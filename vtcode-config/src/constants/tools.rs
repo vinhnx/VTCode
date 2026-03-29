@@ -75,6 +75,12 @@ pub const REQUEST_USER_INPUT: &str = "request_user_input";
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
+/// Schedule a session-scoped task using a cron or one-shot schedule.
+pub const CRON_CREATE: &str = "cron_create";
+/// List session-scoped scheduled tasks.
+pub const CRON_LIST: &str = "cron_list";
+/// Delete a session-scoped scheduled task by id.
+pub const CRON_DELETE: &str = "cron_delete";
 
 // ============================================================
 // PLAN MODE

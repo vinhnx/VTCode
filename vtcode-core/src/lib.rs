@@ -172,6 +172,7 @@ pub mod retry;
 pub mod review;
 pub mod safety;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
+pub mod scheduler;
 pub mod security;
 pub mod session;
 pub mod shutdown;

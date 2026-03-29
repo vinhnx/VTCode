@@ -690,6 +690,40 @@ pub(crate) fn close_agent_parameters() -> Value {
     })
 }
 
+pub(crate) fn cron_create_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+            "prompt": {"type": "string", "description": "Prompt to run when the task fires."},
+            "name": {"type": "string", "description": "Optional short label for the task."},
+            "cron": {"type": "string", "description": "Five-field cron expression for recurring tasks."},
+            "delay_minutes": {"type": "integer", "description": "Fixed recurring interval in minutes."},
+            "run_at": {
+                "type": "string",
+                "description": "One-shot fire time in RFC3339 or local datetime form. Use this instead of `cron` or `delay_minutes` for reminders."
+            }
+        }
+    })
+}
+
+pub(crate) fn cron_list_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {}
+    })
+}
+
+pub(crate) fn cron_delete_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+            "id": {"type": "string", "description": "Session scheduled task id to delete."}
+        }
+    })
+}
+
 fn registration_catalog_kind(registration: &ToolRegistration) -> CatalogToolKind {
     registration
         .metadata()

@@ -64,6 +64,14 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 - `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
 - `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
+## Scheduled Prompts And Reminders
+
+- `/loop` schedules a prompt repeatedly for the current interactive session. It defaults to every 10 minutes when you omit the interval.
+- `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and can also be run by the local scheduler daemon for background execution.
+- VT Code also recognizes narrow reminder phrases in chat such as `remind me at 3pm to ...`, `in 45 minutes, ...`, `what scheduled tasks do I have?`, and `cancel <job id|name>`.
+- Session-scoped scheduled prompts fire only at idle boundaries so they do not interrupt an in-flight turn.
+- For full behavior, limits, jitter, and CLI examples, see [Scheduled Tasks](./scheduled-tasks.md).
+
 ## Vim Mode
 
 VT Code supports an optional Vim-style prompt editor.

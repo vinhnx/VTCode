@@ -157,12 +157,20 @@ impl ToolRegistry {
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),
             subagent_controller: Arc::new(RwLock::new(None)),
+            session_scheduler: Arc::new(tokio::sync::Mutex::new(
+                crate::scheduler::SessionScheduler::new(),
+            )),
         };
 
         registry.rebuild_tool_assembly().await;
         registry.sync_policy_catalog().await;
         registry.initialize_resiliency_trackers();
         registry
+    }
+
+    #[must_use]
+    pub fn session_scheduler(&self) -> Arc<tokio::sync::Mutex<crate::scheduler::SessionScheduler>> {
+        Arc::clone(&self.session_scheduler)
     }
 }
 

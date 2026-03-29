@@ -142,6 +142,12 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
             handlers::handle_manage_workspace_directories(ctx, command).await
         }
+        SlashCommandOutcome::ManageLoop { command } => {
+            handlers::handle_manage_loop(ctx, command).await
+        }
+        SlashCommandOutcome::ManageSchedule { action } => {
+            handlers::handle_manage_schedule(ctx, action).await
+        }
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
         SlashCommandOutcome::LaunchEditor { file } => {

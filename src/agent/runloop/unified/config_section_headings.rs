@@ -98,6 +98,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Guardrails for unattended execution.",
     ),
     (
+        "automation.scheduled_tasks",
+        "Scheduled Tasks",
+        "Session-scoped loops and durable local automation jobs.",
+    ),
+    (
         "chat",
         "Chat Surface",
         "Interactive chat features and assistant affordances.",

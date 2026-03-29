@@ -331,12 +331,20 @@ fn missing_api_key_message(
 fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
     matches!(
         command,
-        Some(Commands::Login { .. } | Commands::Logout { .. } | Commands::Auth { .. })
+        Some(
+            Commands::Login { .. }
+                | Commands::Logout { .. }
+                | Commands::Auth { .. }
+                | Commands::Schedule { .. }
+        )
     )
 }
 
 fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
-    matches!(command, None | Some(Commands::AgentClientProtocol { .. }))
+    matches!(
+        command,
+        None | Some(Commands::AgentClientProtocol { .. } | Commands::Schedule { .. })
+    )
 }
 
 #[cfg(test)]

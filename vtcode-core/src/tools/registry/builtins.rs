@@ -4,10 +4,10 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::session_tool_catalog::{
-    apply_patch_parameters, close_agent_parameters, list_files_parameters, read_file_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    unified_exec_parameters, unified_file_parameters, unified_search_parameters,
-    wait_agent_parameters,
+    apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
+    cron_list_parameters, list_files_parameters, read_file_parameters, resume_agent_parameters,
+    send_input_parameters, spawn_agent_parameters, unified_exec_parameters,
+    unified_file_parameters, unified_search_parameters, wait_agent_parameters,
 };
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
@@ -52,6 +52,35 @@ pub(super) fn builtin_tool_registrations(
             RequestUserInputTool,
         )
         .with_native_cgp_factory(request_user_input_factory),
+        ToolRegistration::new(
+            tools::CRON_CREATE,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::cron_create_executor,
+        )
+        .with_description(
+            "Create a session-scoped scheduled prompt using a cron expression, fixed interval, or one-shot fire time.",
+        )
+        .with_parameter_schema(cron_create_parameters())
+        .with_aliases(["schedule_task", "loop_create"]),
+        ToolRegistration::new(
+            tools::CRON_LIST,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::cron_list_executor,
+        )
+        .with_description("List session-scoped scheduled prompts for the current VT Code process.")
+        .with_parameter_schema(cron_list_parameters())
+        .with_aliases(["scheduled_tasks"]),
+        ToolRegistration::new(
+            tools::CRON_DELETE,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::cron_delete_executor,
+        )
+        .with_description("Delete a session-scoped scheduled prompt by id.")
+        .with_parameter_schema(cron_delete_parameters())
+        .with_aliases(["cancel_scheduled_task"]),
         // ============================================================
         // PLAN MODE (enter/exit)
         // ============================================================

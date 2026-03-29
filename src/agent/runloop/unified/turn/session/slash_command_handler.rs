@@ -3,6 +3,8 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
+use chrono::Utc;
+
 use crate::agent::runloop::slash_commands::handle_slash_command as process_slash_command;
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome, InteractionState,
@@ -11,6 +13,7 @@ use crate::agent::runloop::unified::turn::session::slash_commands::{
     self, SlashCommandContext, SlashCommandControl,
 };
 use vtcode_core::hooks::SessionEndReason;
+use vtcode_core::scheduler::{ScheduleSpec, SessionLanguageCommand, scheduled_tasks_enabled};
 use vtcode_core::tools::file_ops::is_image_path;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -127,7 +130,102 @@ pub(crate) async fn handle_input_commands(
         _ => {}
     }
 
+    if scheduler_enabled(ctx)
+        && let Some(result) = handle_session_language_command(input, ctx).await?
+    {
+        return Ok(result);
+    }
+
     Ok(CommandProcessingResult::NotHandled)
+}
+
+async fn handle_session_language_command(
+    input: &str,
+    ctx: &mut InteractionLoopContext<'_>,
+) -> Result<Option<CommandProcessingResult>> {
+    let Some(command) =
+        vtcode_core::scheduler::parse_session_language_command(input, chrono::Local::now())
+    else {
+        return Ok(None);
+    };
+    match command? {
+        SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at } => {
+            let scheduler = ctx.tool_registry.session_scheduler();
+            let mut scheduler = scheduler.lock().await;
+            let summary = scheduler.create_prompt_task(
+                None,
+                prompt,
+                ScheduleSpec::one_shot(run_at),
+                Utc::now(),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Scheduled session task {} ({}) for {}.",
+                    summary.id,
+                    summary.name,
+                    run_at
+                        .with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d %H:%M:%S")
+                ),
+            )?;
+            Ok(Some(CommandProcessingResult::ContinueLoop))
+        }
+        SessionLanguageCommand::ListTasks => {
+            let scheduler = ctx.tool_registry.session_scheduler();
+            let scheduler = scheduler.lock().await;
+            let tasks = scheduler.list();
+            if tasks.is_empty() {
+                ctx.renderer
+                    .line(MessageStyle::Info, "No session scheduled tasks.")?;
+                return Ok(Some(CommandProcessingResult::ContinueLoop));
+            }
+            for task in tasks {
+                let next_run = task
+                    .next_run_at
+                    .map(|value| {
+                        value
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M:%S")
+                            .to_string()
+                    })
+                    .unwrap_or_else(|| "none".to_string());
+                let status = task.last_status.unwrap_or_else(|| "never_run".to_string());
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "{}  {}  {}  next={}  status={}",
+                        task.id, task.name, task.schedule, next_run, status
+                    ),
+                )?;
+            }
+            Ok(Some(CommandProcessingResult::ContinueLoop))
+        }
+        SessionLanguageCommand::CancelTask { query } => {
+            let scheduler = ctx.tool_registry.session_scheduler();
+            let mut scheduler = scheduler.lock().await;
+            let Some(task) = scheduler.delete(&query) else {
+                return Ok(None);
+            };
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Cancelled session scheduled task {} ({}).",
+                    task.id, task.name
+                ),
+            )?;
+            Ok(Some(CommandProcessingResult::ContinueLoop))
+        }
+    }
+}
+
+fn scheduler_enabled(ctx: &InteractionLoopContext<'_>) -> bool {
+    let enabled = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.automation.scheduled_tasks.enabled)
+        .unwrap_or(false);
+    scheduled_tasks_enabled(enabled)
 }
 
 fn is_absolute_image_path_input(input: &str) -> bool {

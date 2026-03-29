@@ -10,7 +10,7 @@ use crate::cli::adapters::{ask_options, skills_options};
 use crate::cli::anthropic_api::handle_anthropic_api_command;
 use crate::cli::{
     analyze, benchmark, config, create_project, dependencies, exec, init, init_project, man,
-    revert, review, schema, skills, snapshots, trajectory, update,
+    revert, review, schedule, schema, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(
@@ -80,6 +80,9 @@ pub(crate) async fn dispatch_command(
                 command,
             };
             exec::handle_exec_command(core_cfg, cfg, options).await?;
+        }
+        Commands::Schedule { command } => {
+            schedule::handle_schedule_command(startup, command).await?;
         }
         Commands::BackgroundSubagent(args) => {
             crate::cli::background_subagent::handle_background_subagent_command(startup, args)

@@ -2,8 +2,12 @@ use anyhow::Result;
 use shell_words::split as shell_split;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::rendering::{render_add_dir_usage, render_mcp_usage};
-use super::{McpCommandAction, SlashCommandOutcome, WorkspaceDirectoryCommand};
+use super::rendering::{
+    render_add_dir_usage, render_loop_usage, render_mcp_usage, render_schedule_usage,
+};
+use super::{
+    McpCommandAction, ScheduleCommandAction, SlashCommandOutcome, WorkspaceDirectoryCommand,
+};
 
 pub(super) fn handle_mcp_command(
     args: &str,
@@ -177,4 +181,83 @@ pub(super) fn handle_add_dir_command(
     Ok(SlashCommandOutcome::ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand::Add(tokens),
     })
+}
+
+pub(super) fn handle_loop_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    match vtcode_core::scheduler::parse_loop_command(args) {
+        Ok(command) => Ok(SlashCommandOutcome::ManageLoop { command }),
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &err.to_string())?;
+            render_loop_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
+}
+
+pub(super) fn handle_schedule_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(SlashCommandOutcome::ManageSchedule {
+            action: ScheduleCommandAction::Interactive,
+        });
+    }
+
+    let tokens = match shell_split(trimmed) {
+        Ok(tokens) => tokens,
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to parse arguments: {}", err),
+            )?;
+            render_schedule_usage(renderer)?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+    if tokens.is_empty() {
+        render_schedule_usage(renderer)?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+
+    match tokens[0].to_ascii_lowercase().as_str() {
+        "list" => Ok(SlashCommandOutcome::ManageSchedule {
+            action: ScheduleCommandAction::Browse,
+        }),
+        "delete" | "remove" | "cancel" => {
+            let Some(id) = tokens.get(1) else {
+                return Ok(SlashCommandOutcome::ManageSchedule {
+                    action: ScheduleCommandAction::DeleteInteractive,
+                });
+            };
+            Ok(SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Delete { id: id.clone() },
+            })
+        }
+        "create" if tokens.len() == 1 => Ok(SlashCommandOutcome::ManageSchedule {
+            action: ScheduleCommandAction::CreateInteractive,
+        }),
+        "create" => match vtcode_core::scheduler::parse_schedule_create_tokens(&tokens[1..]) {
+            Ok(input) => Ok(SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Create { input },
+            }),
+            Err(err) => {
+                renderer.line(MessageStyle::Error, &err.to_string())?;
+                render_schedule_usage(renderer)?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
+        "help" | "--help" => {
+            render_schedule_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        _ => {
+            render_schedule_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
 }

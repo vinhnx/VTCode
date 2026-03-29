@@ -125,6 +125,7 @@ python3 scripts/generate_config_field_reference.py
 | `automation.full_auto.max_turns` | `integer` | no | `30` | Maximum number of autonomous agent turns before the exec runner pauses. |
 | `automation.full_auto.profile_path` | `null \| string` | no | `null` | Optional path to a profile describing acceptable behaviors. |
 | `automation.full_auto.require_profile_ack` | `boolean` | no | `true` | Require presence of a profile/acknowledgement file before activation. |
+| `automation.scheduled_tasks.enabled` | `boolean` | no | `false` | Enable VT Code's internal scheduler surfaces, including `/loop`, reminder interception, scheduler tools, and durable `vtcode schedule` jobs. |
 | `chat.askQuestions.enabled` | `boolean` | no | `true` | Enable the Ask Questions tool in interactive chat |
 | `commands.allow_glob` | `array` | no | `[]` | Glob patterns allowed for shell commands (applies to Bash) |
 | `commands.allow_glob[]` | `string` | no | `-` | - |

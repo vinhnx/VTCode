@@ -68,6 +68,7 @@ New to VT Code? Start with installation and basic usage:
 - **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
 - **[Subagents](./user-guide/subagents.md)** - Create, configure, invoke, and switch between delegated child agents with VT Code-native tool metadata
 - **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Keyboard shortcuts and terminal workflows
+- **[Scheduled Tasks](./user-guide/scheduled-tasks.md)** - Session `/loop` polling, reminders, and durable `vtcode schedule` automations
 - [Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking) - How decisions are tracked and injected
 - **[Configuration Guide](./config/config.md)** - Comprehensive configuration options
 - **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer

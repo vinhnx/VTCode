@@ -26,6 +26,14 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "add-dir",
             description: "Link external directories or manage links (usage: /add-dir <path>|--list|--remove)",
         },
+        SlashCommandInfo {
+            name: "loop",
+            description: "Run a session-scoped scheduled prompt repeatedly (usage: /loop [interval] <prompt>)",
+        },
+        SlashCommandInfo {
+            name: "schedule",
+            description: "Manage durable scheduled tasks interactively (usage: /schedule)",
+        },
         // Configuration and settings
         SlashCommandInfo {
             name: "config",

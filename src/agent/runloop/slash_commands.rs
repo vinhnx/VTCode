@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
+use vtcode_core::scheduler::{LoopCommand, ScheduleCreateInput};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -18,7 +19,9 @@ use flow::{
     handle_mode_command, handle_plan_command, handle_resume_command, handle_review_command,
     handle_rewind_command,
 };
-use management::{handle_add_dir_command, handle_mcp_command};
+use management::{
+    handle_add_dir_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
+};
 use parsing::{
     parse_prompt_template_args, parse_session_log_export_format, split_command_and_args,
 };
@@ -99,6 +102,16 @@ pub(crate) enum SubprocessManagerAction {
     Cancel { id: String },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ScheduleCommandAction {
+    Interactive,
+    Browse,
+    CreateInteractive,
+    Create { input: ScheduleCreateInput },
+    DeleteInteractive,
+    Delete { id: String },
+}
+
 pub(crate) enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
@@ -152,9 +165,14 @@ pub(crate) enum SlashCommandOutcome {
         install: bool,
         force: bool,
     },
-
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
+    },
+    ManageLoop {
+        command: LoopCommand,
+    },
+    ManageSchedule {
+        action: ScheduleCommandAction,
     },
     LaunchEditor {
         file: Option<String>,
@@ -496,6 +514,8 @@ pub(crate) async fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
         "add-dir" => handle_add_dir_command(args, renderer),
+        "loop" => handle_loop_command(args, renderer),
+        "schedule" => handle_schedule_command(args, renderer),
         "share-log" | "sharelog" | "export-log" => match parse_session_log_export_format(args) {
             Ok(format) => Ok(SlashCommandOutcome::ShareLog { format }),
             Err(message) => {
@@ -751,8 +771,9 @@ fn parse_doctor_args(
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentManagerAction, DoctorCommand, SessionModeCommand, SlashCommandOutcome,
-        SubprocessManagerAction, handle_slash_command, parse_doctor_args, parse_update_args,
+        AgentManagerAction, DoctorCommand, ScheduleCommandAction, SessionModeCommand,
+        SlashCommandOutcome, SubprocessManagerAction, handle_slash_command, parse_doctor_args,
+        parse_update_args,
     };
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
@@ -1060,6 +1081,78 @@ mod tests {
             .await
             .expect("mode cycle should parse");
         assert!(matches!(cycle, SlashCommandOutcome::CycleMode));
+    }
+
+    #[tokio::test]
+    async fn schedule_commands_parse_to_interactive_and_direct_outcomes() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let interactive = handle_slash_command("schedule", &mut renderer, &workspace)
+            .await
+            .expect("schedule should parse");
+        assert!(matches!(
+            interactive,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Interactive
+            }
+        ));
+
+        let browse = handle_slash_command("schedule list", &mut renderer, &workspace)
+            .await
+            .expect("schedule list should parse");
+        assert!(matches!(
+            browse,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Browse
+            }
+        ));
+
+        let create_interactive = handle_slash_command("schedule create", &mut renderer, &workspace)
+            .await
+            .expect("schedule create should parse");
+        assert!(matches!(
+            create_interactive,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::CreateInteractive
+            }
+        ));
+
+        let delete_interactive = handle_slash_command("schedule delete", &mut renderer, &workspace)
+            .await
+            .expect("schedule delete should parse");
+        assert!(matches!(
+            delete_interactive,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::DeleteInteractive
+            }
+        ));
+
+        let delete_direct =
+            handle_slash_command("schedule delete deadbeef", &mut renderer, &workspace)
+                .await
+                .expect("schedule delete id should parse");
+        assert!(matches!(
+            delete_direct,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Delete { ref id }
+            } if id == "deadbeef"
+        ));
+
+        let create_direct = handle_slash_command(
+            "schedule create --prompt \"check the deployment\" --every 10m",
+            &mut renderer,
+            &workspace,
+        )
+        .await
+        .expect("schedule create with flags should parse");
+        assert!(matches!(
+            create_direct,
+            SlashCommandOutcome::ManageSchedule {
+                action: ScheduleCommandAction::Create { ref input }
+            } if input.prompt.as_deref() == Some("check the deployment")
+                && input.every.as_deref() == Some("10m")
+        ));
     }
 
     #[tokio::test]

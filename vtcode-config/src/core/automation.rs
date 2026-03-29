@@ -9,6 +9,26 @@ pub struct AutomationConfig {
     /// Full-auto execution safeguards.
     #[serde(default)]
     pub full_auto: FullAutoConfig,
+    /// Session and durable scheduled task controls.
+    #[serde(default)]
+    pub scheduled_tasks: ScheduledTasksConfig,
+}
+
+/// Controls for the built-in scheduled task subsystem.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScheduledTasksConfig {
+    /// Enable session-scoped `/loop` tasks and durable `vtcode schedule` jobs.
+    #[serde(default = "default_scheduled_tasks_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for ScheduledTasksConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_scheduled_tasks_enabled(),
+        }
+    }
 }
 
 /// Controls for running the agent without interactive approvals.
@@ -49,6 +69,10 @@ impl Default for FullAutoConfig {
 }
 
 fn default_full_auto_enabled() -> bool {
+    false
+}
+
+fn default_scheduled_tasks_enabled() -> bool {
     false
 }
 

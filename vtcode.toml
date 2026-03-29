@@ -2,138 +2,593 @@ file_opener = "none"
 project_doc_fallback_filenames = []
 notify = []
 
-[history]
-persistence = "file"
+# ACP Bridge
+# IDE and Agent Client Protocol integrations.
+[acp]
+# Globally enable the ACP bridge
+# Default: false
+# Type: `boolean`
+enabled = true
 
-[tui]
+# Zed Integration
+# How VT Code connects commands and trust settings to Zed.
+[acp.zed]
+# Enable Zed integration
+# Default: false
+# Type: `boolean`
+enabled = true
 
+# Transport used to communicate with the Zed client
+# Default: "stdio"
+# Type: `string`
+transport = "stdio"
+
+# Desired workspace trust level when running under ACP
+# Default: "full_auto"
+# Type: `string`
+workspace_trust = "full_auto"
+
+# Zed Authentication
+# Default authentication flow for ACP sessions in Zed.
+[acp.zed.auth]
+# Default authentication method for ACP agents Options: "agent" (default - agent handles auth),
+# "env_var", "terminal"
+# Possible values: agent, env_var, terminal
+# Default: "agent"
+# Type: `string`
+default_method = "agent"
+
+
+# Zed Tool Bridge
+# Which file tools are exposed to the Zed client.
+[acp.zed.tools]
+# Toggle the list_files function bridge
+# Default: true
+# Type: `boolean`
+list_files = true
+
+# Toggle the read_file function bridge
+# Default: true
+# Type: `boolean`
+read_file = true
+
+
+# Agent Defaults
+# Primary model, prompt, and chat behavior.
 [agent]
-provider = "minimax"
+# Environment variable that stores the API key for the active provider
+# Default: "OPENAI_API_KEY"
+# Type: `string`
 api_key_env = "MINIMAX_API_KEY"
-default_model = "MiniMax-M2.7"
-theme = "ciapre"
-system_prompt_mode = "default"
-tool_documentation_mode = "minimal"
-enable_split_tool_results = true
-todo_planning_mode = false
-ui_surface = "auto"
-max_conversation_turns = 193
-reasoning_effort = "low"
-verbosity = "medium"
-temperature = 0.7
-refine_temperature = 0.3
-enable_self_review = false
-max_review_passes = 1
-refine_prompts_enabled = false
-refine_prompts_max_passes = 1
-refine_prompts_model = ""
-project_doc_max_bytes = 16384
-project_doc_fallback_filenames = []
-instruction_max_bytes = 16384
-instruction_files = []
-credential_storage_mode = "keyring"
-max_task_retries = 2
-include_temporal_context = true
-temporal_context_use_utc = false
-include_working_directory = true
-default_editing_mode = "edit"
-require_plan_confirmation = true
+
+# Deprecated compatibility flag. When `true` and `permissions.default_mode` is unset, VT Code maps it
+# to `permissions.default_mode = "auto"`.
+# Default: false
+# Type: `boolean`
 autonomous_mode = true
 
-[agent.small_model]
+# Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use
+# OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service). This
+# is the default as it's the most secure. - `file`: Use AES-256-GCM encrypted file with
+# machine-derived key - `auto`: Try keyring first, fall back to file if unavailable
+# Possible values: etc.
+# Default: "keyring"
+# Type: `string`
+credential_storage_mode = "keyring"
+
+# Default editing mode on startup: "edit" (default) or "plan" Codex-inspired: Encourages structured
+# planning before execution.
+# Possible values: default
+# Default: "edit"
+# Type: `string`
+default_editing_mode = "edit"
+
+# Default model to use
+# Default: "gpt-5.3-codex"
+# Type: `string`
+default_model = "MiniMax-M2.7"
+
+# Enable an extra self-review pass to refine final responses
+# Default: false
+# Type: `boolean`
+enable_self_review = false
+
+# Enable split tool results for massive token savings (Phase 4) When enabled, tools return
+# dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction)
+# - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search,
+# unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use
+# Default: true
+# Type: `boolean`
+enable_split_tool_results = true
+
+# Include current date/time in system prompt for temporal awareness Helps LLM understand context for
+# time-sensitive tasks (default: true)
+# Default: true
+# Type: `boolean`
+include_temporal_context = true
+
+# Include current working directory in system prompt (default: true)
+# Default: true
+# Type: `boolean`
+include_working_directory = true
+
+# Additional instruction files or globs to merge into the hierarchy
+# Default: []
+# Type: `array`
+instruction_files = []
+
+# Maximum bytes of instruction content to load from AGENTS.md hierarchy
+# Default: 16384
+# Type: `integer`
+instruction_max_bytes = 16384
+
+# Maximum number of conversation turns before auto-termination
+# Default: 150
+# Type: `integer`
+max_conversation_turns = 193
+
+# Maximum number of self-review passes
+# Default: 1
+# Type: `integer`
+max_review_passes = 1
+
+# Maximum number of retries for agent task execution (default: 2) When an agent task fails due to
+# retryable errors (timeout, network, 503, etc.), it will be retried up to this many times with
+# exponential backoff
+# Default: 2
+# Type: `integer`
+max_task_retries = 2
+
+project_doc_fallback_filenames = []
+
+# Maximum bytes of AGENTS.md content to load from project hierarchy
+# Default: 16384
+# Type: `integer`
+project_doc_max_bytes = 16384
+
+# AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
+# Possible values: anthropic, gemini, openai, openrouter, zai
+# Default: "openai"
+# Type: `string`
+provider = "minimax"
+
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
+# to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
+# Possible values: high, low, medium, minimal, none, xhigh
+# Default: "none"
+# Type: `string`
+reasoning_effort = "low"
+
+# Enable prompt refinement pass before sending to LLM
+# Default: false
+# Type: `boolean`
+refine_prompts_enabled = false
+
+# Max refinement passes for prompt writing
+# Default: 1
+# Type: `integer`
+refine_prompts_max_passes = 1
+
+# Optional model override for the refiner (empty = auto pick efficient sibling)
+# Default: ""
+# Type: `string`
+refine_prompts_model = ""
+
+# Temperature for prompt refinement (0.0-1.0, default: 0.3) Lower values ensure prompt refinement is
+# more deterministic/consistent Keep lower than main temperature for stable prompt improvement
+# Possible values: 0.0-1.0
+# Default: 0.30000001192092896
+# Type: `number`
+refine_temperature = 0.3
+
+# Require user confirmation before executing a plan generated in plan mode When true, exiting plan
+# mode shows the implementation blueprint and requires explicit user approval before enabling edit
+# tools.
+# Default: true
+# Type: `boolean`
+require_plan_confirmation = true
+
+# System prompt mode controlling verbosity and token overhead Options: minimal (~500-800 tokens),
+# lightweight (~1-2k), default (~6-7k), specialized (~7-8k) Inspired by pi-coding-agent: modern models
+# often perform well with minimal prompts
+# Default: "default"
+# Type: `string`
+system_prompt_mode = "default"
+
+# Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more
+# creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0
+# (maximum randomness)
+# Possible values: 0.0-1.0
+# Default: 0.699999988079071
+# Type: `number`
+temperature = 0.7
+
+# Use UTC instead of local time for temporal context in system prompts
+# Default: false
+# Type: `boolean`
+temporal_context_use_utc = false
+
+# UI theme identifier controlling ANSI styling
+# Default: "ciapre"
+# Type: `string`
+theme = "ciapre"
+
+# Enable TODO planning helper mode for structured task management
+# Default: true
+# Type: `boolean`
+todo_planning_mode = false
+
+# Tool documentation mode controlling token overhead for tool definitions Options: minimal (~800
+# tokens), progressive (~1.2k), full (~3k current) Progressive: signatures upfront, detailed docs
+# on-demand (recommended) Minimal: signatures only, pi-coding-agent style (power users) Full: all
+# documentation upfront (current behavior, default)
+# Default: "progressive"
+# Type: `string`
+tool_documentation_mode = "minimal"
+
+# Preferred rendering surface for the interactive chat UI (auto, alternate, inline)
+# Possible values: alternate, auto, inline
+# Default: "auto"
+# Type: `string`
+ui_surface = "auto"
+
+# Verbosity level for output text (low, medium, high) Applies to: GPT-5.4-family Responses workflows
+# and other models that support verbosity control
+# Possible values: high, low, medium
+# Default: "medium"
+# Type: `string`
+verbosity = "medium"
+
+# Checkpoints
+# Automatic turn snapshots and retention limits.
+[agent.checkpointing]
+# Enable automatic checkpoints after each successful turn
+# Default: true
+# Type: `boolean`
 enabled = false
-model = ""
-temperature = 0.3
-use_for_large_reads = true
-use_for_web_summary = true
-use_for_git_history = true
 
-[agent.prompt_suggestions]
+# Maximum age in days before checkpoints are removed automatically (None disables)
+# Default: 30
+# Type: `integer | null`
+max_age_days = 30
+
+# Maximum number of checkpoints to retain on disk
+# Default: 50
+# Type: `integer`
+max_snapshots = 50
+
+
+# Circuit Breaker
+# Failure pause thresholds and recovery guardrails.
+[agent.circuit_breaker]
+# Enable circuit breaker functionality
+# Default: true
+# Type: `boolean`
 enabled = true
-model = "MiniMax-M2.5"
-temperature = 0.3
-show_cost_notice = true
 
+# Number of consecutive failures before opening circuit
+# Default: 5
+# Type: `integer`
+failure_threshold = 5
+
+# Number of open circuits before triggering pause
+# Default: 3
+# Type: `integer`
+max_open_circuits = 3
+
+# Pause and ask user when circuit opens (vs auto-backoff)
+# Default: true
+# Type: `boolean`
+pause_on_open = true
+
+# Cooldown period between recovery prompts (seconds)
+# Possible values: seconds
+# Default: 60
+# Type: `integer`
+recovery_cooldown = 60
+
+
+# Harness Limits
+# Per-turn tool call and timing safety limits.
+[agent.harness]
+# Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When
+# enabled, VT Code uses provider-native Responses compaction when available and local fallback
+# compaction otherwise.
+# Default: false
+# Type: `boolean`
+auto_compaction_enabled = false
+
+# Controls harness-managed continuation loops. Options: `"off"`, `"exec_only"` (exec/full-auto only),
+# or `"all"` (default; also allow interactive sessions).
+# Possible values: all, exec_only, off
+# Default: "all"
+# Type: `string`
+continuation_policy = "all"
+
+# Optional JSONL event log path for harness events
+# Default: null
+# Type: `null | string`
+event_log_path = ""
+
+max_revision_rounds = 2
+
+# Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
+# Default: 0
+# Type: `integer`
+max_tool_calls_per_turn = 0
+
+# Maximum retries for retryable tool errors
+# Default: 2
+# Type: `integer`
+max_tool_retries = 2
+
+# Maximum wall clock time (seconds) for tool execution in a turn
+# Possible values: seconds
+# Default: 600
+# Type: `integer`
+max_tool_wall_clock_secs = 600
+
+orchestration_mode = "single"
+
+
+# Onboarding
+# Welcome message, tips, and first-run guidance.
 [agent.onboarding]
+# Toggle onboarding message rendering
+# Default: true
+# Type: `boolean`
 enabled = true
-intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
-include_project_overview = true
-include_language_summary = false
-include_guideline_highlights = true
-include_usage_tips_in_welcome = false
-include_recommended_actions_in_welcome = false
+
+# Maximum number of guideline bullets to surface
+# Default: 3
+# Type: `integer`
 guideline_highlight_limit = 3
-usage_tips = [
-    "Describe your current coding goal or ask for a quick status overview.",
-    "Reference AGENTS.md guidelines when proposing changes.",
-    "Prefer asking for targeted file reads or diffs before editing.",
-]
+
+# Whether to include AGENTS.md highlights in onboarding message
+# Default: true
+# Type: `boolean`
+include_guideline_highlights = true
+
+# Whether to include language summary in onboarding message
+# Default: false
+# Type: `boolean`
+include_language_summary = false
+
+# Whether to include project overview in onboarding message
+# Default: true
+# Type: `boolean`
+include_project_overview = true
+
+# Whether to surface suggested actions inside the welcome text banner
+# Default: false
+# Type: `boolean`
+include_recommended_actions_in_welcome = false
+
+# Whether to surface usage tips inside the welcome text banner
+# Default: false
+# Type: `boolean`
+include_usage_tips_in_welcome = false
+
+# Introductory text shown at session start
+# Default: "Let's get oriented. I preloaded workspace context so we can move fast."
+# Type: `string`
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+
+# Recommended follow-up actions to display
+# Default: ["Review the highlighted guidelines and share the task you want to tackle.", "Ask for a workspace tour if you need mo...
+# Type: `array`
 recommended_actions = [
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Ask for a workspace tour if you need more context.",
 ]
 
-[agent.checkpointing]
-enabled = false
-max_snapshots = 50
-max_age_days = 30
+# Tips for collaborating with the agent effectively
+# Default: ["Describe your current coding goal or ask for a quick status overview.", "Reference AGENTS.md guidelines when propos...
+# Type: `array`
+usage_tips = [
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md guidelines when proposing changes.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+]
 
-[agent.vibe_coding]
-enabled = false
-min_prompt_length = 5
-min_prompt_words = 2
-enable_entity_resolution = true
-entity_index_cache = ".vtcode/entity_index.json"
-max_entity_matches = 5
-track_workspace_state = true
-max_recent_files = 20
-track_value_history = true
-enable_conversation_memory = true
-max_memory_turns = 50
-enable_pronoun_resolution = true
-enable_proactive_context = true
-max_context_files = 3
-max_context_snippets_per_file = 20
-max_search_results = 5
-enable_relative_value_inference = true
 
-[agent.harness]
-max_tool_calls_per_turn = 0
-max_tool_wall_clock_secs = 600
-max_tool_retries = 2
-auto_compaction_enabled = false
-continuation_policy = "all"
-event_log_path = ""
-orchestration_mode = "single"
-max_revision_rounds = 2
-
-[agent.circuit_breaker]
-enabled = true
-failure_threshold = 5
-pause_on_open = true
-max_open_circuits = 3
-recovery_cooldown = 60
-
+# Open Responses
+# Compatibility events and response item mapping.
 [agent.open_responses]
-enabled = false
+# Emit Open Responses events to the event sink When true, streaming events follow Open Responses
+# format (response.created, response.output_item.added, response.output_text.delta, etc.)
+# Possible values: etc., response.created, response.output_item.added, response.output_text.delta
+# Default: true
+# Type: `boolean`
 emit_events = true
+
+# Enable Open Responses specification compliance layer When true, VT Code emits semantic streaming
+# events alongside internal events Default: false (opt-in feature)
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Include VT Code extension items (vtcode:file_change, vtcode:web_search, etc.) When false, extension
+# items are omitted from the Open Responses output
+# Possible values: etc.
+# Default: true
+# Type: `boolean`
 include_extensions = true
-map_tool_calls = true
+
+# Include reasoning items in Open Responses output When true, model reasoning/thinking is exposed as
+# reasoning items
+# Default: true
+# Type: `boolean`
 include_reasoning = true
 
-[auth.openrouter]
-use_oauth = false
-callback_port = 8484
-auto_refresh = true
-flow_timeout_secs = 300
+# Map internal tool calls to Open Responses function_call items When true, command executions and MCP
+# tool calls are represented as function_call items
+# Default: true
+# Type: `boolean`
+map_tool_calls = true
 
-[auth.openai]
-preferred_method = "auto"
-callback_port = 1455
-auto_refresh = true
-flow_timeout_secs = 300
 
+# Prompt Suggestions
+# Inline composer suggestions and lightweight model routing.
+[agent.prompt_suggestions]
+# Enable inline prompt suggestions in the chat composer. `Alt+P` requests a ghost-text completion
+# instead of opening the `/suggest` picker.
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Lightweight model to use for prompt suggestions. Leave empty to auto-select an efficient sibling of
+# the main model.
+# Default: ""
+# Type: `string`
+model = "MiniMax-M2.5"
+
+# Show a one-time reminder that LLM-backed prompt suggestions can consume tokens.
+# Default: true
+# Type: `boolean`
+show_cost_notice = true
+
+# Temperature for inline prompt suggestion generation. Lower values keep suggestions stable and
+# completion-like.
+# Default: 0.30000001192092896
+# Type: `number`
+temperature = 0.3
+
+
+# Small Model Helpers
+# Low-cost model settings for lightweight side tasks.
+[agent.small_model]
+# Enable small model tier for efficient operations
+# Default: true
+# Type: `boolean`
+enabled = false
+
+# Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to
+# auto-select a lightweight sibling of the main model
+# Possible values: claude-4-5-haiku, e.g., gemini-2.0-flash, gpt-4-mini
+# Default: ""
+# Type: `string`
+model = ""
+
+# Temperature for small model responses
+# Default: 0.30000001192092896
+# Type: `number`
+temperature = 0.3
+
+# Enable small model for git history processing
+# Default: true
+# Type: `boolean`
+use_for_git_history = true
+
+# Enable small model for large file reads (>50KB)
+# Default: true
+# Type: `boolean`
+use_for_large_reads = true
+
+# Enable small model for web content summarization
+# Default: true
+# Type: `boolean`
+use_for_web_summary = true
+
+
+# Vibe Coding
+# Loose-input parsing and extra contextual assistance.
+[agent.vibe_coding]
+# Enable conversation memory for pronoun resolution
+# Default: true
+# Type: `boolean`
+enable_conversation_memory = true
+
+# Enable fuzzy entity resolution
+# Default: true
+# Type: `boolean`
+enable_entity_resolution = true
+
+# Enable proactive context gathering
+# Default: true
+# Type: `boolean`
+enable_proactive_context = true
+
+# Enable pronoun resolution (it, that, this)
+# Possible values: it, that, this
+# Default: true
+# Type: `boolean`
+enable_pronoun_resolution = true
+
+# Enable relative value inference (by half, double, etc.)
+# Possible values: double, etc.
+# Default: true
+# Type: `boolean`
+enable_relative_value_inference = true
+
+# Enable vibe coding support
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Entity index cache file path (relative to workspace)
+# Default: ".vtcode/entity_index.json"
+# Type: `string`
+entity_index_cache = ".vtcode/entity_index.json"
+
+# Maximum files to gather for context (default: 3)
+# Default: 3
+# Type: `integer`
+max_context_files = 3
+
+# Maximum code snippets per file (default: 20 lines)
+# Default: 20
+# Type: `integer`
+max_context_snippets_per_file = 20
+
+# Maximum entity matches to return (default: 5)
+# Default: 5
+# Type: `integer`
+max_entity_matches = 5
+
+# Maximum conversation turns to remember (default: 50)
+# Default: 50
+# Type: `integer`
+max_memory_turns = 50
+
+# Maximum recent files to track (default: 20)
+# Default: 20
+# Type: `integer`
+max_recent_files = 20
+
+# Maximum search results to include (default: 5)
+# Default: 5
+# Type: `integer`
+max_search_results = 5
+
+# Minimum prompt length for refinement (default: 5 chars)
+# Default: 5
+# Type: `integer`
+min_prompt_length = 5
+
+# Minimum prompt words for refinement (default: 2 words)
+# Default: 2
+# Type: `integer`
+min_prompt_words = 2
+
+# Track value history for inference
+# Default: true
+# Type: `boolean`
+track_value_history = true
+
+# Track workspace state (file activity, value changes)
+# Default: true
+# Type: `boolean`
+track_workspace_state = true
+
+
+# Authentication
+# Provider login and token handling.
+[auth]
+# Copilot
 [auth.copilot]
+auth_timeout_secs = 300
+
 available_tools = [
     "view",
     "glob",
@@ -141,126 +596,159 @@ available_tools = [
     "edit",
     "create",
 ]
+
 excluded_tools = []
+
+startup_timeout_secs = 20
+
 vtcode_tool_allowlist = [
     "unified_search",
     "unified_file",
     "unified_exec",
     "apply_patch",
 ]
-startup_timeout_secs = 20
-auth_timeout_secs = 300
 
-[tools]
-default_policy = "allow"
-max_tool_loops = 0
-max_repeated_tool_calls = 2
-max_consecutive_blocked_tool_calls_per_turn = 8
-max_sequential_spool_chunk_reads = 6
 
-[tools.policies]
-"/edit" = "prompt"
-"/plan" = "prompt"
-"/plan_off" = "prompt"
-agent_info = "allow"
-apply_patch = "allow"
-ask_user_question = "allow"
-"assistant<|channel|>apply_patch" = "allow"
-checklist = "prompt"
-close_pty_session = "allow"
-coder_mode = "prompt"
-create_file = "allow"
-create_pty_session = "allow"
-delete_file = "prompt"
-edit_file = "allow"
-enter_plan = "prompt"
-enter_plan_mode = "allow"
-exec_code = "allow"
-execute_code = "allow"
-exit_plan = "prompt"
-exit_plan_mode = "prompt"
-git_diff = "allow"
-grep_file = "allow"
-implement_plan = "prompt"
-list_files = "allow"
-list_pty_sessions = "allow"
-list_skills = "allow"
-load_skill = "allow"
-load_skill_resource = "allow"
-mode_edit = "prompt"
-mode_plan = "prompt"
-open_file = "allow"
-plan_checklist = "prompt"
-plan_exit = "prompt"
-plan_manager = "prompt"
-plan_mode = "prompt"
-plan_off = "prompt"
-plan_on = "prompt"
-plan_start = "prompt"
-plan_task_tracker = "prompt"
-plan_tasks = "prompt"
-planner_mode = "prompt"
-read_file = "allow"
-read_pty_session = "allow"
-request_user_input = "allow"
-resize_pty_session = "allow"
-resume_edit_mode = "prompt"
-run_pty_cmd = "allow"
-search_file = "allow"
-search_replace = "prompt"
-search_tools = "allow"
-"send_command<|channel|>analysis" = "allow"
-send_pty_input = "prompt"
-skill = "allow"
-start_implementation = "prompt"
-start_planning = "prompt"
-switch_edit_mode = "prompt"
-switch_plan_mode = "prompt"
-switch_to_edit_mode = "prompt"
-switch_to_plan_mode = "prompt"
-task_tracker = "allow"
-track_tasks = "prompt"
-unified_exec = "allow"
-unified_file = "allow"
-unified_search = "allow"
-web_fetch = "allow"
-write_file = "allow"
-vtcode-clippy = "prompt"
-vtcode-check = "prompt"
-spawn_agent = "allow"
-wait_agent = "allow"
-send_input = "allow"
-resume_agent = "allow"
+# OpenAI
+[auth.openai]
+auto_refresh = true
 
-[tools.web_fetch]
-mode = "restricted"
-dynamic_blocklist_enabled = false
-dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
-dynamic_whitelist_enabled = false
-dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
-blocked_domains = []
-allowed_domains = []
-blocked_patterns = []
-enable_audit_logging = false
-audit_log_path = "~/.vtcode/web_fetch_audit.log"
-strict_https_only = true
+callback_port = 1455
 
-[tools.plugins]
+flow_timeout_secs = 300
+
+preferred_method = "auto"
+
+
+# OpenRouter OAuth
+# Browser login flow and token refresh behavior.
+[auth.openrouter]
+# Whether to automatically refresh tokens when they expire. If false, the user will be prompted to
+# re-authenticate.
+# Default: true
+# Type: `boolean`
+auto_refresh = true
+
+# Port for the local OAuth callback server. The server listens on localhost for the OAuth redirect.
+# Default: 8484
+# Type: `integer`
+callback_port = 8484
+
+# Timeout in seconds for the OAuth flow. If the user doesn't complete authentication within this time,
+# the flow is cancelled.
+# Default: 300
+# Type: `integer`
+flow_timeout_secs = 300
+
+# Whether to use OAuth instead of API key for authentication. When enabled, VT Code will prompt for
+# OAuth login if no valid token exists.
+# Default: false
+# Type: `boolean`
+use_oauth = false
+
+
+# Automation
+# Autonomous run controls and safety defaults.
+[automation]
+# Full Auto
+# Guardrails for unattended execution.
+[automation.full_auto]
+# Allow-list of tools that may execute automatically.
+# Default: ["read_file", "unified_search"]
+# Type: `array`
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+]
+
+# Enable the runtime flag once the workspace is configured for autonomous runs.
+# Default: false
+# Type: `boolean`
 enabled = true
-manifests = []
-default_trust = "sandbox"
-allow = []
-deny = []
-auto_reload = true
 
-[tools.editor]
+# Maximum number of autonomous agent turns before the exec runner pauses.
+# Default: 30
+# Type: `integer`
+max_turns = 30
+
+# Require presence of a profile/acknowledgement file before activation.
+# Default: true
+# Type: `boolean`
+require_profile_ack = true
+
+
+# Scheduled Tasks
+# Session-scoped loops and durable local automation jobs.
+[automation.scheduled_tasks]
+# Enable VT Code's internal scheduler surfaces, including `/loop`, reminder interception, scheduler
+# tools, and durable `vtcode schedule` jobs.
+# Default: false
+# Type: `boolean`
 enabled = true
-preferred_editor = ""
-suspend_tui = true
 
-[tools.loop_thresholds]
 
+# Chat Surface
+# Interactive chat features and assistant affordances.
+[chat]
+# Ask Questions Tool
+# Inline clarification prompts during chat sessions.
+[chat.askQuestions]
+# Enable the Ask Questions tool in interactive chat
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# Command Policies
+# Allow and deny rules for shell execution.
 [commands]
+# Glob patterns allowed for shell commands (applies to Bash)
+# Default: []
+# Type: `array`
+allow_glob = [
+    "git *",
+    "cargo *",
+    "rustc *",
+    "python *",
+    "python3 *",
+    "pip *",
+    "pip3 *",
+    "node *",
+    "npm *",
+    "npm run *",
+    "yarn *",
+    "yarn run *",
+    "pnpm *",
+    "pnpm run *",
+    "bun *",
+    "bun run *",
+    "npx *",
+    "go *",
+    "gcc *",
+    "g++ *",
+    "clang *",
+    "clang++ *",
+    "javac *",
+    "java *",
+    "mvn *",
+    "gradle *",
+    "make *",
+    "cmake *",
+    "ninja *",
+    "docker *",
+    "docker-compose *",
+    "virtualenv *",
+    "tar *",
+    "zip *",
+    "unzip *",
+    "gzip *",
+    "gunzip *",
+]
+
+# Commands that can be executed without prompting
+# Default: []
+# Type: `array`
 allow_list = [
     "ls",
     "pwd",
@@ -346,16 +834,53 @@ allow_list = [
     "docker",
     "docker-compose",
 ]
-approval_prefixes = []
-extra_path_entries = [
-    "$HOME/.cargo/bin",
-    "$HOME/.local/bin",
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "$HOME/.asdf/bin",
-    "$HOME/.asdf/shims",
-    "$HOME/go/bin",
+
+# Regex allow patterns for shell commands
+# Default: []
+# Type: `array`
+allow_regex = [
+    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
+    '^git (status|diff|log|show|branch|remote)\b',
+    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
+    '^rustc\b',
+    '^(python|python3) (-m | )?\w*',
+    '^(pip|pip3)\b',
+    '^virtualenv\b',
+    '^(node|npm|yarn|pnpm|bun|npx)\b',
+    '^go\b',
+    '^(gcc|g\+\+|clang|clang\++)\b',
+    '^(javac|java)\b',
+    '^(mvn|gradle)\b',
+    '^(make|cmake)\b',
+    '^(docker|docker-compose)\b',
 ]
+
+# Command prefixes that skip future shell approval prompts when matched
+# Default: []
+# Type: `array`
+approval_prefixes = []
+
+# Glob patterns denied for shell commands
+# Default: []
+# Type: `array`
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kill *",
+    "pkill *",
+    "systemctl *",
+    "service *",
+    "mount *",
+    "umount *",
+    "docker run *",
+    "kubectl *",
+]
+
+# Commands that are always denied
+# Default: []
+# Type: `array`
 deny_list = [
     "rm",
     "rm -rf /",
@@ -415,75 +940,10 @@ deny_list = [
     "tail -f /var/log",
     "head -n 1 /var/log",
 ]
-allow_glob = [
-    "git *",
-    "cargo *",
-    "rustc *",
-    "python *",
-    "python3 *",
-    "pip *",
-    "pip3 *",
-    "node *",
-    "npm *",
-    "npm run *",
-    "yarn *",
-    "yarn run *",
-    "pnpm *",
-    "pnpm run *",
-    "bun *",
-    "bun run *",
-    "npx *",
-    "go *",
-    "gcc *",
-    "g++ *",
-    "clang *",
-    "clang++ *",
-    "javac *",
-    "java *",
-    "mvn *",
-    "gradle *",
-    "make *",
-    "cmake *",
-    "ninja *",
-    "docker *",
-    "docker-compose *",
-    "virtualenv *",
-    "tar *",
-    "zip *",
-    "unzip *",
-    "gzip *",
-    "gunzip *",
-]
-deny_glob = [
-    "rm *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kill *",
-    "pkill *",
-    "systemctl *",
-    "service *",
-    "mount *",
-    "umount *",
-    "docker run *",
-    "kubectl *",
-]
-allow_regex = [
-    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
-    '^git (status|diff|log|show|branch|remote)\b',
-    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
-    '^rustc\b',
-    '^(python|python3) (-m | )?\w*',
-    '^(pip|pip3)\b',
-    '^virtualenv\b',
-    '^(node|npm|yarn|pnpm|bun|npx)\b',
-    '^go\b',
-    '^(gcc|g\+\+|clang|clang\++)\b',
-    '^(javac|java)\b',
-    '^(mvn|gradle)\b',
-    '^(make|cmake)\b',
-    '^(docker|docker-compose)\b',
-]
+
+# Regex deny patterns for shell commands
+# Default: []
+# Type: `array`
 deny_regex = [
     'rm\s+(-rf|--force)',
     'sudo\s+.*',
@@ -493,29 +953,919 @@ deny_regex = [
     'kubectl\s+(delete|drain|uncordon)',
 ]
 
-[permissions]
-default_mode = "default"
-allowed_tools = []
-disallowed_tools = []
-allow = []
-ask = []
-deny = []
+# Additional directories that should be searched/prepended to PATH for command execution
+# Default: ["$HOME/.cargo/bin", "$HOME/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "$HOME/.asdf/bin", "$HOME/.asdf/shims...
+# Type: `array`
+extra_path_entries = [
+    "$HOME/.cargo/bin",
+    "$HOME/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "$HOME/.asdf/bin",
+    "$HOME/.asdf/shims",
+    "$HOME/go/bin",
+]
+
+
+# Context Budget
+# How much history and workspace context is retained.
+[context]
+# Maximum tokens to keep in context (affects model cost and performance) Higher values preserve more
+# context but cost more and may hit token limits This field is maintained for compatibility but no
+# longer used for trimming
+# Default: 90000
+# Type: `integer`
+max_context_tokens = 130048
+
+# Preserve recent turns during context management This field is maintained for compatibility but no
+# longer used for trimming
+# Default: 10
+# Type: `integer`
+preserve_recent_turns = 10
+
+# Percentage to trim context to when it gets too large This field is maintained for compatibility but
+# no longer used for trimming
+# Default: 60
+# Type: `integer`
+trim_to_percent = 85
+
+# Dynamic Context
+# Spooled outputs and generated workspace context artifacts.
+[context.dynamic]
+# Enable dynamic context discovery features
+# Default: true
+# Type: `boolean`
 enabled = true
-resolve_commands = true
-audit_enabled = true
+
+# Maximum number of spooled files to keep
+# Default: 100
+# Type: `integer`
+max_spooled_files = 100
+
+# Enable persisting compaction history artifacts and session memory envelopes. These artifacts are
+# reused by later resumes and summarized fork handoffs.
+# Default: true
+# Type: `boolean`
+persist_history = true
+
+# Maximum age in seconds for spooled tool output files before cleanup
+# Default: 3600
+# Type: `integer`
+spool_max_age_secs = 3600
+
+# Enable syncing MCP tool descriptions to .vtcode/mcp/tools/
+# Default: true
+# Type: `boolean`
+sync_mcp_tools = true
+
+# Enable generating skill index in .agents/skills/INDEX.md
+# Default: true
+# Type: `boolean`
+sync_skills = true
+
+# Enable syncing terminal sessions to .vtcode/terminals/ files
+# Default: true
+# Type: `boolean`
+sync_terminals = true
+
+# Threshold in bytes above which tool outputs are spooled to files
+# Default: 8192
+# Type: `integer`
+tool_output_threshold = 8192
+
+
+# Decision Ledger
+# Important decisions kept across the session.
+[context.ledger]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Inject ledger into the system prompt each turn
+# Default: true
+# Type: `boolean`
+include_in_prompt = true
+
+# -
+# Default: 12
+# Type: `integer`
+max_entries = 12
+
+# Preserve ledger entries during context compression
+# Default: true
+# Type: `boolean`
+preserve_in_compression = true
+
+
+# Debug Logging
+# Tracing and local diagnostics output.
+[debug]
+# Enable structured logging for development and troubleshooting
+# Default: false
+# Type: `boolean`
+enable_tracing = true
+
+# Maximum age of debug logs to keep (in days)
+# Default: 7
+# Type: `integer`
+max_debug_log_age_days = 7
+
+# Maximum size of debug logs before rotating (in MB)
+# Default: 50
+# Type: `integer`
+max_debug_log_size_mb = 50
+
+# Trace level (error, warn, info, debug, trace)
+# Possible values: debug, error, info, trace, warn
+# Default: "info"
+# Type: `string`
+trace_level = "error"
+
+# List of tracing targets to enable Examples: "vtcode_core::agent", "vtcode_core::tools", "vtcode::*"
+# Default: []
+# Type: `array`
+trace_targets = []
+
+
+# Dotfile Protection
+# Extra safeguards for shell and editor dotfiles.
+[dotfile_protection]
+# Additional dotfile patterns to protect (beyond defaults).
+# Default: []
+# Type: `array`
+additional_protected_patterns = []
+
+# Path to the audit log file.
+# Default: "~/.vtcode/dotfile_audit.log"
+# Type: `string`
+audit_log_path = "~/.vtcode/dotfile_audit.log"
+
+# Enable immutable audit logging of all dotfile access attempts.
+# Default: true
+# Type: `boolean`
+audit_logging_enabled = true
+
+# Directory for storing dotfile backups.
+# Default: "~/.vtcode/dotfile_backups"
+# Type: `string`
+backup_directory = "~/.vtcode/dotfile_backups"
+
+# Block modifications during automated operations.
+# Default: true
+# Type: `boolean`
+block_during_automation = true
+
+# Operations that trigger extra protection.
+# Default: ["dependency_installation", "code_formatting", "git_operations", "project_initialization", "build_operations", "test_...
+# Type: `array`
+blocked_operations = [
+    "dependency_installation",
+    "code_formatting",
+    "git_operations",
+    "project_initialization",
+    "build_operations",
+    "test_execution",
+    "linting",
+    "auto_fix",
+]
+
+# Create backup before any permitted modification.
+# Default: true
+# Type: `boolean`
+create_backups = true
+
+# Enable dotfile protection globally.
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Maximum number of backups to retain per file.
+# Default: 10
+# Type: `integer`
+max_backups_per_file = 10
+
+# Preserve original file permissions and ownership.
+# Default: true
+# Type: `boolean`
+preserve_permissions = true
+
+# Prevent cascading modifications (one dotfile change triggering others).
+# Default: true
+# Type: `boolean`
+prevent_cascading_modifications = true
+
+# Require explicit user confirmation for any dotfile modification.
+# Default: true
+# Type: `boolean`
+require_explicit_confirmation = true
+
+# Secondary authentication required for whitelisted files.
+# Default: true
+# Type: `boolean`
+require_secondary_auth_for_whitelist = true
+
+# Whitelisted dotfiles that can be modified (after secondary confirmation).
+# Default: []
+# Type: `array`
+whitelist = []
+
+
+# History
+[history]
+persistence = "file"
+
+
+# Lifecycle Hooks
+# Automations triggered around session events.
+[hooks]
+# Lifecycle Events
+# Hook groups for session and tool milestones.
+[hooks.lifecycle]
+# Commands to run when VT Code emits a runtime notification event
+# Default: []
+# Type: `array`
+notification = []
+
+# Commands to run immediately after a tool returns its output
+# Default: []
+# Type: `array`
+post_tool_use = []
+
+pre_compact = []
+
+# Commands to run immediately before a tool is executed
+# Default: []
+# Type: `array`
+pre_tool_use = []
+
+quiet_success_output = false
+
+# Commands to run when an agent session ends
+# Default: []
+# Type: `array`
+session_end = []
+
+# Commands to run immediately when an agent session begins
+# Default: []
+# Type: `array`
+session_start = []
+
+subagent_start = []
+
+subagent_stop = []
+
+# Commands to run after a task is finalized and session is closed
+# Default: []
+# Type: `array`
+task_completed = []
+
+# Commands to run when the agent indicates task completion (pre-exit)
+# Possible values: pre-exit
+# Default: []
+# Type: `array`
+task_completion = []
+
+# Commands to run when the user submits a prompt (pre-processing)
+# Possible values: pre-processing
+# Default: []
+# Type: `array`
+user_prompt_submit = []
+
+
+# IDE Context
+# Cross-IDE active editor context injected into prompts and inline UI.
+[ide_context]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# -
+# Default: true
+# Type: `boolean`
+include_selection_text = true
+
+# -
+# Default: true
+# Type: `boolean`
+inject_into_prompt = true
+
+# -
+# Default: "auto"
+# Type: `string`
+provider_mode = "auto"
+
+# -
+# Default: true
+# Type: `boolean`
+show_in_tui = true
+
+# IDE Providers
+# Per-editor-family enablement for editor context ingestion.
+[ide_context.providers]
+# Generic Bridge
+# Enable file-bridge snapshots from JetBrains and other external adapters.
+[ide_context.providers.generic]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# VS Code Family
+# Enable context snapshots from VS Code, Cursor, Windsurf, and compatible editors.
+[ide_context.providers.vscode_compatible]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# Zed Family
+# Enable context snapshots from Zed integrations.
+[ide_context.providers.zed]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# MCP Servers
+# Model Context Protocol providers and defaults.
+[mcp]
+# Enable connection pooling for better performance
+# Default: true
+# Type: `boolean`
+connection_pooling_enabled = true
+
+# Connection timeout in seconds
+# Default: 30
+# Type: `integer`
+connection_timeout_seconds = 30
+
+# Enable MCP functionality
+# Default: false
+# Type: `boolean`
+enabled = true
+
+# Toggle experimental RMCP client features
+# Default: true
+# Type: `boolean`
+experimental_use_rmcp_client = true
+
+# Maximum number of concurrent MCP connections
+# Default: 5
+# Type: `integer`
+max_concurrent_connections = 5
+
+# Configured MCP providers
+# Default: []
+# Type: `array`
+providers = []
+
+# Request timeout in seconds
+# Default: 30
+# Type: `integer`
+request_timeout_seconds = 30
+
+# Connection retry attempts
+# Default: 3
+# Type: `integer`
+retry_attempts = 3
+
+# Cache capacity for tool discovery results
+# Default: 100
+# Type: `integer`
+tool_cache_capacity = 100
+
+# MCP Allowlist
+# Default restrictions for MCP resources, prompts, and config.
+[mcp.allowlist]
+# Whether to enforce allow list checks
+# Default: false
+# Type: `boolean`
+enforce = false
+
+# Default MCP Rules
+# Fallback allowlist applied to every MCP provider.
+[mcp.allowlist.default]
+
+# Provider Overrides
+# Per-provider MCP allowlist exceptions.
+[mcp.allowlist.providers]
+
+# MCP Requirements
+# Startup checks and required capabilities for MCP providers.
+[mcp.requirements]
+# Allowed HTTP endpoints when enforcement is enabled
+# Default: []
+# Type: `array`
+allowed_http_endpoints = []
+
+# Allowed stdio command names when enforcement is enabled
+# Default: []
+# Type: `array`
+allowed_stdio_commands = []
+
+# Whether requirement checks are enforced
+# Default: false
+# Type: `boolean`
+enforce = false
+
+
+# MCP Security
+# Validation and runtime protection for MCP.
+[mcp.security]
+# Enable authentication for MCP server
+# Default: false
+# Type: `boolean`
+auth_enabled = false
+
+# MCP Rate Limits
+# Concurrency and throughput guardrails for MCP traffic.
+[mcp.security.rate_limit]
+# Maximum concurrent requests per client
+# Default: 10
+# Type: `integer`
+concurrent_requests = 10
+
+# Maximum requests per minute per client
+# Default: 100
+# Type: `integer`
+requests_per_minute = 100
+
+
+# MCP Validation
+# Schema and payload checks for MCP requests.
+[mcp.security.validation]
+# Maximum argument size in bytes
+# Default: 1048576
+# Type: `integer`
+max_argument_size = 1048576
+
+# Enable path traversal protection
+# Default: true
+# Type: `boolean`
+path_traversal_protection = true
+
+# Enable JSON schema validation for tool arguments
+# Default: true
+# Type: `boolean`
+schema_validation_enabled = true
+
+
+# MCP Server Transport
+# How VT Code hosts its own MCP server.
+[mcp.server]
+# Bind address for the MCP server
+# Default: "127.0.0.1"
+# Type: `string`
+bind_address = "127.0.0.1"
+
+# Enable vtcode's MCP server capability
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Tools exposed by the vtcode MCP server
+# Default: []
+# Type: `array`
+exposed_tools = []
+
+# Server identifier
+# Default: "vtcode-mcp-server"
+# Type: `string`
+name = "vtcode-mcp-server"
+
+# Port for the MCP server
+# Default: 3000
+# Type: `integer`
+port = 3000
+
+# Server transport type
+# Default: "sse"
+# Type: `string`
+transport = "sse"
+
+# Server version
+# Default: "0.88.0"
+# Type: `string`
+version = "0.72.2"
+
+
+# MCP UI
+# How MCP tools and events appear in the interface.
+[mcp.ui]
+# Maximum number of MCP events to display
+# Default: 50
+# Type: `integer`
+max_events = 50
+
+# UI mode for MCP events: "compact" or "full"
+# Default: "compact"
+# Type: `string`
+mode = "compact"
+
+# Show MCP provider names in UI
+# Default: true
+# Type: `boolean`
+show_provider_names = true
+
+# MCP Renderers
+# Presentation rules for specific MCP tool outputs.
+[mcp.ui.renderers]
+
+# Model Defaults
+# Shared model selection and context settings.
+[model]
+# Enable interactive prompt for loop detection instead of silently halting
+# Default: true
+# Type: `boolean`
+loop_detection_interactive = true
+
+# Maximum number of identical tool calls (same tool + same arguments) before triggering loop detection
+# Default: 2
+# Type: `integer`
+loop_detection_threshold = 2
+
+# Enable loop hang detection to identify when model is stuck in repetitive behavior
+# Default: false
+# Type: `boolean`
+skip_loop_detection = false
+
+
+# Performance
+# Caching and runtime performance tuning.
+[optimization]
+# Agent Execution
+# Concurrency and execution scheduling for agent turns.
+[optimization.agent_execution]
+# Enable performance prediction
+# Default: -
+# Type: `boolean`
+enable_performance_prediction = false
+
+# Back-off duration in milliseconds when no work is pending This reduces CPU usage during idle periods
+# Default: -
+# Type: `integer`
+idle_backoff_ms = 100
+
+# Idle detection timeout in milliseconds (0 to disable) When the agent is idle for this duration, it
+# will enter a low-power state
+# Default: -
+# Type: `integer`
+idle_timeout_ms = 5000
+
+# Maximum execution time in seconds
+# Default: -
+# Type: `integer`
+max_execution_time_secs = 300
+
+# Maximum consecutive idle cycles before entering deep sleep
+# Default: -
+# Type: `integer`
+max_idle_cycles = 10
+
+# Maximum memory usage in MB
+# Default: -
+# Type: `integer`
+max_memory_mb = 1024
+
+# Resource monitoring interval in milliseconds
+# Default: -
+# Type: `integer`
+resource_monitor_interval_ms = 100
+
+# State transition history size
+# Default: -
+# Type: `integer`
+state_history_size = 1000
+
+# Enable optimized agent execution loop
+# Default: -
+# Type: `boolean`
+use_optimized_loop = false
+
+
+# Async Pipeline
+# Background streaming and async pipeline tuning.
+[optimization.async_pipeline]
+# Batch timeout in milliseconds
+# Default: -
+# Type: `integer`
+batch_timeout_ms = 100
+
+# Result cache size
+# Default: -
+# Type: `integer`
+cache_size = 100
+
+# Enable request batching
+# Default: -
+# Type: `boolean`
+enable_batching = false
+
+# Enable result caching
+# Default: -
+# Type: `boolean`
+enable_caching = true
+
+# Maximum batch size for tool requests
+# Default: -
+# Type: `integer`
+max_batch_size = 5
+
+
+# Command Cache
+# Cache repeated shell command results.
+[optimization.command_cache]
+# Allowlist of command prefixes eligible for caching
+# Default: -
+# Type: `array`
+allowlist = [
+    "rg",
+    "ls",
+    "git status",
+    "git diff --stat",
+]
+
+# Enable command caching
+# Default: -
+# Type: `boolean`
+enabled = true
+
+# Maximum number of cached entries
+# Default: -
+# Type: `integer`
+max_entries = 128
+
+# Cache TTL in milliseconds
+# Default: -
+# Type: `integer`
+ttl_ms = 2000
+
+
+# File Read Cache
+# Reuse hot file reads to reduce I/O churn.
+[optimization.file_read_cache]
+# Enable file read caching
+# Default: -
+# Type: `boolean`
+enabled = true
+
+# Maximum number of cached entries
+# Default: -
+# Type: `integer`
+max_entries = 128
+
+# Maximum cached file size (bytes)
+# Possible values: bytes
+# Default: -
+# Type: `integer`
+max_size_bytes = 10485760
+
+# Minimum file size (bytes) before caching
+# Possible values: bytes
+# Default: -
+# Type: `integer`
+min_size_bytes = 262144
+
+# Cache TTL in seconds
+# Default: -
+# Type: `integer`
+ttl_secs = 300
+
+
+# LLM Client
+# HTTP client behavior for model requests.
+[optimization.llm_client]
+# Response cache TTL in seconds
+# Default: -
+# Type: `integer`
+cache_ttl_secs = 300
+
+# Connection pool size
+# Default: -
+# Type: `integer`
+connection_pool_size = 4
+
+# Enable connection pooling
+# Default: -
+# Type: `boolean`
+enable_connection_pooling = false
+
+# Enable request batching
+# Default: -
+# Type: `boolean`
+enable_request_batching = false
+
+# Enable response caching
+# Default: -
+# Type: `boolean`
+enable_response_caching = true
+
+# Rate limit burst capacity
+# Default: -
+# Type: `integer`
+rate_limit_burst = 20
+
+# Rate limit: requests per second
+# Default: -
+# Type: `number`
+rate_limit_rps = 10.0
+
+# Response cache size
+# Default: -
+# Type: `integer`
+response_cache_size = 50
+
+
+# Memory Pool
+# Allocator and buffer reuse settings.
+[optimization.memory_pool]
+# Enable memory pool (can be disabled for debugging)
+# Default: -
+# Type: `boolean`
+enabled = true
+
+# Maximum number of strings to pool
+# Default: -
+# Type: `integer`
+max_string_pool_size = 64
+
+# Maximum number of Values to pool
+# Default: -
+# Type: `integer`
+max_value_pool_size = 32
+
+# Maximum number of Vec<String> to pool
+# Default: -
+# Type: `integer`
+max_vec_pool_size = 16
+
+
+# Profiling
+# Performance instrumentation and trace sampling.
+[optimization.profiling]
+# Auto-export results to file
+# Default: -
+# Type: `boolean`
+auto_export_results = false
+
+# Enable regression testing
+# Default: -
+# Type: `boolean`
+enable_regression_testing = false
+
+# Enable performance profiling
+# Default: -
+# Type: `boolean`
+enabled = false
+
+# Export file path
+# Default: -
+# Type: `string`
+export_file_path = "benchmark_results.json"
+
+# Maximum benchmark history size
+# Default: -
+# Type: `integer`
+max_history_size = 1000
+
+# Maximum allowed performance regression percentage
+# Default: -
+# Type: `number`
+max_regression_percent = 10.0
+
+# Resource monitoring interval in milliseconds
+# Default: -
+# Type: `integer`
+monitor_interval_ms = 100
+
+
+# Tool Registry
+# Startup and lookup behavior for tool metadata.
+[optimization.tool_registry]
+# Tool execution timeout in seconds
+# Default: -
+# Type: `integer`
+default_timeout_secs = 180
+
+# Hot cache size for frequently used tools
+# Default: -
+# Type: `integer`
+hot_cache_size = 16
+
+# Maximum concurrent tool executions
+# Default: -
+# Type: `integer`
+max_concurrent_tools = 4
+
+# Enable optimized registry
+# Default: -
+# Type: `boolean`
+use_optimized_registry = false
+
+
+# Output Style
+# Formatting and readability preferences.
+[output_style]
+# -
+# Default: "default"
+# Type: `string`
+active_style = "default"
+
+
+# Permissions
+# Default approval and trust behavior.
+[permissions]
+# Rules that allow matching tool calls without prompting
+# Default: []
+# Type: `array`
+allow = []
+
+allowed_tools = []
+
+# Rules that require an interactive prompt when they match
+# Default: []
+# Type: `array`
+ask = []
+
+# Directory for audit logs (created if not exists) Defaults to ~/.vtcode/audit
+# Default: "~/.vtcode/audit"
+# Type: `string`
 audit_directory = "~/.vtcode/audit"
-log_allowed_commands = true
-log_denied_commands = true
-log_permission_prompts = true
+
+# Enable audit logging of all permission decisions
+# Default: true
+# Type: `boolean`
+audit_enabled = true
+
+# Enable permission decision caching to avoid redundant evaluations
+# Default: true
+# Type: `boolean`
 cache_enabled = true
+
+# Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes)
+# Default: 300
+# Type: `integer`
 cache_ttl_seconds = 300
 
+# Default unified permission mode. Options: `"default"`, `"accept_edits"`, `"auto"`, `"plan"`,
+# `"dont_ask"`, `"bypass_permissions"` plus legacy aliases `"ask"`, `"suggest"`, `"auto-approved"`,
+# `"full-auto"`, and `"trusted_auto"`
+# Possible values: accept_edits, ask, auto, auto-approved, bypass_permissions, default, dont_ask, full-auto, plan, suggest, trusted_auto
+# Default: "default"
+# Type: `string`
+default_mode = "default"
+
+# Rules that deny matching tool calls
+# Default: []
+# Type: `array`
+deny = []
+
+disallowed_tools = []
+
+# Enable the enhanced permission system (resolver + audit logger + cache)
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Log allowed commands to audit trail
+# Default: true
+# Type: `boolean`
+log_allowed_commands = true
+
+# Log denied commands to audit trail
+# Default: true
+# Type: `boolean`
+log_denied_commands = true
+
+# Log permission prompts (when user is asked for confirmation)
+# Default: true
+# Type: `boolean`
+log_permission_prompts = true
+
+# Enable command resolution to actual paths (helps identify suspicious commands)
+# Default: true
+# Type: `boolean`
+resolve_commands = true
+
+# Auto Mode
 [permissions.auto_mode]
-model = ""
-probe_model = ""
-max_consecutive_denials = 3
-max_total_denials = 20
-drop_broad_allow_rules = true
+# Narrow allow exceptions applied after auto-mode block rules
+# Default: built-in defaults
+# Type: `array`
+allow_exceptions = [
+    "Allow read-only tools and read-only browsing/search actions.",
+    "Allow file edits and writes inside the current workspace when the path is not protected.",
+    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
+]
+
+# Background-classifier block rules for `permissions.default_mode = "auto"`
+# Default: built-in defaults
+# Type: `array`
 block_rules = [
     "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.",
     "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.",
@@ -525,261 +1875,769 @@ block_rules = [
     "Block destructive or production/shared-infrastructure actions unless the user explicitly authorized the target and the action.",
     "Block destructive actions against inferred, fuzzy-matched, or agent-selected targets when the user did not name the exact target.",
 ]
-allow_exceptions = [
-    "Allow read-only tools and read-only browsing/search actions.",
-    "Allow file edits and writes inside the current workspace when the path is not protected.",
-    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
-]
 
-[security]
-human_in_the_loop = true
-require_write_tool_for_claims = true
-auto_apply_detected_patches = false
-zero_trust_mode = false
-encrypt_payloads = false
-integrity_checks = true
-hitl_notification_bell = true
+# Ignore broad shell/interpreter allow rules while auto mode is active so risky commands still reach
+# the classifier
+# Default: true
+# Type: `boolean`
+drop_broad_allow_rules = true
 
+# Consecutive classifier denials before auto mode falls back to manual prompts
+# Default: 3
+# Type: `integer`
+max_consecutive_denials = 3
+
+# Total classifier denials before auto mode falls back to manual prompts
+# Default: 20
+# Type: `integer`
+max_total_denials = 20
+
+# Optional reviewer-model override for auto mode. Leave empty to auto-pick a lightweight model from
+# the active provider
+# Default: ""
+# Type: `string`
+model = ""
+
+# Optional prompt-injection-probe model override for auto mode
+# Default: ""
+# Type: `string`
+probe_model = ""
+
+# Environment
 [permissions.auto_mode.environment]
-trusted_paths = []
+# Extra trusted domains for auto mode
+# Default: []
+# Type: `array`
 trusted_domains = []
+
+# Extra trusted Git hosts for auto mode
+# Default: []
+# Type: `array`
 trusted_git_hosts = []
+
+# Extra trusted Git orgs for auto mode
+# Default: []
+# Type: `array`
 trusted_git_orgs = []
+
+# Extra trusted filesystem roots for auto mode
+# Default: []
+# Type: `array`
+trusted_paths = []
+
+# Extra trusted service identifiers for auto mode
+# Default: []
+# Type: `array`
 trusted_services = []
 
+
+# Prompt Cache
+# Reuse prompts to cut duplicate provider work.
+[prompt_cache]
+# Base directory for local prompt cache storage (supports `~` expansion)
+# Default: "~/.vtcode/cache/prompts"
+# Type: `string`
+cache_dir = "~/.vtcode/cache/prompts"
+
+# Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code
+# keeps volatile runtime context at the end of prompt text.
+# Default: true
+# Type: `boolean`
+cache_friendly_prompt_shaping = false
+
+# Automatically evict stale entries on startup/shutdown
+# Default: true
+# Type: `boolean`
+enable_auto_cleanup = true
+
+# Enable prompt caching features globally
+# Default: true
+# Type: `boolean`
+enabled = false
+
+# Maximum age (in days) before cached entries are purged
+# Default: 30
+# Type: `integer`
+max_age_days = 30
+
+# Maximum number of cached prompt entries to retain on disk
+# Default: 1000
+# Type: `integer`
+max_entries = 1000
+
+# Minimum quality score required before persisting an entry
+# Default: 0.7
+# Type: `number`
+min_quality_threshold = 0.7
+
+# Prompt Cache Providers
+# Provider-specific prompt cache behavior.
+[prompt_cache.providers]
+# Anthropic Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.anthropic]
+# Apply cache control to system prompts by default
+# Default: true
+# Type: `boolean`
+cache_system_messages = true
+
+# Apply cache control to tool definitions by default Default: true (tools are typically stable and
+# benefit from longer caching)
+# Default: true
+# Type: `boolean`
+cache_tool_definitions = true
+
+# Apply cache control to user messages exceeding threshold
+# Default: true
+# Type: `boolean`
+cache_user_messages = true
+
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Extended TTL for Anthropic prompt caching (in seconds) Set to >= 3600 for 1-hour cache on messages
+# Default: 3600
+# Type: `integer | null`
+extended_ttl_seconds = 3600
+
+# Maximum number of cache breakpoints to use (max 4 per Anthropic spec). Default: 4
+# Default: 4
+# Type: `integer`
+max_breakpoints = 4
+
+# TTL for subsequent cache breakpoints (messages). Set to >= 3600 for 1-hour cache on messages.
+# Default: 300 (5 minutes) - recommended for frequently changing messages
+# Possible values: messages
+# Default: 300
+# Type: `integer`
+messages_ttl_seconds = 300
+
+# Minimum message length (in characters) before applying cache control to avoid caching very short
+# messages that don't benefit from caching. Default: 256 characters (~64 tokens)
+# Default: 256
+# Type: `integer`
+min_message_length_for_cache = 256
+
+# Default TTL in seconds for the first cache breakpoint (tools/system). Anthropic only supports "5m"
+# (300s) or "1h" (3600s) TTL formats. Set to >= 3600 for 1-hour cache on tools and system prompts.
+# Default: 3600 (1 hour) - recommended for stable tool definitions
+# Possible values: tools/system
+# Default: 3600
+# Type: `integer`
+tools_ttl_seconds = 3600
+
+
+# DeepSeek Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.deepseek]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Emit cache hit/miss metrics from responses when available
+# Default: true
+# Type: `boolean`
+surface_metrics = true
+
+
+# Gemini Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.gemini]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# TTL for explicit caches (ignored in implicit mode)
+# Default: 3600
+# Type: `integer | null`
+explicit_ttl_seconds = 3600
+
+# -
+# Default: 1024
+# Type: `integer`
+min_prefix_tokens = 1024
+
+# Gemini prompt caching mode selection
+# Default: "implicit"
+# Type: `string`
+mode = "implicit"
+
+
+# Moonshot Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.moonshot]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# OpenAI Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.openai]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# -
+# Default: 3600
+# Type: `integer`
+idle_expiration_seconds = 3600
+
+# -
+# Default: 1024
+# Type: `integer`
+min_prefix_tokens = 1024
+
+# Strategy for generating OpenAI `prompt_cache_key`. Session mode derives one stable key per VT Code
+# conversation.
+# Default: "session"
+# Type: `string`
+prompt_cache_key_mode = "session"
+
+# -
+# Default: true
+# Type: `boolean`
+surface_metrics = true
+
+
+# OpenRouter Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.openrouter]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Propagate provider cache instructions automatically
+# Default: true
+# Type: `boolean`
+propagate_provider_capabilities = true
+
+# Surface cache savings reported by OpenRouter
+# Default: true
+# Type: `boolean`
+report_savings = true
+
+
+# Z.AI Prompt Cache
+# Provider-specific prompt cache overrides.
+[prompt_cache.providers.zai]
+# -
+# Default: false
+# Type: `boolean`
+enabled = false
+
+
+# Provider Endpoints
+# Network and provider-specific API settings.
+[provider]
+# Anthropic
+# Anthropic-specific request settings.
+[provider.anthropic]
+# Enable token counting via the count_tokens endpoint When enabled, the agent can estimate input token
+# counts before making API calls Useful for proactive management of rate limits and costs
+# Default: false
+# Type: `boolean`
+count_tokens_enabled = false
+
+# Effort level for token usage (high, medium, low) Controls how many tokens Claude uses when
+# responding, trading off between response thoroughness and token efficiency. Supported by Claude Opus
+# 4.5/4.6 (4.5 requires effort beta header)
+# Possible values: high, low, medium
+# Default: "low"
+# Type: `string`
+effort = "low"
+
+# Enable extended thinking feature for Anthropic models When enabled, Claude uses internal reasoning
+# before responding, providing enhanced reasoning capabilities for complex tasks. Only supported by
+# Claude 4, Claude 4.5, and Claude 3.7 Sonnet models. Claude 4.6 uses adaptive thinking instead of
+# extended thinking. Note: Extended thinking is now auto-enabled by default (31,999 tokens). Set
+# MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models. See:
+# https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+# Possible values: 31
+# Default: true
+# Type: `boolean`
+extended_thinking_enabled = true
+
+# Beta header for interleaved thinking feature
+# Default: "interleaved-thinking-2025-05-14"
+# Type: `string`
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+
+# Budget tokens for extended thinking (minimum: 1024, default: 31999) On 64K output models (Opus 4.5,
+# Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999 On 32K output models (Opus 4): max 31,999 Use
+# MAX_THINKING_TOKENS environment variable to override.
+# Default: 31999
+# Type: `integer`
+interleaved_thinking_budget_tokens = 31999
+
+# Type value for enabling interleaved thinking
+# Default: "enabled"
+# Type: `string`
+interleaved_thinking_type_enabled = "enabled"
+
+# DEPRECATED: Model name validation has been removed. The Anthropic API validates model names
+# directly, avoiding maintenance burden and allowing flexibility. This field is kept for backward
+# compatibility but has no effect.
+# Default: false
+# Type: `boolean`
+skip_model_validation = false
+
+# Anthropic Tool Search
+# Hosted search tool configuration for Anthropic models.
+[provider.anthropic.tool_search]
+# Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language)
+# Default: "regex"
+# Type: `string`
+algorithm = "regex"
+
+# Tool names that should never be deferred (always available)
+# Default: []
+# Type: `array`
+always_available_tools = []
+
+# Automatically defer loading of all tools except core tools
+# Default: true
+# Type: `boolean`
+defer_by_default = true
+
+# Enable tool search feature (requires advanced-tool-use-2025-11-20 beta)
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Maximum number of tool search results to return
+# Default: 5
+# Type: `integer`
+max_results = 5
+
+
+# OpenAI
+# OpenAI-specific request settings.
+[provider.openai]
+# Enable the native OpenAI Responses WebSocket transport for eligible non-streaming requests to
+# `api.openai.com`. VT Code keeps this opt-in, sends incremental input only when it can prove
+# continuation safely, may warm up brand-new chains with `generate=false`, reconnects after
+# close/60-minute limits, reuses cached continuation only when it can survive reconnect, and otherwise
+# restarts as a new chain after reconnect or `previous_response_not_found`.
+# Default: false
+# Type: `boolean`
+websocket_mode = false
+
+# Hosted Shell
+[provider.openai.hosted_shell]
+# Enable OpenAI hosted shell instead of VT Code's local shell tool. Only applies to native OpenAI
+# Responses models.
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Hosted shell environment mode. Use `"container_auto"` to provision a new container with mounted
+# files/skills, or `"container_reference"` to reuse an existing container ID.
+# Default: "container_auto"
+# Type: `string`
+environment = "container_auto"
+
+# Network Policy
+[provider.openai.hosted_shell.network_policy]
+# Hosted shell network policy. Use `"disabled"` for no outbound access or `"allowlist"` to permit only
+# `allowed_domains`. Only used with `container_auto`.
+# Default: "disabled"
+# Type: `string`
+type = "disabled"
+
+
+# OpenAI Tool Search
+# Hosted search tool configuration for OpenAI Responses models.
+[provider.openai.tool_search]
+always_available_tools = []
+
+defer_by_default = true
+
+enabled = true
+
+
+# Terminal Sessions
+# PTY limits, buffering, and shell defaults.
+[pty]
+# Command timeout in seconds (prevents hanging commands)
+# Default: 300
+# Type: `integer`
+command_timeout_seconds = 3600
+
+# Default terminal columns for PTY sessions
+# Default: 80
+# Type: `integer`
+default_cols = 120
+
+# Default terminal rows for PTY sessions
+# Default: 24
+# Type: `integer`
+default_rows = 24
+
+emulation_backend = "legacy_vt100"
+
+# Enable PTY support for interactive commands
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Threshold (KB) at which to auto-spool large outputs to disk instead of memory
+# Possible values: KB
+# Default: 5000
+# Type: `integer`
+large_output_threshold_kb = 5000
+
+# Maximum bytes of output to retain per PTY session (prevents memory explosion)
+# Default: 25000000
+# Type: `integer`
+max_scrollback_bytes = 25000000
+
+# Maximum number of concurrent PTY sessions
+# Default: 10
+# Type: `integer`
+max_sessions = 10
+
+# Total scrollback buffer size (lines) retained per PTY session
+# Possible values: lines
+# Default: 400
+# Type: `integer`
+scrollback_lines = 400
+
+# Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks.
+# Default: false
+# Type: `boolean`
+shell_zsh_fork = false
+
+# Number of recent PTY output lines to display in the chat transcript
+# Default: 20
+# Type: `integer`
+stdout_tail_lines = 20
+
+
+# Sandboxing
+# Process isolation and filesystem boundaries.
+[sandbox]
+# Default sandbox mode
+# Default: "read_only"
+# Type: `string`
+default_mode = "read_only"
+
+# Enable sandboxing for command execution
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# External Sandbox
+# Container or VM-backed isolation settings.
+[sandbox.external]
+# Type of external sandbox
+# Default: "none"
+# Type: `string`
+sandbox_type = "none"
+
+# Docker Sandbox
+# Docker-based sandbox execution settings.
+[sandbox.external.docker]
+# CPU limit for container
+# Default: ""
+# Type: `string`
+cpu_limit = ""
+
+# Docker image to use
+# Default: "ubuntu:22.04"
+# Type: `string`
+image = "ubuntu:22.04"
+
+# Memory limit for container
+# Default: ""
+# Type: `string`
+memory_limit = ""
+
+# Network mode
+# Default: "none"
+# Type: `string`
+network_mode = "none"
+
+
+# MicroVM Sandbox
+# MicroVM-backed isolation settings.
+[sandbox.external.microvm]
+# Kernel image path
+# Default: ""
+# Type: `string`
+kernel_path = ""
+
+# Memory size in MB
+# Default: 512
+# Type: `integer`
+memory_mb = 512
+
+# Root filesystem path
+# Default: ""
+# Type: `string`
+rootfs_path = ""
+
+# Number of vCPUs
+# Default: 1
+# Type: `integer`
+vcpus = 1
+
+# VMM to use (firecracker, cloud-hypervisor)
+# Possible values: cloud-hypervisor, firecracker
+# Default: ""
+# Type: `string`
+vmm = ""
+
+
+# Sandbox Network
+# Outbound network restrictions inside the sandbox.
+[sandbox.network]
+# Allow any network access (legacy mode)
+# Default: false
+# Type: `boolean`
+allow_all = false
+
+# Domain allowlist for network egress Following field guide: "Default-deny outbound network, then
+# allowlist."
+# Default: []
+# Type: `array`
+allowlist = []
+
+# Block all network access (overrides allowlist)
+# Default: false
+# Type: `boolean`
+block_all = false
+
+
+# Resource Limits
+# CPU, memory, and disk ceilings for sandbox runs.
+[sandbox.resource_limits]
+# Custom CPU time limit in seconds (0 = use preset)
+# Default: 0
+# Type: `integer`
+cpu_time_secs = 0
+
+# Custom disk write limit in MB (0 = use preset)
+# Default: 0
+# Type: `integer`
+max_disk_mb = 0
+
+# Custom memory limit in MB (0 = use preset)
+# Default: 0
+# Type: `integer`
+max_memory_mb = 0
+
+# Custom max processes (0 = use preset)
+# Default: 0
+# Type: `integer`
+max_pids = 0
+
+# Preset resource limits profile
+# Default: "moderate"
+# Type: `string`
+preset = "moderate"
+
+# Custom wall clock timeout in seconds (0 = use preset)
+# Default: 0
+# Type: `integer`
+timeout_secs = 0
+
+
+# Seccomp Filters
+# Linux syscall restrictions for sandboxed processes.
+[sandbox.seccomp]
+# Additional syscalls to block
+# Default: []
+# Type: `array`
+additional_blocked = []
+
+# Enable seccomp filtering (Linux only)
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Log blocked syscalls instead of killing process (for debugging)
+# Default: false
+# Type: `boolean`
+log_only = false
+
+# Seccomp profile preset
+# Default: "strict"
+# Type: `string`
+profile = "strict"
+
+
+# Sensitive Paths
+# Protected host paths denied to sandboxed runs.
+[sandbox.sensitive_paths]
+# Additional paths to block
+# Default: []
+# Type: `array`
+additional = []
+
+# Paths to explicitly allow (overrides defaults)
+# Default: []
+# Type: `array`
+exceptions = []
+
+# Use default sensitive paths (SSH, AWS, etc.)
+# Possible values: AWS, SSH, etc.
+# Default: true
+# Type: `boolean`
+use_defaults = true
+
+
+# Security Gate
+# Approvals and blocking rules for risky actions.
+[security]
+# Automatically apply detected patch blocks in assistant replies when no write tool was executed.
+# Defaults to false for safety.
+# Default: false
+# Type: `boolean`
+auto_apply_detected_patches = false
+
+# Encrypt payloads passed across executors.
+# Default: false
+# Type: `boolean`
+encrypt_payloads = false
+
+# Play terminal bell notification when HITL approval is required.
+# Default: true
+# Type: `boolean`
+hitl_notification_bell = true
+
+# Require human confirmation for critical actions
+# Default: true
+# Type: `boolean`
+human_in_the_loop = true
+
+# Enable runtime integrity tagging for critical paths.
+# Default: true
+# Type: `boolean`
+integrity_checks = true
+
+# Require a successful write tool before accepting claims like "I've updated the file" as applied.
+# When true, such claims are treated as proposals unless a write tool executed successfully.
+# Default: true
+# Type: `boolean`
+require_write_tool_for_claims = true
+
+# Enable zero-trust checks between components.
+# Default: false
+# Type: `boolean`
+zero_trust_mode = false
+
+# Gatekeeper
+# Extra approval checks and enforcement rules.
 [security.gatekeeper]
-warn_on_quarantine = true
-auto_clear_quarantine = false
+# Paths eligible for quarantine auto-clear
+# Default: [".vtcode/bin", "~/.vtcode/bin"]
+# Type: `array`
 auto_clear_paths = [
     ".vtcode/bin",
     "~/.vtcode/bin",
 ]
 
-[sandbox]
-enabled = false
-default_mode = "read_only"
+# Attempt to clear quarantine automatically (opt-in)
+# Possible values: opt-in
+# Default: false
+# Type: `boolean`
+auto_clear_quarantine = false
 
-[sandbox.network]
-allow_all = false
-allowlist = []
-block_all = false
+# Warn when a quarantined executable is detected
+# Default: true
+# Type: `boolean`
+warn_on_quarantine = true
 
-[sandbox.sensitive_paths]
-use_defaults = true
-additional = []
-exceptions = []
 
-[sandbox.resource_limits]
-preset = "moderate"
-max_memory_mb = 0
-max_pids = 0
-max_disk_mb = 0
-cpu_time_secs = 0
-timeout_secs = 0
+# Skills
+# Skill discovery, rendering, and loading behavior.
+[skills]
+# Enable auto-trigger on $skill-name mentions
+# Default: true
+# Type: `boolean`
+enable-auto-trigger = true
 
-[sandbox.seccomp]
-enabled = true
-profile = "strict"
-additional_blocked = []
-log_only = false
+# Enable description-based keyword matching for auto-trigger
+# Default: true
+# Type: `boolean`
+enable-description-matching = true
 
-[sandbox.external]
-sandbox_type = "none"
+# Maximum number of skills to show in system prompt
+# Default: 10
+# Type: `integer`
+max-skills-in-prompt = 10
 
-[sandbox.external.docker]
-image = "ubuntu:22.04"
-memory_limit = ""
-cpu_limit = ""
-network_mode = "none"
+# Minimum keyword matches required for description-based trigger
+# Default: 2
+# Type: `integer`
+min-keyword-matches = 2
 
-[sandbox.external.microvm]
-vmm = ""
-kernel_path = ""
-rootfs_path = ""
-memory_mb = 512
-vcpus = 1
+# Prompt format for skills section (Agent Skills spec) - "xml": XML wrapping for safety (Claude models
+# default) - "markdown": Plain markdown sections
+# Default: "xml"
+# Type: `string`
+prompt-format = "xml"
 
-[ui]
-tool_output_mode = "compact"
-tool_output_max_lines = 50
-tool_output_spool_bytes = 200000
-allow_tool_ansi = true
-inline_viewport_rows = 16
-reasoning_display_mode = "toggle"
-reasoning_visible_default = true
-vim_mode = false
-layout_mode = "auto"
-display_mode = "minimal"
-show_sidebar = false
-dim_completed_todos = true
-message_block_spacing = true
-show_turn_timer = false
-show_diagnostics_in_transcript = true
-minimum_contrast = 4.5
-bold_is_bright = true
-safe_colors_only = false
-color_scheme_mode = "auto"
-screen_reader_mode = false
-reduce_motion_mode = false
-reduce_motion_keep_progress_animation = false
+# Rendering mode for skills in system prompt - "lean": Codex-style minimal (name + description + path
+# only, 40-60% token savings) - "full": Full metadata with version, author, native flags
+# Default: "lean"
+# Type: `string`
+render-mode = "lean"
 
-[ui.status_line]
-mode = "Auto"
-refresh_interval_ms = 1000
-command_timeout_ms = 200
-
-[ui.keyboard_protocol]
-enabled = true
-mode = "default"
-disambiguate_escape_codes = true
-report_event_types = true
-report_alternate_keys = true
-report_all_keys = false
-
-[ui.notifications]
-enabled = true
-delivery_mode = "hybrid"
-suppress_when_focused = true
-command_failure = true
-tool_failure = true
-error = true
-completion = true
-completion_success = true
-completion_failure = true
-hitl = true
-policy_approval = true
-request = true
-tool_success = true
-repeat_window_seconds = 30
-max_identical_in_window = 1
-
-[chat.askQuestions]
+# Bundled
+[skills.bundled]
 enabled = true
 
-[pty]
+
+# Subagents
+[subagents]
+auto_delegate_read_only = true
+
+default_timeout_seconds = 300
+
 enabled = true
-default_rows = 24
-default_cols = 120
-max_sessions = 10
-command_timeout_seconds = 3600
-stdout_tail_lines = 20
-scrollback_lines = 400
-max_scrollback_bytes = 25000000
-emulation_backend = "legacy_vt100"
-large_output_threshold_kb = 5000
-shell_zsh_fork = false
 
-[debug]
-enable_tracing = true
-trace_level = "error"
-trace_targets = []
-max_debug_log_size_mb = 50
-max_debug_log_age_days = 7
+max_concurrent = 4
 
-[context]
-max_context_tokens = 130048
-trim_to_percent = 85
-preserve_recent_turns = 10
+max_depth = 1
 
-[context.ledger]
+# Background
+[subagents.background]
+auto_restore = true
+
+default_agent = "default"
+
 enabled = true
-max_entries = 12
-include_in_prompt = true
-preserve_in_compression = true
 
-[context.dynamic]
-enabled = true
-tool_output_threshold = 8192
-sync_terminals = true
-persist_history = true
-sync_mcp_tools = true
-sync_skills = true
-spool_max_age_secs = 3600
-max_spooled_files = 100
+refresh_interval_ms = 2000
 
-[telemetry]
-trajectory_enabled = true
-dashboards_enabled = true
-sample_interval_ms = 1000
-retention_days = 14
-bottleneck_tracing = true
-perf_events = true
-trajectory_max_files = 50
-trajectory_max_age_days = 14
-trajectory_max_size_mb = 50
+toggle_shortcut = "ctrl+b"
 
-[optimization.memory_pool]
-enabled = true
-max_string_pool_size = 64
-max_value_pool_size = 32
-max_vec_pool_size = 16
 
-[optimization.tool_registry]
-use_optimized_registry = false
-max_concurrent_tools = 4
-hot_cache_size = 16
-default_timeout_secs = 180
-
-[optimization.async_pipeline]
-enable_batching = false
-enable_caching = true
-max_batch_size = 5
-batch_timeout_ms = 100
-cache_size = 100
-
-[optimization.llm_client]
-enable_connection_pooling = false
-enable_response_caching = true
-enable_request_batching = false
-connection_pool_size = 4
-response_cache_size = 50
-cache_ttl_secs = 300
-rate_limit_rps = 10.0
-rate_limit_burst = 20
-
-[optimization.agent_execution]
-use_optimized_loop = false
-enable_performance_prediction = false
-state_history_size = 1000
-resource_monitor_interval_ms = 100
-max_memory_mb = 1024
-max_execution_time_secs = 300
-idle_timeout_ms = 5000
-idle_backoff_ms = 100
-max_idle_cycles = 10
-
-[optimization.profiling]
-enabled = false
-monitor_interval_ms = 100
-max_history_size = 1000
-auto_export_results = false
-export_file_path = "benchmark_results.json"
-enable_regression_testing = false
-max_regression_percent = 10.0
-
-[optimization.file_read_cache]
-enabled = true
-min_size_bytes = 262144
-max_size_bytes = 10485760
-ttl_secs = 300
-max_entries = 128
-
-[optimization.command_cache]
-enabled = true
-ttl_ms = 2000
-max_entries = 128
-allowlist = [
-    "rg",
-    "ls",
-    "git status",
-    "git diff --stat",
-]
-
+# Syntax Highlighting
+# Language-aware rendering in the transcript.
 [syntax_highlighting]
-enabled = true
-theme = "base16-ocean.dark"
+# Enable theme caching for better performance
+# Default: true
+# Type: `boolean`
 cache_themes = true
-max_file_size_mb = 10
+
+# Enable syntax highlighting for tool output
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Languages to enable syntax highlighting for
+# Default: []
+# Type: `array`
 enabled_languages = [
     "rust",
     "python",
@@ -797,232 +2655,108 @@ enabled_languages = [
     "bash",
     "swift",
 ]
+
+# Performance settings - highlight timeout in milliseconds
+# Default: 5000
+# Type: `integer`
 highlight_timeout_ms = 5000
 
+# Maximum file size for syntax highlighting (in MB)
+# Default: 10
+# Type: `integer`
+max_file_size_mb = 10
+
+# Theme to use for syntax highlighting
+# Default: "base16-ocean.dark"
+# Type: `string`
+theme = "base16-ocean.dark"
+
+
+# Telemetry
+# Local analytics, metrics, and reporting.
+[telemetry]
+# Emit bottleneck traces for slow paths
+# Default: false
+# Type: `boolean`
+bottleneck_tracing = true
+
+# Enable real-time dashboards
+# Default: true
+# Type: `boolean`
+dashboards_enabled = true
+
+# Emit performance events for file I/O, spawns, and UI latency
+# Default: true
+# Type: `boolean`
+perf_events = true
+
+# Retention window for historical benchmarking (days)
+# Possible values: days
+# Default: 14
+# Type: `integer`
+retention_days = 14
+
+# KPI sampling interval in milliseconds
+# Default: 1000
+# Type: `integer`
+sample_interval_ms = 1000
+
+# -
+# Default: true
+# Type: `boolean`
+trajectory_enabled = true
+
+trajectory_max_age_days = 14
+
+trajectory_max_files = 50
+
+trajectory_max_size_mb = 50
+
+
+# Timeouts
+# Global operation time limits.
 [timeouts]
-default_ceiling_seconds = 180
-pty_ceiling_seconds = 300
-mcp_ceiling_seconds = 120
-streaming_ceiling_seconds = 600
-warning_threshold_percent = 80
+# Adaptive timeout decay ratio (0.1-1.0). Lower relaxes faster back to ceiling.
+# Possible values: 0.1-1.0
+# Default: 0.875
+# Type: `number`
 adaptive_decay_ratio = 0.875
-adaptive_success_streak = 5
+
+# Minimum timeout floor in milliseconds when applying adaptive clamps.
+# Default: 1000
+# Type: `integer`
 adaptive_min_floor_ms = 1000
 
-[automation.full_auto]
-enabled = true
-max_turns = 30
-allowed_tools = [
-    "read_file",
-    "list_files",
-    "grep_file",
-]
-require_profile_ack = true
+# Number of consecutive successes before relaxing adaptive ceiling.
+# Default: 5
+# Type: `integer`
+adaptive_success_streak = 5
 
-[prompt_cache]
-enabled = false
-cache_dir = "~/.vtcode/cache/prompts"
-max_entries = 1000
-max_age_days = 30
-enable_auto_cleanup = true
-min_quality_threshold = 0.7
-cache_friendly_prompt_shaping = false
+# Maximum duration (in seconds) for standard, non-PTY tools.
+# Default: 180
+# Type: `integer`
+default_ceiling_seconds = 180
 
-[subagents]
-enabled = true
-max_concurrent = 4
-max_depth = 1
-default_timeout_seconds = 300
-auto_delegate_read_only = true
+# Maximum duration (in seconds) for MCP calls.
+# Default: 120
+# Type: `integer`
+mcp_ceiling_seconds = 120
 
-[subagents.background]
-enabled = true
-default_agent = "default"
-refresh_interval_ms = 2000
-auto_restore = true
-toggle_shortcut = "ctrl+b"
+# Maximum duration (in seconds) for PTY-backed commands.
+# Default: 300
+# Type: `integer`
+pty_ceiling_seconds = 300
 
-[prompt_cache.providers.openai]
-enabled = true
-min_prefix_tokens = 1024
-idle_expiration_seconds = 3600
-surface_metrics = true
-prompt_cache_key_mode = "session"
+# Maximum duration (in seconds) for streaming API responses.
+# Default: 600
+# Type: `integer`
+streaming_ceiling_seconds = 600
 
-[prompt_cache.providers.anthropic]
-enabled = true
-tools_ttl_seconds = 3600
-messages_ttl_seconds = 300
-max_breakpoints = 4
-cache_system_messages = true
-cache_user_messages = true
-cache_tool_definitions = true
-min_message_length_for_cache = 256
-extended_ttl_seconds = 3600
-
-[prompt_cache.providers.gemini]
-enabled = true
-mode = "implicit"
-min_prefix_tokens = 1024
-explicit_ttl_seconds = 3600
-
-[prompt_cache.providers.openrouter]
-enabled = true
-propagate_provider_capabilities = true
-report_savings = true
-
-[prompt_cache.providers.moonshot]
-enabled = true
-
-[prompt_cache.providers.deepseek]
-enabled = true
-surface_metrics = true
-
-[prompt_cache.providers.zai]
-enabled = false
-
-[mcp]
-enabled = true
-providers = []
-max_concurrent_connections = 5
-request_timeout_seconds = 30
-retry_attempts = 3
-experimental_use_rmcp_client = true
-connection_pooling_enabled = true
-tool_cache_capacity = 100
-connection_timeout_seconds = 30
-
-[mcp.ui]
-mode = "compact"
-max_events = 50
-show_provider_names = true
-
-[mcp.ui.renderers]
-
-[mcp.requirements]
-enforce = false
-allowed_stdio_commands = []
-allowed_http_endpoints = []
-
-[mcp.server]
-enabled = false
-bind_address = "127.0.0.1"
-port = 3000
-transport = "sse"
-name = "vtcode-mcp-server"
-version = "0.72.2"
-exposed_tools = []
-
-[mcp.allowlist]
-enforce = false
-
-[mcp.allowlist.default]
-
-[mcp.allowlist.providers]
-
-[mcp.security]
-auth_enabled = false
-
-[mcp.security.rate_limit]
-requests_per_minute = 100
-concurrent_requests = 10
-
-[mcp.security.validation]
-schema_validation_enabled = true
-path_traversal_protection = true
-max_argument_size = 1048576
-
-[acp]
-enabled = true
-
-[acp.zed]
-enabled = true
-transport = "stdio"
-workspace_trust = "full_auto"
-
-[acp.zed.tools]
-read_file = true
-list_files = true
-
-[acp.zed.auth]
-default_method = "agent"
-
-[ide_context]
-enabled = true
-inject_into_prompt = true
-show_in_tui = true
-include_selection_text = true
-provider_mode = "auto"
-
-[ide_context.providers.vscode_compatible]
-enabled = true
-
-[ide_context.providers.zed]
-enabled = true
-
-[ide_context.providers.generic]
-enabled = true
-
-[hooks.lifecycle]
-quiet_success_output = false
-session_start = []
-session_end = []
-user_prompt_submit = []
-pre_tool_use = []
-post_tool_use = []
-pre_compact = []
-task_completion = []
-task_completed = []
-notification = []
-subagent_start = []
-subagent_stop = []
-
-[model]
-skip_loop_detection = false
-loop_detection_threshold = 2
-loop_detection_interactive = true
-
-[provider.openai]
-websocket_mode = false
-
-[provider.openai.hosted_shell]
-enabled = false
-environment = "container_auto"
-
-[provider.openai.tool_search]
-enabled = true
-defer_by_default = true
-always_available_tools = []
-
-[provider.anthropic]
-skip_model_validation = false
-extended_thinking_enabled = true
-interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
-interleaved_thinking_budget_tokens = 31999
-interleaved_thinking_type_enabled = "enabled"
-effort = "low"
-count_tokens_enabled = false
-
-[provider.openai.hosted_shell.network_policy]
-type = "disabled"
-
-[provider.anthropic.tool_search]
-enabled = false
-algorithm = "regex"
-defer_by_default = true
-max_results = 5
-always_available_tools = []
-
-[skills]
-render-mode = "lean"
-prompt-format = "xml"
-max-skills-in-prompt = 10
-enable-auto-trigger = true
-enable-description-matching = true
-min-keyword-matches = 2
-
-[skills.bundled]
-enabled = true
+# Percentage (0-100) of the ceiling after which the UI should warn.
+# Possible values: 0-100
+# Default: 80
+# Type: `integer`
+warning_threshold_percent = 80
 
 [[custom_providers]]
 name = "mycorp"
@@ -1031,30 +2765,570 @@ base_url = "https://llm.corp.example/v1"
 api_key_env = "MYCORP_API_KEY"
 model = "gpt-5.4"
 
-[output_style]
-active_style = "default"
 
-[dotfile_protection]
+# Tool Defaults
+# Loop limits and default tool behavior.
+[tools]
+# Default policy for tools not explicitly listed
+# Default: "prompt"
+# Type: `string`
+default_policy = "allow"
+
+# Maximum consecutive blocked tool calls allowed per turn before forcing a turn break. This prevents
+# long blocked-call churn from consuming CPU.
+# Default: 3
+# Type: `integer`
+max_consecutive_blocked_tool_calls_per_turn = 8
+
+# Maximum number of times the same tool invocation can be retried with the identical arguments within
+# a single turn.
+# Default: 2
+# Type: `integer`
+max_repeated_tool_calls = 2
+
+# Maximum sequential spool-chunk `read_file` calls allowed per turn before nudging the agent to switch
+# to targeted extraction/summarization.
+# Default: 6
+# Type: `integer`
+max_sequential_spool_chunk_reads = 6
+
+# Maximum inner tool-call loops per user turn. Set to `0` to disable the limit. Prevents infinite
+# tool-calling cycles in interactive chat. This limits how many back-and-forths the agent will perform
+# executing tools and re-asking the model before returning a final answer.
+# Default: 0
+# Type: `integer`
+max_tool_loops = 0
+
+# External Editor
+# Editor launch command and editor fallback.
+[tools.editor]
+# Enable external editor support for `/edit` and keyboard shortcuts
+# Default: true
+# Type: `boolean`
 enabled = true
-require_explicit_confirmation = true
-audit_logging_enabled = true
-audit_log_path = "~/.vtcode/dotfile_audit.log"
-prevent_cascading_modifications = true
-create_backups = true
-backup_directory = "~/.vtcode/dotfile_backups"
-max_backups_per_file = 10
-preserve_permissions = true
-whitelist = []
-additional_protected_patterns = []
-block_during_automation = true
-blocked_operations = [
-    "dependency_installation",
-    "code_formatting",
-    "git_operations",
-    "project_initialization",
-    "build_operations",
-    "test_execution",
-    "linting",
-    "auto_fix",
-]
-require_secondary_auth_for_whitelist = true
+
+# Preferred editor command override (supports arguments, e.g. "code --wait")
+# Default: ""
+# Type: `string`
+preferred_editor = ""
+
+# Suspend the TUI event loop while editor is running
+# Default: true
+# Type: `boolean`
+suspend_tui = true
+
+
+# Loop Thresholds
+# Warn or stop when repeated tool loops are detected.
+[tools.loop_thresholds]
+
+# Tool Plugins
+# Plugin loading and trust settings.
+[tools.plugins]
+# Explicit allow-list of plugin identifiers permitted to load.
+# Default: []
+# Type: `array`
+allow = []
+
+# Enable hot-reload polling for manifests to support rapid iteration.
+# Default: false
+# Type: `boolean`
+auto_reload = true
+
+# Default trust level when a manifest omits trust metadata.
+# Default: "sandbox"
+# Type: `string`
+default_trust = "sandbox"
+
+# Explicit block-list of plugin identifiers that must be rejected.
+# Default: []
+# Type: `array`
+deny = []
+
+# Toggle the plugin runtime. When disabled, manifests are ignored.
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Manifest paths (files or directories) that should be scanned for plugins.
+# Default: []
+# Type: `array`
+manifests = []
+
+
+# Tool Policies
+# Per-tool allow, prompt, or deny rules.
+[tools.policies]
+"/edit" = "prompt"
+
+"/plan" = "prompt"
+
+"/plan_off" = "prompt"
+
+agent_info = "allow"
+
+apply_patch = "allow"
+
+ask_user_question = "allow"
+
+"assistant<|channel|>apply_patch" = "allow"
+
+checklist = "prompt"
+
+close_pty_session = "allow"
+
+coder_mode = "prompt"
+
+create_file = "allow"
+
+create_pty_session = "allow"
+
+delete_file = "prompt"
+
+edit_file = "allow"
+
+enter_plan = "prompt"
+
+enter_plan_mode = "allow"
+
+exec_code = "allow"
+
+execute_code = "allow"
+
+exit_plan = "prompt"
+
+exit_plan_mode = "prompt"
+
+git_diff = "allow"
+
+grep_file = "allow"
+
+implement_plan = "prompt"
+
+list_files = "allow"
+
+list_pty_sessions = "allow"
+
+list_skills = "allow"
+
+load_skill = "allow"
+
+load_skill_resource = "allow"
+
+mode_edit = "prompt"
+
+mode_plan = "prompt"
+
+open_file = "allow"
+
+plan_checklist = "prompt"
+
+plan_exit = "prompt"
+
+plan_manager = "prompt"
+
+plan_mode = "prompt"
+
+plan_off = "prompt"
+
+plan_on = "prompt"
+
+plan_start = "prompt"
+
+plan_task_tracker = "prompt"
+
+plan_tasks = "prompt"
+
+planner_mode = "prompt"
+
+read_file = "allow"
+
+read_pty_session = "allow"
+
+request_user_input = "allow"
+
+resize_pty_session = "allow"
+
+resume_agent = "allow"
+
+resume_edit_mode = "prompt"
+
+run_pty_cmd = "allow"
+
+search_file = "allow"
+
+search_replace = "prompt"
+
+search_tools = "allow"
+
+"send_command<|channel|>analysis" = "allow"
+
+send_input = "allow"
+
+send_pty_input = "prompt"
+
+skill = "allow"
+
+spawn_agent = "allow"
+
+start_implementation = "prompt"
+
+start_planning = "prompt"
+
+switch_edit_mode = "prompt"
+
+switch_plan_mode = "prompt"
+
+switch_to_edit_mode = "prompt"
+
+switch_to_plan_mode = "prompt"
+
+task_tracker = "allow"
+
+track_tasks = "prompt"
+
+unified_exec = "allow"
+
+unified_file = "allow"
+
+unified_search = "allow"
+
+vtcode-check = "prompt"
+
+vtcode-clippy = "prompt"
+
+wait_agent = "allow"
+
+web_fetch = "allow"
+
+write_file = "allow"
+
+
+# Web Fetch
+# Remote fetch limits and safety checks.
+[tools.web_fetch]
+# Inline whitelist - Domains to allow in restricted mode
+# Default: []
+# Type: `array`
+allowed_domains = []
+
+# Path to audit log file
+# Default: ""
+# Type: `string`
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+
+# Inline blocklist - Additional domains to block
+# Default: []
+# Type: `array`
+blocked_domains = []
+
+# Additional blocked patterns
+# Default: []
+# Type: `array`
+blocked_patterns = []
+
+# Enable dynamic blocklist loading from external file
+# Default: false
+# Type: `boolean`
+dynamic_blocklist_enabled = false
+
+# Path to dynamic blocklist file
+# Default: ""
+# Type: `string`
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+
+# Enable dynamic whitelist loading from external file
+# Default: false
+# Type: `boolean`
+dynamic_whitelist_enabled = false
+
+# Path to dynamic whitelist file
+# Default: ""
+# Type: `string`
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+
+# Enable audit logging of URL validation decisions
+# Default: false
+# Type: `boolean`
+enable_audit_logging = false
+
+# Security mode: "restricted" (blocklist) or "whitelist" (allowlist)
+# Possible values: blocklist
+# Default: "restricted"
+# Type: `string`
+mode = "restricted"
+
+# Strict HTTPS-only mode
+# Default: true
+# Type: `boolean`
+strict_https_only = true
+
+
+# Tui
+[tui]
+
+# Interface
+# Appearance, layout, and transcript behavior.
+[ui]
+# Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
+# Default: false
+# Type: `boolean`
+allow_tool_ansi = true
+
+# Compatibility mode for legacy terminals that map bold to bright colors. When enabled, avoids using
+# bold styling on text that would become bright colors, preventing visibility issues in terminals with
+# "bold is bright" behavior.
+# Default: false
+# Type: `boolean`
+bold_is_bright = true
+
+# Color scheme mode for automatic light/dark theme switching. - "auto": Detect from terminal (via OSC
+# 11 or COLORFGBG env var) - "light": Force light mode theme selection - "dark": Force dark mode theme
+# selection
+# Default: "auto"
+# Type: `string`
+color_scheme_mode = "auto"
+
+# Dim completed todo items (- [x]) in agent output
+# Default: true
+# Type: `boolean`
+dim_completed_todos = true
+
+# UI display mode preset (full, minimal, focused)
+# Possible values: focused, full, minimal
+# Default: "minimal"
+# Type: `string`
+display_mode = "minimal"
+
+# Number of rows to allocate for inline UI viewport
+# Default: 16
+# Type: `integer`
+inline_viewport_rows = 16
+
+# Override the responsive layout mode
+# Default: "auto"
+# Type: `string`
+layout_mode = "auto"
+
+# Add spacing between message blocks
+# Default: true
+# Type: `boolean`
+message_block_spacing = true
+
+# Minimum contrast ratio for text against background (WCAG 2.1 standard) - 4.5: WCAG AA (default,
+# suitable for most users) - 7.0: WCAG AAA (enhanced, for low-vision users) - 3.0: Large text minimum
+# - 1.0: Disable contrast enforcement
+# Default: 4.5
+# Type: `number`
+minimum_contrast = 4.5
+
+# Reasoning display mode for chat UI ("always", "toggle", or "hidden")
+# Possible values: always, toggle
+# Default: "toggle"
+# Type: `string`
+reasoning_display_mode = "toggle"
+
+# Default visibility for reasoning when display mode is "toggle"
+# Default: false
+# Type: `boolean`
+reasoning_visible_default = true
+
+# Keep animated progress indicators while reduce_motion_mode is enabled.
+# Default: false
+# Type: `boolean`
+reduce_motion_keep_progress_animation = false
+
+# Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via
+# VTCODE_REDUCE_MOTION=1 environment variable.
+# Default: false
+# Type: `boolean`
+reduce_motion_mode = false
+
+# Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red,
+# green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided:
+# brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue
+# (Basic Dark). See: https://blog.xoria.org/terminal-colors/
+# Default: false
+# Type: `boolean`
+safe_colors_only = false
+
+# Screen reader mode: disables animations, uses plain text indicators, and optimizes output for
+# assistive technology compatibility. Can also be enabled via VTCODE_SCREEN_READER=1 environment
+# variable.
+# Default: false
+# Type: `boolean`
+screen_reader_mode = false
+
+# Show warning/error/fatal diagnostic lines in the TUI transcript and log panel. Also controls whether
+# ERROR-level tracing logs appear in the TUI session log. Errors are always captured in the session
+# archive JSON regardless of this setting.
+# Default: false
+# Type: `boolean`
+show_diagnostics_in_transcript = true
+
+# Show the right sidebar (queue, context, tools)
+# Possible values: context, queue, tools
+# Default: true
+# Type: `boolean`
+show_sidebar = false
+
+# Show per-turn elapsed timer line after completed turns
+# Default: false
+# Type: `boolean`
+show_turn_timer = false
+
+# Maximum number of lines to display in tool output (prevents transcript flooding)
+# Default: 600
+# Type: `integer`
+tool_output_max_lines = 50
+
+# Tool output display mode ("compact" or "full")
+# Default: "compact"
+# Type: `string`
+tool_output_mode = "compact"
+
+# Maximum bytes of output to display before auto-spooling to disk
+# Default: 200000
+# Type: `integer`
+tool_output_spool_bytes = 200000
+
+# Enable Vim-style prompt editing for new interactive sessions
+# Default: false
+# Type: `boolean`
+vim_mode = false
+
+# Keyboard Protocol
+# Enhanced terminal keyboard reporting.
+[ui.keyboard_protocol]
+# Resolve Esc key ambiguity (recommended for performance)
+# Default: true
+# Type: `boolean`
+disambiguate_escape_codes = true
+
+# Enable keyboard protocol enhancements (master toggle)
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Preset mode: "default", "full", "minimal", or "custom"
+# Default: "default"
+# Type: `string`
+mode = "default"
+
+# Report all keys, including modifier-only keys (Shift, Ctrl)
+# Possible values: Ctrl, Shift
+# Default: false
+# Type: `boolean`
+report_all_keys = false
+
+# Report alternate key layouts (e.g. for non-US keyboards)
+# Default: true
+# Type: `boolean`
+report_alternate_keys = true
+
+# Report press, release, and repeat events
+# Default: true
+# Type: `boolean`
+report_event_types = true
+
+
+# Notifications
+# Desktop and in-app notification delivery.
+[ui.notifications]
+# Notify when a shell/command execution fails. If omitted, falls back to `tool_failure` for backward
+# compatibility.
+# Default: null
+# Type: `boolean | null`
+command_failure = true
+
+# Legacy master toggle for completion notifications. New installs should prefer `completion_success`
+# and `completion_failure`.
+# Default: true
+# Type: `boolean`
+completion = true
+
+# Notify when a turn/session is partial, failed, or cancelled. If omitted, falls back to `completion`.
+# Default: null
+# Type: `boolean | null`
+completion_failure = true
+
+# Notify when a turn/session completes successfully. If omitted, falls back to `completion`.
+# Default: null
+# Type: `boolean | null`
+completion_success = true
+
+# Notification transport strategy.
+# Default: "hybrid"
+# Type: `string`
+delivery_mode = "hybrid"
+
+# Master toggle for all runtime notifications.
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Notify on runtime/system errors.
+# Default: true
+# Type: `boolean`
+error = true
+
+# Notify when human input/approval is required.
+# Default: true
+# Type: `boolean`
+hitl = true
+
+# Maximum identical notifications allowed within the suppression window.
+# Default: 1
+# Type: `integer`
+max_identical_in_window = 1
+
+# Notify when policy approval is required. If omitted, falls back to `hitl` for backward
+# compatibility.
+# Default: null
+# Type: `boolean | null`
+policy_approval = true
+
+# Suppression window for repeated identical notifications.
+# Default: 30
+# Type: `integer`
+repeat_window_seconds = 30
+
+# Notify on generic request events. If omitted, falls back to `hitl` for backward compatibility.
+# Default: null
+# Type: `boolean | null`
+request = true
+
+# Suppress notifications while terminal focus is active.
+# Default: true
+# Type: `boolean`
+suppress_when_focused = true
+
+# Notify when a tool call fails.
+# Default: false
+# Type: `boolean`
+tool_failure = true
+
+# Notify on successful tool calls.
+# Default: false
+# Type: `boolean`
+tool_success = true
+
+
+# Status Line
+# Bottom status bar content and refresh behavior.
+[ui.status_line]
+# -
+# Default: 200
+# Type: `integer`
+command_timeout_ms = 200
+
+# -
+# Default: "Auto"
+# Type: `string`
+mode = "Auto"
+
+# -
+# Default: 1000
+# Type: `integer`
+refresh_interval_ms = 1000
+

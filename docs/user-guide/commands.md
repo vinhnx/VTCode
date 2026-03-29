@@ -135,6 +135,23 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 - `/resume` opens archived sessions when the current run is idle.
 - `/fork` opens the session picker and then lets you choose between a full-copy fork and a summarized fork.
 - `/compact` manually compacts the current conversation context. On the local fallback path, VT Code keeps a structured summary plus retained user prompts instead of a mixed recent tail.
+- `/loop` schedules a session-scoped prompt that re-enters the chat only when the current turn is idle.
+- `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and the local scheduler daemon keeps them running in the background.
+
+## Scheduled tasks
+
+Use `/loop` inside interactive chat for quick polling, and use `vtcode schedule` when the task should survive restarts.
+
+```bash
+vtcode schedule create --prompt "check the deployment" --every 10m
+vtcode schedule create --prompt "review the nightly build" --cron "0 9 * * 1-5"
+vtcode schedule create --reminder "push the release branch" --at "15:00"
+vtcode schedule list
+vtcode schedule delete 1a2b3c4d
+vtcode schedule serve
+```
+
+See [Scheduled Tasks](./scheduled-tasks.md) for session reminders, durable daemon behavior, and service installation details.
 
 ## stats (session metrics)
 

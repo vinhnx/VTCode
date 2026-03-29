@@ -5,11 +5,13 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+use tokio::task::JoinHandle;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
@@ -46,6 +48,8 @@ use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, Intera
 const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool result or tool error already provides the next tool call, use it directly instead of retrying the same failing call or asking for more follow-up.";
 const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool result or tool error includes a concrete follow-up tool call, use it first. Do not repeat a failing tool call when the tool already provided the next step.";
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
+const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
+const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Deserialize)]
 struct ToolErrorPayloadHint {
@@ -367,6 +371,21 @@ fn sync_mcp_approval_policy_for_context(ctx: &InteractionLoopContext<'_>) {
     sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
 }
 
+fn scheduler_enabled(ctx: &InteractionLoopContext<'_>) -> bool {
+    let enabled = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.automation.scheduled_tasks.enabled)
+        .unwrap_or(false);
+    vtcode_core::scheduler::scheduled_tasks_enabled(enabled)
+}
+
+fn build_durable_scheduler_daemon() -> Result<SchedulerDaemon> {
+    let store = DurableTaskStore::new_default()?;
+    let executable = std::env::current_exe()?;
+    Ok(SchedulerDaemon::new(store, executable))
+}
+
 #[derive(Default)]
 struct LiveIdeContextUpdate {
     snapshot: Option<vtcode_core::EditorContextSnapshot>,
@@ -445,6 +464,11 @@ pub(super) async fn run_interaction_loop_impl(
 ) -> Result<InteractionOutcome> {
     const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
     let mut last_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
+    let mut last_input_activity_at = Instant::now();
+    let mut last_durable_scheduler_poll = Instant::now() - DURABLE_SCHEDULER_POLL_INTERVAL;
+    let mut durable_scheduler_daemon = None;
+    let mut last_durable_scheduler_error = None::<String>;
+    let mut durable_scheduler_run = None::<JoinHandle<Result<usize>>>;
     let mut live_reload_watcher = SimpleConfigWatcher::new(ctx.config.workspace.clone());
     live_reload_watcher.set_check_interval(1);
     live_reload_watcher.set_debounce_duration(200);
@@ -635,6 +659,109 @@ pub(super) async fn run_interaction_loop_impl(
         let current_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
         if current_input_activity != last_input_activity {
             last_input_activity = current_input_activity;
+            last_input_activity_at = Instant::now();
+        }
+
+        if durable_scheduler_run
+            .as_ref()
+            .is_some_and(tokio::task::JoinHandle::is_finished)
+        {
+            let result = durable_scheduler_run
+                .take()
+                .expect("checked durable scheduler task presence")
+                .await;
+            match result {
+                Ok(Ok(triggered)) => {
+                    last_durable_scheduler_error = None;
+                    if triggered > 0 {
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!(
+                                "Triggered {triggered} durable scheduled task{}.",
+                                if triggered == 1 { "" } else { "s" }
+                            ),
+                        )?;
+                    }
+                }
+                Ok(Err(err)) => {
+                    let error = err.to_string();
+                    if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
+                        tracing::warn!(
+                            "Durable scheduler poll failed in interactive session: {}",
+                            error
+                        );
+                        ctx.renderer.line(
+                            MessageStyle::Warning,
+                            &format!("Durable scheduler poll failed: {}", error),
+                        )?;
+                        last_durable_scheduler_error = Some(error);
+                    }
+                }
+                Err(err) => {
+                    let error = err.to_string();
+                    if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
+                        tracing::warn!(
+                            "Durable scheduler background task failed in interactive session: {}",
+                            error
+                        );
+                        ctx.renderer.line(
+                            MessageStyle::Warning,
+                            &format!("Durable scheduler task failed: {}", error),
+                        )?;
+                        last_durable_scheduler_error = Some(error);
+                    }
+                }
+            }
+        }
+
+        if scheduler_enabled(ctx)
+            && durable_scheduler_run.is_none()
+            && last_durable_scheduler_poll.elapsed() >= DURABLE_SCHEDULER_POLL_INTERVAL
+        {
+            last_durable_scheduler_poll = Instant::now();
+
+            if durable_scheduler_daemon.is_none() {
+                match build_durable_scheduler_daemon() {
+                    Ok(daemon) => durable_scheduler_daemon = Some(daemon),
+                    Err(err) => {
+                        let error = err.to_string();
+                        if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
+                            tracing::warn!(
+                                "Failed to initialize durable scheduler in interactive session: {}",
+                                error
+                            );
+                            last_durable_scheduler_error = Some(error);
+                        }
+                    }
+                }
+            }
+
+            if let Some(daemon) = durable_scheduler_daemon.clone() {
+                durable_scheduler_run =
+                    Some(tokio::spawn(
+                        async move { daemon.run_due_tasks_once().await },
+                    ));
+            }
+        }
+
+        if scheduler_enabled(ctx)
+            && state.queued_inputs.is_empty()
+            && last_input_activity_at.elapsed() >= SCHEDULED_PROMPT_INACTIVITY_GRACE
+        {
+            let scheduler = ctx.tool_registry.session_scheduler();
+            let mut scheduler = scheduler.lock().await;
+            let due = scheduler.collect_due_prompts(chrono::Utc::now())?;
+            drop(scheduler);
+            for task in due {
+                state.queued_inputs.push_back(task.prompt);
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Scheduled task {} ({}) is ready to run.",
+                        task.id, task.name
+                    ),
+                )?;
+            }
         }
 
         let mut input_owned = match inline_action {

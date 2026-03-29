@@ -33,6 +33,7 @@ pub mod skills_ref;
 pub mod update;
 
 mod revert;
+mod schedule;
 
 use action_resolution::ResolvedCliAction;
 use dispatch::{handle_ask_single_command, handle_chat_command, handle_resume_session_command};

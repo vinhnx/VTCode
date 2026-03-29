@@ -6,6 +6,8 @@ exec` prints progress, summaries, and outcomes to **stderr**. `stdout` remains s
 
 For the complete runtime lifecycle mapping, see [Agent Loop Contract](../guides/agent-loop-contract.md).
 
+`vtcode schedule` uses this same exec runtime for durable prompt tasks. When a durable scheduled prompt fires, VT Code launches a fresh `vtcode exec` run in the configured workspace and records the resulting status and artifacts. For session-scoped `/loop` polling and reminders, see [Scheduled Tasks](./scheduled-tasks.md).
+
 ## Launching exec mode
 
 ```bash

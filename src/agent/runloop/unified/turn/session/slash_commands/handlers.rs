@@ -10,6 +10,7 @@ use vtcode_core::core::agent::snapshots::{
 };
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::scheduler::{LoopCommand, ScheduleSpec, scheduled_tasks_enabled};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
 use vtcode_tui::app::RewindAction;
@@ -41,6 +42,8 @@ mod mcp;
 mod modes;
 #[path = "oauth.rs"]
 mod oauth;
+#[path = "schedule.rs"]
+mod schedule;
 #[path = "share_log.rs"]
 mod share_log;
 #[path = "skills.rs"]
@@ -70,6 +73,7 @@ pub(super) use oauth::{
     handle_oauth_login, handle_oauth_logout, handle_refresh_oauth, handle_show_auth_status,
     handle_start_oauth_provider_picker,
 };
+pub(super) use schedule::handle_manage_schedule;
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
@@ -79,6 +83,44 @@ pub(super) use ui::{
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
+
+pub(super) async fn handle_manage_loop(
+    ctx: SlashCommandContext<'_>,
+    command: LoopCommand,
+) -> Result<SlashCommandControl> {
+    if !scheduler_enabled(ctx.vt_cfg.as_ref()) {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Scheduled tasks are disabled. Enable [automation.scheduled_tasks].enabled or unset VTCODE_DISABLE_CRON.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let LoopCommand {
+        prompt,
+        interval,
+        normalization_note,
+    } = command;
+    let scheduler = ctx.tool_registry.session_scheduler();
+    let mut scheduler = scheduler.lock().await;
+    let summary = scheduler.create_prompt_task(
+        None,
+        prompt,
+        ScheduleSpec::FixedInterval(interval),
+        Utc::now(),
+    )?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Scheduled session task {} ({}) with {}.",
+            summary.id, summary.name, summary.schedule
+        ),
+    )?;
+    if let Some(note) = normalization_note {
+        ctx.renderer.line(MessageStyle::Info, &note)?;
+    }
+    Ok(SlashCommandControl::Continue)
+}
 
 pub(super) fn persist_mode_settings(
     workspace: &std::path::Path,
@@ -120,6 +162,13 @@ pub(super) fn persist_mode_settings(
     }
 
     Ok(())
+}
+
+fn scheduler_enabled(vt_cfg: Option<&VTCodeConfig>) -> bool {
+    let enabled = vt_cfg
+        .map(|cfg| cfg.automation.scheduled_tasks.enabled)
+        .unwrap_or(false);
+    scheduled_tasks_enabled(enabled)
 }
 
 pub(super) async fn handle_show_settings(

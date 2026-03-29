@@ -101,6 +101,9 @@ Additional blocking for:
 - System modification: `chmod`, `chown`, `systemctl`
 - Container/orchestration: `docker`, `kubectl`
 - Network commands (without sandbox): `curl`, `wget`, `ssh`
+- OS task schedulers: `crontab`, `at`
+
+VT Code supports automation through its internal scheduler instead of raw shell scheduling commands. Use `/loop` for session-scoped polling and `vtcode schedule` for durable local automation.
 
 ### Layer 5: Sandbox Integration
 

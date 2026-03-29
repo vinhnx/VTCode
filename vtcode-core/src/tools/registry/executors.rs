@@ -19,7 +19,7 @@ use crate::tools::types::VTCodeExecSession;
 use crate::zsh_exec_bridge::ZshExecBridgeSession;
 use regex::Regex;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use chrono;
 use futures::future::BoxFuture;
 use hashbrown::HashMap;
@@ -1535,6 +1535,76 @@ enum PlannedPatchWrite {
 }
 
 impl ToolRegistry {
+    pub(super) fn cron_create_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let prompt = args
+                .get("prompt")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| anyhow!("cron_create requires a non-empty prompt"))?
+                .to_string();
+            let name = args
+                .get("name")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let cron = args.get("cron").and_then(Value::as_str);
+            let delay_minutes = args.get("delay_minutes").and_then(Value::as_u64);
+            let run_at = args.get("run_at").and_then(Value::as_str);
+
+            let schedule = match (cron, delay_minutes, run_at) {
+                (Some(expression), None, None) => {
+                    crate::scheduler::ScheduleSpec::cron5(expression)?
+                }
+                (None, Some(minutes), None) => {
+                    crate::scheduler::ScheduleSpec::fixed_interval(Duration::from_secs(
+                        minutes
+                            .checked_mul(60)
+                            .ok_or_else(|| anyhow!("delay_minutes is too large"))?,
+                    ))?
+                }
+                (None, None, Some(raw)) => crate::scheduler::ScheduleSpec::one_shot(
+                    crate::scheduler::parse_local_datetime(raw, chrono::Local::now())?,
+                ),
+                _ => bail!("Choose exactly one of cron, delay_minutes, or run_at"),
+            };
+
+            let scheduler = self.session_scheduler();
+            let mut scheduler = scheduler.lock().await;
+            let summary =
+                scheduler.create_prompt_task(name, prompt, schedule, chrono::Utc::now())?;
+            serde_json::to_value(summary).context("Failed to serialize cron_create response")
+        })
+    }
+
+    pub(super) fn cron_list_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let scheduler = self.session_scheduler();
+            let scheduler = scheduler.lock().await;
+            Ok(json!({
+                "tasks": scheduler.list(),
+            }))
+        })
+    }
+
+    pub(super) fn cron_delete_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let id = args
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| anyhow!("cron_delete requires id"))?;
+            let scheduler = self.session_scheduler();
+            let mut scheduler = scheduler.lock().await;
+            let deleted = scheduler.delete(id);
+            Ok(json!({
+                "deleted": deleted.is_some(),
+                "task": deleted,
+            }))
+        })
+    }
+
     pub async fn shell_run_approval_reason(
         &self,
         tool_name: &str,

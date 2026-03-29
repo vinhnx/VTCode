@@ -20,7 +20,7 @@ pub use agent::{
 pub use auth::{
     AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod, OpenRouterAuthConfig,
 };
-pub use automation::{AutomationConfig, FullAutoConfig};
+pub use automation::{AutomationConfig, FullAutoConfig, ScheduledTasksConfig};
 pub use commands::CommandsConfig;
 pub use custom_provider::CustomProviderConfig;
 pub use dotfile_protection::DotfileProtectionConfig;
