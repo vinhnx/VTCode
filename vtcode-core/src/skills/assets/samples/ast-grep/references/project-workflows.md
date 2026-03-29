@@ -29,6 +29,21 @@ Use the public structural tool first for read-only project checks:
 - `ast-grep test` runs rule tests.
 - `ast-grep lsp` starts the language server for editor integration.
 
+## How Ast-Grep Works
+
+- ast-grep accepts multiple query formats.
+  - Pattern query for direct structural search
+  - YAML rule for linting and reusable project checks
+  - Programmatic API for code-driven workflows
+- The core engine has two phases.
+  - Tree-Sitter parses source code into syntax trees
+  - ast-grep’s Rust matcher traverses those trees to search, rewrite, lint, or analyze
+- The main usage scenarios are search, rewrite, lint, and analyze.
+- Performance comes from processing many files in parallel across available CPU cores.
+- In VT Code, keep the bird’s-eye overview simple:
+  - public structural tool for read-only query / scan / test
+  - bundled ast-grep skill for rule authoring, rewrite/apply work, and API workflows
+
 ## Project Scaffolding
 
 - `ast-grep scan` needs project scaffolding before it can run repository rules.
@@ -122,6 +137,83 @@ Use the public structural tool first for read-only project checks:
 - `$$VAR` captures unnamed nodes when punctuation or other anonymous syntax matters.
 - If a snippet is ambiguous or too short to parse cleanly, switch to an object-style `pattern` with more `context` and a precise `selector`.
 
+## Pattern Parsing Deep Dive
+
+- ast-grep builds a pattern in stages.
+  - preprocess meta variables when the language needs a custom `expandoChar`
+  - parse the snippet with tree-sitter
+  - extract the effective node by builtin heuristic or explicit `selector`
+  - detect meta variables inside that effective node
+- Invalid patterns usually fail when a meta variable is pretending to be an operator or keyword.
+  - use parseable code plus rule fields like `kind`, `regex`, or relational checks instead of patterns such as `$LEFT $OP $RIGHT`
+  - do the same when trying to abstract method modifiers like `get` or `set`
+- Incomplete and ambiguous snippets can work only because tree-sitter recovered from an error.
+  - prefer valid `context` plus `selector`
+  - do not rely on recovery staying identical across parser or ast-grep upgrades
+- The builtin effective-node heuristic picks the leaf node or the innermost node with more than one child.
+  - use `selector` when the real match should be the outer statement instead of the inner expression
+  - this matters most when combining a pattern with `follows` or `precedes`
+- Meta variables are recognized only when the whole AST node text matches meta-variable syntax.
+  - mixed text like `obj.on$EVENT` will not work
+  - lowercase names like `$jq` will not work
+  - `$$VAR` is for unnamed nodes and `$$$ARGS` is lazy
+- VT Code boundary stays the same.
+  - public structural tool for read-only query / scan / test and `debug_query`
+  - bundled ast-grep skill for deeper pattern authoring and iteration
+
+## Pattern Core Concepts
+
+- ast-grep is structural matching over syntax trees, not plain text matching over source bytes. Use `regex` only when node text itself is the thing you need to filter.
+- Tree-Sitter provides a CST-shaped view of the code. That is why operators, punctuation, and modifiers can still affect matching even though ast-grep skips trivial syntax where it safely can.
+- Named nodes have a `kind`. Unnamed nodes are literal tokens such as punctuation or operators, and `$$VAR` is the opt-in when those unnamed nodes must be captured.
+- `kind` is a property of one node. `field` is a property of the edge between a parent and child, so reach for relational `has` / `inside` plus `field` when semantic role matters.
+- Significant nodes are either named or attached through a `field`. That distinction is useful when a token looks minor in Tree-Sitter but still changes how precise a pattern must be.
+
+## Match Algorithm
+
+- The default match mode is `smart`.
+  - all pattern nodes must match
+  - unnamed nodes in the code being searched may be skipped
+- Unnamed nodes written in the pattern are still respected.
+  - `function $A() {}` can match `async function`
+  - `async function $A() {}` requires the `async` token
+- Strictness controls what matching may skip.
+  - `cst`: skip nothing
+  - `smart`: skip unnamed code nodes only
+  - `ast`: skip unnamed nodes on both sides
+  - `relaxed`: also ignore comments
+  - `signature`: compare mostly named-node kinds and ignore text
+- Practical effect:
+  - quote differences can stop mattering under `ast`
+  - comments can stop mattering under `relaxed`
+  - text differences can stop mattering under `signature`
+- VT Code exposes `strictness` publicly on read-only structural queries. Use the bundled skill when the task is about picking the right strictness, or when the user needs CLI `--strictness` or YAML pattern-object `strictness`.
+
+## FAQ Highlights
+
+- If a fragment pattern does not match, provide a larger valid `context` snippet and use `selector` to focus the real node you care about.
+- If a rule is confusing, shrink it to a minimal repro and use `all` when meta variables captured by one rule must feed later rules. This makes rule order explicit instead of relying on implementation details.
+- CLI and Playground can disagree because of parser-version drift and utf-8 vs utf-16 error recovery. Use `--debug-query` or VT Code’s public structural `debug_query` to compare the parsed nodes first.
+- Meta variables must be a whole AST node. Prefix or suffix matching like `use$HOOK` should become `$HOOK(...)` plus `constraints.regex`, and `$$$MULTI` stays lazy by design.
+- Separate `kind` and `pattern` rules do not change how a pattern is parsed. If the desired node kind needs more context, use a pattern object with `context` and `selector`.
+- ast-grep rules are single-language. For shared JS/TS-style cases, either parse both through the superset language via `languageGlobs` or write separate rules.
+- ast-grep is syntax-aware only. It does not perform scope, type, control-flow, data-flow, taint, or constant-propagation analysis.
+
+## Find & Patch
+
+- The rewrite pipeline is still find, generate, and patch.
+  - `rule` and optional `constraints` find the outer target
+  - `transform` derives intermediate strings
+  - `fix` patches the final text
+- `rewriters` and `transform.rewrite` extend that workflow to matched sub-nodes.
+  - apply sub-rules under a meta-variable
+  - generate one fix per sub-node
+  - join the results with `joinBy`
+- This is the declarative way to do one-to-many rewrites such as splitting a barrel import into separate import lines.
+- In VT Code, keep this on the bundled ast-grep skill path.
+  - public structural tool stays read-only
+  - rewrite/apply flows still belong to CLI-driven skill work
+
 ## Rewrite Essentials
 
 - Use `ast-grep run --pattern ... --rewrite ...` for ad-hoc rewrites.
@@ -131,6 +223,8 @@ Use the public structural tool first for read-only project checks:
 - Unmatched meta variables become empty strings in `fix`.
 - `fix` is indentation-sensitive. Multiline templates preserve their authored indentation relative to the matched source position.
 - If `$VARName` would be parsed as a larger meta variable, use a transform instead of concatenating uppercase suffixes directly.
+- Use `transform.rewrite` when rewriting the outer node depends on rewriting a list of child nodes first.
+- Use `joinBy` to stitch rewritten child results together before the outer `fix`.
 - Use advanced `FixConfig` when replacing the target node is not enough:
   - `template` is the replacement text
   - `expandStart` expands the rewritten range backward while its rule keeps matching
@@ -197,6 +291,8 @@ Switch to direct CLI work through `unified_exec` when the task needs:
 - Interactive flags
 - Programmatic API exploration in JavaScript, Python, or Rust
 - `transform`
+- `rewrite`
+- `joinBy`
 - `rewriters`
 - Custom `sgconfig.yml` authoring across `customLanguages`, `languageGlobs`, `languageInjections`, or `expandoChar`
 - Advanced rule-object authoring with `nthChild`, `range`, relational `field`, `stopBy`, or local/global utility rules

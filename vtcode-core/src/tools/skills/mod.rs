@@ -1363,6 +1363,424 @@ Use `/rust-skills`.
     }
 
     #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_rule_order_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "rule order" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_kind_pattern_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "kind pattern" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_static_analysis_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "static analysis" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_tree_sitter_parser_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "tree-sitter parser" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_pattern_yaml_api_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "pattern yaml api" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_search_rewrite_lint_analyze_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "search rewrite lint analyze" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_textual_structural_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "textual structural" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_ast_cst_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "ast cst" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_named_unnamed_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "named unnamed" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_kind_field_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "kind field" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_ambiguous_pattern_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "ambiguous pattern" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_effective_selector_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "effective selector" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_meta_variable_detection_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "meta variable detection" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_lazy_multi_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "lazy multi" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_strictness_smart_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "strictness smart" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_relaxed_signature_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "relaxed signature" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_find_patch_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "find patch" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_rewrite_join_by_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "rewrite joinBy" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_barrel_import_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "barrel import" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
     async fn list_skills_discovers_bundled_ast_grep_by_stdin_query() {
         let temp_dir = TempDir::new().expect("temp dir");
         let active_skills = Arc::new(RwLock::new(HashMap::new()));

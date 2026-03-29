@@ -59,6 +59,12 @@ Rewrite workflows such as `ast-grep run --rewrite`, YAML `fix`, and `expandStart
 CLI-only topics such as `--stdin`, raw `--json`, `scan -r`, `lsp`, shell completions, and GitHub Action setup are also documented there.
 When ast-grep rule syntax is not expressive enough, that skill now also documents when to switch to ast-grep’s JavaScript/Python/Rust API instead of piling more complexity into YAML.
 It also covers ast-grep pattern syntax itself, including `$VAR`, `$$$ARGS`, `$_`, `$$VAR`, object-style patterns when fragments are ambiguous, rule-object features such as `nthChild`, `range`, relational `field`, `stopBy`, and local/global utility rules, plus config keys such as `url`, `metadata`, `constraints`, `severity`, `message`, `note`, `labels`, `files`, `ignores`, `transform`, `fix`, `rewriters`, and `caseInsensitive` glob objects.
+It also covers FAQ-style troubleshooting such as Playground vs CLI differences, using `debug_query`, incomplete fragments that need `context` plus `selector`, `kind` + `pattern` pitfalls, rule-order sensitivity, multi-language guidance, naming-convention matching via `constraints.regex`, and ast-grep’s static-analysis limits.
+It also covers the high-level ast-grep workflow: pattern / YAML / API inputs, Tree-Sitter parsing, Rust tree matching, search/rewrite/lint/analyze scenarios, and why ast-grep scales well across CPU cores.
+It also covers pattern core concepts such as textual vs structural matching, CST vs AST, named vs unnamed nodes, `kind` vs `field`, and significant vs trivial syntax.
+It also covers pattern parsing details such as invalid / incomplete / ambiguous snippets, effective-node selection via `selector`, meta-variable detection rules, unnamed-node capture, lazy `$$$ARGS`, and when `expandoChar` matters.
+It also covers the match algorithm and strictness levels, while VT Code’s public structural query surface already exposes read-only `strictness` for `cst`, `smart`, `ast`, `relaxed`, and `signature`.
+It also covers Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, and one-to-many rewrites like splitting barrel imports.
 Quick-start guidance there also covers shell quoting for metavariables, Linux `ast-grep` vs `sg`, and the optional-chaining rewrite example.
 Catalog-style example discovery and adaptation are also routed there, especially when examples depend on `constraints`, `utils`, `transform`, `rewriters`, or built-in fixes.
 

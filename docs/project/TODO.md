@@ -40,10 +40,7 @@ https://developers.openai.com/codex/plugins
 
 https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9fad-60e24e3b4f5a?mode=fast
 
-
 ---
-
-
 
 High-value Rust codemods to build for VT Code (and the broader ecosystem):
 
@@ -82,3 +79,7 @@ S
 $100
 
 Being first to publish any quality Rust codemod also positions you for the $2,000 framework adoption tier — e.g., getting ratatui or tokio maintainers to reference your codemod in their upgrade guides.
+
+---
+
+use https://github.com/Uzaaft/libghostty-rs/ replace existing libghostty-vt impl.
