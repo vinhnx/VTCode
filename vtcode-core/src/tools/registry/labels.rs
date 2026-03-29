@@ -43,10 +43,20 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
             }
         }
         name if name == tool_names::UNIFIED_SEARCH => {
-            match tool_intent::unified_search_action(args).unwrap_or("grep") {
+            let normalized = tool_intent::normalize_unified_search_args(args);
+            let workflow = normalized
+                .get("workflow")
+                .and_then(Value::as_str)
+                .unwrap_or("query");
+
+            match tool_intent::unified_search_action(&normalized).unwrap_or("grep") {
                 "grep" => "Search text".to_string(),
                 "list" => "List files".to_string(),
-                "structural" => "Structural search".to_string(),
+                "structural" => match workflow {
+                    "scan" => "Structural scan".to_string(),
+                    "test" => "Structural test".to_string(),
+                    _ => "Structural search".to_string(),
+                },
                 "tools" => "List tools".to_string(),
                 "errors" => "List errors".to_string(),
                 "agent" => "Show agent info".to_string(),
@@ -97,4 +107,41 @@ fn humanize_tool_name(name: &str) -> String {
     let mut result = first.to_uppercase().collect::<String>();
     result.push_str(&chars.collect::<String>());
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tool_action_label;
+    use crate::config::constants::tools;
+    use serde_json::json;
+
+    #[test]
+    fn unified_search_structural_query_uses_default_label() {
+        let label = tool_action_label(
+            tools::UNIFIED_SEARCH,
+            &json!({"action": "structural", "pattern": "fn $NAME() {}"}),
+        );
+
+        assert_eq!(label, "Structural search");
+    }
+
+    #[test]
+    fn unified_search_structural_scan_uses_distinct_label() {
+        let label = tool_action_label(
+            tools::UNIFIED_SEARCH,
+            &json!({"action": "structural", "workflow": "scan"}),
+        );
+
+        assert_eq!(label, "Structural scan");
+    }
+
+    #[test]
+    fn unified_search_structural_test_uses_distinct_label() {
+        let label = tool_action_label(
+            tools::UNIFIED_SEARCH,
+            &json!({"workflow": "test", "config_path": "sgconfig.yml"}),
+        );
+
+        assert_eq!(label, "Structural test");
+    }
 }

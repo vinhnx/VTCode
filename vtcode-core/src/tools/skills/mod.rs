@@ -1154,6 +1154,61 @@ Use `/rust-skills`.
     }
 
     #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_from_vtcode_home() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "ast-grep" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn load_skill_activates_bundled_ast_grep_from_vtcode_home() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let runtime = SkillToolSessionRuntime::new(
+            Arc::clone(&registry),
+            None,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+            None,
+        );
+        let tool = LoadSkillTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            Arc::clone(&active_skills),
+            runtime,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "name": "ast-grep" }))
+            .await
+            .expect("load bundled skill succeeds");
+
+        assert_eq!(result["name"].as_str(), Some("ast-grep"));
+        assert_eq!(
+            result["activation_status"].as_str(),
+            Some("Associated tools activated and added to context.")
+        );
+        assert!(active_skills.read().await.contains_key("ast-grep"));
+    }
+
+    #[tokio::test]
     async fn list_skills_surfaces_discovery_errors() {
         let temp_dir = TempDir::new().expect("temp dir");
         write_invalid_skill_fixture(temp_dir.path(), "broken-skill");

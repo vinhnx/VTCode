@@ -465,16 +465,24 @@ fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> O
         .and_then(|value| value.as_str())
         .or_else(|| {
             // Smart action inference based on parameters
+            let has_structural_workflow = get_field_case_insensitive(args, "workflow")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .is_some_and(|workflow| !workflow.is_empty());
             let has_pattern = has_meaningful_search_field(args, "pattern")
                 || has_meaningful_search_field(args, "query");
-            let has_structural_hint = has_meaningful_search_field(args, "lang")
+            let has_structural_hint = has_structural_workflow
+                || has_meaningful_search_field(args, "lang")
                 || has_meaningful_search_field(args, "selector")
                 || has_meaningful_search_field(args, "strictness")
                 || has_meaningful_search_field(args, "debug_query")
-                || has_meaningful_search_field(args, "globs");
+                || has_meaningful_search_field(args, "globs")
+                || has_meaningful_search_field(args, "config_path")
+                || has_meaningful_search_field(args, "filter")
+                || has_meaningful_search_field(args, "skip_snapshot_tests");
             let has_path = has_meaningful_search_field(args, "path");
 
-            if has_pattern && has_structural_hint {
+            if has_structural_workflow || (has_pattern && has_structural_hint) {
                 Some("structural")
             } else if has_pattern && has_path && looks_like_list_glob_pattern(args) {
                 Some("list")
@@ -509,9 +517,13 @@ fn is_unified_search_arg_key(key: &str) -> bool {
             | "selector"
             | "strictness"
             | "debug_query"
+            | "workflow"
+            | "config_path"
+            | "filter"
             | "globs"
             | "context_lines"
             | "max_results"
+            | "skip_snapshot_tests"
             | "keyword"
             | "url"
             | "scope"
@@ -590,6 +602,14 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         } else if key.eq_ignore_ascii_case("debug_query") || key.eq_ignore_ascii_case("debug-query")
         {
             "debug_query"
+        } else if key.eq_ignore_ascii_case("workflow") {
+            "workflow"
+        } else if key.eq_ignore_ascii_case("config_path")
+            || key.eq_ignore_ascii_case("config-path")
+        {
+            "config_path"
+        } else if key.eq_ignore_ascii_case("filter") {
+            "filter"
         } else if key.eq_ignore_ascii_case("globs") {
             "globs"
         } else if key.eq_ignore_ascii_case("context_lines")
@@ -599,6 +619,10 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         } else if key.eq_ignore_ascii_case("max_results") || key.eq_ignore_ascii_case("max-results")
         {
             "max_results"
+        } else if key.eq_ignore_ascii_case("skip_snapshot_tests")
+            || key.eq_ignore_ascii_case("skip-snapshot-tests")
+        {
+            "skip_snapshot_tests"
         } else if key.eq_ignore_ascii_case("keyword") {
             "keyword"
         } else if key.eq_ignore_ascii_case("url") {
@@ -1014,6 +1038,22 @@ mod tests {
         assert_eq!(normalized["action"], "structural");
         assert_eq!(normalized["lang"], "rust");
         assert_eq!(normalized["path"], ".");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_canonicalizes_structural_workflow_fields() {
+        let normalized = normalize_unified_search_args(&json!({
+            "Workflow": "scan",
+            "Config-Path": "config/sgconfig.yml",
+            "Filter": "rust/no-iterator-for-each",
+            "Skip-Snapshot-Tests": true
+        }));
+
+        assert_eq!(normalized["workflow"], "scan");
+        assert_eq!(normalized["config_path"], "config/sgconfig.yml");
+        assert_eq!(normalized["filter"], "rust/no-iterator-for-each");
+        assert_eq!(normalized["skip_snapshot_tests"], true);
+        assert_eq!(normalized["action"], "structural");
     }
 
     #[test]

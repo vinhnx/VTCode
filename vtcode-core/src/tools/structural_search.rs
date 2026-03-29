@@ -3,6 +3,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -10,10 +11,11 @@ use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::editing::patch::resolve_ast_grep_binary_path;
 use crate::tools::tree_sitter_runtime::parse_source;
-use crate::utils::path::resolve_workspace_path;
+use crate::utils::path::{canonicalize_allow_missing, normalize_path, resolve_workspace_path};
 
 const DEFAULT_MAX_RESULTS: usize = 100;
 const MAX_ALLOWED_RESULTS: usize = 10_000;
+const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
 const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; `$VAR` matches named nodes by default and `$$VAR` includes unnamed nodes; if node role matters, make it explicit in the parseable pattern instead of guessing; structural search is syntax-aware, not scope/type/data-flow analysis.";
 const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. If the parser exists but the extension is unusual, map it with `languageGlobs`. If the target syntax is embedded inside another host language, configure `languageInjections`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
@@ -28,6 +30,32 @@ const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
 static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
 });
+static ANSI_ESCAPE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile")
+});
+static AST_GREP_TEST_RESULT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"test result:\s*(ok|failed)\.\s*(\d+)\s+passed;\s*(\d+)\s+failed;")
+        .expect("ast-grep test summary regex must compile")
+});
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+enum StructuralWorkflow {
+    #[default]
+    Query,
+    Scan,
+    Test,
+}
+
+impl StructuralWorkflow {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Query => "query",
+            Self::Scan => "scan",
+            Self::Test => "test",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -91,9 +119,16 @@ impl GlobInput {
 
 #[derive(Debug, Clone, Deserialize)]
 struct StructuralSearchRequest {
-    pattern: String,
+    #[serde(default)]
+    workflow: StructuralWorkflow,
+    #[serde(default)]
+    pattern: Option<String>,
     #[serde(default)]
     path: Option<String>,
+    #[serde(default)]
+    config_path: Option<String>,
+    #[serde(default)]
+    filter: Option<String>,
     #[serde(default)]
     lang: Option<String>,
     #[serde(default)]
@@ -108,6 +143,8 @@ struct StructuralSearchRequest {
     context_lines: Option<usize>,
     #[serde(default)]
     max_results: Option<usize>,
+    #[serde(default)]
+    skip_snapshot_tests: Option<bool>,
 }
 
 impl StructuralSearchRequest {
@@ -116,17 +153,107 @@ impl StructuralSearchRequest {
 
         let mut request: Self =
             serde_json::from_value(args.clone()).context("invalid structural search args")?;
-        request.normalize_language();
+        request.normalize();
+        request.validate()?;
 
-        if request.pattern.trim().is_empty() {
-            bail!("action='structural' requires a non-empty `pattern`");
+        Ok(request)
+    }
+
+    fn normalize(&mut self) {
+        if self.workflow == StructuralWorkflow::Query {
+            self.lang = self.normalized_or_inferred_lang();
+        }
+    }
+
+    fn validate(&self) -> Result<()> {
+        match self.workflow {
+            StructuralWorkflow::Query => self.validate_query(),
+            StructuralWorkflow::Scan => self.validate_scan(),
+            StructuralWorkflow::Test => self.validate_test(),
+        }
+    }
+
+    fn validate_query(&self) -> Result<()> {
+        if self.pattern().is_none() {
+            bail!("action='structural' workflow='query' requires a non-empty `pattern`");
         }
 
-        if request.debug_query.is_some() && request.lang.as_deref().is_none_or(str::is_empty) {
+        self.reject_present("config_path", self.config_path.as_deref())?;
+        self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+
+        if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!(DEBUG_QUERY_LANG_HINT);
         }
 
-        Ok(request)
+        Ok(())
+    }
+
+    fn validate_scan(&self) -> Result<()> {
+        self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("lang", self.lang.as_deref())?;
+        self.reject_present("selector", self.selector.as_deref())?;
+        self.reject_present(
+            "strictness",
+            self.strictness.as_ref().map(StructuralStrictness::as_str),
+        )?;
+        self.reject_present(
+            "debug_query",
+            self.debug_query.as_ref().map(DebugQueryFormat::as_str),
+        )?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        Ok(())
+    }
+
+    fn validate_test(&self) -> Result<()> {
+        self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("path", self.path.as_deref())?;
+        self.reject_present("lang", self.lang.as_deref())?;
+        self.reject_present("selector", self.selector.as_deref())?;
+        self.reject_present(
+            "strictness",
+            self.strictness.as_ref().map(StructuralStrictness::as_str),
+        )?;
+        self.reject_present(
+            "debug_query",
+            self.debug_query.as_ref().map(DebugQueryFormat::as_str),
+        )?;
+        if self.globs.is_some() {
+            bail!(
+                "action='structural' workflow='test' does not accept `globs`; use `config_path`, `filter`, and `skip_snapshot_tests`."
+            );
+        }
+        if self.context_lines.is_some() {
+            bail!(
+                "action='structural' workflow='test' does not accept `context_lines`; use `config_path`, `filter`, and `skip_snapshot_tests`."
+            );
+        }
+        if self.max_results.is_some() {
+            bail!(
+                "action='structural' workflow='test' does not accept `max_results`; use `config_path`, `filter`, and `skip_snapshot_tests`."
+            );
+        }
+        Ok(())
+    }
+
+    fn reject_present(&self, field: &str, value: Option<&str>) -> Result<()> {
+        if value.is_some_and(|value| !value.trim().is_empty()) {
+            bail!(
+                "action='structural' workflow='{}' does not accept `{field}`.",
+                self.workflow.as_str()
+            );
+        }
+        Ok(())
+    }
+
+    fn reject_flag(&self, field: &str, value: Option<bool>) -> Result<()> {
+        if value.is_some() {
+            bail!(
+                "action='structural' workflow='{}' does not accept `{field}`.",
+                self.workflow.as_str()
+            );
+        }
+        Ok(())
     }
 
     fn requested_path(&self) -> &str {
@@ -136,14 +263,31 @@ impl StructuralSearchRequest {
             .unwrap_or(".")
     }
 
+    fn requested_config_path(&self) -> &str {
+        self.config_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .unwrap_or(DEFAULT_AST_GREP_CONFIG_PATH)
+    }
+
+    fn pattern(&self) -> Option<&str> {
+        self.pattern
+            .as_deref()
+            .map(str::trim)
+            .filter(|pattern| !pattern.is_empty())
+    }
+
+    fn filter(&self) -> Option<&str> {
+        self.filter
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
     fn effective_max_results(&self) -> usize {
         self.max_results
             .unwrap_or(DEFAULT_MAX_RESULTS)
             .clamp(1, MAX_ALLOWED_RESULTS)
-    }
-
-    fn normalize_language(&mut self) {
-        self.lang = self.normalized_or_inferred_lang();
     }
 
     fn normalized_or_inferred_lang(&self) -> Option<String> {
@@ -190,6 +334,27 @@ struct AstGrepMatch {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct AstGrepScanFinding {
+    file: String,
+    text: String,
+    #[serde(default)]
+    lines: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    range: AstGrepRange,
+    #[serde(default, rename = "ruleId")]
+    rule_id: Option<String>,
+    #[serde(default)]
+    severity: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    note: Option<String>,
+    #[serde(default)]
+    metadata: Option<Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct AstGrepRange {
     start: AstGrepPoint,
     end: AstGrepPoint,
@@ -208,22 +373,33 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
             "Structural search requires ast-grep (`sg`). {reason}. Install it with `{AST_GREP_INSTALL_COMMAND}`."
         )
     })?;
+    match request.workflow {
+        StructuralWorkflow::Query => execute_structural_query(workspace_root, &request, &ast_grep).await,
+        StructuralWorkflow::Scan => execute_structural_scan(workspace_root, &request, &ast_grep).await,
+        StructuralWorkflow::Test => execute_structural_test(workspace_root, &request, &ast_grep).await,
+    }
+}
+
+async fn execute_structural_query(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+) -> Result<Value> {
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
-    if let Some(hint) = preflight_parseable_pattern(&request)? {
-        return Ok(build_fragment_result(
-            &request,
-            &search_path.display_path,
-            hint,
-        ));
+    if let Some(hint) = preflight_parseable_pattern(request)? {
+        return Ok(build_fragment_result(request, &search_path.display_path, hint));
     }
     let command_path = search_path.command_arg.clone();
 
     if let Some(debug_query) = &request.debug_query {
-        let mut command = Command::new(&ast_grep);
+        let mut command = Command::new(ast_grep);
         command
             .current_dir(workspace_root)
             .arg("run")
-            .arg(format!("--pattern={}", request.pattern))
+            .arg(format!(
+                "--pattern={}",
+                request.pattern().expect("query pattern validated")
+            ))
             .arg("--lang")
             .arg(
                 request
@@ -251,7 +427,7 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
 
         return Ok(json!({
             "backend": "ast-grep",
-            "pattern": request.pattern,
+            "pattern": request.pattern().expect("query pattern validated"),
             "path": search_path.display_path,
             "lang": request.lang,
             "debug_query": debug_query.as_str(),
@@ -261,11 +437,14 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
         }));
     }
 
-    let mut command = Command::new(&ast_grep);
+    let mut command = Command::new(ast_grep);
     command
         .current_dir(workspace_root)
         .arg("run")
-        .arg(format!("--pattern={}", request.pattern))
+        .arg(format!(
+            "--pattern={}",
+            request.pattern().expect("query pattern validated")
+        ))
         .arg("--json=compact")
         .arg("--color=never");
 
@@ -316,7 +495,100 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
     }
 
     let matches = parse_compact_matches(&output.stdout)?;
-    Ok(build_result(&request, &search_path.display_path, matches))
+    Ok(build_query_result(request, &search_path.display_path, matches))
+}
+
+async fn execute_structural_scan(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+) -> Result<Value> {
+    let search_path = resolve_search_path(workspace_root, request.requested_path())?;
+    let config_path = resolve_config_path(workspace_root, request.requested_config_path()).await?;
+
+    let mut command = Command::new(ast_grep);
+    command
+        .current_dir(workspace_root)
+        .arg("scan")
+        .arg("--config")
+        .arg(&config_path.command_arg)
+        .arg("--json=stream")
+        .arg("--include-metadata")
+        .arg("--color=never");
+
+    if let Some(filter) = request.filter() {
+        command.arg("--filter").arg(filter);
+    }
+    if let Some(context_lines) = request.context_lines {
+        command.arg("--context").arg(context_lines.to_string());
+    }
+    if let Some(globs) = request.globs.clone() {
+        for glob in globs
+            .into_vec()
+            .into_iter()
+            .filter(|glob| !glob.trim().is_empty())
+        {
+            command.arg("--globs").arg(glob);
+        }
+    }
+    command.arg(&search_path.command_arg);
+
+    let output = command
+        .output()
+        .await
+        .context("failed to run ast-grep structural scan")?;
+
+    if !output.status.success() {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep structural scan failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let findings = parse_stream_findings(&output.stdout)?;
+    Ok(build_scan_result(
+        request,
+        &search_path.display_path,
+        &config_path.display_path,
+        findings,
+    ))
+}
+
+async fn execute_structural_test(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+) -> Result<Value> {
+    let config_path = resolve_config_path(workspace_root, request.requested_config_path()).await?;
+
+    let mut command = Command::new(ast_grep);
+    command
+        .current_dir(workspace_root)
+        .arg("test")
+        .arg("--config")
+        .arg(&config_path.command_arg);
+
+    if let Some(filter) = request.filter() {
+        command.arg("--filter").arg(filter);
+    }
+    if request.skip_snapshot_tests == Some(true) {
+        command.arg("--skip-snapshot-tests");
+    }
+
+    let output = command
+        .output()
+        .await
+        .context("failed to run ast-grep structural test")?;
+
+    Ok(build_test_result(
+        &config_path.display_path,
+        output.status.success(),
+        &output.stdout,
+        &output.stderr,
+    ))
 }
 
 fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Option<String>> {
@@ -328,8 +600,9 @@ fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Opti
         return Ok(None);
     };
 
-    let (sanitized_pattern, contains_metavariables) =
-        sanitize_pattern_for_tree_sitter(&request.pattern);
+    let (sanitized_pattern, contains_metavariables) = sanitize_pattern_for_tree_sitter(
+        request.pattern().expect("query pattern validated"),
+    );
     let tree = match parse_source(language, &sanitized_pattern) {
         Ok(tree) => tree,
         Err(_) if contains_metavariables => {
@@ -395,7 +668,7 @@ fn reject_forbidden_args(args: &Value) -> Result<()> {
     for key in STRUCTURAL_FORBIDDEN_KEYS {
         if object.get(*key).is_some() {
             bail!(
-                "action='structural' is read-only; remove `{}`. If you need raw `sg scan`, `sg test`, or rewrite workflows, run ast-grep explicitly via `unified_exec`.",
+                "action='structural' is read-only; remove `{}`. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface cannot express the needed CLI flow.",
                 key
             );
         }
@@ -408,7 +681,20 @@ fn parse_compact_matches(stdout: &[u8]) -> Result<Vec<AstGrepMatch>> {
     serde_json::from_slice(stdout).context("failed to parse ast-grep JSON output")
 }
 
-fn build_result(
+fn parse_stream_findings(stdout: &[u8]) -> Result<Vec<AstGrepScanFinding>> {
+    let stdout = String::from_utf8_lossy(stdout);
+    stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str(line).with_context(|| {
+                format!("failed to parse ast-grep JSON stream output line: {line}")
+            })
+        })
+        .collect()
+}
+
+fn build_query_result(
     request: &StructuralSearchRequest,
     display_path: &str,
     matches: Vec<AstGrepMatch>,
@@ -423,9 +709,34 @@ fn build_result(
 
     json!({
         "backend": "ast-grep",
-        "pattern": request.pattern,
+        "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "matches": normalized_matches,
+        "truncated": truncated,
+    })
+}
+
+fn build_scan_result(
+    request: &StructuralSearchRequest,
+    display_path: &str,
+    config_display_path: &str,
+    findings: Vec<AstGrepScanFinding>,
+) -> Value {
+    let max_results = request.effective_max_results();
+    let truncated = findings.len() > max_results;
+    let normalized_findings = findings
+        .iter()
+        .take(max_results)
+        .map(normalize_scan_finding)
+        .collect::<Vec<_>>();
+
+    json!({
+        "backend": "ast-grep",
+        "workflow": "scan",
+        "config_path": config_display_path,
+        "path": display_path,
+        "findings": normalized_findings,
+        "summary": build_scan_summary(&findings, normalized_findings.len(), truncated),
         "truncated": truncated,
     })
 }
@@ -437,7 +748,7 @@ fn build_fragment_result(
 ) -> Value {
     json!({
         "backend": "ast-grep",
-        "pattern": request.pattern,
+        "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "matches": [],
         "truncated": false,
@@ -473,6 +784,90 @@ fn normalize_match(entry: AstGrepMatch) -> Value {
     Value::Object(match_object)
 }
 
+fn normalize_scan_finding(entry: &AstGrepScanFinding) -> Value {
+    let mut finding_object = Map::new();
+    finding_object.insert("file".to_string(), Value::String(entry.file.clone()));
+    finding_object.insert("line_number".to_string(), json!(entry.range.start.line));
+    finding_object.insert("text".to_string(), Value::String(entry.text.clone()));
+    finding_object.insert(
+        "lines".to_string(),
+        Value::String(entry.lines.clone().unwrap_or_else(|| entry.text.clone())),
+    );
+    if let Some(language) = &entry.language {
+        finding_object.insert("language".to_string(), Value::String(language.clone()));
+    }
+    finding_object.insert(
+        "range".to_string(),
+        json!({
+            "start": {
+                "line": entry.range.start.line,
+                "column": entry.range.start.column,
+            },
+            "end": {
+                "line": entry.range.end.line,
+                "column": entry.range.end.column,
+            },
+        }),
+    );
+    finding_object.insert("rule_id".to_string(), json!(entry.rule_id));
+    finding_object.insert("severity".to_string(), json!(entry.severity));
+    finding_object.insert("message".to_string(), json!(entry.message));
+    finding_object.insert("note".to_string(), json!(entry.note));
+    if let Some(metadata) = &entry.metadata {
+        finding_object.insert("metadata".to_string(), metadata.clone());
+    }
+    Value::Object(finding_object)
+}
+
+fn build_scan_summary(findings: &[AstGrepScanFinding], returned: usize, truncated: bool) -> Value {
+    let mut by_severity = BTreeMap::new();
+    let mut by_rule = BTreeMap::new();
+
+    for finding in findings {
+        let severity = finding
+            .severity
+            .as_deref()
+            .unwrap_or("unknown")
+            .to_string();
+        *by_severity.entry(severity).or_insert(0usize) += 1;
+
+        let rule = finding
+            .rule_id
+            .as_deref()
+            .unwrap_or("unknown")
+            .to_string();
+        *by_rule.entry(rule).or_insert(0usize) += 1;
+    }
+
+    json!({
+        "total_findings": findings.len(),
+        "returned_findings": returned,
+        "truncated": truncated,
+        "by_severity": by_severity,
+        "by_rule": by_rule,
+    })
+}
+
+fn build_test_result(
+    config_display_path: &str,
+    passed: bool,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Value {
+    let stdout = String::from_utf8_lossy(stdout).to_string();
+    let stderr = String::from_utf8_lossy(stderr).to_string();
+
+    json!({
+        "backend": "ast-grep",
+        "workflow": "test",
+        "config_path": config_display_path,
+        "passed": passed,
+        "stdout": stdout,
+        "stderr": stderr,
+        "summary": summarize_test_output(&stdout, passed),
+    })
+}
+
 fn stderr_or_stdout(stderr: &[u8], stdout: &[u8]) -> String {
     let stderr_text = String::from_utf8_lossy(stderr).trim().to_string();
     if !stderr_text.is_empty() {
@@ -495,7 +890,7 @@ fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
         message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
     }
     message.push_str(
-        " Retry `unified_search` with a refined structural pattern before switching tools. Use `unified_exec` only for raw `sg scan`, `sg test`, or rewrite workflows.",
+        " Retry `unified_search` with a refined structural pattern before switching tools. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
     );
     if !detail.contains(AST_GREP_INSTALL_COMMAND) {
         message.push(' ');
@@ -518,7 +913,7 @@ fn looks_like_language_support_issue(detail: &str) -> bool {
 }
 
 fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLanguage) -> String {
-    let trimmed = request.pattern.trim();
+    let trimmed = request.pattern().expect("query pattern validated");
     let mut message = format!(
         "Pattern looks like a code fragment, not standalone parseable {} syntax for `action='structural'`.",
         language.display_name()
@@ -550,8 +945,14 @@ struct ResolvedSearchPath {
 fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<ResolvedSearchPath> {
     let resolved = resolve_workspace_path(workspace_root, PathBuf::from(requested_path).as_path())
         .with_context(|| format!("Failed to resolve structural search path: {requested_path}"))?;
+    let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
+        format!(
+            "Failed to canonicalize workspace root {}",
+            workspace_root.display()
+        )
+    })?;
 
-    let display_path = if let Ok(relative) = resolved.strip_prefix(workspace_root) {
+    let display_path = if let Ok(relative) = resolved.strip_prefix(&workspace_root) {
         if relative.as_os_str().is_empty() {
             ".".to_string()
         } else {
@@ -575,11 +976,86 @@ fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<Re
     })
 }
 
+async fn resolve_config_path(workspace_root: &Path, requested_path: &str) -> Result<ResolvedSearchPath> {
+    let candidate = if Path::new(requested_path).is_absolute() {
+        PathBuf::from(requested_path)
+    } else {
+        workspace_root.join(requested_path)
+    };
+    let normalized = normalize_path(&candidate);
+    let resolved = canonicalize_allow_missing(&normalized)
+        .await
+        .with_context(|| format!("Failed to resolve structural config path: {requested_path}"))?;
+    let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
+        format!(
+            "Failed to canonicalize workspace root {}",
+            workspace_root.display()
+        )
+    })?;
+    if !resolved.starts_with(&workspace_root) {
+        bail!(
+            "Path {} escapes workspace root {}",
+            resolved.display(),
+            workspace_root.display()
+        );
+    }
+
+    let display_path = if let Ok(relative) = resolved.strip_prefix(&workspace_root) {
+        if relative.as_os_str().is_empty() {
+            ".".to_string()
+        } else {
+            relative.to_string_lossy().replace('\\', "/")
+        }
+    } else {
+        resolved.to_string_lossy().replace('\\', "/")
+    };
+
+    let command_arg = if Path::new(&display_path).is_relative() {
+        display_path.clone()
+    } else {
+        resolved.to_string_lossy().to_string()
+    };
+
+    Ok(ResolvedSearchPath {
+        command_arg,
+        display_path,
+    })
+}
+
+fn summarize_test_output(stdout: &str, passed: bool) -> Value {
+    let clean_stdout = ANSI_ESCAPE_RE.replace_all(stdout, "");
+    let mut summary = Map::new();
+    summary.insert(
+        "status".to_string(),
+        Value::String(if passed { "ok" } else { "failed" }.to_string()),
+    );
+
+    if let Some(captures) = AST_GREP_TEST_RESULT_RE.captures(&clean_stdout) {
+        let passed_cases = captures
+            .get(2)
+            .and_then(|value| value.as_str().parse::<usize>().ok())
+            .unwrap_or(0);
+        let failed_cases = captures
+            .get(3)
+            .and_then(|value| value.as_str().parse::<usize>().ok())
+            .unwrap_or(0);
+        summary.insert("passed_cases".to_string(), json!(passed_cases));
+        summary.insert("failed_cases".to_string(), json!(failed_cases));
+        summary.insert(
+            "total_cases".to_string(),
+            json!(passed_cases + failed_cases),
+        );
+    }
+
+    Value::Object(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        StructuralSearchRequest, build_result, execute_structural_search, format_ast_grep_failure,
-        normalize_match, preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
+        StructuralSearchRequest, StructuralWorkflow, build_query_result,
+        execute_structural_search, format_ast_grep_failure, normalize_match,
+        preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
     };
     use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
     use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -641,8 +1117,8 @@ mod tests {
     }
 
     #[test]
-    fn build_result_truncates_matches() {
-        let result = build_result(
+    fn build_query_result_truncates_matches() {
+        let result = build_query_result(
             &request(),
             "src",
             vec![
@@ -705,7 +1181,18 @@ mod tests {
     }
 
     #[test]
-    fn structural_request_requires_pattern() {
+    fn structural_request_defaults_workflow_to_query() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}"
+        }))
+        .expect("valid request");
+
+        assert_eq!(request.workflow, StructuralWorkflow::Query);
+    }
+
+    #[test]
+    fn structural_request_requires_pattern_for_query() {
         let err = StructuralSearchRequest::from_args(&json!({
             "action": "structural",
             "pattern": "   "
@@ -713,6 +1200,31 @@ mod tests {
         .expect_err("pattern required");
 
         assert!(err.to_string().contains("requires a non-empty `pattern`"));
+    }
+
+    #[test]
+    fn structural_request_allows_scan_without_pattern() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "scan"
+        }))
+        .expect("scan should not require a pattern");
+
+        assert_eq!(request.workflow, StructuralWorkflow::Scan);
+        assert_eq!(request.requested_path(), ".");
+        assert_eq!(request.requested_config_path(), "sgconfig.yml");
+    }
+
+    #[test]
+    fn structural_request_allows_test_without_pattern() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "test"
+        }))
+        .expect("test should not require a pattern");
+
+        assert_eq!(request.workflow, StructuralWorkflow::Test);
+        assert_eq!(request.requested_config_path(), "sgconfig.yml");
     }
 
     #[test]
@@ -778,6 +1290,59 @@ mod tests {
 
         assert!(err.to_string().contains("read-only"));
         assert!(err.to_string().contains("ast-grep"));
+        assert!(err.to_string().contains("bundled `ast-grep` skill"));
+    }
+
+    #[test]
+    fn structural_request_rejects_query_only_fields_for_scan() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "scan",
+            "lang": "rust"
+        }))
+        .expect_err("scan rejects query-only fields");
+
+        assert!(err.to_string().contains("workflow='scan'"));
+        assert!(err.to_string().contains("does not accept `lang`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_scan_only_fields_for_query() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "config_path": "sgconfig.yml"
+        }))
+        .expect_err("query rejects config path");
+
+        assert!(err.to_string().contains("workflow='query'"));
+        assert!(err.to_string().contains("does not accept `config_path`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_query_only_fields_for_test() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "test",
+            "selector": "function_item"
+        }))
+        .expect_err("test rejects query-only fields");
+
+        assert!(err.to_string().contains("workflow='test'"));
+        assert!(err.to_string().contains("does not accept `selector`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_scan_only_fields_for_test() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "test",
+            "globs": ["**/*.rs"]
+        }))
+        .expect_err("test rejects globs");
+
+        assert!(err.to_string().contains("workflow='test'"));
+        assert!(err.to_string().contains("does not accept `globs`"));
     }
 
     #[test]
@@ -1085,6 +1650,7 @@ mod tests {
         assert!(text.contains("languageInjections"));
         assert!(text.contains("expandoChar"));
         assert!(text.contains("Retry `unified_search`"));
+        assert!(text.contains("bundled `ast-grep` skill"));
         assert!(text.contains("`unified_exec`"));
     }
 
@@ -1142,5 +1708,127 @@ mod tests {
         assert!(text.contains("expandoChar"), "{text}");
         assert!(text.contains("Retry `unified_search`"), "{text}");
         assert!(text.contains("`unified_exec`"), "{text}");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_scan_normalizes_findings_and_truncates() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp.path().join("src")).expect("create src");
+        fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+        let args_path = temp.path().join("sg_args.txt");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '%s\n' '{}' '{}'\n",
+            args_path.display(),
+            r#"{"text":"items.iter().for_each(handle);","range":{"start":{"line":5,"column":4},"end":{"line":5,"column":29}},"file":"src/lib.rs","lines":"5: items.iter().for_each(handle);","language":"Rust","ruleId":"no-iterator-for-each","severity":"warning","message":"Prefer a for loop.","note":"Avoid side-effect-only for_each.","metadata":{"docs":"https://example.com/rule","category":"style"}}"#,
+            r#"{"text":"items.into_iter().for_each(handle);","range":{"start":{"line":9,"column":0},"end":{"line":9,"column":34}},"file":"src/main.rs","lines":"9: items.into_iter().for_each(handle);","language":"Rust","ruleId":"no-iterator-for-each","severity":"warning","message":"Prefer a for loop.","note":null,"metadata":{"docs":"https://example.com/rule","category":"style"}}"#
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "workflow": "scan",
+                "path": "src",
+                "config_path": "sgconfig.yml",
+                "filter": "no-iterator-for-each",
+                "globs": ["**/*.rs", "!target/**"],
+                "context_lines": 2,
+                "max_results": 1
+            }),
+        )
+        .await
+        .expect("scan should succeed");
+
+        assert_eq!(result["backend"], "ast-grep");
+        assert_eq!(result["workflow"], "scan");
+        assert_eq!(result["path"], "src");
+        assert_eq!(result["config_path"], "sgconfig.yml");
+        assert_eq!(result["truncated"], true);
+
+        let findings = result["findings"].as_array().expect("findings");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["file"], "src/lib.rs");
+        assert_eq!(findings[0]["line_number"], 5);
+        assert_eq!(findings[0]["language"], "Rust");
+        assert_eq!(findings[0]["rule_id"], "no-iterator-for-each");
+        assert_eq!(findings[0]["severity"], "warning");
+        assert_eq!(findings[0]["message"], "Prefer a for loop.");
+        assert_eq!(findings[0]["note"], "Avoid side-effect-only for_each.");
+        assert_eq!(findings[0]["metadata"]["category"], "style");
+        assert_eq!(result["summary"]["total_findings"], 2);
+        assert_eq!(result["summary"]["returned_findings"], 1);
+        assert_eq!(result["summary"]["by_rule"]["no-iterator-for-each"], 2);
+        assert_eq!(result["summary"]["by_severity"]["warning"], 2);
+
+        let args = fs::read_to_string(args_path).expect("read sg args");
+        assert!(args.lines().any(|line| line == "scan"));
+        assert!(args.lines().any(|line| line == "--config"));
+        assert!(args.lines().any(|line| line == "sgconfig.yml"));
+        assert!(args.lines().any(|line| line == "--filter"));
+        assert!(args.lines().any(|line| line == "no-iterator-for-each"));
+        assert!(args.lines().any(|line| line == "--globs"));
+        assert!(args.lines().any(|line| line == "--context"));
+        assert!(args.lines().any(|line| line == "2"));
+        assert!(args.lines().any(|line| line == "src"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_test_returns_stdout_stderr_and_summary() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp.path().join("config")).expect("create config dir");
+        fs::write(
+            temp.path().join("config/sgconfig.yml"),
+            "ruleDirs: []\n",
+        )
+        .expect("write config");
+        let args_path = temp.path().join("sg_args.txt");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '\\033[32mRunning 2 tests\\033[0m\nPASS rust/no-iterator-for-each\nFAIL rust/for-each-snapshot\ntest result: failed. 1 passed; 1 failed;\n'\nprintf 'snapshot mismatch\n' >&2\nexit 1\n",
+            args_path.display(),
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "workflow": "test",
+                "config_path": "config/sgconfig.yml",
+                "filter": "rust/no-iterator-for-each",
+                "skip_snapshot_tests": true
+            }),
+        )
+        .await
+        .expect("test workflow should return structured result");
+
+        assert_eq!(result["backend"], "ast-grep");
+        assert_eq!(result["workflow"], "test");
+        assert_eq!(result["config_path"], "config/sgconfig.yml");
+        assert_eq!(result["passed"], false);
+        assert!(result["stdout"]
+            .as_str()
+            .expect("stdout")
+            .contains("Running 2 tests"));
+        assert!(result["stderr"]
+            .as_str()
+            .expect("stderr")
+            .contains("snapshot mismatch"));
+        assert_eq!(result["summary"]["status"], "failed");
+        assert_eq!(result["summary"]["passed_cases"], 1);
+        assert_eq!(result["summary"]["failed_cases"], 1);
+        assert_eq!(result["summary"]["total_cases"], 2);
+
+        let args = fs::read_to_string(args_path).expect("read sg args");
+        assert!(args.lines().any(|line| line == "test"));
+        assert!(args.lines().any(|line| line == "--config"));
+        assert!(args.lines().any(|line| line == "config/sgconfig.yml"));
+        assert!(args.lines().any(|line| line == "--filter"));
+        assert!(args.lines().any(|line| line == "rust/no-iterator-for-each"));
+        assert!(args.lines().any(|line| line == "--skip-snapshot-tests"));
     }
 }

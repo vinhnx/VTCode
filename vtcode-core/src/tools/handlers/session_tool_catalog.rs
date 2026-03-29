@@ -909,29 +909,38 @@ pub(crate) fn unified_search_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
-                "description": "Action to perform. Default to `structural` for code or syntax-aware search, `grep` for raw text, and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
+                "description": "Action to perform. Default to `structural` for code or syntax-aware search, including ast-grep query, project scan, and project test workflows; use `grep` for raw text and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
             },
-            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
-            "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
-            "lang": {"type": "string", "description": "Language for structural search. Set it whenever the code language is known; required for debug_query."},
-            "selector": {"type": "string", "description": "ast-grep selector for structural search when the real match is a subnode inside the parseable pattern."},
+            "workflow": {
+                "type": "string",
+                "enum": ["query", "scan", "test"],
+                "description": "Structural workflow. `query` is the default parseable-pattern search, `scan` runs project rules from config, and `test` runs ast-grep rule tests.",
+                "default": "query"
+            },
+            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
+            "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`.", "default": "."},
+            "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
+            "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`."},
+            "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"`. Set it whenever the code language is known; required for debug_query."},
+            "selector": {"type": "string", "description": "Ast-grep selector for structural `workflow=\"query\"` when the real match is a subnode inside the parseable pattern."},
             "strictness": {
                 "type": "string",
                 "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],
-                "description": "Pattern strictness for structural search."
+                "description": "Pattern strictness for structural `workflow=\"query\"`."
             },
             "debug_query": {
                 "type": "string",
                 "enum": ["pattern", "ast", "cst", "sexp"],
-                "description": "Print the structural query AST instead of matches. Requires lang."
+                "description": "Print the structural query AST instead of matches for `workflow=\"query\"`. Requires lang."
             },
             "globs": {
-                "description": "Optional include/exclude globs for structural search.",
+                "description": "Optional include/exclude globs for structural `workflow=\"query\"` or `workflow=\"scan\"`.",
                 "anyOf": [
                     {"type": "string"},
                     {"type": "array", "items": {"type": "string"}}
                 ]
             },
+            "skip_snapshot_tests": {"type": "boolean", "description": "Skip ast-grep snapshot tests for structural `workflow=\"test\"`.", "default": false},
             "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
             "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
             "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
@@ -949,7 +958,7 @@ pub(crate) fn unified_search_parameters() -> Value {
             },
             "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
             "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
-            "context_lines": {"type": "integer", "description": "Context lines for 'grep' or 'structural' results.", "default": 0},
+            "context_lines": {"type": "integer", "description": "Context lines for `grep` or structural `workflow=\"query\"|\"scan\"` results.", "default": 0},
             "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
             "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
             "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}
@@ -1323,6 +1332,30 @@ mod tests {
                 .expect("action description")
                 .contains("Refine and retry `grep` or `structural`"),
             "schema should keep search refinement inside unified_search"
+        );
+        assert_eq!(
+            params["properties"]["workflow"]["enum"][1],
+            "scan",
+            "schema should expose structural scan workflow"
+        );
+        assert_eq!(
+            params["properties"]["workflow"]["enum"][2],
+            "test",
+            "schema should expose structural test workflow"
+        );
+        assert!(
+            params["properties"]["config_path"]["description"]
+                .as_str()
+                .expect("config path description")
+                .contains("Defaults to workspace `sgconfig.yml`"),
+            "schema should describe structural config handling"
+        );
+        assert!(
+            params["properties"]["skip_snapshot_tests"]["description"]
+                .as_str()
+                .expect("skip snapshot description")
+                .contains("workflow=\"test\""),
+            "schema should scope snapshot skipping to structural test"
         );
     }
 

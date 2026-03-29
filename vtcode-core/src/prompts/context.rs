@@ -258,6 +258,7 @@ mod tests {
             .map(|skill| skill.name.as_str())
             .collect::<Vec<_>>();
 
+        assert!(skill_names.contains(&"ast-grep"));
         assert!(skill_names.contains(&"repo-skill"));
         assert!(skill_names.contains(&"skill-creator"));
     }

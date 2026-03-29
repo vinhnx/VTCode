@@ -60,22 +60,33 @@ This document describes the canonical public tool surface exposed to VT Code mod
 
 ### `structural`
 
-- Required: `action="structural"`, `pattern`
-- Optional: `path` (default `"."`), `lang`, `selector`, `strictness`, `debug_query`, `globs`, `context_lines`, `max_results`
-- Result shape: top-level `matches` array with `file`, `line_number`, `text`/`lines`, `language`, and compact `range` metadata, plus `backend: "ast-grep"`
+- Required: `action="structural"`
+- Optional common fields: `workflow` (`"query" | "scan" | "test"`, default `"query"`), `path` (default `"."` for query/scan), `config_path` (default workspace `sgconfig.yml` for scan/test), `filter`, `globs`, `context_lines`, `max_results`
+- `workflow="query"`:
+  - Required: `pattern`
+  - Optional: `lang`, `selector`, `strictness`, `debug_query`
+  - Result shape: top-level `matches` array with `file`, `line_number`, `text`/`lines`, `language`, and compact `range` metadata, plus `backend: "ast-grep"`
+- `workflow="scan"`:
+  - Optional: `path`, `config_path`, `filter`, `globs`, `context_lines`, `max_results`
+  - Result shape: top-level `findings` array with `file`, `line_number`, `text`/`lines`, `language`, `range`, `rule_id`, `severity`, `message`, `note`, optional `metadata`, plus `summary`, `truncated`, and `backend: "ast-grep"`
+- `workflow="test"`:
+  - Optional: `config_path`, `filter`, `skip_snapshot_tests`
+  - Result shape: `passed`, `stdout`, `stderr`, `summary`, and `backend: "ast-grep"`
 - Constraints:
   - Read-only only; rewrite/apply flags are rejected
-  - `lang` is optional for normal search
+  - `lang`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"`
   - `lang` is required when `debug_query` is set
+  - `skip_snapshot_tests` is only valid for `workflow="test"`
   - Requires a local `sg` / `ast-grep` binary; if missing, VT Code returns an actionable error, points to the bundled `ast-grep` skill, and recommends `vtcode dependencies install search-tools` or `vtcode dependencies install ast-grep`
   - VT Code-managed installs live in `~/.vtcode/bin`
   - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
   - Syntax-aware only; do not treat this surface as scope, type, or data-flow analysis
-  - Patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
+  - `workflow="query"` patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
   - Custom languages are supported only through local ast-grep configuration, typically workspace `sgconfig.yml` `customLanguages` plus a compiled tree-sitter dynamic library
   - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
-  - Rewrite-oriented ast-grep features like `fix`, `transform`, `rewriters`, `sg scan`, `sg test`, and `sg new` stay outside this read-only surface; use the bundled `ast-grep` skill workflow instead
-- Use when: you need syntax-aware search that should ignore irrelevant text matches
+  - Public project support stops at read-only `sg scan` and `sg test`
+  - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `rewriters`, or non-trivial `sgconfig.yml` authoring/debugging
+- Use when: you need syntax-aware search, read-only project rule scans, or read-only ast-grep rule tests
 - Avoid when: plain text grep is simpler, the search target is not syntax-sensitive, or the task depends on semantic/static-analysis facts
 
 ### `tools`
@@ -104,8 +115,9 @@ This document describes the canonical public tool surface exposed to VT Code mod
 
 - Prefer `unified_search` over shell `grep`/`find` for normal workspace discovery.
 - Prefer `grep` for broad text search.
-- Prefer `structural` for syntax-sensitive search.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes a rule-authoring, debug-query, `sg scan`, `sg test`, `sg new`, or `sgconfig.yml` workflow.
+- Prefer `structural` for syntax-sensitive search, read-only project scans, and read-only ast-grep rule tests.
+- Prefer `workflow="scan"` for public `sg scan` equivalents and `workflow="test"` for public `sg test` equivalents.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes rule authoring, `sg new`, rewrite/apply work, interactive ast-grep work, or `sgconfig.yml` authoring/debugging.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the target snippet is not valid standalone code and needs pattern-object `context` plus `selector`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the requested language is not built into ast-grep and needs workspace `sgconfig.yml` `customLanguages` setup or `expandoChar`.
