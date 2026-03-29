@@ -470,6 +470,7 @@ impl<'a> TurnProcessingContext<'a> {
         let auto_mode = Some(
             crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
                 config: llm_ctx.config,
+                vt_cfg: llm_ctx.vt_cfg,
                 provider_client: llm_ctx.provider_client.as_mut(),
                 working_history: state.working_history.as_slice(),
             },

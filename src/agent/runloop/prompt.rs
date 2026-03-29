@@ -6,8 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::context::{ConversationMemory, EntityResolver, WorkspaceState};
 use vtcode_core::llm::{
-    factory::{ProviderConfig, create_provider_with_config},
-    provider as uni,
+    LightweightFeature, create_provider_for_model_route, provider as uni, resolve_lightweight_route,
 };
 
 const MIN_PROMPT_LENGTH_FOR_REFINEMENT: usize = 20;
@@ -64,89 +63,95 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         return raw.to_string();
     }
 
-    let provider_name = if cfg.provider.trim().is_empty() {
-        "gemini".to_string()
-    } else {
-        cfg.provider.to_lowercase()
-    };
+    let routes = resolve_lightweight_route(
+        cfg,
+        Some(vtc),
+        LightweightFeature::PromptRefinement,
+        Some(vtc.agent.refine_prompts_model.as_str()),
+    );
+    if let Some(warning) = &routes.warning {
+        tracing::warn!(warning = %warning, "prompt refinement route adjusted");
+    }
 
-    let refiner_model = if !vtc.agent.refine_prompts_model.is_empty() {
-        vtc.agent.refine_prompts_model.clone()
-    } else {
-        match provider_name.as_str() {
-            "openai" => vtcode_core::config::constants::models::openai::GPT_5_MINI.to_string(),
-            _ => cfg.model.clone(),
+    match try_refine_prompt_with_route(raw, cfg, Some(vtc), &routes.primary).await {
+        Ok(Some(text)) => text,
+        Ok(None) | Err(_) if routes.fallback_to_main_model().is_some() => {
+            let fallback = routes.fallback_to_main_model().expect("checked fallback");
+            tracing::warn!(
+                model = %routes.primary.model,
+                fallback_model = %fallback.model,
+                "prompt refinement failed on lightweight route; retrying with main model"
+            );
+            match try_refine_prompt_with_route(raw, cfg, Some(vtc), fallback).await {
+                Ok(Some(text)) => text,
+                _ => raw.to_string(),
+            }
         }
-    };
+        _ => raw.to_string(),
+    }
+}
 
-    let Ok(refiner) = create_provider_with_config(
-        &provider_name,
-        ProviderConfig {
-            api_key: Some(cfg.api_key.clone()),
-            openai_chatgpt_auth: cfg.openai_chatgpt_auth.clone(),
-            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
-            base_url: None,
-            model: Some(refiner_model.clone()),
-            prompt_cache: Some(cfg.prompt_cache.clone()),
-            timeouts: None,
-            openai: None,
-            anthropic: None,
-            model_behavior: cfg.model_behavior.clone(),
-            workspace_root: Some(cfg.workspace.clone()),
-        },
-    ) else {
-        return raw.to_string();
+async fn try_refine_prompt_with_route(
+    raw: &str,
+    cfg: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    route: &vtcode_core::llm::ModelRoute,
+) -> Result<Option<String>, anyhow::Error> {
+    let Some(vt_cfg) = vt_cfg else {
+        return Ok(None);
     };
-
-    let supports_effort = refiner.supports_reasoning_effort(&refiner_model);
+    let refiner = create_provider_for_model_route(route, cfg, Some(vt_cfg))?;
+    let supports_effort = refiner.supports_reasoning_effort(&route.model);
     let reasoning_effort = if supports_effort {
-        Some(vtc.agent.reasoning_effort)
+        Some(vt_cfg.agent.reasoning_effort)
     } else {
         None
     };
     let temperature = if reasoning_effort.is_some()
-        && matches!(provider_name.as_str(), "anthropic" | "minimax")
+        && matches!(route.provider_name.as_str(), "anthropic" | "minimax")
     {
         None
     } else {
-        Some(vtc.agent.refine_temperature)
+        Some(vt_cfg.agent.refine_temperature)
     };
     let req = uni::LLMRequest {
         messages: vec![uni::Message::user(raw.to_string())],
-        model: refiner_model,
+        model: route.model.clone(),
         temperature,
         tool_choice: Some(uni::ToolChoice::none()),
         reasoning_effort,
         ..Default::default()
     };
 
-    match refiner
+    let text = refiner
         .generate(req)
         .await
-        .map(|response| response.content.unwrap_or_default())
-    {
-        Ok(text) if should_accept_refinement(raw, &text) => {
-            // If the user's prompt looks like a debug/analyze request, append a concise tools hint
-            let lower = text.to_lowercase();
-            let debug_triggers = [
-                "debug",
-                "analyze",
-                "error",
-                "fix",
-                "issue",
-                "troubleshoot",
-                "diagnose",
-            ];
-            if debug_triggers.iter().any(|token| lower.contains(token)) {
-                format!(
-                    "{}\n\nNote: For diagnostics, prefer using tools: debug_agent, analyze_agent, search_tools.",
-                    text
-                )
-            } else {
-                text
-            }
-        }
-        _ => raw.to_string(),
+        .map(|response| response.content.unwrap_or_default())?;
+    if !should_accept_refinement(raw, &text) {
+        return Ok(None);
+    }
+
+    Ok(Some(finalize_refined_prompt(text)))
+}
+
+fn finalize_refined_prompt(text: String) -> String {
+    let lower = text.to_lowercase();
+    let debug_triggers = [
+        "debug",
+        "analyze",
+        "error",
+        "fix",
+        "issue",
+        "troubleshoot",
+        "diagnose",
+    ];
+    if debug_triggers.iter().any(|token| lower.contains(token)) {
+        format!(
+            "{}\n\nNote: For diagnostics, prefer using tools: debug_agent, analyze_agent, search_tools.",
+            text
+        )
+    } else {
+        text
     }
 }
 

@@ -189,6 +189,7 @@ impl<'a> TurnLoopContext<'a> {
         let auto_mode = Some(
             crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
                 config: self.config,
+                vt_cfg: self.vt_cfg,
                 provider_client: self.provider_client.as_mut(),
                 working_history: &[],
             },

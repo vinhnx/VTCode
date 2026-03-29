@@ -289,6 +289,7 @@ async fn resolve_auto_mode_permission(
     match review_tool_call(
         auto_mode_runtime.provider_client,
         auto_mode_runtime.config,
+        auto_mode_runtime.vt_cfg,
         permissions,
         tool_registry.workspace_root(),
         auto_mode_runtime.working_history,
@@ -1805,6 +1806,7 @@ mod tests {
                 permissions_config: Some(&permissions),
                 auto_mode_runtime: Some(AutoModeRuntimeContext {
                     config: &config,
+                    vt_cfg: None,
                     provider_client: &mut provider,
                     working_history: &history,
                 }),
@@ -1881,6 +1883,7 @@ mod tests {
                 permissions_config: Some(&permissions),
                 auto_mode_runtime: Some(AutoModeRuntimeContext {
                     config: &config,
+                    vt_cfg: None,
                     provider_client: &mut provider,
                     working_history: &history,
                 }),
@@ -1927,6 +1930,7 @@ mod tests {
                 permissions_config: Some(&permissions),
                 auto_mode_runtime: Some(AutoModeRuntimeContext {
                     config: &config,
+                    vt_cfg: None,
                     provider_client: &mut provider,
                     working_history: &history,
                 }),

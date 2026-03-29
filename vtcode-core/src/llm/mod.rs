@@ -169,6 +169,7 @@ pub mod client;
 pub mod error_display;
 pub mod factory;
 pub mod http_client;
+pub mod lightweight_routing;
 pub mod model_resolver;
 pub mod optimized_client;
 pub mod provider;
@@ -189,6 +190,11 @@ pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, ProviderClientAdapter, make_client};
 pub use factory::{
     create_provider_with_config, get_factory, get_models_manager, infer_provider_from_model,
+};
+pub use lightweight_routing::{
+    LightweightFeature, LightweightRouteResolution, LightweightRouteSource, ModelRoute,
+    auto_lightweight_model, create_provider_for_model_route, lightweight_model_choices,
+    main_model_route, resolve_api_key_for_model_route, resolve_lightweight_route,
 };
 pub use model_resolver::{
     DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel,

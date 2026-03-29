@@ -2,20 +2,18 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::agent::runloop::unified::state::AutoModeDenial;
 use anyhow::{Context, Result, anyhow};
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
 use vtcode_core::command_safety::parse_bash_lc_commands;
-use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::{PermissionsConfig, loader::VTCodeConfig};
 use vtcode_core::git_info::get_git_remote_urls;
-use vtcode_core::llm::provider as uni;
+use vtcode_core::llm::{LightweightFeature, provider as uni, resolve_lightweight_route};
 use vtcode_core::permissions::{PermissionRequest, build_permission_request};
 use vtcode_core::tools::command_args;
-
-use crate::agent::runloop::unified::interactive_features::auto_small_model;
-use crate::agent::runloop::unified::state::AutoModeDenial;
 
 const AUTO_MODE_SYSTEM_PROMPT: &str =
     include_str!("../../../../../system-prompts/system-prompt-auto-mode.md");
@@ -60,6 +58,7 @@ pub(crate) fn system_prompt_addendum() -> &'static str {
 pub(crate) async fn review_tool_call(
     provider: &mut dyn uni::LLMProvider,
     agent_config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     permissions: &PermissionsConfig,
     workspace_root: &Path,
     history: &[uni::Message],
@@ -78,14 +77,16 @@ pub(crate) async fn review_tool_call(
         "Respond with exactly ALLOW or BLOCK.",
         None,
     );
-    let stage_one_model = selected_model(
-        provider.name(),
-        &agent_config.model,
+    let stage_one_models = selected_models(
+        agent_config,
+        vt_cfg,
         permissions.auto_mode.model.as_str(),
+        LightweightFeature::AutoModeReview,
     );
     let stage_one = raw_completion(
         provider,
-        &stage_one_model,
+        &stage_one_models.primary_model,
+        stage_one_models.fallback_model.as_deref(),
         REVIEWER_PROMPT,
         stage_one_prompt,
         Some(8),
@@ -116,7 +117,8 @@ pub(crate) async fn review_tool_call(
     );
     let stage_two = raw_completion(
         provider,
-        &stage_one_model,
+        &stage_one_models.primary_model,
+        stage_one_models.fallback_model.as_deref(),
         REVIEWER_PROMPT,
         stage_two_prompt,
         Some(300),
@@ -149,6 +151,7 @@ pub(crate) async fn review_tool_call(
 pub(crate) async fn probe_tool_output(
     provider: &mut dyn uni::LLMProvider,
     agent_config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     permissions: &PermissionsConfig,
     history: &[uni::Message],
     tool_output: &str,
@@ -157,10 +160,11 @@ pub(crate) async fn probe_tool_output(
         return Ok(None);
     }
 
-    let probe_model = selected_model(
-        provider.name(),
-        &agent_config.model,
+    let probe_models = selected_models(
+        agent_config,
+        vt_cfg,
         permissions.auto_mode.probe_model.as_str(),
+        LightweightFeature::AutoModeProbe,
     );
     let recent_user_context = history
         .iter()
@@ -179,9 +183,16 @@ pub(crate) async fn probe_tool_output(
         },
         truncate_text(tool_output, MAX_TOOL_OUTPUT_CHARS)
     );
-    let response = raw_completion(provider, &probe_model, PROBE_PROMPT, probe_prompt, Some(8))
-        .await
-        .context("auto mode prompt-injection probe")?;
+    let response = raw_completion(
+        provider,
+        &probe_models.primary_model,
+        probe_models.fallback_model.as_deref(),
+        PROBE_PROMPT,
+        probe_prompt,
+        Some(8),
+    )
+    .await
+    .context("auto mode prompt-injection probe")?;
     let decision = first_upper_token(&response);
     tracing::trace!(stage = "probe", decision = %decision, "auto mode prompt probe completed");
     if decision != "SUSPECT" {
@@ -565,6 +576,7 @@ fn extract_written_content(tool_name: &str, args: &Value) -> Option<String> {
 async fn raw_completion(
     provider: &mut dyn uni::LLMProvider,
     model: &str,
+    fallback_model: Option<&str>,
     system_prompt: &str,
     user_prompt: String,
     max_tokens: Option<u32>,
@@ -578,11 +590,34 @@ async fn raw_completion(
         stream: false,
         ..Default::default()
     };
-    let response = provider
-        .generate(request)
+    match provider
+        .generate(request.clone())
         .await
-        .map_err(|err| anyhow!(err))?;
-    Ok(response.content_text().trim().to_string())
+        .map_err(|err| anyhow!(err))
+    {
+        Ok(response) => Ok(response.content_text().trim().to_string()),
+        Err(primary_err) => {
+            let Some(fallback_model) = fallback_model.filter(|candidate| *candidate != model)
+            else {
+                return Err(primary_err);
+            };
+            tracing::warn!(
+                model,
+                fallback_model,
+                error = %primary_err,
+                "auto mode lightweight request failed; retrying with main model"
+            );
+            let fallback_request = uni::LLMRequest {
+                model: fallback_model.to_string(),
+                ..request
+            };
+            let response = provider
+                .generate(fallback_request)
+                .await
+                .map_err(|err| anyhow!(err))?;
+            Ok(response.content_text().trim().to_string())
+        }
+    }
 }
 
 fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
@@ -599,11 +634,26 @@ fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
     serde_json::from_str(&raw[start..=end]).context("parse auto mode stage-2 JSON")
 }
 
-fn selected_model(provider_name: &str, active_model: &str, configured_model: &str) -> String {
-    if !configured_model.trim().is_empty() {
-        configured_model.trim().to_string()
-    } else {
-        auto_small_model(provider_name, active_model)
+struct AutoModeModels {
+    primary_model: String,
+    fallback_model: Option<String>,
+}
+
+fn selected_models(
+    agent_config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    configured_model: &str,
+    feature: LightweightFeature,
+) -> AutoModeModels {
+    let resolution =
+        resolve_lightweight_route(agent_config, vt_cfg, feature, Some(configured_model));
+    if let Some(warning) = &resolution.warning {
+        tracing::warn!(warning = %warning, "auto mode route adjusted");
+    }
+
+    AutoModeModels {
+        primary_model: resolution.primary.model,
+        fallback_model: resolution.fallback.map(|route| route.model),
     }
 }
 
@@ -784,6 +834,7 @@ mod tests {
         let warning = probe_tool_output(
             &mut provider,
             &runtime_config(),
+            None,
             &PermissionsConfig::default(),
             &[uni::Message::user("check the tool output".to_string())],
             r#"{"error":"tool failed unexpectedly"}"#,

@@ -6,6 +6,10 @@ use vtcode_core::config::current_config_defaults;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path};
+use vtcode_core::llm::{
+    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
+    resolve_lightweight_route,
+};
 use vtcode_core::persistent_memory::{
     PersistentMemoryStatus, cleanup_persistent_memory, persistent_memory_status,
     rebuild_persistent_memory_summary, scaffold_persistent_memory,
@@ -29,6 +33,15 @@ const DOCTOR_ACTION_BACK: &str = "doctor.action.back";
 const MEMORY_ACTION_PREFIX: &str = "memory.action.";
 const MEMORY_ACTION_BACK: &str = "memory.action.back";
 const MEMORY_PROMPT_QUESTION_ID: &str = "memory.input";
+const MEMORY_LIGHTWEIGHT_MODEL_PREFIX: &str = "lightweight_model:";
+
+struct MemoryLightweightRouteInfo {
+    configured_label: String,
+    effective_label: String,
+    warning: Option<String>,
+    choices: Vec<String>,
+    main_model: String,
+}
 
 pub(crate) async fn handle_show_status(
     ctx: SlashCommandContext<'_>,
@@ -148,6 +161,7 @@ async fn render_memory_status_lines(
     let memory_status =
         persistent_memory_status(&agent_config.persistent_memory, &ctx.config.workspace)?;
     let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
+    let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
     ctx.renderer
         .line(MessageStyle::Info, "Instruction Memory")?;
@@ -160,6 +174,19 @@ async fn render_memory_status_lines(
         &format!("Matched rules: {}", format_path_list(&matched_rules)),
     )?;
     render_common_memory_status(ctx, &memory_status)?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Memory triage model: {} ({})",
+            lightweight_route.configured_label, lightweight_route.effective_label
+        ),
+    )?;
+    if let Some(warning) = lightweight_route.warning {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            &format!("Route warning: {}", warning),
+        )?;
+    }
     if include_config_hint {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -178,6 +205,7 @@ async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>) -> Result
         .unwrap_or_default();
     let memory_status =
         persistent_memory_status(&agent_config.persistent_memory, &ctx.config.workspace)?;
+    let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
     ctx.renderer.line(MessageStyle::Info, "Memory Settings")?;
     render_common_memory_status(ctx, &memory_status)?;
@@ -200,14 +228,20 @@ async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>) -> Result
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
-            "Small model for memory: {}",
-            if agent_config.small_model.use_for_memory {
-                "enabled"
-            } else {
-                "disabled"
-            }
+            "Memory triage model: {}",
+            lightweight_route.configured_label
         ),
     )?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!("Effective route: {}", lightweight_route.effective_label),
+    )?;
+    if let Some(warning) = lightweight_route.warning {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            &format!("Route warning: {}", warning),
+        )?;
+    }
 
     Ok(())
 }
@@ -293,6 +327,51 @@ fn render_common_memory_status(
     Ok(())
 }
 
+fn memory_lightweight_route_info(
+    runtime_config: &vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
+) -> MemoryLightweightRouteInfo {
+    let resolution =
+        resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
+    let configured_label = vt_cfg
+        .map(|cfg| {
+            if !cfg.agent.small_model.enabled || !cfg.agent.small_model.use_for_memory {
+                "Use main model".to_string()
+            } else {
+                let configured = cfg.agent.small_model.model.trim();
+                if configured.is_empty() {
+                    "Automatic".to_string()
+                } else if configured.eq_ignore_ascii_case(runtime_config.model.as_str()) {
+                    "Use main model".to_string()
+                } else {
+                    configured.to_string()
+                }
+            }
+        })
+        .unwrap_or_else(|| "Use main model".to_string());
+    let effective_label = match resolution.source {
+        LightweightRouteSource::MainModel => runtime_config.model.clone(),
+        _ => match resolution.fallback_to_main_model() {
+            Some(fallback) => format!(
+                "{} -> fallback {}",
+                resolution.primary.model, fallback.model
+            ),
+            None => resolution.primary.model.clone(),
+        },
+    };
+
+    let mut choices = lightweight_model_choices(&runtime_config.provider, &runtime_config.model);
+    choices.retain(|model| !model.eq_ignore_ascii_case(runtime_config.model.as_str()));
+
+    MemoryLightweightRouteInfo {
+        configured_label,
+        effective_label,
+        warning: resolution.warning,
+        choices,
+        main_model: runtime_config.model.clone(),
+    }
+}
+
 fn instruction_memory_map(
     appendix: Option<&vtcode_core::project_doc::InstructionAppendixBundle>,
 ) -> (Vec<String>, Vec<String>) {
@@ -345,6 +424,7 @@ fn show_memory_actions_modal(
         .as_ref()
         .map(|cfg| cfg.agent.clone())
         .unwrap_or_default();
+    let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
     let title = if config_mode {
         "Memory Settings"
     } else {
@@ -368,18 +448,14 @@ fn show_memory_actions_modal(
         ]
     };
     lines.push(format!(
-        "Memory {} • auto-write {} • small-model {} • pending rollouts {} • cleanup {}",
+        "Memory {} • auto-write {} • triage {} • pending rollouts {} • cleanup {}",
         if memory_status.enabled { "on" } else { "off" },
         if memory_status.auto_write {
             "on"
         } else {
             "off"
         },
-        if agent_config.small_model.use_for_memory {
-            "on"
-        } else {
-            "off"
-        },
+        lightweight_route.configured_label,
         memory_status.pending_rollout_summaries,
         if memory_status.cleanup_status.needed {
             "needed"
@@ -387,8 +463,15 @@ fn show_memory_actions_modal(
             "clean"
         },
     ));
+    lines.push(format!(
+        "Effective memory route: {}",
+        lightweight_route.effective_label
+    ));
+    if let Some(warning) = &lightweight_route.warning {
+        lines.push(format!("Route warning: {}", warning));
+    }
 
-    let items = vec![
+    let mut items = vec![
         InlineListItem {
             title: toggle_title("Persistent memory", memory_status.enabled),
             subtitle: Some(
@@ -418,11 +501,11 @@ fn show_memory_actions_modal(
         },
         InlineListItem {
             title: toggle_title(
-                "Small Model For Memory",
+                "Lightweight Model For Memory",
                 agent_config.small_model.use_for_memory,
             ),
             subtitle: Some(
-                "Use the small-model tier for memory classification and summary refresh."
+                "Allow VT Code to use the shared lightweight route for memory classification and summary refresh."
                     .to_string(),
             ),
             badge: Some("Toggle".to_string()),
@@ -431,8 +514,83 @@ fn show_memory_actions_modal(
                 "{}toggle_small_model",
                 MEMORY_ACTION_PREFIX
             ))),
-            search_value: Some("memory small model toggle".to_string()),
+            search_value: Some("memory lightweight model toggle".to_string()),
         },
+        InlineListItem {
+            title: format!("Memory Triage Model ({})", lightweight_route.configured_label),
+            subtitle: Some(format!(
+                "Effective route: {}",
+                lightweight_route.effective_label
+            )),
+            badge: Some("Pick".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}auto",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some("memory triage lightweight model pick".to_string()),
+        },
+        InlineListItem {
+            title: "Automatic".to_string(),
+            subtitle: Some(format!(
+                "Use {} and fall back to {}.",
+                auto_lightweight_model(&ctx.config.provider, &ctx.config.model),
+                ctx.config.model
+            )),
+            badge: Some(if lightweight_route.configured_label == "Automatic" {
+                "Current".to_string()
+            } else {
+                "Recommended".to_string()
+            }),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}auto",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some("memory lightweight model automatic".to_string()),
+        },
+        InlineListItem {
+            title: "Use main model".to_string(),
+            subtitle: Some(format!(
+                "Keep memory extraction on {}.",
+                lightweight_route.main_model
+            )),
+            badge: Some(if lightweight_route.configured_label == "Use main model" {
+                "Current".to_string()
+            } else {
+                "Accuracy".to_string()
+            }),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}main",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some("memory lightweight model main".to_string()),
+        },
+    ];
+    items.extend(lightweight_route.choices.iter().map(|model| {
+        InlineListItem {
+            title: model.clone(),
+            subtitle: Some("Explicit same-provider lightweight model.".to_string()),
+            badge: Some(
+                if lightweight_route
+                    .configured_label
+                    .eq_ignore_ascii_case(model.as_str())
+                {
+                    "Current".to_string()
+                } else {
+                    "Model".to_string()
+                },
+            ),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}{model}",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some(format!("memory lightweight triage {}", model)),
+        }
+    }));
+    items.extend([
         InlineListItem {
             title: format!(
                 "Startup Line Limit ({})",
@@ -624,7 +782,7 @@ fn show_memory_actions_modal(
             )),
             search_value: Some("back close cancel".to_string()),
         },
-    ];
+    ]);
 
     ctx.renderer.show_list_modal(
         title,
@@ -648,6 +806,22 @@ async fn handle_memory_action(
     memory_status: &PersistentMemoryStatus,
     _config_mode: bool,
 ) -> Result<Option<SlashCommandControl>> {
+    if let Some(selection) = action_key.strip_prefix(MEMORY_LIGHTWEIGHT_MODEL_PREFIX) {
+        let model = match selection {
+            "auto" => String::new(),
+            "main" => ctx.config.model.clone(),
+            explicit => explicit.to_string(),
+        };
+        persist_workspace_config_change(ctx, move |root| {
+            set_workspace_small_model_model(root, model);
+            Ok(())
+        })
+        .await?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Updated the memory triage model.")?;
+        return Ok(None);
+    }
+
     match action_key {
         "toggle_enabled" => {
             let enabled = ctx
@@ -689,7 +863,7 @@ async fn handle_memory_action(
             })
             .await?;
             ctx.renderer
-                .line(MessageStyle::Info, "Toggled small-model memory routing.")?;
+                .line(MessageStyle::Info, "Toggled lightweight memory routing.")?;
         }
         "set_lines" => {
             let current = ctx
@@ -1113,6 +1287,15 @@ fn set_workspace_small_model_for_memory(
     let agent_table = ensure_child_table(root_table, "agent");
     let small_model_table = ensure_child_table(agent_table, "small_model");
     small_model_table.insert("use_for_memory".to_string(), TomlValue::Boolean(value));
+}
+
+fn set_workspace_small_model_model(
+    root_table: &mut toml::map::Map<String, TomlValue>,
+    value: String,
+) {
+    let agent_table = ensure_child_table(root_table, "agent");
+    let small_model_table = ensure_child_table(agent_table, "small_model");
+    small_model_table.insert("model".to_string(), TomlValue::String(value));
 }
 
 fn usize_to_toml_integer(value: usize, label: &str) -> Result<i64> {

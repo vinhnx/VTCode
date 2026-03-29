@@ -23,7 +23,8 @@ use crate::core::threads::{
 };
 use crate::exec::events::ThreadEvent;
 use crate::hooks::LifecycleHookEngine;
-use crate::llm::factory::infer_provider;
+use crate::llm::auto_lightweight_model;
+use crate::llm::factory::{infer_provider, infer_provider_from_model};
 use crate::llm::provider::{Message, ToolDefinition};
 use crate::plugins::components::AgentsHandler;
 use crate::plugins::manifest::PluginManifest;
@@ -2605,9 +2606,25 @@ fn resolve_subagent_model(
 
     let resolved = if requested.eq_ignore_ascii_case("small") {
         if !vt_cfg.agent.small_model.model.trim().is_empty() {
-            vt_cfg.agent.small_model.model.clone()
+            let configured = vt_cfg.agent.small_model.model.trim();
+            let active_provider = infer_provider(Some(parent_provider), parent_model);
+            let configured_provider =
+                infer_provider_from_model(configured).or_else(|| infer_provider(None, configured));
+            if configured_provider.is_some() && configured_provider != active_provider {
+                tracing::warn!(
+                    agent_name,
+                    configured_model = configured,
+                    active_provider = active_provider
+                        .map(|provider| provider.to_string())
+                        .unwrap_or_else(|| parent_provider.to_string()),
+                    "Ignoring cross-provider lightweight subagent model; using same-provider automatic route"
+                );
+                auto_lightweight_model(parent_provider, parent_model)
+            } else {
+                configured.to_string()
+            }
         } else {
-            lightweight_model_for_provider(parent_provider, parent_model)
+            auto_lightweight_model(parent_provider, parent_model)
         }
     } else if requested.eq_ignore_ascii_case("haiku")
         || requested.eq_ignore_ascii_case("sonnet")
@@ -2654,6 +2671,21 @@ fn resolve_effective_subagent_model(
         ) {
             Ok(model) => return Ok(model),
             Err(err) => {
+                if requested_model.trim().eq_ignore_ascii_case("small") {
+                    tracing::warn!(
+                        agent_name,
+                        requested_model = requested_model.trim(),
+                        error = %err,
+                        "Failed to bootstrap lightweight subagent model; falling back to parent model"
+                    );
+                    return resolve_subagent_model(
+                        vt_cfg,
+                        parent_model,
+                        parent_provider,
+                        Some("inherit"),
+                        agent_name,
+                    );
+                }
                 let fallback_model = spec_model
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
@@ -2669,13 +2701,34 @@ fn resolve_effective_subagent_model(
         }
     }
 
-    resolve_subagent_model(
+    match resolve_subagent_model(
         vt_cfg,
         parent_model,
         parent_provider,
         spec_model,
         agent_name,
-    )
+    ) {
+        Ok(model) => Ok(model),
+        Err(err)
+            if spec_model
+                .map(str::trim)
+                .is_some_and(|value| value.eq_ignore_ascii_case("small")) =>
+        {
+            tracing::warn!(
+                agent_name,
+                error = %err,
+                "Failed to resolve lightweight subagent model from spec; falling back to parent model"
+            );
+            resolve_subagent_model(
+                vt_cfg,
+                parent_model,
+                parent_provider,
+                Some("inherit"),
+                agent_name,
+            )
+        }
+        Err(err) => Err(err),
+    }
 }
 
 fn alias_model_for_provider(parent_provider: &str, alias: &str, parent_model: &str) -> String {
@@ -2696,10 +2749,6 @@ fn alias_model_for_provider(parent_provider: &str, alias: &str, parent_model: &s
         },
         _ => parent_model.to_string(),
     }
-}
-
-fn lightweight_model_for_provider(parent_provider: &str, parent_model: &str) -> String {
-    alias_model_for_provider(parent_provider, "haiku", parent_model)
 }
 
 fn agent_type_for_spec(spec: &SubagentSpec) -> AgentType {
@@ -3083,6 +3132,23 @@ mod tests {
         )
         .expect("resolve model");
         assert_eq!(resolved.as_str(), models::ollama::GPT_OSS_120B_CLOUD);
+    }
+
+    #[test]
+    fn resolve_subagent_small_model_rejects_cross_provider_configured_lightweight_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.small_model.model = models::anthropic::CLAUDE_HAIKU_4_5.to_string();
+
+        let resolved = resolve_subagent_model(
+            &cfg,
+            models::openai::GPT_5_4,
+            "openai",
+            Some("small"),
+            "worker",
+        )
+        .expect("resolve model");
+
+        assert_eq!(resolved, ModelId::GPT5Mini);
     }
 
     #[test]

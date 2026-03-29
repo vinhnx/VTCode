@@ -5,6 +5,8 @@ use std::path::Path;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::{ConfigReadRequest, ConfigService};
+use vtcode_core::config::{constants::defaults, constants::model_helpers};
+use vtcode_core::llm::{auto_lightweight_model, lightweight_model_choices};
 use vtcode_core::ui::theme;
 
 use crate::agent::runloop::unified::config_section_headings::{
@@ -13,7 +15,7 @@ use crate::agent::runloop::unified::config_section_headings::{
 
 use super::SettingsPaletteState;
 use super::docs::{FIELD_DOCS, FieldDoc};
-use super::path::{PathToken, get_node_mut, parse_path_tokens};
+use super::path::{PathToken, get_node, get_node_mut, parse_path_tokens};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ScalarOperation {
@@ -156,6 +158,11 @@ pub(super) fn apply_scalar_operation(
     path: &str,
     operation: ScalarOperation,
 ) -> Result<()> {
+    let precomputed_cycle_options = matches!(
+        operation,
+        ScalarOperation::CycleNext | ScalarOperation::CyclePrev
+    )
+    .then(|| resolve_cycle_options(Some(root), path, ""));
     let Some(node) = get_node_mut(root, path) else {
         return apply_missing_scalar_operation(root, path, operation);
     };
@@ -185,7 +192,9 @@ pub(super) fn apply_scalar_operation(
             Ok(())
         }
         TomlValue::String(current) => {
-            let options = resolve_cycle_options(path, current);
+            let options = precomputed_cycle_options
+                .clone()
+                .unwrap_or_else(|| resolve_cycle_options(None, path, current));
             if options.is_empty() {
                 bail!("{} has no predefined values to cycle", path);
             }
@@ -204,7 +213,7 @@ fn apply_missing_scalar_operation(
 ) -> Result<()> {
     match operation {
         ScalarOperation::CycleNext | ScalarOperation::CyclePrev => {
-            let mut options = resolve_cycle_options(path, "");
+            let mut options = resolve_cycle_options(Some(root), path, "");
             if options.is_empty() {
                 bail!("Settings path '{}' was not found", path);
             }
@@ -257,12 +266,19 @@ fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) 
     }
 }
 
-pub(super) fn resolve_cycle_options(path: &str, current: &str) -> Vec<String> {
+pub(super) fn resolve_cycle_options(
+    root: Option<&TomlValue>,
+    path: &str,
+    current: &str,
+) -> Vec<String> {
     if normalize_config_path(path) == "agent.theme" {
         return theme::available_themes()
             .into_iter()
             .map(str::to_string)
             .collect();
+    }
+    if normalize_config_path(path) == "agent.small_model.model" {
+        return lightweight_model_cycle_options(root, current);
     }
 
     FIELD_DOCS
@@ -276,6 +292,49 @@ pub(super) fn resolve_cycle_options(path: &str, current: &str) -> Vec<String> {
                 vec![current.to_string()]
             }
         })
+}
+
+fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> Vec<String> {
+    let provider = root
+        .and_then(|value| get_node(value, "agent.provider"))
+        .and_then(TomlValue::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(defaults::DEFAULT_PROVIDER);
+    let main_model = root
+        .and_then(|value| get_node(value, "agent.default_model"))
+        .and_then(TomlValue::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| model_helpers::default_for(provider).map(str::to_string))
+        .unwrap_or_else(|| current.to_string());
+
+    let mut options = vec![String::new(), main_model.clone()];
+    options.extend(lightweight_model_choices(provider, &main_model));
+    if !current.trim().is_empty() {
+        options.push(current.to_string());
+    }
+
+    let auto_model = auto_lightweight_model(provider, &main_model);
+    let mut deduped = Vec::new();
+    for option in options {
+        if deduped
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(option.as_str()))
+        {
+            continue;
+        }
+        deduped.push(option);
+    }
+
+    if let Some(auto_index) = deduped
+        .iter()
+        .position(|value| value.eq_ignore_ascii_case(auto_model.as_str()))
+    {
+        let auto = deduped.remove(auto_index);
+        deduped.insert(1, auto);
+    }
+
+    deduped
 }
 
 fn cycle_string_option(

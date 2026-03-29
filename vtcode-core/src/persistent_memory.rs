@@ -7,14 +7,12 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, sleep};
 
-use crate::config::api_keys::{ApiKeySources, get_api_key};
-use crate::config::constants::model_helpers;
 use crate::config::loader::VTCodeConfig;
-use crate::config::models::{ModelId, Provider};
 use crate::config::types::AgentConfig as RuntimeAgentConfig;
 use crate::config::{ConfigManager, PersistentMemoryConfig, get_config_dir};
-use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
+use crate::llm::factory::infer_provider_from_model;
 use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole};
+use crate::llm::{LightweightFeature, create_provider_for_model_route, resolve_lightweight_route};
 
 pub const MEMORY_FILENAME: &str = "MEMORY.md";
 pub const MEMORY_SUMMARY_FILENAME: &str = "memory_summary.md";
@@ -237,6 +235,13 @@ struct MemoryModelRoute {
     provider_name: String,
     model: String,
     temperature: f32,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedMemoryRoutes {
+    primary: MemoryModelRoute,
+    fallback: Option<MemoryModelRoute>,
+    warning: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2062,12 +2067,37 @@ async fn classify_facts_with_llm(
     workspace_root: &Path,
     candidates: &[GroundedFactRecord],
 ) -> Result<ClassifiedFacts> {
-    let route = resolve_memory_model_route(runtime_config, vt_cfg)
-        .ok_or_else(|| anyhow!("no LLM route is available for persistent memory"))?;
     let runtime_config = runtime_config
         .ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
-    let provider = create_memory_provider(&route, runtime_config, vt_cfg)?;
-    classify_facts_with_provider(provider.as_ref(), &route, workspace_root, candidates).await
+    let routes = resolve_memory_model_routes(runtime_config, vt_cfg);
+    log_memory_route_warning(&routes);
+
+    let provider = create_memory_provider(&routes.primary, runtime_config, vt_cfg)?;
+    match classify_facts_with_provider(
+        provider.as_ref(),
+        &routes.primary,
+        workspace_root,
+        candidates,
+    )
+    .await
+    {
+        Ok(result) => Ok(result),
+        Err(primary_err) => {
+            let Some(fallback) = routes.fallback.as_ref() else {
+                return Err(primary_err);
+            };
+
+            tracing::warn!(
+                model = %routes.primary.model,
+                fallback_model = %fallback.model,
+                error = %primary_err,
+                "persistent memory classification failed on lightweight route; retrying with main model"
+            );
+            let provider = create_memory_provider(fallback, runtime_config, vt_cfg)?;
+            classify_facts_with_provider(provider.as_ref(), fallback, workspace_root, candidates)
+                .await
+        }
+    }
 }
 
 async fn classify_facts_with_provider(
@@ -2179,18 +2209,41 @@ async fn summarize_memory(
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
 ) -> Option<String> {
-    let route = resolve_memory_model_route(runtime_config, vt_cfg)?;
     let runtime_config = runtime_config?;
-    let provider = create_memory_provider(&route, runtime_config, vt_cfg).ok()?;
-    summarize_memory_with_provider(
+    let routes = resolve_memory_model_routes(runtime_config, vt_cfg);
+    log_memory_route_warning(&routes);
+
+    let provider = create_memory_provider(&routes.primary, runtime_config, vt_cfg).ok()?;
+    match summarize_memory_with_provider(
         provider.as_ref(),
-        &route,
+        &routes.primary,
         workspace_root,
         preferences,
         repository_facts,
     )
     .await
-    .ok()
+    {
+        Ok(summary) => Some(summary),
+        Err(primary_err) => {
+            let fallback = routes.fallback.as_ref()?;
+            tracing::warn!(
+                model = %routes.primary.model,
+                fallback_model = %fallback.model,
+                error = %primary_err,
+                "persistent memory summary failed on lightweight route; retrying with main model"
+            );
+            let provider = create_memory_provider(fallback, runtime_config, vt_cfg).ok()?;
+            summarize_memory_with_provider(
+                provider.as_ref(),
+                fallback,
+                workspace_root,
+                preferences,
+                repository_facts,
+            )
+            .await
+            .ok()
+        }
+    }
 }
 
 async fn summarize_memory_with_provider(
@@ -2257,19 +2310,46 @@ async fn plan_memory_operation(
     supplemental_answer: Option<&str>,
     candidates: &[MemoryOpCandidate],
 ) -> Result<MemoryOpPlan> {
-    let route = resolve_memory_model_route(Some(runtime_config), vt_cfg)
-        .ok_or_else(|| anyhow!("no LLM route is available for persistent memory"))?;
-    let provider = create_memory_provider(&route, runtime_config, vt_cfg)?;
-    plan_memory_operation_with_provider(
+    let routes = resolve_memory_model_routes(runtime_config, vt_cfg);
+    log_memory_route_warning(&routes);
+
+    let provider = create_memory_provider(&routes.primary, runtime_config, vt_cfg)?;
+    match plan_memory_operation_with_provider(
         provider.as_ref(),
-        &route,
+        &routes.primary,
         workspace_root,
-        expected_kind,
+        expected_kind.clone(),
         request,
         supplemental_answer,
         candidates,
     )
     .await
+    {
+        Ok(plan) => Ok(plan),
+        Err(primary_err) => {
+            let Some(fallback) = routes.fallback.as_ref() else {
+                return Err(primary_err);
+            };
+
+            tracing::warn!(
+                model = %routes.primary.model,
+                fallback_model = %fallback.model,
+                error = %primary_err,
+                "persistent memory planner failed on lightweight route; retrying with main model"
+            );
+            let provider = create_memory_provider(fallback, runtime_config, vt_cfg)?;
+            plan_memory_operation_with_provider(
+                provider.as_ref(),
+                fallback,
+                workspace_root,
+                expected_kind,
+                request,
+                supplemental_answer,
+                candidates,
+            )
+            .await
+        }
+    }
 }
 
 async fn plan_memory_operation_with_provider(
@@ -2474,80 +2554,52 @@ fn facts_for_prompt(facts: &[GroundedFactRecord]) -> String {
         .join("\n")
 }
 
-fn resolve_memory_model_route(
-    runtime_config: Option<&RuntimeAgentConfig>,
+fn resolve_memory_model_routes(
+    runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
-) -> Option<MemoryModelRoute> {
-    let runtime_config = runtime_config?;
+) -> ResolvedMemoryRoutes {
+    let resolution =
+        resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
+    let primary = memory_model_route_from_resolution(&resolution.primary, runtime_config, vt_cfg);
+    let fallback = resolution
+        .fallback
+        .as_ref()
+        .map(|route| memory_model_route_from_resolution(route, runtime_config, vt_cfg));
 
-    if let Some(vt_cfg) = vt_cfg {
-        let small_model = &vt_cfg.agent.small_model;
-        if small_model.enabled && small_model.use_for_memory {
-            let configured_model = small_model.model.trim();
-            let provider_name = if !configured_model.is_empty() {
-                infer_provider_from_model(configured_model)
-                    .map(|provider| provider.to_string().to_lowercase())
-                    .or_else(|| {
-                        (!runtime_config.provider.trim().is_empty())
-                            .then(|| runtime_config.provider.to_lowercase())
-                    })
-                    .or_else(|| {
-                        infer_provider_from_model(&runtime_config.model)
-                            .map(|provider| provider.to_string().to_lowercase())
-                    })
-                    .unwrap_or_else(|| "gemini".to_string())
-            } else if runtime_config.provider.trim().is_empty() {
-                infer_provider_from_model(&runtime_config.model)
-                    .map(|provider| provider.to_string().to_lowercase())
-                    .unwrap_or_else(|| "gemini".to_string())
-            } else {
-                runtime_config.provider.to_lowercase()
-            };
-            let model = if configured_model.is_empty() {
-                auto_small_model(&provider_name, &runtime_config.model)
-            } else {
-                small_model.model.clone()
-            };
-
-            return Some(MemoryModelRoute {
-                provider_name,
-                model,
-                temperature: small_model.temperature,
-            });
-        }
+    ResolvedMemoryRoutes {
+        primary,
+        fallback,
+        warning: resolution.warning,
     }
-
-    let provider_name = runtime_provider_name(runtime_config);
-    Some(MemoryModelRoute {
-        provider_name,
-        model: runtime_config.model.clone(),
-        temperature: 0.0,
-    })
 }
 
-fn auto_small_model(provider_name: &str, active_model: &str) -> String {
-    if let Ok(model_id) = active_model.parse::<ModelId>()
-        && model_id.is_efficient_variant()
+fn memory_model_route_from_resolution(
+    route: &crate::llm::ModelRoute,
+    runtime_config: &RuntimeAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> MemoryModelRoute {
+    let temperature = if route.model == runtime_config.model
+        && route
+            .provider_name
+            .eq_ignore_ascii_case(runtime_provider_name(runtime_config).as_str())
     {
-        return model_id.as_str().to_string();
+        0.0
+    } else {
+        vt_cfg
+            .map(|cfg| cfg.agent.small_model.temperature)
+            .unwrap_or(0.0)
+    };
+
+    MemoryModelRoute {
+        provider_name: route.provider_name.clone(),
+        model: route.model.clone(),
+        temperature,
     }
+}
 
-    let provider = infer_provider_from_model(active_model).unwrap_or(match provider_name {
-        "openai" => Provider::OpenAI,
-        "anthropic" => Provider::Anthropic,
-        "deepseek" => Provider::DeepSeek,
-        "gemini" | "google" => Provider::Gemini,
-        _ => Provider::Gemini,
-    });
-
-    match provider {
-        Provider::OpenAI => ModelId::GPT5Mini.as_str().to_string(),
-        Provider::Anthropic => ModelId::ClaudeHaiku45.as_str().to_string(),
-        Provider::DeepSeek => ModelId::DeepSeekChat.as_str().to_string(),
-        Provider::Gemini => ModelId::Gemini3FlashPreview.as_str().to_string(),
-        _ => model_helpers::default_for(provider_name)
-            .unwrap_or(active_model)
-            .to_string(),
+fn log_memory_route_warning(routes: &ResolvedMemoryRoutes) {
+    if let Some(warning) = &routes.warning {
+        tracing::warn!(warning = %warning, "persistent memory route adjusted");
     }
 }
 
@@ -2556,39 +2608,15 @@ fn create_memory_provider(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<Box<dyn LLMProvider>> {
-    let api_key = resolve_memory_route_api_key(route, runtime_config);
-    create_provider_with_config(
-        &route.provider_name,
-        ProviderConfig {
-            api_key,
-            openai_chatgpt_auth: runtime_config.openai_chatgpt_auth.clone(),
-            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
-            base_url: None,
-            model: Some(route.model.clone()),
-            prompt_cache: Some(runtime_config.prompt_cache.clone()),
-            timeouts: None,
-            openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
-            anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
-            model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
-            workspace_root: Some(runtime_config.workspace.clone()),
+    create_provider_for_model_route(
+        &crate::llm::ModelRoute {
+            provider_name: route.provider_name.clone(),
+            model: route.model.clone(),
         },
+        runtime_config,
+        vt_cfg,
     )
     .context("Failed to initialize persistent memory LLM provider")
-}
-
-fn resolve_memory_route_api_key(
-    route: &MemoryModelRoute,
-    runtime_config: &RuntimeAgentConfig,
-) -> Option<String> {
-    if route
-        .provider_name
-        .eq_ignore_ascii_case(&runtime_provider_name(runtime_config))
-        && !runtime_config.api_key.trim().is_empty()
-    {
-        return Some(runtime_config.api_key.clone());
-    }
-
-    get_api_key(&route.provider_name, &ApiKeySources::default()).ok()
 }
 
 fn runtime_provider_name(runtime_config: &RuntimeAgentConfig) -> String {
@@ -2781,7 +2809,9 @@ impl Drop for MemoryLock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::models::ModelId;
     use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
+    use crate::llm::resolve_api_key_for_model_route;
     use async_trait::async_trait;
     use std::sync::Mutex;
     use tempfile::tempdir;
@@ -3373,10 +3403,11 @@ mod tests {
         vt_cfg.agent.small_model.use_for_memory = true;
         vt_cfg.agent.small_model.model = "claude-4-5-haiku".to_string();
 
-        let route = resolve_memory_model_route(Some(&runtime), Some(&vt_cfg)).expect("route");
+        let routes = resolve_memory_model_routes(&runtime, Some(&vt_cfg));
 
-        assert_eq!(route.provider_name, "anthropic");
-        assert_eq!(route.model, "claude-4-5-haiku");
+        assert_eq!(routes.primary.provider_name, "openai");
+        assert_eq!(routes.primary.model, ModelId::GPT5Mini.as_str());
+        assert!(routes.warning.is_some());
     }
 
     #[test]
@@ -3388,7 +3419,13 @@ mod tests {
             temperature: 0.1,
         };
 
-        let api_key = resolve_memory_route_api_key(&route, &runtime_config(workspace.path()));
+        let api_key = resolve_api_key_for_model_route(
+            &crate::llm::ModelRoute {
+                provider_name: route.provider_name.clone(),
+                model: route.model.clone(),
+            },
+            &runtime_config(workspace.path()),
+        );
 
         assert_eq!(api_key.as_deref(), Some("test-key"));
     }

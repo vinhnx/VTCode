@@ -454,6 +454,7 @@ async fn check_tool_permission(
     let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
         crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
             config: auto_mode.config,
+            vt_cfg,
             provider_client: &mut *auto_mode.provider_client,
             working_history: auto_mode.working_history,
         }

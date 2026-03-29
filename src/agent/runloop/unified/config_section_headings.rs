@@ -74,8 +74,8 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "agent.small_model",
-        "Small Model Helpers",
-        "Low-cost model settings for lightweight side tasks.",
+        "Lightweight Model Helpers",
+        "Low-cost lightweight-model routing for memory and other side tasks.",
     ),
     (
         "agent.vibe_coding",

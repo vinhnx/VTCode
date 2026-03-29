@@ -188,7 +188,7 @@ use_for_memory = true
 - `agent.persistent_memory.enabled` turns per-repository persistent memory on or off. It defaults to `false`.
 - `agent.persistent_memory.auto_write` controls whether VT Code stages and consolidates rollout summaries at session finalization.
 - `startup_line_limit` and `startup_byte_limit` cap the excerpt loaded from `memory_summary.md`.
-- `agent.small_model.use_for_memory` enables small-model routing for memory planning, classification, cleanup, and summary refresh.
+- `agent.small_model.use_for_memory` enables lightweight-model routing for memory planning, classification, cleanup, and summary refresh.
 
 Memory mutation is LLM-assisted only:
 

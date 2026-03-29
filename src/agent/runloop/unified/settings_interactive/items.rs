@@ -41,18 +41,23 @@ pub(super) fn build_settings_items(
 
         let node = get_node(draft, view_path)
             .ok_or_else(|| anyhow!("Could not resolve settings path {}", view_path))?;
-        append_node_items(&mut items, view_path, node)?;
+        append_node_items(&mut items, view_path, node, draft)?;
     } else if let TomlValue::Table(table) = draft {
-        append_table_items(&mut items, table, None, None);
+        append_table_items(&mut items, table, None, None, draft);
     }
 
     Ok(items)
 }
 
-fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlValue) -> Result<()> {
+fn append_node_items(
+    items: &mut Vec<InlineListItem>,
+    path: &str,
+    node: &TomlValue,
+    draft_root: &TomlValue,
+) -> Result<()> {
     match node {
         TomlValue::Table(table) => {
-            append_table_items(items, table, Some(path), Some(node));
+            append_table_items(items, table, Some(path), Some(node), draft_root);
         }
         TomlValue::Array(entries) => {
             items.push(action_item(
@@ -71,11 +76,11 @@ fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlVal
             for (index, value) in entries.iter().enumerate() {
                 let child_path = format!("{}[{}]", path, index);
                 let label = format!("[{}]", index);
-                items.push(item_for_value(&label, &child_path, value));
+                items.push(item_for_value(&label, &child_path, value, draft_root));
             }
         }
         _ => {
-            items.push(item_for_value(path, path, node));
+            items.push(item_for_value(path, path, node, draft_root));
         }
     }
 
@@ -87,6 +92,7 @@ fn append_table_items(
     table: &toml::map::Map<String, TomlValue>,
     parent_path: Option<&str>,
     optional_doc_root: Option<&TomlValue>,
+    draft_root: &TomlValue,
 ) {
     let mut section_items = Vec::new();
     let mut setting_items = Vec::new();
@@ -101,7 +107,7 @@ fn append_table_items(
         if HIDDEN_SETTINGS_PATHS.contains(&path.as_str()) {
             continue;
         }
-        let entry = item_for_value(key, &path, value);
+        let entry = item_for_value(key, &path, value, draft_root);
         if matches!(value, TomlValue::Table(_)) {
             section_items.push(entry);
         } else {
@@ -146,7 +152,12 @@ fn append_missing_optional_doc_items(
     }
 }
 
-fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem {
+fn item_for_value(
+    label: &str,
+    path: &str,
+    value: &TomlValue,
+    draft_root: &TomlValue,
+) -> InlineListItem {
     let doc = FIELD_DOCS.lookup(path);
     let title = display_title(label, path, value);
     let description = doc
@@ -159,7 +170,13 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         })
         .unwrap_or_default();
 
-    let summary = summarize_value(value);
+    let summary = if path == "agent.small_model.model"
+        && value.as_str().is_some_and(|current| current.is_empty())
+    {
+        "Automatic".to_string()
+    } else {
+        summarize_value(value)
+    };
     let subtitle = setting_subtitle(&summary, &description, false);
 
     match value {
@@ -186,7 +203,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         TomlValue::String(current) => {
-            let has_options = resolve_cycle_options(path, current).len() > 1;
+            let has_options = resolve_cycle_options(Some(draft_root), path, current).len() > 1;
             InlineListItem {
                 title,
                 subtitle: Some(setting_subtitle(&summary, &description, has_options)),

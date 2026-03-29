@@ -13,8 +13,8 @@ use vtcode_core::{initialize_dot_folder, update_model_preference};
 
 use super::dependency_advisories::render_optional_search_tools_notice;
 use super::first_run_prompts::{
-    default_model_for_provider, prompt_model, prompt_provider, prompt_reasoning_effort,
-    prompt_trust, resolve_initial_provider,
+    default_model_for_provider, prompt_lightweight_model, prompt_model, prompt_provider,
+    prompt_reasoning_effort, prompt_trust, resolve_initial_provider,
 };
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
@@ -95,11 +95,11 @@ async fn run_first_run_setup(
         MessageStyle::Info,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
-    let (provider, model, reasoning, trust) = match mode {
+    let (provider, model, lightweight_model, reasoning, trust) = match mode {
         SetupMode::Interactive => {
             renderer.line(
                 MessageStyle::Status,
-                "Let's configure your default provider, model, reasoning effort, and workspace trust.",
+                "Let's configure your default provider, model, lightweight model route, reasoning effort, and workspace trust.",
             )?;
             renderer.line(
                 MessageStyle::Status,
@@ -116,13 +116,16 @@ async fn run_first_run_setup(
             let model = prompt_model(&mut renderer, provider, default_model)?;
             renderer.line(MessageStyle::Info, "")?;
 
+            let lightweight_model = prompt_lightweight_model(&mut renderer, provider, &model)?;
+            renderer.line(MessageStyle::Info, "")?;
+
             let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
             renderer.line(MessageStyle::Info, "")?;
 
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, reasoning, trust)
+            (provider, model, lightweight_model, reasoning, trust)
         }
         SetupMode::NonInteractive { full_auto } => {
             renderer.line(
@@ -134,6 +137,7 @@ async fn run_first_run_setup(
             let provider = resolve_initial_provider(config);
             let default_model = default_model_for_provider(provider);
             let model = default_model.to_owned();
+            let lightweight_model = String::new();
             let reasoning = config.agent.reasoning_effort;
             let trust = if full_auto {
                 WorkspaceTrustLevel::FullAuto
@@ -148,6 +152,10 @@ async fn run_first_run_setup(
             renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
             renderer.line(
                 MessageStyle::Info,
+                "Lightweight model: Automatic (same-provider lightweight route)",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
                 &format!("Reasoning effort: {}", reasoning.as_str()),
             )?;
             renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
@@ -157,7 +165,7 @@ async fn run_first_run_setup(
             )?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, reasoning, trust)
+            (provider, model, lightweight_model, reasoning, trust)
         }
     };
 
@@ -170,7 +178,7 @@ async fn run_first_run_setup(
     let provider_key = provider.to_string();
     // Set API key environment name from provider defaults; do this once to avoid recomputing.
     config.agent.api_key_env = provider.default_api_key_env().to_owned();
-    apply_selection(config, &provider_key, &model, reasoning);
+    apply_selection(config, &provider_key, &model, &lightweight_model, reasoning);
 
     let config_path = workspace.join("vtcode.toml");
     ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
@@ -195,9 +203,16 @@ async fn run_first_run_setup(
     renderer.line(
         MessageStyle::Status,
         &format!(
-            "Setup complete. Provider: {} • Model: {} • Reasoning: {} • Trust: {}",
+            "Setup complete. Provider: {} • Model: {} • Lightweight: {} • Reasoning: {} • Trust: {}",
             provider.label(),
             model,
+            if lightweight_model.trim().is_empty() {
+                "automatic".to_string()
+            } else if lightweight_model == model {
+                "main model".to_string()
+            } else {
+                lightweight_model.clone()
+            },
             reasoning.as_str(),
             trust_label(trust)
         ),
@@ -221,10 +236,12 @@ fn apply_selection(
     config: &mut VTCodeConfig,
     provider_key: &str,
     model: &str,
+    lightweight_model: &str,
     reasoning: ReasoningEffortLevel,
 ) {
     config.agent.provider = provider_key.to_owned();
     config.agent.default_model = model.to_owned();
+    config.agent.small_model.model = lightweight_model.to_owned();
     config.agent.reasoning_effort = reasoning;
     config.agent.theme = defaults::DEFAULT_THEME.to_owned();
     config.agent.max_conversation_turns = defaults::DEFAULT_MAX_CONVERSATION_TURNS;

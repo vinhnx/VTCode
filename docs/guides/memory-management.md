@@ -115,7 +115,7 @@ VT Code now treats LLM assistance as a hard requirement for memory mutation:
 - VT Code writes the files itself after validating the structured output
 - if no memory LLM route is available, or the structured response is invalid, VT Code blocks the mutation and leaves memory unchanged
 
-If `agent.small_model.use_for_memory = true`, VT Code prefers the configured small-model tier for memory planning, classification, cleanup, and summary refresh. Otherwise it uses the active session model/provider.
+If `agent.small_model.use_for_memory = true`, VT Code prefers the configured lightweight-model route for memory planning, classification, cleanup, and summary refresh. Otherwise it uses the active session model/provider.
 
 ## Interactive Controls
 
@@ -124,7 +124,7 @@ If `agent.small_model.use_for_memory = true`, VT Code prefers the configured sma
 Use `/memory` as the memory-focused control surface.
 
 - In inline UI, it shows loaded `AGENTS.md` sources, matched rules, memory status, file paths, and quick actions.
-- Quick actions include toggling memory, toggling auto-write, toggling small-model memory routing, scaffolding memory files, running one-time legacy cleanup, rebuilding the summary, opening the memory directory, and jumping to `/config memory`.
+- Quick actions include toggling memory, toggling auto-write, toggling lightweight-memory routing, picking the memory triage model, scaffolding memory files, running one-time legacy cleanup, rebuilding the summary, opening the memory directory, and jumping to `/config memory`.
 - In non-inline UI, `/memory` prints status plus exact follow-up commands such as `/config memory` and `/edit <target>`.
 - `/memory` also shows whether cleanup is required because legacy raw prompts or serialized tool payloads were found in the memory store.
 

@@ -72,7 +72,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.open_responses.include_reasoning` | `boolean` | no | `true` | Include reasoning items in Open Responses output When true, model reasoning/thinking is exposed as reasoning items |
 | `agent.open_responses.map_tool_calls` | `boolean` | no | `true` | Map internal tool calls to Open Responses function_call items When true, command executions and MCP tool calls are represented as function_call items |
 | `agent.prompt_suggestions.enabled` | `boolean` | no | `true` | Enable inline prompt suggestions in the chat composer. `Alt+P` requests a ghost-text completion instead of opening the `/suggest` picker. |
-| `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for prompt suggestions. Leave empty to auto-select an efficient sibling of the main model. |
+| `agent.prompt_suggestions.model` | `string` | no | `""` | Optional prompt-suggestion model override. Leave empty to inherit the shared lightweight-model route. |
 | `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Show a one-time reminder that LLM-backed prompt suggestions can consume tokens. |
 | `agent.prompt_suggestions.temperature` | `number` | no | `0.30000001192092896` | Temperature for inline prompt suggestion generation. Lower values keep suggestions stable and completion-like. |
 | `agent.persistent_memory.auto_write` | `boolean` | no | `true` | Write one rollout summary at session finalization, then consolidate it into the per-repository memory files. |
@@ -85,18 +85,18 @@ python3 scripts/generate_config_field_reference.py
 | `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability |
 | `agent.refine_prompts_enabled` | `boolean` | no | `false` | Enable prompt refinement pass before sending to LLM |
 | `agent.refine_prompts_max_passes` | `integer` | no | `1` | Max refinement passes for prompt writing |
-| `agent.refine_prompts_model` | `string` | no | `""` | Optional model override for the refiner (empty = auto pick efficient sibling) |
+| `agent.refine_prompts_model` | `string` | no | `""` | Optional model override for the refiner. Leave empty to inherit the shared lightweight-model route. |
 | `agent.refine_temperature` | `number` | no | `0.30000001192092896` | Temperature for prompt refinement (0.0-1.0, default: 0.3) Lower values ensure prompt refinement is more deterministic/consistent Keep lower than main temperature for stable prompt improvement |
 | `agent.require_plan_confirmation` | `boolean` | no | `true` | Require user confirmation before executing a plan generated in plan mode When true, exiting plan mode shows the implementation blueprint and requires explicit user approval before enabling edit tools. |
 | `agent.instruction_excludes` | `array[string]` | no | `[]` | Instruction files or glob patterns to exclude from AGENTS.md and `.vtcode/rules/` discovery. |
 | `agent.instruction_import_max_depth` | `integer` | no | `5` | Maximum recursive `@path` import depth for AGENTS.md and rule files. |
-| `agent.small_model.enabled` | `boolean` | no | `true` | Enable small model tier for efficient operations |
-| `agent.small_model.model` | `string` | no | `""` | Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to auto-select a lightweight sibling of the main model |
-| `agent.small_model.temperature` | `number` | no | `0.30000001192092896` | Temperature for small model responses |
-| `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable small model for git history processing |
-| `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
-| `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable small model for persistent memory classification and startup summary refresh. |
-| `agent.small_model.use_for_web_summary` | `boolean` | no | `true` | Enable small model for web content summarization |
+| `agent.small_model.enabled` | `boolean` | no | `true` | Enable the shared lightweight model tier for cheaper helper tasks |
+| `agent.small_model.model` | `string` | no | `""` | Lightweight model to use (e.g., claude-4-5-haiku, "gpt-5-mini", "gemini-3-flash-preview") Leave empty to auto-select a lightweight sibling of the main model |
+| `agent.small_model.temperature` | `number` | no | `0.30000001192092896` | Temperature for lightweight-model responses |
+| `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable the lightweight model for git history processing |
+| `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable the lightweight model for large file read summarization (>50KB) |
+| `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable the lightweight model for persistent memory classification and startup summary refresh. |
+| `agent.small_model.use_for_web_summary` | `boolean` | no | `true` | Enable the lightweight model for web content summarization |
 | `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling verbosity and token overhead Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k) Inspired by pi-coding-agent: modern models often perform well with minimal prompts |
 | `agent.temperature` | `number` | no | `0.699999988079071` | Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0 (maximum randomness) |
 | `agent.temporal_context_use_utc` | `boolean` | no | `false` | Use UTC instead of local time for temporal context in system prompts |
@@ -389,8 +389,8 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.auto_mode.environment.trusted_services[]` | `string` | no | `-` | Trusted service entry |
 | `permissions.auto_mode.max_consecutive_denials` | `integer` | no | `3` | Consecutive classifier denials before auto mode falls back to manual prompts |
 | `permissions.auto_mode.max_total_denials` | `integer` | no | `20` | Total classifier denials before auto mode falls back to manual prompts |
-| `permissions.auto_mode.model` | `string` | no | `""` | Optional reviewer-model override for auto mode. Leave empty to auto-pick a lightweight model from the active provider |
-| `permissions.auto_mode.probe_model` | `string` | no | `""` | Optional prompt-injection-probe model override for auto mode |
+| `permissions.auto_mode.model` | `string` | no | `""` | Optional reviewer-model override for auto mode. Leave empty to inherit the shared lightweight-model route. |
+| `permissions.auto_mode.probe_model` | `string` | no | `""` | Optional prompt-injection-probe model override for auto mode. Leave empty to inherit the shared lightweight-model route. |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls |
 | `permissions.deny[]` | `string` | no | `-` | Permission rule entry such as `Edit(/.git/**)` or `Bash(git push *)` |
 | `permissions.enabled` | `boolean` | no | `true` | Enable the enhanced permission system (resolver + audit logger + cache) |

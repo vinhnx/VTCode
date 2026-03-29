@@ -2,14 +2,12 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 
-use vtcode_core::config::constants::model_helpers;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::llm::factory::{
-    ProviderConfig, create_provider_with_config, infer_provider_from_model,
-};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::llm::{
+    LightweightFeature, create_provider_for_model_route, resolve_lightweight_route,
+};
 use vtcode_core::tools::ToolRegistry;
 
 use crate::agent::runloop::unified::state::SessionStats;
@@ -55,6 +53,13 @@ struct PromptSuggestionRoute {
     temperature: f32,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct PromptSuggestionRoutes {
+    primary: PromptSuggestionRoute,
+    fallback: Option<PromptSuggestionRoute>,
+    warning: Option<String>,
+}
+
 impl PromptSuggestionRoute {
     fn cache_key(&self) -> String {
         format!(
@@ -73,9 +78,15 @@ pub(crate) async fn generate_prompt_suggestions(
     session_stats: &SessionStats,
     tool_registry: &ToolRegistry,
 ) -> Vec<PromptSuggestion> {
-    let route = resolve_prompt_suggestion_route(config, vt_cfg);
-    let cache_key =
-        prompt_suggestion_cache_key(&route, workspace, history, session_stats, tool_registry);
+    let routes = resolve_prompt_suggestion_routes(config, vt_cfg);
+    log_prompt_suggestion_route_warning(&routes);
+    let cache_key = prompt_suggestion_cache_key(
+        &routes.primary,
+        workspace,
+        history,
+        session_stats,
+        tool_registry,
+    );
     if let Some(cached) = PROMPT_SUGGESTION_CACHE
         .lock()
         .ok()
@@ -86,7 +97,7 @@ pub(crate) async fn generate_prompt_suggestions(
 
     let fallback =
         deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
-    let llm_generated = llm_prompt_suggestions(provider, config, vt_cfg, &route, history).await;
+    let llm_generated = llm_prompt_suggestions(provider, config, vt_cfg, &routes, history).await;
     let resolved = if llm_generated.is_empty() {
         fallback
     } else {
@@ -120,9 +131,10 @@ pub(crate) async fn generate_inline_prompt_suggestion(
         return None;
     }
 
-    let route = resolve_prompt_suggestion_route(config, vt_cfg);
+    let routes = resolve_prompt_suggestion_routes(config, vt_cfg);
+    log_prompt_suggestion_route_warning(&routes);
     if let Some(prompt) =
-        llm_inline_prompt_suggestion(provider, config, vt_cfg, &route, history, draft).await
+        llm_inline_prompt_suggestion(provider, config, vt_cfg, &routes, history, draft).await
     {
         return Some(InlinePromptSuggestion {
             prompt,
@@ -259,6 +271,28 @@ async fn llm_prompt_suggestions(
     provider: &dyn uni::LLMProvider,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
+    routes: &PromptSuggestionRoutes,
+    history: &[uni::Message],
+) -> Vec<PromptSuggestion> {
+    let primary =
+        llm_prompt_suggestions_for_route(provider, config, vt_cfg, &routes.primary, history).await;
+    if !primary.is_empty() || routes.fallback.is_none() {
+        return primary;
+    }
+
+    let fallback = routes.fallback.as_ref().expect("checked fallback");
+    tracing::warn!(
+        model = %routes.primary.model,
+        fallback_model = %fallback.model,
+        "prompt suggestions failed on lightweight route; retrying with main model"
+    );
+    llm_prompt_suggestions_for_route(provider, config, vt_cfg, fallback, history).await
+}
+
+async fn llm_prompt_suggestions_for_route(
+    provider: &dyn uni::LLMProvider,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     route: &PromptSuggestionRoute,
     history: &[uni::Message],
 ) -> Vec<PromptSuggestion> {
@@ -285,6 +319,36 @@ async fn llm_prompt_suggestions(
 }
 
 async fn llm_inline_prompt_suggestion(
+    provider: &dyn uni::LLMProvider,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    routes: &PromptSuggestionRoutes,
+    history: &[uni::Message],
+    draft: &str,
+) -> Option<String> {
+    let primary = llm_inline_prompt_suggestion_for_route(
+        provider,
+        config,
+        vt_cfg,
+        &routes.primary,
+        history,
+        draft,
+    )
+    .await;
+    if primary.is_some() || routes.fallback.is_none() {
+        return primary;
+    }
+
+    let fallback = routes.fallback.as_ref().expect("checked fallback");
+    tracing::warn!(
+        model = %routes.primary.model,
+        fallback_model = %fallback.model,
+        "inline prompt suggestion failed on lightweight route; retrying with main model"
+    );
+    llm_inline_prompt_suggestion_for_route(provider, config, vt_cfg, fallback, history, draft).await
+}
+
+async fn llm_inline_prompt_suggestion_for_route(
     provider: &dyn uni::LLMProvider,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -325,21 +389,13 @@ fn create_prompt_suggestion_provider(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Option<Box<dyn uni::LLMProvider>> {
-    create_provider_with_config(
-        &route.provider_name,
-        ProviderConfig {
-            api_key: Some(config.api_key.clone()),
-            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
-            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
-            base_url: None,
-            model: Some(route.model.clone()),
-            prompt_cache: Some(config.prompt_cache.clone()),
-            timeouts: None,
-            openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
-            anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
-            model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
-            workspace_root: Some(config.workspace.clone()),
+    create_provider_for_model_route(
+        &vtcode_core::llm::ModelRoute {
+            provider_name: route.provider_name.clone(),
+            model: route.model.clone(),
         },
+        config,
+        vt_cfg,
     )
     .ok()
 }
@@ -537,67 +593,44 @@ fn prompt_suggestion_cache_key(
     )
 }
 
-fn resolve_prompt_suggestion_route(
+fn resolve_prompt_suggestion_routes(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
-) -> PromptSuggestionRoute {
-    let provider_name = prompt_suggestion_provider_name(config);
-    let fallback = PromptSuggestionRoute {
-        provider_name: provider_name.clone(),
-        model: config.model.clone(),
-        temperature: DEFAULT_PROMPT_SUGGESTION_TEMPERATURE,
-    };
+) -> PromptSuggestionRoutes {
+    let temperature = vt_cfg
+        .map(|cfg| cfg.agent.prompt_suggestions.temperature)
+        .unwrap_or(DEFAULT_PROMPT_SUGGESTION_TEMPERATURE);
+    let resolution = resolve_lightweight_route(
+        config,
+        vt_cfg,
+        LightweightFeature::PromptSuggestions,
+        vt_cfg.map(|cfg| cfg.agent.prompt_suggestions.model.as_str()),
+    );
 
-    let Some(vt_cfg) = vt_cfg else {
-        return fallback;
+    let primary = PromptSuggestionRoute {
+        provider_name: resolution.primary.provider_name.clone(),
+        model: resolution.primary.model.clone(),
+        temperature,
     };
-    let prompt_suggestions_cfg = &vt_cfg.agent.prompt_suggestions;
-    let model = if prompt_suggestions_cfg.model.trim().is_empty() {
-        auto_small_model(&provider_name, &config.model)
-    } else {
-        prompt_suggestions_cfg.model.clone()
-    };
+    let fallback = resolution
+        .fallback
+        .as_ref()
+        .map(|route| PromptSuggestionRoute {
+            provider_name: route.provider_name.clone(),
+            model: route.model.clone(),
+            temperature,
+        });
 
-    PromptSuggestionRoute {
-        provider_name,
-        model,
-        temperature: prompt_suggestions_cfg.temperature,
+    PromptSuggestionRoutes {
+        primary,
+        fallback,
+        warning: resolution.warning,
     }
 }
 
-fn prompt_suggestion_provider_name(config: &CoreAgentConfig) -> String {
-    if !config.provider.trim().is_empty() {
-        return config.provider.to_lowercase();
-    }
-
-    infer_provider_from_model(&config.model)
-        .map(|provider| provider.to_string().to_lowercase())
-        .unwrap_or_else(|| "gemini".to_string())
-}
-
-pub(crate) fn auto_small_model(provider_name: &str, active_model: &str) -> String {
-    if let Ok(model_id) = active_model.parse::<ModelId>()
-        && model_id.is_efficient_variant()
-    {
-        return model_id.as_str().to_string();
-    }
-
-    let provider = infer_provider_from_model(active_model).unwrap_or(match provider_name {
-        "openai" => Provider::OpenAI,
-        "anthropic" => Provider::Anthropic,
-        "deepseek" => Provider::DeepSeek,
-        "gemini" | "google" => Provider::Gemini,
-        _ => Provider::Gemini,
-    });
-
-    match provider {
-        Provider::OpenAI => ModelId::GPT5Mini.as_str().to_string(),
-        Provider::Anthropic => ModelId::ClaudeHaiku45.as_str().to_string(),
-        Provider::DeepSeek => ModelId::DeepSeekChat.as_str().to_string(),
-        Provider::Gemini => ModelId::Gemini3FlashPreview.as_str().to_string(),
-        _ => model_helpers::default_for(provider_name)
-            .unwrap_or(active_model)
-            .to_string(),
+fn log_prompt_suggestion_route_warning(routes: &PromptSuggestionRoutes) {
+    if let Some(warning) = &routes.warning {
+        tracing::warn!(warning = %warning, "prompt suggestion route adjusted");
     }
 }
 
@@ -660,6 +693,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use vtcode_core::config::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::config::models::ModelId;
     use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
     use vtcode_core::config::types::ModelSelectionSource;
     use vtcode_core::llm::provider::{FinishReason, LLMError, LLMRequest, LLMResponse};
@@ -744,10 +778,10 @@ mod tests {
         vt_cfg.agent.prompt_suggestions.model = "gpt-5-mini".to_string();
         vt_cfg.agent.prompt_suggestions.temperature = 0.2;
 
-        let route = resolve_prompt_suggestion_route(&config, Some(&vt_cfg));
-        assert_eq!(route.provider_name, "openai");
-        assert_eq!(route.model, "gpt-5-mini");
-        assert_eq!(route.temperature, 0.2);
+        let routes = resolve_prompt_suggestion_routes(&config, Some(&vt_cfg));
+        assert_eq!(routes.primary.provider_name, "openai");
+        assert_eq!(routes.primary.model, "gpt-5-mini");
+        assert_eq!(routes.primary.temperature, 0.2);
     }
 
     #[test]
@@ -755,9 +789,9 @@ mod tests {
         let config = prompt_config("openai", "gpt-5.4");
 
         let vt_cfg = VTCodeConfig::default();
-        let route = resolve_prompt_suggestion_route(&config, Some(&vt_cfg));
-        assert_eq!(route.provider_name, "openai");
-        assert_eq!(route.model, ModelId::GPT5Mini.as_str());
+        let routes = resolve_prompt_suggestion_routes(&config, Some(&vt_cfg));
+        assert_eq!(routes.primary.provider_name, "openai");
+        assert_eq!(routes.primary.model, ModelId::GPT54Mini.as_str());
     }
 
     #[test]

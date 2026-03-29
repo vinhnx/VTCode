@@ -118,14 +118,14 @@ pub(crate) async fn run_doctor_diagnostics(
         )?;
 
         let model_info = if cfg.agent.small_model.enabled {
-            let small_model = if cfg.agent.small_model.model.is_empty() {
+            let lightweight_model = if cfg.agent.small_model.model.is_empty() {
                 "auto-select".to_string()
             } else {
                 cfg.agent.small_model.model.clone()
             };
             format!(
-                "{} (+ small model: {})",
-                cfg.agent.default_model, small_model
+                "{} (+ lightweight model: {})",
+                cfg.agent.default_model, lightweight_model
             )
         } else {
             cfg.agent.default_model.clone()

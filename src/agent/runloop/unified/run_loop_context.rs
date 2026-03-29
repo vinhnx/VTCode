@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -386,6 +387,7 @@ pub(crate) struct RunLoopContext<'a> {
 
 pub(crate) struct AutoModeRuntimeContext<'a> {
     pub config: &'a CoreAgentConfig,
+    pub vt_cfg: Option<&'a VTCodeConfig>,
     pub provider_client: &'a mut dyn uni::LLMProvider,
     pub working_history: &'a [uni::Message],
 }

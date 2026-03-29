@@ -1,8 +1,12 @@
 //! Tool execution result handling for turn flow.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use vtcode_commons::ErrorCategory;
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
+use vtcode_core::llm::{
+    LightweightFeature, create_provider_for_model_route, resolve_lightweight_route,
+};
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::error_messages::agent_execution;
@@ -81,6 +85,9 @@ fn emit_turn_metric_log(
 const MAX_ERROR_MESSAGE_CHARS: usize = 420;
 const MAX_FALLBACK_ARGS_PREVIEW_CHARS: usize = 140;
 const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
+const TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS: usize = 12_000;
+const TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS: u32 = 400;
+const TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT: &str = "You summarize tool outputs for VT Code before they are added to the model context. Preserve actionable facts, concrete errors, file paths, commands, and next steps. Keep it concise, faithful, and specific. Do not invent details.";
 
 fn request_user_input_result_stats(output: &serde_json::Value) -> (usize, bool) {
     let cancelled = output
@@ -869,6 +876,199 @@ pub(super) fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) 
     serialize_output(&compacted)
 }
 
+fn tool_output_summary_feature(
+    tool_name: &str,
+    args_val: &serde_json::Value,
+    output: &serde_json::Value,
+    serialized_len: usize,
+) -> Option<LightweightFeature> {
+    let action = args_val.get("action").and_then(serde_json::Value::as_str);
+    let command = args_val
+        .get("command")
+        .map(serialize_json_for_model)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let content_type = output
+        .get("content_type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+
+    let is_large_read = matches!(tool_name, tool_names::READ_FILE)
+        || (tool_name == tool_names::UNIFIED_FILE
+            && matches!(action, Some("read" | "read_chunk" | "cat")));
+    if is_large_read && (serialized_len > 6_000 || output.get("spool_path").is_some()) {
+        return Some(LightweightFeature::LargeReadSummary);
+    }
+
+    if tool_name == "web_fetch" || content_type == "web_page" {
+        return (serialized_len > 2_500).then_some(LightweightFeature::WebSummary);
+    }
+
+    let is_git_history = tool_name == tool_names::UNIFIED_EXEC
+        && (content_type == "git_diff"
+            || command.contains("git log")
+            || command.contains("git show")
+            || command.contains("git diff"));
+    if is_git_history && serialized_len > 2_500 {
+        return Some(LightweightFeature::GitHistorySummary);
+    }
+
+    None
+}
+
+async fn summarize_tool_output_with_provider(
+    provider: &dyn vtcode_core::llm::provider::LLMProvider,
+    model: &str,
+    tool_name: &str,
+    serialized_output: &str,
+) -> Result<String> {
+    let prompt = format!(
+        "Tool: {tool_name}\n\nOutput:\n{}\n\nReturn a concise summary that preserves the actionable details VT Code should remember for the next model turn.",
+        truncate_text_for_model(serialized_output, TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS).0
+    );
+    let request = LLMRequest {
+        messages: vec![LlmMessage::user(prompt)],
+        system_prompt: Some(std::sync::Arc::new(
+            TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT.to_string(),
+        )),
+        model: model.to_string(),
+        max_tokens: Some(TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS),
+        temperature: Some(0.0),
+        stream: false,
+        ..Default::default()
+    };
+    let response = provider
+        .generate(request)
+        .await
+        .context("tool output summarization failed")?;
+    Ok(response.content_text().trim().to_string())
+}
+
+async fn summarize_tool_output_with_route(
+    ctx: &mut TurnProcessingContext<'_>,
+    route: &vtcode_core::llm::ModelRoute,
+    tool_name: &str,
+    serialized_output: &str,
+) -> Result<String> {
+    let same_runtime_provider = !ctx.config.provider.trim().is_empty()
+        && route
+            .provider_name
+            .eq_ignore_ascii_case(ctx.config.provider.as_str())
+        && route.model == ctx.config.model;
+    if same_runtime_provider {
+        return summarize_tool_output_with_provider(
+            ctx.provider_client.as_ref(),
+            &route.model,
+            tool_name,
+            serialized_output,
+        )
+        .await;
+    }
+
+    let provider = create_provider_for_model_route(route, ctx.config, ctx.vt_cfg)?;
+    summarize_tool_output_with_provider(
+        provider.as_ref(),
+        &route.model,
+        tool_name,
+        serialized_output,
+    )
+    .await
+}
+
+fn summarized_tool_response_payload(
+    tool_name: &str,
+    output: &serde_json::Value,
+    summary: &str,
+) -> String {
+    let mut compacted = compact_model_tool_payload(output.clone());
+    if should_prefer_spool_reference_only(tool_name, output) {
+        apply_spool_reference_only(&mut compacted, output);
+    }
+    if let Some(obj) = compacted.as_object_mut() {
+        obj.remove("output");
+        obj.remove("content");
+        obj.remove("stdout");
+        obj.remove("stderr");
+        obj.insert(
+            "summary".to_string(),
+            serde_json::Value::String(summary.to_string()),
+        );
+        obj.insert(
+            "summarized_for_model".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+    serialize_output(&compacted)
+}
+
+async fn prepare_tool_response_content(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+    output: &serde_json::Value,
+) -> String {
+    let fallback = maybe_inline_spooled(tool_name, output);
+    let serialized_output = serialize_json_for_model(output);
+    let Some(feature) =
+        tool_output_summary_feature(tool_name, args_val, output, serialized_output.len())
+    else {
+        return fallback;
+    };
+
+    let resolution = resolve_lightweight_route(ctx.config, ctx.vt_cfg, feature, None);
+    if let Some(warning) = &resolution.warning {
+        tracing::warn!(warning = %warning, tool = %tool_name, "tool output route adjusted");
+    }
+
+    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &serialized_output)
+        .await
+    {
+        Ok(summary) if !summary.trim().is_empty() => {
+            return summarized_tool_response_payload(tool_name, output, summary.trim());
+        }
+        Ok(_) => {}
+        Err(primary_err) => {
+            if let Some(fallback_route) = resolution.fallback.as_ref() {
+                tracing::warn!(
+                    tool = %tool_name,
+                    model = %resolution.primary.model,
+                    fallback_model = %fallback_route.model,
+                    error = %primary_err,
+                    "tool output summarization failed on lightweight route; retrying with main model"
+                );
+                match summarize_tool_output_with_route(
+                    ctx,
+                    fallback_route,
+                    tool_name,
+                    &serialized_output,
+                )
+                .await
+                {
+                    Ok(summary) if !summary.trim().is_empty() => {
+                        return summarized_tool_response_payload(tool_name, output, summary.trim());
+                    }
+                    Ok(_) => {}
+                    Err(fallback_err) => {
+                        tracing::warn!(
+                            tool = %tool_name,
+                            error = %fallback_err,
+                            "tool output summarization failed on main model; using compact fallback"
+                        );
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    tool = %tool_name,
+                    error = %primary_err,
+                    "tool output summarization failed; using compact fallback"
+                );
+            }
+        }
+    }
+
+    fallback
+}
+
 fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
     let Some(obj) = value.as_object() else {
         return value.clone();
@@ -982,6 +1182,7 @@ async fn auto_mode_probe_warning(
     match probe_tool_output(
         ctx.provider_client.as_mut(),
         ctx.config,
+        ctx.vt_cfg,
         &permissions,
         &working_history,
         content_for_model,
@@ -1047,7 +1248,8 @@ async fn handle_success<'a>(
 
     // Update blocked-streak and record tool response in grouped context form.
     t_ctx.ctx.reset_blocked_tool_call_streak();
-    let content_for_model = maybe_inline_spooled(tool_name, output);
+    let content_for_model =
+        prepare_tool_response_content(t_ctx.ctx, tool_name, args_val, output).await;
     push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, content_for_model)
         .await?;
     if !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {

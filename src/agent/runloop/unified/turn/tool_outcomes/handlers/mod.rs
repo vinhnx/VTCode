@@ -204,6 +204,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
         auto_mode_runtime: Some(
             crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
                 config: ctx.config,
+                vt_cfg: ctx.vt_cfg,
                 provider_client: ctx.provider_client.as_mut(),
                 working_history: ctx.working_history.as_slice(),
             },
