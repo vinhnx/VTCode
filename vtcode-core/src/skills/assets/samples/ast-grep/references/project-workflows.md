@@ -209,6 +209,24 @@ Use the public structural tool first for read-only project checks:
   - public structural queries can consume the configured custom language
   - parser compilation and `sgconfig.yml` authoring remain skill-driven work
 
+## Language Injection
+
+- ast-grep can search embedded-language regions inside a host document.
+  - built-in behavior already covers HTML with CSS in `<style>` and JavaScript in `<script>`
+  - project-specific cases should be configured with `languageInjections`
+- A `languageInjections` entry should define:
+  - `hostLanguage` for the outer file language
+  - `rule` for the embedded region
+  - `injected` for the parser to use inside that region
+- The injection `rule` should capture the subregion with a meta variable such as `$CONTENT`.
+  - styled-components example: `styled.$TAG\`$CONTENT\``
+  - GraphQL tagged template example: `graphql\`$CONTENT\``
+- Use `languageGlobs` when a whole file should be parsed through a different or superset language.
+- Use `languageInjections` when only a nested fragment switches language inside the same file.
+- VT Code boundary:
+  - public structural query / scan / test can consume existing injection config
+  - authoring or debugging `languageInjections` remains skill-driven work
+
 ## FAQ Highlights
 
 - If a fragment pattern does not match, provide a larger valid `context` snippet and use `selector` to focus the real node you care about.

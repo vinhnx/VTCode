@@ -66,6 +66,7 @@ It also covers pattern parsing details such as invalid / incomplete / ambiguous 
 It also covers the match algorithm and strictness levels, while VT Code’s public structural query surface already exposes read-only `strictness` for `cst`, `smart`, `ast`, `relaxed`, and `signature`.
 It also covers Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, and one-to-many rewrites like splitting barrel imports.
 It also covers custom language setup, including `customLanguages`, parser compilation with `tree-sitter build`, the `TREE_SITTER_LIBDIR` fallback, `expandoChar`, and parser inspection with `tree-sitter parse`.
+It also covers multi-language documents and language injection, including built-in HTML `<script>` / `<style>` extraction, `languageInjections`, `hostLanguage`, `injected`, `$CONTENT` captures, styled-components CSS, and GraphQL template literals.
 Quick-start guidance there also covers shell quoting for metavariables, Linux `ast-grep` vs `sg`, and the optional-chaining rewrite example.
 Catalog-style example discovery and adaptation are also routed there, especially when examples depend on `constraints`, `utils`, `transform`, `rewriters`, or built-in fixes.
 

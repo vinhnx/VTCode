@@ -85,6 +85,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - Pattern syntax follows ast-grep rules: `$VAR` captures one named node, `$$$ARGS` captures zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture
   - `workflow="query"` patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
   - Custom languages are supported only through local ast-grep configuration, typically workspace `sgconfig.yml` `customLanguages` plus a compiled tree-sitter dynamic library
+  - Built-in embedded-language behavior is limited to what ast-grep already knows, such as HTML `<script>` / `<style>` extraction; other nested-language cases depend on local `languageInjections`
   - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
   - Public project support stops at read-only `sg scan` and `sg test`
   - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `rewrite`, `joinBy`, `rewriters`, custom parser compilation, or non-trivial `sgconfig.yml` authoring/debugging
@@ -141,6 +142,6 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the requested language is not built into ast-grep and needs workspace `sgconfig.yml` `customLanguages` setup or `expandoChar`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs custom parser compilation via `tree-sitter build`, the `TREE_SITTER_LIBDIR` fallback, reused Neovim parser libraries, or parser inspection with `tree-sitter parse`.
-- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `languageGlobs`, `languageInjections`, local/global utility rules, `transform`, `rewrite`, `joinBy`, or `rewriters`.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `languageGlobs`, `languageInjections`, `hostLanguage`, `injected`, `$CONTENT`-style embedded-region capture, styled-components CSS, GraphQL template literals, local/global utility rules, `transform`, `rewrite`, `joinBy`, or `rewriters`.
 - Prefer another analysis tool when the task depends on scope, type, control-flow, data-flow, taint, or constant-propagation facts; ast-grep’s structural surface does not provide that analysis.
 - `action="intelligence"` remains executor-compatible for legacy callers, but it is deprecated and not part of the public schema.

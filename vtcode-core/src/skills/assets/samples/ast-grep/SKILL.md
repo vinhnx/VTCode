@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep setup and authoring: install, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, cheat sheets, `nthChild stopBy`, `range field`, config hints `metadata url` and `caseInsensitive glob`, FAQ `rule order`, `kind pattern`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, core concepts `textual structural`, `ast cst`, `named unnamed`, `kind field`, `significant trivial`, deep dive `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, strictness `strictness smart ast relaxed signature cst`, `constraints`, `expandEnd`, `transform`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `languageGlobs`, `expandoChar`, programmatic API."
+description: "Use for ast-grep setup and authoring: install, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, FAQ `rule order`, `kind pattern`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `significant trivial`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, strictness `strictness smart ast relaxed signature cst`, `constraints`, `expandEnd`, `transform`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `languageGlobs`, `expandoChar`, programmatic API."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -144,6 +144,16 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Register `libraryPath`, `extensions`, and optional `expandoChar` in `sgconfig.yml`. `expandoChar` matters when `$VAR` is not valid syntax in the target language and must be rewritten to a parser-friendly prefix.
 - Use `tree-sitter parse <file>` to inspect parser output when the custom grammar or file association is unclear.
 - VT Code’s public structural queries can use a custom language only after the local ast-grep project config is in place. The setup, compilation, and debugging work stays on the bundled ast-grep skill path.
+
+## Language Injection
+
+- ast-grep can search embedded languages inside a host document. Built-in injection already covers HTML with CSS in `<style>` and JavaScript in `<script>`.
+- Use `languageInjections` in `sgconfig.yml` when the embedded language is project-specific, such as CSS inside styled-components or GraphQL inside tagged template literals.
+- A `languageInjections` entry needs `hostLanguage`, a `rule`, and `injected`. The `rule` should capture the embedded subregion with a meta variable such as `$CONTENT`.
+- Typical patterns are `styled.$TAG\`$CONTENT\`` for CSS-in-JS and `graphql\`$CONTENT\`` for GraphQL template literals.
+- ast-grep parses the extracted subregion with the injected language, not the parent document language. That is why CSS patterns can match inside JavaScript once injection is configured.
+- Use `languageGlobs` when the whole file should be parsed as a different or superset language. Use `languageInjections` when only a nested region inside the file changes language.
+- In VT Code, read-only structural query / scan / test can consume existing injection config. Designing or debugging `languageInjections` itself stays on the bundled ast-grep skill path.
 
 ## FAQ Highlights
 
