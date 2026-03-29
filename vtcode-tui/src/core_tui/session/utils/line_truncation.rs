@@ -43,7 +43,7 @@ pub(crate) fn truncate_line_with_ellipsis_if_overflow(
 /// Truncate a `Line` to fit within `max_width` display columns.
 ///
 /// Used for table lines where word-wrapping would break the box-drawing
-/// alignment. Spans are trimmed at the character boundary that exceeds the
+/// alignment. Line are trimmed at the character boundary that exceeds the
 /// width; any remaining spans are dropped.
 fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static> {
     let total: usize = line.spans.iter().map(|s| s.width()).sum();

@@ -208,7 +208,7 @@ pub(super) fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> 
 /// Truncate a `Line` to fit within `max_width` display columns.
 ///
 /// Used for table lines where word-wrapping would break the box-drawing
-/// alignment. Spans are trimmed at the character boundary that exceeds the
+/// alignment. Line are trimmed at the character boundary that exceeds the
 /// width; any remaining spans are dropped.
 ///
 /// This is a re-export from the centralized line_truncation module.
