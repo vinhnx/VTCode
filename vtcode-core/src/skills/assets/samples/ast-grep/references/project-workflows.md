@@ -69,6 +69,27 @@ Use the public structural tool first for read-only project checks:
   - Composite: `all`, `any`, `not`, `matches`
 - `language` changes how patterns are parsed, so author patterns in the actual target language instead of assuming syntax is portable.
 
+## Rule Cheat Sheet
+
+- Atomic rules are the narrowest checks on one target node.
+  - Use `pattern` for syntax shape, `kind` for AST node type, and `regex` for node text.
+  - Use `nthChild` when the target is defined by its named-sibling position.
+  - Use `range` when the match must stay inside a specific source span.
+- Relational rules describe where the target sits relative to other nodes.
+  - Use `inside` and `has` for ancestor or descendant requirements.
+  - Use relational `field` when the semantic role matters, such as matching only a `body`.
+  - Use `stopBy` when traversal should continue past the nearest boundary instead of stopping at the default scope edge.
+  - Use `follows` and `precedes` when relative order matters.
+- Composite rules combine multiple checks on the same target node.
+  - `all` means every sub-rule must match.
+  - `any` means at least one sub-rule must match.
+  - `not` excludes a sub-rule.
+  - `matches` reuses a named utility rule.
+- Utility rules are reusable rule definitions.
+  - Use local `utils` in the current config file for nearby reuse.
+  - Use global utility-rule files when several rules across the project need the same logic.
+- Move from a simple `pattern` to a full rule object when the task needs positional constraints, semantic roles, reusable sub-rules, or several structural conditions on the same node.
+
 ## Pattern Syntax
 
 - Pattern text must be valid parseable code for the target language.
@@ -157,4 +178,5 @@ Switch to direct CLI work through `unified_exec` when the task needs:
 - `transform`
 - `rewriters`
 - Custom `sgconfig.yml` authoring across `customLanguages`, `languageGlobs`, `languageInjections`, or `expandoChar`
+- Advanced rule-object authoring with `nthChild`, `range`, relational `field`, `stopBy`, or local/global utility rules
 - Iterative rule debugging that depends on unsupported ast-grep flags or output formats

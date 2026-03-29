@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: Use when the task involves ast-grep quick start, rule catalog examples, and project workflows such as installing ast-grep, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, optional chaining refactors, project scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, pattern syntax, meta variables, multi meta variables like `$$$ARGS`, non-capturing `$_`, unnamed-node `$$VAR`, object-style patterns, `constraints`, `labels`, `utils`, `transform`, `rewriters`, `customLanguages`, `languageGlobs`, `languageInjections`, `scan --rule`, `scan --inline-rules`, `--rewrite`, YAML `fix`, `expandStart`, `expandEnd`, `template`, `--interactive`, `--update-all`, `--stdin`, `--json`, `scan -r`, shell `completions`, GitHub Action setup, ast-grep JavaScript/Python/Rust programmatic API usage, `ast_grep_core`, `matches` utility rules, or ast-grep rule authoring, rewriting, and debugging.
+description: Use when the task involves ast-grep quick start, rule catalog examples, and project workflows such as installing ast-grep, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, optional chaining refactors, project scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, pattern syntax, meta variables, multi meta variables like `$$$ARGS`, non-capturing `$_`, unnamed-node `$$VAR`, object-style patterns, rule cheat sheets, advanced hints like `nthChild stopBy` and `range field`, `constraints`, `labels`, local/global utility rules, `utils`, `transform`, `rewriters`, `customLanguages`, `languageGlobs`, `languageInjections`, `scan --rule`, `scan --inline-rules`, `--rewrite`, YAML `fix`, `expandStart`, `expandEnd`, `template`, `--interactive`, `--update-all`, `--stdin`, `--json`, `scan -r`, shell `completions`, GitHub Action setup, ast-grep JS/Python/Rust programmatic API usage, `ast_grep_core`, `matches` utility rules, or ast-grep rule authoring, rewriting, and debugging.
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -62,6 +62,16 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
 - Rule object fields are effectively unordered and conjunctive; if matching becomes order-sensitive, rewrite the logic with an explicit `all` sequence instead of assuming YAML key order matters.
 - `language` controls how patterns parse. Syntax that is valid in one language can fail in another.
+
+## Rule Cheat Sheet
+
+- Atomic rules check properties of one node. Start here when a single syntax shape is enough.
+- `pattern`, `kind`, and `regex` are the common atomic fields. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
+- Relational rules describe structure around the target node. Use `inside`, `has`, `follows`, and `precedes` when the match depends on ancestors, descendants, or neighboring nodes.
+- Add relational `field` when the surrounding node matters by semantic role, not just by shape. Add `stopBy` when ancestor or sibling traversal must continue past the nearest boundary instead of stopping early.
+- Composite rules combine checks for the same target node. Use `all` for explicit conjunction, `any` for alternatives, `not` for exclusions, and `matches` to delegate to a utility rule.
+- Utility rules keep repeated logic out of the main rule body. Use file-local `utils` for one config file and global utility-rule files when multiple rules in the project need the same building block.
+- Switch from a single `pattern` to a rule object when you need positional constraints, role-sensitive matching, reusable sub-rules, or several structural conditions on one node.
 
 ## Pattern Syntax
 
