@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep setup and authoring: install, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, FAQ `rule order`, `kind pattern`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `significant trivial`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, strictness `strictness smart ast relaxed signature cst`, `constraints`, `expandEnd`, `transform`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `languageGlobs`, `expandoChar`, programmatic API."
+description: "Use for ast-grep: `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `sgconfig.yml`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, pattern objects, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, `severity off`, `include metadata`, FAQ `rule order`, `kind pattern`, `positive rule`, `kind esquery`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, `strictness smart ast relaxed signature cst`, `string fix`, `fix config`, `expandEnd`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `language alias`, `languageGlobs`, `expandoChar`, `napi parse`, `python api`, programmatic API."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -34,6 +34,14 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `ast-grep test`: rule-test execution.
 - `ast-grep lsp`: editor integration via language server.
 
+## Built-In Languages
+
+- ast-grep ships many built-in languages. Common aliases include `bash`, `c`, `cc` / `cpp`, `cs`, `css`, `ex`, `go` / `golang`, `html`, `java`, `js` / `javascript` / `jsx`, `json`, `kt`, `lua`, `php`, `py` / `python`, `rb`, `rs` / `rust`, `swift`, `ts` / `typescript`, `tsx`, and `yml`.
+- `--lang <alias>` and YAML `language: <alias>` use those built-in aliases. File-system scans infer language from built-in extensions unless the project overrides them.
+- In VT Code, public structural `lang` is passed through to ast-grep. VT Code also normalizes and infers a local subset it can pre-parse itself: Rust, Python, JavaScript, TypeScript, TSX, Go, and Java.
+- That local subset includes common ast-grep aliases and extensions such as `golang`, `jsx`, `cjs`, `mjs`, `cts`, `mts`, `py3`, and `pyi`.
+- Use `languageGlobs` when the repository needs a different extension mapping than ast-grep’s built-in defaults.
+
 ## How Ast-Grep Works
 
 - ast-grep accepts several query formats: pattern queries, YAML rules, and programmatic API usage.
@@ -65,6 +73,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 - Start rule files with `id`, `language`, and root `rule`.
 - Treat the root `rule` as a rule object that matches one target AST node per result.
+- A rule object still needs a positive anchor. In practice, start with `pattern` or `kind`; `regex` is a filter, not a sufficient root rule by itself.
 - Use atomic fields such as `pattern`, `kind`, and `regex` for direct node checks.
 - Use relational fields such as `inside`, `has`, `follows`, and `precedes` when the match depends on surrounding nodes.
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
@@ -74,20 +83,32 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 ## Rule Cheat Sheet
 
 - Atomic rules check properties of one node. Start here when a single syntax shape is enough.
-- `pattern`, `kind`, and `regex` are the common atomic fields. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
+- `pattern`, `kind`, and `regex` are the common atomic fields. `pattern` can also be an object with `context`, `selector`, and optional `strictness`.
+- `kind` is usually a plain node kind name, but ast-grep also supports a limited ESQuery-style syntax for some `kind` selectors.
+- `regex` matches the whole node text. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
+- `nthChild` accepts a number, an `An+B` string, or an object with `position`, `reverse`, and `ofRule`. Counting is 1-based and only considers named siblings.
 - Relational rules describe structure around the target node. Use `inside`, `has`, `follows`, and `precedes` when the match depends on ancestors, descendants, or neighboring nodes.
-- Add relational `field` when the surrounding node matters by semantic role, not just by shape. Add `stopBy` when ancestor or sibling traversal must continue past the nearest boundary instead of stopping early.
+- Add relational `field` when the surrounding node matters by semantic role, not just by shape. `field` only applies to `inside` and `has`.
+- Add `stopBy` when ancestor or sibling traversal must continue past the nearest boundary instead of stopping early. The default is `neighbor`, `end` searches to the boundary, and a rule object stop is inclusive.
 - Composite rules combine checks for the same target node. Use `all` for explicit conjunction, `any` for alternatives, `not` for exclusions, and `matches` to delegate to a utility rule.
+- `all` and `any` still operate on one target node. They combine sub-rules, not multiple matched nodes.
 - Utility rules keep repeated logic out of the main rule body. Use file-local `utils` for one config file and global utility-rule files when multiple rules in the project need the same building block.
 - Switch from a single `pattern` to a rule object when you need positional constraints, role-sensitive matching, reusable sub-rules, or several structural conditions on one node.
 
 ## Config Cheat Sheet
 
 - Basic info keys define the rule itself. Use `id` for the unique rule name, `language` for the parser target, `url` for rule documentation, and `metadata` for custom project data that VT Code should preserve with the rule.
+- One YAML file can hold multiple rules when you separate documents with `---`.
 - Finding keys define what gets matched. `rule` is the core matcher, `constraints` narrows meta-variable captures, and `utils` holds reusable helper rules that you call through `matches`.
+- `constraints` runs after `rule` matched, only targets single meta variables like `$ARG`, and is a poor fit inside `not`.
 - Patching keys define reusable fixes. Use `transform` to derive new meta-variables before replacement, `fix` for either a string replacement or a `template` object with `expandStart` / `expandEnd`, and `rewriters` when the transformation is too complex for one inline `fix`.
 - Linting keys define what scan results report. Use `severity`, `message`, `note`, and `labels` for diagnostics, then `files` and `ignores` to scope where the rule applies.
+- `severity: off` disables the rule during scanning. `note` supports Markdown but cannot interpolate meta variables.
+- `labels` keys must come from meta variables already defined by the rule or `constraints`.
 - `files` supports either plain globs or object entries. Use object syntax when you need options like `caseInsensitive` glob matching.
+- `ignores` runs before `files`. Both are relative to the `sgconfig.yml` directory, and the glob should not start with `./`.
+- Rule-level `ignores` is different from CLI `--no-ignore`: the CLI flag changes global ignore-file behavior, while YAML `ignores` only filters files for that rule.
+- JSON output only includes rule `metadata` when the ast-grep run enabled metadata output, for example via `--include-metadata`.
 - Keep config authoring on the ast-grep skill path. VT Code’s public structural tool runs read-only query/scan/test workflows; it does not expose rule-YAML authoring fields directly.
 
 ## Pattern Syntax
@@ -180,12 +201,14 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Use `--interactive` to review rewrite hunks before applying them.
 - Use `--update-all` or `-U` only when the user clearly wants non-interactive apply behavior.
 - Meta variables captured in `pattern` can be reused in `fix`.
+- String `fix` is raw replacement text, not a parsed Tree-Sitter pattern. Meta variables can appear anywhere in the replacement string.
 - `fix` indentation is preserved relative to the matched source location, so multiline rewrites must be authored with deliberate indentation.
 - Non-matched meta variables become empty strings in rewritten output.
 - If appended uppercase text would be parsed as part of a meta variable name, use transforms instead of writing `$VARName` directly.
 - Use `transform.rewrite` when a matched list must be rewritten element-by-element before the outer `fix` runs.
 - Use `joinBy` to control how rewritten list items are stitched together, for example newline-joined imports in a barrel-import rewrite.
-- Use `fix.template` plus `expandStart` / `expandEnd` when the rewrite must consume surrounding commas, brackets, or trivia outside the target node.
+- Use `FixConfig` when replacing only the matched node is not enough, especially for deleting list items or key-value pairs that also need a surrounding comma removed.
+- In `FixConfig`, `template` is the replacement text and `expandStart` / `expandEnd` widen the rewritten range to consume commas, brackets, or other surrounding trivia outside the target node.
 - Keep advanced `transform` and `rewriters` in the skill-driven CLI workflow.
 
 ## CLI Modes
@@ -201,8 +224,11 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 - Do not force complex transformations into rule syntax when the task needs arbitrary AST inspection or computed replacements.
 - Escalate to ast-grep’s library API when the task needs conditional replacement logic, counting or ordering matched nodes, per-node patch generation, or replacement text computed from matched content and surrounding nodes.
-- JavaScript is the most mature ast-grep binding.
-- Python bindings exist and are useful for syntax-tree scripting.
+- Node.js NAPI is the main experimental API surface today. The common entry points are `parse`, `kind`, and `pattern`, and the main objects are `SgRoot` and `SgNode`.
+- In NAPI, `parse(Lang.<X>, source)` returns `SgRoot`, `root()` returns `SgNode`, and traversal/search APIs like `find`, `findAll`, `field`, `parent`, `children`, `matches`, `inside`, `has`, `replace`, and `commitEdits` live on `SgNode`.
+- `NapiConfig` is the programmatic equivalent of rule YAML for `find` / `findAll`, and `FindConfig` is the config shape for file-based searching.
+- Python bindings expose the same general model with `SgRoot(src, language)` plus `SgNode` methods for rule checks, traversal, searching, and edit generation.
+- JS language-specific objects like `js.parse(...)` are deprecated; prefer the unified NAPI functions with `Lang.JavaScript`.
 - Rust `ast_grep_core` is the lowest-level and most efficient option, but also the heaviest lift.
 - Applying ast-grep `fix` through the JS/Python APIs is still experimental, so prefer generating explicit patches in code when reliability matters.
 - If the target language has no suitable JS/Python parser path for the desired automation, prefer a Rust implementation or another repo-native AST approach instead of overcomplicating ast-grep rules.

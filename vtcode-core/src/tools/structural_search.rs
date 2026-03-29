@@ -1254,6 +1254,25 @@ mod tests {
     }
 
     #[test]
+    fn structural_request_canonicalizes_additional_ast_grep_aliases() {
+        let go_request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "lang": "golang"
+        }))
+        .expect("valid request");
+        assert_eq!(go_request.lang.as_deref(), Some("go"));
+
+        let js_request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "foo(<Bar />)",
+            "lang": "jsx"
+        }))
+        .expect("valid request");
+        assert_eq!(js_request.lang.as_deref(), Some("javascript"));
+    }
+
+    #[test]
     fn structural_request_infers_lang_from_unambiguous_path() {
         let request = StructuralSearchRequest::from_args(&json!({
             "action": "structural",
@@ -1264,6 +1283,27 @@ mod tests {
         .expect("path inference should satisfy debug query");
 
         assert_eq!(request.lang.as_deref(), Some("rust"));
+    }
+
+    #[test]
+    fn structural_request_infers_lang_from_additional_supported_extensions() {
+        let js_request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "export default $VALUE",
+            "path": "web/app.mjs",
+            "debug_query": "ast"
+        }))
+        .expect("path inference should satisfy debug query");
+        assert_eq!(js_request.lang.as_deref(), Some("javascript"));
+
+        let ts_request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "export const $VALUE = 1",
+            "path": "web/app.cts",
+            "debug_query": "ast"
+        }))
+        .expect("path inference should satisfy debug query");
+        assert_eq!(ts_request.lang.as_deref(), Some("typescript"));
     }
 
     #[test]
