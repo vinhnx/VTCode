@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: Use when the task involves ast-grep project workflows such as `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, project scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, `customLanguages`, `languageGlobs`, `languageInjections`, `transform`, `rewriters`, `scan --rule`, `scan --inline-rules`, `--rewrite`, YAML `fix`, `expandStart`, `expandEnd`, `template`, `--interactive`, `--update-all`, `--stdin`, `--json`, `scan -r`, shell `completions`, GitHub Action setup, ast-grep JavaScript/Python/Rust programmatic API usage, `ast_grep_core`, `matches` utility rules, or ast-grep rule authoring, rewriting, and debugging.
+description: Use when the task involves ast-grep quick start, rule catalog examples, and project workflows such as installing ast-grep, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, optional chaining refactors, project scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, pattern syntax, meta variables, multi meta variables like `$$$ARGS`, non-capturing `$_`, unnamed-node `$$VAR`, object-style patterns, `constraints`, `labels`, `utils`, `transform`, `rewriters`, `customLanguages`, `languageGlobs`, `languageInjections`, `scan --rule`, `scan --inline-rules`, `--rewrite`, YAML `fix`, `expandStart`, `expandEnd`, `template`, `--interactive`, `--update-all`, `--stdin`, `--json`, `scan -r`, shell `completions`, GitHub Action setup, ast-grep JavaScript/Python/Rust programmatic API usage, `ast_grep_core`, `matches` utility rules, or ast-grep rule authoring, rewriting, and debugging.
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -16,6 +16,15 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Prefer structural `debug_query` on the public tool surface before falling back to raw `ast-grep run --debug-query`.
 - Stay on the public structural surface first when the task is only running project checks and reporting findings.
 - Use `unified_exec` only when the public structural surface cannot express the requested ast-grep flow.
+
+## Quick Start
+
+- In VT Code, prefer `vtcode dependencies install ast-grep` before suggesting system package managers.
+- External install routes such as Homebrew, Cargo, npm, pip, MacPorts, or Nix are fallback options when the user explicitly wants a system-managed install.
+- After installation, validate availability with `ast-grep --help`.
+- On Linux, prefer the full `ast-grep` binary name over `sg` because `sg` may already refer to `setgroups`.
+- When running CLI patterns with shell metavariables like `$PROP`, use single quotes so the shell does not expand them before ast-grep sees the pattern.
+- A good first rewrite example is optional chaining, for example rewriting `$PROP && $PROP()` to `$PROP?.()`.
 
 ## Command Overview
 
@@ -33,6 +42,17 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Use `ast-grep new` when the repository does not have ast-grep scaffolding yet.
 - Use `ast-grep new rule` when the scaffold exists and the task is creating a new rule plus optional test case.
 
+## Rule Catalog
+
+- Use the ast-grep catalog as inspiration when the user wants existing example rules, not as something to copy blindly.
+- Start from examples in the same language family when possible.
+- Read catalog markers as hints about rule complexity:
+  - simple pattern examples are good starting points
+  - `Fix` means the example includes a rewrite path
+  - `constraints`, `labels`, `utils`, `transform`, and `rewriters` mean the example depends on more advanced rule features
+- When adapting a catalog example, translate it to the current repository’s language, style, and safety constraints instead of preserving the example verbatim.
+- Prefer the bundled skill workflow when the user asks to explain, adapt, or combine catalog examples.
+
 ## Rule Essentials
 
 - Start rule files with `id`, `language`, and root `rule`.
@@ -42,6 +62,17 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
 - Rule object fields are effectively unordered and conjunctive; if matching becomes order-sensitive, rewrite the logic with an explicit `all` sequence instead of assuming YAML key order matters.
 - `language` controls how patterns parse. Syntax that is valid in one language can fail in another.
+
+## Pattern Syntax
+
+- Pattern code must be valid code that tree-sitter can parse.
+- Patterns match syntax trees, so a query can match nested expressions instead of only top-level text.
+- `$VAR` matches one named AST node.
+- `$$$ARGS` matches zero or more AST nodes in places like arguments, parameters, or statements.
+- Reusing the same captured name means both occurrences must match the same syntax.
+- Prefixing a meta variable with `_` disables capture, so repeated `$_X` occurrences do not need to match the same content.
+- `$$VAR` captures unnamed nodes when named-node matching is too narrow.
+- If a short snippet is ambiguous, move to an object-style pattern with more `context` plus `selector` instead of guessing.
 
 ## Rewrite Essentials
 
@@ -77,6 +108,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Use `unified_exec` For
 
+- `ast-grep --help`
 - `ast-grep new`
 - `ast-grep new rule`
 - `ast-grep scan -r <rule.yml>`
@@ -90,6 +122,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `ast-grep completions`
 - ast-grep GitHub Action setup
 - ast-grep programmatic API experiments and library examples
+- System package-manager install commands when the user explicitly wants them
 - `sg new`
 - Rewrite or apply flows
 - Interactive ast-grep flags
@@ -100,4 +133,4 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Read More
 
-- Read [references/project-workflows.md](references/project-workflows.md) when you need the boundary between public scan/test support and skill-driven CLI work, or when you need a quick reminder of ast-grep rule object essentials.
+- Read [references/project-workflows.md](references/project-workflows.md) when you need the boundary between public scan/test support and skill-driven CLI work, or when you need a quick reminder of ast-grep pattern and rule essentials.

@@ -9,6 +9,18 @@ Use the public structural tool first for read-only project checks:
 - `globs`, `context_lines`, and `max_results` apply to `scan`
 - `skip_snapshot_tests` applies only to `test`
 
+## Quick Start
+
+- In VT Code, the preferred install path is `vtcode dependencies install ast-grep`.
+- If the user explicitly wants a system-managed install, common external options include Homebrew, Cargo, npm, pip, MacPorts, and Nix.
+- Validate installation with `ast-grep --help`.
+- On Linux, prefer `ast-grep` over `sg` because `sg` can conflict with the system `setgroups` command.
+- For shell usage, quote patterns containing `$VAR` with single quotes so the shell does not strip metavariables before ast-grep runs.
+- A representative first refactor is optional chaining:
+  - search pattern: `'$PROP && $PROP()'`
+  - rewrite: `'$PROP?.()'`
+  - interactive apply: `--interactive`
+
 ## Command Overview
 
 - `ast-grep run` handles ad-hoc search, `--debug-query`, and one-off rewrite flows.
@@ -34,6 +46,17 @@ Use the public structural tool first for read-only project checks:
 - `ast-grep new rule` creates a rule file directly and can optionally create its paired test file.
 - If the repo already has `sgconfig.yml` and `rules/`, extend the existing scaffold instead of creating a second one.
 
+## Rule Catalog
+
+- The catalog is best used as an example bank for rule design and rewrite inspiration.
+- Start from examples in the target language before borrowing from another language.
+- Catalog signals are useful shorthand:
+  - `Simple Pattern Example` means the example is mostly pattern-driven
+  - `Fix` means the example includes a rewrite
+  - `constraints`, `labels`, `utils`, `transform`, and `rewriters` indicate more advanced features
+- Prefer adapting catalog ideas to the current repository over copying them verbatim.
+- If a catalog rule relies on features like `transform`, `rewriters`, or utility rules, keep that work in the skill-driven workflow instead of trying to squeeze it into the public read-only structural tool.
+
 ## Rule Essentials
 
 - A minimal rule file starts with `id`, `language`, and root `rule`.
@@ -45,6 +68,17 @@ Use the public structural tool first for read-only project checks:
   - Relational: `inside`, `has`, `follows`, `precedes`
   - Composite: `all`, `any`, `not`, `matches`
 - `language` changes how patterns are parsed, so author patterns in the actual target language instead of assuming syntax is portable.
+
+## Pattern Syntax
+
+- Pattern text must be valid parseable code for the target language.
+- Patterns match syntax trees, so a fragment like `a + 1` can match nested expressions, not just top-level lines.
+- `$VAR` matches one named AST node.
+- `$$$ARGS` matches zero or more AST nodes, which is useful for arguments, parameters, or statement lists.
+- Reusing the same captured meta variable name means the syntax must match identically in each position.
+- Names starting with `_` are non-capturing, so repeated `$_VAR` occurrences can match different content.
+- `$$VAR` captures unnamed nodes when punctuation or other anonymous syntax matters.
+- If a snippet is ambiguous or too short to parse cleanly, switch to an object-style `pattern` with more `context` and a precise `selector`.
 
 ## Rewrite Essentials
 
@@ -97,6 +131,7 @@ Use the public structural tool first for read-only project checks:
 
 Switch to direct CLI work through `unified_exec` when the task needs:
 
+- `ast-grep --help`
 - `ast-grep new`
 - `ast-grep new rule`
 - `ast-grep run --debug-query`
@@ -113,6 +148,8 @@ Switch to direct CLI work through `unified_exec` when the task needs:
 - `ast-grep completions`
 - GitHub Action workflow setup
 - Raw `--color never`
+- External install commands via brew, cargo, npm, pip, MacPorts, or Nix
+- Adapting catalog examples that depend on rewrite/apply flows or advanced rule features
 - `sg new`
 - Rewrite/apply behavior
 - Interactive flags

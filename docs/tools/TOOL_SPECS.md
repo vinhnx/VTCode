@@ -81,6 +81,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - VT Code-managed installs live in `~/.vtcode/bin`
   - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
   - Syntax-aware only; do not treat this surface as scope, type, or data-flow analysis
+  - Pattern syntax follows ast-grep rules: `$VAR` captures one named node, `$$$ARGS` captures zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture
   - `workflow="query"` patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
   - Custom languages are supported only through local ast-grep configuration, typically workspace `sgconfig.yml` `customLanguages` plus a compiled tree-sitter dynamic library
   - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
@@ -118,10 +119,13 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `structural` for syntax-sensitive search, read-only project scans, and read-only ast-grep rule tests.
 - Prefer `workflow="scan"` for public `sg scan` equivalents and `workflow="test"` for public `sg test` equivalents.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes rule authoring, `sg new`, rewrite/apply work, interactive ast-grep work, or `sgconfig.yml` authoring/debugging.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task is a quick-start or install flow, including `ast-grep --help`, shell quoting for metavariables, or optional-chaining style first rewrites.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task asks for ast-grep catalog examples, existing rewrite examples, or help adapting catalog rules to this repository.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs project scaffolding via `ast-grep new` or `ast-grep new rule`, or when it needs guidance around `rules/`, `rule-tests/`, `utils/`, and `sgconfig.yml`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `scan --rule`, `scan --inline-rules`, relational/composite rule objects, `matches` utility rules, or rule-order debugging.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `--rewrite`, YAML `fix`, `template`, `expandStart`, `expandEnd`, `--interactive`, `--update-all`, or indentation-sensitive rewrite behavior.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs raw ast-grep CLI behavior such as `--stdin`, `--json`, `scan -r`, `lsp`, shell completions, GitHub Action setup, or direct `--color never` control.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task is really about pattern syntax design, meta-variable capture rules, `$$$ARGS`, `$_`, `$$VAR`, or object-style patterns.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task outgrows rule syntax and needs ast-grep’s JavaScript/Python/Rust API, `ast_grep_core`, computed replacements, conditional AST edits, or node-order/count logic.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the target snippet is not valid standalone code and needs pattern-object `context` plus `selector`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.

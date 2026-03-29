@@ -917,7 +917,7 @@ pub(crate) fn unified_search_parameters() -> Value {
                 "description": "Structural workflow. `query` is the default parseable-pattern search, `scan` runs project rules from config, and `test` runs ast-grep rule tests.",
                 "default": "query"
             },
-            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
+            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language using ast-grep pattern syntax, not a raw code fragment; `$VAR` matches one named node, `$$$ARGS` matches zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture. If a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
             "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`.", "default": "."},
             "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
             "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`."},
@@ -1318,6 +1318,13 @@ mod tests {
                 .expect("pattern description")
                 .contains("valid parseable code"),
             "schema should explain structural pattern requirements"
+        );
+        assert!(
+            params["properties"]["pattern"]["description"]
+                .as_str()
+                .expect("pattern description")
+                .contains("$$$ARGS"),
+            "schema should expose ast-grep multi metavariable syntax"
         );
         assert!(
             params["properties"]["pattern"]["description"]
