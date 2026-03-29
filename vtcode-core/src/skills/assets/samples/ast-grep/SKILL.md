@@ -68,6 +68,10 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `customLanguages` registers project-local parsers. `libraryPath` can be one relative library path or a target-triple map, `extensions` is required, `expandoChar` is optional, and `languageSymbol` defaults to `tree_sitter_{name}`.
 - `languageInjections` is experimental. Each entry needs `hostLanguage`, `rule`, and `injected`.
 - Use dynamic `injected` candidates when the rule captures `$LANG` and the embedded language must be chosen from a list such as `css`, `scss`, or `less`.
+- Raw ast-grep project discovery walks upward from the current working directory until it finds `sgconfig.yml`, and `--config <file>` overrides that discovery with an explicit root config path.
+- `ast-grep scan` requires project config and will error if no `sgconfig.yml` is found. `ast-grep run` can still search without project config, though it also benefits from discovered config for things like `customLanguages` and `languageGlobs`.
+- `ast-grep scan --inspect summary` is the quickest way to confirm which project directory and config file ast-grep actually selected during discovery.
+- ast-grep also recognizes a home-directory `sgconfig.yml` as a global fallback config. XDG config directories are not part of this behavior.
 - Keep `sgconfig.yml` authoring on the skill path. VT Code’s public structural tool can consume an existing config through `config_path`, but it does not expose these top-level schema fields directly.
 
 ## Rule Catalog
@@ -186,12 +190,40 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Yoda-condition rewrite: clearly style-driven and repository-policy-sensitive. Treat it as optional rewrite material only where the project explicitly prefers constant-on-the-left comparisons.
 - Adapt C catalog rules to the repository’s parser choice, macro usage, pointer conventions, coding style, and safety policy before using them directly.
 
+## JavaScript API Highlights
+
+- Use `@ast-grep/napi` only when rule YAML or VT Code’s public structural tool is not enough. The programmatic API is the right escalation path for computed replacements, ordered-match logic, cross-node inspection, or edit orchestration that would be awkward in pure rule syntax.
+- Core objects are `SgRoot` and `SgNode`: `parse(Lang.<X>, source)` creates the tree, `root()` returns the root node, and `find` / `findAll` / traversal / refinement / edit APIs live on `SgNode`.
+- `Matcher` inputs can be pattern strings, numeric kind ids, or `NapiConfig` objects. Prefer patterns or `NapiConfig` unless there is a concrete reason to drop to raw kind ids.
+- `getMatch` and `getMultipleMatches` expose captured metavariables, but `replace` does not interpolate metavariables for you. Build replacement strings explicitly in JavaScript from matched nodes before calling `commitEdits`.
+- Keep VT Code’s boundary clear: prefer the public structural tool or CLI path for ordinary query/scan/test/rewrite flows, and only drop to NAPI when the task is genuinely programmatic.
+- `registerDynamicLanguage` and extra language packages exist, but that path is still experimental. Prefer established parsers and repo-native tooling unless dynamic-language support is actually needed.
+
+## Python API Highlights
+
+- Use `ast-grep-py` when the task needs programmatic AST traversal or computed edits but a Python host environment is a better fit than JavaScript or Rust. As with NAPI, prefer it only after rule YAML or VT Code’s structural/CLI path stops being a good fit.
+- Core objects are again `SgRoot` and `SgNode`: `SgRoot(source, language)` parses the source, `root()` returns the root node, and search, refinement, traversal, and edit APIs live on `SgNode`.
+- `find` and `find_all` support either direct rule keyword arguments or a config object. Prefer keyword-rule searches for simple cases and config objects when constraints or utility rules make the query more expressive.
+- `get_match`, `get_multiple_matches`, and `__getitem__` expose captured metavariables. `__getitem__` is useful when you want a stricter access pattern and are willing to let missing captures raise instead of returning `None`.
+- `replace` and `commit_edits` generate source edits, but they do not interpolate metavariables for you. Build replacement text explicitly from matched nodes before applying edits.
+- Keep VT Code’s boundary clear here too: use Python API only for genuinely programmatic transformations, not as a default substitute for public structural queries or ordinary CLI rewrites.
+
+## NAPI Performance Highlights
+
+- NAPI is not automatically faster than host-language traversal. Performance usually comes from reducing Rust↔JavaScript FFI crossings and letting ast-grep do more work per boundary crossing.
+- Prefer `parseAsync` over `parse` when many parse jobs can benefit from Node’s libuv thread pool and the main JS thread is already busy.
+- Prefer `findAll` over manual recursive traversal in JavaScript. One bulk Rust-side search is usually cheaper than repeated `kind()`, `children()`, and recursion calls across the FFI boundary.
+- Prefer `findInFiles` when scanning many files and you can use its file-path-oriented search model. It avoids unnecessary round-tripping source strings through JavaScript and can parallelize work in Rust threads.
+- `findInFiles` has a callback-completion caveat: its returned promise can resolve before all callbacks run. If completion ordering matters, track callback counts explicitly before treating the scan as finished.
+- Apply these performance tips only when scale justifies them. For small inputs or one-off transformations, simpler synchronous code is often the better tradeoff.
+
 ## Rule Essentials
 
 - Start rule files with `id`, `language`, and root `rule`.
 - Treat the root `rule` as a rule object that matches one target AST node per result.
 - A rule object still needs a positive anchor. In practice, start with `pattern` or `kind`; `regex` is a filter, not a sufficient root rule by itself.
-- Use atomic fields such as `pattern`, `kind`, and `regex` for direct node checks.
+- Atomic rules are `pattern`, `kind`, `regex`, `nthChild`, and `range`.
+- Use atomic fields such as `pattern`, `kind`, `regex`, `nthChild`, and `range` for direct node checks.
 - Use relational fields such as `inside`, `has`, `follows`, and `precedes` when the match depends on surrounding nodes.
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
 - Rule object fields are effectively unordered and conjunctive; if matching becomes order-sensitive, rewrite the logic with an explicit `all` sequence instead of assuming YAML key order matters.
@@ -201,26 +233,54 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 - Atomic rules check properties of one node. Start here when a single syntax shape is enough.
 - `pattern`, `kind`, and `regex` are the common atomic fields. `pattern` can also be an object with `context`, `selector`, and optional `strictness`.
+- Pattern objects are for invalid, incomplete, or ambiguous snippets. `context` is required; `selector` picks the real target node inside that context; `strictness` tunes how literally the pattern matches.
+- Use pattern objects when the bare snippet would parse as the wrong node kind, such as JavaScript class fields or Go/C call expressions inside ambiguous fragments.
 - `kind` is usually a plain node kind name, but ast-grep also supports a limited ESQuery-style syntax for some `kind` selectors.
+- Separate `kind` and `pattern` checks do not change how the pattern is parsed. If parse shape is the problem, switch to one pattern object with `context` and `selector`.
 - `regex` matches the whole node text. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
+- Regex syntax follows Rust `regex`, not PCRE. Do not assume look-around or backreferences are available, and usually pair `regex` with `kind` or `pattern` so the expensive text check only runs on the right node shapes.
 - `nthChild` accepts a number, an `An+B` string, or an object with `position`, `reverse`, and `ofRule`. Counting is 1-based and only considers named siblings.
+- `range` matches by source position with 0-based `line` and `column`; `start` is inclusive and `end` is exclusive.
 - Relational rules describe structure around the target node. Use `inside`, `has`, `follows`, and `precedes` when the match depends on ancestors, descendants, or neighboring nodes.
+- Read relational rules as: target node relates to surrounding node. The top-level rule still matches the target; the relational subrule matches the surrounding node that filters it.
+- Relational subrules can themselves use `pattern`, `kind`, composites, and captures. Those captures can still be referenced later in `fix`, which is a practical way to extract surrounding syntax while keeping the target node as the match.
 - Add relational `field` when the surrounding node matters by semantic role, not just by shape. `field` only applies to `inside` and `has`.
 - Add `stopBy` when ancestor or sibling traversal must continue past the nearest boundary instead of stopping early. The default is `neighbor`, `end` searches to the boundary, and a rule object stop is inclusive.
+- `inside` means the target is somewhere under a matching ancestor, `has` means the target node contains a matching descendant, `follows` means the target comes after a matching sibling or prior node, and `precedes` means it comes before one.
 - Composite rules combine checks for the same target node. Use `all` for explicit conjunction, `any` for alternatives, `not` for exclusions, and `matches` to delegate to a utility rule.
 - `all` and `any` still operate on one target node. They combine sub-rules, not multiple matched nodes.
+- `all` is the ordered composite. Use it when later checks depend on captures established by earlier `pattern` matches, because YAML rule-object field order is not guaranteed.
+- `any` is for alternatives, not for "collect all matching nodes". If one node cannot satisfy every branch at once, `all` is the wrong operator even if the surrounding structure feels plural.
+- Nested composites still evaluate one node at a time. A rule like `has: { all: [...] }` means "has one child satisfying every listed rule", not "has one child for each listed rule".
+- When you need "a node that has X child and has Y child", write `all: [ { has: ... }, { has: ... } ]` on the outer target instead of putting incompatible checks inside one nested `all`.
 - Utility rules keep repeated logic out of the main rule body. Use file-local `utils` for one config file and global utility-rule files when multiple rules in the project need the same building block.
+- Local utility rules live under the current file's `utils` map, are only visible in that one config file, inherit the file's language, and cannot define their own separate `constraints`.
+- Global utility rules live in separate files discovered through `utilDirs`. They must declare `id` and `language`, and can only use the utility-safe fields: `id`, `language`, `rule`, `constraints`, and local `utils`.
+- Local utility names must be unique inside one file. A local utility can shadow a global utility with the same name, so check the nearest file first when `matches` seems to resolve unexpectedly.
+- Utility rules can call other utility rules through `matches`, including recursive structural tricks like nested-parentheses matching. Avoid cyclic `matches` dependency graphs, because ast-grep does not allow recursive cycles there.
+- Self-reference through relational structure such as `inside` or `has` is different from cyclic `matches` reuse and is allowed when the AST traversal still makes progress.
 - Switch from a single `pattern` to a rule object when you need positional constraints, role-sensitive matching, reusable sub-rules, or several structural conditions on one node.
+- Rule-object fields are logically equivalent to an `all` across those fields, but not to an ordered `all`. Keep explicit `all` when capture order matters; use rule-object style when the checks are independent and flatter indentation helps readability.
 
 ## Config Cheat Sheet
 
 - Basic info keys define the rule itself. Use `id` for the unique rule name, `language` for the parser target, `url` for rule documentation, and `metadata` for custom project data that VT Code should preserve with the rule.
 - One YAML file can hold multiple rules when you separate documents with `---`.
 - Finding keys define what gets matched. `rule` is the core matcher, `constraints` narrows meta-variable captures, and `utils` holds reusable helper rules that you call through `matches`.
+- `utils` can be purely local to the current file or can supplement global utility-rule files loaded through `utilDirs`. Keep shared building blocks global only when multiple rule files genuinely need them.
 - `constraints` runs after `rule` matched, only targets single meta variables like `$ARG`, and is a poor fit inside `not`.
 - Patching keys define reusable fixes. Use `transform` to derive new meta-variables before replacement, `fix` for either a string replacement or a `template` object with `expandStart` / `expandEnd`, and `rewriters` when the transformation is too complex for one inline `fix`.
 - Linting keys define what scan results report. Use `severity`, `message`, `note`, and `labels` for diagnostics, then `files` and `ignores` to scope where the rule applies.
+- Severity levels are `error`, `warning`, `info`, `hint`, and `off`. `hint` is the default severity in ast-grep project scans.
+- `error` findings make raw `ast-grep scan` exit non-zero; VT Code normalizes that CLI behavior into structured findings on the public scan path instead of surfacing a tool error.
 - `severity: off` disables the rule during scanning. `note` supports Markdown but cannot interpolate meta variables.
+- Source suppression uses `ast-grep-ignore` comments.
+  - `ast-grep-ignore` suppresses all rules for the same line or following line
+  - `ast-grep-ignore: rule-id` suppresses one rule
+  - comma-separated rule ids suppress multiple specific rules
+  - next-line suppression only works when there is no preceding AST node on that same comment line
+- File-level suppression requires the suppression comment on the first line plus an empty second line.
+- `unused-suppression` is a built-in hint-style rule with autofix for stale ignore directives, but it only appears in full `scan` runs when ast-grep is not filtering or disabling rules through CLI narrowing flags.
 - `labels` keys must come from meta variables already defined by the rule or `constraints`.
 - `files` supports either plain globs or object entries. Use object syntax when you need options like `caseInsensitive` glob matching.
 - `ignores` runs before `files`. Both are relative to the `sgconfig.yml` directory, and the glob should not start with `./`.
@@ -231,13 +291,18 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 ## Transformation Objects
 
 - `transform` builds new strings from captured meta variables before `fix` runs.
+- Each `transform` entry introduces a new variable name without a leading `$`. Inside the transform object, `source` still points at an existing capture or prior transform result using the normal `$VAR` form.
+- Later transforms can consume variables created by earlier transforms, so transform order matters when you are stacking multiple string operations.
 - `replace` uses a Rust regex over one meta variable. `source` must be `$VAR` style, `replace` is the regex, `by` is the replacement text, and regex capture groups can be reused in `by`.
+- Regex capture groups are only available inside the `replace` field of the `replace` transform and can only be referenced from the `by` field of that same transform. Regular `regex` rules do not expose those capture groups.
 - `substring` slices a meta variable by character index with inclusive `startChar` and exclusive `endChar`. Negative indexes count from the end, and slicing is based on Unicode characters rather than raw bytes.
 - `substring` behaves like Python string slicing, so omit either bound when the slice should stay open-ended.
 - `convert` changes identifier-style casing through `toCase`. Common outputs are `lowerCase`, `upperCase`, `capitalize`, `camelCase`, `snakeCase`, `kebabCase`, and `pascalCase`.
 - Use `separatedBy` to control how `convert` splits words before rebuilding the target case. Supported separators include dash, dot, space, slash, underscore, and `CaseChange`.
 - `CaseChange` splits at transitions such as `astGrep`, `ASTGrep`, or `XMLHttpRequest`, which matters when converting mixed acronym identifiers.
+- Use `replace` transforms for conditional punctuation or whitespace when a multi-capture may be empty. The common pattern is deriving `MAYBE_COMMA` or similar from `$$$ARGS` so the extra separator only appears when matches exist.
 - String-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)` are valid shorthand in newer ast-grep versions, but keep examples explicit when debugging.
+- String-form transforms require ast-grep 0.38.3 or newer. Prefer object form when compatibility or debugging clarity matters.
 
 ## Rewriters
 
@@ -369,13 +434,21 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 ## Test Command Basics
 
 - `ast-grep test` validates rule tests from the ast-grep project config.
+- Rule test files are YAML with `id`, `valid`, and `invalid`. `valid` cases should produce no issue; `invalid` cases should produce at least one issue.
+- Ast-grep’s test output distinguishes four outcomes:
+  - `reported`: invalid code correctly reports
+  - `validated`: valid code correctly stays quiet
+  - `noisy`: valid code reported unexpectedly
+  - `missing`: invalid code was not reported
 - `--config <file>` points test execution at a specific ast-grep root config.
 - `--test-dir <dir>` narrows where test YAML files are discovered.
 - `--snapshot-dir <dir>` changes the snapshot directory name from the default `__snapshots__`.
 - `--filter <glob>` narrows which rule test cases run.
 - `--skip-snapshot-tests` checks test validity without snapshot-output assertions. VT Code exposes this one on the public `workflow="test"` path.
 - `--include-off` includes `severity: off` rules during test runs.
-- `--update-all` and `--interactive` are snapshot-maintenance flows and stay on the CLI skill path.
+- `--update-all` generates or refreshes snapshot baselines, usually under `__snapshots__/`.
+- `--interactive` is for selective snapshot updates after rule or test changes.
+- Snapshot tests cover output details such as spans, labels, or message rendering in addition to simple valid/invalid matching, so `--skip-snapshot-tests` is useful while a rule is still evolving.
 
 ## Other Commands
 
@@ -388,6 +461,10 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 - `--interactive` is for reviewing rewrite hunks one-by-one; ast-grep’s interactive controls are `y`, `n`, `e`, and `q`.
 - `--json=pretty|stream|compact` is for raw ast-grep JSON output when the user needs native ast-grep payloads or shell pipelines. `pretty` is the default if a style is not specified. Prefer VT Code’s normalized structural results when those are sufficient.
+- Raw ast-grep JSON match objects include fields such as `text`, `range`, `file`, `lines`, optional `replacement`, optional `replacementOffsets`, and optional `metaVariables`. Scan-mode rule matches add fields like `ruleId`, `severity`, `message`, and optional `note`.
+- ast-grep JSON positions are zero-based for line, column, and byte offsets. Keep that convention in mind when translating payloads into editor-facing or user-facing locations.
+- `--json=stream` emits one JSON object per line and is the better fit for large pipelines; `pretty` and `compact` emit one JSON array and are easier to inspect but less streaming-friendly.
+- `--json=<STYLE>` must use the equals-sign form. `--json stream` is parsed as plain `--json` plus an extra positional argument, not as `--json=stream`.
 - `--stdin` is for piping code into ast-grep. It conflicts with `--interactive`.
 - `ast-grep run --stdin` requires an explicit `--lang` because stdin has no file extension for language inference.
 - `ast-grep scan --stdin` only works with one single rule via `--rule` / `-r`.
@@ -397,6 +474,8 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `--format=github|sarif` is for CI/reporting pipelines, not VT Code’s normalized public scan result shape.
 - `--report-style=rich|medium|short` only changes ast-grep’s human-readable diagnostics.
 - `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run. These flags belong on the CLI skill path, not VT Code’s public structural surface.
+- `--inspect entity` is the direct CLI way to inspect each rule’s final enabled severity, including overrides and project-config effects.
+- `unused-suppression` can also have its severity overridden on the CLI, but that is still CLI-only behavior outside VT Code’s public structural surface.
 - `--inspect=summary|entity` emits file and rule discovery diagnostics to stderr without changing the actual match results.
 - `--threads <NUM>` controls approximate parallelism. `0` keeps ast-grep’s default heuristics.
 - `-C/--context` shows symmetric surrounding lines. `-A/--after` and `-B/--before` are asymmetric alternatives and conflict with `--context`.

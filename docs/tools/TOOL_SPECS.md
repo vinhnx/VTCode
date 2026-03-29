@@ -71,12 +71,16 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - `context_lines` maps to ast-grep `--context`; raw `--before` and `--after` are intentionally not exposed
   - ast-grep `run` exit code `1` is normalized to an empty `matches` array instead of surfacing as a VT Code error
   - Result shape: top-level `matches` array with `file`, `line_number`, `text`/`lines`, `language`, and compact `range` metadata, plus `backend: "ast-grep"`
+  - Raw ast-grep JSON contains fields such as `text`, `range`, `file`, `lines`, optional `replacement`, optional `replacementOffsets`, and optional `metaVariables`; VT Code consumes that internal payload but returns a normalized query result instead of exposing the native ast-grep object directly
+  - ast-grep JSON `line`, `column`, and byte offsets are zero-based; VT Code preserves the range semantics in its structured metadata even when also surfacing a convenience `line_number`
 - `workflow="scan"`:
   - Optional: `path`, `config_path`, `filter`, `globs`, `context_lines`, `max_results`
   - Internal mapping: read-only `ast-grep scan --config ... --json=stream --include-metadata --color=never`, plus optional `--filter`, repeated `--globs`, and `--context`
+  - `workflow="scan"` depends on project config. In raw ast-grep terms, `scan` requires an `sgconfig.yml`, while `run` can still search without one.
   - `context_lines` maps to ast-grep `--context`; raw `--before` and `--after` are intentionally not exposed
   - ast-grep `scan` exit code `1` when error-severity findings exist is normalized to structured `findings` instead of surfacing as a VT Code error
   - Result shape: top-level `findings` array with `file`, `line_number`, `text`/`lines`, `language`, `range`, `rule_id`, `severity`, `message`, `note`, optional `metadata`, plus `summary`, `truncated`, and `backend: "ast-grep"`
+  - Raw ast-grep scan JSON extends the base match object with rule metadata such as `ruleId`, `severity`, `message`, and optional `note`; VT Code maps those into its normalized finding fields rather than returning the raw scan object verbatim
 - `workflow="test"`:
   - Optional: `config_path`, `filter`, `skip_snapshot_tests`
   - Result shape: `passed`, `stdout`, `stderr`, `summary`, and `backend: "ast-grep"`
@@ -85,6 +89,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - `lang`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"`
   - `lang` is required when `debug_query` is set
   - `skip_snapshot_tests` is only valid for `workflow="test"`
+  - Default `config_path` is workspace `sgconfig.yml`; raw ast-grep also supports upward discovery of `sgconfig.yml`, but VT Code’s public structural surface pins scan/test to an explicit config path for determinism
   - Requires a local `sg` / `ast-grep` binary; if missing, VT Code returns an actionable error, points to the bundled `ast-grep` skill, and recommends `vtcode dependencies install search-tools` or `vtcode dependencies install ast-grep`
   - VT Code-managed installs live in `~/.vtcode/bin`
   - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
