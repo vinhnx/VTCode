@@ -118,6 +118,11 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `structural` for syntax-sensitive search, read-only project scans, and read-only ast-grep rule tests.
 - Prefer `workflow="scan"` for public `sg scan` equivalents and `workflow="test"` for public `sg test` equivalents.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes rule authoring, `sg new`, rewrite/apply work, interactive ast-grep work, or `sgconfig.yml` authoring/debugging.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs project scaffolding via `ast-grep new` or `ast-grep new rule`, or when it needs guidance around `rules/`, `rule-tests/`, `utils/`, and `sgconfig.yml`.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `scan --rule`, `scan --inline-rules`, relational/composite rule objects, `matches` utility rules, or rule-order debugging.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `--rewrite`, YAML `fix`, `template`, `expandStart`, `expandEnd`, `--interactive`, `--update-all`, or indentation-sensitive rewrite behavior.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs raw ast-grep CLI behavior such as `--stdin`, `--json`, `scan -r`, `lsp`, shell completions, GitHub Action setup, or direct `--color never` control.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task outgrows rule syntax and needs ast-grep’s JavaScript/Python/Rust API, `ast_grep_core`, computed replacements, conditional AST edits, or node-order/count logic.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the target snippet is not valid standalone code and needs pattern-object `context` plus `selector`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the requested language is not built into ast-grep and needs workspace `sgconfig.yml` `customLanguages` setup or `expandoChar`.
