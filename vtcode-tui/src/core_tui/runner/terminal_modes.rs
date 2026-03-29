@@ -90,7 +90,10 @@ pub(super) fn enable_terminal_modes(
     // Push keyboard enhancement flags
     if !keyboard_flags.is_empty() {
         match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
-            Ok(_) => state.keyboard_enhancements_pushed = true,
+            Ok(_) => {
+                state.keyboard_enhancements_pushed = true;
+                crate::ui::tui::panic_hook::mark_keyboard_enhancements_pushed(true);
+            }
             Err(error) => {
                 tracing::debug!(%error, "failed to push keyboard enhancement flags");
             }
@@ -109,11 +112,12 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     // Restore in reverse order of enabling
 
     // 1. Pop keyboard enhancement flags (if they were pushed)
-    if state.keyboard_enhancements_pushed
-        && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
-    {
-        tracing::debug!(%error, "failed to pop keyboard enhancement flags");
-        errors.push(format!("keyboard enhancements: {}", error));
+    if state.keyboard_enhancements_pushed {
+        crate::ui::tui::panic_hook::mark_keyboard_enhancements_pushed(false);
+        if let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags) {
+            tracing::debug!(%error, "failed to pop keyboard enhancement flags");
+            errors.push(format!("keyboard enhancements: {}", error));
+        }
     }
 
     // 2. Disable focus change events (if they were enabled)

@@ -72,4 +72,6 @@ pub(crate) fn spawn_signal_handler(
 fn emergency_terminal_cleanup() {
     set_global_terminal_focused(false);
     let _ = vtcode_tui::panic_hook::restore_tui();
+    vtcode_commons::trace_flush::flush_trace_log();
+    std::process::exit(130);
 }

@@ -19,6 +19,8 @@ use ratatui::crossterm::{
 };
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
+static KEYBOARD_ENHANCEMENTS_PUSHED: AtomicBool = AtomicBool::new(false);
+static RESTORE_DONE: AtomicBool = AtomicBool::new(false);
 static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static COLOR_EYRE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static SHOW_DIAGNOSTICS: AtomicBool = AtomicBool::new(false);
@@ -217,11 +219,17 @@ pub fn init_panic_hook() {
 /// Mark that TUI has been initialized so panic hook knows to restore terminal
 pub fn mark_tui_initialized() {
     TUI_INITIALIZED.store(true, Ordering::SeqCst);
+    RESTORE_DONE.store(false, Ordering::SeqCst);
 }
 
 /// Mark that TUI has been deinitialized to prevent further restoration attempts
 pub fn mark_tui_deinitialized() {
     TUI_INITIALIZED.store(false, Ordering::SeqCst);
+}
+
+/// Mark that keyboard enhancement flags were pushed so `restore_tui` knows to pop them.
+pub fn mark_keyboard_enhancements_pushed(pushed: bool) {
+    KEYBOARD_ENHANCEMENTS_PUSHED.store(pushed, Ordering::SeqCst);
 }
 
 /// Restore terminal to a usable state after a panic
@@ -233,6 +241,12 @@ pub fn mark_tui_deinitialized() {
 ///
 /// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
 pub fn restore_tui() -> io::Result<()> {
+    // Ensure restoration only runs once to prevent interleaved cleanup from
+    // multiple call-sites (panic hook, signal handler, normal shutdown).
+    if RESTORE_DONE.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+
     mark_tui_deinitialized();
     let mut first_error: Option<io::Error> = None;
 
@@ -266,7 +280,13 @@ pub fn restore_tui() -> io::Result<()> {
     if let Err(error) = execute!(stderr, DisableMouseCapture) {
         first_error.get_or_insert(error);
     }
-    if let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags) {
+
+    // Only pop keyboard enhancement flags if they were actually pushed.
+    // Sending PopKeyboardEnhancementFlags unconditionally emits an escape
+    // sequence that non-kitty terminals may echo as visible garbage.
+    if KEYBOARD_ENHANCEMENTS_PUSHED.swap(false, Ordering::SeqCst)
+        && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
+    {
         first_error.get_or_insert(error);
     }
 

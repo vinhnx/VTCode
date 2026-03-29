@@ -191,6 +191,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: What Makes VT Code Special, Enhanced Terminal Interface, Configuration, Usage Examples, Understanding the Agents
   - **User Questions**: "What can you tell me about Getting Started with VT Code?", "How does What Makes VT Code Special work?", "How does Enhanced Terminal Interface work?"
 
+- **File**: `docs/user-guide/scheduled-tasks.md`
+  - **Content**: Scheduled Tasks
+  - **Topics**: Session-scoped scheduling, Durable scheduling, Config and disable flags, Security model
+  - **User Questions**: "What can you tell me about Scheduled Tasks?", "How does Session-scoped scheduling work?", "How does Durable scheduling work?"
+
 - **File**: `docs/SECURITY.md`
   - **Content**: Security Policy
   - **Topics**: Reporting a Vulnerability, Security Best Practices for Users, Supported Versions, Security Features, Security Architecture
@@ -877,13 +882,13 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: grep_file (ripgrep-like), File operations, Session resume and forks, Quick Actions in Chat Input, stats (session metrics)
+  - **Topics**: grep_file (ripgrep-like), File operations, Session resume and forks, Quick Actions in Chat Input, Scheduled tasks
   - **User Questions**: "What can you tell me about Command Reference?", "How does grep_file (ripgrep-like) work?", "How does File operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference
-  - **Topics**: Keyboard Shortcuts, Vim Mode, Prompt Suggestions, Tasks, and Jobs, Active Run Steering, PR Review Status
-  - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Keyboard Shortcuts work?", "How does Vim Mode work?"
+  - **Topics**: Keyboard Shortcuts, Scheduled Prompts And Reminders, Vim Mode, Prompt Suggestions, Tasks, and Jobs, Active Run Steering
+  - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Keyboard Shortcuts work?", "How does Scheduled Prompts And Reminders work?"
 
 ## Enhanced Trigger Questions
 
