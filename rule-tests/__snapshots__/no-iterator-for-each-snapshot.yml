@@ -1,0 +1,31 @@
+id: no-iterator-for-each
+snapshots:
+  ? |
+    fn render(items: &[String]) {
+        items.iter().for_each(|item| println!("{item}"));
+    }
+  : labels:
+    - source: items.iter().for_each(|item| println!("{item}"))
+      style: primary
+      start: 34
+      end: 82
+  ? |
+    fn validate(items: &[String]) -> Result<(), String> {
+        items.iter().try_for_each(|item| -> Result<(), String> {
+            if item.is_empty() {
+                return Err("empty".to_string());
+            }
+            Ok(())
+        })
+    }
+  : labels:
+    - source: |-
+        items.iter().try_for_each(|item| -> Result<(), String> {
+                if item.is_empty() {
+                    return Err("empty".to_string());
+                }
+                Ok(())
+            })
+      style: primary
+      start: 58
+      end: 220

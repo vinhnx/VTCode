@@ -1,0 +1,26 @@
+id: no-iterator-for-each
+valid:
+  - |
+    fn render(items: &[String]) {
+        for item in items {
+            println!("{item}");
+        }
+    }
+  - |
+    fn sum(items: &[u32]) -> u32 {
+        items.iter().map(|value| value + 1).sum()
+    }
+invalid:
+  - |
+    fn render(items: &[String]) {
+        items.iter().for_each(|item| println!("{item}"));
+    }
+  - |
+    fn validate(items: &[String]) -> Result<(), String> {
+        items.iter().try_for_each(|item| -> Result<(), String> {
+            if item.is_empty() {
+                return Err("empty".to_string());
+            }
+            Ok(())
+        })
+    }

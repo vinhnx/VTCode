@@ -1,0 +1,21 @@
+id: no-iterator-for-each
+language: Rust
+severity: error
+message: Prefer `for` loops over `.for_each` and `.try_for_each`
+note: |
+  VT Code keeps side-effectful iteration explicit. Use a `for` loop so
+  control flow stays obvious and aligned with the workspace Rust style guide.
+rule:
+  any:
+    - pattern: $ITER.for_each($CALLBACK)
+    - pattern: $ITER.try_for_each($CALLBACK)
+files:
+  - src/**/*.rs
+  - tests/**/*.rs
+  - benches/**/*.rs
+  - fuzz/**/*.rs
+  - vtcode-*/src/**/*.rs
+  - vtcode-*/tests/**/*.rs
+  - vtcode-*/benches/**/*.rs
+  - build.rs
+  - vtcode-*/build.rs

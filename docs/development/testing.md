@@ -35,6 +35,23 @@ cargo test tools::
 cargo test --release
 ```
 
+### Structural Rule Checks
+
+VT Code now ships an `ast-grep` project scaffold at `sgconfig.yml`, `rules/`, and `rule-tests/`.
+
+```bash
+# Run ast-grep rule tests
+ast-grep test --config sgconfig.yml
+
+# Scan the repository with the configured rules
+ast-grep scan --config sgconfig.yml
+
+# Run the same repo scan through the standard quality script
+./scripts/check.sh ast-grep
+```
+
+If `ast-grep` is not installed yet, run `vtcode dependencies install ast-grep`.
+
 ### Integration Tests
 
 ```bash

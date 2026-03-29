@@ -31,6 +31,20 @@ check_clippy() {
     fi
 }
 
+find_ast_grep() {
+    if command -v ast-grep > /dev/null 2>&1; then
+        command -v ast-grep
+        return 0
+    fi
+
+    if command -v sg > /dev/null 2>&1; then
+        command -v sg
+        return 0
+    fi
+
+    return 1
+}
+
 # Function to run rustfmt check
 run_rustfmt() {
     print_status "Running rustfmt check..."
@@ -113,6 +127,36 @@ run_structured_logging_lint() {
     fi
 }
 
+run_ast_grep_scan() {
+    local require_binary="${1:-optional}"
+    local ast_grep_bin
+
+    ast_grep_bin="$(find_ast_grep)" || {
+        if [ "$require_binary" = "required" ]; then
+            print_error "ast-grep is not available. Install it with 'vtcode dependencies install ast-grep'."
+            return 1
+        fi
+
+        print_warning "ast-grep is not available. Skipping repository scan. Install it with 'vtcode dependencies install ast-grep'."
+        return 0
+    }
+
+    print_status "Running ast-grep rule tests..."
+    if ! "$ast_grep_bin" test --config sgconfig.yml; then
+        print_error "ast-grep rule tests failed."
+        return 1
+    fi
+
+    print_status "Running ast-grep repository scan..."
+    if ! "$ast_grep_bin" scan --config sgconfig.yml; then
+        print_error "ast-grep scan found issues."
+        return 1
+    fi
+
+    print_success "ast-grep rules passed!"
+    return 0
+}
+
 # Run Zen governance checks (unwrap/expect enforced, other checks warning-only)
 run_zen_governance() {
     print_status "Running Zen governance checks (unwrap/expect enforce mode)..."
@@ -165,6 +209,7 @@ main() {
     run_rustfmt || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
+    run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_build || ((failed_checks++))
     run_tests || ((failed_checks++))
@@ -219,6 +264,7 @@ case "${1:-}" in
         echo "Commands:"
         echo "  fmt     - Check code formatting with rustfmt"
         echo "  clippy  - Run clippy lints"
+        echo "  ast-grep - Run repo ast-grep rule tests and scan"
         echo "  test    - Run tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
@@ -230,6 +276,9 @@ case "${1:-}" in
         ;;
     "zen")
         run_zen_governance
+        ;;
+    "ast-grep"|"astgrep")
+        run_ast_grep_scan required
         ;;
     "miri")
         run_miri
