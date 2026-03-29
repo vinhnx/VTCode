@@ -23,9 +23,32 @@ const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
     "rewrite",
     "interactive",
     "update_all",
+    "stdin",
+    "json",
+    "color",
+    "heading",
+    "threads",
+    "inspect",
+    "follow",
+    "no_ignore",
+    "before",
+    "after",
+    "include_metadata",
+    "test_dir",
+    "snapshot_dir",
+    "include_off",
+    "format",
+    "report_style",
+    "error",
+    "warning",
+    "info",
+    "hint",
+    "off",
     "rule",
     "inline_rules",
     "config",
+    "yes",
+    "base_dir",
 ];
 static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
@@ -484,7 +507,8 @@ async fn execute_structural_query(
         .await
         .context("failed to run ast-grep structural search")?;
 
-    if !output.status.success() {
+    let no_matches = output.status.code() == Some(1);
+    if !output.status.success() && !no_matches {
         bail!(
             "{}",
             format_ast_grep_failure(
@@ -494,7 +518,11 @@ async fn execute_structural_query(
         );
     }
 
-    let matches = parse_compact_matches(&output.stdout)?;
+    let matches = if no_matches && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        Vec::new()
+    } else {
+        parse_compact_matches(&output.stdout)?
+    };
     Ok(build_query_result(request, &search_path.display_path, matches))
 }
 
@@ -538,7 +566,8 @@ async fn execute_structural_scan(
         .await
         .context("failed to run ast-grep structural scan")?;
 
-    if !output.status.success() {
+    let findings_with_error_exit = output.status.code() == Some(1);
+    if !output.status.success() && !findings_with_error_exit {
         bail!(
             "{}",
             format_ast_grep_failure(
@@ -548,7 +577,12 @@ async fn execute_structural_scan(
         );
     }
 
-    let findings = parse_stream_findings(&output.stdout)?;
+    let findings =
+        if findings_with_error_exit && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            Vec::new()
+        } else {
+            parse_stream_findings(&output.stdout)?
+        };
     Ok(build_scan_result(
         request,
         &search_path.display_path,
@@ -666,7 +700,7 @@ fn reject_forbidden_args(args: &Value) -> Result<()> {
     };
 
     for key in STRUCTURAL_FORBIDDEN_KEYS {
-        if object.get(*key).is_some() {
+        if has_argument_key(object, key) {
             bail!(
                 "action='structural' is read-only; remove `{}`. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface cannot express the needed CLI flow.",
                 key
@@ -675,6 +709,15 @@ fn reject_forbidden_args(args: &Value) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn has_argument_key(object: &Map<String, Value>, key: &str) -> bool {
+    object.get(key).is_some()
+        || key
+            .contains('_')
+            .then(|| key.replace('_', "-"))
+            .as_ref()
+            .is_some_and(|hyphenated| object.get(hyphenated).is_some())
 }
 
 fn parse_compact_matches(stdout: &[u8]) -> Result<Vec<AstGrepMatch>> {
@@ -1334,6 +1377,90 @@ mod tests {
     }
 
     #[test]
+    fn structural_request_rejects_raw_run_only_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "stdin": true
+        }))
+        .expect_err("raw run-only flags should be rejected");
+
+        assert!(err.to_string().contains("remove `stdin`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_hyphenated_raw_run_only_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "no-ignore": "hidden"
+        }))
+        .expect_err("hyphenated raw run-only flags should be rejected");
+
+        assert!(err.to_string().contains("remove `no_ignore`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_scan_output_format_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "scan",
+            "format": "sarif"
+        }))
+        .expect_err("scan-only output flags should be rejected");
+
+        assert!(err.to_string().contains("remove `format`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_scan_severity_override_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "scan",
+            "error": true
+        }))
+        .expect_err("scan severity overrides should be rejected");
+
+        assert!(err.to_string().contains("remove `error`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_test_only_snapshot_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "test",
+            "snapshot_dir": "__snapshots__"
+        }))
+        .expect_err("test-only snapshot flags should be rejected");
+
+        assert!(err.to_string().contains("remove `snapshot_dir`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_test_only_include_off_flag() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "workflow": "test",
+            "include_off": true
+        }))
+        .expect_err("test include-off flag should be rejected");
+
+        assert!(err.to_string().contains("remove `include_off`"));
+    }
+
+    #[test]
+    fn structural_request_rejects_new_command_flags() {
+        let err = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "base_dir": "."
+        }))
+        .expect_err("new-command flags should be rejected");
+
+        assert!(err.to_string().contains("remove `base_dir`"));
+    }
+
+    #[test]
     fn structural_request_rejects_query_only_fields_for_scan() {
         let err = StructuralSearchRequest::from_args(&json!({
             "action": "structural",
@@ -1614,6 +1741,30 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn structural_search_treats_exit_code_one_as_no_matches() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let script = "#!/bin/sh\nprintf '[]'\nexit 1\n";
+        let (_script_dir, script_path) = write_fake_sg(script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "fn $NAME() {}",
+                "lang": "rust",
+                "path": "."
+            }),
+        )
+        .await
+        .expect("no-match exit should be normalized");
+
+        assert_eq!(result["matches"], json!([]));
+        assert_eq!(result["truncated"], false);
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn structural_search_passes_selector_and_strictness_flags() {
         let temp = TempDir::new().expect("workspace tempdir");
         let args_path = temp.path().join("sg_args.txt");
@@ -1752,7 +1903,7 @@ mod tests {
     async fn structural_search_failure_surfaces_faq_guidance() {
         let temp = TempDir::new().expect("workspace tempdir");
         let (_script_dir, script_path) =
-            write_fake_sg("#!/bin/sh\nprintf 'parse error near pattern' >&2\nexit 1\n");
+            write_fake_sg("#!/bin/sh\nprintf 'parse error near pattern' >&2\nexit 2\n");
 
         let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
         let err = execute_structural_search(
@@ -1779,7 +1930,7 @@ mod tests {
     async fn structural_search_failure_surfaces_custom_language_guidance() {
         let temp = TempDir::new().expect("workspace tempdir");
         let (_script_dir, script_path) =
-            write_fake_sg("#!/bin/sh\nprintf 'unsupported language: mojo' >&2\nexit 1\n");
+            write_fake_sg("#!/bin/sh\nprintf 'unsupported language: mojo' >&2\nexit 2\n");
 
         let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
         let err = execute_structural_search(
@@ -1874,6 +2025,38 @@ mod tests {
         assert!(args.lines().any(|line| line == "--context"));
         assert!(args.lines().any(|line| line == "2"));
         assert!(args.lines().any(|line| line == "src"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_scan_treats_exit_code_one_as_findings() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp.path().join("src")).expect("create src");
+        fs::write(temp.path().join("sgconfig.yml"), "ruleDirs: []\n").expect("write config");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\n' '{}' >&1\nexit 1\n",
+            r#"{"text":"danger();","range":{"start":{"line":3,"column":2},"end":{"line":3,"column":10}},"file":"src/lib.rs","lines":"3: danger();","language":"Rust","ruleId":"deny-danger","severity":"error","message":"Do not call danger.","note":null,"metadata":{"docs":"https://example.com/rule"}}"#,
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "workflow": "scan",
+                "path": "src",
+                "config_path": "sgconfig.yml"
+            }),
+        )
+        .await
+        .expect("error-severity findings should be normalized");
+
+        assert_eq!(result["backend"], "ast-grep");
+        assert_eq!(result["workflow"], "scan");
+        assert_eq!(result["findings"][0]["rule_id"], "deny-danger");
+        assert_eq!(result["findings"][0]["severity"], "error");
+        assert_eq!(result["summary"]["total_findings"], 1);
     }
 
     #[tokio::test]

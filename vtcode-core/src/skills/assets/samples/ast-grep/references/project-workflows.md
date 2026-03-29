@@ -2,7 +2,7 @@
 
 Use the public structural tool first for read-only project checks:
 
-- `workflow="scan"` maps to `sg scan <path> --config <config_path>`
+- `workflow="scan"` maps to `sg scan <path> --config <config_path> --json=stream --include-metadata --color=never`
 - `workflow="test"` maps to `sg test --config <config_path>`
 - Default config path is workspace `sgconfig.yml`
 - `filter` narrows rules in `scan` and test cases in `test`
@@ -23,11 +23,16 @@ Use the public structural tool first for read-only project checks:
 
 ## Command Overview
 
+- `ast-grep` defaults to `run`, so `ast-grep -p 'foo()'` and `ast-grep run -p 'foo()'` are equivalent.
 - `ast-grep run` handles ad-hoc search, `--debug-query`, and one-off rewrite flows.
+- `run` defaults to path `.` and can accept multiple search paths in one invocation.
 - `ast-grep scan` handles project scans and isolated rule runs.
+- `scan` defaults to path `.` and can accept multiple search paths in one invocation.
 - `ast-grep new` bootstraps projects and generates rules.
 - `ast-grep test` runs rule tests.
 - `ast-grep lsp` starts the language server for editor integration.
+- `ast-grep completions` generates shell completion scripts.
+- `ast-grep help` and `ast-grep --help` are the CLI discovery entry points when the right subcommand is unclear.
 
 ## Built-In Languages
 
@@ -376,14 +381,37 @@ Use the public structural tool first for read-only project checks:
 ## CLI Modes
 
 - `--interactive` reviews rewrite results one-by-one. Interactive controls are `y` accept, `n` skip, `e` open in editor, and `q` quit.
-- `--json` emits raw ast-grep JSON output. Use it when a shell pipeline needs native ast-grep data instead of VT Code’s normalized result objects.
+- `--json=pretty|stream|compact` emits raw ast-grep JSON output. `pretty` is the default when a style is not specified. Use it when a shell pipeline needs native ast-grep data instead of VT Code’s normalized result objects.
 - `--debug-query` is useful for isolated query iteration. In VT Code, prefer the public structural `debug_query` field before dropping to raw CLI.
+- `--config <file>` runs project-config scan from that ast-grep root.
+- `--rule <file>` runs one YAML rule file without project setup and conflicts with `--config`.
+- `--inline-rules '...'` runs one or more inline YAML rules without writing a file and conflicts with `--rule`.
+- `--filter <regex>` narrows project-config scan to matching rule ids and conflicts with `--rule`.
+- `--include-metadata` only affects JSON output and is required when downstream tooling needs rule `metadata`.
+- `ast-grep test --config <file>` runs tests from that ast-grep root config.
+- `--test-dir <dir>` narrows test YAML discovery.
+- `--snapshot-dir <dir>` changes the snapshot directory name from the default `__snapshots__`.
+- `--filter <glob>` on `ast-grep test` narrows which test cases run.
+- `--skip-snapshot-tests` is the fast validity-only mode and is the part VT Code exposes publicly on `workflow="test"`.
+- `--include-off`, `--update-all`, and interactive snapshot review stay on the CLI path.
 - `--stdin` lets ast-grep parse piped code, but:
   - it conflicts with `--interactive`
   - `run --stdin` requires `--lang`
   - `scan --stdin` requires exactly one rule via `--rule` / `-r`
   - stdin mode needs both `--stdin` and a non-TTY execution context
+- `--globs` includes or excludes paths and overrides ignore-file behavior. Use `!pattern` to exclude, and expect the last matching glob to win.
+- `--no-ignore` controls whether ast-grep honors `hidden`, `dot`, `exclude`, `global`, `parent`, or `vcs` ignore sources.
+- `--follow` traverses symlinks and surfaces loop or broken-link errors directly.
 - `--color never` is the direct CLI switch when raw ast-grep output must be plain and non-ANSI.
+- `--format=github|sarif` is for CI/reporting integrations rather than VT Code’s normalized scan result objects.
+- `--report-style=rich|medium|short` only changes ast-grep’s human-readable diagnostics.
+- `--heading=auto|always|never` only changes human-readable output layout.
+- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run.
+- `--inspect=summary|entity` prints discovery diagnostics to stderr without changing result data.
+- `--threads <NUM>` sets approximate parallelism. `0` keeps ast-grep’s default heuristics.
+- `-C/--context` shows symmetric surrounding lines. `-A/--after` and `-B/--before` are asymmetric alternatives and conflict with `--context`.
+- `ast-grep run` exits `0` when at least one match is found and `1` when no matches are found. VT Code’s public structural query path normalizes that no-match case to an empty `matches` list.
+- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match. VT Code’s public structural scan path normalizes that result to structured `findings`.
 
 ## Tooling Around ast-grep
 
@@ -421,8 +449,12 @@ Use the public structural tool first for read-only project checks:
 Switch to direct CLI work through `unified_exec` when the task needs:
 
 - `ast-grep --help`
+- `ast-grep help`
 - `ast-grep new`
+- `ast-grep new project`
 - `ast-grep new rule`
+- `ast-grep new test`
+- `ast-grep new util`
 - `ast-grep run --debug-query`
 - `ast-grep run --json`
 - `ast-grep run --stdin --lang <lang>`
@@ -430,6 +462,11 @@ Switch to direct CLI work through `unified_exec` when the task needs:
 - `ast-grep scan -r <rule.yml>`
 - `ast-grep scan --inline-rules '...' <path>`
 - `ast-grep scan --stdin --rule <rule.yml>`
+- `ast-grep test --test-dir <dir>`
+- `ast-grep test --snapshot-dir <dir>`
+- `ast-grep test --include-off`
+- `ast-grep test --update-all`
+- `ast-grep test --interactive`
 - `ast-grep run --pattern <pattern> --rewrite <rewrite> [--interactive]`
 - `ast-grep run --pattern <pattern> --rewrite <rewrite> --update-all`
 - YAML `fix`, `template`, `expandStart`, or `expandEnd`

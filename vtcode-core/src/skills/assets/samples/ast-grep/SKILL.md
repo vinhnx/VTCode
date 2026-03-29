@@ -244,14 +244,59 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - In `FixConfig`, `template` is the replacement text and `expandStart` / `expandEnd` widen the rewritten range to consume commas, brackets, or other surrounding trivia outside the target node.
 - Keep advanced `transform` and `rewriters` in the skill-driven CLI workflow.
 
+## Run Command Basics
+
+- `ast-grep -p 'foo()'` and `ast-grep run -p 'foo()'` are equivalent. `run` is the default subcommand.
+- `ast-grep run` defaults to searching `.` when no path is provided and can search multiple paths in one invocation.
+- `--globs` includes or excludes paths and overrides ignore-file behavior. Prefix a glob with `!` to exclude, and let later globs win when multiple patterns match.
+- `--no-ignore` changes which ignore sources ast-grep respects. The supported categories are `hidden`, `dot`, `exclude`, `global`, `parent`, and `vcs`.
+- `--follow` makes ast-grep traverse symlinks. Expect loop or broken-link errors to surface directly from the CLI when the filesystem is invalid.
+
+## Scan Command Basics
+
+- `ast-grep scan` defaults to searching `.` when no path is provided and can search multiple paths in one invocation.
+- `--config <file>` points scan at a project `sgconfig.yml` root. It is the default scan mode in VT Code’s public `workflow="scan"` surface.
+- `--rule <file>` runs one YAML rule file without project setup and conflicts with `--config`.
+- `--inline-rules '...'` runs one or more inline YAML rules without creating a file on disk. Separate multiple rules with YAML `---`. It conflicts with `--rule`.
+- `--filter <regex>` narrows project-config scan to matching rule ids and conflicts with `--rule`.
+- `--include-metadata` only affects JSON output and is already enabled on VT Code’s public scan path so normalized findings can carry rule metadata.
+
+## Test Command Basics
+
+- `ast-grep test` validates rule tests from the ast-grep project config.
+- `--config <file>` points test execution at a specific ast-grep root config.
+- `--test-dir <dir>` narrows where test YAML files are discovered.
+- `--snapshot-dir <dir>` changes the snapshot directory name from the default `__snapshots__`.
+- `--filter <glob>` narrows which rule test cases run.
+- `--skip-snapshot-tests` checks test validity without snapshot-output assertions. VT Code exposes this one on the public `workflow="test"` path.
+- `--include-off` includes `severity: off` rules during test runs.
+- `--update-all` and `--interactive` are snapshot-maintenance flows and stay on the CLI skill path.
+
+## Other Commands
+
+- `ast-grep new [project|rule|test|util]` scaffolds a project or individual items. Common flags are `--lang`, `--yes`, `--base-dir`, and an optional item `NAME`.
+- `ast-grep lsp` starts the language server and accepts an optional `--config <file>`.
+- `ast-grep completions [shell]` generates shell completion scripts for `bash`, `elvish`, `fish`, `powershell`, or `zsh`.
+- `ast-grep help` and `ast-grep --help` are the authoritative command-discovery entry points when the exact subcommand or flags are in doubt.
+
 ## CLI Modes
 
 - `--interactive` is for reviewing rewrite hunks one-by-one; ast-grep’s interactive controls are `y`, `n`, `e`, and `q`.
-- `--json` is for raw ast-grep JSON output when the user needs native ast-grep payloads or shell pipelines. Prefer VT Code’s normalized structural results when those are sufficient.
+- `--json=pretty|stream|compact` is for raw ast-grep JSON output when the user needs native ast-grep payloads or shell pipelines. `pretty` is the default if a style is not specified. Prefer VT Code’s normalized structural results when those are sufficient.
 - `--stdin` is for piping code into ast-grep. It conflicts with `--interactive`.
 - `ast-grep run --stdin` requires an explicit `--lang` because stdin has no file extension for language inference.
 - `ast-grep scan --stdin` only works with one single rule via `--rule` / `-r`.
 - `--stdin` only activates when the flag is present and ast-grep is not running in a TTY.
+- `--heading=auto|always|never` only changes the human-readable text layout. It does not matter when VT Code is already consuming structured JSON.
+- `--color=auto|always|ansi|never` only controls terminal coloring. VT Code’s public structural query forces plain output with `--color=never`.
+- `--format=github|sarif` is for CI/reporting pipelines, not VT Code’s normalized public scan result shape.
+- `--report-style=rich|medium|short` only changes ast-grep’s human-readable diagnostics.
+- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run. These flags belong on the CLI skill path, not VT Code’s public structural surface.
+- `--inspect=summary|entity` emits file and rule discovery diagnostics to stderr without changing the actual match results.
+- `--threads <NUM>` controls approximate parallelism. `0` keeps ast-grep’s default heuristics.
+- `-C/--context` shows symmetric surrounding lines. `-A/--after` and `-B/--before` are asymmetric alternatives and conflict with `--context`.
+- `ast-grep run` exits `0` when at least one match is found and `1` when no matches are found. VT Code normalizes that no-match case to an empty `matches` array on the public structural query path.
+- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match. VT Code normalizes that error-finding case to structured `findings` instead of surfacing a tool error.
 
 ## API Escalation
 
@@ -271,15 +316,26 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `ast-grep --help`
 - `ast-grep new`
 - `ast-grep new rule`
-- `ast-grep scan -r <rule.yml>`
-- `ast-grep scan --rule <file>`
-- `ast-grep scan --inline-rules '...'`
+- `ast-grep scan -r <rule.yml> <path>`
+- `ast-grep scan --rule <file> <path>`
+- `ast-grep scan --inline-rules '...' <path>`
 - `ast-grep run --pattern <pattern> --rewrite <rewrite>`
 - `ast-grep run --json`
 - `ast-grep run --stdin --lang <lang>`
+- `ast-grep run --no-ignore hidden --follow`
+- `ast-grep run --inspect summary --threads 4`
+- `ast-grep run --context 2`
+- `ast-grep scan --format sarif --report-style short`
+- `ast-grep scan --error=rule-id`
 - `ast-grep scan --stdin --rule <rule.yml>`
+- `ast-grep test --config sgconfig.yml --filter 'rust/*'`
+- `ast-grep test --test-dir rule-tests --snapshot-dir __snapshots__`
+- `ast-grep test --include-off --update-all`
 - `ast-grep lsp`
 - `ast-grep completions`
+- `ast-grep new project --base-dir . --yes`
+- `ast-grep new rule my-rule --lang rust`
+- `ast-grep help`
 - ast-grep GitHub Action setup
 - ast-grep programmatic API experiments and library examples
 - System package-manager install commands when the user explicitly wants them

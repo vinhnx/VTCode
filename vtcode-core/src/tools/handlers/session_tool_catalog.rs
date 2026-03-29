@@ -909,18 +909,18 @@ pub(crate) fn unified_search_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
-                "description": "Action to perform. Default to `structural` for code or syntax-aware search, including ast-grep query, project scan, and project test workflows; use `grep` for raw text and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
+                "description": "Action to perform. Default to `structural` for code or syntax-aware search, including read-only ast-grep `run` query, project scan, and project test workflows; use `grep` for raw text and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
             },
             "workflow": {
                 "type": "string",
                 "enum": ["query", "scan", "test"],
-                "description": "Structural workflow. `query` is the default parseable-pattern search, `scan` runs project rules from config, and `test` runs ast-grep rule tests.",
+                "description": "Structural workflow. `query` is the default parseable-pattern search and maps to read-only ast-grep `run`; `scan` maps to read-only ast-grep `scan` from config, and `test` runs ast-grep rule tests.",
                 "default": "query"
             },
             "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language using ast-grep pattern syntax, not a raw code fragment; `$VAR` matches one named node, `$$$ARGS` matches zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture. If a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
-            "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`.", "default": "."},
+            "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`. Public structural calls take one root per request even though raw ast-grep `run` can accept multiple paths.", "default": "."},
             "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
-            "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`."},
+            "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`. On `scan`, this maps to `--filter` over rule ids from config."},
             "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"`. Set it whenever the code language is known; required for debug_query."},
             "selector": {"type": "string", "description": "Ast-grep selector for structural `workflow=\"query\"` when the real match is a subnode inside the parseable pattern."},
             "strictness": {
@@ -934,7 +934,7 @@ pub(crate) fn unified_search_parameters() -> Value {
                 "description": "Print the structural query AST instead of matches for `workflow=\"query\"`. Requires lang."
             },
             "globs": {
-                "description": "Optional include/exclude globs for structural `workflow=\"query\"` or `workflow=\"scan\"`.",
+                "description": "Optional include/exclude globs for structural `workflow=\"query\"` or `workflow=\"scan\"`. Maps to repeated ast-grep `--globs` flags.",
                 "anyOf": [
                     {"type": "string"},
                     {"type": "array", "items": {"type": "string"}}
@@ -958,7 +958,7 @@ pub(crate) fn unified_search_parameters() -> Value {
             },
             "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
             "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
-            "context_lines": {"type": "integer", "description": "Context lines for `grep` or structural `workflow=\"query\"|\"scan\"` results.", "default": 0},
+            "context_lines": {"type": "integer", "description": "Context lines for `grep` or structural `workflow=\"query\"|\"scan\"` results. Structural maps this to ast-grep `--context`; raw `--before` and `--after` are not exposed separately.", "default": 0},
             "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
             "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
             "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}
