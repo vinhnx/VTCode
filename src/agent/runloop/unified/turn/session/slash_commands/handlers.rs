@@ -32,6 +32,10 @@ mod activation;
 mod agents;
 #[path = "apps.rs"]
 mod apps;
+#[path = "compact.rs"]
+mod compact;
+#[path = "config_toml.rs"]
+mod config_toml;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "interactive.rs"]
@@ -58,6 +62,7 @@ pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(super) use apps::{
     handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
 };
+pub(super) use compact::handle_compact_conversation;
 pub(super) use diagnostics::{
     handle_run_doctor, handle_show_memory, handle_show_memory_config, handle_show_status,
     handle_start_doctor_interactive, handle_start_terminal_setup,
@@ -264,60 +269,6 @@ pub(super) async fn handle_clear_conversation(
     ctx.renderer
         .line(MessageStyle::Info, "Cleared conversation history.")?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
-}
-
-pub(super) async fn handle_compact_conversation(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
-    if ctx.conversation_history.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "No conversation history to compact.")?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
-    let outcome =
-        match crate::agent::runloop::unified::turn::compaction::compact_history_in_place_with_events(
-            crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
-                ctx.provider_client.as_ref(),
-                &ctx.config.model,
-                &harness_snapshot.session_id,
-                ctx.thread_id,
-                &ctx.config.workspace,
-                ctx.vt_cfg.as_ref(),
-                ctx.lifecycle_hooks,
-                ctx.harness_emitter,
-            ),
-            crate::agent::runloop::unified::turn::compaction::CompactionState::new(
-                ctx.conversation_history,
-                ctx.session_stats,
-                ctx.context_manager,
-            ),
-            vtcode_core::exec::events::CompactionTrigger::Manual,
-        )
-        .await
-        {
-        Ok(outcome) => outcome,
-        Err(err) => {
-            ctx.renderer
-                .line(MessageStyle::Error, &format!("Compaction failed: {}", err))?;
-            return Ok(SlashCommandControl::Continue);
-        }
-    };
-
-    let Some(outcome) = outcome else {
-        ctx.renderer
-            .line(MessageStyle::Info, "Conversation is already compact.")?;
-        return Ok(SlashCommandControl::Continue);
-    };
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Compacted conversation history ({} -> {} messages).",
-            outcome.original_len, outcome.compacted_len
-        ),
-    )?;
     Ok(SlashCommandControl::Continue)
 }
 

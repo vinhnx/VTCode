@@ -12,7 +12,7 @@ use vtcode_core::core::agent::harness_artifacts::{
     current_task_path, read_evaluation_summary, read_spec_summary,
 };
 use vtcode_core::hooks::LifecycleHookEngine;
-use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole};
+use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole, ResponsesCompactionOptions};
 use vtcode_core::persistent_memory::{
     GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact,
 };
@@ -688,6 +688,72 @@ pub(crate) async fn compact_history_in_place_with_events(
     .await
 }
 
+pub(crate) async fn manual_openai_compact_history_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    options: &ResponsesCompactionOptions,
+) -> Result<Option<CompactionOutcome>> {
+    let CompactionContext {
+        provider,
+        model,
+        session_id,
+        thread_id,
+        workspace_root,
+        vt_cfg,
+        lifecycle_hooks,
+        harness_emitter,
+    } = context;
+    let CompactionState {
+        history,
+        session_stats,
+        context_manager,
+    } = state;
+
+    if !provider.supports_manual_openai_compaction(model) {
+        anyhow::bail!(provider.manual_openai_compaction_unavailable_message(model));
+    }
+
+    let previous_response_chain_present = session_stats
+        .previous_response_id_for(provider.name(), model)
+        .is_some();
+    let mut compaction_input = history.clone();
+    strip_existing_memory_envelope(&mut compaction_input);
+    let original_history = compaction_input.clone();
+    let compacted = provider
+        .compact_history_with_options(model, &compaction_input, options)
+        .await?;
+    if compacted == compaction_input {
+        return Ok(None);
+    }
+
+    apply_compacted_history(
+        CompactionContext {
+            provider,
+            model,
+            session_id,
+            thread_id,
+            workspace_root,
+            vt_cfg,
+            lifecycle_hooks,
+            harness_emitter,
+        },
+        CompactionState::new(history, session_stats, context_manager),
+        CompactionPlan {
+            trigger: vtcode_core::exec::events::CompactionTrigger::Manual,
+            envelope_mode: CompactionEnvelopeMode {
+                persistence: MemoryEnvelopePersistence::PersistToDisk,
+                placement: MemoryEnvelopePlacement::Start,
+            },
+        },
+        original_history,
+        previous_response_chain_present,
+        compacted,
+        vtcode_core::exec::events::CompactionMode::Provider,
+    )
+    .await
+    .map(Some)
+}
+
 pub(crate) async fn compact_history_for_recovery_in_place(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
@@ -729,21 +795,21 @@ async fn compact_history_segment_in_place(
         context_manager,
     } = state;
 
-    strip_existing_memory_envelope(history);
-    let original_len = history.len();
-    let original_history = history.clone();
     let previous_response_chain_present = session_stats
         .previous_response_id_for(provider.name(), model)
         .is_some();
+    let mut compaction_input = history.clone();
+    strip_existing_memory_envelope(&mut compaction_input);
+    let original_history = compaction_input.clone();
     let compacted = vtcode_core::compaction::compact_history(
         provider,
         model,
-        history,
+        &compaction_input,
         &CompactionConfig::default(),
     )
     .await?;
 
-    if compacted == *history {
+    if compacted == compaction_input {
         return Ok(None);
     }
 
@@ -752,6 +818,54 @@ async fn compact_history_segment_in_place(
     } else {
         vtcode_core::exec::events::CompactionMode::Local
     };
+    apply_compacted_history(
+        CompactionContext {
+            provider,
+            model,
+            session_id,
+            thread_id,
+            workspace_root,
+            vt_cfg,
+            lifecycle_hooks,
+            harness_emitter,
+        },
+        CompactionState::new(history, session_stats, context_manager),
+        plan,
+        original_history,
+        previous_response_chain_present,
+        compacted,
+        compaction_mode,
+    )
+    .await
+    .map(Some)
+}
+
+async fn apply_compacted_history(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    plan: CompactionPlan,
+    original_history: Vec<Message>,
+    previous_response_chain_present: bool,
+    compacted: Vec<Message>,
+    compaction_mode: vtcode_core::exec::events::CompactionMode,
+) -> Result<CompactionOutcome> {
+    let CompactionContext {
+        provider,
+        model,
+        session_id,
+        thread_id,
+        workspace_root,
+        vt_cfg,
+        lifecycle_hooks,
+        harness_emitter,
+    } = context;
+    let CompactionState {
+        history,
+        session_stats,
+        context_manager,
+    } = state;
+
+    let original_len = original_history.len();
     if let Some(lifecycle_hooks) = lifecycle_hooks {
         let outcome = lifecycle_hooks
             .run_pre_compact(
@@ -766,6 +880,7 @@ async fn compact_history_segment_in_place(
             tracing::debug!(message = %message.text, "pre-compact hook message");
         }
     }
+
     let mut compacted = compacted;
     let compacted_len = compacted.len();
     let touched_files = session_stats.recent_touched_files();
@@ -825,12 +940,12 @@ async fn compact_history_segment_in_place(
         }
     }
 
-    Ok(Some(CompactionOutcome {
+    Ok(CompactionOutcome {
         original_len,
         compacted_len,
         mode: compaction_mode,
         history_artifact_path,
-    }))
+    })
 }
 
 async fn compact_history_before_index_in_place(
@@ -1052,7 +1167,8 @@ mod tests {
         compact_history_for_recovery_in_place, compact_history_from_index_in_place,
         compact_history_in_place, compact_history_in_place_with_events,
         inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
-        maybe_auto_compact_history, resolve_compaction_threshold,
+        manual_openai_compact_history_in_place, maybe_auto_compact_history,
+        resolve_compaction_threshold,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -1067,11 +1183,16 @@ mod tests {
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{
         LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
+        ResponsesCompactionOptions,
     };
 
     struct LocalCompactionProvider;
 
     struct ProviderCompactionProvider;
+
+    struct NoOpProviderCompactionProvider;
+
+    struct FailingProviderCompactionProvider;
 
     #[async_trait]
     impl LLMProvider for LocalCompactionProvider {
@@ -1120,6 +1241,105 @@ mod tests {
             Ok(compacted)
         }
 
+        async fn compact_history_with_options(
+            &self,
+            model: &str,
+            history: &[Message],
+            _options: &ResponsesCompactionOptions,
+        ) -> Result<Vec<Message>, LLMError> {
+            self.compact_history(model, history).await
+        }
+
+        fn supports_responses_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        fn supports_manual_openai_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        fn effective_context_size(&self, _model: &str) -> usize {
+            1_000
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for NoOpProviderCompactionProvider {
+        fn name(&self) -> &str {
+            "noop-provider-stub"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        async fn compact_history(
+            &self,
+            _model: &str,
+            history: &[Message],
+        ) -> Result<Vec<Message>, LLMError> {
+            Ok(history.to_vec())
+        }
+
+        async fn compact_history_with_options(
+            &self,
+            _model: &str,
+            history: &[Message],
+            _options: &ResponsesCompactionOptions,
+        ) -> Result<Vec<Message>, LLMError> {
+            Ok(history.to_vec())
+        }
+
+        fn supports_responses_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        fn supports_manual_openai_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        fn effective_context_size(&self, _model: &str) -> usize {
+            1_000
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for FailingProviderCompactionProvider {
+        fn name(&self) -> &str {
+            "failing-provider-stub"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        async fn compact_history(
+            &self,
+            _model: &str,
+            _history: &[Message],
+        ) -> Result<Vec<Message>, LLMError> {
+            Err(LLMError::Provider {
+                message: "provider compaction failed".to_string(),
+                metadata: None,
+            })
+        }
+
         fn supports_responses_compaction(&self, _model: &str) -> bool {
             true
         }
@@ -1152,6 +1372,14 @@ mod tests {
             Message::assistant("assistant-3".to_string()),
             Message::tool_response("call-3".to_string(), "tool-3".to_string()),
         ]
+    }
+
+    fn test_history_with_memory_envelope() -> Vec<Message> {
+        let mut history = vec![Message::system(
+            "[Session Memory Envelope]\nSummary:\nExisting summary".to_string(),
+        )];
+        history.extend(test_history());
+        history
     }
 
     fn assert_local_compaction_history(history: &[Message], envelope_index: usize) {
@@ -1308,6 +1536,171 @@ mod tests {
         let content = fs::read_to_string(harness_path).expect("read harness log");
         assert!(content.contains("\"type\":\"thread.compact_boundary\""));
         assert!(content.contains("\"mode\":\"provider\""));
+    }
+
+    #[tokio::test]
+    async fn manual_openai_compaction_clears_previous_response_chain() {
+        let temp = tempdir().expect("tempdir");
+        let provider = ProviderCompactionProvider;
+        let mut history = test_history();
+        let mut session_stats = SessionStats::default();
+        session_stats.set_previous_response_chain(
+            "provider-stub",
+            "stub-model",
+            Some("resp_123"),
+            &[],
+        );
+        let mut context_manager = test_context_manager();
+
+        let outcome = manual_openai_compact_history_in_place(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            &ResponsesCompactionOptions::default(),
+        )
+        .await
+        .expect("manual OpenAI compaction succeeds")
+        .expect("history should compact");
+
+        assert_eq!(
+            outcome.mode,
+            vtcode_core::exec::events::CompactionMode::Provider
+        );
+        assert_eq!(
+            session_stats.previous_response_id_for("provider-stub", "stub-model"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn manual_openai_compaction_rejects_unsupported_provider_without_local_fallback() {
+        let temp = tempdir().expect("tempdir");
+        let provider = LocalCompactionProvider;
+        let mut history = test_history();
+        let original_history = history.clone();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let err = manual_openai_compact_history_in_place(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            &ResponsesCompactionOptions::default(),
+        )
+        .await
+        .expect_err("unsupported provider should fail");
+
+        assert!(
+            err.to_string()
+                .contains("Manual `/compact` is available only for native OpenAI Responses models")
+        );
+        assert_eq!(history, original_history);
+    }
+
+    #[tokio::test]
+    async fn manual_openai_compaction_noop_preserves_existing_history() {
+        let temp = tempdir().expect("tempdir");
+        let provider = NoOpProviderCompactionProvider;
+        let mut history = test_history_with_memory_envelope();
+        let original_history = history.clone();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let outcome = manual_openai_compact_history_in_place(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            &ResponsesCompactionOptions::default(),
+        )
+        .await
+        .expect("noop compaction succeeds");
+
+        assert!(outcome.is_none());
+        assert_eq!(history, original_history);
+    }
+
+    #[tokio::test]
+    async fn provider_compaction_noop_preserves_existing_history() {
+        let temp = tempdir().expect("tempdir");
+        let provider = NoOpProviderCompactionProvider;
+        let mut history = test_history_with_memory_envelope();
+        let original_history = history.clone();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let outcome = compact_history_in_place_with_events(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            vtcode_core::exec::events::CompactionTrigger::Manual,
+        )
+        .await
+        .expect("noop compaction succeeds");
+
+        assert!(outcome.is_none());
+        assert_eq!(history, original_history);
+    }
+
+    #[tokio::test]
+    async fn provider_compaction_error_preserves_existing_history() {
+        let temp = tempdir().expect("tempdir");
+        let provider = FailingProviderCompactionProvider;
+        let mut history = test_history_with_memory_envelope();
+        let original_history = history.clone();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let err = compact_history_in_place_with_events(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            vtcode_core::exec::events::CompactionTrigger::Manual,
+        )
+        .await
+        .expect_err("failing provider should fail");
+
+        assert!(!err.to_string().is_empty());
+        assert_eq!(history, original_history);
     }
 
     #[tokio::test]

@@ -3,7 +3,6 @@ use super::super::errors::{
     is_responses_api_unsupported,
 };
 use super::super::headers;
-use super::super::responses_api::build_standard_responses_payload;
 use super::super::types::ResponsesApiState;
 use super::OpenAIProvider;
 use crate::llm::error_display;
@@ -14,6 +13,8 @@ use crate::llm::providers::shared::parse_compacted_output_messages;
 use futures::StreamExt;
 use serde_json::{Value, json};
 
+const MANUAL_COMPACTION_INSTRUCTIONS_LABEL: &str = "[Manual Compaction Instructions]";
+
 #[inline]
 fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
     !matches!(state, ResponsesApiState::Disabled)
@@ -21,6 +22,24 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
 
 fn truncate_for_log(input: &str, max_chars: usize) -> String {
     input.chars().take(max_chars).collect()
+}
+
+fn append_manual_compaction_instructions(
+    derived_instructions: Option<&str>,
+    manual_instructions: Option<&str>,
+) -> Option<String> {
+    let manual_instructions = manual_instructions
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let manual_section = format!("{MANUAL_COMPACTION_INSTRUCTIONS_LABEL}\n{manual_instructions}");
+
+    match derived_instructions
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(existing) => Some(format!("{existing}\n\n{manual_section}")),
+        None => Some(manual_section),
+    }
 }
 
 async fn collect_streamed_response(
@@ -68,6 +87,20 @@ impl OpenAIProvider {
         model: &str,
         history: &[provider::Message],
     ) -> Result<Vec<provider::Message>, provider::LLMError> {
+        self.compact_history_request_with_options(
+            model,
+            history,
+            &provider::ResponsesCompactionOptions::default(),
+        )
+        .await
+    }
+
+    pub(crate) async fn compact_history_request_with_options(
+        &self,
+        model: &str,
+        history: &[provider::Message],
+        options: &provider::ResponsesCompactionOptions,
+    ) -> Result<Vec<provider::Message>, provider::LLMError> {
         let resolved_model = if model.trim().is_empty() {
             self.model.to_string()
         } else {
@@ -77,21 +110,53 @@ impl OpenAIProvider {
         let request = provider::LLMRequest {
             model: resolved_model.clone(),
             messages: history.to_vec(),
+            max_tokens: options.max_output_tokens,
+            reasoning_effort: options.reasoning_effort,
+            verbosity: options.verbosity,
+            response_store: options.response_store,
+            responses_include: options.responses_include.clone(),
+            service_tier: options.service_tier.clone(),
+            prompt_cache_key: options.prompt_cache_key.clone(),
             ..Default::default()
         };
-        let responses_payload = build_standard_responses_payload(&request, true)?;
-        if responses_payload.input.is_empty() {
+        let responses_request = self.convert_to_openai_responses_format(&request)?;
+        let input = responses_request
+            .get("input")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if input.is_empty() {
             return Ok(history.to_vec());
         }
 
         let mut compact_payload = json!({
             "model": resolved_model,
-            "input": responses_payload.input,
+            "input": input,
         });
-        if let Some(instructions) = responses_payload.instructions
-            && let Value::Object(ref mut map) = compact_payload
-        {
-            map.insert("instructions".to_string(), json!(instructions));
+        if let Some(map) = compact_payload.as_object_mut() {
+            let merged_instructions = append_manual_compaction_instructions(
+                responses_request
+                    .get("instructions")
+                    .and_then(Value::as_str),
+                options.instructions.as_deref(),
+            );
+            if let Some(instructions) = merged_instructions {
+                map.insert("instructions".to_string(), json!(instructions));
+            }
+
+            for key in [
+                "max_output_tokens",
+                "service_tier",
+                "store",
+                "include",
+                "reasoning",
+                "text",
+                "prompt_cache_key",
+            ] {
+                if let Some(value) = responses_request.get(key) {
+                    map.insert(key.to_string(), value.clone());
+                }
+            }
         }
         let url = format!("{}/responses/compact", self.base_url);
         let client_request_id = Self::new_client_request_id();

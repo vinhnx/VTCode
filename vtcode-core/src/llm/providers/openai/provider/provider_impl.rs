@@ -85,6 +85,19 @@ impl provider::LLMProvider for OpenAIProvider {
         )
     }
 
+    fn supports_manual_openai_compaction(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+        self.supports_manual_openai_compaction_for_model(requested)
+    }
+
+    fn manual_openai_compaction_unavailable_message(&self, model: &str) -> String {
+        self.manual_openai_compaction_unavailable_message_for_model(model)
+    }
+
     async fn stream(
         &self,
         request: provider::LLMRequest,
@@ -120,6 +133,28 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         self.compact_history_request(model, history).await
+    }
+
+    async fn compact_history_with_options(
+        &self,
+        model: &str,
+        history: &[provider::Message],
+        options: &provider::ResponsesCompactionOptions,
+    ) -> Result<Vec<provider::Message>, provider::LLMError> {
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+        if !self.supports_manual_openai_compaction_for_model(requested) {
+            return Err(provider::LLMError::Provider {
+                message: self.manual_openai_compaction_unavailable_message_for_model(requested),
+                metadata: None,
+            });
+        }
+
+        self.compact_history_request_with_options(requested, history, options)
+            .await
     }
 
     fn supported_models(&self) -> Vec<String> {

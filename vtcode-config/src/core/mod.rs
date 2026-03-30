@@ -40,7 +40,7 @@ pub use provider::{
     AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
     OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
     OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
-    OpenAIServiceTier, OpenAIToolSearchConfig, ToolSearchConfig,
+    OpenAIManualCompactionConfig, OpenAIServiceTier, OpenAIToolSearchConfig, ToolSearchConfig,
 };
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,

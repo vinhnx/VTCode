@@ -119,8 +119,8 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::ShowMemory => handlers::handle_show_memory(ctx).await,
         SlashCommandOutcome::ClearScreen => handlers::handle_clear_screen(ctx).await,
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
-        SlashCommandOutcome::CompactConversation => {
-            handlers::handle_compact_conversation(ctx).await
+        SlashCommandOutcome::CompactConversation { command } => {
+            handlers::handle_compact_conversation(ctx, command).await
         }
         SlashCommandOutcome::CopyLatestAssistantReply => {
             handlers::handle_copy_latest_assistant_reply(ctx).await

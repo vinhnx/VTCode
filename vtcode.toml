@@ -2601,6 +2601,8 @@ prompt-format = "xml"
 # Type: `string`
 render-mode = "lean"
 
+[provider.openai.manual_compaction]
+
 # Bundled
 [skills.bundled]
 enabled = true
@@ -2801,13 +2803,6 @@ max_sequential_spool_chunk_reads = 6
 # Type: `integer`
 max_tool_loops = 0
 
-[[custom_providers]]
-name = "mycorp"
-display_name = "MyCorporateName"
-base_url = "https://llm.corp.example/v1"
-api_key_env = "MYCORP_API_KEY"
-model = "gpt-5.4"
-
 # External Editor
 # Editor launch command and editor fallback.
 [tools.editor]
@@ -2825,6 +2820,13 @@ preferred_editor = ""
 # Default: true
 # Type: `boolean`
 suspend_tui = true
+
+[[custom_providers]]
+name = "mycorp"
+display_name = "MyCorporateName"
+base_url = "https://llm.corp.example/v1"
+api_key_env = "MYCORP_API_KEY"
+model = "gpt-5.4"
 
 
 # Loop Thresholds

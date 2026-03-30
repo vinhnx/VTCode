@@ -65,11 +65,11 @@ pub use core::{
     NetworkAllowlistEntryConfig, NetworkConfig, OpenAIAuthConfig, OpenAIConfig,
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
     OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
-    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
-    PermissionMode, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
-    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
-    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
-    SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
+    OpenAIManualCompactionConfig, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig,
+    OpenRouterAuthConfig, PermissionMode, PluginRuntimeConfig, PluginTrustLevel,
+    PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset,
+    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig,
+    SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

@@ -165,7 +165,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "compact",
-            description: "Compact current conversation history using provider-native or local fallback compaction (usage: /compact)",
+            description: "Open the OpenAI compact manager or run standalone /responses/compact with flags (usage: /compact [--instructions ...])",
         },
         SlashCommandInfo {
             name: "new",

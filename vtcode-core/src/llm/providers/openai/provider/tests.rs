@@ -139,6 +139,12 @@ fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
     )
 }
 
+fn native_openai_mock_base_url(server: &MockServer) -> String {
+    server
+        .uri()
+        .replacen("http://", "http://api.openai.com@", 1)
+}
+
 fn chatgpt_mock_base_url(server: &MockServer) -> String {
     server.uri().replacen("http://", "http://chatgpt.com@", 1)
 }
@@ -849,6 +855,106 @@ fn supports_responses_compaction_tracks_responses_api_availability() {
         None,
     );
     assert!(!xai.supports_responses_compaction(models::openai::GPT_5));
+}
+
+#[test]
+fn supports_manual_openai_compaction_is_native_only() {
+    let openai = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    assert!(openai.supports_manual_openai_compaction(models::openai::GPT_5));
+
+    let compatible = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(!compatible.supports_manual_openai_compaction(models::openai::GPT_5));
+
+    let custom_provider = OpenAIProvider::from_custom_config(
+        "custom-openai".to_string(),
+        "Custom OpenAI".to_string(),
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(!custom_provider.supports_manual_openai_compaction(models::openai::GPT_5));
+
+    let chatgpt = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://chatgpt.com/backend-api/codex".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(!chatgpt.supports_manual_openai_compaction(models::openai::GPT_5));
+
+    assert!(!openai.supports_manual_openai_compaction("gpt-4.1"));
+}
+
+#[test]
+fn manual_openai_compaction_unavailable_message_mentions_chatgpt_backend() {
+    let chatgpt = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://chatgpt.com/backend-api/codex".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let message = chatgpt.manual_openai_compaction_unavailable_message(models::openai::GPT_5);
+
+    assert!(message.contains("ChatGPT subscription auth via chatgpt.com backend"));
+    assert!(message.contains(
+        "ChatGPT subscription auth does not expose the standalone `/responses/compact` endpoint"
+    ));
+}
+
+#[test]
+fn manual_openai_compaction_unavailable_message_mentions_custom_endpoint() {
+    let compatible = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let message = compatible.manual_openai_compaction_unavailable_message(models::openai::GPT_5);
+
+    assert!(message.contains("configured OpenAI-compatible endpoint (https://compat.example/v1)"));
+    assert!(message.contains("manual `/compact` is restricted to the native OpenAI API host"));
+}
+
+#[test]
+fn manual_openai_compaction_unavailable_message_mentions_model_incompatibility() {
+    let openai = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+
+    let message = openai.manual_openai_compaction_unavailable_message("gpt-4.1");
+
+    assert!(message.contains("native OpenAI API (api.openai.com)"));
+    assert!(message.contains("this model is not Responses-compatible on the native OpenAI API"));
+    assert!(message.contains("openai / native OpenAI API (api.openai.com) / gpt-4.1"));
 }
 
 #[test]
@@ -3749,4 +3855,88 @@ async fn stream_normalized_falls_back_to_chat_completions_when_responses_api_is_
             && usage.total_tokens == 2
             && response.content.as_deref() == Some("fallback")
     ));
+}
+
+#[tokio::test]
+async fn manual_compaction_payload_includes_selected_fields_and_appends_instructions() {
+    let server = MockServer::start().await;
+    let provider = test_provider(
+        &native_openai_mock_base_url(&server),
+        models::openai::GPT_5_4,
+    );
+    let captured_payload = Arc::new(Mutex::new(None::<Value>));
+    let captured_payload_for_response = Arc::clone(&captured_payload);
+
+    Mock::given(method("POST"))
+        .and(path("/responses/compact"))
+        .respond_with(move |request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            *captured_payload_for_response
+                .lock()
+                .expect("payload mutex should not be poisoned") = Some(payload);
+
+            ResponseTemplate::new(200).set_body_json(json!({
+                "id": "resp_compact",
+                "status": "completed",
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "compacted history"
+                    }]
+                }]
+            }))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let compacted = provider
+        .compact_history_with_options(
+            models::openai::GPT_5_4,
+            &[
+                provider::Message::system("Preserve implementation decisions.".to_string()),
+                provider::Message::user("Summarize this session.".to_string()),
+            ],
+            &provider::ResponsesCompactionOptions {
+                instructions: Some("Prefer terse summaries.".to_string()),
+                max_output_tokens: Some(321),
+                reasoning_effort: Some(crate::config::types::ReasoningEffortLevel::Minimal),
+                verbosity: Some(crate::config::types::VerbosityLevel::High),
+                responses_include: Some(vec!["reasoning.encrypted_content".to_string()]),
+                response_store: Some(true),
+                service_tier: Some("priority".to_string()),
+                prompt_cache_key: Some("lineage-key".to_string()),
+            },
+        )
+        .await
+        .expect("manual compaction should succeed");
+
+    assert_eq!(compacted.len(), 1);
+    let payload = captured_payload
+        .lock()
+        .expect("payload mutex should not be poisoned")
+        .clone()
+        .expect("compaction payload should be captured");
+
+    assert_eq!(payload["model"], json!(models::openai::GPT_5_4));
+    assert_eq!(payload["max_output_tokens"], json!(321));
+    assert_eq!(payload["service_tier"], json!("priority"));
+    assert_eq!(payload["store"], json!(true));
+    assert_eq!(payload["include"], json!(["reasoning.encrypted_content"]));
+    assert_eq!(payload["reasoning"]["effort"], json!("minimal"));
+    assert_eq!(payload["text"]["verbosity"], json!("high"));
+    assert_eq!(payload["prompt_cache_key"], json!("lineage-key"));
+    assert!(payload.get("previous_response_id").is_none());
+    assert!(payload.get("output_types").is_none());
+    assert!(payload.get("stream").is_none());
+
+    let instructions = payload["instructions"]
+        .as_str()
+        .expect("instructions should be serialized");
+    assert!(instructions.contains("Preserve implementation decisions."));
+    assert!(instructions.contains("[Manual Compaction Instructions]"));
+    assert!(instructions.contains("Prefer terse summaries."));
 }
