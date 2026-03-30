@@ -98,6 +98,13 @@ impl Session {
                 self.last_mouse_position,
             );
             for DetectedLinkMatch { start, end, target } in matches {
+                if styled_matches
+                    .iter()
+                    .any(|existing| start < existing.end && end > existing.start)
+                {
+                    continue;
+                }
+
                 let start_col = UnicodeWidthStr::width(&text[..start]);
                 let width = UnicodeWidthStr::width(&text[start..end]);
                 if width == 0 {
@@ -528,6 +535,56 @@ pub(crate) fn decorate_detected_link_lines(
     (decorated, targets)
 }
 
+pub(crate) fn project_detected_links_onto_wrapped_lines(
+    wrapped_lines: &[Line<'static>],
+    original_text: &str,
+    workspace_root: Option<&Path>,
+) -> Vec<Vec<RenderedTranscriptLink>> {
+    let matches = detect_transcript_link_matches(original_text, workspace_root);
+    let mut projected = Vec::with_capacity(wrapped_lines.len());
+    let mut original_offset = 0usize;
+
+    for wrapped_line in wrapped_lines {
+        let wrapped_text: String = wrapped_line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        let wrapped_start = original_offset;
+        let wrapped_end = wrapped_start + wrapped_text.len();
+        original_offset = wrapped_end;
+
+        let mut line_links = Vec::new();
+        for DetectedLinkMatch { start, end, target } in &matches {
+            let local_start = (*start).max(wrapped_start);
+            let local_end = (*end).min(wrapped_end);
+            if local_start >= local_end {
+                continue;
+            }
+
+            let relative_start = local_start - wrapped_start;
+            let relative_end = local_end - wrapped_start;
+            let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
+            let width = UnicodeWidthStr::width(&wrapped_text[relative_start..relative_end]);
+            if width == 0 {
+                continue;
+            }
+
+            line_links.push(RenderedTranscriptLink {
+                start: relative_start,
+                end: relative_end,
+                start_col,
+                width,
+                target: InlineLinkTarget::Url(transcript_link_target_string(target)),
+            });
+        }
+
+        projected.push(line_links);
+    }
+
+    projected
+}
+
 pub(crate) fn detect_transcript_link_matches(
     text: &str,
     workspace_root: Option<&Path>,
@@ -566,6 +623,13 @@ pub(crate) fn detect_transcript_link_matches(
     matches.dedup_by(|left, right| left.start == right.start && left.end == right.end);
 
     matches
+}
+
+fn transcript_link_target_string(target: &TranscriptLinkTarget) -> String {
+    match target {
+        TranscriptLinkTarget::File(target) => target.canonical_string(),
+        TranscriptLinkTarget::Url(url) => url.clone(),
+    }
 }
 
 fn build_transcript_link_match(

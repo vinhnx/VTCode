@@ -15,7 +15,7 @@ use super::wrapping;
 use super::{
     Session,
     message::{MessageLine, TranscriptLine},
-    render, terminal_capabilities, text_utils,
+    render, terminal_capabilities, text_utils, transcript_links,
 };
 use crate::config::constants::ui;
 
@@ -137,7 +137,7 @@ impl Session {
         }
 
         let lines = if message.kind == InlineMessageKind::Agent {
-            into_transcript_lines(self.reflow_agent_message_lines(message, max_width, !is_new_turn))
+            self.reflow_agent_message_lines(message, max_width, !is_new_turn)
         } else {
             let mut lines = self.wrap_line(base_line, max_width);
             if !lines.is_empty() {
@@ -349,9 +349,9 @@ impl Session {
         message: &MessageLine,
         max_width: usize,
         suppress_prefix_bullet: bool,
-    ) -> Vec<Line<'static>> {
+    ) -> Vec<TranscriptLine> {
         if max_width == 0 {
-            return vec![Line::default()];
+            return vec![TranscriptLine::default()];
         }
 
         let mut prefix_spans = render::agent_prefix_spans(self, message);
@@ -366,6 +366,12 @@ impl Session {
             let style = ratatui_style_from_inline(&segment.style, fallback);
             content_spans.push(Span::styled(segment.text.clone(), style));
         }
+        let content_line = Line::from(content_spans);
+        let content_text: String = content_line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
 
         let is_table_line = message.segments.iter().any(|seg| {
             let t = &seg.text;
@@ -373,23 +379,31 @@ impl Session {
         });
         let code_continuation_prefix = agent_code_continuation_prefix(message);
 
-        let mut wrapped = if content_width == 0 {
-            vec![Line::default()]
+        let (mut wrapped, mut explicit_links) = if content_width == 0 {
+            (vec![Line::default()], vec![Vec::new()])
         } else if is_table_line {
             // Table lines must not be word-wrapped - wrapping breaks box-drawing
             // alignment. Truncate to the available width instead.
-            vec![truncate_line_to_width(
-                Line::from(content_spans),
-                content_width,
-            )]
+            let wrapped = vec![truncate_line_to_width(content_line, content_width)];
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
         } else if let Some(prefix) = code_continuation_prefix.as_deref() {
-            text_utils::wrap_line_with_hanging_prefix(
-                Line::from(content_spans),
-                content_width,
-                prefix,
+            (
+                text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix),
+                Vec::new(),
             )
         } else {
-            self.wrap_line(Line::from(content_spans), content_width)
+            let wrapped = self.wrap_line(content_line, content_width);
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
         };
 
         if !wrapped.is_empty() {
@@ -398,6 +412,7 @@ impl Session {
         if wrapped.is_empty() {
             wrapped.push(Line::default());
         }
+        explicit_links.resize_with(wrapped.len(), Vec::new);
 
         let suppress_prefix_bullet = suppress_prefix_bullet
             || wrapped.first().is_some_and(|line| {
@@ -419,10 +434,28 @@ impl Session {
             prefix_span.content = replacement.into();
         }
 
+        let first_line_prefix_text = format!(
+            "{}{}",
+            prefix_spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>(),
+            left_padding
+        );
+        let first_line_prefix_width = UnicodeWidthStr::width(first_line_prefix_text.as_str());
         let indent = " ".repeat(prefix_width);
         let mut lines = Vec::with_capacity(wrapped.len());
-        for (index, mut line) in wrapped.into_iter().enumerate() {
+        for (index, (mut line, mut line_links)) in wrapped
+            .into_iter()
+            .zip(explicit_links.into_iter())
+            .enumerate()
+        {
             let mut spans = Vec::new();
+            let (prefix_len, prefix_width) = if index == 0 {
+                (first_line_prefix_text.len(), first_line_prefix_width)
+            } else {
+                (indent.len(), prefix_width)
+            };
             if index == 0 {
                 spans.append(&mut prefix_spans);
                 if !left_padding.is_empty() {
@@ -435,11 +468,21 @@ impl Session {
             if spans.is_empty() {
                 spans.push(Span::raw(String::new()));
             }
-            lines.push(Line::from(spans));
+
+            for link in &mut line_links {
+                link.start += prefix_len;
+                link.end += prefix_len;
+                link.start_col += prefix_width;
+            }
+
+            lines.push(TranscriptLine {
+                line: Line::from(spans),
+                explicit_links: line_links,
+            });
         }
 
         if lines.is_empty() {
-            lines.push(Line::default());
+            lines.push(TranscriptLine::default());
         }
 
         lines

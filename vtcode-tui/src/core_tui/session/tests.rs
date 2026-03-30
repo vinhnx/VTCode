@@ -733,6 +733,59 @@ fn modifier_click_emits_open_url_event_for_raw_transcript_url() {
 }
 
 #[test]
+fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = format!(
+        "https://auth.openai.com/oauth/authorize?response_type=code&client_id=test&scope=openid%20profile%20email&state={}",
+        "abcdefghijklmnopqrstuvwxyz".repeat(12)
+    );
+    session.push_line(InlineMessageKind::Agent, vec![make_segment(url.as_str())]);
+
+    let transcript_lines = session.reflow_message_lines(0, 60);
+    let decorated =
+        session.decorate_visible_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
+    let targets = session
+        .transcript_file_link_targets
+        .iter()
+        .filter(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        targets.len() >= 2,
+        "expected wrapped transcript url segments"
+    );
+
+    let target = targets
+        .iter()
+        .max_by_key(|target| (target.area.y, target.area.x))
+        .expect("expected wrapped transcript url target")
+        .clone();
+    assert!(
+        decorated[target.area.y as usize]
+            .spans
+            .iter()
+            .any(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
+    );
+
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
 fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let url = "https://auth.openai.com/oauth/authorize?client_id=test".to_string();
@@ -768,6 +821,76 @@ fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
         .modal_link_targets()
         .first()
         .expect("expected modal url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn modifier_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = format!(
+        "https://auth.openai.com/oauth/authorize?response_type=code&client_id=test&scope=openid%20profile%20email&state={}",
+        "abcdefghijklmnopqrstuvwxyz".repeat(10)
+    );
+    session.show_transient(app_types::TransientRequest::Wizard(
+        app_types::WizardOverlayRequest {
+            title: "OpenAI manual callback".to_string(),
+            steps: vec![WizardStep {
+                title: "Callback".to_string(),
+                question: format!("Open this URL in your browser:\n\n{url}"),
+                items: vec![InlineListItem {
+                    title: "Submit".to_string(),
+                    subtitle: Some("Press Enter to continue.".to_string()),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::ConfigAction("submit".to_string())),
+                    search_value: None,
+                }],
+                completed: false,
+                answer: None,
+                allow_freeform: false,
+                freeform_label: None,
+                freeform_placeholder: None,
+            }],
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        },
+    ));
+
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let targets = session
+        .core
+        .modal_link_targets()
+        .iter()
+        .filter(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        targets.len() >= 2,
+        "expected wrapped wizard modal url segments"
+    );
+
+    let target = targets
+        .iter()
+        .max_by_key(|target| (target.area.y, target.area.x))
+        .expect("expected wrapped wizard modal url target")
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
