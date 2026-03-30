@@ -529,14 +529,3 @@ log:
 ---
 
 also make sure global loading state is not wired and not showing for large read file tool content read (the status bar loading view is not showing for large read file content read, and the loading state is not wired to the tool call state, so it should not be showing at all for this tool call)
-
----
-
-~/Developer/learn-by-doing/vtcode main\* ⇡
-17:34:03 ❯ vtcode --resume session-vtcode-20260330T103350Z_719665-68637
-Error: No session with identifier 'session-vtcode-20260330T103350Z_719665-68637' was found.
-
-~/Developer/learn-by-doing/vtcode main\* ⇡
-17:40:23 ❯ 10;rgb:dbdb/d7d7/caca11;rgb:0000/0000/00004;16;rgb:0000/0000/00004;231;rgb:ffff/ffff/ffff62;22;52c
-
----> case no id was found causing leak ansi escape code.

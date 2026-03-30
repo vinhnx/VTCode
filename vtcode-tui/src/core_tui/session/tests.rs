@@ -547,7 +547,7 @@ fn mixed_transcript_file_references_are_all_underlined() {
 }
 
 #[test]
-fn modifier_click_emits_open_file_event_for_absolute_transcript_path() {
+fn plain_click_emits_open_file_event_for_absolute_transcript_path() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let absolute_path = transcript_file_fixture_absolute_path();
     session.push_line(
@@ -568,7 +568,7 @@ fn modifier_click_emits_open_file_event_for_absolute_transcript_path() {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: open_file_click_modifiers(),
+            modifiers: KeyModifiers::NONE,
         }),
         &tx,
         None,
@@ -647,7 +647,7 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: open_file_click_modifiers(),
+            modifiers: KeyModifiers::NONE,
         }),
         &tx,
         None,
@@ -690,7 +690,7 @@ fn modifier_click_emits_open_url_event_for_explicit_transcript_link() {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: open_file_click_modifiers(),
+            modifiers: KeyModifiers::NONE,
         }),
         &tx,
         None,
@@ -842,7 +842,7 @@ fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
 }
 
 #[test]
-fn modifier_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
+fn plain_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let url = format!(
         "https://auth.openai.com/oauth/authorize?response_type=code&client_id=test&scope=openid%20profile%20email&state={}",
@@ -899,7 +899,7 @@ fn modifier_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: open_file_click_modifiers(),
+            modifiers: KeyModifiers::NONE,
         }),
         &tx,
         None,
@@ -1004,7 +1004,7 @@ fn modal_auth_text_in_app_session_is_selectable_and_copied() {
 }
 
 #[test]
-fn modifier_click_emits_open_url_event_for_standard_modal_auth_link() {
+fn plain_click_emits_open_url_event_for_standard_modal_auth_link() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let url = format!(
         "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
@@ -1048,7 +1048,7 @@ fn modifier_click_emits_open_url_event_for_standard_modal_auth_link() {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: open_file_click_modifiers(),
+            modifiers: KeyModifiers::NONE,
         }),
         &tx,
         None,
@@ -1383,7 +1383,10 @@ fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
         None,
     );
 
-    assert!(rx.try_recv().is_err());
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
 }
 
 #[cfg(target_os = "macos")]

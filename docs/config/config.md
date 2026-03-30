@@ -266,7 +266,7 @@ Notes:
 
 ## External editor
 
-Use `tools.editor` to control the external editor flow used by `/edit`, empty-prompt `Ctrl+E`, and Cmd/Ctrl-click file links in the TUI.
+Use `tools.editor` to control the external editor flow used by `/edit`, empty-prompt `Ctrl+E`, and single-click file links in the TUI.
 
 ```toml
 [tools.editor]
