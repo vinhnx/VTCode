@@ -22,7 +22,7 @@ use vtcode_core::hooks::SessionEndReason;
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
-    create_settings_palette_state, show_settings_palette,
+    create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
 };
 use crate::agent::runloop::unified::state::CtrlCSignal;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
@@ -212,7 +212,7 @@ pub(super) async fn show_settings_at_path_from_context(
     let workspace_path = ctx.config.workspace.clone();
     let vt_snapshot = ctx.vt_cfg.clone();
     let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
-    settings_state.view_path = view_path.map(str::to_string);
+    settings_state.view_path = view_path.map(resolve_settings_view_path);
 
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
         *ctx.palette_state = Some(ActivePalette::Settings {

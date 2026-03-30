@@ -33,6 +33,7 @@ mod rendering;
 mod selection;
 mod state_machine;
 
+pub(crate) use self::config_persistence::persist_lightweight_selection;
 pub(crate) use selection::ModelSelectionResult;
 pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 

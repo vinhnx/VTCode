@@ -142,3 +142,7 @@ auto select light model based on main model's but maybe weaker and lighter versi
 
 OpenAI has a standalone compaction endpoint that's incredibly customizable and is disconnected from their responses API.
 https://developers.openai.com/api/reference/resources/responses/methods/compact
+
+---
+
+checking modal blocking, when an inline modal is showing (eg: the /login modal), currently the whole UI is not selecteable, copyable, or interactable. This is a problem because users may want to copy text from the UI while the modal is open, or interact with other parts of the UI without closing the modal. meaining currently all the modal inline is blocking all interactions with the UI, which is not ideal for user experience. We should make it so that when an inline modal is open, only the modal itself is blocking interactions, while the rest of the UI remains selectable and interactable. This way users can still copy text or interact with other parts of the UI without having to close the modal first.

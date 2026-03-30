@@ -4,6 +4,10 @@ use anyhow::Result;
 use chrono::Local;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::llm::{
+    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
+    resolve_lightweight_route,
+};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -13,9 +17,11 @@ use vtcode_tui::core::convert_style;
 
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::model_selection::finalize_lightweight_model_selection;
 use crate::agent::runloop::unified::settings_interactive::{
     SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
 };
+use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::display::{persist_theme_preference, sync_runtime_theme_selection};
@@ -35,6 +41,11 @@ const SESSIONS_LATEST_BADGE: &str = "Latest";
 const SESSIONS_SEARCH_LABEL: &str = "Search sessions";
 const SESSIONS_SEARCH_PLACEHOLDER: &str = "workspace, provider, model, date";
 const FORK_MODE_HINT_SECONDARY: &str = "Enter to confirm • Esc to go back.";
+const MODEL_TARGET_PALETTE_TITLE: &str = "Model";
+const LIGHTWEIGHT_MODEL_PALETTE_TITLE: &str = "Lightweight model";
+pub(crate) const MODEL_TARGET_ACTION_MAIN: &str = "model_target:main";
+pub(crate) const MODEL_TARGET_ACTION_LIGHTWEIGHT: &str = "model_target:lightweight";
+pub(crate) const LIGHTWEIGHT_MODEL_ACTION_PREFIX: &str = "lightweight_model:";
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -58,6 +69,22 @@ pub(crate) enum ActivePalette {
         state: Box<SettingsPaletteState>,
         esc_armed: bool,
     },
+    ModelTarget,
+    LightweightModel,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ConfiguredLightweightSetting {
+    Disabled,
+    Automatic,
+    Main,
+    Explicit(String),
+}
+
+struct LightweightPaletteView {
+    lines: Vec<String>,
+    items: Vec<InlineListItem>,
+    selected: Option<InlineListSelection>,
 }
 
 pub(crate) fn show_theme_palette(
@@ -292,6 +319,219 @@ pub(crate) fn show_fork_mode_palette(
     Ok(true)
 }
 
+pub(crate) fn show_model_target_palette(renderer: &mut AnsiRenderer) -> Result<bool> {
+    let items = [ModelPickerTarget::Main, ModelPickerTarget::Lightweight]
+        .into_iter()
+        .map(|target| match target {
+            ModelPickerTarget::Main => InlineListItem {
+                title: "Main model".to_string(),
+                subtitle: Some(
+                    "Change the active provider/model for the current conversation session."
+                        .to_string(),
+                ),
+                badge: Some("Active".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    MODEL_TARGET_ACTION_MAIN.to_string(),
+                )),
+                search_value: Some("model main active conversation provider default".to_string()),
+            },
+            ModelPickerTarget::Lightweight => InlineListItem {
+                title: "Lightweight model".to_string(),
+                subtitle: Some(
+                    "Configure the shared lower-cost route for memory, prompt suggestions, and smaller delegated tasks."
+                        .to_string(),
+                ),
+                badge: Some("Shared".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    MODEL_TARGET_ACTION_LIGHTWEIGHT.to_string(),
+                )),
+                search_value: Some(
+                    "model lightweight memory prompt suggestions subagent".to_string(),
+                ),
+            },
+        })
+        .collect();
+
+    renderer.show_list_modal(
+        MODEL_TARGET_PALETTE_TITLE,
+        vec![
+            "Choose which model target to edit.".to_string(),
+            "Main model changes the active conversation model. Lightweight model updates shared side-task routing only.".to_string(),
+        ],
+        items,
+        Some(InlineListSelection::ConfigAction(
+            MODEL_TARGET_ACTION_MAIN.to_string(),
+        )),
+        None,
+    );
+
+    Ok(true)
+}
+
+pub(crate) fn show_lightweight_model_palette(
+    renderer: &mut AnsiRenderer,
+    config: &vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<bool> {
+    let view = build_lightweight_model_palette(config, vt_cfg);
+    renderer.show_list_modal(
+        LIGHTWEIGHT_MODEL_PALETTE_TITLE,
+        view.lines,
+        view.items,
+        view.selected,
+        None,
+    );
+    Ok(true)
+}
+
+fn build_lightweight_model_palette(
+    config: &vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> LightweightPaletteView {
+    let current_setting = configured_lightweight_setting(config, vt_cfg);
+    let configured_label = current_setting.label();
+    let resolution =
+        resolve_lightweight_route(config, vt_cfg, LightweightFeature::PromptSuggestions, None);
+    let effective_route = match resolution.source {
+        LightweightRouteSource::MainModel => config.model.clone(),
+        _ => match resolution.fallback_to_main_model() {
+            Some(fallback) => format!(
+                "{} -> fallback {}",
+                resolution.primary.model, fallback.model
+            ),
+            None => resolution.primary.model.clone(),
+        },
+    };
+
+    let auto_model = auto_lightweight_model(&config.provider, &config.model);
+    let mut explicit_choices = lightweight_model_choices(&config.provider, &config.model);
+    explicit_choices.retain(|model| !model.eq_ignore_ascii_case(config.model.as_str()));
+    explicit_choices.retain(|model| !model.eq_ignore_ascii_case(auto_model.as_str()));
+
+    let mut items = vec![
+        InlineListItem {
+            title: "Automatic (recommended)".to_string(),
+            subtitle: Some(format!(
+                "Use {} for lower-cost side tasks and fall back to {}.",
+                auto_model, config.model
+            )),
+            badge: Some(
+                if matches!(current_setting, ConfiguredLightweightSetting::Automatic) {
+                    "Current".to_string()
+                } else {
+                    "Recommended".to_string()
+                },
+            ),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}auto",
+                LIGHTWEIGHT_MODEL_ACTION_PREFIX
+            ))),
+            search_value: Some("lightweight model automatic recommended".to_string()),
+        },
+        InlineListItem {
+            title: "Use main model".to_string(),
+            subtitle: Some(format!(
+                "Keep lightweight work on {} for accuracy-first behavior.",
+                config.model
+            )),
+            badge: Some(
+                if matches!(current_setting, ConfiguredLightweightSetting::Main) {
+                    "Current".to_string()
+                } else {
+                    "Accuracy".to_string()
+                },
+            ),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}main",
+                LIGHTWEIGHT_MODEL_ACTION_PREFIX
+            ))),
+            search_value: Some("lightweight model main accuracy".to_string()),
+        },
+    ];
+
+    items.extend(explicit_choices.iter().map(|model| InlineListItem {
+        title: model.clone(),
+        subtitle: Some("Explicit same-provider lightweight model.".to_string()),
+        badge: Some(if matches!(
+            &current_setting,
+            ConfiguredLightweightSetting::Explicit(current) if current.eq_ignore_ascii_case(model)
+        ) {
+            "Current".to_string()
+        } else {
+            "Model".to_string()
+        }),
+        indent: 0,
+        selection: Some(InlineListSelection::ConfigAction(format!(
+            "{}{}",
+            LIGHTWEIGHT_MODEL_ACTION_PREFIX, model
+        ))),
+        search_value: Some(format!("lightweight model {}", model)),
+    }));
+
+    let selected = Some(InlineListSelection::ConfigAction(match &current_setting {
+        ConfiguredLightweightSetting::Main => format!("{}main", LIGHTWEIGHT_MODEL_ACTION_PREFIX),
+        ConfiguredLightweightSetting::Explicit(model) => {
+            format!("{}{}", LIGHTWEIGHT_MODEL_ACTION_PREFIX, model)
+        }
+        ConfiguredLightweightSetting::Disabled | ConfiguredLightweightSetting::Automatic => {
+            format!("{}auto", LIGHTWEIGHT_MODEL_ACTION_PREFIX)
+        }
+    }));
+
+    let mut lines = vec![
+        "Choose the shared lightweight model VT Code should prefer for memory triage, prompt suggestions, and smaller delegated tasks.".to_string(),
+        format!("Current setting: {}", configured_label),
+        format!("Effective route: {}", effective_route),
+        "Selecting any option enables the shared lightweight route without changing the active main conversation model.".to_string(),
+    ];
+    if let Some(warning) = resolution.warning {
+        lines.push(format!("Route warning: {}", warning));
+    }
+
+    LightweightPaletteView {
+        lines,
+        items,
+        selected,
+    }
+}
+
+fn configured_lightweight_setting(
+    config: &vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> ConfiguredLightweightSetting {
+    let Some(vt_cfg) = vt_cfg else {
+        return ConfiguredLightweightSetting::Automatic;
+    };
+    if !vt_cfg.agent.small_model.enabled {
+        return ConfiguredLightweightSetting::Disabled;
+    }
+
+    let configured_model = vt_cfg.agent.small_model.model.trim();
+    if configured_model.is_empty() {
+        return ConfiguredLightweightSetting::Automatic;
+    }
+    if configured_model.eq_ignore_ascii_case(config.model.as_str()) {
+        return ConfiguredLightweightSetting::Main;
+    }
+
+    ConfiguredLightweightSetting::Explicit(configured_model.to_string())
+}
+
+impl ConfiguredLightweightSetting {
+    fn label(&self) -> String {
+        match self {
+            ConfiguredLightweightSetting::Disabled => "Disabled".to_string(),
+            ConfiguredLightweightSetting::Automatic => "Automatic".to_string(),
+            ConfiguredLightweightSetting::Main => "Use main model".to_string(),
+            ConfiguredLightweightSetting::Explicit(model) => model.clone(),
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn refresh_runtime_config_from_manager(
     renderer: &mut AnsiRenderer,
@@ -476,6 +716,39 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
+        ActivePalette::ModelTarget => {
+            if show_model_target_palette(renderer)? {
+                Ok(Some(ActivePalette::ModelTarget))
+            } else {
+                Ok(None)
+            }
+        }
+        ActivePalette::LightweightModel => {
+            let Some(action) = (match selection {
+                InlineListSelection::ConfigAction(action) => Some(action),
+                _ => None,
+            }) else {
+                if show_lightweight_model_palette(renderer, config, vt_cfg.as_ref())? {
+                    return Ok(Some(ActivePalette::LightweightModel));
+                }
+                return Ok(None);
+            };
+
+            let Some(choice) = action.strip_prefix(LIGHTWEIGHT_MODEL_ACTION_PREFIX) else {
+                if show_lightweight_model_palette(renderer, config, vt_cfg.as_ref())? {
+                    return Ok(Some(ActivePalette::LightweightModel));
+                }
+                return Ok(None);
+            };
+
+            let selected_model = match choice {
+                "auto" => String::new(),
+                "main" => config.model.clone(),
+                explicit => explicit.to_string(),
+            };
+            finalize_lightweight_model_selection(renderer, config, vt_cfg, selected_model).await?;
+            Ok(None)
+        }
     }
 }
 
@@ -512,6 +785,8 @@ pub(crate) fn handle_palette_preview(
                 original_theme_id,
             }))
         }
+        ActivePalette::ModelTarget => Ok(Some(ActivePalette::ModelTarget)),
+        ActivePalette::LightweightModel => Ok(Some(ActivePalette::LightweightModel)),
         ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings {
             state,
             esc_armed: false,
@@ -614,6 +889,7 @@ pub(crate) fn handle_palette_cancel(
                 Ok(None)
             }
         }
+        ActivePalette::ModelTarget | ActivePalette::LightweightModel => Ok(None),
     }
 }
 
@@ -644,7 +920,42 @@ pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
+    use vtcode_core::config::constants::models;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
+    use vtcode_core::config::types::{
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
+        UiSurfacePreference,
+    };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
     use vtcode_core::utils::session_archive::{SessionArchiveMetadata, SessionSnapshot};
+
+    fn runtime_config(provider: &str, model: &str) -> CoreAgentConfig {
+        CoreAgentConfig {
+            model: model.to_string(),
+            api_key: "test-key".to_string(),
+            provider: provider.to_string(),
+            api_key_env: Provider::OpenAI.default_api_key_env().to_string(),
+            workspace: std::env::current_dir().expect("current_dir"),
+            verbose: false,
+            quiet: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: std::collections::BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        }
+    }
 
     #[test]
     fn normalize_config_selection_maps_cycle_prev_to_cycle() {
@@ -698,5 +1009,50 @@ mod tests {
         assert!(value.contains("5m 0s"));
         assert!(value.contains("12 messages"));
         assert!(value.contains("2 tools"));
+    }
+
+    #[test]
+    fn lightweight_model_palette_includes_automatic_main_and_explicit_choices() {
+        let config = runtime_config("openai", models::openai::GPT_5_4);
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.small_model.model.clear();
+
+        let view = build_lightweight_model_palette(&config, Some(&vt_cfg));
+        assert!(
+            view.items
+                .iter()
+                .any(|item| item.title == "Automatic (recommended)")
+        );
+        assert!(view.items.iter().any(|item| item.title == "Use main model"));
+        assert_eq!(
+            view.selected,
+            Some(InlineListSelection::ConfigAction(format!(
+                "{}auto",
+                LIGHTWEIGHT_MODEL_ACTION_PREFIX
+            )))
+        );
+        assert!(
+            view.lines
+                .iter()
+                .any(|line| line.contains("gpt-5.4-mini -> fallback gpt-5.4"))
+        );
+    }
+
+    #[test]
+    fn lightweight_model_palette_marks_main_model_choice_when_configured() {
+        let config = runtime_config("openai", models::openai::GPT_5_4);
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.small_model.model = "gpt-5.4".to_string();
+
+        let view = build_lightweight_model_palette(&config, Some(&vt_cfg));
+        assert_eq!(
+            view.selected,
+            Some(InlineListSelection::ConfigAction(format!(
+                "{}main",
+                LIGHTWEIGHT_MODEL_ACTION_PREFIX
+            )))
+        );
     }
 }

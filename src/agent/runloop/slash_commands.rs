@@ -381,6 +381,11 @@ pub(crate) async fn handle_slash_command(
                         Ok(SlashCommandOutcome::ShowMemoryConfig)
                     }
                     "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
+                    "model" | "model.main" | "model.lightweight" => {
+                        Ok(SlashCommandOutcome::ShowSettingsAtPath {
+                            path: args.to_string(),
+                        })
+                    }
                     _ => Ok(SlashCommandOutcome::ShowSettingsAtPath {
                         path: args.to_string(),
                     }),
@@ -914,6 +919,21 @@ mod tests {
             .expect("config memory command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::ShowMemoryConfig));
+    }
+
+    #[tokio::test]
+    async fn config_model_opens_model_settings_tree() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("config model", &mut renderer, &workspace)
+            .await
+            .expect("config model command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ShowSettingsAtPath { ref path } if path == "model"
+        ));
     }
 
     #[tokio::test]

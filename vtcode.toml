@@ -476,7 +476,7 @@ enabled = true
 # Possible values: claude-4-5-haiku, e.g., gemini-2.0-flash, gpt-4-mini
 # Default: ""
 # Type: `string`
-model = "gpt-5.4-mini"
+model = "gpt-5-nano"
 
 # Temperature for small model responses
 # Default: 0.30000001192092896

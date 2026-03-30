@@ -4,6 +4,7 @@ mod mutations;
 mod path;
 mod render;
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use super::config_section_headings::heading_for_path;
@@ -37,6 +38,11 @@ const ACTION_PREFIX_ARRAY_ADD: &str = "settings:array_add:";
 const ACTION_PREFIX_ARRAY_POP: &str = "settings:array_pop:";
 const ACTION_PREFIX_SET: &str = "settings:set:";
 const OPTIONAL_DOC_FIELDS: &[&str] = &["provider.openai.service_tier"];
+pub(crate) const SETTINGS_MODEL_CONFIG_PATH: &str = "model_config";
+pub(crate) const SETTINGS_MODEL_CONFIG_MAIN_PATH: &str = "model_config.main";
+pub(crate) const SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH: &str = "model_config.lightweight";
+pub(crate) const ACTION_PICK_MAIN_MODEL: &str = "settings:pick_main_model";
+pub(crate) const ACTION_PICK_LIGHTWEIGHT_MODEL: &str = "settings:pick_lightweight_model";
 
 #[derive(Clone)]
 pub(crate) struct SettingsPaletteState {
@@ -100,7 +106,11 @@ pub(crate) fn show_settings_palette(
     lines.push(state.source_label.clone());
     if let Some(view_path) = state.view_path.as_deref() {
         let heading = heading_for_path(view_path);
-        lines.push(format!("{} ({})", heading.title, view_path));
+        lines.push(format!(
+            "{} ({})",
+            heading.title,
+            display_settings_view_path(view_path)
+        ));
         if !heading.summary.is_empty() {
             lines.push(heading.summary.into_owned());
         }
@@ -154,6 +164,13 @@ pub(crate) fn apply_settings_action(
     action: &str,
 ) -> Result<SettingsApplyOutcome> {
     let mut outcome = SettingsApplyOutcome::default();
+
+    if matches!(
+        action,
+        ACTION_PICK_MAIN_MODEL | ACTION_PICK_LIGHTWEIGHT_MODEL
+    ) {
+        return Ok(outcome);
+    }
 
     match action {
         ACTION_RELOAD => {
@@ -211,6 +228,24 @@ pub(crate) fn apply_settings_action(
     }
 
     bail!("Unknown settings action: {}", action)
+}
+
+pub(crate) fn resolve_settings_view_path(path: &str) -> String {
+    match path.trim() {
+        "model" => SETTINGS_MODEL_CONFIG_PATH.to_string(),
+        "model.main" => SETTINGS_MODEL_CONFIG_MAIN_PATH.to_string(),
+        "model.lightweight" => SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH.to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub(crate) fn display_settings_view_path(path: &str) -> Cow<'_, str> {
+    match path {
+        SETTINGS_MODEL_CONFIG_PATH => Cow::Borrowed("model"),
+        SETTINGS_MODEL_CONFIG_MAIN_PATH => Cow::Borrowed("model.main"),
+        SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH => Cow::Borrowed("model.lightweight"),
+        other => Cow::Borrowed(other),
+    }
 }
 
 #[cfg(test)]
@@ -453,6 +488,131 @@ mod tests {
     }
 
     #[test]
+    fn resolve_settings_view_path_maps_model_aliases() {
+        assert_eq!(
+            resolve_settings_view_path("model"),
+            SETTINGS_MODEL_CONFIG_PATH
+        );
+        assert_eq!(
+            resolve_settings_view_path("model.main"),
+            SETTINGS_MODEL_CONFIG_MAIN_PATH
+        );
+        assert_eq!(
+            resolve_settings_view_path("model.lightweight"),
+            SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH
+        );
+    }
+
+    #[test]
+    fn root_settings_include_model_config_quick_access() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "Model Config")
+            .expect("model config quick access");
+        assert_eq!(
+            entry.selection,
+            Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_PATH
+            )))
+        );
+    }
+
+    #[test]
+    fn model_config_root_shows_main_and_lightweight_sections() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some(SETTINGS_MODEL_CONFIG_PATH.to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "Main Model"));
+        assert!(items.iter().any(|item| item.title == "Lightweight Model"));
+    }
+
+    #[test]
+    fn model_config_main_uses_picker_backed_default_model() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some(SETTINGS_MODEL_CONFIG_MAIN_PATH.to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "Provider"));
+        let default_model = items
+            .iter()
+            .find(|item| item.title == "Default Model")
+            .expect("default model entry");
+        assert_eq!(
+            default_model.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_PICK_MAIN_MODEL.to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn model_config_lightweight_shows_full_small_model_block() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some(SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH.to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        for title in [
+            "Enabled",
+            "Model",
+            "Temperature",
+            "Use For Git History",
+            "Use For Large Reads",
+            "Use For Web Summary",
+            "Use For Memory",
+        ] {
+            assert!(
+                items.iter().any(|item| item.title == title),
+                "missing {title}"
+            );
+        }
+
+        let model = items
+            .iter()
+            .find(|item| item.title == "Model")
+            .expect("lightweight model entry");
+        assert_eq!(
+            model.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()
+            ))
+        );
+    }
+
+    #[test]
     fn ide_context_view_includes_provider_section_navigation() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
@@ -468,6 +628,62 @@ mod tests {
         assert!(items.iter().any(|item| item.title == "VS Code Family"));
         assert!(items.iter().any(|item| item.title == "Zed Family"));
         assert!(items.iter().any(|item| item.title == "Generic Bridge"));
+    }
+
+    #[test]
+    fn agent_view_uses_picker_backed_default_model() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("agent".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let default_model = items
+            .iter()
+            .find(|item| item.title == "Default Model")
+            .expect("default model entry");
+        assert_eq!(
+            default_model.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_PICK_MAIN_MODEL.to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn lightweight_model_view_uses_picker_backed_model_entry() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("agent.small_model".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let model = items
+            .iter()
+            .find(|item| item.title == "Model")
+            .expect("model entry");
+        assert_eq!(
+            model.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()
+            ))
+        );
+        assert!(
+            model
+                .subtitle
+                .as_deref()
+                .is_some_and(|subtitle| subtitle.contains("Automatic"))
+        );
     }
 
     #[test]

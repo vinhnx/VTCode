@@ -253,6 +253,21 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Shared model selection and context settings.",
     ),
     (
+        "model_config",
+        "Model Config",
+        "Focused main-model and lightweight-model configuration.",
+    ),
+    (
+        "model_config.main",
+        "Main Model",
+        "Provider and default model for the active conversation model.",
+    ),
+    (
+        "model_config.lightweight",
+        "Lightweight Model",
+        "Shared lower-cost route for memory, prompt suggestions, and smaller delegated tasks.",
+    ),
+    (
         "optimization",
         "Performance",
         "Caching and runtime performance tuning.",

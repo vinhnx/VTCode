@@ -14,10 +14,13 @@ use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{InlineHandle, InlineHeaderContext};
 
-use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
+use crate::agent::runloop::model_picker::{
+    ModelPickerState, ModelSelectionResult, persist_lightweight_selection,
+};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::ui::build_inline_header_context;
+use vtcode_core::llm::{LightweightFeature, LightweightRouteSource, resolve_lightweight_route};
 
 fn service_tier_message_label(
     service_tier: Option<vtcode_config::OpenAIServiceTier>,
@@ -206,6 +209,54 @@ pub(crate) async fn finalize_model_selection(
                 selection.env_key
             ),
         )?;
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn finalize_lightweight_model_selection(
+    renderer: &mut AnsiRenderer,
+    config: &CoreAgentConfig,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    selected_model: String,
+) -> Result<()> {
+    let updated_cfg = persist_lightweight_selection(&config.workspace, &selected_model).await?;
+    *vt_cfg = Some(updated_cfg);
+
+    let configured_label = if selected_model.trim().is_empty() {
+        "Automatic".to_string()
+    } else if selected_model.eq_ignore_ascii_case(config.model.as_str()) {
+        "Use main model".to_string()
+    } else {
+        selected_model
+    };
+    let resolution = resolve_lightweight_route(
+        config,
+        vt_cfg.as_ref(),
+        LightweightFeature::PromptSuggestions,
+        None,
+    );
+    let effective_route = match resolution.source {
+        LightweightRouteSource::MainModel => config.model.clone(),
+        _ => match resolution.fallback_to_main_model() {
+            Some(fallback) => format!(
+                "{} -> fallback {}",
+                resolution.primary.model, fallback.model
+            ),
+            None => resolution.primary.model.clone(),
+        },
+    };
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Lightweight model set to {}.", configured_label),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Effective lightweight route: {}.", effective_route),
+    )?;
+    if let Some(warning) = resolution.warning {
+        renderer.line(MessageStyle::Warning, &warning)?;
     }
 
     Ok(())

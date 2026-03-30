@@ -8,12 +8,20 @@ use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection};
 
-use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
+use crate::agent::runloop::model_picker::{
+    ModelPickerProgress, ModelPickerStart, ModelPickerState,
+};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, handle_palette_cancel, handle_palette_preview, handle_palette_selection,
+    ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODEL_TARGET_ACTION_LIGHTWEIGHT,
+    MODEL_TARGET_ACTION_MAIN, handle_palette_cancel, handle_palette_preview,
+    handle_palette_selection, show_lightweight_model_palette,
 };
+use crate::agent::runloop::unified::settings_interactive::{
+    ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL,
+};
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::action::InlineLoopAction;
@@ -81,6 +89,9 @@ impl<'a> InlineModalProcessor<'a> {
         match self.model_picker.handle_submit(renderer, selection).await? {
             ModelPickerOutcome::SkipPalette => Ok(InlineLoopAction::Continue),
             ModelPickerOutcome::ForwardToPalette(selection) => {
+                if self.handle_palette_redirect(renderer, &selection).await? {
+                    return Ok(InlineLoopAction::Continue);
+                }
                 self.palette
                     .handle_submit(
                         renderer,
@@ -115,6 +126,65 @@ impl<'a> InlineModalProcessor<'a> {
         selection: InlineListSelection,
     ) -> Result<InlineLoopAction> {
         self.palette.handle_preview(renderer, selection)
+    }
+
+    async fn handle_palette_redirect(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: &InlineListSelection,
+    ) -> Result<bool> {
+        let Some(active) = self.palette.state.as_ref() else {
+            return Ok(false);
+        };
+
+        match (active, selection) {
+            (ActivePalette::ModelTarget, InlineListSelection::ConfigAction(action))
+                if action == MODEL_TARGET_ACTION_MAIN =>
+            {
+                self.palette.state.take();
+                self.model_picker.start_picker(renderer).await?;
+                Ok(true)
+            }
+            (ActivePalette::ModelTarget, InlineListSelection::ConfigAction(action))
+                if action == MODEL_TARGET_ACTION_LIGHTWEIGHT =>
+            {
+                self.palette.state.take();
+                if show_lightweight_model_palette(
+                    renderer,
+                    self.model_picker.config,
+                    self.model_picker.vt_cfg.as_ref(),
+                )? {
+                    *self.palette.state = Some(ActivePalette::LightweightModel);
+                }
+                Ok(true)
+            }
+            (ActivePalette::Settings { .. }, InlineListSelection::ConfigAction(action))
+                if action == ACTION_PICK_MAIN_MODEL =>
+            {
+                self.palette.state.take();
+                self.model_picker.start_picker(renderer).await?;
+                Ok(true)
+            }
+            (ActivePalette::Settings { .. }, InlineListSelection::ConfigAction(action))
+                if action == ACTION_PICK_LIGHTWEIGHT_MODEL =>
+            {
+                self.palette.state.take();
+                if show_lightweight_model_palette(
+                    renderer,
+                    self.model_picker.config,
+                    self.model_picker.vt_cfg.as_ref(),
+                )? {
+                    *self.palette.state = Some(ActivePalette::LightweightModel);
+                }
+                Ok(true)
+            }
+            (ActivePalette::LightweightModel, InlineListSelection::ConfigAction(action))
+                if action.starts_with(LIGHTWEIGHT_MODEL_ACTION_PREFIX) =>
+            {
+                Ok(false)
+            }
+            _ => Ok(false),
+        }
     }
 }
 
@@ -265,6 +335,88 @@ struct ModelPickerCoordinator<'a> {
 }
 
 impl<'a> ModelPickerCoordinator<'a> {
+    async fn start_picker(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if self.state.is_some() {
+            renderer.line(
+                MessageStyle::Error,
+                "A model picker session is already active. Complete or cancel it before starting another.",
+            )?;
+            return Ok(());
+        }
+
+        let reasoning = self
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.reasoning_effort)
+            .unwrap_or(self.config.reasoning_effort);
+        let service_tier = self
+            .vt_cfg
+            .as_ref()
+            .and_then(|cfg| cfg.provider.openai.service_tier);
+        let workspace_hint = Some(self.config.workspace.clone());
+        let picker_start = {
+            let loading_spinner = if renderer.supports_inline_ui() {
+                Some(PlaceholderSpinner::new(
+                    self.handle,
+                    Some(String::new()),
+                    Some(String::new()),
+                    "Loading model lists...",
+                ))
+            } else {
+                renderer.line(MessageStyle::Info, "Loading model lists...")?;
+                None
+            };
+            let result = ModelPickerState::new(
+                renderer,
+                self.vt_cfg.clone(),
+                reasoning,
+                service_tier,
+                workspace_hint,
+                self.config.provider.clone(),
+                self.config.model.clone(),
+            )
+            .await;
+            drop(loading_spinner);
+            result
+        };
+
+        match picker_start {
+            Ok(ModelPickerStart::InProgress(picker)) => {
+                *self.state = Some(picker);
+            }
+            Ok(ModelPickerStart::Completed { state, selection }) => {
+                if let Err(err) = finalize_model_selection(
+                    renderer,
+                    &state,
+                    selection,
+                    self.config,
+                    self.vt_cfg,
+                    self.provider_client,
+                    self.session_bootstrap,
+                    self.handle,
+                    self.header_context,
+                    self.full_auto,
+                    self.conversation_history_len,
+                )
+                .await
+                {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to apply model selection: {}", err),
+                    )?;
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to start model picker: {}", err),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn handle_submit(
         &mut self,
         renderer: &mut AnsiRenderer,

@@ -10,8 +10,10 @@ use super::render::{
     search_value_with_content, section_item, section_subtitle, setting_subtitle, summarize_value,
 };
 use super::{
-    ACTION_PREFIX_ARRAY_ADD, ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET,
-    OPTIONAL_DOC_FIELDS, SettingsPaletteState,
+    ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_ARRAY_ADD,
+    ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET, OPTIONAL_DOC_FIELDS,
+    SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH, SETTINGS_MODEL_CONFIG_MAIN_PATH,
+    SETTINGS_MODEL_CONFIG_PATH, SettingsPaletteState,
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
 
@@ -39,10 +41,21 @@ pub(super) fn build_settings_items(
             super::ACTION_OPEN_ROOT,
         ));
 
+        if append_synthetic_model_config_items(&mut items, view_path, draft)? {
+            return Ok(items);
+        }
+
         let node = get_node(draft, view_path)
             .ok_or_else(|| anyhow!("Could not resolve settings path {}", view_path))?;
         append_node_items(&mut items, view_path, node, draft)?;
     } else if let TomlValue::Table(table) = draft {
+        items.push(section_item("Quick Access"));
+        items.push(action_item(
+            "Model Config",
+            "Edit main and lightweight model settings in one focused tree",
+            Some("Section"),
+            &format!("{}{}", ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_PATH),
+        ));
         append_table_items(&mut items, table, None, None, draft);
     }
 
@@ -85,6 +98,55 @@ fn append_node_items(
     }
 
     Ok(())
+}
+
+fn append_synthetic_model_config_items(
+    items: &mut Vec<InlineListItem>,
+    view_path: &str,
+    draft_root: &TomlValue,
+) -> Result<bool> {
+    match view_path {
+        SETTINGS_MODEL_CONFIG_PATH => {
+            items.push(section_item("Sections"));
+            items.push(action_item(
+                "Main Model",
+                "Provider and default model for the active conversation model",
+                Some("Section"),
+                &format!("{}{}", ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_MAIN_PATH),
+            ));
+            items.push(action_item(
+                "Lightweight Model",
+                "Shared lower-cost route for memory, prompt suggestions, and smaller delegated tasks",
+                Some("Section"),
+                &format!(
+                    "{}{}",
+                    ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH
+                ),
+            ));
+            Ok(true)
+        }
+        SETTINGS_MODEL_CONFIG_MAIN_PATH => {
+            items.push(section_item("Settings"));
+            append_mapped_setting_item(items, draft_root, "agent.provider");
+            append_mapped_setting_item(items, draft_root, "agent.default_model");
+            Ok(true)
+        }
+        SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH => {
+            let node = get_node(draft_root, "agent.small_model")
+                .ok_or_else(|| anyhow!("Could not resolve settings path agent.small_model"))?;
+            append_node_items(items, "agent.small_model", node, draft_root)?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn append_mapped_setting_item(items: &mut Vec<InlineListItem>, draft_root: &TomlValue, path: &str) {
+    let Some(value) = get_node(draft_root, path) else {
+        return;
+    };
+    let label = path.rsplit('.').next().unwrap_or(path);
+    items.push(item_for_value(label, path, value, draft_root));
 }
 
 fn append_table_items(
@@ -178,6 +240,23 @@ fn item_for_value(
         summarize_value(value)
     };
     let subtitle = setting_subtitle(&summary, &description, false);
+    let search_value = search_value_with_content(path, label, value, doc);
+
+    if path == "agent.default_model" || path == "agent.small_model.model" {
+        let action = if path == "agent.default_model" {
+            ACTION_PICK_MAIN_MODEL
+        } else {
+            ACTION_PICK_LIGHTWEIGHT_MODEL
+        };
+        return InlineListItem {
+            title,
+            subtitle: Some(subtitle),
+            badge: Some("Pick".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(action.to_string())),
+            search_value: Some(search_value),
+        };
+    }
 
     match value {
         TomlValue::Boolean(_) => InlineListItem {
@@ -189,7 +268,7 @@ fn item_for_value(
                 "{}{}:toggle",
                 ACTION_PREFIX_SET, path
             ))),
-            search_value: Some(search_value_with_content(path, label, value, doc)),
+            search_value: Some(search_value),
         },
         TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
             title,
@@ -200,7 +279,7 @@ fn item_for_value(
                 "{}{}:inc",
                 ACTION_PREFIX_SET, path
             ))),
-            search_value: Some(search_value_with_content(path, label, value, doc)),
+            search_value: Some(search_value),
         },
         TomlValue::String(current) => {
             let has_options = resolve_cycle_options(Some(draft_root), path, current).len() > 1;
@@ -215,7 +294,7 @@ fn item_for_value(
                         ACTION_PREFIX_SET, path
                     ))
                 }),
-                search_value: Some(search_value_with_content(path, label, value, doc)),
+                search_value: Some(search_value),
             }
         }
         TomlValue::Array(entries) => InlineListItem {
@@ -234,7 +313,7 @@ fn item_for_value(
                 "{}{}",
                 ACTION_PREFIX_OPEN, path
             ))),
-            search_value: Some(search_value_with_content(path, label, value, doc)),
+            search_value: Some(search_value),
         },
         TomlValue::Table(_) => InlineListItem {
             title,
@@ -245,7 +324,7 @@ fn item_for_value(
                 "{}{}",
                 ACTION_PREFIX_OPEN, path
             ))),
-            search_value: Some(search_value_with_content(path, label, value, doc)),
+            search_value: Some(search_value),
         },
         _ => InlineListItem {
             title,
@@ -253,7 +332,7 @@ fn item_for_value(
             badge: None,
             indent: 0,
             selection: None,
-            search_value: Some(search_value_with_content(path, label, value, doc)),
+            search_value: Some(search_value),
         },
     }
 }

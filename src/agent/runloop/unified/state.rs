@@ -13,6 +13,7 @@ use vtcode_tui::app::EditingMode;
 pub(crate) enum ModelPickerTarget {
     #[default]
     Main,
+    Lightweight,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

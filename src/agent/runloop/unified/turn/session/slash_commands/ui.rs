@@ -16,7 +16,8 @@ use crate::agent::runloop::unified::overlay_prompt::{
     OverlayWaitOutcome, wait_for_overlay_submission,
 };
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, apply_prompt_style, show_sessions_palette, show_theme_palette,
+    ActivePalette, apply_prompt_style, show_lightweight_model_palette, show_model_target_palette,
+    show_sessions_palette, show_theme_palette,
 };
 use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
@@ -297,10 +298,41 @@ pub(crate) async fn handle_start_statusline_setup(
 }
 
 pub(crate) async fn handle_start_model_selection(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
-    ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
-    start_model_picker(ctx).await
+    if !ensure_selection_ui_available(&mut ctx, "selecting a model target")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Inline UI is unavailable; opening the main model picker directly.",
+        )?;
+        return start_model_selection_target(ctx, ModelPickerTarget::Main).await;
+    }
+
+    if show_model_target_palette(ctx.renderer)? {
+        *ctx.palette_state = Some(ActivePalette::ModelTarget);
+    }
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(super) async fn start_model_selection_target(
+    ctx: SlashCommandContext<'_>,
+    target: ModelPickerTarget,
+) -> Result<SlashCommandControl> {
+    ctx.session_stats.model_picker_target = target;
+    match target {
+        ModelPickerTarget::Main => start_model_picker(ctx).await,
+        ModelPickerTarget::Lightweight => {
+            if show_lightweight_model_palette(ctx.renderer, ctx.config, ctx.vt_cfg.as_ref())? {
+                *ctx.palette_state = Some(ActivePalette::LightweightModel);
+            }
+            ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
+            Ok(SlashCommandControl::Continue)
+        }
+    }
 }
 
 pub(crate) async fn handle_toggle_ide_context(
