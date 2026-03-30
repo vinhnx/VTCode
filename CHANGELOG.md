@@ -2,6 +2,52 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.96.0 - 2026-03-30
+
+### Highlights
+#### Bug Fixes
+
+- Update external editor instructions to reflect single-click behavior (7f9f0557) 
+#### Features
+
+- Add shared lightweight model routing (4e41e088) 
+- Implement preferred lightweight model variants and update configuration settings (2112d993) 
+- Implement collect_single_response function for streamlined LLM interactions and refactor related code (a863561c) 
+- Add interactive OpenAI manual compact controls (6660de5d) 
+- Implement transcript link detection and wrapping functionality (9cfd3e01) 
+### Other Changes
+#### Other
+
+- Add parallel batch test for file listing and unified search; refactor list_files to avoid reentrancy (b5b2d2de) 
+- Add minimum turn limit for child agents and update documentation (97eb9a89) 
+- Update theme permissions and synchronize theme selection across components (43361475) 
+- Add theme management and accessibility features (512ad686) 
+- Add documentation for theme-related functions and improve code readability (9c387721) 
+- Enhance terminal restoration on panic and signal handling (d546487f) 
+- Implement scheduled tasks and automation framework (a0c65096) 
+- Add ast-grep integration for code quality checks and rule enforcement (a7b81d0a) 
+- Implement structural search workflows and enhance ast-grep integration (5112cdbb) 
+- Enhance ast-grep documentation and add tests for skill discovery queries (652ab8aa) 
+- Enhance ast-grep documentation and improve pattern syntax guidance (a5a71c9d) 
+- Enhance ast-grep documentation with rule cheat sheets and improve skill discovery tests (0e6a5a6c) 
+- Enhance ast-grep documentation with config cheat sheets and improve skill discovery tests (306f4ab4) 
+- Update TOOL_SPECS.md with strictness details and usage preferences; remove unused stats.rs; enhance SKILL.md and project-workflows.md with ast-grep insights; add tests for skill discovery and structural search flags; refine hints in structural_search.rs. (0cf298f6) 
+- Enhance documentation for custom language setup and tree-sitter integration; add tests for skill discovery by custom language queries. (71b6eadb) 
+- Enhance documentation on language injection and multi-language support; add tests for skill discovery by language queries. (16de0f58) 
+- Enhance ast-grep documentation and language support; add tests for new aliases and inference rules (644d908f) 
+- Enhance documentation for transformation objects and rewriters; add tests for skill discovery by new queries (211e21aa) 
+- Enhance documentation for sgconfig.yml and project workflows; add tests for skill discovery by ruleDirs, testConfigs, libraryPath, and dynamic injected queries. (4c0405d1) 
+- Enhance documentation and refine descriptions for ast-grep commands; normalize exit codes for no matches and findings in structural search. (29867cdc) 
+- Enhance documentation for Rust, TypeScript, TSX, YAML, Ruby, Python, Kotlin, Java, HTML, Go, Cpp, and C catalog examples; provide guidelines for adapting rules to repository-specific conventions. (819298a2) 
+- Enhance documentation for ast-grep project workflows and APIs; clarify project discovery behavior, scan vs run requirements, and performance optimizations (3db5c5e5) 
+- Fix typo in comments for line truncation functions (32ccac09) 
+- Add persistent memory support and enhance instruction appendix functionality (4c73f931) 
+- Refactor signal handling and improve session finalization timeout logic (47828a62) 
+- Refactor credential storage to support encrypted file storage and improve legacy migration handling (d2e97368) 
+- Add model configuration commands and lightweight model support (1458605d) 
+- Refactor transcript link handling and add URL guard feature (5463ab53) 
+### Contributors
+@vinhnx
 ## 0.95.0 - 2026-03-30
 
 ### Highlights
