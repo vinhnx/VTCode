@@ -6,7 +6,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::context::{ConversationMemory, EntityResolver, WorkspaceState};
 use vtcode_core::llm::{
-    LightweightFeature, create_provider_for_model_route, provider as uni, resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route, provider as uni,
+    resolve_lightweight_route,
 };
 
 const MIN_PROMPT_LENGTH_FOR_REFINEMENT: usize = 20;
@@ -123,8 +124,7 @@ async fn try_refine_prompt_with_route(
         ..Default::default()
     };
 
-    let text = refiner
-        .generate(req)
+    let text = collect_single_response(refiner.as_ref(), req)
         .await
         .map(|response| response.content.unwrap_or_default())?;
     if !should_accept_refinement(raw, &text) {

@@ -674,10 +674,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Discovery Queries, Prompt Integration, Resource Loading, Storage Locations
   - **User Questions**: "What can you tell me about Skill Tool Usage?", "How does Discovery Queries work?", "How does Prompt Integration work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: Small Model Helpers
-  - **User Questions**: "What can you tell me about Small Model Helpers?"
-
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm
   - **Topics**: Overview, Architecture, Components, Usage Examples, Benefits
@@ -687,6 +683,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

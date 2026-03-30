@@ -12,7 +12,10 @@ use crate::config::types::AgentConfig as RuntimeAgentConfig;
 use crate::config::{ConfigManager, PersistentMemoryConfig, get_config_dir};
 use crate::llm::factory::infer_provider_from_model;
 use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole};
-use crate::llm::{LightweightFeature, create_provider_for_model_route, resolve_lightweight_route};
+use crate::llm::{
+    LightweightFeature, collect_single_response, create_provider_for_model_route,
+    resolve_lightweight_route,
+};
 
 pub const MEMORY_FILENAME: &str = "MEMORY.md";
 pub const MEMORY_SUMMARY_FILENAME: &str = "memory_summary.md";
@@ -2154,8 +2157,7 @@ async fn classify_facts_with_provider(
         &schema,
     )?;
 
-    let response = provider
-        .generate(request)
+    let response = collect_single_response(provider, request)
         .await
         .context("persistent memory classification LLM request failed")?;
     let content = response
@@ -2277,8 +2279,7 @@ async fn summarize_memory_with_provider(
         &schema,
     )?;
 
-    let response = provider
-        .generate(request)
+    let response = collect_single_response(provider, request)
         .await
         .context("persistent memory summary LLM request failed")?
         .content
@@ -2424,8 +2425,7 @@ async fn plan_memory_operation_with_provider(
         &schema,
     )?;
 
-    let response = provider
-        .generate(llm_request)
+    let response = collect_single_response(provider, llm_request)
         .await
         .context("persistent memory planner LLM request failed")?;
     let content = response
@@ -2810,9 +2810,13 @@ impl Drop for MemoryLock {
 mod tests {
     use super::*;
     use crate::config::models::ModelId;
-    use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
+    use crate::llm::provider::{
+        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse,
+        NormalizedStreamEvent,
+    };
     use crate::llm::resolve_api_key_for_model_route;
     use async_trait::async_trait;
+    use futures::stream;
     use std::sync::Mutex;
     use tempfile::tempdir;
 
@@ -3113,6 +3117,90 @@ mod tests {
                 .as_text()
                 .contains("Return JSON only.")
         );
+    }
+
+    #[derive(Clone)]
+    struct StreamingOnlyMemoryProvider {
+        response: &'static str,
+    }
+
+    #[async_trait]
+    impl LLMProvider for StreamingOnlyMemoryProvider {
+        fn name(&self) -> &str {
+            "streaming-memory"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        fn supports_non_streaming(&self, _model: &str) -> bool {
+            false
+        }
+
+        async fn generate(
+            &self,
+            _request: LLMRequest,
+        ) -> std::result::Result<LLMResponse, LLMError> {
+            panic!("generate should not be called for streaming-only provider")
+        }
+
+        async fn stream_normalized(
+            &self,
+            _request: LLMRequest,
+        ) -> std::result::Result<LLMNormalizedStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![Ok(
+                NormalizedStreamEvent::Done {
+                    response: Box::new(LLMResponse {
+                        content: Some(self.response.to_string()),
+                        model: "stub-model".to_string(),
+                        tool_calls: None,
+                        usage: None,
+                        finish_reason: FinishReason::Stop,
+                        reasoning: None,
+                        reasoning_details: None,
+                        organization_id: None,
+                        request_id: None,
+                        tool_references: Vec::new(),
+                    }),
+                },
+            )])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> std::result::Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn planner_supports_streaming_only_provider() {
+        let workspace = tempdir().expect("workspace");
+        let provider = StreamingOnlyMemoryProvider {
+            response: "{\"kind\":\"ask_missing\",\"facts\":[],\"selected_ids\":[],\"missing\":{\"field\":\"name\",\"prompt\":\"What name should VT Code remember?\"},\"message\":null}",
+        };
+        let route = MemoryModelRoute {
+            provider_name: "stub".to_string(),
+            model: "stub-model".to_string(),
+            temperature: 0.0,
+        };
+
+        let plan = plan_memory_operation_with_provider(
+            &provider,
+            &route,
+            workspace.path(),
+            MemoryOpKind::Remember,
+            "remember my name",
+            None,
+            &[],
+        )
+        .await
+        .expect("streaming planner should succeed");
+
+        assert_eq!(plan.kind, MemoryOpKind::AskMissing);
     }
 
     #[tokio::test]

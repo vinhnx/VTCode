@@ -178,6 +178,7 @@ pub mod provider_builder;
 pub mod provider_config;
 pub mod providers;
 pub mod rig_adapter;
+mod single_response;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing // Centralized HTTP client factory
@@ -205,6 +206,7 @@ pub use providers::{
     AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider,
     ZAIProvider,
 };
+pub use single_response::collect_single_response;
 pub use tool_bridge::{
     CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,
     ToolExecution, ToolIntent, ToolIntentExtractor,

@@ -5,7 +5,8 @@ use vtcode_commons::ErrorCategory;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
 use vtcode_core::llm::{
-    LightweightFeature, create_provider_for_model_route, resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route,
+    resolve_lightweight_route,
 };
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
@@ -937,8 +938,7 @@ async fn summarize_tool_output_with_provider(
         stream: false,
         ..Default::default()
     };
-    let response = provider
-        .generate(request)
+    let response = collect_single_response(provider, request)
         .await
         .context("tool output summarization failed")?;
     Ok(response.content_text().trim().to_string())

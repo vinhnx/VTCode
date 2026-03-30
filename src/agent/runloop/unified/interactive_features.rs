@@ -6,7 +6,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::{
-    LightweightFeature, create_provider_for_model_route, resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route,
+    resolve_lightweight_route,
 };
 use vtcode_core::tools::ToolRegistry;
 
@@ -426,7 +427,7 @@ async fn llm_prompt_suggestions_from_provider(
         ..Default::default()
     };
 
-    let Ok(response) = provider.generate(request).await else {
+    let Ok(response) = collect_single_response(provider, request).await else {
         return Vec::new();
     };
     let Some(content) = response.content else {
@@ -465,13 +466,11 @@ async fn llm_inline_prompt_suggestion_from_provider(
     draft: &str,
 ) -> Option<String> {
     let request = build_inline_prompt_suggestion_request(model, temperature, history, draft);
-    if !provider.supports_non_streaming(&request.model)
-        || provider.validate_request(&request).is_err()
-    {
+    if provider.validate_request(&request).is_err() {
         return None;
     }
 
-    let Ok(response) = provider.generate(request).await else {
+    let Ok(response) = collect_single_response(provider, request).await else {
         return None;
     };
     let content = response.content?;
