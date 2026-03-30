@@ -42,6 +42,13 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
+check ghostty sidebar unvaiable
+
+```
+
+Ghostty VT sidecar unavailable. PTY snapshots will use legacy_vt100.
+```
+
 use https://github.com/Uzaaft/libghostty-rs/ replace existing libghostty-vt impl.
 
 ---
@@ -92,13 +99,6 @@ ref current status and improve: `/Users/vinhnguyenxuan/Documents/vtcode-resource
 2. add ansi color to header heading text. this will make the header more visually appealing and easier to read, especially if we use a color that contrasts well with the background. it will also add a nice design touch to the modal, making it look more polished and cohesive.
 
 ---
-
-check ghostty sidebar unvaiable
-
-```
-
-Ghostty VT sidecar unavailable. PTY snapshots will use legacy_vt100.
-```
 
 ---
 

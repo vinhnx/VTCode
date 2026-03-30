@@ -30,6 +30,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 
 const VIEW_ROWS: u16 = 14;
 const VIEW_WIDTH: u16 = 100;
@@ -69,6 +70,64 @@ fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
     session.core.set_input(input.to_string());
     session.core.set_cursor(cursor);
     session
+}
+
+fn left_click_session(
+    session: &mut Session,
+    events: &UnboundedSender<InlineEvent>,
+    column: u16,
+    row: u16,
+    modifiers: KeyModifiers,
+) {
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers,
+        }),
+        events,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column,
+            row,
+            modifiers,
+        }),
+        events,
+        None,
+    );
+}
+
+fn left_click_app_session(
+    session: &mut AppSession,
+    events: &UnboundedSender<app_types::InlineEvent>,
+    column: u16,
+    row: u16,
+    modifiers: KeyModifiers,
+) {
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers,
+        }),
+        events,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column,
+            row,
+            modifiers,
+        }),
+        events,
+        None,
+    );
 }
 
 fn sample_local_agent_entry(kind: app_types::LocalAgentKind) -> LocalAgentEntry {
@@ -563,21 +622,118 @@ fn plain_click_emits_open_file_event_for_absolute_transcript_path() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
     ));
+}
+
+#[test]
+fn repeated_plain_click_on_same_transcript_file_link_is_throttled() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
+fn repeated_plain_click_on_different_transcript_file_links_is_not_throttled() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let temp_file = quoted_transcript_temp_file_path();
+    fs::write(&temp_file, "transcript-link-throttle").expect("write throttle transcript temp file");
+    let quoted_temp_path = format!("`{}`", temp_file.display());
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!(
+            "Open {} and {}",
+            absolute_path, quoted_temp_path
+        ))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let first_target = session
+        .transcript_file_link_targets
+        .iter()
+        .find(|target| {
+            matches!(
+                &target.target,
+                TranscriptLinkTarget::File(path) if path.path().display().to_string() == absolute_path
+            )
+        })
+        .expect("expected first transcript file target")
+        .clone();
+    let second_target = session
+        .transcript_file_link_targets
+        .iter()
+        .find(|target| {
+            matches!(
+                &target.target,
+                TranscriptLinkTarget::File(path) if path.path() == temp_file.as_path()
+            )
+        })
+        .expect("expected second transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    left_click_session(
+        &mut session,
+        &tx,
+        first_target.area.x,
+        first_target.area.y,
+        KeyModifiers::NONE,
+    );
+    left_click_session(
+        &mut session,
+        &tx,
+        second_target.area.x,
+        second_target.area.y,
+        KeyModifiers::NONE,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == temp_file.display().to_string()
+    ));
+
+    let _ = fs::remove_file(&temp_file);
 }
 
 #[test]
@@ -602,21 +758,14 @@ fn double_click_emits_open_file_event_for_absolute_transcript_path() {
         row: target.area.y,
         modifiers: KeyModifiers::NONE,
     };
-    let release = MouseEvent {
-        kind: MouseEventKind::Up(MouseButton::Left),
-        column: target.area.x,
-        row: target.area.y,
-        modifiers: KeyModifiers::NONE,
-    };
-
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
 
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
     ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -642,15 +791,12 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -685,15 +831,12 @@ fn modifier_click_emits_open_url_event_for_explicit_transcript_link() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -715,15 +858,12 @@ fn modifier_click_emits_open_url_event_for_raw_transcript_url() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -768,15 +908,12 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
     );
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -824,15 +961,12 @@ fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_app_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -894,15 +1028,12 @@ fn plain_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_app_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -952,7 +1083,7 @@ fn modal_auth_text_in_app_session_is_selectable_and_copied() {
         .first()
         .expect("expected modal url target")
         .clone();
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::unbounded_channel::<app_types::InlineEvent>();
 
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
@@ -1043,21 +1174,69 @@ fn plain_click_emits_open_url_event_for_standard_modal_auth_link() {
     let target = targets.last().expect("expected modal url target").clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
+}
+
+#[test]
+fn repeated_plain_click_on_same_modal_url_link_is_throttled() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = format!(
+        "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
+        "abcdefghijklmnopqrstuvwxyz".repeat(10)
+    );
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: format!("Authorize with {url}"),
+            lines: vec![format!("Open this URL in your browser:\n{url}")],
+            footer_hint: None,
+            items: vec![InlineListItem {
+                title: "Continue".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::SlashCommand("continue".to_string())),
+                search_value: None,
+            }],
+            selected: Some(InlineListSelection::SlashCommand("continue".to_string())),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+
+    let _ = rendered_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .modal_link_targets()
+        .iter()
+        .find(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
+        .expect("expected modal url target")
+        .clone();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -1100,21 +1279,14 @@ fn double_click_emits_open_url_event_for_standard_modal_auth_link() {
         row: target.area.y,
         modifiers: KeyModifiers::NONE,
     };
-    let release = MouseEvent {
-        kind: MouseEventKind::Up(MouseButton::Left),
-        column: target.area.x,
-        row: target.area.y,
-        modifiers: KeyModifiers::NONE,
-    };
-
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(&mut session, &tx, click.column, click.row, click.modifiers);
 
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -1158,15 +1330,12 @@ fn modifier_click_emits_open_file_event_for_standard_modal_file_link_with_locati
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -1199,15 +1368,12 @@ fn modifier_click_emits_open_file_event_for_explicit_transcript_file_link() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -1272,25 +1438,18 @@ fn meta_click_emits_open_file_event_for_transcript_path() {
     let (tx, mut rx) = mpsc::unbounded_channel();
 
     // Some terminals (Ghostty, iTerm2) report Cmd as META instead of SUPER
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::META,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::META,
     );
 
-    #[cfg(target_os = "macos")]
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
     ));
-
-    #[cfg(not(target_os = "macos"))]
-    assert!(rx.try_recv().is_err());
 }
 
 #[cfg(target_os = "macos")]
@@ -1351,15 +1510,12 @@ fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
         &tx,
         None,
     );
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -1372,21 +1528,15 @@ fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
         &tx,
         None,
     );
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
-    ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[cfg(target_os = "macos")]
@@ -1408,15 +1558,12 @@ fn meta_key_press_then_plain_click_emits_open_file_event_on_macos() {
     let (tx, mut rx) = mpsc::unbounded_channel();
 
     session.handle_event(CrosstermEvent::Key(meta_modifier_press_event()), &tx, None);
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -1443,15 +1590,12 @@ fn app_session_modifier_click_emits_open_file_event_for_transcript_path() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_app_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(
@@ -1486,21 +1630,14 @@ fn app_session_double_click_emits_open_file_event_for_transcript_path() {
         row: target.area.y,
         modifiers: KeyModifiers::NONE,
     };
-    let release = MouseEvent {
-        kind: MouseEventKind::Up(MouseButton::Left),
-        column: target.area.x,
-        row: target.area.y,
-        modifiers: KeyModifiers::NONE,
-    };
-
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    left_click_app_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_app_session(&mut session, &tx, click.column, click.row, click.modifiers);
 
     assert!(matches!(
         rx.try_recv(),
         Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == absolute_path
     ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -1547,21 +1684,14 @@ fn app_session_double_click_emits_open_url_event_for_modal_auth_link() {
         row: target.area.y,
         modifiers: KeyModifiers::NONE,
     };
-    let release = MouseEvent {
-        kind: MouseEventKind::Up(MouseButton::Left),
-        column: target.area.x,
-        row: target.area.y,
-        modifiers: KeyModifiers::NONE,
-    };
-
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
-    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    left_click_app_session(&mut session, &tx, click.column, click.row, click.modifiers);
+    left_click_app_session(&mut session, &tx, click.column, click.row, click.modifiers);
 
     assert!(matches!(
         rx.try_recv(),
         Ok(app_types::InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[cfg(target_os = "macos")]
@@ -1588,15 +1718,12 @@ fn app_session_command_key_press_then_plain_click_emits_open_file_event_on_macos
         &tx,
         None,
     );
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: KeyModifiers::NONE,
-        }),
+    left_click_app_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        KeyModifiers::NONE,
     );
 
     assert!(matches!(
@@ -1914,7 +2041,7 @@ fn path_with_line_col_suffix_resolves_correctly() {
     );
 
     assert!(!session.transcript_file_link_targets.is_empty());
-    let target = &session.transcript_file_link_targets[0];
+    let target = session.transcript_file_link_targets[0].clone();
     assert!(matches!(
         &target.target,
         TranscriptLinkTarget::File(path)
@@ -1922,15 +2049,12 @@ fn path_with_line_col_suffix_resolves_correctly() {
                 && path.location_suffix() == Some(":42:10")
     ));
     let (tx, mut rx) = mpsc::unbounded_channel();
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
     assert!(matches!(
         rx.try_recv(),
@@ -1988,15 +2112,12 @@ fn path_with_hash_location_resolves_and_opens_with_canonical_suffix() {
     ));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    session.handle_event(
-        CrosstermEvent::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: target.area.x,
-            row: target.area.y,
-            modifiers: open_file_click_modifiers(),
-        }),
+    left_click_session(
+        &mut session,
         &tx,
-        None,
+        target.area.x,
+        target.area.y,
+        open_file_click_modifiers(),
     );
 
     assert!(matches!(

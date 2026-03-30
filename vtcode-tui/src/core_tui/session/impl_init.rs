@@ -123,6 +123,8 @@ impl Session {
             modal_link_targets: Vec::new(),
             hovered_transcript_file_link: None,
             last_mouse_position: None,
+            last_link_open: None,
+            pending_link_open: None,
             held_key_modifiers: KeyModifiers::empty(),
 
             // --- Logging ---

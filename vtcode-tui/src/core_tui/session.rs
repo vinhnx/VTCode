@@ -237,6 +237,8 @@ pub struct Session {
     modal_link_targets: Vec<TranscriptFileLinkTarget>,
     hovered_transcript_file_link: Option<usize>,
     last_mouse_position: Option<(u16, u16)>,
+    last_link_open: Option<(String, Instant)>,
+    pending_link_open: Option<String>,
     held_key_modifiers: KeyModifiers,
 
     // --- Logging ---

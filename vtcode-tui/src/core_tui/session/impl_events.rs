@@ -238,6 +238,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollDown => {
+                    self.clear_pending_link_click();
                     self.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, true, events, callback)
                         && !self.handle_bottom_panel_scroll(true)
@@ -247,6 +248,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollUp => {
+                    self.clear_pending_link_click();
                     self.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, false, events, callback)
                         && !self.handle_bottom_panel_scroll(false)
@@ -256,33 +258,25 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                    if self.handle_link_click_action(
-                        self.transcript_file_link_click_action(
-                            mouse_event.column,
-                            mouse_event.row,
-                            mouse_event.modifiers,
-                        ),
-                        false,
-                        events,
-                        callback,
-                    ) {
+                    self.clear_pending_link_click();
+                    if self.queue_link_click_action(self.transcript_file_link_click_action(
+                        mouse_event.column,
+                        mouse_event.row,
+                        mouse_event.modifiers,
+                    )) {
+                        self.mouse_selection.clear_click_history();
                         return;
                     }
 
                     if self.has_active_overlay() {
                         let in_modal_list =
                             self.mouse_in_modal_area(mouse_event.column, mouse_event.row);
-
-                        if self.handle_link_click_action(
-                            self.modal_link_click_action(
-                                mouse_event.column,
-                                mouse_event.row,
-                                mouse_event.modifiers,
-                            ),
-                            false,
-                            events,
-                            callback,
-                        ) {
+                        if self.queue_link_click_action(self.modal_link_click_action(
+                            mouse_event.column,
+                            mouse_event.row,
+                            mouse_event.modifiers,
+                        )) {
+                            self.mouse_selection.clear_click_history();
                             return;
                         }
 
@@ -294,18 +288,27 @@ impl Session {
                                 mouse_event.row,
                                 Instant::now(),
                             );
-                            if is_double_click
-                                && self.handle_link_click_action(
+                            if is_double_click {
+                                let modal_double_click_action = self.throttle_link_click_action(
                                     self.modal_link_double_click_action(
                                         mouse_event.column,
                                         mouse_event.row,
                                     ),
+                                );
+                                if !matches!(
+                                    modal_double_click_action,
+                                    TranscriptLinkClickAction::Ignore
+                                ) {
+                                    self.clear_pending_link_click();
+                                }
+                                if self.handle_link_click_action(
+                                    modal_double_click_action,
                                     true,
                                     events,
                                     callback,
-                                )
-                            {
-                                return;
+                                ) {
+                                    return;
+                                }
                             }
 
                             self.mouse_drag_target = MouseDragTarget::ModalText;
@@ -340,11 +343,20 @@ impl Session {
                         Instant::now(),
                     );
                     if is_double_click {
-                        if self.handle_link_click_action(
+                        let transcript_double_click_action = self.throttle_link_click_action(
                             self.transcript_file_link_double_click_action(
                                 mouse_event.column,
                                 mouse_event.row,
                             ),
+                        );
+                        if !matches!(
+                            transcript_double_click_action,
+                            TranscriptLinkClickAction::Ignore
+                        ) {
+                            self.clear_pending_link_click();
+                        }
+                        if self.handle_link_click_action(
+                            transcript_double_click_action,
                             true,
                             events,
                             callback,
@@ -370,6 +382,7 @@ impl Session {
                     self.handle_transcript_click(mouse_event);
                 }
                 MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    self.clear_pending_link_click();
                     match self.mouse_drag_target {
                         MouseDragTarget::Input => {
                             if let Some(cursor) = self
@@ -394,6 +407,18 @@ impl Session {
                     }
                 }
                 MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
+                    let transcript_link_action =
+                        self.pending_link_click_action(self.transcript_file_link_click_action(
+                            mouse_event.column,
+                            mouse_event.row,
+                            mouse_event.modifiers,
+                        ));
+                    let modal_link_action =
+                        self.pending_link_click_action(self.modal_link_click_action(
+                            mouse_event.column,
+                            mouse_event.row,
+                            mouse_event.modifiers,
+                        ));
                     match self.mouse_drag_target {
                         MouseDragTarget::Input => {
                             if let Some(cursor) = self
@@ -417,6 +442,16 @@ impl Session {
                         MouseDragTarget::None => {}
                     }
                     self.mouse_drag_target = MouseDragTarget::None;
+                    self.clear_pending_link_click();
+                    if self.handle_link_click_action(
+                        transcript_link_action,
+                        false,
+                        events,
+                        callback,
+                    ) {
+                        return;
+                    }
+                    if self.handle_link_click_action(modal_link_action, false, events, callback) {}
                 }
                 _ => {}
             },

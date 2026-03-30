@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::layout::Rect;
@@ -19,6 +20,7 @@ use crate::ui::tui::types::InlineLinkTarget;
 
 static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
+const LINK_OPEN_THROTTLE_INTERVAL: Duration = Duration::from_millis(500);
 static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'"#,
@@ -216,6 +218,67 @@ impl Session {
         )
     }
 
+    pub(crate) fn throttle_link_click_action(
+        &mut self,
+        action: TranscriptLinkClickAction,
+    ) -> TranscriptLinkClickAction {
+        let TranscriptLinkClickAction::Open(outbound) = action else {
+            return action;
+        };
+
+        let Some(key) = link_action_throttle_key(&outbound).map(str::to_owned) else {
+            return TranscriptLinkClickAction::Open(outbound);
+        };
+        let now = Instant::now();
+        if self
+            .last_link_open
+            .as_ref()
+            .is_some_and(|(last_key, last_at)| {
+                last_key == &key
+                    && now.saturating_duration_since(*last_at) <= LINK_OPEN_THROTTLE_INTERVAL
+            })
+        {
+            return TranscriptLinkClickAction::Consume;
+        }
+
+        self.last_link_open = Some((key, now));
+        TranscriptLinkClickAction::Open(outbound)
+    }
+
+    pub(crate) fn queue_link_click_action(&mut self, action: TranscriptLinkClickAction) -> bool {
+        match action {
+            TranscriptLinkClickAction::Open(outbound) => {
+                self.pending_link_open = link_action_throttle_key(&outbound).map(str::to_owned);
+                false
+            }
+            TranscriptLinkClickAction::Consume => true,
+            TranscriptLinkClickAction::Ignore => false,
+        }
+    }
+
+    pub(crate) fn pending_link_click_action(
+        &mut self,
+        action: TranscriptLinkClickAction,
+    ) -> TranscriptLinkClickAction {
+        let Some(pending_key) = self.pending_link_open.clone() else {
+            return TranscriptLinkClickAction::Ignore;
+        };
+        let TranscriptLinkClickAction::Open(outbound) = action else {
+            return TranscriptLinkClickAction::Ignore;
+        };
+
+        if link_action_throttle_key(&outbound) != Some(pending_key.as_str()) {
+            return TranscriptLinkClickAction::Ignore;
+        }
+
+        self.pending_link_open = None;
+        self.throttle_link_click_action(TranscriptLinkClickAction::Open(outbound))
+    }
+
+    pub(crate) fn clear_pending_link_click(&mut self) {
+        self.pending_link_open = None;
+    }
+
     pub(crate) fn update_held_key_modifiers(&mut self, key: &KeyEvent) {
         let Some(modifier) = modifier_key_flag(key.code) else {
             return;
@@ -290,6 +353,13 @@ fn point_in_rect(area: Rect, column: u16, row: u16) -> bool {
         && row < area.y.saturating_add(area.height)
         && column >= area.x
         && column < area.x.saturating_add(area.width)
+}
+
+fn link_action_throttle_key(event: &InlineEvent) -> Option<&str> {
+    match event {
+        InlineEvent::OpenFileInEditor(path) | InlineEvent::OpenUrl(path) => Some(path.as_str()),
+        _ => None,
+    }
 }
 
 fn should_consume_transcript_link_click(modifiers: KeyModifiers) -> bool {
