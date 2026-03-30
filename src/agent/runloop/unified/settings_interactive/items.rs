@@ -58,7 +58,7 @@ pub(super) fn build_settings_items(
         ));
         items.push(action_item(
             "External Editor",
-            "Open guided setup for /edit, Ctrl+E, and Cmd/Ctrl-click file links",
+            "Open guided setup for /edit, Ctrl+E, and single-click file links",
             Some("Setup"),
             ACTION_CONFIGURE_EDITOR,
         ));

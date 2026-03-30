@@ -93,8 +93,18 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
         .context("failed to write DA1 sentinel query")?;
     tty.flush().context("failed to flush OSC probe queries")?;
 
-    let response = read_until_da1(&mut tty, timeout)?;
-    let [fg, bg, c16, c231] = parse_four_colors(&response)?;
+    let result = read_until_da1(&mut tty, timeout);
+    if result.is_err() {
+        // Drain any pending responses so they don't leak as visible escape codes
+        // after the process exits and the terminal restores cooked mode.
+        drain_tty_input(&mut tty);
+    }
+    let response = result?;
+    let parsed = parse_four_colors(&response);
+    if parsed.is_err() {
+        drain_tty_input(&mut tty);
+    }
+    let [fg, bg, c16, c231] = parsed?;
 
     let is_term_light_theme = lightness(bg) > lightness(fg);
     let is_palette_light_theme = lightness(c16) > lightness(c231);
@@ -105,6 +115,42 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
         is_harmonious: is_term_light_theme == is_palette_light_theme,
         is_generated: bg == c16 && fg == c231,
     })
+}
+
+/// Best-effort drain of pending TTY input to prevent escape code leakage.
+#[cfg(unix)]
+fn drain_tty_input(tty: &mut File) {
+    let drain_tty = match tty.try_clone() {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    let mut pollfd = [PollFd::new(drain_tty.as_fd(), PollFlags::POLLIN)];
+    let drain_deadline = Instant::now() + Duration::from_millis(100);
+    let mut discard = [0_u8; 4096];
+    loop {
+        let now = Instant::now();
+        if now >= drain_deadline {
+            break;
+        }
+        let remaining_ms = (drain_deadline - now).as_millis().min(i32::MAX as u128) as i32;
+        let timeout = match PollTimeout::try_from(remaining_ms) {
+            Ok(t) => t,
+            Err(_) => break,
+        };
+        if poll(&mut pollfd, timeout).unwrap_or(0) == 0 {
+            break;
+        }
+        let ready = pollfd[0]
+            .revents()
+            .unwrap_or(PollFlags::empty())
+            .contains(PollFlags::POLLIN);
+        if !ready {
+            break;
+        }
+        if tty.read(&mut discard).unwrap_or(0) == 0 {
+            break;
+        }
+    }
 }
 
 #[cfg(unix)]

@@ -444,7 +444,7 @@ fn build_editor_config_steps(
                 request_choice_item(
                     EDITOR_ENABLED_ID,
                     "Enabled",
-                    "Allow `/edit` and Cmd/Ctrl-click file links to open in the configured editor.",
+                    "Allow `/edit` and single-click file links to open in the configured editor.",
                     WORKFLOW_ENABLED,
                 ),
                 request_choice_item(

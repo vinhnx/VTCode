@@ -265,11 +265,7 @@ impl Session {
             return TranscriptLinkClickAction::Consume;
         }
 
-        if is_open_file_modifier_click(modifiers) {
-            return self.link_open_action(Some(target));
-        }
-
-        TranscriptLinkClickAction::Ignore
+        self.link_open_action(Some(target))
     }
 
     fn link_open_action(
@@ -764,16 +760,4 @@ fn looks_like_transcript_path(token: &str) -> bool {
                 && ext.len() <= 12
                 && ext.chars().all(|c| c.is_ascii_alphanumeric())
         })
-}
-
-fn is_open_file_modifier_click(modifiers: KeyModifiers) -> bool {
-    // On macOS: Cmd+Click. crossterm's Unix mouse events only carry Shift/Alt/Ctrl,
-    // so Command is supplied via held keyboard modifier state when the terminal
-    // reports modifier key press/release events.
-    // On other platforms: Ctrl+Click.
-    if cfg!(target_os = "macos") {
-        modifiers.contains(KeyModifiers::SUPER) || modifiers.contains(KeyModifiers::META)
-    } else {
-        modifiers.contains(KeyModifiers::CONTROL)
-    }
 }
