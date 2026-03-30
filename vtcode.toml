@@ -2819,7 +2819,7 @@ preferred_editor = ""
 # Suspend the TUI event loop while editor is running
 # Default: true
 # Type: `boolean`
-suspend_tui = true
+suspend_tui = false
 
 [[custom_providers]]
 name = "mycorp"

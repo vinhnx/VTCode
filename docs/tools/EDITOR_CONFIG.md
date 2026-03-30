@@ -8,6 +8,13 @@ The `editor-command` crate handles editor detection and invocation across all ma
 
 ## Configuration
 
+The guided setup is available from the TUI:
+
+- Run `/config`, then select `External Editor` from the root quick-access list.
+- Run `/config tools.editor` to jump straight into the same wizard.
+- The wizard configures `/edit`, `Ctrl+E` when the prompt is empty, and Cmd/Ctrl-click file links in the TUI.
+- After saving editor settings, the flow can also take you to `/config file_opener` for ANSI hyperlink URI behavior.
+
 Editor settings are configured in the `[tools.editor]` section of `vtcode.toml`:
 
 ```toml
@@ -20,7 +27,7 @@ enabled = true
 # Examples: "vim", "nvim", "emacs", "nano", "code", "code --wait", "zed", "subl -w"
 preferred_editor = ""
 
-# Suspend TUI event loop while editor is running
+# Suspend the TUI while VT Code is waiting on the editor process
 suspend_tui = true
 ```
 
@@ -68,6 +75,10 @@ This opens your default editor with a temporary file. The file contents are retu
 ```
 
 Opens `src/main.rs` in your preferred editor.
+
+When `suspend_tui = false`, VT Code now keeps the TUI live for real file opens and returns immediately after launching the external editor. Temporary-file `/edit` flows still wait, because VT Code has to read the edited content back into the composer.
+
+Cmd/Ctrl-clicking a file path in the transcript or a modal uses the same editor workflow and respects configured line and column targets when the selected editor supports them.
 
 ### Edit relative paths
 

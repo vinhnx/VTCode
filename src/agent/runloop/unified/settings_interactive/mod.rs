@@ -43,6 +43,7 @@ pub(crate) const SETTINGS_MODEL_CONFIG_MAIN_PATH: &str = "model_config.main";
 pub(crate) const SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH: &str = "model_config.lightweight";
 pub(crate) const ACTION_PICK_MAIN_MODEL: &str = "settings:pick_main_model";
 pub(crate) const ACTION_PICK_LIGHTWEIGHT_MODEL: &str = "settings:pick_lightweight_model";
+pub(crate) const ACTION_CONFIGURE_EDITOR: &str = "settings:configure_editor";
 
 #[derive(Clone)]
 pub(crate) struct SettingsPaletteState {
@@ -167,7 +168,7 @@ pub(crate) fn apply_settings_action(
 
     if matches!(
         action,
-        ACTION_PICK_MAIN_MODEL | ACTION_PICK_LIGHTWEIGHT_MODEL
+        ACTION_PICK_MAIN_MODEL | ACTION_PICK_LIGHTWEIGHT_MODEL | ACTION_CONFIGURE_EDITOR
     ) {
         return Ok(outcome);
     }
@@ -300,7 +301,7 @@ mod tests {
         let draft: TomlValue = toml::from_str(
             r#"
             [tools.editor]
-            external_editor = "code --wait"
+            preferred_editor = "code --wait"
             [agent]
             quiet = true
             "#,
@@ -313,7 +314,7 @@ mod tests {
             .find(|item| item.title == "Tool Defaults")
             .expect("root should show section heading");
         let search_value = tools_entry.search_value.as_deref().expect("search value");
-        assert!(search_value.contains("tools.editor.external_editor"));
+        assert!(search_value.contains("tools.editor.preferred_editor"));
         assert!(search_value.contains("code --wait"));
     }
 
@@ -329,14 +330,14 @@ mod tests {
         let draft: TomlValue = toml::from_str(
             r#"
             [tools.editor]
-            external_editor = "code --wait"
+            preferred_editor = "code --wait"
             "#,
         )
         .expect("valid draft value");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
         assert!(items.iter().any(|item| item.title == "Tool Defaults"));
-        assert!(!items.iter().any(|item| item.title == "External Editor"));
+        assert!(!items.iter().any(|item| item.title == "Preferred Editor"));
     }
 
     #[test]
@@ -530,6 +531,31 @@ mod tests {
     }
 
     #[test]
+    fn root_settings_include_external_editor_quick_access() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "External Editor")
+            .expect("external editor quick access");
+        assert_eq!(
+            entry.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_CONFIGURE_EDITOR.to_string()
+            ))
+        );
+    }
+
+    #[test]
     fn model_config_root_shows_main_and_lightweight_sections() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
@@ -628,6 +654,31 @@ mod tests {
         assert!(items.iter().any(|item| item.title == "VS Code Family"));
         assert!(items.iter().any(|item| item.title == "Zed Family"));
         assert!(items.iter().any(|item| item.title == "Generic Bridge"));
+    }
+
+    #[test]
+    fn tools_view_routes_external_editor_to_configure_action() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("tools".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "External Editor")
+            .expect("tools.external editor entry");
+        assert_eq!(
+            entry.selection,
+            Some(InlineListSelection::ConfigAction(
+                ACTION_CONFIGURE_EDITOR.to_string()
+            ))
+        );
     }
 
     #[test]

@@ -20,6 +20,7 @@ pub mod diff;
 pub mod diff_paths;
 pub mod diff_preview;
 pub mod diff_theme;
+pub mod editor;
 pub mod error_category;
 pub mod errors;
 pub mod formatting;
@@ -46,6 +47,9 @@ pub mod utils;
 pub mod validation;
 pub mod vtcodegitignore;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
+pub use editor::{
+    EditorPoint, EditorTarget, parse_editor_target, resolve_editor_path, resolve_editor_target,
+};
 pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,
     is_retryable_llm_error_message,

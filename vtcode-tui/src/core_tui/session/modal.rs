@@ -7,7 +7,7 @@ mod tests;
 #[allow(unused_imports)]
 pub use layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 #[allow(unused_imports)]
-pub use render::{
+pub(crate) use render::{
     modal_list_item_lines, render_modal_body, render_modal_list, render_wizard_modal_body,
     render_wizard_tabs,
 };

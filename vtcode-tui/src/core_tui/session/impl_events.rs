@@ -39,6 +39,34 @@ impl Session {
         }
     }
 
+    fn handle_link_click_action(
+        &mut self,
+        action: TranscriptLinkClickAction,
+        clear_drag_target: bool,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) -> bool {
+        match action {
+            TranscriptLinkClickAction::Open(outbound) => {
+                if clear_drag_target {
+                    self.mouse_drag_target = MouseDragTarget::None;
+                }
+                self.mark_dirty();
+                self.emit_inline_event(&outbound, events, callback);
+                self.mouse_selection.clear_click_history();
+                true
+            }
+            TranscriptLinkClickAction::Consume => {
+                if clear_drag_target {
+                    self.mouse_drag_target = MouseDragTarget::None;
+                }
+                self.mouse_selection.clear_click_history();
+                true
+            }
+            TranscriptLinkClickAction::Ignore => false,
+        }
+    }
+
     fn modal_visible_index_at(&self, row: u16) -> Option<usize> {
         let area = self.modal_list_area?;
         if row < area.y || row >= area.y.saturating_add(area.height) {
@@ -103,25 +131,35 @@ impl Session {
         None
     }
 
+    fn mouse_in_modal_area(&self, column: u16, row: u16) -> bool {
+        self.modal_list_area.is_some_and(|area| {
+            row >= area.y
+                && row < area.y.saturating_add(area.height)
+                && column >= area.x
+                && column < area.x.saturating_add(area.width)
+        })
+    }
+
+    fn modal_text_area_contains(&self, column: u16, row: u16) -> bool {
+        self.modal_text_areas().iter().any(|area| {
+            row >= area.y
+                && row < area.y.saturating_add(area.height)
+                && column >= area.x
+                && column < area.x.saturating_add(area.width)
+        })
+    }
+
     fn handle_active_overlay_click(
         &mut self,
         mouse_event: MouseEvent,
         events: &UnboundedSender<InlineEvent>,
         callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
     ) -> bool {
-        let column = mouse_event.column;
-        let row = mouse_event.row;
-        let in_modal_list = self.modal_list_area.is_some_and(|area| {
-            row >= area.y
-                && row < area.y.saturating_add(area.height)
-                && column >= area.x
-                && column < area.x.saturating_add(area.width)
-        });
-        if !in_modal_list {
-            return self.has_active_overlay();
+        if !self.mouse_in_modal_area(mouse_event.column, mouse_event.row) {
+            return false;
         }
 
-        let Some(visible_index) = self.modal_visible_index_at(row) else {
+        let Some(visible_index) = self.modal_visible_index_at(mouse_event.row) else {
             return true;
         };
 
@@ -149,17 +187,8 @@ impl Session {
             return false;
         }
 
-        let column = mouse_event.column;
-        let row = mouse_event.row;
-        let in_modal_list = self.modal_list_area.is_some_and(|area| {
-            row >= area.y
-                && row < area.y.saturating_add(area.height)
-                && column >= area.x
-                && column < area.x.saturating_add(area.width)
-        });
-
-        if !in_modal_list {
-            return true;
+        if !self.mouse_in_modal_area(mouse_event.column, mouse_event.row) {
+            return false;
         }
 
         if let Some(wizard) = self.wizard_overlay_mut() {
@@ -227,22 +256,64 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                    match self.transcript_file_link_click_action(
-                        mouse_event.column,
-                        mouse_event.row,
-                        mouse_event.modifiers,
+                    if self.handle_link_click_action(
+                        self.transcript_file_link_click_action(
+                            mouse_event.column,
+                            mouse_event.row,
+                            mouse_event.modifiers,
+                        ),
+                        false,
+                        events,
+                        callback,
                     ) {
-                        TranscriptLinkClickAction::Open(outbound) => {
+                        return;
+                    }
+
+                    if self.has_active_overlay() {
+                        let in_modal_list =
+                            self.mouse_in_modal_area(mouse_event.column, mouse_event.row);
+
+                        if self.handle_link_click_action(
+                            self.modal_link_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                                mouse_event.modifiers,
+                            ),
+                            false,
+                            events,
+                            callback,
+                        ) {
+                            return;
+                        }
+
+                        if self.modal_text_area_contains(mouse_event.column, mouse_event.row)
+                            && !in_modal_list
+                        {
+                            let is_double_click = self.mouse_selection.register_click(
+                                mouse_event.column,
+                                mouse_event.row,
+                                Instant::now(),
+                            );
+                            if is_double_click
+                                && self.handle_link_click_action(
+                                    self.modal_link_double_click_action(
+                                        mouse_event.column,
+                                        mouse_event.row,
+                                    ),
+                                    true,
+                                    events,
+                                    callback,
+                                )
+                            {
+                                return;
+                            }
+
+                            self.mouse_drag_target = MouseDragTarget::ModalText;
+                            self.mouse_selection
+                                .start_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
-                            self.emit_inline_event(&outbound, events, callback);
-                            self.mouse_selection.clear_click_history();
                             return;
                         }
-                        TranscriptLinkClickAction::Consume => {
-                            self.mouse_selection.clear_click_history();
-                            return;
-                        }
-                        TranscriptLinkClickAction::Ignore => {}
                     }
 
                     if self.has_active_overlay()
@@ -269,6 +340,18 @@ impl Session {
                         Instant::now(),
                     );
                     if is_double_click {
+                        if self.handle_link_click_action(
+                            self.transcript_file_link_double_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                            ),
+                            true,
+                            events,
+                            callback,
+                        ) {
+                            return;
+                        }
+
                         self.mouse_drag_target = MouseDragTarget::None;
                         let _ = self.handle_transcript_click(mouse_event);
                         if self.select_transcript_word_at(mouse_event.column, mouse_event.row) {
@@ -302,6 +385,11 @@ impl Session {
                                 .update_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
+                        MouseDragTarget::ModalText => {
+                            self.mouse_selection
+                                .update_selection(mouse_event.column, mouse_event.row);
+                            self.mark_dirty();
+                        }
                         MouseDragTarget::None => {}
                     }
                 }
@@ -317,6 +405,11 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
+                            self.mouse_selection
+                                .finish_selection(mouse_event.column, mouse_event.row);
+                            self.mark_dirty();
+                        }
+                        MouseDragTarget::ModalText => {
                             self.mouse_selection
                                 .finish_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();

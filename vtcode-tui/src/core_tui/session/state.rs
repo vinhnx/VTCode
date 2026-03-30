@@ -144,6 +144,23 @@ impl Session {
         self.modal_list_area
     }
 
+    pub(crate) fn set_modal_text_areas(&mut self, areas: Vec<Rect>) {
+        self.modal_text_areas = areas;
+    }
+
+    pub(crate) fn modal_text_areas(&self) -> &[Rect] {
+        &self.modal_text_areas
+    }
+
+    pub(crate) fn set_modal_link_targets(&mut self, targets: Vec<super::TranscriptFileLinkTarget>) {
+        self.modal_link_targets = targets;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn modal_link_targets(&self) -> &[super::TranscriptFileLinkTarget] {
+        &self.modal_link_targets
+    }
+
     pub(crate) fn input_enabled(&self) -> bool {
         self.input_enabled
     }
@@ -363,6 +380,9 @@ impl Session {
             return;
         };
 
+        self.modal_list_area = None;
+        self.modal_text_areas.clear();
+        self.modal_link_targets.clear();
         self.cache_last_overlay_list_state(&state);
         self.input_enabled = state.restore_input();
         self.cursor_visible = state.restore_cursor();

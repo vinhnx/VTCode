@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-use std::env;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::LazyLock;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
@@ -9,11 +7,13 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use regex::Regex;
 use unicode_width::UnicodeWidthStr;
+use vtcode_commons::{EditorTarget, parse_editor_target};
 
 use super::super::types::InlineEvent;
 use super::{
     Session,
     message::{RenderedTranscriptLink, TranscriptLine},
+    wrapping,
 };
 use crate::ui::tui::types::InlineLinkTarget;
 
@@ -34,19 +34,19 @@ pub(crate) struct TranscriptFileLinkTarget {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TranscriptLinkTarget {
-    File(PathBuf),
+    File(EditorTarget),
     Url(String),
 }
 
 #[derive(Clone, Debug)]
-struct FileLinkMatch {
+pub(crate) struct DetectedLinkMatch {
     start: usize,
     end: usize,
-    path: PathBuf,
+    target: TranscriptLinkTarget,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct StyledFileLinkMatch {
+struct StyledLinkMatch {
     start: usize,
     end: usize,
     hovered: bool,
@@ -85,7 +85,7 @@ impl Session {
                 .iter()
                 .map(|span| span.content.as_ref())
                 .collect();
-            let matches = detect_transcript_file_link_matches(&text, workspace_root);
+            let matches = detect_transcript_link_matches(&text, workspace_root);
             let mut styled_matches =
                 Vec::with_capacity(matches.len() + transcript_line.explicit_links.len());
             append_explicit_link_matches(
@@ -97,7 +97,7 @@ impl Session {
                 workspace_root,
                 self.last_mouse_position,
             );
-            for FileLinkMatch { start, end, path } in matches {
+            for DetectedLinkMatch { start, end, target } in matches {
                 let start_col = UnicodeWidthStr::width(&text[..start]);
                 let width = UnicodeWidthStr::width(&text[start..end]);
                 if width == 0 {
@@ -116,9 +116,9 @@ impl Session {
 
                 targets.push(TranscriptFileLinkTarget {
                     area: target_area,
-                    target: TranscriptLinkTarget::File(path),
+                    target,
                 });
-                styled_matches.push(StyledFileLinkMatch {
+                styled_matches.push(StyledLinkMatch {
                     start,
                     end,
                     hovered,
@@ -144,14 +144,19 @@ impl Session {
     }
 
     pub(crate) fn update_transcript_file_link_hover(&mut self, column: u16, row: u16) -> bool {
+        let previous_position = self.last_mouse_position;
+        let previous_modal_hover = previous_position.and_then(|(previous_column, previous_row)| {
+            self.modal_link_target_index_at(previous_column, previous_row)
+        });
         self.last_mouse_position = Some((column, row));
+
         let hovered = self.mouse_hovered_transcript_file_link_index();
-        if hovered == self.hovered_transcript_file_link {
-            return false;
-        }
+        let transcript_hover_changed = hovered != self.hovered_transcript_file_link;
+        let modal_hover_changed =
+            previous_modal_hover != self.modal_link_target_index_at(column, row);
 
         self.hovered_transcript_file_link = hovered;
-        true
+        transcript_hover_changed || modal_hover_changed
     }
 
     pub(crate) fn transcript_file_link_click_action(
@@ -161,27 +166,47 @@ impl Session {
         modifiers: KeyModifiers,
     ) -> TranscriptLinkClickAction {
         let modifiers = self.effective_link_click_modifiers(modifiers);
-        let Some(target) = self
-            .transcript_link_target_index_at(column, row)
-            .and_then(|index| self.transcript_file_link_targets.get(index))
-        else {
-            return TranscriptLinkClickAction::Ignore;
-        };
+        self.link_click_action(
+            self.transcript_link_target_index_at(column, row)
+                .and_then(|index| self.transcript_file_link_targets.get(index)),
+            modifiers,
+        )
+    }
 
-        if should_consume_transcript_link_click(modifiers) {
-            return TranscriptLinkClickAction::Consume;
-        }
+    pub(crate) fn modal_link_click_action(
+        &self,
+        column: u16,
+        row: u16,
+        modifiers: KeyModifiers,
+    ) -> TranscriptLinkClickAction {
+        let modifiers = self.effective_link_click_modifiers(modifiers);
+        self.link_click_action(
+            self.modal_link_target_index_at(column, row)
+                .and_then(|index| self.modal_link_targets.get(index)),
+            modifiers,
+        )
+    }
 
-        if is_open_file_modifier_click(modifiers) {
-            return TranscriptLinkClickAction::Open(match &target.target {
-                TranscriptLinkTarget::File(path) => {
-                    InlineEvent::OpenFileInEditor(path.display().to_string())
-                }
-                TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
-            });
-        }
+    pub(crate) fn transcript_file_link_double_click_action(
+        &self,
+        column: u16,
+        row: u16,
+    ) -> TranscriptLinkClickAction {
+        self.link_open_action(
+            self.transcript_link_target_index_at(column, row)
+                .and_then(|index| self.transcript_file_link_targets.get(index)),
+        )
+    }
 
-        TranscriptLinkClickAction::Ignore
+    pub(crate) fn modal_link_double_click_action(
+        &self,
+        column: u16,
+        row: u16,
+    ) -> TranscriptLinkClickAction {
+        self.link_open_action(
+            self.modal_link_target_index_at(column, row)
+                .and_then(|index| self.modal_link_targets.get(index)),
+        )
     }
 
     pub(crate) fn update_held_key_modifiers(&mut self, key: &KeyEvent) {
@@ -210,8 +235,50 @@ impl Session {
             .position(|target| point_in_rect(target.area, column, row))
     }
 
+    fn modal_link_target_index_at(&self, column: u16, row: u16) -> Option<usize> {
+        self.modal_link_targets
+            .iter()
+            .position(|target| point_in_rect(target.area, column, row))
+    }
+
     fn effective_link_click_modifiers(&self, mouse_modifiers: KeyModifiers) -> KeyModifiers {
         mouse_modifiers | self.held_key_modifiers
+    }
+
+    fn link_click_action(
+        &self,
+        target: Option<&TranscriptFileLinkTarget>,
+        modifiers: KeyModifiers,
+    ) -> TranscriptLinkClickAction {
+        let Some(target) = target else {
+            return TranscriptLinkClickAction::Ignore;
+        };
+
+        if should_consume_transcript_link_click(modifiers) {
+            return TranscriptLinkClickAction::Consume;
+        }
+
+        if is_open_file_modifier_click(modifiers) {
+            return self.link_open_action(Some(target));
+        }
+
+        TranscriptLinkClickAction::Ignore
+    }
+
+    fn link_open_action(
+        &self,
+        target: Option<&TranscriptFileLinkTarget>,
+    ) -> TranscriptLinkClickAction {
+        let Some(target) = target else {
+            return TranscriptLinkClickAction::Ignore;
+        };
+
+        TranscriptLinkClickAction::Open(match &target.target {
+            TranscriptLinkTarget::File(target) => {
+                InlineEvent::OpenFileInEditor(target.canonical_string())
+            }
+            TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
+        })
     }
 }
 
@@ -255,7 +322,7 @@ fn modifier_key_flag(code: KeyCode) -> Option<KeyModifiers> {
 
 fn append_explicit_link_matches(
     targets: &mut Vec<TranscriptFileLinkTarget>,
-    styled_matches: &mut Vec<StyledFileLinkMatch>,
+    styled_matches: &mut Vec<StyledLinkMatch>,
     explicit_links: Vec<RenderedTranscriptLink>,
     row_idx: usize,
     area: Rect,
@@ -272,7 +339,7 @@ fn append_explicit_link_matches(
         let hovered = last_mouse_position
             .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
         let target = match explicit.target {
-            InlineLinkTarget::Url(url) => resolve_transcript_file_path(&url, workspace_root)
+            InlineLinkTarget::Url(url) => resolve_transcript_file_target(&url, workspace_root)
                 .map(TranscriptLinkTarget::File)
                 .unwrap_or(TranscriptLinkTarget::Url(url)),
         };
@@ -280,7 +347,7 @@ fn append_explicit_link_matches(
             area: target_area,
             target,
         });
-        styled_matches.push(StyledFileLinkMatch {
+        styled_matches.push(StyledLinkMatch {
             start: explicit.start,
             end: explicit.end,
             hovered,
@@ -290,7 +357,7 @@ fn append_explicit_link_matches(
 
 fn style_transcript_file_link_line(
     line: Line<'static>,
-    matches: &[StyledFileLinkMatch],
+    matches: &[StyledLinkMatch],
     link_style: Style,
     hovered_style: Style,
 ) -> Line<'static> {
@@ -369,14 +436,106 @@ fn style_transcript_file_link_line(
     styled
 }
 
-fn detect_transcript_file_link_matches(
+pub(crate) fn decorate_detected_link_lines(
+    lines: Vec<Line<'static>>,
+    area: Rect,
+    workspace_root: Option<&Path>,
+    last_mouse_position: Option<(u16, u16)>,
+    link_style: Style,
+    hovered_style: Style,
+) -> (Vec<Line<'static>>, Vec<TranscriptFileLinkTarget>) {
+    let mut targets = Vec::new();
+    let mut decorated = Vec::new();
+    let mut row_idx = 0usize;
+
+    for line in lines {
+        if row_idx >= usize::from(area.height) {
+            break;
+        }
+
+        let original_text: String = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        let matches = detect_transcript_link_matches(&original_text, workspace_root);
+        let wrapped_lines = wrapping::wrap_line_preserving_urls(line, area.width.max(1) as usize);
+        let mut original_offset = 0usize;
+
+        for wrapped_line in wrapped_lines {
+            if row_idx >= usize::from(area.height) {
+                break;
+            }
+
+            let wrapped_text: String = wrapped_line
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+            let wrapped_start = original_offset;
+            let wrapped_end = wrapped_start + wrapped_text.len();
+            original_offset = wrapped_end;
+
+            let mut styled_matches = Vec::new();
+            for DetectedLinkMatch { start, end, target } in &matches {
+                let local_start = (*start).max(wrapped_start);
+                let local_end = (*end).min(wrapped_end);
+                if local_start >= local_end {
+                    continue;
+                }
+
+                let relative_start = local_start - wrapped_start;
+                let relative_end = local_end - wrapped_start;
+                let start_col = UnicodeWidthStr::width(&wrapped_text[..relative_start]);
+                let width = UnicodeWidthStr::width(&wrapped_text[relative_start..relative_end]);
+                if width == 0 {
+                    continue;
+                }
+
+                let target_area = Rect::new(
+                    area.x.saturating_add(start_col as u16),
+                    area.y.saturating_add(row_idx as u16),
+                    width as u16,
+                    1,
+                );
+                let hovered = last_mouse_position
+                    .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+                targets.push(TranscriptFileLinkTarget {
+                    area: target_area,
+                    target: target.clone(),
+                });
+                styled_matches.push(StyledLinkMatch {
+                    start: relative_start,
+                    end: relative_end,
+                    hovered,
+                });
+            }
+
+            if styled_matches.is_empty() {
+                decorated.push(wrapped_line);
+            } else {
+                decorated.push(style_transcript_file_link_line(
+                    wrapped_line,
+                    &styled_matches,
+                    link_style,
+                    hovered_style,
+                ));
+            }
+            row_idx += 1;
+        }
+    }
+
+    (decorated, targets)
+}
+
+pub(crate) fn detect_transcript_link_matches(
     text: &str,
     workspace_root: Option<&Path>,
-) -> Vec<FileLinkMatch> {
+) -> Vec<DetectedLinkMatch> {
     let mut matches = Vec::new();
 
     for quoted_match in QUOTED_PATH_PATTERN.find_iter(text) {
-        if let Some(link_match) = build_transcript_file_link_match(
+        if let Some(link_match) = build_transcript_link_match(
             text,
             quoted_match.start(),
             quoted_match.end(),
@@ -393,7 +552,7 @@ fn detect_transcript_file_link_matches(
             continue;
         }
 
-        if let Some(link_match) = build_transcript_file_link_match(
+        if let Some(link_match) = build_transcript_link_match(
             text,
             token_match.start(),
             token_match.end(),
@@ -409,12 +568,12 @@ fn detect_transcript_file_link_matches(
     matches
 }
 
-fn build_transcript_file_link_match(
+fn build_transcript_link_match(
     text: &str,
     token_start: usize,
     token_end: usize,
     workspace_root: Option<&Path>,
-) -> Option<FileLinkMatch> {
+) -> Option<DetectedLinkMatch> {
     let token = &text[token_start..token_end];
     let (trimmed_start, trimmed_end) = trim_transcript_token_bounds(token);
     if trimmed_start >= trimmed_end {
@@ -424,9 +583,14 @@ fn build_transcript_file_link_match(
     let start = token_start + trimmed_start;
     let end = token_start + trimmed_end;
     let candidate = &text[start..end];
-    let path = resolve_transcript_file_path(candidate, workspace_root)?;
+    let target = resolve_transcript_url(candidate)
+        .map(TranscriptLinkTarget::Url)
+        .or_else(|| {
+            resolve_transcript_file_target(candidate, workspace_root)
+                .map(TranscriptLinkTarget::File)
+        })?;
 
-    Some(FileLinkMatch { start, end, path })
+    Some(DetectedLinkMatch { start, end, target })
 }
 
 fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
@@ -478,68 +642,38 @@ fn location_paren_suffix_start(token: &str) -> Option<usize> {
     valid.then_some(paren_start)
 }
 
-fn resolve_transcript_file_path(token: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
+fn resolve_transcript_file_target(
+    token: &str,
+    workspace_root: Option<&Path>,
+) -> Option<EditorTarget> {
     let token = token.trim();
     if token.is_empty() {
         return None;
     }
 
-    // Strip location suffixes first so heuristic check sees clean paths (e.g. `a.rs` not `a.rs:10`)
-    let stripped = strip_location_suffix(strip_file_scheme(token)).trim_end_matches(':');
-    if stripped.is_empty() || !looks_like_transcript_path(stripped) {
+    let parsed = parse_editor_target(token)?;
+    let stripped = parsed.path().to_string_lossy();
+    if stripped.is_empty() || !looks_like_transcript_path(&stripped) {
         return None;
     }
 
-    // Normalize Windows backslashes on Unix for cross-platform terminal output
-    let raw_path: Cow<'_, str> = if cfg!(not(target_os = "windows")) && stripped.contains('\\') {
-        Cow::Owned(stripped.replace('\\', "/"))
+    let resolved = if parsed.path().is_absolute() {
+        parsed
     } else {
-        Cow::Borrowed(stripped)
+        let root = workspace_root?;
+        parsed.with_resolved_path(root)
     };
 
-    let path = expand_home_relative_path(&raw_path)
-        .or_else(|| {
-            Path::new(raw_path.as_ref())
-                .is_absolute()
-                .then(|| PathBuf::from(raw_path.as_ref()))
-        })
-        .or_else(|| workspace_root.map(|root| root.join(raw_path.as_ref())))?;
-
-    path.is_file().then_some(path)
+    resolved.path().is_file().then_some(resolved)
 }
 
-fn strip_file_scheme(token: &str) -> &str {
-    token.strip_prefix("file://").unwrap_or(token)
-}
-
-fn strip_location_suffix(token: &str) -> &str {
-    let without_fragment = token.split('#').next().unwrap_or(token);
-    let mut base = without_fragment;
-
-    // Strip parenthesized location suffix like (10,5) or (10)
-    if let Some(paren_start) = location_paren_suffix_start(base) {
-        base = &base[..paren_start];
+fn resolve_transcript_url(token: &str) -> Option<String> {
+    let trimmed = token.trim();
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        Some(trimmed.to_string())
+    } else {
+        None
     }
-
-    // Strip colon-separated line:col suffix like :10:5 or :10
-    for _ in 0..2 {
-        let Some(colon_idx) = base.rfind(':') else {
-            break;
-        };
-        let suffix = &base[colon_idx + 1..];
-        if suffix.is_empty() || !suffix.chars().all(|ch| ch.is_ascii_digit()) {
-            break;
-        }
-        base = &base[..colon_idx];
-    }
-
-    base
-}
-
-fn expand_home_relative_path(path: &str) -> Option<PathBuf> {
-    let remainder = path.strip_prefix("~/")?;
-    let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
-    Some(PathBuf::from(home).join(remainder))
 }
 
 fn looks_like_transcript_path(token: &str) -> bool {

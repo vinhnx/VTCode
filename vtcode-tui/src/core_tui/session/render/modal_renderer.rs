@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::constants::ui;
+use crate::core_tui::session::transcript_links::decorate_detected_link_lines;
 use crate::core_tui::types::InlineMessageKind;
 use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
@@ -180,6 +181,8 @@ pub(crate) fn floating_modal_area(area: Rect) -> Rect {
 pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.width == 0 || area.height == 0 {
         session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
         return;
     }
 
@@ -200,32 +203,69 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         session.needs_full_clear = true;
         session.needs_redraw = true;
         session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
         return;
     }
 
     let styles = modal_render_styles(session);
+    let link_style = session
+        .styles
+        .transcript_link_style()
+        .add_modifier(Modifier::UNDERLINED);
+    let hovered_link_style = link_style.add_modifier(Modifier::BOLD);
+    let workspace_root = session.workspace_root.clone();
+    let last_mouse_position = session.last_mouse_position;
     let title = modal_title_text(session).trim().to_owned();
-    let body_area = if title.is_empty() {
-        area
+    let mut title_link_targets = Vec::new();
+    let (body_area, title_area) = if title.is_empty() {
+        (area, None)
     } else {
         let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
         let title_area = chunks[0];
+        let title_line = Line::from(Span::styled(title, styles.title));
+        let (decorated_title, link_targets) = decorate_detected_link_lines(
+            vec![title_line],
+            title_area,
+            workspace_root.as_deref(),
+            last_mouse_position,
+            link_style,
+            hovered_link_style,
+        );
+        title_link_targets = link_targets;
         frame.render_widget(Clear, title_area);
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(title, styles.title))).wrap(Wrap { trim: true }),
+            Paragraph::new(decorated_title).wrap(Wrap { trim: true }),
             title_area,
         );
-        chunks[1]
+        (chunks[1], Some(title_area))
     };
 
     if let Some(wizard) = session.wizard_overlay_mut() {
         frame.render_widget(Clear, body_area);
         if body_area.width == 0 || body_area.height == 0 {
             session.set_modal_list_area(None);
+            session.set_modal_text_areas(Vec::new());
+            session.set_modal_link_targets(Vec::new());
             return;
         }
-        let list_area = render_wizard_modal_body(frame, body_area, wizard, &styles);
-        session.set_modal_list_area(list_area);
+        let mut outcome = render_wizard_modal_body(
+            frame,
+            body_area,
+            wizard,
+            &styles,
+            workspace_root.as_deref(),
+            last_mouse_position,
+            link_style,
+            hovered_link_style,
+        );
+        if let Some(title_area) = title_area {
+            outcome.text_areas.push(title_area);
+            outcome.link_targets.extend(title_link_targets.clone());
+        }
+        session.set_modal_list_area(outcome.list_area);
+        session.set_modal_text_areas(outcome.text_areas);
+        session.set_modal_link_targets(outcome.link_targets);
         return;
     }
 
@@ -233,15 +273,19 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let cursor = session.input_manager.cursor();
     let Some(modal) = session.modal_state_mut() else {
         session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
         return;
     };
 
     frame.render_widget(Clear, body_area);
     if body_area.width == 0 || body_area.height == 0 {
         session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
         return;
     }
-    let list_area = render_modal_body(
+    let mut outcome = render_modal_body(
         frame,
         body_area,
         ModalBodyContext {
@@ -254,8 +298,18 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             input: &input,
             cursor,
         },
+        workspace_root.as_deref(),
+        last_mouse_position,
+        link_style,
+        hovered_link_style,
     );
-    session.set_modal_list_area(list_area);
+    if let Some(title_area) = title_area {
+        outcome.text_areas.push(title_area);
+        outcome.link_targets.extend(title_link_targets);
+    }
+    session.set_modal_list_area(outcome.list_area);
+    session.set_modal_text_areas(outcome.text_areas);
+    session.set_modal_link_targets(outcome.link_targets);
 }
 
 pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {

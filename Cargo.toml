@@ -194,6 +194,7 @@ ratatui = { workspace = true }
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 unicode-width = { workspace = true }
+url = { workspace = true }
 smallvec = "1.13"
 self_update = { version = "0.42", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
 reqwest = { workspace = true }

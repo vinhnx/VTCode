@@ -60,7 +60,8 @@ mod update;
 mod workspace;
 pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(super) use apps::{
-    handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
+    handle_configure_editor, handle_launch_editor, handle_launch_git, handle_new_session,
+    handle_open_docs,
 };
 pub(super) use compact::handle_compact_conversation;
 pub(super) use diagnostics::{
@@ -218,6 +219,9 @@ pub(super) async fn show_settings_at_path_from_context(
     let vt_snapshot = ctx.vt_cfg.clone();
     let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
     settings_state.view_path = view_path.map(resolve_settings_view_path);
+    if settings_state.view_path.as_deref() == Some("tools.editor") {
+        return handle_configure_editor(ctx).await;
+    }
 
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
         *ctx.palette_state = Some(ActivePalette::Settings {

@@ -31,17 +31,16 @@ fn copy_selected_input_if_requested(
     key: &KeyEvent,
     has_command: bool,
 ) -> bool {
-    if has_command && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
-        if session.input_manager.copy_selected_text_to_clipboard() {
-            session.mark_dirty();
+    let is_copy_shortcut = if has_command {
+        matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
+    } else {
+        match key.code {
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                key.modifiers.contains(KeyModifiers::CONTROL)
+            }
+            KeyCode::Char('\u{3}') => true,
+            _ => false,
         }
-        return true;
-    }
-
-    let is_copy_shortcut = match key.code {
-        KeyCode::Char('c') | KeyCode::Char('C') => key.modifiers.contains(KeyModifiers::CONTROL),
-        KeyCode::Char('\u{3}') => true,
-        _ => false,
     };
 
     if !is_copy_shortcut {
@@ -54,6 +53,19 @@ fn copy_selected_input_if_requested(
     }
 
     false
+}
+
+fn handle_interrupt(session: &mut Session) -> Option<InlineEvent> {
+    if session.mouse_selection.has_selection {
+        session.mouse_selection.request_copy();
+        session.mark_dirty();
+        return None;
+    }
+    if session.has_active_overlay() {
+        session.close_overlay();
+    }
+    session.mark_dirty();
+    Some(InlineEvent::Interrupt)
 }
 
 #[allow(dead_code)]
@@ -134,11 +146,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let has_command = has_super || raw_meta;
     let has_alt = raw_alt && !has_command;
 
-    // When a modal/wizard overlay is active, prioritize modal key handling
-    // over copy-to-clipboard so that Ctrl+C dismisses the overlay.
-    let has_modal = session.modal_state().is_some() || session.wizard_overlay().is_some();
-
-    if !has_modal && copy_selected_input_if_requested(session, &key, has_command) {
+    // Allow copy-to-clipboard even when a modal is active so users can
+    // copy selected transcript text without dismissing the overlay first.
+    // The modal's own key handler below will still consume Ctrl+C/Esc to
+    // close the overlay when no text is selected.
+    if copy_selected_input_if_requested(session, &key, has_command) {
         return None;
     }
 
@@ -247,30 +259,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 
     match key.code {
-        KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
-            if session.mouse_selection.has_selection {
-                session.mouse_selection.request_copy();
-                session.mark_dirty();
-                return None;
-            }
-            if session.has_active_overlay() {
-                session.close_overlay();
-            }
-            session.mark_dirty();
-            Some(InlineEvent::Interrupt)
-        }
-        KeyCode::Char('\u{3}') => {
-            if session.mouse_selection.has_selection {
-                session.mouse_selection.request_copy();
-                session.mark_dirty();
-                return None;
-            }
-            if session.has_active_overlay() {
-                session.close_overlay();
-            }
-            session.mark_dirty();
-            Some(InlineEvent::Interrupt)
-        }
+        KeyCode::Char('c') | KeyCode::Char('C') if has_control => handle_interrupt(session),
+        KeyCode::Char('\u{3}') => handle_interrupt(session),
         KeyCode::Char('d') if has_control => {
             session.mark_dirty();
             Some(InlineEvent::Exit)

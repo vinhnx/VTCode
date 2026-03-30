@@ -1,12 +1,11 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::{Context, Result, anyhow};
-use editor_command::Editor;
 use ratatui::crossterm::ExecutableCommand;
 use ratatui::crossterm::event;
 use ratatui::crossterm::terminal::{
@@ -15,6 +14,7 @@ use ratatui::crossterm::terminal::{
 };
 use tempfile::NamedTempFile;
 use tracing::debug;
+use vtcode_commons::EditorTarget;
 
 /// Result from running a terminal application
 #[derive(Debug)]
@@ -26,10 +26,21 @@ pub struct TerminalAppResult {
 }
 
 /// Runtime configuration for launching an external editor.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EditorLaunchConfig {
     /// Preferred editor command override (supports args, e.g. `code --wait`)
     pub preferred_editor: Option<String>,
+    /// Wait for the editor process to exit before returning.
+    pub wait_for_editor: bool,
+}
+
+impl Default for EditorLaunchConfig {
+    fn default() -> Self {
+        Self {
+            preferred_editor: None,
+            wait_for_editor: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,8 +66,7 @@ impl TerminalAppLauncher {
     /// If no file is provided, a temporary file will be created and its
     /// contents returned after editing.
     ///
-    /// Uses the `editor-command` crate to detect and launch the user's preferred editor
-    /// from environment variables (VISUAL, EDITOR) or common editor defaults.
+    /// Uses the configured editor command, then VISUAL/EDITOR, then common editor defaults.
     ///
     /// # Errors
     ///
@@ -73,16 +83,30 @@ impl TerminalAppLauncher {
         file: Option<PathBuf>,
         config: EditorLaunchConfig,
     ) -> Result<Option<String>> {
-        let (file_path, is_temp) = if let Some(path) = file {
-            (path, false)
+        let target = file.map(|path| EditorTarget::new(path, None));
+        self.launch_editor_target_with_config(target, config)
+    }
+
+    /// Launch user's preferred editor with an optional file target and location.
+    ///
+    /// `preferred_editor`, when set, takes precedence over VISUAL/EDITOR env vars.
+    pub fn launch_editor_target_with_config(
+        &self,
+        target: Option<EditorTarget>,
+        config: EditorLaunchConfig,
+    ) -> Result<Option<String>> {
+        let (target, is_temp) = if let Some(target) = target {
+            (target, false)
         } else {
             // Create temp file for editing
             let temp =
                 NamedTempFile::new().context("failed to create temporary file for editing")?;
             // Keep temp file alive by persisting it
             let (_, path) = temp.keep().context("failed to persist temporary file")?;
-            (path, true)
+            (EditorTarget::new(path, None), true)
         };
+        let file_path = target.path().to_path_buf();
+        let wait_for_editor = is_temp || config.wait_for_editor;
         let preferred_editor = config
             .preferred_editor
             .as_deref()
@@ -90,49 +114,58 @@ impl TerminalAppLauncher {
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned);
 
-        // Use unified terminal suspension logic
-        self.suspend_terminal_for_command(|| {
-            debug!("launching editor with file: {:?}", file_path);
+        debug!(
+            path = %file_path.display(),
+            wait_for_editor,
+            "launching editor"
+        );
 
-            // Prefer explicit config override, then VISUAL/EDITOR, then fallback probes.
-            let mut cmd = if let Some(preferred) = preferred_editor.as_deref() {
-                debug!("using configured preferred editor command: {}", preferred);
-                Self::build_editor_command_from_string(preferred, &file_path).with_context(
-                    || {
-                        format!(
-                            "failed to parse tools.editor.preferred_editor '{}'",
-                            preferred
-                        )
-                    },
-                )?
-            } else {
-                match Editor::new() {
-                    Ok(editor) => editor.open(&file_path),
-                    Err(_) => {
-                        // If EDITOR/VISUAL not set, search for available editors in PATH
-                        debug!("EDITOR/VISUAL not set, searching for available editors");
-                        Self::try_common_editors(&file_path).context(
-                            "failed to detect editor: set tools.editor.preferred_editor, \
-                             or set EDITOR/VISUAL, or install an editor in PATH",
-                        )?
-                    }
+        let mut cmd = if let Some(preferred) = preferred_editor.as_deref() {
+            debug!("using configured preferred editor command: {}", preferred);
+            Self::build_editor_command_from_string(preferred, &target, wait_for_editor)
+                .with_context(|| {
+                    format!(
+                        "failed to parse tools.editor.preferred_editor '{}'",
+                        preferred
+                    )
+                })?
+        } else if let Some(env_command) = Self::editor_command_from_env() {
+            debug!("using editor command from environment: {}", env_command);
+            Self::build_editor_command_from_string(&env_command, &target, wait_for_editor)
+                .with_context(|| format!("failed to parse editor command '{}'", env_command))?
+        } else {
+            // If EDITOR/VISUAL not set, search for available editors in PATH
+            debug!("EDITOR/VISUAL not set, searching for available editors");
+            Self::try_common_editors(&target, wait_for_editor).context(
+                "failed to detect editor: set tools.editor.preferred_editor, \
+                 or set EDITOR/VISUAL, or install an editor in PATH",
+            )?
+        };
+
+        if wait_for_editor {
+            self.suspend_terminal_for_command(|| {
+                let status = cmd
+                    .current_dir(&self.workspace_root)
+                    .status()
+                    .context("failed to spawn editor")?;
+
+                if !status.success() {
+                    return Err(anyhow!(
+                        "editor exited with non-zero status: {}",
+                        status.code().unwrap_or(-1)
+                    ));
                 }
-            };
 
-            let status = cmd
-                .current_dir(&self.workspace_root)
-                .status()
+                Ok(())
+            })?;
+        } else {
+            cmd.current_dir(&self.workspace_root)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
                 .context("failed to spawn editor")?;
-
-            if !status.success() {
-                return Err(anyhow!(
-                    "editor exited with non-zero status: {}",
-                    status.code().unwrap_or(-1)
-                ));
-            }
-
-            Ok(())
-        })?;
+        }
 
         // Read temp file contents if it was a temp file
         let content = if is_temp {
@@ -147,20 +180,25 @@ impl TerminalAppLauncher {
         Ok(content)
     }
 
-    fn build_editor_command_from_string(command: &str, file_path: &Path) -> Result<Command> {
+    fn build_editor_command_from_string(
+        command: &str,
+        target: &EditorTarget,
+        wait_for_editor: bool,
+    ) -> Result<Command> {
         let tokens = shell_words::split(command)
             .with_context(|| format!("invalid editor command: {}", command))?;
         let (program, args) = tokens
             .split_first()
             .ok_or_else(|| anyhow!("editor command cannot be empty"))?;
+        let adapter = EditorAdapter::from_program(program);
         let mut cmd = Command::new(program);
-        cmd.args(args);
-        cmd.arg(file_path);
+        cmd.args(filtered_editor_args(adapter, args, wait_for_editor));
+        Self::append_editor_target_args(&mut cmd, program, target);
         Ok(cmd)
     }
 
     /// Try common editors in priority order as fallback when EDITOR/VISUAL not set
-    fn try_common_editors(file_path: &Path) -> Result<Command> {
+    fn try_common_editors(target: &EditorTarget, wait_for_editor: bool) -> Result<Command> {
         let candidates = if cfg!(target_os = "windows") {
             vec![
                 "code --wait",
@@ -217,7 +255,7 @@ impl TerminalAppLauncher {
             };
             if which::which(program).is_ok() {
                 debug!("found fallback editor: {}", candidate);
-                return Self::build_editor_command_from_string(candidate, file_path);
+                return Self::build_editor_command_from_string(candidate, target, wait_for_editor);
             }
         }
 
@@ -225,6 +263,40 @@ impl TerminalAppLauncher {
             "no editor found in PATH. Install an editor (e.g. nvim, code, zed, emacs), \
              or configure tools.editor.preferred_editor"
         ))
+    }
+
+    fn editor_command_from_env() -> Option<String> {
+        ["VISUAL", "EDITOR"]
+            .into_iter()
+            .find_map(|key| std::env::var(key).ok())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    }
+
+    fn append_editor_target_args(cmd: &mut Command, program: &str, target: &EditorTarget) {
+        let adapter = EditorAdapter::from_program(program);
+        let file_path = target.path();
+
+        match (adapter, target.point()) {
+            (EditorAdapter::Vscode, Some(point)) => {
+                cmd.arg("-g");
+                cmd.arg(format_location_arg(file_path, point.line, point.column));
+            }
+            (EditorAdapter::ColonLocation, Some(point)) => {
+                cmd.arg(format_location_arg(file_path, point.line, point.column));
+            }
+            (EditorAdapter::Vim, Some(point)) => {
+                if let Some(column) = point.column {
+                    cmd.arg(format!("+call cursor({},{})", point.line, column));
+                } else {
+                    cmd.arg(format!("+{}", point.line));
+                }
+                cmd.arg(file_path);
+            }
+            _ => {
+                cmd.arg(file_path);
+            }
+        }
     }
 
     /// Suspend terminal UI state and run external command
@@ -393,6 +465,64 @@ impl TerminalAppLauncher {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditorAdapter {
+    Plain,
+    Vscode,
+    ColonLocation,
+    Mate,
+    MacOpen,
+    Vim,
+}
+
+impl EditorAdapter {
+    fn from_program(program: &str) -> Self {
+        let program = Path::new(program)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(program)
+            .to_ascii_lowercase();
+
+        match program.as_str() {
+            "code" | "code-insiders" => Self::Vscode,
+            "zed" | "subl" => Self::ColonLocation,
+            "mate" => Self::Mate,
+            "open" => Self::MacOpen,
+            "nvim" | "vim" | "vi" => Self::Vim,
+            _ => Self::Plain,
+        }
+    }
+}
+
+fn filtered_editor_args(
+    adapter: EditorAdapter,
+    args: &[String],
+    wait_for_editor: bool,
+) -> Vec<String> {
+    if wait_for_editor {
+        return args.to_vec();
+    }
+
+    args.iter()
+        .filter(|arg| !matches_wait_flag(adapter, arg))
+        .cloned()
+        .collect()
+}
+
+fn matches_wait_flag(adapter: EditorAdapter, arg: &str) -> bool {
+    match adapter {
+        EditorAdapter::Vscode => arg == "--wait",
+        EditorAdapter::ColonLocation | EditorAdapter::Mate => arg == "--wait" || arg == "-w",
+        EditorAdapter::MacOpen => arg == "-W",
+        EditorAdapter::Plain | EditorAdapter::Vim => false,
+    }
+}
+
+fn format_location_arg(path: &Path, line: usize, column: Option<usize>) -> String {
+    let column = column.unwrap_or(1);
+    format!("{}:{}:{}", path.display(), line, column)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,7 +539,8 @@ mod tests {
     fn test_build_editor_command_supports_arguments() {
         let command = TerminalAppLauncher::build_editor_command_from_string(
             "code --wait",
-            Path::new("/tmp/test.rs"),
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), None),
+            true,
         )
         .expect("command should parse");
         let args: Vec<String> = command
@@ -423,8 +554,120 @@ mod tests {
 
     #[test]
     fn test_build_editor_command_rejects_empty_string() {
-        let result =
-            TerminalAppLauncher::build_editor_command_from_string("   ", Path::new("/tmp/test.rs"));
+        let result = TerminalAppLauncher::build_editor_command_from_string(
+            "   ",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), None),
+            true,
+        );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_editor_command_uses_vscode_go_to_location() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "code --wait",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), Some(":12:4".to_string())),
+            true,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(
+            args,
+            vec![
+                "--wait".to_string(),
+                "-g".to_string(),
+                "/tmp/test.rs:12:4".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_build_editor_command_uses_colon_location_for_zed() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "zed",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), Some(":12".to_string())),
+            true,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(args, vec!["/tmp/test.rs:12:1".to_string()]);
+    }
+
+    #[test]
+    fn test_build_editor_command_uses_cursor_command_for_vim() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "nvim",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), Some(":12:4".to_string())),
+            true,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(
+            args,
+            vec!["+call cursor(12,4)".to_string(), "/tmp/test.rs".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_build_editor_command_degrades_unknown_commands_to_file_only() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "custom-editor --flag",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), Some(":12:4".to_string())),
+            true,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(args, vec!["--flag".to_string(), "/tmp/test.rs".to_string()]);
+    }
+
+    #[test]
+    fn test_build_editor_command_strips_vscode_wait_flag_when_not_waiting() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "code --wait",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), Some(":12:4".to_string())),
+            false,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(
+            args,
+            vec!["-g".to_string(), "/tmp/test.rs:12:4".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_build_editor_command_strips_sublime_wait_flag_when_not_waiting() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "subl -w",
+            &EditorTarget::new(PathBuf::from("/tmp/test.rs"), None),
+            false,
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(args, vec!["/tmp/test.rs".to_string()]);
     }
 }

@@ -20,8 +20,9 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   File inputs are supported for native OpenAI Responses API requests through `input_file` parts.
 -   Supported file input fields in VT Code message parts: `file_id`, `file_data`, `file_url`, `filename`.
 -   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
--   VT Code's harness parses local non-image file refs such as `@report.pdf` and `@"Quarterly Deck.pptx"` into inline file attachments before provider serialization.
--   Remote external document URLs such as `@https://example.com/letter.pdf` are only elevated to structured `file_url` inputs for native OpenAI Responses sessions. OpenAI-compatible endpoints and non-Responses OpenAI models keep remote document URLs as plain text.
+-   VT Code only upgrades local non-image file refs such as `@report.pdf` and `@"Quarterly Deck.pptx"` into structured file attachments for native OpenAI Responses sessions on `api.openai.com`.
+-   Remote external document URLs such as `@https://example.com/letter.pdf` are also only elevated to structured `file_url` inputs for native OpenAI Responses sessions.
+-   ChatGPT subscription sessions, OpenAI-compatible endpoints, and other providers keep non-image `@file` refs as plain text plus file-reference metadata so the agent can resolve the path and read the file with tools.
 -   Raw image paths still use the existing multimodal image path flow. Non-image files require explicit `@...` references.
 -   Official OpenAI Responses replays now preserve assistant phase metadata for replayed assistant history (`commentary` for preambles/progress updates, `final_answer` for completed answers) when the target GPT model supports it. VT Code does not send this field to Chat Completions, tool/user items, or non-native OpenAI-compatible endpoints.
 -   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`, with hosted config passed through directly on each tool entry.

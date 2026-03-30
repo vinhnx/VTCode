@@ -27,7 +27,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/config/config.md`
   - **Content**: VT Code Configuration
-  - **Topics**: Quick navigation, Feature flags, Model selection, Instruction Guidance and Persistent Memory, Execution environment
+  - **Topics**: Quick navigation, Feature flags, Model selection, Instruction Guidance and Persistent Memory, External editor
   - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?", "How does Feature flags work?"
 
 ### Development & Testing

@@ -311,6 +311,7 @@ async fn edit_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         } else {
             Some(editor_config.preferred_editor.clone())
         },
+        wait_for_editor: true,
     };
     let temp_path = temp_file.path().to_path_buf();
 

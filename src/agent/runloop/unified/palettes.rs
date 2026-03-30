@@ -17,6 +17,7 @@ use vtcode_tui::core::convert_style;
 
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::inline_events::UrlGuardPrompt;
 use crate::agent::runloop::unified::model_selection::finalize_lightweight_model_selection;
 use crate::agent::runloop::unified::settings_interactive::{
     SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
@@ -71,6 +72,10 @@ pub(crate) enum ActivePalette {
     },
     ModelTarget,
     LightweightModel,
+    UrlGuard {
+        prompt: UrlGuardPrompt,
+        previous: Option<Box<ActivePalette>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -749,6 +754,9 @@ pub(crate) async fn handle_palette_selection(
             finalize_lightweight_model_selection(renderer, config, vt_cfg, selected_model).await?;
             Ok(None)
         }
+        ActivePalette::UrlGuard { prompt, previous } => {
+            Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
+        }
     }
 }
 
@@ -787,6 +795,9 @@ pub(crate) fn handle_palette_preview(
         }
         ActivePalette::ModelTarget => Ok(Some(ActivePalette::ModelTarget)),
         ActivePalette::LightweightModel => Ok(Some(ActivePalette::LightweightModel)),
+        ActivePalette::UrlGuard { prompt, previous } => {
+            Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
+        }
         ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings {
             state,
             esc_armed: false,
@@ -890,6 +901,7 @@ pub(crate) fn handle_palette_cancel(
             }
         }
         ActivePalette::ModelTarget | ActivePalette::LightweightModel => Ok(None),
+        ActivePalette::UrlGuard { previous, .. } => Ok(previous.map(|palette| *palette)),
     }
 }
 

@@ -16,11 +16,11 @@ use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, R
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use url::Url;
 use vtcode_commons::color_policy::{self, ColorOutputPolicySource};
 use vtcode_commons::diff_paths::looks_like_diff_content;
+use vtcode_commons::{parse_editor_target, resolve_editor_path};
 
 static FILE_OPENER: OnceLock<Mutex<vtcode_config::FileOpener>> = OnceLock::new();
 
@@ -49,105 +49,15 @@ fn make_clickable_target(target: &str) -> Option<String> {
 
     let opener = current_file_opener();
     let scheme = opener.scheme()?;
-    let (path, location) = parse_local_link_target(trimmed)?;
-    let file_url = Url::from_file_path(resolve_clickable_path(path)?).ok()?;
-    let suffix = location.unwrap_or_default();
+    let target = parse_editor_target(trimmed)?;
+    let cwd = std::env::current_dir().ok()?;
+    let file_url = Url::from_file_path(resolve_editor_path(target.path(), &cwd)).ok()?;
+    let suffix = target.location_suffix().unwrap_or("");
     Some(format!(
         "{scheme}://file{}{}",
         file_url.as_str().trim_start_matches("file://"),
         suffix
     ))
-}
-
-fn parse_local_link_target(raw: &str) -> Option<(PathBuf, Option<String>)> {
-    if raw.starts_with("file://") {
-        let url = Url::parse(raw).ok()?;
-        let location = url
-            .fragment()
-            .and_then(normalize_hash_fragment)
-            .or_else(|| extract_trailing_location(url.path()));
-        let path = url.to_file_path().ok()?;
-        return Some((path, location));
-    }
-
-    if let Some((path_str, fragment)) = raw.split_once('#')
-        && let Some(location) = normalize_hash_fragment(fragment)
-    {
-        if path_str.is_empty() {
-            return None;
-        }
-        return Some((PathBuf::from(path_str), Some(location)));
-    }
-
-    let location = extract_trailing_location(raw);
-    let path_str = match location.as_deref() {
-        Some(suffix) => &raw[..raw.len().saturating_sub(suffix.len())],
-        None => raw,
-    };
-    if path_str.is_empty() {
-        return None;
-    }
-    Some((PathBuf::from(path_str), location))
-}
-
-fn resolve_clickable_path(path: PathBuf) -> Option<PathBuf> {
-    if path.is_absolute() {
-        return Some(path);
-    }
-
-    let cwd = std::env::current_dir().ok()?;
-    Some(join_normalized_path(&cwd, &path))
-}
-
-fn join_normalized_path(base: &Path, path: &Path) -> PathBuf {
-    let mut joined = PathBuf::from(base);
-    for component in path.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
-                joined.pop();
-            }
-            other => joined.push(other.as_os_str()),
-        }
-    }
-    joined
-}
-
-fn extract_trailing_location(raw: &str) -> Option<String> {
-    let mut hash_parts = raw.rsplitn(2, '#');
-    let fragment = hash_parts.next()?;
-    let base = hash_parts.next();
-    if let Some(base) = base
-        && let Some(location) = normalize_hash_fragment(fragment)
-    {
-        return Some(location).filter(|_| !base.is_empty());
-    }
-
-    let bytes = raw.as_bytes();
-    let mut idx = bytes.len();
-    while idx > 0 && (bytes[idx - 1].is_ascii_digit() || matches!(bytes[idx - 1], b':' | b'-')) {
-        idx -= 1;
-    }
-    if idx >= bytes.len() || bytes.get(idx).copied() != Some(b':') {
-        return None;
-    }
-    let suffix = &raw[idx..];
-    let digits = suffix.chars().filter(|ch| ch.is_ascii_digit()).count();
-    (digits > 0).then(|| suffix.to_string())
-}
-
-fn normalize_hash_fragment(fragment: &str) -> Option<String> {
-    let fragment = fragment.strip_prefix('L')?;
-    let mut normalized = String::from(":");
-    for ch in fragment.chars() {
-        match ch {
-            'L' => {}
-            'C' => normalized.push(':'),
-            '0'..='9' | '-' => normalized.push(ch),
-            _ => return None,
-        }
-    }
-    Some(normalized)
 }
 
 /// Renderer with deferred output buffering

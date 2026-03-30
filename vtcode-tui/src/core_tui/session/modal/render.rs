@@ -1,8 +1,7 @@
 use crate::config::constants::ui;
 use crate::ui::markdown::render_markdown;
 use crate::ui::tui::session::inline_list::{
-    InlineListRenderOptions, InlineListRow, render_inline_list_with_options, row_height,
-    selection_padding, selection_padding_width,
+    InlineListRow, row_height, selection_padding, selection_padding_width,
 };
 use crate::ui::tui::session::list_panel::{
     SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
@@ -17,9 +16,13 @@ use unicode_width::UnicodeWidthStr;
 
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
+use crate::core_tui::session::transcript_links::{
+    TranscriptFileLinkTarget, decorate_detected_link_lines,
+};
 use crate::ui::tui::session::wrapping;
 use ratatui::style::Color as RatatuiColor;
 use std::mem;
+use std::path::Path;
 
 fn modal_text_area_aligned_with_list(area: Rect) -> Rect {
     let gutter = selection_padding_width().min(area.width as usize) as u16;
@@ -96,12 +99,10 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
     }
 }
 
-fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
+fn markdown_lines_for_modal(text: &str, style: Style) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for line in markdown_to_plain_lines(text) {
-        let line_ratatui = Line::from(Span::styled(line, style));
-        let wrapped = wrapping::wrap_line_preserving_urls(line_ratatui, width);
-        lines.extend(wrapped);
+        lines.push(Line::from(Span::styled(line, style)));
     }
 
     if lines.is_empty() {
@@ -111,6 +112,11 @@ fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Ve
     }
 }
 
+#[cfg(test)]
+fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
+    wrapping::wrap_lines_preserving_urls(markdown_lines_for_modal(text, style), width)
+}
+
 #[derive(Clone, Debug)]
 pub struct ModalInlineEditor {
     item_index: usize,
@@ -118,6 +124,49 @@ pub struct ModalInlineEditor {
     text: String,
     placeholder: Option<String>,
     active: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct ModalRenderOutcome {
+    pub(crate) list_area: Option<Rect>,
+    pub(crate) text_areas: Vec<Rect>,
+    pub(crate) link_targets: Vec<TranscriptFileLinkTarget>,
+}
+
+impl ModalRenderOutcome {
+    fn push_text_area(&mut self, area: Rect) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        self.text_areas.push(area);
+    }
+}
+
+fn render_modal_text_lines(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    lines: Vec<Line<'static>>,
+    workspace_root: Option<&Path>,
+    last_mouse_position: Option<(u16, u16)>,
+    link_style: Style,
+    hovered_link_style: Style,
+    outcome: &mut ModalRenderOutcome,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let (decorated, targets) = decorate_detected_link_lines(
+        lines,
+        area,
+        workspace_root,
+        last_mouse_position,
+        link_style,
+        hovered_link_style,
+    );
+    frame.render_widget(Paragraph::new(decorated).wrap(Wrap { trim: false }), area);
+    outcome.push_text_area(area);
+    outcome.link_targets.extend(targets);
 }
 
 struct ModalListPanelModel<'a> {
@@ -304,14 +353,19 @@ fn inline_editor_for_step(step: &WizardStepState) -> Option<ModalInlineEditor> {
 
 /// Render wizard modal body including tabs, question, and list
 #[allow(dead_code)]
-pub fn render_wizard_modal_body(
+pub(crate) fn render_wizard_modal_body(
     frame: &mut Frame<'_>,
     area: Rect,
     wizard: &mut WizardModalState,
     styles: &ModalRenderStyles,
-) -> Option<Rect> {
+    workspace_root: Option<&Path>,
+    last_mouse_position: Option<(u16, u16)>,
+    link_style: Style,
+    hovered_link_style: Style,
+) -> ModalRenderOutcome {
+    let mut outcome = ModalRenderOutcome::default();
     if area.width == 0 || area.height == 0 {
-        return None;
+        return outcome;
     }
 
     let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
@@ -327,20 +381,14 @@ pub fn render_wizard_modal_body(
         && inline_editor.is_none();
     let instruction_lines = wizard.instruction_lines();
     let header_lines = if is_multistep {
-        render_markdown_lines_for_modal(
-            wizard.question_header().as_str(),
-            content_width,
-            styles.header,
-        )
+        markdown_lines_for_modal(wizard.question_header().as_str(), styles.header)
     } else {
         Vec::new()
     };
     let question_lines = wizard
         .steps
         .get(wizard.current_step)
-        .map(|step| {
-            render_markdown_lines_for_modal(step.question.as_str(), content_width, styles.header)
-        })
+        .map(|step| markdown_lines_for_modal(step.question.as_str(), styles.header))
         .unwrap_or_else(|| vec![Line::default()]);
 
     let mut info_lines = question_lines;
@@ -369,18 +417,25 @@ pub fn render_wizard_modal_body(
             .into_iter()
             .map(|line| Line::from(Span::styled(line, styles.hint))),
     );
+    let header_row_count =
+        wrapping::wrap_lines_preserving_urls(header_lines.clone(), content_width)
+            .len()
+            .max(1);
+    let info_row_count = wrapping::wrap_lines_preserving_urls(info_lines.clone(), content_width)
+        .len()
+        .max(1);
 
     // Layout: [Header] [Info] [Search?] [Main content list]
     let mut constraints = Vec::new();
     if is_multistep {
         constraints.push(Constraint::Length(
-            header_lines.len().min(u16::MAX as usize) as u16,
+            header_row_count.min(u16::MAX as usize) as u16
         ));
     } else {
         constraints.push(Constraint::Length(1));
     }
     constraints.push(Constraint::Length(
-        info_lines.len().max(1).min(u16::MAX as usize) as u16,
+        info_row_count.min(u16::MAX as usize) as u16
     ));
     if wizard.search.is_some() {
         constraints.push(Constraint::Length(1));
@@ -392,16 +447,33 @@ pub fn render_wizard_modal_body(
     let mut idx = 0;
     if is_multistep {
         let header_area = text_alignment_fn(chunks[idx]);
-        let header = Paragraph::new(header_lines).wrap(Wrap { trim: false });
-        frame.render_widget(header, header_area);
+        render_modal_text_lines(
+            frame,
+            header_area,
+            header_lines,
+            workspace_root,
+            last_mouse_position,
+            link_style,
+            hovered_link_style,
+            &mut outcome,
+        );
     } else {
         let tabs_area = text_alignment_fn(chunks[idx]);
         render_wizard_tabs(frame, tabs_area, &wizard.steps, wizard.current_step, styles);
+        outcome.push_text_area(tabs_area);
     }
     idx += 1;
 
-    let info = Paragraph::new(info_lines).wrap(Wrap { trim: false });
-    frame.render_widget(info, text_alignment_fn(chunks[idx]));
+    render_modal_text_lines(
+        frame,
+        text_alignment_fn(chunks[idx]),
+        info_lines,
+        workspace_root,
+        last_mouse_position,
+        link_style,
+        hovered_link_style,
+        &mut outcome,
+    );
     idx += 1;
 
     if let Some(search) = wizard.search.as_ref()
@@ -414,7 +486,7 @@ pub fn render_wizard_modal_body(
     if let Some(step) = wizard.steps.get_mut(wizard.current_step)
         && idx < chunks.len()
     {
-        return Some(render_modal_list(
+        outcome.list_area = Some(render_modal_list(
             frame,
             chunks[idx],
             &mut step.list,
@@ -424,7 +496,7 @@ pub fn render_wizard_modal_body(
         ));
     }
 
-    None
+    outcome
 }
 
 #[allow(clippy::const_is_empty)]
@@ -476,13 +548,18 @@ fn modal_list_summary_line(
     }
 }
 
-pub fn render_modal_body(
+pub(crate) fn render_modal_body(
     frame: &mut Frame<'_>,
     area: Rect,
     context: ModalBodyContext<'_, '_>,
-) -> Option<Rect> {
+    workspace_root: Option<&Path>,
+    last_mouse_position: Option<(u16, u16)>,
+    link_style: Style,
+    hovered_link_style: Style,
+) -> ModalRenderOutcome {
+    let mut outcome = ModalRenderOutcome::default();
     if area.width == 0 || area.height == 0 {
-        return None;
+        return outcome;
     }
 
     let mut sections = Vec::new();
@@ -490,6 +567,15 @@ pub fn render_modal_body(
         .instructions
         .iter()
         .any(|line| !line.trim().is_empty());
+    let instruction_lines = if has_instructions {
+        modal_instruction_lines(area, context.instructions, context.styles)
+    } else {
+        Vec::new()
+    };
+    let instruction_row_count =
+        wrapping::wrap_lines_preserving_urls(instruction_lines.clone(), area.width.max(1) as usize)
+            .len()
+            .clamp(1, 6);
     if has_instructions {
         sections.push(ModalSection::Instructions);
     }
@@ -504,7 +590,7 @@ pub fn render_modal_body(
     }
 
     if sections.is_empty() {
-        return None;
+        return outcome;
     }
 
     let mut constraints = Vec::new();
@@ -512,14 +598,8 @@ pub fn render_modal_body(
         match section {
             ModalSection::Search => constraints.push(Constraint::Length(1.min(area.height))),
             ModalSection::Instructions => {
-                let visible_rows = context.instructions.len().clamp(1, 6) as u16;
-                let instruction_title_rows = if ui::MODAL_INSTRUCTIONS_TITLE.is_empty() {
-                    0
-                } else {
-                    1
-                };
-                let height = visible_rows.saturating_add(instruction_title_rows);
-                constraints.push(Constraint::Length(height.min(area.height)));
+                let visible_rows = instruction_row_count as u16;
+                constraints.push(Constraint::Length(visible_rows.min(area.height)));
             }
             ModalSection::Prompt => constraints.push(Constraint::Length(2.min(area.height))),
             ModalSection::List => constraints.push(Constraint::Min(1)),
@@ -532,8 +612,17 @@ pub fn render_modal_body(
     for (section, chunk) in sections.into_iter().zip(chunks.iter()) {
         match section {
             ModalSection::Instructions => {
-                if chunk.height > 0 && has_instructions {
-                    render_modal_instructions(frame, *chunk, context.instructions, context.styles);
+                if chunk.height > 0 && !instruction_lines.is_empty() {
+                    render_modal_text_lines(
+                        frame,
+                        *chunk,
+                        instruction_lines.clone(),
+                        workspace_root,
+                        last_mouse_position,
+                        link_style,
+                        hovered_link_style,
+                        &mut outcome,
+                    );
                 }
             }
             ModalSection::Prompt => {
@@ -548,7 +637,7 @@ pub fn render_modal_body(
             }
             ModalSection::List => {
                 if let Some(list_state) = list_state.as_deref_mut() {
-                    return Some(render_modal_list(
+                    outcome.list_area = Some(render_modal_list(
                         frame,
                         *chunk,
                         list_state,
@@ -561,7 +650,7 @@ pub fn render_modal_body(
         }
     }
 
-    None
+    outcome
 }
 
 enum DiffLineKind {
@@ -591,12 +680,11 @@ fn diff_line_style(kind: &DiffLineKind) -> Style {
     }
 }
 
-fn render_modal_instructions(
-    frame: &mut Frame<'_>,
+fn modal_instruction_lines(
     area: Rect,
     instructions: &[String],
     styles: &ModalRenderStyles,
-) {
+) -> Vec<Line<'static>> {
     fn parse_instruction_highlight_markup(text: &str) -> (String, bool) {
         let trimmed = text.trim();
         match trimmed
@@ -647,7 +735,7 @@ fn render_modal_instructions(
     }
 
     if area.width == 0 || area.height == 0 {
-        return;
+        return Vec::new();
     }
 
     let mut items: Vec<Vec<Line<'static>>> = Vec::new();
@@ -719,42 +807,19 @@ fn render_modal_instructions(
         items.push(vec![Line::default()]);
     }
 
-    let mut rendered_items = Vec::new();
+    let mut rendered_lines = Vec::new();
     if !ui::MODAL_INSTRUCTIONS_TITLE.is_empty() {
-        rendered_items.push((
-            InlineListRow::single(
-                Line::from(Span::styled(
-                    ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
-                    styles.instruction_title,
-                )),
-                styles.instruction_title,
-            ),
-            1_u16,
-        ));
+        rendered_lines.push(Line::from(Span::styled(
+            ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
+            styles.instruction_title,
+        )));
     }
 
-    rendered_items.extend(items.into_iter().map(|lines| {
-        (
-            InlineListRow {
-                lines: lines.clone(),
-                style: styles.instruction_body,
-            },
-            row_height(&lines),
-        )
-    }));
+    for lines in items {
+        rendered_lines.extend(lines);
+    }
 
-    let _ = render_inline_list_with_options(
-        frame,
-        area,
-        rendered_items,
-        None,
-        InlineListRenderOptions {
-            base_style: styles.instruction_body,
-            selected_style: None,
-            scroll_padding: ui::INLINE_LIST_SCROLL_PADDING,
-            infinite_scrolling: false,
-        },
-    );
+    rendered_lines
 }
 
 fn render_modal_search(
@@ -1103,6 +1168,10 @@ mod tests {
                         input: "",
                         cursor: 0,
                     },
+                    None,
+                    None,
+                    Style::default(),
+                    Style::default(),
                 );
             })
             .expect("modal render should succeed");
@@ -1329,6 +1398,10 @@ mod tests {
                         input: "",
                         cursor: 0,
                     },
+                    None,
+                    None,
+                    Style::default(),
+                    Style::default(),
                 );
             })
             .expect("modal render should succeed");

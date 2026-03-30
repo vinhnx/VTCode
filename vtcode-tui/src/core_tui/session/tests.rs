@@ -581,6 +581,45 @@ fn modifier_click_emits_open_file_event_for_absolute_transcript_path() {
 }
 
 #[test]
+fn double_click_emits_open_file_event_for_absolute_transcript_path() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
 fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let temp_file = quoted_transcript_temp_file_path();
@@ -593,7 +632,12 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
     let target = session
         .transcript_file_link_targets
         .iter()
-        .find(|target| matches!(&target.target, TranscriptLinkTarget::File(path) if path == &temp_file))
+        .find(|target| {
+            matches!(
+                &target.target,
+                TranscriptLinkTarget::File(path) if path.path() == temp_file.as_path()
+            )
+        })
         .expect("expected quoted transcript file target")
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -655,6 +699,356 @@ fn modifier_click_emits_open_url_event_for_explicit_transcript_link() {
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn modifier_click_emits_open_url_event_for_raw_transcript_url() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://auth.openai.com/oauth/authorize?client_id=test".to_string();
+    session.push_line(InlineMessageKind::Agent, vec![make_segment(url.as_str())]);
+    let _ = rendered_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://auth.openai.com/oauth/authorize?client_id=test".to_string();
+    session.show_transient(app_types::TransientRequest::Wizard(
+        app_types::WizardOverlayRequest {
+            title: "OpenAI manual callback".to_string(),
+            steps: vec![WizardStep {
+                title: "Callback".to_string(),
+                question: format!("Open this URL in your browser:\n\n{url}"),
+                items: vec![InlineListItem {
+                    title: "Submit".to_string(),
+                    subtitle: Some("Press Enter to continue.".to_string()),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::ConfigAction("submit".to_string())),
+                    search_value: None,
+                }],
+                completed: false,
+                answer: None,
+                allow_freeform: false,
+                freeform_label: None,
+                freeform_placeholder: None,
+            }],
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        },
+    ));
+
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let target = session
+        .core
+        .modal_link_targets()
+        .first()
+        .expect("expected modal url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn modal_auth_text_in_app_session_is_selectable_and_copied() {
+    let _guard = CLIPBOARD_TEST_LOCK
+        .lock()
+        .expect("clipboard test lock should not be poisoned");
+
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://auth.openai.com/oauth/authorize?client_id=test".to_string();
+    session.show_transient(app_types::TransientRequest::Wizard(
+        app_types::WizardOverlayRequest {
+            title: "OpenAI manual callback".to_string(),
+            steps: vec![WizardStep {
+                title: "Callback".to_string(),
+                question: format!("Copy this URL:\n\n{url}"),
+                items: vec![InlineListItem {
+                    title: "Submit".to_string(),
+                    subtitle: Some("Press Enter to continue.".to_string()),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::ConfigAction("submit".to_string())),
+                    search_value: None,
+                }],
+                completed: false,
+                answer: None,
+                allow_freeform: false,
+                freeform_label: None,
+                freeform_placeholder: None,
+            }],
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        },
+    ));
+
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let target = session
+        .core
+        .modal_link_targets()
+        .first()
+        .expect("expected modal url target")
+        .clone();
+    let (tx, _rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: target.area.x + 5,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: target.area.x + 5,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+
+    let backend = TestBackend::new(VIEW_WIDTH, 20);
+    let mut terminal = Terminal::new(backend).expect("create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render modal selection");
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        session
+            .core
+            .mouse_selection
+            .extract_text(buffer, buffer.area),
+        "https"
+    );
+    assert!(session.core.mouse_selection.has_selection);
+    assert!(!session.core.mouse_selection.needs_copy());
+}
+
+#[test]
+fn modifier_click_emits_open_url_event_for_standard_modal_auth_link() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = format!(
+        "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
+        "abcdefghijklmnopqrstuvwxyz".repeat(10)
+    );
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: format!("Authorize with {url}"),
+            lines: vec![format!("Open this URL in your browser:\n{url}")],
+            footer_hint: None,
+            items: vec![InlineListItem {
+                title: "Continue".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::SlashCommand("continue".to_string())),
+                search_value: None,
+            }],
+            selected: Some(InlineListSelection::SlashCommand("continue".to_string())),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+
+    let _ = rendered_session_lines(&mut session, VIEW_ROWS);
+    let targets = session
+        .modal_link_targets()
+        .iter()
+        .filter(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        targets.len() >= 2,
+        "expected wrapped modal url target segments"
+    );
+    let target = targets.last().expect("expected modal url target").clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn double_click_emits_open_url_event_for_standard_modal_auth_link() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = format!(
+        "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
+        "abcdefghijklmnopqrstuvwxyz".repeat(10)
+    );
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: format!("Authorize with {url}"),
+            lines: vec![format!("Open this URL in your browser:\n{url}")],
+            footer_hint: None,
+            items: vec![InlineListItem {
+                title: "Continue".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::SlashCommand("continue".to_string())),
+                search_value: None,
+            }],
+            selected: Some(InlineListSelection::SlashCommand("continue".to_string())),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+
+    let _ = rendered_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .modal_link_targets()
+        .iter()
+        .find(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
+        .expect("expected modal url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
+}
+
+#[test]
+fn modifier_click_emits_open_file_event_for_standard_modal_file_link_with_location() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let file_target = format!("{absolute_path}#L12C4");
+    let canonical_target = format!("{absolute_path}:12:4");
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Open source file".to_string(),
+            lines: vec![format!("Review this file:\n{file_target}")],
+            footer_hint: None,
+            items: vec![InlineListItem {
+                title: "Continue".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::SlashCommand("continue".to_string())),
+                search_value: None,
+            }],
+            selected: Some(InlineListSelection::SlashCommand("continue".to_string())),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+
+    let _ = rendered_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .modal_link_targets()
+        .iter()
+        .find(|target| {
+            matches!(
+                &target.target,
+                TranscriptLinkTarget::File(path)
+                    if path.path().display().to_string() == absolute_path
+                        && path.location_suffix() == Some(":12:4")
+            )
+        })
+        .expect("expected modal file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == canonical_target
     ));
 }
 
@@ -941,6 +1335,107 @@ fn app_session_modifier_click_emits_open_file_event_for_transcript_path() {
     assert_eq!(session.core.mouse_drag_target, MouseDragTarget::None);
     assert!(!session.core.mouse_selection.is_selecting);
     assert!(!session.core.mouse_selection.has_selection);
+}
+
+#[test]
+fn app_session_double_click_emits_open_file_event_for_transcript_path() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .core
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
+fn app_session_double_click_emits_open_url_event_for_modal_auth_link() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://auth.openai.com/oauth/authorize?client_id=test".to_string();
+    session.show_transient(app_types::TransientRequest::Wizard(
+        app_types::WizardOverlayRequest {
+            title: "OpenAI manual callback".to_string(),
+            steps: vec![WizardStep {
+                title: "Callback".to_string(),
+                question: format!("Open this URL in your browser:\n\n{url}"),
+                items: vec![InlineListItem {
+                    title: "Submit".to_string(),
+                    subtitle: Some("Press Enter to continue.".to_string()),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::ConfigAction("submit".to_string())),
+                    search_value: None,
+                }],
+                completed: false,
+                answer: None,
+                allow_freeform: false,
+                freeform_label: None,
+                freeform_placeholder: None,
+            }],
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        },
+    ));
+
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let target = session
+        .core
+        .modal_link_targets()
+        .first()
+        .expect("expected modal url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: target.area.x,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
 }
 
 #[cfg(target_os = "macos")]
@@ -1296,7 +1791,24 @@ fn path_with_line_col_suffix_resolves_correctly() {
     let target = &session.transcript_file_link_targets[0];
     assert!(matches!(
         &target.target,
-        TranscriptLinkTarget::File(path) if path.display().to_string() == absolute_path
+        TranscriptLinkTarget::File(path)
+            if path.path().display().to_string() == absolute_path
+                && path.location_suffix() == Some(":42:10")
+    ));
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == path_with_loc
     ));
     assert!(
         decorated[0]
@@ -1320,7 +1832,50 @@ fn path_with_paren_location_resolves_correctly() {
     assert!(!session.transcript_file_link_targets.is_empty());
     assert!(matches!(
         &session.transcript_file_link_targets[0].target,
-        TranscriptLinkTarget::File(path) if path.display().to_string() == absolute_path
+        TranscriptLinkTarget::File(path)
+            if path.path().display().to_string() == absolute_path
+                && path.location_suffix() == Some(":10:5")
+    ));
+}
+
+#[test]
+fn path_with_hash_location_resolves_and_opens_with_canonical_suffix() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let hash_path = format!("{absolute_path}#L12C4");
+
+    let _ = session.decorate_visible_transcript_links(
+        vec![transcript_line(format!("Error at {}", hash_path))],
+        Rect::new(0, 0, 200, 1),
+    );
+
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    assert!(matches!(
+        &target.target,
+        TranscriptLinkTarget::File(path)
+            if path.path().display().to_string() == absolute_path
+                && path.location_suffix() == Some(":12:4")
+    ));
+
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == format!("{absolute_path}:12:4")
     ));
 }
 

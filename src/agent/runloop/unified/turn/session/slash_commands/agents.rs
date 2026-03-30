@@ -1456,42 +1456,7 @@ async fn launch_editor_path(
     ctx: &mut SlashCommandContext<'_>,
     path: String,
 ) -> Result<SlashCommandControl> {
-    use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
-
-    let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
-    let editor_config = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|config| config.tools.editor.clone())
-        .unwrap_or_default();
-    if !editor_config.enabled {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "External editor is disabled (`tools.editor.enabled = false`).",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let launch_config = EditorLaunchConfig {
-        preferred_editor: if editor_config.preferred_editor.trim().is_empty() {
-            None
-        } else {
-            Some(editor_config.preferred_editor.clone())
-        },
-    };
-
-    match launcher.launch_editor_with_config(Some(PathBuf::from(path)), launch_config) {
-        Ok(_) => {
-            ctx.renderer.line(MessageStyle::Info, "Editor closed.")?;
-        }
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to launch editor: {}", err),
-            )?;
-        }
-    }
-    Ok(SlashCommandControl::Continue)
+    super::apps::launch_editor_from_context(ctx, Some(path)).await
 }
 
 fn format_datetime(timestamp: chrono::DateTime<chrono::Utc>) -> String {

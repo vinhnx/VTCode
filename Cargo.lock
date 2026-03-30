@@ -6253,6 +6253,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-width 0.2.2",
+ "url",
  "vtcode-acp",
  "vtcode-auth",
  "vtcode-commons",
@@ -6362,6 +6363,7 @@ dependencies = [
  "tokio",
  "tracing",
  "unicode-width 0.2.2",
+ "url",
 ]
 
 [[package]]

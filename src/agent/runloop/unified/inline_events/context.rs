@@ -162,8 +162,7 @@ impl<'a> InlineEventContext<'a> {
             }
             InlineEvent::OpenUrl(url) => {
                 self.state.reset_interrupt_state();
-                let _ = webbrowser::open(&url);
-                InlineLoopAction::Continue
+                self.modal.request_url_guard(self.state.renderer(), url)?
             }
 
             InlineEvent::ScrollLineUp

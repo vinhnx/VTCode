@@ -68,6 +68,35 @@ impl Session {
         }
     }
 
+    fn handle_link_click_action(
+        &mut self,
+        action: TranscriptLinkClickAction,
+        clear_drag_target: bool,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) -> bool {
+        match action {
+            TranscriptLinkClickAction::Open(outbound) => {
+                if clear_drag_target {
+                    self.core.mouse_drag_target = MouseDragTarget::None;
+                }
+                self.mark_dirty();
+                let outbound: InlineEvent = outbound.into();
+                events::emit_inline_event(&outbound, events, callback);
+                self.core.mouse_selection.clear_click_history();
+                true
+            }
+            TranscriptLinkClickAction::Consume => {
+                if clear_drag_target {
+                    self.core.mouse_drag_target = MouseDragTarget::None;
+                }
+                self.core.mouse_selection.clear_click_history();
+                true
+            }
+            TranscriptLinkClickAction::Ignore => false,
+        }
+    }
+
     fn modal_visible_index_at(&self, row: u16) -> Option<usize> {
         let area = self.core.modal_list_area()?;
         if row < area.y || row >= area.y.saturating_add(area.height) {
@@ -165,6 +194,15 @@ impl Session {
         }
 
         true
+    }
+
+    fn modal_text_area_contains(&self, column: u16, row: u16) -> bool {
+        self.core.modal_text_areas().iter().any(|area| {
+            row >= area.y
+                && row < area.y.saturating_add(area.height)
+                && column >= area.x
+                && column < area.x.saturating_add(area.width)
+        })
     }
 
     fn handle_active_overlay_scroll(
@@ -451,23 +489,69 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                    match self.transcript_file_link_click_action(
-                        mouse_event.column,
-                        mouse_event.row,
-                        mouse_event.modifiers,
+                    if self.handle_link_click_action(
+                        self.transcript_file_link_click_action(
+                            mouse_event.column,
+                            mouse_event.row,
+                            mouse_event.modifiers,
+                        ),
+                        false,
+                        events,
+                        callback,
                     ) {
-                        TranscriptLinkClickAction::Open(outbound) => {
+                        return;
+                    }
+
+                    if self.has_active_overlay() {
+                        let in_modal_list = self.core.modal_list_area().is_some_and(|area| {
+                            mouse_event.row >= area.y
+                                && mouse_event.row < area.y.saturating_add(area.height)
+                                && mouse_event.column >= area.x
+                                && mouse_event.column < area.x.saturating_add(area.width)
+                        });
+
+                        if self.handle_link_click_action(
+                            self.modal_link_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                                mouse_event.modifiers,
+                            ),
+                            false,
+                            events,
+                            callback,
+                        ) {
+                            return;
+                        }
+
+                        if self.modal_text_area_contains(mouse_event.column, mouse_event.row)
+                            && !in_modal_list
+                        {
+                            let is_double_click = self.core.mouse_selection.register_click(
+                                mouse_event.column,
+                                mouse_event.row,
+                                Instant::now(),
+                            );
+                            if is_double_click
+                                && self.handle_link_click_action(
+                                    self.modal_link_double_click_action(
+                                        mouse_event.column,
+                                        mouse_event.row,
+                                    ),
+                                    true,
+                                    events,
+                                    callback,
+                                )
+                            {
+                                return;
+                            }
+
+                            self.core.mouse_drag_target = MouseDragTarget::ModalText;
+                            self.core
+                                .mouse_selection
+                                .start_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
-                            let outbound: InlineEvent = outbound.into();
-                            events::emit_inline_event(&outbound, events, callback);
-                            self.core.mouse_selection.clear_click_history();
                             return;
                         }
-                        TranscriptLinkClickAction::Consume => {
-                            self.core.mouse_selection.clear_click_history();
-                            return;
-                        }
-                        TranscriptLinkClickAction::Ignore => {}
                     }
 
                     if self.has_active_overlay()
@@ -494,6 +578,18 @@ impl Session {
                         Instant::now(),
                     );
                     if is_double_click {
+                        if self.handle_link_click_action(
+                            self.transcript_file_link_double_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                            ),
+                            true,
+                            events,
+                            callback,
+                        ) {
+                            return;
+                        }
+
                         self.core.mouse_drag_target = MouseDragTarget::None;
                         let _ = self.handle_transcript_click(mouse_event);
                         if self
@@ -532,6 +628,12 @@ impl Session {
                                 .update_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
+                        MouseDragTarget::ModalText => {
+                            self.core
+                                .mouse_selection
+                                .update_selection(mouse_event.column, mouse_event.row);
+                            self.mark_dirty();
+                        }
                         MouseDragTarget::None => {}
                     }
                 }
@@ -547,6 +649,12 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
+                            self.core
+                                .mouse_selection
+                                .finish_selection(mouse_event.column, mouse_event.row);
+                            self.mark_dirty();
+                        }
+                        MouseDragTarget::ModalText => {
                             self.core
                                 .mouse_selection
                                 .finish_selection(mouse_event.column, mouse_event.row);

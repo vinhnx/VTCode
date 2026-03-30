@@ -10,9 +10,9 @@ use super::render::{
     search_value_with_content, section_item, section_subtitle, setting_subtitle, summarize_value,
 };
 use super::{
-    ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_ARRAY_ADD,
-    ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET, OPTIONAL_DOC_FIELDS,
-    SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH, SETTINGS_MODEL_CONFIG_MAIN_PATH,
+    ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL,
+    ACTION_PREFIX_ARRAY_ADD, ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET,
+    OPTIONAL_DOC_FIELDS, SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH, SETTINGS_MODEL_CONFIG_MAIN_PATH,
     SETTINGS_MODEL_CONFIG_PATH, SettingsPaletteState,
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
@@ -55,6 +55,12 @@ pub(super) fn build_settings_items(
             "Edit main and lightweight model settings in one focused tree",
             Some("Section"),
             &format!("{}{}", ACTION_PREFIX_OPEN, SETTINGS_MODEL_CONFIG_PATH),
+        ));
+        items.push(action_item(
+            "External Editor",
+            "Open guided setup for /edit, Ctrl+E, and Cmd/Ctrl-click file links",
+            Some("Setup"),
+            ACTION_CONFIGURE_EDITOR,
         ));
         append_table_items(&mut items, table, None, None, draft);
     }
@@ -254,6 +260,19 @@ fn item_for_value(
             badge: Some("Pick".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(action.to_string())),
+            search_value: Some(search_value),
+        };
+    }
+
+    if path == "tools.editor" {
+        return InlineListItem {
+            title,
+            subtitle: Some(section_subtitle(path, value)),
+            badge: Some("Setup".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                ACTION_CONFIGURE_EDITOR.to_string(),
+            )),
             search_value: Some(search_value),
         };
     }

@@ -11,6 +11,7 @@ use pulldown_cmark::{CodeBlockKind, HeadingLevel, Tag, TagEnd};
 use regex::Regex;
 use std::cmp::max;
 use std::sync::LazyLock;
+use vtcode_commons::parse_editor_target;
 
 static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
@@ -437,24 +438,13 @@ fn build_file_link_match(
         return None;
     }
 
-    let stripped = strip_location_suffix(strip_file_scheme(candidate)).trim_end_matches(':');
-    if stripped.is_empty() || !looks_like_markdown_path(stripped) {
+    let parsed = parse_editor_target(candidate)?;
+    let stripped = parsed.path().to_string_lossy();
+    if stripped.is_empty() || !looks_like_markdown_path(&stripped) {
         return None;
     }
 
-    let mut target = candidate.to_string();
-    while target.ends_with(':') {
-        target.pop();
-    }
-    if let Some(paren_start) = location_paren_suffix_start(candidate) {
-        let base = &candidate[..paren_start];
-        let suffix = &candidate[paren_start..];
-        if let Some(location) = parse_paren_location_suffix(suffix) {
-            target = format!("{base}{location}");
-        } else {
-            target = base.to_string();
-        }
-    }
+    let target = parsed.canonical_string();
 
     Some(FileLinkMatch { start, end, target })
 }
@@ -493,34 +483,6 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
     }
 
     (start, end)
-}
-
-fn strip_file_scheme(token: &str) -> &str {
-    token.strip_prefix("file://").unwrap_or(token)
-}
-
-fn strip_location_suffix(token: &str) -> &str {
-    let without_fragment = token.split('#').next().unwrap_or(token);
-    let mut base = without_fragment;
-
-    // Strip parenthesized location suffix like (10,5) or (10)
-    if let Some(paren_start) = location_paren_suffix_start(base) {
-        base = &base[..paren_start];
-    }
-
-    // Strip colon-separated line:col suffix like :10:5 or :10
-    for _ in 0..2 {
-        let Some(colon_idx) = base.rfind(':') else {
-            break;
-        };
-        let suffix = &base[colon_idx + 1..];
-        if suffix.is_empty() || !suffix.chars().all(|ch| ch.is_ascii_digit()) {
-            break;
-        }
-        base = &base[..colon_idx];
-    }
-
-    base
 }
 
 fn looks_like_markdown_path(token: &str) -> bool {
@@ -589,33 +551,6 @@ fn location_paren_suffix_start(token: &str) -> Option<usize> {
         && !inner.contains(",,")
         && inner.chars().all(|c| c.is_ascii_digit() || c == ',');
     valid.then_some(paren_start)
-}
-
-fn parse_paren_location_suffix(suffix: &str) -> Option<String> {
-    let inner = suffix.strip_prefix('(')?.strip_suffix(')')?;
-    if inner.is_empty() {
-        return None;
-    }
-
-    let mut parts = inner.split(',');
-    let line = parts.next()?;
-    let col = parts.next();
-    if parts.next().is_some() {
-        return None;
-    }
-
-    if !line.chars().all(|ch| ch.is_ascii_digit()) {
-        return None;
-    }
-    let mut location = format!(":{line}");
-    if let Some(col) = col {
-        if col.is_empty() || !col.chars().all(|ch| ch.is_ascii_digit()) {
-            return None;
-        }
-        location.push(':');
-        location.push_str(col);
-    }
-    Some(location)
 }
 
 fn append_text_segment(

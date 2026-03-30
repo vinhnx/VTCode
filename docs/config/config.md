@@ -9,6 +9,7 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 - [Feature flags](#feature-flags)
 - [Model selection](#model-selection)
 - [Instruction guidance and memory](#instruction-guidance-and-persistent-memory)
+- [External editor](#external-editor)
 - [Execution environment](#execution-environment)
 - [MCP integration](#mcp-integration)
 - [Security and approvals](#security-and-approvals)
@@ -262,6 +263,29 @@ Notes:
 - `provider.openai.hosted_shell.network_policy` currently applies only to `container_auto`.
 - `type = "allowlist"` requires at least one `allowed_domains` entry. Each `domain_secrets[*].domain` must also appear in `allowed_domains`.
 - `version` may be omitted for the default `"latest"` behavior, or set to a pinned integer/string version when your hosted skill deployment requires it.
+
+## External editor
+
+Use `tools.editor` to control the external editor flow used by `/edit`, empty-prompt `Ctrl+E`, and Cmd/Ctrl-click file links in the TUI.
+
+```toml
+[tools.editor]
+enabled = true
+preferred_editor = ""
+suspend_tui = true
+```
+
+When `suspend_tui = false`, VT Code keeps the TUI live for real file opens and returns immediately after launching the external editor. Temporary-file `/edit` flows still wait for the editor to close so VT Code can read the edited content back into the composer.
+
+### Interactive controls
+
+You can manage this feature without editing TOML directly:
+
+- `/config` shows an `External Editor` quick-access entry at the root.
+- `/config tools.editor` opens the dedicated editor setup wizard directly.
+- The guided flow can also take you to `/config file_opener` when you want to tune ANSI hyperlink URI handling separately.
+
+For full editor detection, launcher behavior, and examples, see [External Editor Configuration](../tools/EDITOR_CONFIG.md).
 
 ## Execution environment
 

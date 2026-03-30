@@ -15,7 +15,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
 | `Ctrl+T` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs without affecting the TODO panel. |
 | `Ctrl+A` | Move cursor to start of input line. | UNIX/readline-style editing. |
-| `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. |
+| `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. Configure it with `/config tools.editor`. |
 | `Ctrl+W` | Delete the previous word. | UNIX/readline-style editing. |
 | `Ctrl+U` | Delete from cursor to line start. | UNIX/readline-style editing. |
 | `Ctrl+K` | Delete from cursor to line end. | UNIX/readline-style editing. |

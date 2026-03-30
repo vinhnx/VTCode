@@ -227,7 +227,7 @@ fn append_agent_reference_metadata(
     }
 }
 
-fn supports_openai_remote_file_inputs(
+fn supports_native_openai_file_inputs(
     provider_name: &str,
     model_supports_responses_compaction: bool,
 ) -> bool {
@@ -1073,7 +1073,7 @@ pub(super) async fn run_interaction_loop_impl(
         }
         let input = input_owned.as_str();
 
-        let allow_remote_non_image_file_inputs = supports_openai_remote_file_inputs(
+        let allow_structured_non_image_file_inputs = supports_native_openai_file_inputs(
             &ctx.config.provider,
             ctx.provider_client
                 .supports_responses_compaction(&ctx.config.model),
@@ -1083,8 +1083,8 @@ pub(super) async fn run_interaction_loop_impl(
                 input,
                 &ctx.config.workspace,
                 vtcode_core::utils::at_pattern::AtPatternOptions {
-                    allow_local_non_image_file_inputs: true,
-                    allow_remote_non_image_file_inputs,
+                    allow_local_non_image_file_inputs: allow_structured_non_image_file_inputs,
+                    allow_remote_non_image_file_inputs: allow_structured_non_image_file_inputs,
                 },
             )
             .await
@@ -1178,7 +1178,7 @@ mod tests {
     use super::{
         append_agent_reference_metadata, append_file_reference_metadata,
         build_file_reference_metadata, extract_recent_follow_up_hint, fallback_args_preview,
-        refresh_live_ide_context_update, supports_openai_remote_file_inputs, tool_names,
+        refresh_live_ide_context_update, supports_native_openai_file_inputs, tool_names,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
@@ -1243,10 +1243,11 @@ mod tests {
     }
 
     #[test]
-    fn supports_openai_remote_file_inputs_requires_openai_provider_and_responses_support() {
-        assert!(supports_openai_remote_file_inputs("openai", true));
-        assert!(!supports_openai_remote_file_inputs("openai", false));
-        assert!(!supports_openai_remote_file_inputs("anthropic", true));
+    fn supports_native_openai_file_inputs_requires_openai_provider_and_responses_support() {
+        assert!(supports_native_openai_file_inputs("openai", true));
+        assert!(!supports_native_openai_file_inputs("openai", false));
+        assert!(!supports_native_openai_file_inputs("anthropic", true));
+        assert!(!supports_native_openai_file_inputs("mycorp", true));
     }
 
     #[test]

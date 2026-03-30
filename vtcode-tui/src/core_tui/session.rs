@@ -180,6 +180,7 @@ pub(crate) enum MouseDragTarget {
     #[default]
     None,
     Transcript,
+    ModalText,
     Input,
 }
 
@@ -231,7 +232,9 @@ pub struct Session {
     input_area: Option<Rect>,
     bottom_panel_area: Option<Rect>,
     modal_list_area: Option<Rect>,
+    modal_text_areas: Vec<Rect>,
     transcript_file_link_targets: Vec<TranscriptFileLinkTarget>,
+    modal_link_targets: Vec<TranscriptFileLinkTarget>,
     hovered_transcript_file_link: Option<usize>,
     last_mouse_position: Option<(u16, u16)>,
     held_key_modifiers: KeyModifiers,

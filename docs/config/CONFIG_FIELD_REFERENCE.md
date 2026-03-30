@@ -553,7 +553,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.default_policy` | `string` | no | `"prompt"` | Default policy for tools not explicitly listed |
 | `tools.editor.enabled` | `boolean` | no | `true` | Enable external editor support for `/edit` and keyboard shortcuts |
 | `tools.editor.preferred_editor` | `string` | no | `""` | Preferred editor command override (supports arguments, e.g. "code --wait") |
-| `tools.editor.suspend_tui` | `boolean` | no | `true` | Suspend the TUI event loop while editor is running |
+| `tools.editor.suspend_tui` | `boolean` | no | `true` | Suspend the TUI while VT Code is waiting on the editor process. When `false`, real file opens return immediately and keep the TUI live. |
 | `tools.loop_thresholds` | `object` | no | `{}` | Tool-specific loop thresholds (Adaptive Loop Detection) Allows setting higher loop limits for read-only tools (e.g., ls, grep) and lower limits for mutating tools. |
 | `tools.loop_thresholds.*` | `integer` | no | `-` | - |
 | `tools.max_consecutive_blocked_tool_calls_per_turn` | `integer` | no | `3` | Maximum consecutive blocked tool calls allowed per turn before forcing a turn break. This prevents long blocked-call churn from consuming CPU. |
