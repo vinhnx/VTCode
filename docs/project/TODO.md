@@ -529,3 +529,7 @@ log:
 ---
 
 also make sure global loading state is not wired and not showing for large read file tool content read (the status bar loading view is not showing for large read file content read, and the loading state is not wired to the tool call state, so it should not be showing at all for this tool call)
+
+---
+
+check and fix codemod follow Alex advices 
