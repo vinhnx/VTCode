@@ -1313,6 +1313,13 @@ websocket_mode = false
 # Options: "flex", "priority"
 # service_tier = "flex"
 
+[provider.openai.manual_compaction]
+# Optional default instructions appended to manual `/compact` requests.
+# VT Code only applies this to the standalone OpenAI `/responses/compact` flow.
+# instructions = """
+# Focus on durable implementation decisions, changed files, and unresolved risks.
+# """
+
 
 [provider.anthropic]
 # DEPRECATED: Model name validation has been removed in v0.75.0+

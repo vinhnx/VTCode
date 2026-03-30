@@ -346,14 +346,67 @@ impl OpenAIProvider {
         }
     }
 
+    fn is_native_openai_api(&self) -> bool {
+        self.provider_key_override.is_none() && self.base_url.contains("api.openai.com")
+    }
+
+    pub(crate) fn supports_manual_openai_compaction_for_model(&self, model: &str) -> bool {
+        self.is_native_openai_api()
+            && !self.uses_chatgpt_auth()
+            && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
+    }
+
+    pub(crate) fn manual_openai_compaction_unavailable_message_for_model(
+        &self,
+        model: &str,
+    ) -> String {
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+
+        let (backend, reason) = if self.uses_chatgpt_auth() {
+            (
+                "ChatGPT subscription auth via chatgpt.com backend".to_string(),
+                "ChatGPT subscription auth does not expose the standalone `/responses/compact` endpoint"
+                    .to_string(),
+            )
+        } else if self.provider_key_override.is_some() {
+            (
+                format!("custom OpenAI-compatible provider endpoint ({})", self.base_url),
+                "custom OpenAI-compatible providers are intentionally excluded from the manual `/compact` UX"
+                    .to_string(),
+            )
+        } else if !self.base_url.contains("api.openai.com") {
+            (
+                format!("configured OpenAI-compatible endpoint ({})", self.base_url),
+                "manual `/compact` is restricted to the native OpenAI API host".to_string(),
+            )
+        } else {
+            (
+                "native OpenAI API (api.openai.com)".to_string(),
+                "this model is not Responses-compatible on the native OpenAI API".to_string(),
+            )
+        };
+
+        format!(
+            "Manual `/compact` is available only for the native OpenAI provider on api.openai.com with a Responses-compatible OpenAI model. Active provider/backend/model: {} / {} / {}. Reason: {}.",
+            self.name(),
+            backend,
+            requested,
+            reason,
+        )
+    }
+
     fn websocket_mode_enabled(&self, model: &str) -> bool {
         self.websocket_mode
-            && self.base_url.contains("api.openai.com")
+            && self.is_native_openai_api()
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 
     fn hosted_shell_for_model(&self, model: &str) -> Option<&OpenAIHostedShellConfig> {
-        (self.base_url.contains("api.openai.com")
+        (self.is_native_openai_api()
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
             && self.hosted_shell.enabled
             && self.hosted_shell.is_valid_for_runtime())
@@ -685,13 +738,13 @@ impl OpenAIProvider {
         request_builder::build_chat_request(request, &ctx)
     }
 
-    fn convert_to_openai_responses_format(
+    pub(crate) fn convert_to_openai_responses_format(
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
         Self::validate_inline_file_inputs(request)?;
 
-        let is_native_openai = self.base_url.contains("api.openai.com");
+        let is_native_openai = self.is_native_openai_api();
         let prompt_cache_key = if is_native_openai {
             request.prompt_cache_key.as_deref()
         } else {

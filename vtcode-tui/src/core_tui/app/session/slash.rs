@@ -478,6 +478,7 @@ pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool 
             | "/copy"
             | "/help"
             | "/clear"
+            | "/compact"
             | "/login"
             | "/logout"
             | "/auth"
@@ -586,6 +587,9 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/refresh-oauth".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/compact".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 

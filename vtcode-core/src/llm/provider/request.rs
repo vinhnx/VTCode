@@ -100,6 +100,27 @@ pub struct LLMRequest {
     pub prompt_cache_key: Option<String>,
 }
 
+/// Optional overrides for standalone Responses compaction requests.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ResponsesCompactionOptions {
+    /// Optional custom instructions appended to the derived replay instructions.
+    pub instructions: Option<String>,
+    /// Optional output token limit for the compaction response.
+    pub max_output_tokens: Option<u32>,
+    /// Optional reasoning effort override for the compaction pass.
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
+    /// Optional verbosity override for the compaction output text settings.
+    pub verbosity: Option<VerbosityLevel>,
+    /// Optional include selectors override.
+    pub responses_include: Option<Vec<String>>,
+    /// Optional storage override.
+    pub response_store: Option<bool>,
+    /// Optional native OpenAI service tier override.
+    pub service_tier: Option<String>,
+    /// Optional prompt cache routing override.
+    pub prompt_cache_key: Option<String>,
+}
+
 /// Settings to refine model behavior for coding agent tasks
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CodingAgentSettings {

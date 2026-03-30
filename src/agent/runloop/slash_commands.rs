@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
 use vtcode_core::scheduler::{LoopCommand, ScheduleCreateInput};
 use vtcode_core::ui::theme;
@@ -23,7 +24,8 @@ use management::{
     handle_add_dir_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
 };
 use parsing::{
-    parse_prompt_template_args, parse_session_log_export_format, split_command_and_args,
+    parse_compact_command, parse_prompt_template_args, parse_session_log_export_format,
+    split_command_and_args,
 };
 use rendering::{render_generate_agent_file_usage, render_help, render_theme_list};
 
@@ -112,6 +114,12 @@ pub(crate) enum ScheduleCommandAction {
     Delete { id: String },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CompactConversationCommand {
+    InteractiveManager,
+    Run { options: ResponsesCompactionOptions },
+}
+
 pub(crate) enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
@@ -151,7 +159,9 @@ pub(crate) enum SlashCommandOutcome {
     },
     ClearScreen,
     ClearConversation,
-    CompactConversation,
+    CompactConversation {
+        command: CompactConversationCommand,
+    },
     CopyLatestAssistantReply,
     TriggerPromptSuggestions,
     ToggleTasksPanel,
@@ -417,13 +427,17 @@ pub(crate) async fn handle_slash_command(
                 Ok(SlashCommandOutcome::Handled)
             }
         },
-        "compact" | "context" => {
-            if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /compact")?;
-                return Ok(SlashCommandOutcome::Handled);
+        "compact" | "context" => match parse_compact_command(args) {
+            Ok(command) => Ok(SlashCommandOutcome::CompactConversation { command }),
+            Err(err) => {
+                renderer.line(MessageStyle::Error, &err)?;
+                renderer.line(
+                        MessageStyle::Info,
+                        "Usage: /compact [--instructions <text>] [--max-output-tokens <n>] [--reasoning-effort <none|minimal|low|medium|high|xhigh>] [--verbosity <low|medium|high>] [--include <selector> ...] [--store|--no-store] [--service-tier <flex|priority>] [--prompt-cache-key <key>]",
+                    )?;
+                Ok(SlashCommandOutcome::Handled)
             }
-            Ok(SlashCommandOutcome::CompactConversation)
-        }
+        },
         "copy" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /copy")?;
@@ -796,9 +810,9 @@ fn parse_doctor_args(
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentManagerAction, DoctorCommand, ScheduleCommandAction, SessionModeCommand,
-        SlashCommandOutcome, SubprocessManagerAction, handle_slash_command, parse_doctor_args,
-        parse_update_args,
+        AgentManagerAction, CompactConversationCommand, DoctorCommand, ScheduleCommandAction,
+        SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
+        parse_doctor_args, parse_update_args,
     };
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
@@ -1216,6 +1230,38 @@ mod tests {
                 action: ScheduleCommandAction::Create { ref input }
             } if input.prompt.as_deref() == Some("check the deployment")
                 && input.every.as_deref() == Some("10m")
+        ));
+    }
+
+    #[tokio::test]
+    async fn compact_commands_parse_to_interactive_and_direct_outcomes() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let interactive = handle_slash_command("compact", &mut renderer, &workspace)
+            .await
+            .expect("compact should parse");
+        assert!(matches!(
+            interactive,
+            SlashCommandOutcome::CompactConversation {
+                command: CompactConversationCommand::InteractiveManager
+            }
+        ));
+
+        let direct = handle_slash_command(
+            "compact --instructions \"keep decisions\" --include reasoning.encrypted_content --store",
+            &mut renderer,
+            &workspace,
+        )
+        .await
+        .expect("compact flags should parse");
+        assert!(matches!(
+            direct,
+            SlashCommandOutcome::CompactConversation {
+                command: CompactConversationCommand::Run { ref options }
+            } if options.instructions.as_deref() == Some("keep decisions")
+                && options.responses_include.as_deref() == Some(&["reasoning.encrypted_content".to_string()][..])
+                && options.response_store == Some(true)
         ));
     }
 

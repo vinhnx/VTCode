@@ -26,6 +26,9 @@ use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 
+use super::config_toml::{
+    ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value,
+};
 use super::{SlashCommandContext, SlashCommandControl};
 
 const DOCTOR_ACTION_PREFIX: &str = "doctor.action.";
@@ -1198,21 +1201,6 @@ fn write_user_directory_override(path: &Path, value: Option<String>) -> Result<(
     save_toml_value(path, &root)
 }
 
-fn ensure_child_table<'a>(
-    table: &'a mut toml::map::Map<String, TomlValue>,
-    key: &str,
-) -> &'a mut toml::map::Map<String, TomlValue> {
-    let entry = table
-        .entry(key.to_string())
-        .or_insert_with(|| TomlValue::Table(Default::default()));
-    if !entry.is_table() {
-        *entry = TomlValue::Table(Default::default());
-    }
-    entry
-        .as_table_mut()
-        .expect("table entry should be a table after initialization")
-}
-
 fn set_workspace_memory_enabled(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
     let agent_table = ensure_child_table(root_table, "agent");
     let memory_table = ensure_child_table(agent_table, "persistent_memory");
@@ -1300,52 +1288,6 @@ fn set_workspace_small_model_model(
 
 fn usize_to_toml_integer(value: usize, label: &str) -> Result<i64> {
     i64::try_from(value).with_context(|| format!("{} is too large to persist", label))
-}
-
-fn load_toml_value(path: &Path) -> Result<TomlValue> {
-    if !path.exists() {
-        return Ok(TomlValue::Table(Default::default()));
-    }
-
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    if content.trim().is_empty() {
-        return Ok(TomlValue::Table(Default::default()));
-    }
-
-    toml::from_str::<TomlValue>(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))
-}
-
-fn save_toml_value(path: &Path, root: &TomlValue) -> Result<()> {
-    let is_empty = root.as_table().is_some_and(|table| table.is_empty());
-    if is_empty {
-        if path.exists() {
-            std::fs::remove_file(path)
-                .with_context(|| format!("Failed to remove {}", path.display()))?;
-        }
-        return Ok(());
-    }
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
-    }
-    std::fs::write(path, toml::to_string_pretty(root)?)
-        .with_context(|| format!("Failed to write {}", path.display()))
-}
-
-fn preferred_workspace_config_path(manager: &ConfigManager, workspace: &Path) -> PathBuf {
-    manager
-        .layer_stack()
-        .layers()
-        .iter()
-        .rev()
-        .find_map(|layer| match &layer.source {
-            ConfigLayerSource::Workspace { file } if layer.is_enabled() => Some(file.clone()),
-            _ => None,
-        })
-        .unwrap_or_else(|| workspace.join(manager.config_file_name()))
 }
 
 fn preferred_user_config_path(manager: &ConfigManager) -> Option<PathBuf> {

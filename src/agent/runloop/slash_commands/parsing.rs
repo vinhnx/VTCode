@@ -1,4 +1,7 @@
-use super::SessionLogExportFormat;
+use super::{CompactConversationCommand, SessionLogExportFormat};
+use vtcode_config::OpenAIServiceTier;
+use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
+use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::review::{ReviewSpec, build_review_spec};
 
 pub(super) fn split_command_and_args(input: &str) -> (&str, &str) {
@@ -18,6 +21,137 @@ pub(super) fn parse_prompt_template_args(args: &str) -> std::result::Result<Vec<
 
     shell_words::split(trimmed)
         .map_err(|err| format!("Failed to parse template arguments: {}", err))
+}
+
+pub(super) fn parse_compact_command(
+    args: &str,
+) -> std::result::Result<CompactConversationCommand, String> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(CompactConversationCommand::InteractiveManager);
+    }
+
+    let tokens =
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+    let mut options = ResponsesCompactionOptions::default();
+    let mut index = 0;
+
+    while index < tokens.len() {
+        let token = &tokens[index];
+        let next_value = |flag: &str, index: &mut usize| -> std::result::Result<String, String> {
+            let Some(value) = tokens.get(*index + 1) else {
+                return Err(format!("Missing value for {}", flag));
+            };
+            *index += 2;
+            Ok(value.clone())
+        };
+
+        match token.as_str() {
+            "--instructions" => {
+                options.instructions = Some(next_value("--instructions", &mut index)?);
+            }
+            "--max-output-tokens" => {
+                let value = next_value("--max-output-tokens", &mut index)?;
+                options.max_output_tokens =
+                    Some(value.parse::<u32>().map_err(|_| {
+                        format!("Invalid value for --max-output-tokens: {}", value)
+                    })?);
+            }
+            "--reasoning-effort" => {
+                let value = next_value("--reasoning-effort", &mut index)?;
+                options.reasoning_effort =
+                    Some(ReasoningEffortLevel::parse(&value).ok_or_else(|| {
+                        format!("Invalid value for --reasoning-effort: {}", value)
+                    })?);
+            }
+            "--verbosity" => {
+                let value = next_value("--verbosity", &mut index)?;
+                options.verbosity = Some(
+                    VerbosityLevel::parse(&value)
+                        .ok_or_else(|| format!("Invalid value for --verbosity: {}", value))?,
+                );
+            }
+            "--include" => {
+                let value = next_value("--include", &mut index)?;
+                options
+                    .responses_include
+                    .get_or_insert_with(Vec::new)
+                    .push(value);
+            }
+            "--store" => {
+                if matches!(options.response_store, Some(false)) {
+                    return Err("Use either --store or --no-store, not both.".to_string());
+                }
+                options.response_store = Some(true);
+                index += 1;
+            }
+            "--no-store" => {
+                if matches!(options.response_store, Some(true)) {
+                    return Err("Use either --store or --no-store, not both.".to_string());
+                }
+                options.response_store = Some(false);
+                index += 1;
+            }
+            "--service-tier" => {
+                let value = next_value("--service-tier", &mut index)?;
+                options.service_tier = Some(
+                    OpenAIServiceTier::parse(&value)
+                        .ok_or_else(|| format!("Invalid value for --service-tier: {}", value))?
+                        .as_str()
+                        .to_string(),
+                );
+            }
+            "--prompt-cache-key" => {
+                options.prompt_cache_key = Some(next_value("--prompt-cache-key", &mut index)?);
+            }
+            _ => {
+                if let Some(value) = token.strip_prefix("--instructions=") {
+                    options.instructions = Some(value.to_string());
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--max-output-tokens=") {
+                    options.max_output_tokens = Some(value.parse::<u32>().map_err(|_| {
+                        format!("Invalid value for --max-output-tokens: {}", value)
+                    })?);
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--reasoning-effort=") {
+                    options.reasoning_effort =
+                        Some(ReasoningEffortLevel::parse(value).ok_or_else(|| {
+                            format!("Invalid value for --reasoning-effort: {}", value)
+                        })?);
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--verbosity=") {
+                    options.verbosity = Some(
+                        VerbosityLevel::parse(value)
+                            .ok_or_else(|| format!("Invalid value for --verbosity: {}", value))?,
+                    );
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--include=") {
+                    options
+                        .responses_include
+                        .get_or_insert_with(Vec::new)
+                        .push(value.to_string());
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--service-tier=") {
+                    options.service_tier = Some(
+                        OpenAIServiceTier::parse(value)
+                            .ok_or_else(|| format!("Invalid value for --service-tier: {}", value))?
+                            .as_str()
+                            .to_string(),
+                    );
+                    index += 1;
+                } else if let Some(value) = token.strip_prefix("--prompt-cache-key=") {
+                    options.prompt_cache_key = Some(value.to_string());
+                    index += 1;
+                } else if token.starts_with('-') {
+                    return Err(format!("Unknown option: {}", token));
+                } else {
+                    return Err(format!("Unexpected argument: {}", token));
+                }
+            }
+        }
+    }
+
+    Ok(CompactConversationCommand::Run { options })
 }
 
 pub(super) fn parse_session_log_export_format(
@@ -131,8 +265,56 @@ pub(super) fn parse_review_spec(args: &str) -> std::result::Result<ReviewSpec, S
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionLogExportFormat, parse_review_spec, parse_session_log_export_format};
+    use super::{
+        CompactConversationCommand, SessionLogExportFormat, parse_compact_command,
+        parse_review_spec, parse_session_log_export_format,
+    };
+    use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
     use vtcode_core::review::ReviewTarget;
+
+    #[test]
+    fn compact_defaults_to_interactive_manager() {
+        assert_eq!(
+            parse_compact_command("").expect("compact command"),
+            CompactConversationCommand::InteractiveManager
+        );
+    }
+
+    #[test]
+    fn compact_parses_direct_flags() {
+        let parsed = parse_compact_command(
+            "--instructions \"keep only decisions\" --max-output-tokens 128 --reasoning-effort minimal --verbosity high --include reasoning.encrypted_content --include output_text.logprobs --store --service-tier priority --prompt-cache-key lineage-1",
+        )
+        .expect("compact flags should parse");
+
+        assert_eq!(
+            parsed,
+            CompactConversationCommand::Run {
+                options: vtcode_core::llm::provider::ResponsesCompactionOptions {
+                    instructions: Some("keep only decisions".to_string()),
+                    max_output_tokens: Some(128),
+                    reasoning_effort: Some(ReasoningEffortLevel::Minimal),
+                    verbosity: Some(VerbosityLevel::High),
+                    responses_include: Some(vec![
+                        "reasoning.encrypted_content".to_string(),
+                        "output_text.logprobs".to_string(),
+                    ]),
+                    response_store: Some(true),
+                    service_tier: Some("priority".to_string()),
+                    prompt_cache_key: Some("lineage-1".to_string()),
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn compact_rejects_invalid_flags() {
+        assert!(parse_compact_command("--max-output-tokens nope").is_err());
+        assert!(parse_compact_command("--reasoning-effort absurd").is_err());
+        assert!(parse_compact_command("--verbosity louder").is_err());
+        assert!(parse_compact_command("--service-tier turbo").is_err());
+        assert!(parse_compact_command("--store --no-store").is_err());
+    }
 
     #[test]
     fn share_log_defaults_to_json() {

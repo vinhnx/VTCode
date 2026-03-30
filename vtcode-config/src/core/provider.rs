@@ -16,6 +16,17 @@ impl OpenAIServiceTier {
             Self::Priority => "priority",
         }
     }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("flex") {
+            Some(Self::Flex)
+        } else if normalized.eq_ignore_ascii_case("priority") {
+            Some(Self::Priority)
+        } else {
+            None
+        }
+    }
 }
 
 /// How VT Code should provision OpenAI hosted shell environments.
@@ -352,6 +363,15 @@ impl Default for OpenAIToolSearchConfig {
     }
 }
 
+/// Manual compaction defaults for the native OpenAI `/responses/compact` flow.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIManualCompactionConfig {
+    /// Optional custom instructions appended to manual `/compact` requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+}
+
 /// OpenAI-specific provider configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -376,6 +396,10 @@ pub struct OpenAIConfig {
     /// Options: "flex", "priority"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<OpenAIServiceTier>,
+
+    /// Manual `/compact` defaults for the native OpenAI standalone compaction endpoint.
+    #[serde(default)]
+    pub manual_compaction: OpenAIManualCompactionConfig,
 
     /// Optional hosted shell configuration for OpenAI native Responses models.
     #[serde(default)]
@@ -554,7 +578,7 @@ mod tests {
         AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
         OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
         OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
-        OpenAIServiceTier,
+        OpenAIManualCompactionConfig, OpenAIServiceTier,
     };
 
     #[test]
@@ -564,6 +588,10 @@ mod tests {
         assert_eq!(config.responses_store, None);
         assert!(config.responses_include.is_empty());
         assert_eq!(config.service_tier, None);
+        assert_eq!(
+            config.manual_compaction,
+            OpenAIManualCompactionConfig::default()
+        );
         assert_eq!(config.hosted_shell, OpenAIHostedShellConfig::default());
         assert!(config.tool_search.enabled);
         assert!(config.tool_search.defer_by_default);
@@ -578,6 +606,10 @@ mod tests {
         assert_eq!(parsed.responses_store, None);
         assert!(parsed.responses_include.is_empty());
         assert_eq!(parsed.service_tier, None);
+        assert_eq!(
+            parsed.manual_compaction,
+            OpenAIManualCompactionConfig::default()
+        );
         assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
         assert_eq!(parsed.tool_search, super::OpenAIToolSearchConfig::default());
     }
@@ -600,7 +632,27 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
             ]
         );
         assert_eq!(parsed.service_tier, None);
+        assert_eq!(
+            parsed.manual_compaction,
+            OpenAIManualCompactionConfig::default()
+        );
         assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
+    }
+
+    #[test]
+    fn openai_config_parses_manual_compaction_defaults() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+[manual_compaction]
+instructions = "Preserve the bug reproduction steps."
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(
+            parsed.manual_compaction.instructions.as_deref(),
+            Some("Preserve the bug reproduction steps.")
+        );
     }
 
     #[test]

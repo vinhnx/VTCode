@@ -4,7 +4,10 @@ use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 
-use super::{LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message};
+use super::{
+    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
+    ResponsesCompactionOptions,
+};
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
 /// Cached provider capabilities to reduce repeated trait method calls
@@ -168,6 +171,23 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the provider supports the interactive manual `/compact` command path.
+    ///
+    /// This is narrower than general Responses compaction support and may exclude
+    /// compatible endpoints that do not match VT Code's native OpenAI UX contract.
+    fn supports_manual_openai_compaction(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Explain why the interactive manual `/compact` command path is unavailable.
+    fn manual_openai_compaction_unavailable_message(&self, model: &str) -> String {
+        format!(
+            "Manual `/compact` is available only for the native OpenAI provider on api.openai.com with a Responses-compatible OpenAI model. Active provider/backend/model: {} / provider does not expose native OpenAI manual compaction / {}.",
+            self.name(),
+            model,
+        )
+    }
+
     /// Whether the provider exposes native context-awareness / token-budget prompts.
     fn supports_context_awareness(&self, _model: &str) -> bool {
         false
@@ -188,6 +208,19 @@ pub trait LLMProvider: Send + Sync {
     ) -> Result<Vec<Message>, LLMError> {
         Err(LLMError::Provider {
             message: "Conversation compaction is not supported by this provider".to_string(),
+            metadata: None,
+        })
+    }
+
+    /// Compact conversation history with standalone Responses compaction options.
+    async fn compact_history_with_options(
+        &self,
+        _model: &str,
+        _history: &[Message],
+        _options: &ResponsesCompactionOptions,
+    ) -> Result<Vec<Message>, LLMError> {
+        Err(LLMError::Provider {
+            message: "manual OpenAI compaction is not supported by this provider".to_string(),
             metadata: None,
         })
     }
