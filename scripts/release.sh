@@ -960,7 +960,7 @@ main() {
 
     if [[ "$dry_run" == 'true' ]]; then
         if [[ "$skip_crates" == 'false' ]]; then
-            print_info "Dry run - would run: ./scripts/publish_extracted_crates.sh --dry-run --skip-tags --skip-follow-up"
+            print_info "Dry run - would run: ./scripts/publish_extracted_crates.sh --dry-run --skip-tests --skip-tags --skip-follow-up"
         fi
         print_success 'Dry run completed'
         exit 0
@@ -968,7 +968,7 @@ main() {
 
     if [[ "$skip_crates" == 'false' ]]; then
         print_distribution "Publishing crates in dependency order..."
-        ./scripts/publish_extracted_crates.sh --skip-tags --skip-follow-up
+        ./scripts/publish_extracted_crates.sh --skip-tests --skip-tags --skip-follow-up
     fi
 
     # Confirm version after cargo-release
