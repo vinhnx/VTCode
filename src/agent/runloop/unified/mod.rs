@@ -37,6 +37,7 @@ pub(crate) mod stop_requests;
 pub(crate) mod tool_catalog;
 mod tool_output_handler;
 mod tool_pipeline;
+mod tool_reads;
 mod tool_routing;
 mod tool_summary;
 mod tool_summary_helpers;

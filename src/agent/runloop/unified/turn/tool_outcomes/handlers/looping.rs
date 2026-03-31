@@ -4,6 +4,10 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::tool_intent;
 
+use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_file_path_arg};
+
+pub(super) use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
+
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
 }
@@ -62,19 +66,6 @@ fn unified_search_globs_arg(args: &Value) -> Option<String> {
     }
 }
 
-fn read_file_path_arg(args: &Value) -> Option<&str> {
-    let obj = args.as_object()?;
-    for key in ["path", "file_path", "filepath", "target_path"] {
-        if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
-            let trimmed = path.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed);
-            }
-        }
-    }
-    None
-}
-
 fn read_file_has_offset_arg(args: &Value) -> bool {
     ["offset", "offset_lines", "offset_bytes"]
         .iter()
@@ -108,21 +99,6 @@ pub(super) fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Op
     Some(format!("{}::{}", tool_names::UNIFIED_EXEC, command))
 }
 
-fn looks_like_tool_output_spool_path(path: &str) -> bool {
-    let normalized = path.replace('\\', "/");
-    normalized.contains(".vtcode/context/tool_outputs/")
-}
-
-fn is_read_file_style_call(canonical_tool_name: &str, args: &Value) -> bool {
-    match canonical_tool_name {
-        tool_names::READ_FILE => true,
-        tool_names::UNIFIED_FILE => tool_intent::unified_file_action(args)
-            .unwrap_or("read")
-            .eq_ignore_ascii_case("read"),
-        _ => false,
-    }
-}
-
 pub(super) fn maybe_apply_spool_read_offset_hint(
     tool_registry: &mut ToolRegistry,
     canonical_tool_name: &str,
@@ -132,12 +108,9 @@ pub(super) fn maybe_apply_spool_read_offset_hint(
         return args.clone();
     }
 
-    let Some(path) = read_file_path_arg(args) else {
+    let Some(path) = spool_chunk_read_path(canonical_tool_name, args) else {
         return args.clone();
     };
-    if !looks_like_tool_output_spool_path(path) {
-        return args.clone();
-    }
 
     let Some((next_offset, chunk_limit)) =
         tool_registry.find_recent_read_file_spool_progress(path, Duration::from_secs(180))
@@ -204,22 +177,6 @@ pub(super) fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Op
 
     Some(signature)
 }
-
-pub(super) fn spool_chunk_read_path<'a>(
-    canonical_tool_name: &str,
-    args: &'a Value,
-) -> Option<&'a str> {
-    if !is_read_file_style_call(canonical_tool_name, args) {
-        return None;
-    }
-    let path = read_file_path_arg(args)?;
-    if looks_like_tool_output_spool_path(path) {
-        Some(path)
-    } else {
-        None
-    }
-}
-
 pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
     match canonical_tool_name {
         tool_names::READ_FILE => read_file_path_arg(args).map(|path| {

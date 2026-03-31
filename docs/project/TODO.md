@@ -532,4 +532,16 @@ https://developers.openai.com/codex/app-server
 
 ---
 
-check and fix codemod follow Alex advices 
+check and fix codemod follow Alex advices
+
+--
+
+bundle `./scripts/check.sh ast-grep` into vtcode binary
+
+`VT Code now ships an ast-grep project scaffold out of the box: sgconfig.yml, rules/, and rule-tests/.
+
+Run tests and scans via `$ ./scripts/check.sh ast-grep`.
+
+Not installed? `$ vtcode dependencies install ast-grep` gets you set up instantly.`
+
+currently it only on github source only. need to bundle into vtcode binary and make it work on local codebase as well.

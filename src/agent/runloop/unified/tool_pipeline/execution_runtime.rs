@@ -14,6 +14,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
 use super::cache::{
@@ -136,6 +137,14 @@ fn build_streaming_progress_callback(
     (callback, Some(coalescer))
 }
 
+fn should_show_loading_ui_for_tool_call(name: &str, args: &Value) -> bool {
+    spool_chunk_read_path(name, args).is_none()
+}
+
+fn clear_loading_ui_state(handle: &vtcode_tui::app::InlineHandle) {
+    handle.set_input_status(Some(String::new()), Some(String::new()));
+}
+
 #[derive(Clone, Copy)]
 enum CacheLookupPhase {
     Initial,
@@ -189,34 +198,53 @@ pub(super) async fn execute_with_cache_and_streaming(
 
     handle.force_redraw();
 
-    let progress_reporter = ProgressReporter::new();
-    progress_reporter.set_total(100).await;
-    progress_reporter.set_progress(0).await;
-    progress_reporter
-        .set_message(format!("Starting {}...", name))
-        .await;
+    let show_loading_ui = should_show_loading_ui_for_tool_call(name, args_val);
+    if !show_loading_ui {
+        clear_loading_ui_state(handle);
+    }
 
-    let status_message = build_tool_status_message(name, args_val);
-    let tool_spinner = PlaceholderSpinner::with_progress(
-        handle,
-        Some(String::new()),
-        Some(String::new()),
-        status_message,
-        Some(&progress_reporter),
-    );
+    let progress_reporter = if show_loading_ui {
+        let progress_reporter = ProgressReporter::new();
+        progress_reporter.set_total(100).await;
+        progress_reporter.set_progress(0).await;
+        progress_reporter
+            .set_message(format!("Starting {}...", name))
+            .await;
+        Some(progress_reporter)
+    } else {
+        None
+    };
+
+    let tool_spinner = if show_loading_ui {
+        let status_message = build_tool_status_message(name, args_val);
+        Some(PlaceholderSpinner::with_progress(
+            handle,
+            Some(String::new()),
+            Some(String::new()),
+            status_message,
+            progress_reporter.as_ref(),
+        ))
+    } else {
+        None
+    };
 
     let should_stream_pty = matches!(
         name,
         tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT
     );
+    debug_assert!(
+        show_loading_ui || !should_stream_pty,
+        "loading-ui suppression should only apply to non-PTY tool calls"
+    );
     let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
     let mut output_coalescer: Option<StreamingOutputCoalescer> = None;
     let _progress_callback_guard = if should_stream_pty {
+        let progress_reporter = progress_reporter.clone().unwrap_or_default();
         let stream_command = extract_pty_stream_command(name, args_val);
         let tail_limit = resolve_stdout_tail_limit(vt_cfg);
         let (runtime, callback) = PtyStreamRuntime::start(
             handle.clone(),
-            progress_reporter.clone(),
+            progress_reporter,
             tail_limit,
             stream_command,
             registry.pty_config().clone(),
@@ -240,7 +268,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         args_val,
         ctrl_c_state,
         ctrl_c_notify,
-        Some(&progress_reporter),
+        progress_reporter.as_ref(),
         max_tool_retries,
         settle_noninteractive_exec,
     )
@@ -265,7 +293,9 @@ pub(super) async fn execute_with_cache_and_streaming(
         .await
         {
             Some(status) => {
-                tool_spinner.finish();
+                if let Some(tool_spinner) = tool_spinner.as_ref() {
+                    tool_spinner.finish();
+                }
                 return into_runtime_tool_execution(name, args_val, status);
             }
             None => outcome,
@@ -274,7 +304,9 @@ pub(super) async fn execute_with_cache_and_streaming(
         outcome
     };
 
-    if let ToolExecutionStatus::Success { .. } = &outcome {
+    if let ToolExecutionStatus::Success { .. } = &outcome
+        && let Some(tool_spinner) = tool_spinner.as_ref()
+    {
         tool_spinner.finish();
     }
 
@@ -403,12 +435,15 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::sync::mpsc;
     use vtcode_core::config::constants::tools;
     use vtcode_core::tools::registry::ToolRegistry;
+    use vtcode_tui::app::{InlineCommand, InlineHandle};
 
     use super::{
-        ProgressCallbackGuard, StreamingOutputCoalescer, extract_pty_stream_command,
-        should_cache_success_output,
+        ProgressCallbackGuard, StreamingOutputCoalescer, clear_loading_ui_state,
+        extract_pty_stream_command, should_cache_success_output,
+        should_show_loading_ui_for_tool_call,
     };
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     use tempfile::TempDir;
@@ -537,6 +572,79 @@ mod tests {
         });
 
         assert!(should_cache_success_output("read_file", &output, true));
+    }
+
+    #[test]
+    fn suppresses_loading_ui_for_spool_file_reads() {
+        let read_args = json!({
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "offset": 41,
+            "limit": 40
+        });
+        let unified_args = json!({
+            "action": "read",
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "offset": 41,
+            "limit": 40
+        });
+
+        assert!(!should_show_loading_ui_for_tool_call(
+            tools::READ_FILE,
+            &read_args
+        ));
+        assert!(!should_show_loading_ui_for_tool_call(
+            tools::UNIFIED_FILE,
+            &unified_args
+        ));
+    }
+
+    #[test]
+    fn keeps_loading_ui_for_regular_file_reads() {
+        let read_args = json!({
+            "path": "src/main.rs",
+            "offset": 1,
+            "limit": 100
+        });
+        let unified_read_args = json!({
+            "action": "read",
+            "path": "src/main.rs",
+            "offset": 1,
+            "limit": 100
+        });
+        let unified_write_args = json!({
+            "action": "write",
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "content": "replacement"
+        });
+
+        assert!(should_show_loading_ui_for_tool_call(
+            tools::READ_FILE,
+            &read_args
+        ));
+        assert!(should_show_loading_ui_for_tool_call(
+            tools::UNIFIED_FILE,
+            &unified_read_args
+        ));
+        assert!(should_show_loading_ui_for_tool_call(
+            tools::UNIFIED_FILE,
+            &unified_write_args
+        ));
+    }
+
+    #[test]
+    fn clearing_loading_ui_state_sends_blank_status() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+
+        clear_loading_ui_state(&handle);
+
+        match rx.try_recv().expect("blank status command expected") {
+            InlineCommand::SetInputStatus { left, right } => {
+                assert_eq!(left.as_deref(), Some(""));
+                assert_eq!(right.as_deref(), Some(""));
+            }
+            _ => panic!("expected input status command"),
+        }
     }
 
     #[test]
