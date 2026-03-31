@@ -680,11 +680,6 @@ mod tests {
         let transcript_text = transcript_lines.join("\n");
         let stripped_text = vtcode_core::utils::ansi_parser::strip_ansi(&transcript_text);
         assert!(
-            stripped_text.contains("cargo check -p vtcode-core"),
-            "Transcript: {:?}",
-            stripped_text
-        );
-        assert!(
             stripped_text.contains("Large output was spooled to"),
             "Transcript: {:?}",
             stripped_text

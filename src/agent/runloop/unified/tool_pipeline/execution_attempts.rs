@@ -589,7 +589,7 @@ mod tests {
     fn first_retry_backoff_is_non_zero_and_meaningful() {
         let delay = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0)
             .delay_for_attempt(0);
-        assert!(delay >= Duration::from_millis(350));
+        assert!(delay >= RETRY_BACKOFF_BASE);
         assert!(delay <= MAX_RETRY_BACKOFF);
     }
 

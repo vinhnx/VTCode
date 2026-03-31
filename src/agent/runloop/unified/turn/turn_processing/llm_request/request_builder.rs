@@ -436,7 +436,7 @@ pub(super) async fn build_turn_request(
 
     Ok(TurnRequestBuildResult {
         request: request_plan.request,
-        has_tools: request_plan.has_tools,
+        has_tools: prompt_output.tool_snapshot.has_tools(),
         runtime_tools: prompt_output.tool_snapshot.snapshot,
     })
 }

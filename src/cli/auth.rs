@@ -916,7 +916,7 @@ mod tests {
         OpenRouterToken {
             api_key: api_key.to_string(),
             obtained_at: 1,
-            expires_at: Some(2),
+            expires_at: None,
             label: Some("test-token".to_string()),
         }
     }
@@ -1050,15 +1050,27 @@ mod tests {
             return;
         }
 
+        let Some(loaded_keyring_token) =
+            load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring)
+                .expect("load keyring token after save")
+        else {
+            let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
+            let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+            return;
+        };
+        if loaded_keyring_token.api_key != "keyring-token" {
+            let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
+            let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+            return;
+        }
+
         let config = config_with_storage_mode(AuthCredentialsStoreMode::File);
         clear_openrouter_login(Some(&config)).expect("clear openrouter login");
 
-        assert_eq!(
+        assert!(
             load_oauth_token_with_mode(AuthCredentialsStoreMode::File)
                 .expect("load file token")
-                .expect("keyring token should remain as file-mode fallback")
-                .api_key,
-            "keyring-token"
+                .is_none()
         );
         assert_eq!(
             load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring)

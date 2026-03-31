@@ -166,7 +166,7 @@ pub fn diff_display_line_number_width(lines: &[DiffDisplayLine]) -> usize {
         .filter_map(|line| line.line_number.map(|line_no| line_no.to_string().len()))
         .max()
         .unwrap_or(4);
-    max_digits.clamp(4, 6)
+    max_digits.clamp(5, 6)
 }
 
 pub fn format_numbered_unified_diff(diff_content: &str) -> Vec<String> {
