@@ -2,6 +2,15 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.96.4 - 2026-03-31
+
+### Highlights
+#### Bug Fixes
+
+- Pass model behavior to anthropic api provider (70944e75) 
+### Other Changes
+### Contributors
+@vinhnx
 ## 0.96.3 - 2026-03-31
 
 ### Highlights
