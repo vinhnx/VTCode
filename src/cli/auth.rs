@@ -18,6 +18,8 @@ use vtcode_core::copilot::{
     login_with_events, logout_with_events, probe_auth_status,
 };
 
+use crate::agent::runloop::unified::url_guard::{UrlGuardPrompt, open_external_url};
+
 pub(crate) const OPENAI_PROVIDER: &str = "openai";
 pub(crate) const OPENROUTER_PROVIDER: &str = "openrouter";
 pub(crate) const COPILOT_PROVIDER: &str = "copilot";
@@ -284,7 +286,7 @@ pub(crate) async fn handle_login_command(
         Ok(OAuthProvider::OpenRouter) => {
             let prepared = prepare_openrouter_login(vt_cfg)?;
             println!("Starting OpenRouter OAuth authentication...");
-            open_browser_or_print_url(&prepared.auth_url);
+            open_browser_or_print_url(&prepared.auth_url)?;
             let api_key = complete_openrouter_login(prepared).await?;
             println!("OpenRouter authentication complete.");
             println!(
@@ -296,7 +298,7 @@ pub(crate) async fn handle_login_command(
         Ok(OAuthProvider::OpenAi) => {
             let prepared = prepare_openai_login(vt_cfg)?;
             println!("Starting OpenAI ChatGPT authentication...");
-            open_browser_or_print_url(&prepared.auth_url);
+            open_browser_or_print_url(&prepared.auth_url)?;
             print_openai_manual_guidance();
             let session = complete_openai_login_with_cli_fallback(prepared).await?;
             println!("OpenAI ChatGPT authentication complete.");
@@ -465,7 +467,7 @@ fn prompt_openai_manual_input_cli_once() -> Result<Option<String>> {
     })
 }
 
-fn open_browser_or_print_url(url: &str) {
+fn open_browser_or_print_url(url: &str) -> Result<()> {
     println!("Open this URL to continue:");
     println!(
         "{}{}{}",
@@ -473,9 +475,46 @@ fn open_browser_or_print_url(url: &str) {
         url,
         vtcode_commons::ansi_codes::hyperlink_close(),
     );
-    if let Err(err) = webbrowser::open(url) {
-        eprintln!("warning: failed to open browser automatically: {}", err);
+
+    if !confirm_cli_browser_open(url)? {
+        println!(
+            "Automatic browser launch skipped. Open the URL manually if you want to continue."
+        );
+        return Ok(());
     }
+
+    if let Err(err) = open_external_url(url) {
+        eprintln!("warning: {}", err);
+    }
+
+    Ok(())
+}
+
+fn confirm_cli_browser_open(url: &str) -> Result<bool> {
+    let Some(prompt) = UrlGuardPrompt::parse(url.to_string()) else {
+        return Ok(false);
+    };
+
+    if vtcode_core::ui::terminal::is_piped_input() || vtcode_core::ui::terminal::is_piped_output() {
+        println!(
+            "Automatic browser launch skipped because approval requires an interactive terminal."
+        );
+        return Ok(false);
+    }
+
+    for line in prompt.cli_lines() {
+        println!("{}", line);
+    }
+
+    print!("Open in browser now? [y/N]: ");
+    vtcode_core::ui::terminal::flush_stdout();
+    let input = vtcode_core::ui::terminal::read_line()
+        .map_err(|err| anyhow!("stdin read failed: {err}"))?;
+    Ok(cli_browser_open_approved(&input))
+}
+
+fn cli_browser_open_approved(input: &str) -> bool {
+    matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes")
 }
 
 fn render_openrouter_auth_status(status: AuthStatus) {
@@ -600,7 +639,10 @@ fn now_secs() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_openai_login, clear_openrouter_login, resolve_openai_authorization_code};
+    use super::{
+        clear_openai_login, clear_openrouter_login, cli_browser_open_approved,
+        resolve_openai_authorization_code,
+    };
     use anyhow::anyhow;
     use serial_test::serial;
     use std::future;
@@ -641,6 +683,14 @@ mod tests {
             expires_at: Some(2),
             label: Some("test-token".to_string()),
         }
+    }
+
+    #[test]
+    fn cli_browser_open_approved_accepts_yes_only() {
+        assert!(cli_browser_open_approved("y"));
+        assert!(cli_browser_open_approved("YES"));
+        assert!(!cli_browser_open_approved("n"));
+        assert!(!cli_browser_open_approved(""));
     }
 
     #[tokio::test]

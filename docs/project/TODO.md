@@ -86,10 +86,6 @@ See https://code.claude.com/docs/en/hooks
 
 ---
 
-SECURITY CRITICAL: WHEN OPEN WEB URL LINKS, CAN YOU ADD A LINK GUARDRAIL HUMAN IN THE LOOP INLINE MODAL, FROM OUR SYSTEM TO LET USER DECIDE IF THEY WANT TO PROCEED? THIS IS A HUGE SECURITY RISK TO OPEN WEB URL LINKS WITHOUT USER APPROVAL, AND WE SHOULD HAVE A GUARDRAIL IN PLACE TO PREVENT MALICIOUS LINKS FROM BEING OPENED AUTOMATICALLY. THIS CAN BE A SIMPLE INLINE MODAL THAT ASKS THE USER "THIS LINK MAY BE UNSAFE, DO YOU WANT TO PROCEED?" WITH OPTIONS TO APPROVE OR DENY. PLEASE PRIORITIZE IMPLEMENTING THIS GUARDRAIL AS SOON AS POSSIBLE TO PROTECT OUR USERS.
-
----
-
 IMPROVE modal visualize
 
 1. add top & bottom border color from modal header section. check subagent header color for reference. this will create a visual connection between the modal header, list selection and main content, making it clearer that they belong together. it will also add a nice design touch to the modal, making it look more polished and cohesive.
@@ -529,6 +525,10 @@ log:
 ---
 
 also make sure global loading state is not wired and not showing for large read file tool content read (the status bar loading view is not showing for large read file content read, and the loading state is not wired to the tool call state, so it should not be showing at all for this tool call)
+
+--
+
+https://developers.openai.com/codex/app-server
 
 ---
 

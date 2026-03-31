@@ -6,11 +6,13 @@ pub(crate) mod context_manager;
 
 mod diagnostics;
 mod display;
+pub(crate) mod external_url_guard;
 mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;
 pub(crate) mod interactive_features;
 pub(crate) mod overlay_prompt;
+pub(crate) mod url_guard;
 
 mod mcp_support;
 mod mcp_tool_manager;

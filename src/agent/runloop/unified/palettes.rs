@@ -17,12 +17,12 @@ use vtcode_tui::core::convert_style;
 
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
-use crate::agent::runloop::unified::inline_events::UrlGuardPrompt;
 use crate::agent::runloop::unified::model_selection::finalize_lightweight_model_selection;
 use crate::agent::runloop::unified::settings_interactive::{
     SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
 };
 use crate::agent::runloop::unified::state::ModelPickerTarget;
+use crate::agent::runloop::unified::url_guard::UrlGuardPrompt;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::display::{persist_theme_preference, sync_runtime_theme_selection};

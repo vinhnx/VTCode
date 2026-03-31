@@ -2,6 +2,9 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 
 use super::selection::supports_gpt5_none_reasoning;
 use super::*;
+use crate::agent::runloop::unified::external_url_guard::{
+    ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
+};
 
 impl ModelPickerState {
     pub(super) fn handle_reasoning(
@@ -429,6 +432,7 @@ impl ModelPickerState {
         &mut self,
         renderer: &mut AnsiRenderer,
         input: &str,
+        url_guard: ExternalUrlGuardContext<'_>,
     ) -> Result<ModelPickerProgress> {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("API key requested before selecting a model"));
@@ -437,20 +441,43 @@ impl ModelPickerState {
             && matches!(selection.provider_enum, Some(Provider::OpenAI))
         {
             let prepared = crate::cli::auth::prepare_openai_login(self.vt_cfg.as_ref())?;
-            renderer.line(
-                MessageStyle::Info,
-                "Opening browser for OpenAI ChatGPT authentication...",
-            )?;
-            renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
-            if let Err(err) = webbrowser::open(&prepared.auth_url) {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to open browser automatically: {}", err),
-                )?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "Please open the URL manually in your browser.",
-                )?;
+            match request_external_url_open(url_guard, &prepared.auth_url).await? {
+                ExternalUrlOpenOutcome::Opened => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Opening browser for OpenAI ChatGPT authentication...",
+                    )?;
+                    renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
+                }
+                ExternalUrlOpenOutcome::OpenFailed(err) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Opening browser for OpenAI ChatGPT authentication...",
+                    )?;
+                    renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to open browser automatically: {}", err),
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Please open the URL manually in your browser.",
+                    )?;
+                }
+                ExternalUrlOpenOutcome::Cancelled => {
+                    renderer.line(MessageStyle::Info, "Cancelled opening authentication link.")?;
+                    return Ok(ModelPickerProgress::InProgress);
+                }
+                ExternalUrlOpenOutcome::Exit => {
+                    return Ok(ModelPickerProgress::Exit);
+                }
+                ExternalUrlOpenOutcome::Unsupported => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Blocked unsupported authentication link target.",
+                    )?;
+                    return Ok(ModelPickerProgress::InProgress);
+                }
             }
             crate::cli::auth::complete_openai_login(prepared).await?;
             if self.inline_enabled {

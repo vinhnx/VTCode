@@ -10,6 +10,7 @@ use crate::agent::runloop::unified::settings_interactive::{
     ACTION_CONFIGURE_EDITOR, SettingsPaletteState,
 };
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::url_guard::UrlGuardPrompt;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -26,8 +27,6 @@ use vtcode_tui::app::{
     InlineCommand, InlineEvent, InlineHandle, InlineListSelection, TransientEvent,
     TransientRequest, TransientSubmission,
 };
-
-use super::{URL_GUARD_DENY_ACTION, UrlGuardPrompt};
 
 #[derive(Clone)]
 struct DummyProvider;
@@ -237,12 +236,7 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
         InlineCommand::ShowTransient { request } => match *request {
             TransientRequest::List(request) => {
                 assert_eq!(request.title, "Open External Link");
-                assert_eq!(
-                    request.selected,
-                    Some(InlineListSelection::ConfigAction(
-                        URL_GUARD_DENY_ACTION.to_string()
-                    ))
-                );
+                assert_eq!(request.selected, Some(prompt.default_selection()));
                 assert_eq!(request.lines, prompt.lines());
                 let titles: Vec<_> = request
                     .items

@@ -23,6 +23,7 @@ use crate::agent::runloop::unified::async_mcp_manager::{
     AsyncMcpManager, approval_policy_from_human_in_the_loop,
 };
 use crate::agent::runloop::unified::display::display_user_message;
+use crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
@@ -923,7 +924,16 @@ pub(super) async fn run_interaction_loop_impl(
 
         if let Some(picker) = state.model_picker_state.as_mut() {
             let progress = picker
-                .handle_input(ctx.renderer, input_owned.as_str())
+                .handle_input(
+                    ctx.renderer,
+                    input_owned.as_str(),
+                    ExternalUrlGuardContext::new(
+                        ctx.handle,
+                        ctx.session,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                    ),
+                )
                 .await?;
             match progress {
                 ModelPickerProgress::InProgress => continue,
@@ -934,6 +944,12 @@ pub(super) async fn run_interaction_loop_impl(
                 ModelPickerProgress::Cancelled => {
                     *state.model_picker_state = None;
                     continue;
+                }
+                ModelPickerProgress::Exit => {
+                    *state.model_picker_state = None;
+                    return Ok(InteractionOutcome::Exit {
+                        reason: SessionEndReason::Exit,
+                    });
                 }
                 ModelPickerProgress::Completed(selection) => {
                     let Some(picker_state) = state.model_picker_state.take() else {

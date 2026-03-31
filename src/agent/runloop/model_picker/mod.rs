@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::PathBuf;
 use std::str::FromStr;
-
 use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -51,6 +50,7 @@ pub(crate) enum ModelPickerProgress {
     NeedsRefresh,
     Completed(ModelSelectionResult),
     Cancelled,
+    Exit,
 }
 
 pub(crate) struct ModelPickerState {
@@ -157,6 +157,10 @@ impl ModelPickerState {
                                 return Ok(ModelPickerStart::InProgress(state));
                             }
                             ModelPickerProgress::Cancelled => {
+                                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                                return Ok(ModelPickerStart::InProgress(state));
+                            }
+                            ModelPickerProgress::Exit => {
                                 renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
                                 return Ok(ModelPickerStart::InProgress(state));
                             }
@@ -278,6 +282,7 @@ impl ModelPickerState {
         &mut self,
         renderer: &mut AnsiRenderer,
         input: &str,
+        url_guard: crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext<'_>,
     ) -> Result<ModelPickerProgress> {
         let trimmed = input.trim();
         if trimmed.is_empty() {
@@ -302,7 +307,7 @@ impl ModelPickerState {
             PickerStep::AwaitModel => self.handle_model_selection(renderer, trimmed),
             PickerStep::AwaitReasoning => self.handle_reasoning(renderer, trimmed),
             PickerStep::AwaitServiceTier => self.handle_service_tier(renderer, trimmed),
-            PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed).await,
+            PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed, url_guard).await,
         }
     }
 

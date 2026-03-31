@@ -12,9 +12,6 @@ use crate::agent::runloop::model_picker::{
     ModelPickerProgress, ModelPickerStart, ModelPickerState,
 };
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
-use crate::agent::runloop::unified::inline_events::{
-    URL_GUARD_APPROVE_ACTION, URL_GUARD_DENY_ACTION, UrlGuardPrompt,
-};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODEL_TARGET_ACTION_LIGHTWEIGHT,
@@ -27,6 +24,9 @@ use crate::agent::runloop::unified::settings_interactive::{
     show_settings_palette,
 };
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+use crate::agent::runloop::unified::url_guard::{
+    URL_GUARD_TITLE, UrlGuardDecision, UrlGuardPrompt, open_external_url, url_guard_decision,
+};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::action::InlineLoopAction;
@@ -37,8 +37,6 @@ pub(crate) struct InlineModalProcessor<'a> {
 }
 
 impl<'a> InlineModalProcessor<'a> {
-    const URL_GUARD_TITLE: &'static str = "Open External Link";
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         handle: &'a InlineHandle,
@@ -196,15 +194,15 @@ impl<'a> InlineModalProcessor<'a> {
             return Ok(None);
         };
 
-        match selection {
-            InlineListSelection::ConfigAction(action) if action == URL_GUARD_APPROVE_ACTION => {
-                if let Err(err) = webbrowser::open(prompt.url()) {
+        match url_guard_decision(selection) {
+            Some(UrlGuardDecision::Approve) => {
+                if let Err(err) = open_external_url(prompt.url()) {
                     renderer.line(MessageStyle::Error, &format!("Failed to open link: {err}"))?;
                 }
                 self.restore_previous_palette(renderer, previous)?;
                 Ok(Some(InlineLoopAction::Continue))
             }
-            InlineListSelection::ConfigAction(action) if action == URL_GUARD_DENY_ACTION => {
+            Some(UrlGuardDecision::Deny) => {
                 self.restore_previous_palette(renderer, previous)?;
                 Ok(Some(InlineLoopAction::Continue))
             }
@@ -234,7 +232,7 @@ impl<'a> InlineModalProcessor<'a> {
 
     fn show_url_guard(&mut self, renderer: &mut AnsiRenderer, prompt: &UrlGuardPrompt) {
         renderer.show_list_modal(
-            Self::URL_GUARD_TITLE,
+            URL_GUARD_TITLE,
             prompt.lines(),
             prompt.items(),
             Some(prompt.default_selection()),
@@ -653,6 +651,12 @@ impl<'a> ModelPickerCoordinator<'a> {
                 return Ok(ModelPickerOutcome::SkipPalette);
             }
             ModelPickerProgress::Cancelled => {
+                *self.state = None;
+                if !renderer.supports_inline_ui() {
+                    renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                }
+            }
+            ModelPickerProgress::Exit => {
                 *self.state = None;
                 if !renderer.supports_inline_ui() {
                     renderer.line(MessageStyle::Info, "Model picker cancelled.")?;

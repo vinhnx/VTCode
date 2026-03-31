@@ -1,8 +1,10 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+use anyhow::{Result, anyhow};
 use url::Url;
-use vtcode_tui::app::{InlineListItem, InlineListSelection};
+use vtcode_tui::app::{InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest};
 
+pub(crate) const URL_GUARD_TITLE: &str = "Open External Link";
 pub(crate) const URL_GUARD_APPROVE_ACTION: &str = "url_guard:approve";
 pub(crate) const URL_GUARD_DENY_ACTION: &str = "url_guard:deny";
 
@@ -12,6 +14,12 @@ const TRUSTED_HOSTS: &[&str] = &[
     "api.openai.com",
     "deepwiki.com",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UrlGuardDecision {
+    Approve,
+    Deny,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct UrlGuardPrompt {
@@ -92,6 +100,14 @@ impl UrlGuardPrompt {
         lines
     }
 
+    pub(crate) fn cli_lines(&self) -> Vec<String> {
+        self.lines()
+            .into_iter()
+            .filter(|line| !line.starts_with("URL: "))
+            .filter(|line| !line.starts_with("Choose Open"))
+            .collect()
+    }
+
     pub(crate) fn items(&self) -> Vec<InlineListItem> {
         let badge = if self.insecure_transport {
             Some("HTTP".to_string())
@@ -132,6 +148,35 @@ impl UrlGuardPrompt {
     pub(crate) fn default_selection(&self) -> InlineListSelection {
         InlineListSelection::ConfigAction(URL_GUARD_DENY_ACTION.to_string())
     }
+
+    pub(crate) fn request(&self) -> TransientRequest {
+        TransientRequest::List(ListOverlayRequest {
+            title: URL_GUARD_TITLE.to_string(),
+            lines: self.lines(),
+            footer_hint: None,
+            items: self.items(),
+            selected: Some(self.default_selection()),
+            search: None,
+            hotkeys: Vec::new(),
+        })
+    }
+}
+
+pub(crate) fn url_guard_decision(selection: &InlineListSelection) -> Option<UrlGuardDecision> {
+    match selection {
+        InlineListSelection::ConfigAction(action) if action == URL_GUARD_APPROVE_ACTION => {
+            Some(UrlGuardDecision::Approve)
+        }
+        InlineListSelection::ConfigAction(action) if action == URL_GUARD_DENY_ACTION => {
+            Some(UrlGuardDecision::Deny)
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn open_external_url(url: &str) -> Result<()> {
+    webbrowser::open(url).map_err(|err| anyhow!("failed to open browser: {err}"))?;
+    Ok(())
 }
 
 fn is_trusted_host(host: &str) -> bool {
@@ -183,7 +228,11 @@ fn is_local_or_private_ipv6(addr: Ipv6Addr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::UrlGuardPrompt;
+    use super::{
+        URL_GUARD_APPROVE_ACTION, URL_GUARD_DENY_ACTION, URL_GUARD_TITLE, UrlGuardDecision,
+        UrlGuardPrompt, url_guard_decision,
+    };
+    use vtcode_tui::app::{InlineListSelection, TransientRequest};
 
     #[test]
     fn parse_http_url_marks_insecure_transport() {
@@ -221,6 +270,50 @@ mod tests {
             lines
                 .iter()
                 .any(|line| line.contains("local or private address"))
+        );
+    }
+
+    #[test]
+    fn cli_lines_omit_url_and_inline_modal_instruction() {
+        let prompt =
+            UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
+
+        let lines = prompt.cli_lines();
+        assert!(!lines.iter().any(|line| line.starts_with("URL: ")));
+        assert!(
+            !lines
+                .iter()
+                .any(|line| line.starts_with("Choose Open to continue"))
+        );
+    }
+
+    #[test]
+    fn request_defaults_to_deny_selection() {
+        let prompt =
+            UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
+
+        match prompt.request() {
+            TransientRequest::List(request) => {
+                assert_eq!(request.title, URL_GUARD_TITLE);
+                assert_eq!(request.selected, Some(prompt.default_selection()));
+            }
+            other => panic!("expected list request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decision_mapping_accepts_approve_and_deny_actions() {
+        assert_eq!(
+            url_guard_decision(&InlineListSelection::ConfigAction(
+                URL_GUARD_APPROVE_ACTION.to_string(),
+            )),
+            Some(UrlGuardDecision::Approve)
+        );
+        assert_eq!(
+            url_guard_decision(&InlineListSelection::ConfigAction(
+                URL_GUARD_DENY_ACTION.to_string(),
+            )),
+            Some(UrlGuardDecision::Deny)
         );
     }
 }

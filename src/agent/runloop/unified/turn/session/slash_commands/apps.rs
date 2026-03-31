@@ -14,6 +14,9 @@ use vtcode_tui::app::{
 use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::external_url_guard::{
+    ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
+};
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, refresh_runtime_config_from_manager,
 };
@@ -49,20 +52,38 @@ pub(crate) async fn handle_new_session(
 }
 
 pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    match webbrowser::open(DOCS_URL) {
-        Ok(_) => {
+    match request_external_url_open(
+        ExternalUrlGuardContext::new(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify),
+        DOCS_URL,
+    )
+    .await?
+    {
+        ExternalUrlOpenOutcome::Opened => {
             ctx.renderer.line(
                 MessageStyle::Info,
                 &format!("Opening documentation in browser: {}", DOCS_URL),
             )?;
         }
-        Err(err) => {
+        ExternalUrlOpenOutcome::OpenFailed(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
                 &format!("Failed to open browser: {}", err),
             )?;
             ctx.renderer
                 .line(MessageStyle::Info, &format!("Please visit: {}", DOCS_URL))?;
+        }
+        ExternalUrlOpenOutcome::Cancelled => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Cancelled opening documentation link.")?;
+        }
+        ExternalUrlOpenOutcome::Exit => {
+            return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+        }
+        ExternalUrlOpenOutcome::Unsupported => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "Blocked unsupported documentation link target.",
+            )?;
         }
     }
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;

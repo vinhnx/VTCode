@@ -7,6 +7,7 @@ use vtcode_core::copilot::{
     COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
     login_with_events, logout_with_events, probe_auth_status,
 };
+use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::ansi_codes::notify_attention;
@@ -15,6 +16,9 @@ use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, Wiza
 use super::{SlashCommandContext, SlashCommandControl, ui};
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::external_url_guard::{
+    ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
+};
 use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
@@ -109,7 +113,9 @@ pub(crate) async fn handle_oauth_login(
                 "Starting OpenRouter OAuth authentication...",
             )?;
             let prepared = prepare_openrouter_login(vt_cfg)?;
-            open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
+            if let Some(control) = open_browser_with_guidance(&mut ctx, &prepared.auth_url).await? {
+                return Ok(control);
+            }
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Waiting for OpenRouter OAuth callback...",
@@ -134,7 +140,9 @@ pub(crate) async fn handle_oauth_login(
                 "Starting OpenAI ChatGPT authentication...",
             )?;
             let prepared = prepare_openai_login(vt_cfg)?;
-            open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
+            if let Some(control) = open_browser_with_guidance(&mut ctx, &prepared.auth_url).await? {
+                return Ok(control);
+            }
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
             let auth_url = prepared.auth_url.clone();
@@ -406,20 +414,54 @@ fn ensure_supported_provider(
     Ok(false)
 }
 
-fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Opening browser for authentication...")?;
-    renderer.hyperlink_line(MessageStyle::Response, auth_url)?;
-    if let Err(err) = webbrowser::open(auth_url) {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to open browser automatically: {}", err),
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "Please open the URL manually in your browser.",
-        )?;
+async fn open_browser_with_guidance(
+    ctx: &mut SlashCommandContext<'_>,
+    auth_url: &str,
+) -> Result<Option<SlashCommandControl>> {
+    match request_external_url_open(
+        ExternalUrlGuardContext::new(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify),
+        auth_url,
+    )
+    .await?
+    {
+        ExternalUrlOpenOutcome::Opened => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Opening browser for authentication...")?;
+            ctx.renderer
+                .hyperlink_line(MessageStyle::Response, auth_url)?;
+            Ok(None)
+        }
+        ExternalUrlOpenOutcome::OpenFailed(err) => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Opening browser for authentication...")?;
+            ctx.renderer
+                .hyperlink_line(MessageStyle::Response, auth_url)?;
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to open browser automatically: {}", err),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Please open the URL manually in your browser.",
+            )?;
+            Ok(None)
+        }
+        ExternalUrlOpenOutcome::Cancelled => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Cancelled opening authentication link.")?;
+            Ok(Some(SlashCommandControl::Continue))
+        }
+        ExternalUrlOpenOutcome::Exit => Ok(Some(SlashCommandControl::BreakWithReason(
+            SessionEndReason::Exit,
+        ))),
+        ExternalUrlOpenOutcome::Unsupported => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "Blocked unsupported authentication link target.",
+            )?;
+            Ok(Some(SlashCommandControl::Continue))
+        }
     }
-    Ok(())
 }
 
 async fn prompt_openai_manual_callback_input(
