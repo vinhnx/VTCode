@@ -224,6 +224,7 @@ fn test_merge_toml_values_with_origins_tracks_winning_layer() {
 }
 
 #[test]
+#[serial]
 fn syntax_highlighting_defaults_are_valid() {
     let config = SyntaxHighlightingConfig::default();
     config

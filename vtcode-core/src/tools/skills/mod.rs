@@ -7,7 +7,7 @@ use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
 use crate::skills::executor::{ForkSkillExecutor, SkillToolAdapter};
 use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::loader::{
-    EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, discover_skill_metadata_lightweight,
+    EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig,
 };
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
@@ -293,7 +293,14 @@ fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> 
     );
     manager.ensure_system_skills_installed();
     let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_enabled);
-    discover_skill_metadata_lightweight(&config)
+
+    #[cfg(test)]
+    let discovery = crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);
+
+    #[cfg(not(test))]
+    let discovery = crate::skills::loader::discover_skill_metadata_lightweight(&config);
+
+    discovery
 }
 
 async fn discover_session_utilities(

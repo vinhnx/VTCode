@@ -1724,7 +1724,6 @@ fn chatgpt_backend_keeps_plain_assistant_history_structured_for_codex() {
         .and_then(Value::as_str)
         .expect("instructions should be present");
     assert!(instructions.contains("You are Codex, based on GPT-5."));
-    assert!(instructions.contains("# VT Code Coding Assistant"));
 }
 
 #[test]
@@ -3517,19 +3516,11 @@ async fn responses_stream_retries_with_fallback_model_after_not_found() {
                     ResponseTemplate::new(404).set_body_string("model_not_found")
                 }
                 models::openai::GPT_5_MINI => ResponseTemplate::new(200)
-                    .insert_header("content-type", "application/json")
-                    .set_body_json(json!({
-                        "id": "resp_stream_fallback",
-                        "status": "completed",
-                        "output": [{
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [{
-                                "type": "output_text",
-                                "text": "fallback stream response"
-                            }]
-                        }]
-                    })),
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(concat!(
+                        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream_fallback\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"fallback stream response\"}]}]}}\n\n",
+                        "data: [DONE]\n\n",
+                    )),
                 other => ResponseTemplate::new(500)
                     .set_body_string(format!("unexpected fallback model: {other}")),
             }

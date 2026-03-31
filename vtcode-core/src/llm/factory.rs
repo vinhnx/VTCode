@@ -528,12 +528,12 @@ mod tests {
     }
 
     #[test]
-    fn create_provider_for_huggingface_repo_id_uses_huggingface_provider() {
+    fn create_provider_for_openai_repo_id_uses_openrouter_provider() {
         let provider =
             create_provider_for_model("openai/gpt-oss-20b", "test-key".to_string(), None, None)
-                .expect("repo identifiers should preserve huggingface routing");
+                .expect("repo identifiers should preserve openrouter routing");
 
-        assert_eq!(provider.name(), "huggingface");
+        assert_eq!(provider.name(), "openrouter");
     }
 
     #[test]

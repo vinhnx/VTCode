@@ -623,6 +623,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use tempfile::TempDir;
+    use serial_test::serial;
 
     thread_local! {
         static TEST_FREE_WAS_CALLED: Cell<bool> = const { Cell::new(false) };
@@ -892,6 +893,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_native_plugin_serializes_concurrent_execution() {
         TEST_EXECUTE_ACTIVE_CALLS.store(0, Ordering::SeqCst);
         TEST_EXECUTE_MAX_CONCURRENCY.store(0, Ordering::SeqCst);
@@ -938,6 +940,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_native_plugin_allows_parallel_execution() {
         TEST_EXECUTE_ACTIVE_CALLS.store(0, Ordering::SeqCst);
         TEST_EXECUTE_MAX_CONCURRENCY.store(0, Ordering::SeqCst);

@@ -1,6 +1,14 @@
 use tempfile::TempDir;
 use vtcode_core::tools::editing::{Patch, PatchError};
 
+fn original_patch_error(err: &PatchError) -> &PatchError {
+    match err {
+        PatchError::RolledBack { original } => original.as_ref(),
+        PatchError::Recovery { original, .. } => original.as_ref(),
+        other => other,
+    }
+}
+
 #[tokio::test]
 async fn update_failure_preserves_original_content() {
     let temp_dir = TempDir::new().unwrap();
@@ -13,7 +21,10 @@ async fn update_failure_preserves_original_content() {
 
     let err = patch.apply(temp_dir.path()).await.unwrap_err();
     let patch_err = err.downcast::<PatchError>().unwrap();
-    assert!(matches!(patch_err, PatchError::SegmentNotFound { .. }));
+    assert!(matches!(
+        original_patch_error(&patch_err),
+        PatchError::SegmentNotFound { .. }
+    ));
 
     let contents = tokio::fs::read_to_string(&file_path).await.unwrap();
     assert_eq!(contents, "original\n");
@@ -44,7 +55,7 @@ async fn update_failure_restores_file_after_partial_write() {
 
     let err = patch.apply(temp_dir.path()).await.unwrap_err();
     let patch_err = err.downcast::<PatchError>().unwrap();
-    if let PatchError::Io { action, .. } = &patch_err {
+    if let PatchError::Io { action, .. } = original_patch_error(&patch_err) {
         assert_eq!(*action, "create");
     } else {
         panic!("expected I/O error, got {patch_err:?}");

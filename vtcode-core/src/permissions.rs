@@ -520,7 +520,7 @@ fn push_resolved_path(
             .map(|relative| workspace_root.join(relative).join(trimmed))
             .unwrap_or_else(|| workspace_root.join(trimmed))
     };
-    paths.push(resolved);
+    paths.push(crate::utils::path::normalize_path(&resolved));
 }
 
 fn extract_web_domains(args: &Value) -> Vec<String> {
@@ -703,7 +703,7 @@ mod tests {
             "unified_file",
             Some(&json!({
                 "action": "write",
-                "path": ".vtcode/skills/example.md"
+                "path": "../.vtcode/skills/example.md"
             })),
         );
         assert!(!request.requires_protected_write_prompt());
@@ -714,7 +714,7 @@ mod tests {
             "unified_file",
             Some(&json!({
                 "action": "write",
-                "path": ".vtcode/settings.toml"
+                "path": "../.vtcode/settings.toml"
             })),
         );
         assert!(request.requires_protected_write_prompt());
@@ -732,7 +732,7 @@ mod tests {
             &cwd,
             "apply_patch",
             Some(&json!({
-                "patch": "*** Begin Patch\n*** Update File: src/main.rs\n@@\n-test\n+test\n*** End Patch\n"
+                "patch": "*** Begin Patch\n*** Update File: ../src/main.rs\n@@\n-test\n+test\n*** End Patch\n"
             })),
         );
 

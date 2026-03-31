@@ -315,7 +315,10 @@ mod tests {
         assert_eq!(provider.model_id(), models::minimax::DEFAULT_MODEL);
         assert_eq!(
             provider.supported_models(),
-            vec![models::minimax::DEFAULT_MODEL.to_string()]
+            vec![
+                models::minimax::MINIMAX_M2_7.to_string(),
+                models::minimax::MINIMAX_M2_5.to_string(),
+            ]
         );
     }
 

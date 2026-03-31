@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::io::ErrorKind;
 
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -26,10 +27,18 @@ impl LineEnding {
 pub(super) async fn load_file_lines(
     path: &Path,
 ) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
-    let file = fs::File::open(path).await.map_err(|err| PatchError::Io {
-        action: "read",
-        path: path.to_path_buf(),
-        source: err,
+    let file = fs::File::open(path).await.map_err(|err| {
+        if err.kind() == ErrorKind::NotFound {
+            PatchError::MissingFile {
+                path: path.display().to_string(),
+            }
+        } else {
+            PatchError::Io {
+                action: "read",
+                path: path.to_path_buf(),
+                source: err,
+            }
+        }
     })?;
     let mut reader = BufReader::new(file);
     let mut lines = Vec::new();

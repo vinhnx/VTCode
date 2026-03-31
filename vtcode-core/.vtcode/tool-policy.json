@@ -2,6 +2,9 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
+    "cron_create",
+    "cron_delete",
+    "cron_list",
     "enter_plan_mode",
     "exit_plan_mode",
     "plan_task_tracker",
@@ -21,6 +24,9 @@
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
+    "cron_create": "allow",
+    "cron_delete": "allow",
+    "cron_list": "allow",
     "list_files": "allow",
     "read_file": "allow"
   },

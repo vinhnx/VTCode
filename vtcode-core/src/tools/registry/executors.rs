@@ -3270,12 +3270,24 @@ impl ToolRegistry {
                 {
                     content
                 } else {
-                    fs::read_to_string(&canonical_path).await.with_context(|| {
-                        format!(
-                            "Failed to read patch source content for {}",
-                            canonical_path.display()
-                        )
-                    })?
+                    match fs::read_to_string(&canonical_path).await {
+                        Ok(content) => content,
+                        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                            return Err(anyhow!(
+                                crate::tools::editing::PatchError::MissingFile {
+                                    path: canonical_path.display().to_string(),
+                                }
+                            ));
+                        }
+                        Err(err) => {
+                            return Err(err).with_context(|| {
+                                format!(
+                                    "Failed to read patch source content for {}",
+                                    canonical_path.display()
+                                )
+                            });
+                        }
+                    }
                 };
 
                 let rendered = crate::tools::editing::patch::render_patch_update_content(
@@ -4803,7 +4815,7 @@ mod sandbox_runtime_tests {
         let obj = payload.as_object().expect("payload object");
         let err = parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
             .expect_err("empty additional_permissions should fail");
-        assert!(err.to_string().contains("must include at least one path"));
+        assert!(err.to_string().contains("missing `additional_permissions`"));
     }
 
     #[test]

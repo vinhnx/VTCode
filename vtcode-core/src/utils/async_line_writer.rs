@@ -26,6 +26,9 @@ impl AsyncLineWriter {
                 .with_context(|| format!("Failed to create log directory: {}", parent.display()))?;
         }
 
+        // Create the current log file eagerly so callers can observe it immediately.
+        let _ = OpenOptions::new().create(true).append(true).open(&path);
+
         let (sender, receiver) = sync_channel(defaults::DEFAULT_TRAJECTORY_LOG_CHANNEL_CAPACITY);
         let handle = thread::spawn(move || writer_loop(&path, receiver));
 

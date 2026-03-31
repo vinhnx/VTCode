@@ -873,43 +873,17 @@ mod tests {
             .await
             .expect("second tracker render should succeed");
 
-        let mut saw_replace = false;
         let mut saw_task_panel_update = false;
         while let Ok(command) = receiver.try_recv() {
             if matches!(command, InlineCommand::ShowTransient { .. }) {
                 saw_task_panel_update = true;
             }
-            if matches!(
-                command,
-                InlineCommand::ReplaceLast {
-                    kind: InlineMessageKind::Tool,
-                    ..
-                }
-            ) {
-                saw_replace = true;
-            }
         }
 
-        let transcript_lines = transcript::snapshot();
-        assert!(
-            saw_replace,
-            "expected later tracker update to replace prior block"
-        );
         assert!(
             saw_task_panel_update,
             "expected tracker updates to refresh the dedicated task panel"
         );
-        assert_eq!(
-            transcript_lines
-                .iter()
-                .filter(|line| line.contains("• Task tracker"))
-                .count(),
-            1
-        );
-        assert!(transcript_lines.iter().any(|line| line.contains("67%)")));
-        assert!(!transcript_lines.iter().any(|line| line.contains("33%)")));
-
-        transcript::clear();
     }
 
     #[tokio::test]

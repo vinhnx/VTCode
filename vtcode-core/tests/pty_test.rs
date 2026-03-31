@@ -131,12 +131,7 @@ async fn test_pty_run_returns_live_session_after_yield_window() {
 
     assert_eq!(start["success"], true);
     assert_eq!(start["is_exited"].as_bool(), Some(false));
-    assert!(
-        start
-            .get("process_id")
-            .and_then(|value| value.as_str())
-            .is_some()
-    );
+    assert!(start.get("session_id").and_then(|value| value.as_str()).is_some());
     assert!(start.get("exit_code").is_none());
 
     let (output, read) = read_session_until_exit(&registry, sid.as_str(), 20, 250).await;

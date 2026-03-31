@@ -3126,7 +3126,7 @@ mod tests {
             &cfg,
             models::ollama::GPT_OSS_120B_CLOUD,
             "ollama",
-            Some("gpt-5-mini"),
+            Some("not-a-real-model"),
             None,
             "rust-engineer",
         )
@@ -3148,7 +3148,7 @@ mod tests {
         )
         .expect("resolve model");
 
-        assert_eq!(resolved, ModelId::GPT5Mini);
+        assert_eq!(resolved, ModelId::GPT54Mini);
     }
 
     #[test]
@@ -3158,7 +3158,7 @@ mod tests {
             &cfg,
             models::anthropic::CLAUDE_SONNET_4_6,
             "anthropic",
-            Some("gpt-5"),
+            Some("not-a-real-model"),
             Some("haiku"),
             "reviewer",
         )
@@ -3236,7 +3236,7 @@ mod tests {
             models::anthropic::CLAUDE_SONNET_4_6,
             "anthropic",
             None,
-            Some("gpt-5-mini"),
+            Some("not-a-real-model"),
             "reviewer",
         )
         .expect_err("invalid spec model should fail");

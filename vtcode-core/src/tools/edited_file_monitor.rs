@@ -925,6 +925,7 @@ mod tests {
         let file = temp.path().join("sample.txt");
         std::fs::write(&file, "hello\n")?;
         let monitor = Arc::new(EditedFileMonitor::new());
+        let normalized_file = normalize_event_path(&file);
 
         let first = monitor.acquire_mutation(&file).await;
         let monitor_clone = Arc::clone(&monitor);
@@ -937,7 +938,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         drop(first);
         let acquired = waiter.await?;
-        assert_eq!(acquired, file);
+        assert_eq!(acquired, normalized_file);
         Ok(())
     }
 
@@ -965,6 +966,7 @@ mod tests {
         let file = temp.path().join("sample.txt");
         std::fs::write(&file, "hello\n")?;
         let monitor = Arc::new(EditedFileMonitor::new());
+        let normalized_file = normalize_event_path(&file);
 
         let first = monitor.acquire_mutation(&file).await;
 
@@ -986,7 +988,7 @@ mod tests {
         drop(first);
 
         let acquired = tokio::time::timeout(Duration::from_secs(1), next).await??;
-        assert_eq!(acquired, file);
+        assert_eq!(acquired, normalized_file);
         Ok(())
     }
 

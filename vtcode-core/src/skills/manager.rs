@@ -1,4 +1,6 @@
 use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
+#[cfg(test)]
+use crate::skills::loader::discover_skill_metadata_lightweight_hermetic;
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use crate::skills::system::uninstall_system_skills;
@@ -213,6 +215,20 @@ impl SkillsManager {
         discover_skill_metadata_lightweight(&config)
     }
 
+    #[cfg(test)]
+    fn skills_metadata_lightweight_hermetic(&self, cwd: &Path) -> SkillLoadOutcome {
+        let project_root = find_git_root(cwd);
+
+        let config = SkillLoaderConfig {
+            codex_home: self.codex_home.clone(),
+            cwd: cwd.to_path_buf(),
+            project_root,
+            include_bundled_system_skills: self.bundled_skills_enabled,
+        };
+
+        discover_skill_metadata_lightweight_hermetic(&config)
+    }
+
     /// Load full skill instructions on-demand (Phase 3)
     /// Parses SKILL.md and returns Skill with full manifest and instructions.
     /// Cached with LRU eviction (max 50 skills, 10-minute TTL).
@@ -394,7 +410,7 @@ mod tests {
         let cwd = temp_home.path();
 
         // Lightweight discovery should work without errors
-        let outcome = manager.skills_metadata_lightweight(cwd);
+        let outcome = manager.skills_metadata_lightweight_hermetic(cwd);
 
         // Should return empty outcome (no skills in temp dir)
         // but should not crash or error

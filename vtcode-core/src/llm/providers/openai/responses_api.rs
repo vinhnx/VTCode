@@ -604,7 +604,7 @@ mod tests {
             .expect("function_call_output output should be an array");
 
         assert_eq!(tool_result_content.len(), 2);
-        assert_eq!(tool_result_content[0]["type"], "output_text");
+        assert_eq!(tool_result_content[0]["type"], "input_text");
         assert_eq!(tool_result_content[0]["text"], "inline image note");
         assert_eq!(tool_result_content[1]["type"], "input_image");
         assert_eq!(

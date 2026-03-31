@@ -40,6 +40,8 @@ include_working_directory = true
 default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
+instruction_excludes = []
+instruction_import_max_depth = 5
 
 [agent.small_model]
 enabled = true
@@ -48,6 +50,7 @@ temperature = 0.3
 use_for_large_reads = true
 use_for_web_summary = true
 use_for_git_history = true
+use_for_memory = true
 
 [agent.prompt_suggestions]
 enabled = true
@@ -79,6 +82,12 @@ enabled = true
 max_snapshots = 50
 max_age_days = 30
 
+[agent.persistent_memory]
+enabled = false
+auto_write = true
+startup_line_limit = 200
+startup_byte_limit = 25600
+
 [agent.vibe_coding]
 enabled = false
 min_prompt_length = 5
@@ -105,6 +114,8 @@ max_tool_retries = 2
 auto_compaction_enabled = false
 continuation_policy = "all"
 event_log_path = ""
+orchestration_mode = "single"
+max_revision_rounds = 2
 
 [agent.circuit_breaker]
 enabled = true
@@ -119,6 +130,11 @@ emit_events = true
 include_extensions = true
 map_tool_calls = true
 include_reasoning = true
+
+[agent.codex_app_server]
+command = "codex"
+args = ["app-server"]
+startup_timeout_secs = 10
 
 [auth.openrouter]
 use_oauth = false
@@ -493,9 +509,37 @@ auto_clear_paths = [
     "~/.vtcode/bin",
 ]
 
+[permissions.auto_mode]
+model = ""
+probe_model = ""
+max_consecutive_denials = 3
+max_total_denials = 20
+drop_broad_allow_rules = true
+block_rules = [
+    "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.",
+    "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.",
+    "Block sending workspace contents, credentials, environment variables, or other sensitive data to external endpoints unless the user explicitly named both the destination and the data.",
+    "Block credential hunting, secret discovery, or scanning config and environment stores for alternative tokens unless the user explicitly asked for that credential workflow.",
+    "Block commands that bypass safety checks, disable verification, install persistence, or weaken the host security posture.",
+    "Block destructive or production/shared-infrastructure actions unless the user explicitly authorized the target and the action.",
+    "Block destructive actions against inferred, fuzzy-matched, or agent-selected targets when the user did not name the exact target.",
+]
+allow_exceptions = [
+    "Allow read-only tools and read-only browsing/search actions.",
+    "Allow file edits and writes inside the current workspace when the path is not protected.",
+    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
+]
+
 [sandbox]
 enabled = false
 default_mode = "read_only"
+
+[permissions.auto_mode.environment]
+trusted_paths = []
+trusted_domains = []
+trusted_git_hosts = []
+trusted_git_orgs = []
+trusted_services = []
 
 [sandbox.network]
 allow_all = false
@@ -642,6 +686,9 @@ sample_interval_ms = 1000
 retention_days = 14
 bottleneck_tracing = true
 perf_events = true
+trajectory_max_files = 50
+trajectory_max_age_days = 14
+trajectory_max_size_mb = 50
 
 [optimization.memory_pool]
 enabled = true
@@ -796,6 +843,9 @@ mode = "implicit"
 min_prefix_tokens = 1024
 explicit_ttl_seconds = 3600
 
+[automation.scheduled_tasks]
+enabled = false
+
 [prompt_cache.providers.openrouter]
 enabled = true
 propagate_provider_capabilities = true
@@ -804,9 +854,22 @@ report_savings = true
 [prompt_cache.providers.moonshot]
 enabled = true
 
+[subagents]
+enabled = true
+max_concurrent = 3
+max_depth = 1
+default_timeout_seconds = 300
+auto_delegate_read_only = true
+
 [prompt_cache.providers.deepseek]
 enabled = true
 surface_metrics = true
+
+[subagents.background]
+enabled = false
+refresh_interval_ms = 2000
+auto_restore = false
+toggle_shortcut = "ctrl+b"
 
 [prompt_cache.providers.zai]
 enabled = false
@@ -904,6 +967,8 @@ pre_compact = []
 task_completion = []
 task_completed = []
 notification = []
+subagent_start = []
+subagent_stop = []
 
 [model]
 skip_loop_detection = false
@@ -952,6 +1017,8 @@ enabled = true
 [output_style]
 active_style = "default"
 
+[provider.openai.manual_compaction]
+
 [dotfile_protection]
 enabled = true
 require_explicit_confirmation = true
@@ -976,3 +1043,6 @@ blocked_operations = [
     "auto_fix",
 ]
 require_secondary_auth_for_whitelist = true
+
+[provider.openai.hosted_shell.network_policy]
+type = "disabled"

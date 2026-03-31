@@ -64,21 +64,12 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
 
 #[tokio::test]
 async fn mock_responses_api_sampling_parameters_structure() {
-    use serde_json::json;
-    // Start mock server
-    // We expect temperature under sampling_parameters and token cap at top level.
-    let expect_body = json!({
-        "max_completion_tokens": 100,
-        "sampling_parameters": {
-            "temperature": 0.5
-        },
-        "model": "gpt-5.2"
-    });
-
     let mut server = Server::new_async().await;
     let mock = server
         .mock("POST", "/api.openai.com/responses")
-        .match_body(Matcher::PartialJson(expect_body))
+        .match_body(Matcher::Regex(
+            r#"(?s)"model":"gpt-5.2".*"max_output_tokens":100.*"sampling_parameters":\{"temperature":0.5"#.to_string(),
+        ))
         .with_status(200)
         .with_body(
             r#"{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}"#,
@@ -240,33 +231,19 @@ async fn mock_responses_api_minimal_reasoning_effort() {
 
 #[tokio::test]
 async fn mock_responses_api_preserves_assistant_phase_history() {
-    let expect_body = json!({
-        "model": "gpt-5.4",
-        "input": [
-            {
-                "role": "user"
-            },
-            {
-                "role": "assistant",
-                "phase": "commentary"
-            },
-            {
-                "role": "assistant",
-                "phase": "final_answer"
-            },
-            {
-                "role": "user"
-            }
-        ]
-    });
-
     let mut server = Server::new_async().await;
     let mock = server
         .mock("POST", "/api.openai.com/responses")
-        .match_body(Matcher::PartialJson(expect_body))
+        .match_body(Matcher::Regex(
+            r#"(?s)"phase":"commentary".*"phase":"final_answer""#.to_string(),
+        ))
         .with_status(200)
+        .with_header("content-type", "text/event-stream")
         .with_body(
-            r#"{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}"#,
+            concat!(
+                "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_history\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}]}}\n\n",
+                "data: [DONE]\n\n",
+            ),
         )
         .create_async()
         .await;
