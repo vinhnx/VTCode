@@ -3273,11 +3273,9 @@ impl ToolRegistry {
                     match fs::read_to_string(&canonical_path).await {
                         Ok(content) => content,
                         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                            return Err(anyhow!(
-                                crate::tools::editing::PatchError::MissingFile {
-                                    path: canonical_path.display().to_string(),
-                                }
-                            ));
+                            return Err(anyhow!(crate::tools::editing::PatchError::MissingFile {
+                                path: canonical_path.display().to_string(),
+                            }));
                         }
                         Err(err) => {
                             return Err(err).with_context(|| {

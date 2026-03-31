@@ -6,9 +6,7 @@ use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
 use crate::skills::executor::{ForkSkillExecutor, SkillToolAdapter};
 use crate::skills::file_references::FileReferenceValidator;
-use crate::skills::loader::{
-    EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig,
-};
+use crate::skills::loader::{EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig};
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillVariety};

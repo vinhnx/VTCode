@@ -1,6 +1,6 @@
-use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
 #[cfg(test)]
 use crate::skills::loader::discover_skill_metadata_lightweight_hermetic;
+use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use crate::skills::system::uninstall_system_skills;

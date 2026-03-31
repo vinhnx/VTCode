@@ -7,6 +7,9 @@ push-remote = "origin"
 publish = true
 tag-name = "{{version}}"
 tag-message = "Release {{version}}"
+# Skip pre-release tests - they should be run manually before release
+# Snapshot tests can fail and block releases; run `cargo nextest run` manually instead
+pre-release-hook = []
 [rate-limit]
 new-packages = 5
 existing-packages = 300

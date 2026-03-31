@@ -618,12 +618,12 @@ pub fn validate_plugin_structure(plugin_dir: &Path) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::cell::Cell;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use tempfile::TempDir;
-    use serial_test::serial;
 
     thread_local! {
         static TEST_FREE_WAS_CALLED: Cell<bool> = const { Cell::new(false) };
