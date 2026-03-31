@@ -38,8 +38,8 @@ mock = ["dep:async-trait"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.96.4" }
-vtcode-core = { path = "../vtcode-core", version = "0.96.4", default-features = false }
+vtcode-commons = { path = "../vtcode-commons", version = "0.96.5" }
+vtcode-core = { path = "../vtcode-core", version = "0.96.5", default-features = false }
 
 [dev-dependencies]
 futures = { workspace = true }
