@@ -4,9 +4,10 @@
 #
 # This script handles local releases for VT Code:
 # 1. Builds binaries locally (Sanity Check)
-# 2. Runs cargo-release to version, tag, and publish to crates.io
-# 3. Uploads pre-built binaries to GitHub Releases
-# 4. Updates and publishes Homebrew formula
+# 2. Runs cargo-release to version, tag, and push
+# 3. Hands off crates.io publishing to the staged release script
+# 4. Uploads pre-built binaries to GitHub Releases
+# 5. Updates and publishes Homebrew formula
 #
 # Usage: ./scripts/release.sh [version|level] [options]
 
@@ -111,7 +112,7 @@ Version or level:
 
 Options:
   --dry-run           Run in dry-run mode
-  --skip-crates       Skip publishing crates to crates.io
+  --skip-crates       Skip the crates.io publish handoff
   --skip-binaries     Skip building and uploading binaries (and Homebrew update)
   --skip-docs         Skip docs.rs rebuild trigger
   --full-ci           Use GitHub Actions for ALL platforms (including macOS)
@@ -946,23 +947,28 @@ main() {
     print_info "Step 2: Generating changelog and release notes..."
     update_changelog_from_commits "$next_version" "$dry_run"
 
-    # 3. Cargo Release (Publish to crates.io, tag and push)
-    print_info "Step 3: Running cargo release (publish to crates.io, tag and push)..."
-    
-    local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm)
-    if [[ "$skip_crates" == 'true' ]]; then
-        command+=(--no-publish)
-    fi
+    # 3. Cargo Release (version, tag, and push only)
+    print_info "Step 3: Running cargo release (version, tag, and push only)..."
+
+    local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
 
     if [[ "$dry_run" == 'true' ]]; then
         print_info "Dry run - would run: ${command[*]}"
     else
-            "${command[@]}"
+        "${command[@]}"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
+        if [[ "$skip_crates" == 'false' ]]; then
+            print_info "Dry run - would run: ./scripts/publish_extracted_crates.sh --dry-run --skip-tags --skip-follow-up"
+        fi
         print_success 'Dry run completed'
         exit 0
+    fi
+
+    if [[ "$skip_crates" == 'false' ]]; then
+        print_distribution "Publishing crates in dependency order..."
+        ./scripts/publish_extracted_crates.sh --skip-tags --skip-follow-up
     fi
 
     # Confirm version after cargo-release

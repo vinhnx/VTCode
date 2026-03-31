@@ -5,26 +5,31 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # publish_extracted_crates.sh orchestrates the sequential publishes for the
-# extracted VT Code crates. It mirrors the workflow defined in
-# docs/component_release_plan.md and provides optional dry-run coverage so the
+# extracted VT Code crates. It follows the dependency order required by
+# crates.io tarball verification and provides optional dry-run coverage so the
 # same script can be used for validation ahead of the real release window.
 
 usage() {
     cat <<USAGE
-Usage: $0 [--dry-run] [--start-from <crate>] [--skip-tests] [--skip-docs]
+Usage: $0 [--dry-run] [--start-from <crate>] [--skip-tests] [--skip-docs] [--skip-tags] [--skip-follow-up]
 
 Options:
   --dry-run          Use `cargo publish --dry-run` for each crate instead of
                      performing the real publish. This is the default when the
                      VT_RELEASE_DRY_RUN environment variable is set to `1`.
   --start-from CRATE Resume publishing from the provided crate name. Valid
-                     crates: vtcode-commons, vtcode-markdown-store,
-                     vtcode-indexer, vtcode-bash-runner, vtcode-exec-events.
+                     crates: vtcode-commons, vtcode-auth, vtcode-exec-events,
+                     vtcode-markdown-store, vtcode-ghostty-vt-sys, vtcode-vim,
+                     vtcode-config, vtcode-theme, vtcode-file-search,
+                     vtcode-indexer, vtcode-bash-runner, vtcode-tui,
+                     vtcode-core, vtcode-acp, vtcode.
   --skip-tests       Skip running the workspace fmt/clippy/test checks. Use with
                      caution; the release plan expects the validation suite to
                      pass before publishing.
   --skip-docs        Skip regenerating API docs for each crate prior to
                      publishing.
+  --skip-tags        Skip creating per-crate git tags after publish.
+  --skip-follow-up   Skip cargo update/check after each publish.
   -h, --help         Show this help message and exit.
 
 Environment variables:
@@ -41,6 +46,8 @@ DRY_RUN=${VT_RELEASE_DRY_RUN:-0}
 START_FROM=""
 RUN_TESTS=1
 RUN_DOCS=1
+RUN_TAGS=1
+RUN_FOLLOW_UP=1
 
 if [[ ${VT_RELEASE_SKIP_DOCS:-0} -eq 1 ]]; then
     RUN_DOCS=0
@@ -64,6 +71,14 @@ while [[ $# -gt 0 ]]; do
             RUN_DOCS=0
             shift
             ;;
+        --skip-tags)
+            RUN_TAGS=0
+            shift
+            ;;
+        --skip-follow-up)
+            RUN_FOLLOW_UP=0
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -78,13 +93,19 @@ done
 
 CRATES=(
     vtcode-commons
-    vtcode-markdown-store
+    vtcode-auth
     vtcode-exec-events
+    vtcode-markdown-store
+    vtcode-ghostty-vt-sys
+    vtcode-vim
     vtcode-config
-    vtcode-indexer
+    vtcode-theme
     vtcode-file-search
+    vtcode-indexer
     vtcode-bash-runner
+    vtcode-tui
     vtcode-core
+    vtcode-acp
     vtcode
 )
 
@@ -131,6 +152,10 @@ generate_docs() {
 
 maybe_tag() {
     local tag="$1"
+    if [[ $RUN_TAGS -eq 0 ]]; then
+        echo "Skipping creation of git tag ${tag}."
+        return
+    fi
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "[dry-run] Skipping creation of git tag ${tag}."
         return
@@ -144,6 +169,10 @@ maybe_tag() {
 
 post_publish_follow_up() {
     local crate="$1"
+    if [[ $RUN_FOLLOW_UP -eq 0 ]]; then
+        echo "Skipping follow-up update/check for ${crate}."
+        return
+    fi
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "[dry-run] Would run 'cargo update -p ${crate}' and 'cargo check -p ${crate}'."
         return

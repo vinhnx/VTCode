@@ -137,3 +137,9 @@ https://www.mintlify.com/VineeTagarwaL-code/claude-code/concepts/how-it-works
 ---
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/claude-code-main
+
+---
+
+https://github.com/openai/codex/pull/12334
+
+https://github.com/openai/codex/pull/15860

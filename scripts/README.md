@@ -106,7 +106,7 @@ Creates multi-crate releases for VT Code using [`cargo-release`](https://github.
 -   Delegates version management, tagging, pushing, and changelog updates to `cargo release`
 -   Keeps `vtcode` and `vtcode-core` versions in sync and updates `npm/package.json`
 -   Creates GitHub releases populated with the relevant changelog section
--   Publishes crates to crates.io (unless `--skip-crates` is provided)
+-   Hands off crates.io publishing to `publish_extracted_crates.sh` so the crates release in dependency order
 -   Optionally publishes to npm
 
 **Prerequisites:**
@@ -121,8 +121,29 @@ Creates multi-crate releases for VT Code using [`cargo-release`](https://github.
 1. **Pre-flight checks**: Verifies branch, working tree, and authentication
 2. **cargo-release execution**: Runs `cargo release` with workspace configuration from `release.toml`
 3. **Git operations**: `cargo release` commits, tags, pushes, and updates `CHANGELOG.md`
-4. **Distribution**: Publishes crates, optionally publishes npm package, triggers docs.rs rebuild, and builds binaries
+4. **Distribution**: Publishes crates in dependency order via the staged script, optionally publishes npm package, triggers docs.rs rebuild, and builds binaries
 5. **GitHub Release**: `cargo release` uploads release notes using the generated changelog section
+
+### `publish_extracted_crates.sh` - Staged Crate Publishing
+
+Publishes the extracted workspace crates in dependency order so each crate can
+resolve its workspace dependencies from crates.io before the next crate is
+published.
+
+```bash
+# Dry run the staged publish flow
+./scripts/publish_extracted_crates.sh --dry-run
+
+# Resume from a specific crate after an interruption
+./scripts/publish_extracted_crates.sh --start-from vtcode-config
+```
+
+**What it does:**
+
+-   Publishes leaf crates first, then the crates that depend on them
+-   Runs docs, formatting, clippy, and test checks before publishing
+-   Tags each crate after a successful publish
+-   Supports dry-run rehearsal of the full sequence
 
 **Changelog Generation:**
 
