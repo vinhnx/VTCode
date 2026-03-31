@@ -1,7 +1,9 @@
 pub use vtcode_auth::{
-    AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, CopilotAuthConfig,
-    CredentialStorage, CustomApiKeyStorage, OAuthCallbackPage, OAuthProvider,
-    OpenAIChatGptAuthHandle, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
+    AuthCallbackOutcome, AuthCodeCallbackServer, AuthCredentialsStoreMode, AuthStatus,
+    CopilotAuthConfig, CredentialStorage, CustomApiKeyStorage, McpOAuthConfig,
+    McpOAuthLoginCompletion, McpOAuthPreparedLogin, McpOAuthService, McpOAuthStatus, McpOAuthToken,
+    OAuthCallbackPage, OAuthProvider, OpenAIAccountAuthService, OpenAIChatGptAuthHandle,
+    OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenAIChatGptSessionRefresher,
     OpenAICredentialOverview, OpenAIResolvedAuth, OpenAIResolvedAuthSource, OpenRouterOAuthConfig,
     OpenRouterToken, PkceChallenge, clear_custom_api_keys, clear_oauth_token,
     clear_oauth_token_with_mode, clear_openai_chatgpt_session,
@@ -13,5 +15,6 @@ pub use vtcode_auth::{
     load_openai_chatgpt_session_with_mode, migrate_custom_api_keys_to_keyring,
     refresh_openai_chatgpt_session_with_mode, resolve_openai_auth, run_auth_code_callback_server,
     save_oauth_token, save_oauth_token_with_mode, save_openai_chatgpt_session,
-    save_openai_chatgpt_session_with_mode, summarize_openai_credentials,
+    save_openai_chatgpt_session_with_mode, start_auth_code_callback_server,
+    summarize_openai_credentials,
 };

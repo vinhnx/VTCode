@@ -1,25 +1,33 @@
 //! Shared authentication and OAuth flows for VT Code.
 
+mod auth_service;
 mod config;
 pub mod credentials;
+pub mod mcp_oauth;
 pub mod oauth_server;
 pub mod openai_chatgpt_oauth;
 pub mod openrouter_oauth;
 pub mod pkce;
 mod storage_paths;
 
+pub use auth_service::OpenAIAccountAuthService;
 pub use config::{AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod};
 pub use credentials::{
     AuthCredentialsStoreMode, CredentialStorage, CustomApiKeyStorage, clear_custom_api_keys,
     load_custom_api_keys, migrate_custom_api_keys_to_keyring,
 };
+pub use mcp_oauth::{
+    McpOAuthConfig, McpOAuthLoginCompletion, McpOAuthPreparedLogin, McpOAuthService,
+    McpOAuthStatus, McpOAuthToken,
+};
 pub use oauth_server::{
-    AuthCallbackOutcome, OAuthCallbackPage, OAuthProvider, run_auth_code_callback_server,
+    AuthCallbackOutcome, AuthCodeCallbackServer, OAuthCallbackPage, OAuthProvider,
+    run_auth_code_callback_server, start_auth_code_callback_server,
 };
 pub use openai_chatgpt_oauth::{
     OpenAIChatGptAuthHandle, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
-    OpenAICredentialOverview, OpenAIResolvedAuth, OpenAIResolvedAuthSource,
-    clear_openai_chatgpt_session, clear_openai_chatgpt_session_with_mode,
+    OpenAIChatGptSessionRefresher, OpenAICredentialOverview, OpenAIResolvedAuth,
+    OpenAIResolvedAuthSource, clear_openai_chatgpt_session, clear_openai_chatgpt_session_with_mode,
     exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state,
     get_openai_chatgpt_auth_status, get_openai_chatgpt_auth_status_with_mode,
     get_openai_chatgpt_auth_url, load_openai_chatgpt_session,

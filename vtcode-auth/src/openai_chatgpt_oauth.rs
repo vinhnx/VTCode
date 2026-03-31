@@ -7,6 +7,7 @@
 //! - secure storage in keyring or encrypted file storage
 
 use anyhow::{Context, Result, anyhow, bail};
+use async_trait::async_trait;
 use base64::{Engine, engine::general_purpose::STANDARD, engine::general_purpose::URL_SAFE_NO_PAD};
 use fs2::FileExt;
 use reqwest::Client;
@@ -18,6 +19,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::storage_paths::auth_storage_dir;
 use crate::{OpenAIAuthConfig, OpenAIPreferredMethod};
@@ -75,19 +77,49 @@ impl OpenAIChatGptSession {
     }
 }
 
+/// Host-provided refresher for externally managed ChatGPT auth tokens.
+#[async_trait]
+pub trait OpenAIChatGptSessionRefresher: Send + Sync {
+    async fn refresh_session(&self, current: &OpenAIChatGptSession)
+    -> Result<OpenAIChatGptSession>;
+}
+
+#[derive(Clone)]
+enum OpenAIChatGptAuthRefreshStrategy {
+    Stored {
+        storage_mode: AuthCredentialsStoreMode,
+    },
+    External {
+        refresher: Arc<dyn OpenAIChatGptSessionRefresher>,
+    },
+}
+
+impl fmt::Debug for OpenAIChatGptAuthRefreshStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stored { storage_mode } => f
+                .debug_struct("Stored")
+                .field("storage_mode", storage_mode)
+                .finish(),
+            Self::External { .. } => f.debug_struct("External").finish_non_exhaustive(),
+        }
+    }
+}
+
 /// Runtime auth state shared by OpenAI provider instances.
 #[derive(Clone)]
 pub struct OpenAIChatGptAuthHandle {
     session: Arc<Mutex<OpenAIChatGptSession>>,
-    auth_config: OpenAIAuthConfig,
-    storage_mode: AuthCredentialsStoreMode,
+    refresh_gate: Arc<AsyncMutex<()>>,
+    auto_refresh: bool,
+    refresh_strategy: OpenAIChatGptAuthRefreshStrategy,
 }
 
 impl fmt::Debug for OpenAIChatGptAuthHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OpenAIChatGptAuthHandle")
-            .field("auth_config", &self.auth_config)
-            .field("storage_mode", &self.storage_mode)
+            .field("auto_refresh", &self.auto_refresh)
+            .field("refresh_strategy", &self.refresh_strategy)
             .finish()
     }
 }
@@ -100,8 +132,22 @@ impl OpenAIChatGptAuthHandle {
     ) -> Self {
         Self {
             session: Arc::new(Mutex::new(session)),
-            auth_config,
-            storage_mode,
+            refresh_gate: Arc::new(AsyncMutex::new(())),
+            auto_refresh: auth_config.auto_refresh,
+            refresh_strategy: OpenAIChatGptAuthRefreshStrategy::Stored { storage_mode },
+        }
+    }
+
+    pub fn new_external(
+        session: OpenAIChatGptSession,
+        auto_refresh: bool,
+        refresher: Arc<dyn OpenAIChatGptSessionRefresher>,
+    ) -> Self {
+        Self {
+            session: Arc::new(Mutex::new(session)),
+            refresh_gate: Arc::new(AsyncMutex::new(())),
+            auto_refresh,
+            refresh_strategy: OpenAIChatGptAuthRefreshStrategy::External { refresher },
         }
     }
 
@@ -122,22 +168,44 @@ impl OpenAIChatGptAuthHandle {
     }
 
     pub async fn refresh_if_needed(&self) -> Result<()> {
-        if !self.auth_config.auto_refresh {
+        if !self.auto_refresh {
             return Ok(());
         }
 
-        let needs_refresh = self.snapshot()?.is_refresh_due();
-        if needs_refresh {
-            self.force_refresh().await?;
-        }
-        Ok(())
+        self.refresh_when(|session| session.is_refresh_due()).await
     }
 
     pub async fn force_refresh(&self) -> Result<()> {
+        self.refresh_when(|_| true).await
+    }
+
+    async fn refresh_when<P>(&self, should_refresh: P) -> Result<()>
+    where
+        P: FnOnce(&OpenAIChatGptSession) -> bool,
+    {
+        let _refresh_guard = self.refresh_gate.lock().await;
         let session = self.snapshot()?;
-        let refreshed =
-            refresh_openai_chatgpt_session_from_snapshot(&session, self.storage_mode).await?;
+        if !should_refresh(&session) {
+            return Ok(());
+        }
+
+        let refreshed = match &self.refresh_strategy {
+            OpenAIChatGptAuthRefreshStrategy::Stored { storage_mode } => {
+                refresh_openai_chatgpt_session_from_snapshot(&session, *storage_mode).await?
+            }
+            OpenAIChatGptAuthRefreshStrategy::External { refresher } => {
+                refresher.refresh_session(&session).await?
+            }
+        };
         self.replace_session(refreshed)
+    }
+
+    #[must_use]
+    pub fn using_external_tokens(&self) -> bool {
+        matches!(
+            self.refresh_strategy,
+            OpenAIChatGptAuthRefreshStrategy::External { .. }
+        )
     }
 
     fn replace_session(&self, session: OpenAIChatGptSession) -> Result<()> {
@@ -327,38 +395,8 @@ pub fn resolve_openai_auth(
     storage_mode: AuthCredentialsStoreMode,
     api_key: Option<String>,
 ) -> Result<OpenAIResolvedAuth> {
-    let session = load_openai_chatgpt_session_with_mode(storage_mode)?;
-    match auth_config.preferred_method {
-        OpenAIPreferredMethod::Chatgpt => {
-            let session = session.ok_or_else(|| anyhow!("Run vtcode login openai"))?;
-            let handle =
-                OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
-            Ok(OpenAIResolvedAuth::ChatGpt {
-                api_key: active_api_bearer_token(&session).to_string(),
-                handle,
-            })
-        }
-        OpenAIPreferredMethod::ApiKey => {
-            let api_key = api_key.ok_or_else(|| anyhow!("OpenAI API key not found"))?;
-            Ok(OpenAIResolvedAuth::ApiKey { api_key })
-        }
-        OpenAIPreferredMethod::Auto => {
-            if let Some(session) = session {
-                let handle = OpenAIChatGptAuthHandle::new(
-                    session.clone(),
-                    auth_config.clone(),
-                    storage_mode,
-                );
-                Ok(OpenAIResolvedAuth::ChatGpt {
-                    api_key: active_api_bearer_token(&session).to_string(),
-                    handle,
-                })
-            } else {
-                let api_key = api_key.ok_or_else(|| anyhow!("OpenAI API key not found"))?;
-                Ok(OpenAIResolvedAuth::ApiKey { api_key })
-            }
-        }
-    }
+    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode)
+        .resolve_runtime_auth(api_key)
 }
 
 pub fn summarize_openai_credentials(
@@ -366,64 +404,8 @@ pub fn summarize_openai_credentials(
     storage_mode: AuthCredentialsStoreMode,
     api_key: Option<String>,
 ) -> Result<OpenAICredentialOverview> {
-    let chatgpt_session = load_openai_chatgpt_session_with_mode(storage_mode)?;
-    let api_key_available = api_key
-        .as_ref()
-        .is_some_and(|value| !value.trim().is_empty());
-    let active_source = match auth_config.preferred_method {
-        OpenAIPreferredMethod::Chatgpt => chatgpt_session
-            .as_ref()
-            .map(|_| OpenAIResolvedAuthSource::ChatGpt),
-        OpenAIPreferredMethod::ApiKey => {
-            api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey)
-        }
-        OpenAIPreferredMethod::Auto => {
-            if chatgpt_session.is_some() {
-                Some(OpenAIResolvedAuthSource::ChatGpt)
-            } else if api_key_available {
-                Some(OpenAIResolvedAuthSource::ApiKey)
-            } else {
-                None
-            }
-        }
-    };
-
-    let (notice, recommendation) = if api_key_available && chatgpt_session.is_some() {
-        let active_label = match active_source {
-            Some(OpenAIResolvedAuthSource::ChatGpt) => "ChatGPT subscription",
-            Some(OpenAIResolvedAuthSource::ApiKey) => "OPENAI_API_KEY",
-            None => "neither credential",
-        };
-        let recommendation = match active_source {
-            Some(OpenAIResolvedAuthSource::ChatGpt) => {
-                "Next step: keep the current priority, run /logout openai to rely on API-key auth only, or set [auth.openai].preferred_method = \"api_key\"."
-            }
-            Some(OpenAIResolvedAuthSource::ApiKey) => {
-                "Next step: keep the current priority, remove OPENAI_API_KEY if ChatGPT should win, or set [auth.openai].preferred_method = \"chatgpt\"."
-            }
-            None => {
-                "Next step: choose a single preferred source or set [auth.openai].preferred_method explicitly."
-            }
-        };
-        (
-            Some(format!(
-                "Both ChatGPT subscription auth and OPENAI_API_KEY are available. VT Code is using {active_label} because auth.openai.preferred_method = {}.",
-                auth_config.preferred_method.as_str()
-            )),
-            Some(recommendation.to_string()),
-        )
-    } else {
-        (None, None)
-    };
-
-    Ok(OpenAICredentialOverview {
-        api_key_available,
-        chatgpt_session,
-        active_source,
-        preferred_method: auth_config.preferred_method,
-        notice,
-        recommendation,
-    })
+    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode)
+        .summarize_credentials(api_key)
 }
 
 pub fn save_openai_chatgpt_session(session: &OpenAIChatGptSession) -> Result<()> {
@@ -1014,6 +996,23 @@ mod tests {
     use super::*;
     use assert_fs::TempDir;
     use serial_test::serial;
+    use std::sync::Arc;
+
+    struct ExternalRefresher;
+
+    #[async_trait]
+    impl OpenAIChatGptSessionRefresher for ExternalRefresher {
+        async fn refresh_session(
+            &self,
+            current: &OpenAIChatGptSession,
+        ) -> Result<OpenAIChatGptSession> {
+            let mut refreshed = current.clone();
+            refreshed.access_token = "oauth-access-refreshed".to_string();
+            refreshed.refreshed_at = current.refreshed_at.saturating_add(1);
+            refreshed.expires_at = Some(now_secs() + 3600);
+            Ok(refreshed)
+        }
+    }
 
     struct TestAuthDirGuard {
         temp_dir: Option<TempDir>,
@@ -1101,6 +1100,90 @@ mod tests {
         assert!(session.is_refresh_due());
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn external_auth_handle_refreshes_without_persisting_session() {
+        let _guard = TestAuthDirGuard::new();
+        let mut session = sample_session();
+        session.openai_api_key.clear();
+        session.expires_at = Some(now_secs().saturating_sub(1));
+        let handle =
+            OpenAIChatGptAuthHandle::new_external(session, true, Arc::new(ExternalRefresher));
+
+        assert!(handle.using_external_tokens());
+        assert!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load session")
+                .is_none()
+        );
+
+        handle.force_refresh().await.expect("force refresh");
+
+        assert_eq!(
+            handle.current_api_key().expect("current api key"),
+            "oauth-access-refreshed"
+        );
+        assert!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load session")
+                .is_none()
+        );
+    }
+
+    struct CountingExternalRefresher {
+        calls: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait]
+    impl OpenAIChatGptSessionRefresher for CountingExternalRefresher {
+        async fn refresh_session(
+            &self,
+            current: &OpenAIChatGptSession,
+        ) -> Result<OpenAIChatGptSession> {
+            let mut calls = self.calls.lock().expect("refresh calls mutex should lock");
+            *calls += 1;
+            drop(calls);
+
+            let mut refreshed = current.clone();
+            refreshed.access_token = "oauth-access-refreshed".to_string();
+            refreshed.refreshed_at = now_secs();
+            refreshed.expires_at = Some(now_secs() + 3600);
+            Ok(refreshed)
+        }
+    }
+
+    #[tokio::test]
+    async fn refresh_if_needed_serializes_external_refreshes() {
+        let mut session = sample_session();
+        session.openai_api_key.clear();
+        session.expires_at = Some(now_secs().saturating_sub(1));
+        let calls = Arc::new(Mutex::new(0usize));
+        let handle = OpenAIChatGptAuthHandle::new_external(
+            session,
+            true,
+            Arc::new(CountingExternalRefresher {
+                calls: Arc::clone(&calls),
+            }),
+        );
+
+        let first = handle.clone();
+        let second = handle.clone();
+        let (first_result, second_result) =
+            tokio::join!(first.refresh_if_needed(), second.refresh_if_needed());
+
+        first_result.expect("first refresh should succeed");
+        second_result.expect("second refresh should succeed");
+        assert_eq!(
+            *calls.lock().expect("refresh calls mutex should lock"),
+            1,
+            "concurrent refresh_if_needed calls should share one refresh"
+        );
+        assert_eq!(
+            handle.current_api_key().expect("current api key"),
+            "oauth-access-refreshed"
+        );
+    }
+
     #[test]
     #[serial]
     fn resolve_openai_auth_prefers_chatgpt_in_auto_mode() {
@@ -1132,6 +1215,21 @@ mod tests {
         )
         .expect("resolved auth");
         assert!(matches!(resolved, OpenAIResolvedAuth::ApiKey { .. }));
+    }
+
+    #[test]
+    #[serial]
+    fn resolve_openai_auth_auto_rejects_blank_api_key_without_session() {
+        let _guard = TestAuthDirGuard::new();
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+            .expect("clear session");
+        let error = resolve_openai_auth(
+            &OpenAIAuthConfig::default(),
+            AuthCredentialsStoreMode::File,
+            Some("   ".to_string()),
+        )
+        .expect_err("blank api key should fail");
+        assert!(error.to_string().contains("OpenAI API key not found"));
     }
 
     #[test]

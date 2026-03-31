@@ -2,14 +2,15 @@ use anyhow::{Result, anyhow};
 use std::future::Future;
 use std::path::PathBuf;
 use vtcode_auth::{
-    AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage, OAuthProvider,
-    OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
-    clear_oauth_token_with_mode, clear_openai_chatgpt_session, exchange_code_for_token,
-    exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
-    get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
-    get_openai_chatgpt_auth_url, load_openai_chatgpt_session_with_mode,
-    parse_openai_chatgpt_manual_callback_input, run_auth_code_callback_server,
+    AuthCallbackOutcome, AuthCodeCallbackServer, AuthCredentialsStoreMode, AuthStatus,
+    OAuthCallbackPage, OAuthProvider, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
+    OpenRouterToken, PkceChallenge, clear_oauth_token_with_mode, clear_openai_chatgpt_session,
+    exchange_code_for_token, exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state,
+    generate_pkce_challenge, get_auth_status_with_mode, get_auth_url,
+    get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url,
+    load_openai_chatgpt_session_with_mode, parse_openai_chatgpt_manual_callback_input,
     save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
+    start_auth_code_callback_server,
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -46,6 +47,16 @@ pub(crate) struct PreparedOpenAiLogin {
     state: String,
 }
 
+pub(crate) struct StartedOpenRouterLogin {
+    prepared: PreparedOpenRouterLogin,
+    callback_server: AuthCodeCallbackServer,
+}
+
+pub(crate) struct StartedOpenAiLogin {
+    prepared: PreparedOpenAiLogin,
+    callback_server: AuthCodeCallbackServer,
+}
+
 pub(crate) fn supports_oauth_provider(provider: &str) -> bool {
     provider.parse::<OAuthProvider>().is_ok()
 }
@@ -76,15 +87,29 @@ pub(crate) fn prepare_openrouter_login(
     })
 }
 
-pub(crate) async fn complete_openrouter_login(prepared: PreparedOpenRouterLogin) -> Result<String> {
-    match run_auth_code_callback_server(
+pub(crate) async fn begin_openrouter_login(
+    prepared: PreparedOpenRouterLogin,
+) -> Result<StartedOpenRouterLogin> {
+    let callback_server = start_auth_code_callback_server(
         prepared.callback_port,
         prepared.timeout_secs,
         OAuthCallbackPage::new(OAuthProvider::OpenRouter),
         None,
     )
-    .await?
-    {
+    .await?;
+    Ok(StartedOpenRouterLogin {
+        prepared,
+        callback_server,
+    })
+}
+
+pub(crate) async fn complete_openrouter_login(started: StartedOpenRouterLogin) -> Result<String> {
+    let StartedOpenRouterLogin {
+        prepared,
+        callback_server,
+    } = started;
+
+    match callback_server.wait().await? {
         AuthCallbackOutcome::Code(code) => {
             let api_key = exchange_code_for_token(&code, &prepared.pkce).await?;
             let token = OpenRouterToken {
@@ -124,33 +149,59 @@ pub(crate) fn prepare_openai_login(vt_cfg: Option<&VTCodeConfig>) -> Result<Prep
 }
 
 pub(crate) async fn complete_openai_login(
-    prepared: PreparedOpenAiLogin,
+    started: StartedOpenAiLogin,
 ) -> Result<OpenAIChatGptSession> {
     complete_openai_login_with_manual_future(
-        prepared,
+        started,
         None::<std::future::Ready<Result<Option<String>>>>,
     )
     .await
 }
 
-pub(crate) async fn complete_openai_login_with_manual_future<ManualFut>(
+pub(crate) async fn begin_openai_login(
     prepared: PreparedOpenAiLogin,
+) -> Result<StartedOpenAiLogin> {
+    let callback_server = start_auth_code_callback_server(
+        prepared.callback_port,
+        prepared.timeout_secs,
+        OAuthCallbackPage::new(OAuthProvider::OpenAi),
+        Some(prepared.state.clone()),
+    )
+    .await?;
+    Ok(StartedOpenAiLogin {
+        prepared,
+        callback_server,
+    })
+}
+
+pub(crate) async fn complete_openai_login_with_manual_future<ManualFut>(
+    started: StartedOpenAiLogin,
     manual_input: Option<ManualFut>,
 ) -> Result<OpenAIChatGptSession>
 where
     ManualFut: Future<Output = Result<Option<String>>>,
 {
-    let code = resolve_openai_authorization_code(
-        run_auth_code_callback_server(
-            prepared.callback_port,
-            prepared.timeout_secs,
-            OAuthCallbackPage::new(OAuthProvider::OpenAi),
-            Some(prepared.state.clone()),
-        ),
-        &prepared.state,
-        manual_input,
-    )
-    .await?;
+    let StartedOpenAiLogin {
+        prepared,
+        callback_server,
+    } = started;
+    let code =
+        resolve_openai_authorization_code(callback_server.wait(), &prepared.state, manual_input)
+            .await?;
+    persist_openai_login_code(prepared, &code).await
+}
+
+pub(crate) async fn complete_openai_login_from_manual_future<ManualFut>(
+    prepared: PreparedOpenAiLogin,
+    manual_input: ManualFut,
+) -> Result<OpenAIChatGptSession>
+where
+    ManualFut: Future<Output = Result<Option<String>>>,
+{
+    let input = manual_input
+        .await?
+        .ok_or_else(|| anyhow!("No redirected URL or query string provided"))?;
+    let code = parse_openai_chatgpt_manual_callback_input(&input, &prepared.state)?;
     persist_openai_login_code(prepared, &code).await
 }
 
@@ -285,9 +336,11 @@ pub(crate) async fn handle_login_command(
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
             let prepared = prepare_openrouter_login(vt_cfg)?;
+            let auth_url = prepared.auth_url.clone();
+            let started = begin_openrouter_login(prepared).await?;
             println!("Starting OpenRouter OAuth authentication...");
-            open_browser_or_print_url(&prepared.auth_url)?;
-            let api_key = complete_openrouter_login(prepared).await?;
+            open_browser_or_print_url(&auth_url)?;
+            let api_key = complete_openrouter_login(started).await?;
             println!("OpenRouter authentication complete.");
             println!(
                 "Stored secure OAuth token. Key preview: {}...",
@@ -297,10 +350,11 @@ pub(crate) async fn handle_login_command(
         }
         Ok(OAuthProvider::OpenAi) => {
             let prepared = prepare_openai_login(vt_cfg)?;
+            let started = begin_openai_login(prepared.clone()).await;
             println!("Starting OpenAI ChatGPT authentication...");
             open_browser_or_print_url(&prepared.auth_url)?;
             print_openai_manual_guidance();
-            let session = complete_openai_login_with_cli_fallback(prepared).await?;
+            let session = complete_openai_login_with_cli_fallback(prepared, started).await?;
             println!("OpenAI ChatGPT authentication complete.");
             if let Some(email) = session.email.as_deref() {
                 println!("Account: {}", email);
@@ -432,21 +486,35 @@ fn print_openai_manual_guidance() {
 
 async fn complete_openai_login_with_cli_fallback(
     prepared: PreparedOpenAiLogin,
+    started: Result<StartedOpenAiLogin>,
 ) -> Result<OpenAIChatGptSession> {
-    match complete_openai_login(prepared.clone()).await {
-        Ok(session) => Ok(session),
+    match started {
+        Ok(started) => match complete_openai_login(started).await {
+            Ok(session) => Ok(session),
+            Err(err) if should_prompt_manual_openai_input(&err) => {
+                let Some(input) = prompt_openai_manual_input_cli_once()? else {
+                    return Err(err);
+                };
+                complete_openai_login_from_manual_future(
+                    prepared,
+                    std::future::ready(Ok(Some(input))),
+                )
+                .await
+            }
+            Err(err) => Err(err),
+        },
         Err(err) if should_prompt_manual_openai_input(&err) => {
             let Some(input) = prompt_openai_manual_input_cli_once()? else {
                 return Err(err);
             };
-            let code = parse_openai_chatgpt_manual_callback_input(&input, &prepared.state)?;
-            persist_openai_login_code(prepared, &code).await
+            complete_openai_login_from_manual_future(prepared, std::future::ready(Ok(Some(input))))
+                .await
         }
         Err(err) => Err(err),
     }
 }
 
-fn should_prompt_manual_openai_input(err: &anyhow::Error) -> bool {
+pub(crate) fn should_prompt_manual_openai_input(err: &anyhow::Error) -> bool {
     let message = err.to_string();
     message.contains("failed to bind localhost callback server") || message.contains("timed out")
 }

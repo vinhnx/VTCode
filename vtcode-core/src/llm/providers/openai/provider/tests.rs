@@ -12,15 +12,38 @@ use crate::tools::handlers::plan_task_tracker::PlanTaskTrackerTool;
 use crate::tools::handlers::task_tracker::TaskTrackerTool;
 use crate::tools::traits::Tool;
 use futures::StreamExt;
+use reqwest::StatusCode;
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::Mutex;
-use vtcode_config::OpenAIAuthConfig;
+use std::sync::{Arc, Mutex};
 use vtcode_config::auth::{
     AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession,
 };
-use wiremock::matchers::{method, path};
+use vtcode_config::{OpenAIAuthConfig, auth::OpenAIChatGptSessionRefresher};
+use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+struct ExternalSessionRefresher {
+    calls: Arc<Mutex<usize>>,
+}
+
+#[async_trait::async_trait]
+impl OpenAIChatGptSessionRefresher for ExternalSessionRefresher {
+    async fn refresh_session(
+        &self,
+        current: &OpenAIChatGptSession,
+    ) -> anyhow::Result<OpenAIChatGptSession> {
+        let mut calls = self.calls.lock().expect("mutex should lock");
+        *calls += 1;
+        drop(calls);
+
+        let mut refreshed = current.clone();
+        refreshed.access_token = "oauth-access-refreshed".to_string();
+        refreshed.refreshed_at = current.refreshed_at.saturating_add(1);
+        refreshed.expires_at = None;
+        Ok(refreshed)
+    }
+}
 
 fn sample_tool() -> provider::ToolDefinition {
     provider::ToolDefinition::function(
@@ -230,6 +253,104 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
             .get("ChatGPT-Account-Id")
             .and_then(|value| value.to_str().ok()),
         Some("acc_123")
+    );
+}
+
+#[tokio::test]
+async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
+    let server = MockServer::start().await;
+    let refresh_calls = Arc::new(Mutex::new(0usize));
+    let seen_bearer_tokens = Arc::new(Mutex::new(Vec::new()));
+    let seen_bearer_tokens_for_response = Arc::clone(&seen_bearer_tokens);
+
+    Mock::given(method("GET"))
+        .and(path("/auth-retry"))
+        .respond_with(move |request: &wiremock::Request| {
+            let bearer_token = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .expect("request should include an authorization header")
+                .to_string();
+            let account_id = request
+                .headers
+                .get("ChatGPT-Account-Id")
+                .and_then(|value| value.to_str().ok())
+                .expect("request should include a ChatGPT account header");
+            assert_eq!(account_id, "acc_123");
+
+            let mut seen_tokens = seen_bearer_tokens_for_response
+                .lock()
+                .expect("tokens mutex should not be poisoned");
+            seen_tokens.push(bearer_token);
+
+            match seen_tokens.len() {
+                1 => ResponseTemplate::new(401),
+                2 => ResponseTemplate::new(200),
+                call_count => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected retry count: {call_count}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let provider = OpenAIProvider::new_with_client(
+        "api-key".to_string(),
+        Some(OpenAIChatGptAuthHandle::new_external(
+            OpenAIChatGptSession {
+                openai_api_key: String::new(),
+                id_token: "id-token".to_string(),
+                access_token: "oauth-access".to_string(),
+                refresh_token: String::new(),
+                account_id: Some("acc_123".to_string()),
+                email: Some("test@example.com".to_string()),
+                plan: Some("plus".to_string()),
+                obtained_at: 1,
+                refreshed_at: u64::MAX / 2,
+                expires_at: None,
+            },
+            true,
+            Arc::new(ExternalSessionRefresher {
+                calls: Arc::clone(&refresh_calls),
+            }),
+        )),
+        models::openai::GPT_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client should build"),
+        chatgpt_mock_base_url(&server),
+        TimeoutsConfig::default(),
+    );
+
+    let response = provider
+        .send_authorized(|auth| {
+            provider.authorize_with_api_key(
+                provider
+                    .http_client
+                    .get(format!("{}{}", server.uri(), "/auth-retry")),
+                auth,
+            )
+        })
+        .await
+        .expect("request should succeed after refresh");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        seen_bearer_tokens
+            .lock()
+            .expect("tokens mutex should not be poisoned")
+            .as_slice(),
+        &[
+            "Bearer oauth-access".to_string(),
+            "Bearer oauth-access-refreshed".to_string(),
+        ]
+    );
+    assert_eq!(
+        *refresh_calls.lock().expect("mutex should lock"),
+        1,
+        "401 should trigger exactly one external token refresh"
     );
 }
 

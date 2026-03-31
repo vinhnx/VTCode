@@ -10,6 +10,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 const DEFAULT_CALLBACK_TIMEOUT_SECS: u64 = 300;
@@ -86,13 +87,64 @@ impl FromStr for OAuthProvider {
 
 #[derive(Debug, Clone, Copy)]
 pub struct OAuthCallbackPage {
-    provider: OAuthProvider,
+    provider_slug: &'static str,
+    success_subtitle: &'static str,
+    failure_subtitle: &'static str,
+    retry_hint: &'static str,
 }
 
 impl OAuthCallbackPage {
     #[must_use]
     pub fn new(provider: OAuthProvider) -> Self {
-        Self { provider }
+        match provider {
+            OAuthProvider::OpenAi => Self {
+                provider_slug: "openai",
+                success_subtitle: "Your ChatGPT subscription is now connected.",
+                failure_subtitle: "Unable to connect your ChatGPT subscription.",
+                retry_hint: "You can try again anytime using /login openai",
+            },
+            OAuthProvider::OpenRouter => Self {
+                provider_slug: "openrouter",
+                success_subtitle: "Your OpenRouter account is now connected.",
+                failure_subtitle: "Unable to connect your OpenRouter account.",
+                retry_hint: "You can try again anytime using /login openrouter",
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn custom(
+        provider_slug: &'static str,
+        success_subtitle: &'static str,
+        failure_subtitle: &'static str,
+        retry_hint: &'static str,
+    ) -> Self {
+        Self {
+            provider_slug,
+            success_subtitle,
+            failure_subtitle,
+            retry_hint,
+        }
+    }
+
+    #[must_use]
+    pub fn provider_slug(&self) -> &'static str {
+        self.provider_slug
+    }
+
+    #[must_use]
+    pub fn success_subtitle(&self) -> &'static str {
+        self.success_subtitle
+    }
+
+    #[must_use]
+    pub fn failure_subtitle(&self) -> &'static str {
+        self.failure_subtitle
+    }
+
+    #[must_use]
+    pub fn retry_hint(&self) -> &'static str {
+        self.retry_hint
     }
 }
 
@@ -101,6 +153,93 @@ pub enum AuthCallbackOutcome {
     Code(String),
     Cancelled,
     Error(String),
+}
+
+pub struct AuthCodeCallbackServer {
+    timeout: Duration,
+    result_rx: mpsc::Receiver<AuthCallbackOutcome>,
+    shutdown_tx: Option<oneshot::Sender<()>>,
+    server_handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl AuthCodeCallbackServer {
+    pub async fn start(
+        port: u16,
+        timeout_secs: u64,
+        page: OAuthCallbackPage,
+        expected_state: Option<String>,
+    ) -> Result<Self> {
+        let (result_tx, result_rx) = mpsc::channel::<AuthCallbackOutcome>(1);
+        let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+        let state = Arc::new(AuthCallbackState {
+            page,
+            expected_state,
+            result_tx,
+        });
+
+        let app = Router::new()
+            .route("/callback", get(handle_callback))
+            .route("/auth/callback", get(handle_callback))
+            .route("/cancel", get(handle_cancel))
+            .route("/health", get(|| async { "OK" }))
+            .with_state(state);
+
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .with_context(|| format!("failed to bind localhost callback server on port {port}"))?;
+
+        let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
+        let server_handle = tokio::spawn(async move {
+            if let Err(err) = server.await {
+                tracing::error!("OAuth callback server error: {}", err);
+            }
+        });
+
+        Ok(Self {
+            timeout: callback_timeout(timeout_secs),
+            result_rx,
+            shutdown_tx: Some(shutdown_tx),
+            server_handle: Some(server_handle),
+        })
+    }
+
+    pub async fn wait(mut self) -> Result<AuthCallbackOutcome> {
+        let result = tokio::select! {
+            Some(result) = self.result_rx.recv() => result,
+            _ = tokio::time::sleep(self.timeout) => {
+                AuthCallbackOutcome::Error(format!(
+                    "OAuth flow timed out after {} seconds",
+                    self.timeout.as_secs()
+                ))
+            }
+        };
+
+        self.shutdown().await;
+        Ok(result)
+    }
+
+    async fn shutdown(&mut self) {
+        if let Some(shutdown_tx) = self.shutdown_tx.take() {
+            let _ = shutdown_tx.send(());
+        }
+        if let Some(server_handle) = self.server_handle.take() {
+            let _ = server_handle.await;
+        }
+    }
+}
+
+impl Drop for AuthCodeCallbackServer {
+    fn drop(&mut self) {
+        if let Some(shutdown_tx) = self.shutdown_tx.take() {
+            let _ = shutdown_tx.send(());
+        }
+        if let Some(server_handle) = self.server_handle.take() {
+            server_handle.abort();
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,56 +256,25 @@ struct AuthCallbackState {
     result_tx: mpsc::Sender<AuthCallbackOutcome>,
 }
 
+pub async fn start_auth_code_callback_server(
+    port: u16,
+    timeout_secs: u64,
+    page: OAuthCallbackPage,
+    expected_state: Option<String>,
+) -> Result<AuthCodeCallbackServer> {
+    AuthCodeCallbackServer::start(port, timeout_secs, page, expected_state).await
+}
+
 pub async fn run_auth_code_callback_server(
     port: u16,
     timeout_secs: u64,
     page: OAuthCallbackPage,
     expected_state: Option<String>,
 ) -> Result<AuthCallbackOutcome> {
-    let timeout = if timeout_secs == 0 {
-        DEFAULT_CALLBACK_TIMEOUT_SECS
-    } else {
-        timeout_secs
-    };
-    let (result_tx, mut result_rx) = mpsc::channel::<AuthCallbackOutcome>(1);
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    let state = Arc::new(AuthCallbackState {
-        page,
-        expected_state,
-        result_tx,
-    });
-
-    let app = Router::new()
-        .route("/callback", get(handle_callback))
-        .route("/auth/callback", get(handle_callback))
-        .route("/cancel", get(handle_cancel))
-        .route("/health", get(|| async { "OK" }))
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = tokio::net::TcpListener::bind(addr)
+    start_auth_code_callback_server(port, timeout_secs, page, expected_state)
+        .await?
+        .wait()
         .await
-        .with_context(|| format!("failed to bind localhost callback server on port {port}"))?;
-
-    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
-        let _ = shutdown_rx.await;
-    });
-    let server_handle = tokio::spawn(async move {
-        if let Err(err) = server.await {
-            tracing::error!("OAuth callback server error: {}", err);
-        }
-    });
-
-    let result = tokio::select! {
-        Some(result) = result_rx.recv() => result,
-        _ = tokio::time::sleep(std::time::Duration::from_secs(timeout)) => {
-            AuthCallbackOutcome::Error(format!("OAuth flow timed out after {timeout} seconds"))
-        }
-    };
-
-    let _ = shutdown_tx.send(());
-    let _ = server_handle.await;
-    Ok(result)
 }
 
 async fn handle_callback(
@@ -174,7 +282,7 @@ async fn handle_callback(
     Query(params): Query<AuthCallbackParams>,
 ) -> Html<String> {
     tracing::info!(
-        provider = %state.page.provider,
+        provider = state.page.provider_slug(),
         has_code = params.code.is_some(),
         has_error = params.error.is_some(),
         "received oauth callback"
@@ -188,7 +296,7 @@ async fn handle_callback(
                     .result_tx
                     .send(AuthCallbackOutcome::Error(message.clone()))
                     .await;
-                return Html(error_html(state.page.provider, &message));
+                return Html(error_html(state.page, &message));
             }
         }
     }
@@ -204,7 +312,7 @@ async fn handle_callback(
             .result_tx
             .send(AuthCallbackOutcome::Error(message.clone()))
             .await;
-        return Html(error_html(state.page.provider, &message));
+        return Html(error_html(state.page, &message));
     }
 
     let Some(code) = params.code else {
@@ -213,22 +321,22 @@ async fn handle_callback(
             .result_tx
             .send(AuthCallbackOutcome::Error(message.clone()))
             .await;
-        return Html(error_html(state.page.provider, &message));
+        return Html(error_html(state.page, &message));
     };
 
     let _ = state.result_tx.send(AuthCallbackOutcome::Code(code)).await;
-    Html(success_html(state.page.provider))
+    Html(success_html(state.page))
 }
 
 async fn handle_cancel(State(state): State<Arc<AuthCallbackState>>) -> Html<String> {
     let _ = state.result_tx.send(AuthCallbackOutcome::Cancelled).await;
-    Html(cancelled_html(state.page.provider))
+    Html(cancelled_html(state.page))
 }
 
-fn success_html(provider: OAuthProvider) -> String {
+fn success_html(page: OAuthCallbackPage) -> String {
     base_html(
         "Authentication Successful",
-        provider.subtitle(),
+        page.success_subtitle(),
         Some("You may now close this window and return to VT Code."),
         "✓",
         "#22c55e",
@@ -236,10 +344,10 @@ fn success_html(provider: OAuthProvider) -> String {
     )
 }
 
-fn error_html(provider: OAuthProvider, error: &str) -> String {
+fn error_html(page: OAuthCallbackPage, error: &str) -> String {
     base_html(
         "Authentication Failed",
-        provider.failure_subtitle(),
+        page.failure_subtitle(),
         None,
         "✕",
         "#ef4444",
@@ -247,10 +355,10 @@ fn error_html(provider: OAuthProvider, error: &str) -> String {
     )
 }
 
-fn cancelled_html(provider: OAuthProvider) -> String {
+fn cancelled_html(page: OAuthCallbackPage) -> String {
     base_html(
         "Authentication Cancelled",
-        &provider.retry_hint(),
+        page.retry_hint(),
         None,
         "—",
         "#71717a",
@@ -414,10 +522,19 @@ fn html_escape(value: &str) -> String {
         .replace('>', "&gt;")
 }
 
+fn callback_timeout(timeout_secs: u64) -> Duration {
+    Duration::from_secs(if timeout_secs == 0 {
+        DEFAULT_CALLBACK_TIMEOUT_SECS
+    } else {
+        timeout_secs
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::extract::{Query, State};
+    use reqwest::Client;
 
     #[test]
     fn oauth_provider_parses_known_providers() {
@@ -431,7 +548,7 @@ mod tests {
 
     #[test]
     fn success_html_mentions_vtcode_and_autoclose() {
-        let html = success_html(OAuthProvider::OpenAi);
+        let html = success_html(OAuthCallbackPage::new(OAuthProvider::OpenAi));
         assert!(html.contains("VT Code"));
         assert!(html.contains("Authentication Successful"));
         assert!(html.contains("window.close"));
@@ -465,5 +582,44 @@ mod tests {
             _ => panic!("expected error outcome"),
         }
         assert!(html.0.contains("Authentication Failed"));
+    }
+
+    #[tokio::test]
+    async fn callback_server_starts_listening_before_wait() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temp port");
+        let port = listener.local_addr().expect("local addr").port();
+        drop(listener);
+
+        let server = start_auth_code_callback_server(
+            port,
+            5,
+            OAuthCallbackPage::new(OAuthProvider::OpenAi),
+            None,
+        )
+        .await
+        .expect("start callback server");
+        let client = Client::builder()
+            .no_proxy()
+            .build()
+            .expect("build http client");
+
+        let health = client
+            .get(format!("http://127.0.0.1:{port}/health"))
+            .send()
+            .await
+            .expect("health request should succeed");
+        assert!(health.status().is_success());
+
+        let cancel = client
+            .get(format!("http://127.0.0.1:{port}/cancel"))
+            .send()
+            .await
+            .expect("cancel request should succeed");
+        assert!(cancel.status().is_success());
+
+        assert!(matches!(
+            server.wait().await.expect("wait for callback outcome"),
+            AuthCallbackOutcome::Cancelled
+        ));
     }
 }

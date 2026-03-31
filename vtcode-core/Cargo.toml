@@ -146,6 +146,7 @@ editor-command = "2.0"
 rustc-hash = { workspace = true }
 arc-swap = "1.7"
 libloading = { workspace = true }
+webbrowser = "1.0"
 
 notify = "6.1.1"
 notify-rust = { version = "4.12", optional = true }

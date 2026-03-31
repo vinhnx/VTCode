@@ -415,6 +415,7 @@ max_concurrent_requests = 1
                 transport: McpTransportConfig::Http(McpHttpServerConfig {
                     endpoint: "https://example.invalid/mcp".to_string(),
                     api_key_env: Some(MISSING_API_KEY_ENV.to_string()),
+                    oauth: None,
                     protocol_version: "2024-11-05".to_string(),
                     http_headers: HashMap::new(),
                     env_http_headers: HashMap::new(),

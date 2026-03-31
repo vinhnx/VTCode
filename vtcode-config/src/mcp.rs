@@ -2,6 +2,7 @@ use hashbrown::HashMap;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use vtcode_auth::McpOAuthConfig;
 
 /// Top-level MCP configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -601,6 +602,7 @@ pub enum McpServerTransport {
 
 /// Transport configuration for MCP providers
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum McpTransportConfig {
@@ -640,6 +642,10 @@ pub struct McpHttpServerConfig {
     #[serde(default)]
     pub api_key_env: Option<String>,
 
+    /// Optional OAuth configuration for providers that issue bearer tokens dynamically.
+    #[serde(default)]
+    pub oauth: Option<McpOAuthConfig>,
+
     /// Protocol version
     #[serde(default = "default_mcp_protocol_version")]
     pub protocol_version: String,
@@ -661,6 +667,7 @@ impl Default for McpHttpServerConfig {
         Self {
             endpoint: String::new(),
             api_key_env: None,
+            oauth: None,
             protocol_version: default_mcp_protocol_version(),
             http_headers: HashMap::new(),
             env_http_headers: HashMap::new(),

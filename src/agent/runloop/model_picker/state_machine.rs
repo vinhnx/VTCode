@@ -441,20 +441,22 @@ impl ModelPickerState {
             && matches!(selection.provider_enum, Some(Provider::OpenAI))
         {
             let prepared = crate::cli::auth::prepare_openai_login(self.vt_cfg.as_ref())?;
-            match request_external_url_open(url_guard, &prepared.auth_url).await? {
+            let auth_url = prepared.auth_url.clone();
+            let started = crate::cli::auth::begin_openai_login(prepared).await?;
+            match request_external_url_open(url_guard, &auth_url).await? {
                 ExternalUrlOpenOutcome::Opened => {
                     renderer.line(
                         MessageStyle::Info,
                         "Opening browser for OpenAI ChatGPT authentication...",
                     )?;
-                    renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
+                    renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
                 }
                 ExternalUrlOpenOutcome::OpenFailed(err) => {
                     renderer.line(
                         MessageStyle::Info,
                         "Opening browser for OpenAI ChatGPT authentication...",
                     )?;
-                    renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
+                    renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
                     renderer.line(
                         MessageStyle::Error,
                         &format!("Failed to open browser automatically: {}", err),
@@ -479,7 +481,7 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
-            crate::cli::auth::complete_openai_login(prepared).await?;
+            crate::cli::auth::complete_openai_login(started).await?;
             if self.inline_enabled {
                 renderer.close_modal();
             }

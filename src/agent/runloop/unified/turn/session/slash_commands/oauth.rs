@@ -23,10 +23,12 @@ use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 use crate::cli::auth::{
-    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login,
-    clear_openrouter_login, complete_openai_login_with_manual_future, complete_openrouter_login,
-    openai_auth_status, openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
-    prepare_openrouter_login, refresh_openai_login, supports_auth_provider,
+    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, begin_openai_login,
+    begin_openrouter_login, clear_openai_login, clear_openrouter_login,
+    complete_openai_login_from_manual_future, complete_openai_login_with_manual_future,
+    complete_openrouter_login, openai_auth_status, openai_manual_placeholder,
+    openrouter_auth_status, prepare_openai_login, prepare_openrouter_login, refresh_openai_login,
+    should_prompt_manual_openai_input, supports_auth_provider,
 };
 
 const OAUTH_PROVIDER_PREFIX: &str = "oauth-provider:";
@@ -113,14 +115,16 @@ pub(crate) async fn handle_oauth_login(
                 "Starting OpenRouter OAuth authentication...",
             )?;
             let prepared = prepare_openrouter_login(vt_cfg)?;
-            if let Some(control) = open_browser_with_guidance(&mut ctx, &prepared.auth_url).await? {
+            let auth_url = prepared.auth_url.clone();
+            let started = begin_openrouter_login(prepared).await?;
+            if let Some(control) = open_browser_with_guidance(&mut ctx, &auth_url).await? {
                 return Ok(control);
             }
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Waiting for OpenRouter OAuth callback...",
             )?;
-            let api_key = complete_openrouter_login(prepared).await?;
+            let api_key = complete_openrouter_login(started).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Successfully authenticated with OpenRouter.",
@@ -140,16 +144,31 @@ pub(crate) async fn handle_oauth_login(
                 "Starting OpenAI ChatGPT authentication...",
             )?;
             let prepared = prepare_openai_login(vt_cfg)?;
-            if let Some(control) = open_browser_with_guidance(&mut ctx, &prepared.auth_url).await? {
+            let auth_url = prepared.auth_url.clone();
+            let callback_port = prepared.callback_port;
+            let started = begin_openai_login(prepared.clone()).await;
+            if let Some(control) = open_browser_with_guidance(&mut ctx, &auth_url).await? {
                 return Ok(control);
             }
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
-            let auth_url = prepared.auth_url.clone();
-            let manual_input =
-                prompt_openai_manual_callback_input(&mut ctx, prepared.callback_port, &auth_url);
-            let login_result =
-                complete_openai_login_with_manual_future(prepared, Some(manual_input)).await;
+            let login_result = match started {
+                Ok(started) => {
+                    let manual_input =
+                        prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
+                    complete_openai_login_with_manual_future(started, Some(manual_input)).await
+                }
+                Err(err) if should_prompt_manual_openai_input(&err) => {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "Local callback listener is unavailable. Waiting for manual redirect input...",
+                    )?;
+                    let manual_input =
+                        prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
+                    complete_openai_login_from_manual_future(prepared, manual_input).await
+                }
+                Err(err) => Err(err),
+            };
             ctx.handle.close_modal();
             ctx.handle.force_redraw();
             let session = login_result?;

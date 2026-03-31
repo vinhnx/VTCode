@@ -127,7 +127,8 @@ pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 
 // Re-export auth module types
 pub use auth::{
-    AuthStatus, CopilotAuthConfig as AuthCopilotConfig, OpenAIChatGptAuthHandle,
+    AuthStatus, CopilotAuthConfig as AuthCopilotConfig, McpOAuthConfig, McpOAuthService,
+    McpOAuthStatus, McpOAuthToken, OpenAIAccountAuthService, OpenAIChatGptAuthHandle,
     OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterOAuthConfig, OpenRouterToken,
     PkceChallenge, clear_oauth_token, clear_openai_chatgpt_session, generate_pkce_challenge,
     get_auth_status, get_auth_url, get_openai_chatgpt_auth_status, get_openai_chatgpt_auth_url,

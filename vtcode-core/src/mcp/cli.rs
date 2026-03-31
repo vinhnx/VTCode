@@ -11,7 +11,15 @@ use clap::{ArgGroup, Args, Subcommand};
 use hashbrown::HashMap;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 use tokio::fs;
+use vtcode_config::auth::{
+    AuthCallbackOutcome, McpOAuthConfig, McpOAuthService, OAuthCallbackPage,
+    start_auth_code_callback_server,
+};
+
+static GLOBAL_CONFIG_PATH_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Subcommands exposed by the `vtcode mcp` entrypoint.
 #[derive(Debug, Clone, Subcommand)]
@@ -28,10 +36,10 @@ pub enum McpCommands {
     /// Remove an MCP provider definition.
     Remove(RemoveArgs),
 
-    /// Placeholder for OAuth login (not yet supported).
+    /// Start OAuth login for an HTTP MCP provider.
     Login(LoginArgs),
 
-    /// Placeholder for OAuth logout (not yet supported).
+    /// Clear stored OAuth credentials for an HTTP MCP provider.
     Logout(LogoutArgs),
 }
 
@@ -253,7 +261,7 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
     }
 
     let mut stdio_rows: Vec<[String; 6]> = Vec::new();
-    let mut http_rows: Vec<[String; 5]> = Vec::new();
+    let mut http_rows: Vec<[String; 6]> = Vec::new();
 
     for provider in &providers {
         match &provider.transport {
@@ -292,13 +300,13 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
                 } else {
                     "disabled"
                 };
-                let api_key_env = http.api_key_env.clone().unwrap_or_else(|| "-".to_owned());
                 let protocol = http.protocol_version.clone();
                 http_rows.push([
                     provider.name.clone(),
                     http.endpoint.clone(),
-                    api_key_env,
+                    http_auth_label(&provider.name, http),
                     protocol,
+                    http_oauth_status_label(&provider.name, http),
                     format!(
                         "{status} (max {max_requests})",
                         max_requests = provider.max_concurrent_requests
@@ -365,14 +373,26 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
         McpTransportConfig::Http(http) => {
             println!("  transport: http");
             println!("  endpoint: {}", http.endpoint);
-            let env = http.api_key_env.as_deref().unwrap_or("-");
-            println!("  api_key_env: {env}");
+            println!("  auth: {}", http_auth_label(&provider.name, http));
+            println!(
+                "  oauth_status: {}",
+                http_oauth_status_label(&provider.name, http)
+            );
             println!("  protocol_version: {}", http.protocol_version);
             if !http.http_headers.is_empty() {
                 println!("  headers: {}", format_env_map(&http.http_headers));
             }
             if !http.env_http_headers.is_empty() {
                 println!("  env_headers: {}", format_env_map(&http.env_http_headers));
+            }
+            if let Some(oauth) = &http.oauth {
+                println!("  oauth.authorization_url: {}", oauth.authorization_url);
+                println!("  oauth.token_url: {}", oauth.token_url);
+                println!("  oauth.client_id: {}", oauth.client_id);
+                if !oauth.scopes.is_empty() {
+                    println!("  oauth.scopes: {}", oauth.scopes.join(", "));
+                }
+                println!("  oauth.callback_port: {}", oauth.callback_port);
             }
         }
     }
@@ -383,15 +403,71 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
 }
 
 async fn run_login(login_args: LoginArgs) -> Result<()> {
-    let _ = login_args;
-    bail!(
-        "MCP OAuth login is not implemented in VT Code yet. Configure HTTP auth with --bearer-token-env-var or provider api_key_env."
+    validate_provider_name(&login_args.name)?;
+
+    let (config, _) = load_global_config()?;
+    let provider = config
+        .mcp
+        .providers
+        .iter()
+        .find(|provider| provider.name == login_args.name)
+        .ok_or_else(|| anyhow!("No MCP provider named '{}' found.", login_args.name))?;
+    let oauth = provider_http_oauth_config(provider)?;
+    let service = McpOAuthService::new();
+    let prepared = service.prepare_login(&provider.name, oauth)?;
+    let callback_server = start_auth_code_callback_server(
+        prepared.callback_port,
+        prepared.timeout_secs,
+        OAuthCallbackPage::custom(
+            "mcp",
+            "The MCP provider is now connected.",
+            "Unable to connect this MCP provider.",
+            "You can try again anytime using `vtcode mcp login <name>`.",
+        ),
+        Some(prepared.expected_state().to_string()),
     )
+    .await?;
+
+    println!("Starting MCP OAuth login for '{}'...", provider.name);
+    open_browser_or_print_url(&prepared.auth_url)?;
+    println!(
+        "Waiting for the OAuth callback on localhost:{}...",
+        prepared.callback_port
+    );
+
+    let completion = match callback_server.wait().await? {
+        AuthCallbackOutcome::Code(code) => {
+            service
+                .complete_login(&provider.name, oauth, &prepared, &code)
+                .await?
+        }
+        AuthCallbackOutcome::Cancelled => {
+            bail!("OAuth flow was cancelled")
+        }
+        AuthCallbackOutcome::Error(error) => {
+            bail!(error)
+        }
+    };
+
+    println!("MCP OAuth login complete for '{}'.", completion.name);
+    Ok(())
 }
 
 async fn run_logout(logout_args: LogoutArgs) -> Result<()> {
-    let _ = logout_args;
-    bail!("MCP OAuth logout is not implemented in VT Code yet.")
+    validate_provider_name(&logout_args.name)?;
+
+    let (config, _) = load_global_config()?;
+    let provider = config
+        .mcp
+        .providers
+        .iter()
+        .find(|provider| provider.name == logout_args.name)
+        .ok_or_else(|| anyhow!("No MCP provider named '{}' found.", logout_args.name))?;
+    let oauth = provider_http_oauth_config(provider)?;
+    let service = McpOAuthService::new();
+    service.logout(&provider.name, oauth.credentials_store_mode)?;
+    println!("Cleared MCP OAuth credentials for '{}'.", provider.name);
+    Ok(())
 }
 
 fn build_stdio_transport(args: AddMcpStdioArgs) -> Result<McpTransportConfig> {
@@ -428,6 +504,7 @@ fn build_http_transport(args: AddMcpStreamableHttpArgs) -> Result<McpTransportCo
     let transport = McpHttpServerConfig {
         endpoint: args.url,
         api_key_env: args.bearer_token_env_var,
+        oauth: None,
         protocol_version: default_config.protocol_version,
         http_headers: headers,
         env_http_headers: env_headers,
@@ -464,6 +541,7 @@ fn json_provider(provider: &McpProviderConfig) -> serde_json::Value {
             "type": "http",
             "endpoint": http.endpoint,
             "api_key_env": http.api_key_env,
+            "oauth": http.oauth,
             "protocol_version": http.protocol_version,
             "headers": http.http_headers,
             "env_headers": http.env_http_headers,
@@ -476,6 +554,56 @@ fn json_provider(provider: &McpProviderConfig) -> serde_json::Value {
         "transport": transport,
         "max_concurrent_requests": provider.max_concurrent_requests,
     })
+}
+
+fn provider_http_oauth_config(provider: &McpProviderConfig) -> Result<&McpOAuthConfig> {
+    match &provider.transport {
+        McpTransportConfig::Http(http) => http.oauth.as_ref().ok_or_else(|| {
+            anyhow!(
+                "MCP provider '{}' does not have HTTP OAuth configured.",
+                provider.name
+            )
+        }),
+        McpTransportConfig::Stdio(_) => Err(anyhow!(
+            "MCP provider '{}' uses stdio transport and does not support HTTP OAuth login.",
+            provider.name
+        )),
+    }
+}
+
+fn http_auth_label(_provider_name: &str, http: &McpHttpServerConfig) -> String {
+    if http.oauth.is_some() {
+        "oauth".to_string()
+    } else {
+        http.api_key_env
+            .clone()
+            .map(|env| format!("env:{env}"))
+            .unwrap_or_else(|| "none".to_string())
+    }
+}
+
+fn http_oauth_status_label(provider_name: &str, http: &McpHttpServerConfig) -> String {
+    let Some(oauth) = http.oauth.as_ref() else {
+        return "-".to_string();
+    };
+
+    match McpOAuthService::new().status(provider_name, oauth.credentials_store_mode) {
+        Ok(vtcode_config::auth::McpOAuthStatus::Authenticated { .. }) => {
+            "authenticated".to_string()
+        }
+        Ok(vtcode_config::auth::McpOAuthStatus::NotAuthenticated) => {
+            "not authenticated".to_string()
+        }
+        Err(error) => format!("error: {error}"),
+    }
+}
+
+fn open_browser_or_print_url(url: &str) -> Result<()> {
+    println!("Open this URL to continue OAuth:\n{url}");
+    if let Err(error) = webbrowser::open(url) {
+        println!("Automatic browser open failed: {error}");
+    }
+    Ok(())
 }
 
 fn format_env_map(map: &HashMap<String, String>) -> String {
@@ -514,8 +642,25 @@ async fn write_global_config(path: &Path, config: &VTCodeConfig) -> Result<()> {
 }
 
 fn global_config_path() -> Result<PathBuf> {
+    if let Some(path) = GLOBAL_CONFIG_PATH_OVERRIDE
+        .lock()
+        .map_err(|_| anyhow!("global config path override mutex poisoned"))?
+        .clone()
+    {
+        return Ok(path);
+    }
+
     let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("failed to determine home directory"))?;
     Ok(home_dir.join(".vtcode").join("vtcode.toml"))
+}
+
+#[doc(hidden)]
+pub fn set_global_config_path_override_for_tests(path: Option<PathBuf>) -> Result<()> {
+    let mut guard = GLOBAL_CONFIG_PATH_OVERRIDE
+        .lock()
+        .map_err(|_| anyhow!("global config path override mutex poisoned"))?;
+    *guard = path;
+    Ok(())
 }
 
 fn parse_env_pair(raw: &str) -> Result<(String, String), String> {
@@ -599,12 +744,13 @@ fn print_stdio_table(rows: &[[String; 6]]) {
     }
 }
 
-fn print_http_table(rows: &[[String; 5]]) {
+fn print_http_table(rows: &[[String; 6]]) {
     let mut widths = [
         "Name".len(),
         "Endpoint".len(),
-        "API Key Env".len(),
+        "Auth".len(),
         "Protocol".len(),
+        "OAuth Status".len(),
         "Status".len(),
     ];
 
@@ -615,39 +761,44 @@ fn print_http_table(rows: &[[String; 5]]) {
     }
 
     println!(
-        "{name:<name_w$}  {endpoint:<endpoint_w$}  {api:<api_w$}  {protocol:<protocol_w$}  {status:<status_w$}",
+        "{name:<name_w$}  {endpoint:<endpoint_w$}  {auth:<auth_w$}  {protocol:<protocol_w$}  {oauth:<oauth_w$}  {status:<status_w$}",
         name = "Name",
         endpoint = "Endpoint",
-        api = "API Key Env",
+        auth = "Auth",
         protocol = "Protocol",
+        oauth = "OAuth Status",
         status = "Status",
         name_w = widths[0],
         endpoint_w = widths[1],
-        api_w = widths[2],
+        auth_w = widths[2],
         protocol_w = widths[3],
-        status_w = widths[4],
+        oauth_w = widths[4],
+        status_w = widths[5],
     );
 
     for row in rows {
         println!(
-            "{name:<name_w$}  {endpoint:<endpoint_w$}  {api:<api_w$}  {protocol:<protocol_w$}  {status:<status_w$}",
+            "{name:<name_w$}  {endpoint:<endpoint_w$}  {auth:<auth_w$}  {protocol:<protocol_w$}  {oauth:<oauth_w$}  {status:<status_w$}",
             name = row[0],
             endpoint = row[1],
-            api = row[2],
+            auth = row[2],
             protocol = row[3],
-            status = row[4],
+            oauth = row[4],
+            status = row[5],
             name_w = widths[0],
             endpoint_w = widths[1],
-            api_w = widths[2],
+            auth_w = widths[2],
             protocol_w = widths[3],
-            status_w = widths[4],
+            oauth_w = widths[4],
+            status_w = widths[5],
         );
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_env_pair, validate_provider_name};
+    use super::{GLOBAL_CONFIG_PATH_OVERRIDE, parse_env_pair, validate_provider_name};
+    use std::path::PathBuf;
 
     #[test]
     fn parse_env_pair_accepts_valid_input() {
@@ -666,5 +817,18 @@ mod tests {
     fn validate_provider_name_rejects_control_chars() {
         let err = validate_provider_name("bad\u{0007}name").expect_err("control chars rejected");
         assert!(err.to_string().contains("U+0007"));
+    }
+
+    #[test]
+    fn global_config_path_uses_test_override() {
+        let override_path = PathBuf::from("/tmp/vtcode-mcp-test.toml");
+        *GLOBAL_CONFIG_PATH_OVERRIDE
+            .lock()
+            .expect("override mutex should be available") = Some(override_path.clone());
+        let resolved = super::global_config_path().expect("global config path");
+        assert_eq!(resolved, override_path);
+        *GLOBAL_CONFIG_PATH_OVERRIDE
+            .lock()
+            .expect("override mutex should be available") = None;
     }
 }

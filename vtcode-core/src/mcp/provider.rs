@@ -16,6 +16,7 @@ use tracing::warn;
 use super::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS};
 
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig, McpTransportConfig};
+use vtcode_config::auth::McpOAuthService;
 
 use super::{McpClient, RmcpClient};
 use super::{
@@ -83,11 +84,25 @@ impl McpProvider {
                     ));
                 }
 
-                let bearer_token = match http.api_key_env.as_ref() {
-                    Some(var) => Some(std::env::var(var).with_context(|| {
-                        format!("Missing MCP API key environment variable: {var}")
-                    })?),
-                    None => None,
+                let bearer_token = if let Some(oauth) = http.oauth.as_ref() {
+                    McpOAuthService::new()
+                        .resolve_access_token(&config.name, oauth)
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "MCP HTTP provider '{}' requires OAuth login. Run `vtcode mcp login {}`.",
+                                config.name,
+                                config.name
+                            )
+                        })
+                        .map(Some)?
+                } else {
+                    match http.api_key_env.as_ref() {
+                        Some(var) => Some(std::env::var(var).with_context(|| {
+                            format!("Missing MCP API key environment variable: {var}")
+                        })?),
+                        None => None,
+                    }
                 };
 
                 let headers = build_headers(&http.http_headers, &http.env_http_headers);

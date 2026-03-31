@@ -6295,6 +6295,7 @@ version = "0.96.0"
 dependencies = [
  "anyhow",
  "assert_fs",
+ "async-trait",
  "axum",
  "base64",
  "dirs",
@@ -6508,6 +6509,7 @@ dependencies = [
  "vtcode-theme",
  "vtcode-tui",
  "walkdir",
+ "webbrowser",
  "which",
  "wiremock",
  "xattr",
