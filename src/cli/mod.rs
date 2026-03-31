@@ -10,6 +10,7 @@ mod anthropic_api;
 pub(crate) mod auth;
 mod auto;
 mod background_subagent;
+mod check;
 mod checkpoints;
 mod config;
 mod create_project;

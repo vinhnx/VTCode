@@ -1,7 +1,49 @@
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+use once_cell::sync::Lazy;
 
 pub const AST_GREP_BIN_ENV: &str = "VTCODE_AST_GREP_BIN";
 pub const AST_GREP_INSTALL_COMMAND: &str = "vtcode dependencies install ast-grep";
+
+static AST_GREP_OVERRIDE: Lazy<Mutex<AstGrepBinaryOverride>> =
+    Lazy::new(|| Mutex::new(AstGrepBinaryOverride::System));
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, Default)]
+enum AstGrepBinaryOverride {
+    #[default]
+    System,
+    Missing,
+    Path(PathBuf),
+}
+
+#[doc(hidden)]
+#[must_use]
+pub struct AstGrepBinaryOverrideGuard {
+    previous: AstGrepBinaryOverride,
+}
+
+impl Drop for AstGrepBinaryOverrideGuard {
+    fn drop(&mut self) {
+        *AST_GREP_OVERRIDE
+            .lock()
+            .expect("ast-grep override mutex must not be poisoned") = self.previous.clone();
+    }
+}
+
+#[doc(hidden)]
+pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepBinaryOverrideGuard {
+    let mut state = AST_GREP_OVERRIDE
+        .lock()
+        .expect("ast-grep override mutex must not be poisoned");
+    let previous = state.clone();
+    *state = match path {
+        Some(path) => AstGrepBinaryOverride::Path(path),
+        None => AstGrepBinaryOverride::Missing,
+    };
+    AstGrepBinaryOverrideGuard { previous }
+}
 
 pub fn managed_ast_grep_bin_dir() -> PathBuf {
     dirs::home_dir()
@@ -26,6 +68,16 @@ pub fn managed_ast_grep_candidates() -> Vec<PathBuf> {
 }
 
 pub fn resolve_ast_grep_binary_from_env_and_fs() -> Option<PathBuf> {
+    match AST_GREP_OVERRIDE
+        .lock()
+        .expect("ast-grep override mutex must not be poisoned")
+        .clone()
+    {
+        AstGrepBinaryOverride::System => {}
+        AstGrepBinaryOverride::Missing => return None,
+        AstGrepBinaryOverride::Path(path) => return Some(path),
+    }
+
     let env_override = std::env::var_os(AST_GREP_BIN_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from);
@@ -95,7 +147,8 @@ fn resolve_ast_grep_binary_with_sources(
 mod tests {
     use super::{
         alias_ast_grep_binary_name, canonical_ast_grep_binary_name,
-        managed_ast_grep_bin_dir_from_home, resolve_ast_grep_binary_with_sources,
+        managed_ast_grep_bin_dir_from_home, resolve_ast_grep_binary_from_env_and_fs,
+        resolve_ast_grep_binary_with_sources, set_ast_grep_binary_override_for_tests,
     };
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
@@ -178,5 +231,26 @@ mod tests {
         );
 
         assert_eq!(resolved, Some(path_fallback));
+    }
+
+    #[test]
+    fn resolution_uses_test_override_when_present() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let override_path = temp_dir.path().join("override-ast-grep");
+        std::fs::write(&override_path, "binary").expect("override binary");
+        let _guard = set_ast_grep_binary_override_for_tests(Some(override_path.clone()));
+
+        let resolved = resolve_ast_grep_binary_from_env_and_fs();
+
+        assert_eq!(resolved, Some(override_path));
+    }
+
+    #[test]
+    fn resolution_can_be_forced_missing_in_tests() {
+        let _guard = set_ast_grep_binary_override_for_tests(None);
+
+        let resolved = resolve_ast_grep_binary_from_env_and_fs();
+
+        assert_eq!(resolved, None);
     }
 }

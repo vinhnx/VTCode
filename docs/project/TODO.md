@@ -534,6 +534,22 @@ https://developers.openai.com/codex/app-server
 
 check and fix codemod follow Alex advices
 
+```
+what do you think about these
+
+1. [if possible] a deterministic step with no FP that transforms simple cases
+2. [if possible] A determinism step with no FN that grabs (dont change) all possible remaining cases, even if some should not change but ai will decide that later in the next step.
+3. An AI step that has the instructions to handle only the tricky cases and instructions not to change things that it shouldn’t.
+   a) Point out any cases that aren’t/can’t be automated
+   b) Point out any edge cases so AI can review them
+   c) Post-codemod review instructions
+```
+
+---
+
+and did you confirm its using our MCP and core codemod skill?
+the codemods are using string modification instead of AST! (not good)
+
 --
 
 bundle `./scripts/check.sh ast-grep` into vtcode binary
@@ -545,3 +561,11 @@ Run tests and scans via `$ ./scripts/check.sh ast-grep`.
 Not installed? `$ vtcode dependencies install ast-grep` gets you set up instantly.`
 
 currently it only on github source only. need to bundle into vtcode binary and make it work on local codebase as well.
+
+---
+
+use codex app server
+
+https://developers.openai.com/codex/app-server
+
+https://deepwiki.com/search/does-vtcode-use-codexs-app-ser_f456c35a-3ba6-4ddb-bd57-ab1144913eb3?mode=fast

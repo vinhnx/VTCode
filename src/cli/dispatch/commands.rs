@@ -9,7 +9,7 @@ use crate::cli::acp::handle_acp_command;
 use crate::cli::adapters::{ask_options, skills_options};
 use crate::cli::anthropic_api::handle_anthropic_api_command;
 use crate::cli::{
-    analyze, benchmark, config, create_project, dependencies, exec, init, init_project, man,
+    analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man,
     revert, review, schedule, schema, skills, snapshots, trajectory, update,
 };
 
@@ -179,6 +179,9 @@ pub(crate) async fn dispatch_command(
         }
         Commands::Dependencies(command) => {
             dependencies::handle_dependencies_command(command).await?;
+        }
+        Commands::Check { command } => {
+            check::handle_check_command(&startup.workspace, command).await?;
         }
         Commands::Skills(skills_cmd) => {
             dispatch_skills_command(startup, skills_cmd).await?;

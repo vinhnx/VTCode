@@ -300,10 +300,22 @@ impl VTCodeConfig {
             defaults_provider,
         )?;
         let rules_readme_path = workspace.join(".vtcode").join("rules").join("README.md");
+        let ast_grep_config_path = workspace.join("sgconfig.yml");
+        let ast_grep_rule_path = workspace
+            .join("rules")
+            .join("examples")
+            .join("no-console-log.yml");
+        let ast_grep_test_path = workspace
+            .join("rule-tests")
+            .join("examples")
+            .join("no-console-log-test.yml");
 
         crate::loader::bootstrap::ensure_parent_dir(&config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&gitignore_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&rules_readme_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&ast_grep_config_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&ast_grep_rule_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&ast_grep_test_path)?;
 
         let mut created_files = Vec::new();
 
@@ -342,6 +354,33 @@ impl VTCodeConfig {
                 )
             })?;
             created_files.push(".vtcode/rules/README.md".to_string());
+        }
+
+        let ast_grep_files = [
+            (
+                &ast_grep_config_path,
+                Self::default_ast_grep_config_template(),
+                "sgconfig.yml",
+            ),
+            (
+                &ast_grep_rule_path,
+                Self::default_ast_grep_example_rule_template(),
+                "rules/examples/no-console-log.yml",
+            ),
+            (
+                &ast_grep_test_path,
+                Self::default_ast_grep_example_test_template(),
+                "rule-tests/examples/no-console-log-test.yml",
+            ),
+        ];
+
+        for (path, contents, label) in ast_grep_files {
+            if !path.exists() || force {
+                fs::write(path, contents).with_context(|| {
+                    format!("Failed to write ast-grep scaffold file: {}", path.display())
+                })?;
+                created_files.push(label.to_string());
+            }
         }
 
         Ok(created_files)
@@ -998,6 +1037,21 @@ target/, build/, dist/, node_modules/, vendor/
     }
 
     #[cfg(feature = "bootstrap")]
+    fn default_ast_grep_config_template() -> &'static str {
+        "ruleDirs:\n  - rules\ntestConfigs:\n  - testDir: rule-tests\n    snapshotDir: __snapshots__\n"
+    }
+
+    #[cfg(feature = "bootstrap")]
+    fn default_ast_grep_example_rule_template() -> &'static str {
+        "id: no-console-log\nlanguage: JavaScript\nseverity: error\nmessage: Avoid `console.log` in checked JavaScript files.\nnote: |\n  This starter rule is scoped to `__ast_grep_examples__/` so fresh repositories can\n  validate the scaffold without scanning unrelated project files.\nrule:\n  pattern: console.log($$$ARGS)\nfiles:\n  - __ast_grep_examples__/**/*.js\n"
+    }
+
+    #[cfg(feature = "bootstrap")]
+    fn default_ast_grep_example_test_template() -> &'static str {
+        "id: no-console-log\nvalid:\n  - |\n    const logger = {\n      info(message) {\n        return message;\n      },\n    };\ninvalid:\n  - |\n    function greet(name) {\n      console.log(name);\n    }\n"
+    }
+
+    #[cfg(feature = "bootstrap")]
     /// Create sample configuration file
     pub fn create_sample_config<P: AsRef<Path>>(output: P) -> Result<()> {
         let output = output.as_ref();
@@ -1030,5 +1084,73 @@ mod tests {
             created
         );
         assert!(workspace.path().join(".vtcode/rules/README.md").exists());
+    }
+
+    #[cfg(feature = "bootstrap")]
+    #[test]
+    fn bootstrap_project_creates_ast_grep_scaffold() {
+        let workspace = tempdir().expect("workspace");
+        let created = VTCodeConfig::bootstrap_project(workspace.path(), false)
+            .expect("bootstrap project should succeed");
+
+        assert!(created.iter().any(|entry| entry == "sgconfig.yml"));
+        assert!(
+            created
+                .iter()
+                .any(|entry| entry == "rules/examples/no-console-log.yml")
+        );
+        assert!(
+            created
+                .iter()
+                .any(|entry| entry == "rule-tests/examples/no-console-log-test.yml")
+        );
+
+        assert!(workspace.path().join("sgconfig.yml").exists());
+        assert!(
+            workspace
+                .path()
+                .join("rules/examples/no-console-log.yml")
+                .exists()
+        );
+        assert!(
+            workspace
+                .path()
+                .join("rule-tests/examples/no-console-log-test.yml")
+                .exists()
+        );
+    }
+
+    #[cfg(feature = "bootstrap")]
+    #[test]
+    fn bootstrap_project_preserves_existing_ast_grep_files_without_force() {
+        let workspace = tempdir().expect("workspace");
+        let sgconfig_path = workspace.path().join("sgconfig.yml");
+        let rule_path = workspace.path().join("rules/examples/no-console-log.yml");
+
+        std::fs::create_dir_all(workspace.path().join("rules/examples")).expect("create rules dir");
+        std::fs::write(&sgconfig_path, "ruleDirs:\n  - custom-rules\n").expect("write sgconfig");
+        std::fs::write(&rule_path, "id: custom-rule\n").expect("write rule");
+
+        let created = VTCodeConfig::bootstrap_project(workspace.path(), false)
+            .expect("bootstrap project should succeed");
+
+        assert!(
+            !created.iter().any(|entry| entry == "sgconfig.yml"),
+            "created files: {created:?}"
+        );
+        assert!(
+            !created
+                .iter()
+                .any(|entry| entry == "rules/examples/no-console-log.yml"),
+            "created files: {created:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&sgconfig_path).expect("read sgconfig"),
+            "ruleDirs:\n  - custom-rules\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&rule_path).expect("read rule"),
+            "id: custom-rule\n"
+        );
     }
 }

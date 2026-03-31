@@ -37,20 +37,30 @@ cargo test --release
 
 ### Structural Rule Checks
 
-VT Code now ships an `ast-grep` project scaffold at `sgconfig.yml`, `rules/`, and `rule-tests/`.
+VT Code bundles a generic `ast-grep` project scaffold and materializes it into the current workspace when you run `vtcode init`.
 
 ```bash
-# Run ast-grep rule tests
+# Install ast-grep if needed
+vtcode dependencies install ast-grep
+
+# Materialize sgconfig.yml, rules/, and rule-tests/ in the current workspace
+vtcode init
+
+# Run the VT Code check entrypoint
+vtcode check ast-grep
+
+# Or run the underlying ast-grep commands directly
 ast-grep test --config sgconfig.yml
 
 # Scan the repository with the configured rules
 ast-grep scan --config sgconfig.yml
 
-# Run the same repo scan through the standard quality script
+# Legacy repo wrapper around `vtcode check ast-grep`
 ./scripts/check.sh ast-grep
 ```
 
 If `ast-grep` is not installed yet, run `vtcode dependencies install ast-grep`.
+If the workspace does not have `sgconfig.yml` yet, run `vtcode init` before invoking the check command.
 If a user asks for ast-grep installation or first-use help, route them to the bundled `ast-grep` skill before falling back to external package-manager instructions.
 
 For ast-grep rule authoring guidance, use the bundled `ast-grep` skill. It now covers the atomic / relational / composite / utility rule cheat sheet, the YAML config cheat sheet, and CLI iteration with `scan --rule` and `scan --inline-rules`.

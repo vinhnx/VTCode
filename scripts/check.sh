@@ -45,6 +45,26 @@ find_ast_grep() {
     return 1
 }
 
+run_vtcode_command() {
+    if command -v vtcode > /dev/null 2>&1; then
+        vtcode "$@"
+        return $?
+    fi
+
+    if [ -x "./target/debug/vtcode" ]; then
+        ./target/debug/vtcode "$@"
+        return $?
+    fi
+
+    if command -v cargo > /dev/null 2>&1 && [ -f "Cargo.toml" ]; then
+        cargo run --quiet --bin vtcode -- "$@"
+        return $?
+    fi
+
+    print_error "VT Code is not available. Install it or build the local binary before running '$0 ast-grep'."
+    return 1
+}
+
 # Function to run rustfmt check
 run_rustfmt() {
     print_status "Running rustfmt check..."
@@ -129,32 +149,21 @@ run_structured_logging_lint() {
 
 run_ast_grep_scan() {
     local require_binary="${1:-optional}"
-    local ast_grep_bin
-
-    ast_grep_bin="$(find_ast_grep)" || {
-        if [ "$require_binary" = "required" ]; then
-            print_error "ast-grep is not available. Install it with 'vtcode dependencies install ast-grep'."
-            return 1
+    if [ "$require_binary" != "required" ]; then
+        if ! find_ast_grep > /dev/null 2>&1; then
+            print_warning "ast-grep is not available. Skipping repository scan. Install it with 'vtcode dependencies install ast-grep'."
+            return 0
         fi
+    fi
 
-        print_warning "ast-grep is not available. Skipping repository scan. Install it with 'vtcode dependencies install ast-grep'."
+    print_status "Running ast-grep rule tests and scan via VT Code..."
+    if run_vtcode_command check ast-grep; then
+        print_success "ast-grep rules passed!"
         return 0
-    }
-
-    print_status "Running ast-grep rule tests..."
-    if ! "$ast_grep_bin" test --config sgconfig.yml; then
-        print_error "ast-grep rule tests failed."
-        return 1
     fi
 
-    print_status "Running ast-grep repository scan..."
-    if ! "$ast_grep_bin" scan --config sgconfig.yml; then
-        print_error "ast-grep scan found issues."
-        return 1
-    fi
-
-    print_success "ast-grep rules passed!"
-    return 0
+    print_error "VT Code ast-grep check failed."
+    return 1
 }
 
 # Run Zen governance checks (unwrap/expect enforced, other checks warning-only)
@@ -264,7 +273,7 @@ case "${1:-}" in
         echo "Commands:"
         echo "  fmt     - Check code formatting with rustfmt"
         echo "  clippy  - Run clippy lints"
-        echo "  ast-grep - Run repo ast-grep rule tests and scan"
+        echo "  ast-grep - Run repo ast-grep rule tests and scan via 'vtcode check ast-grep'"
         echo "  test    - Run tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"

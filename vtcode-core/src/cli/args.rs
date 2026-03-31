@@ -677,6 +677,12 @@ pub enum Commands {
     #[command(name = "dependencies", visible_alias = "deps", subcommand)]
     Dependencies(DependenciesSubcommand),
 
+    /// Run built-in repository checks
+    Check {
+        #[command(subcommand)]
+        command: CheckSubcommand,
+    },
+
     /// Check for and install binary updates from GitHub Releases
     #[command(name = "update")]
     Update {
@@ -968,6 +974,14 @@ pub enum DependenciesSubcommand {
     },
 }
 
+/// Built-in repository checks
+#[derive(Debug, Subcommand, Clone, PartialEq, Eq)]
+pub enum CheckSubcommand {
+    /// Run ast-grep rule tests and scan for the current workspace
+    #[command(name = "ast-grep")]
+    AstGrep,
+}
+
 /// Configuration file structure with latest features
 #[derive(Debug)]
 pub struct ConfigFile {
@@ -1011,7 +1025,8 @@ pub struct LoggingConfig {
 #[cfg(test)]
 mod exec_command_tests {
     use super::{
-        Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency, PodsCommands,
+        CheckSubcommand, Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency,
+        PodsCommands,
     };
     use clap::Parser;
     use std::path::PathBuf;
@@ -1235,6 +1250,16 @@ mod exec_command_tests {
         };
 
         assert_eq!(dependency, ManagedDependency::SearchTools);
+    }
+
+    #[test]
+    fn check_parses_ast_grep_subcommand() {
+        let cli = Cli::parse_from(["vtcode", "check", "ast-grep"]);
+        let Some(Commands::Check { command }) = cli.command else {
+            panic!("expected check command");
+        };
+
+        assert_eq!(command, CheckSubcommand::AstGrep);
     }
 
     #[test]

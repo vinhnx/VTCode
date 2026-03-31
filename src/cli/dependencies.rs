@@ -51,6 +51,14 @@ fn handle_status(dependency: ManagedDependency) -> Result<()> {
     }
 }
 
+fn print_ast_grep_next_steps() {
+    println!(
+        "{} For a local repository, run `vtcode init` to materialize `sgconfig.yml`, `rules/`, and `rule-tests/`.",
+        "→".cyan()
+    );
+    println!("{} Then run `vtcode check ast-grep`.", "→".cyan());
+}
+
 fn install_ripgrep() -> Result<()> {
     match RipgrepStatus::check() {
         RipgrepStatus::Available { version } => {
@@ -109,6 +117,7 @@ async fn install_ast_grep() -> Result<()> {
                     "system PATH or override"
                 }
             );
+            print_ast_grep_next_steps();
         }
         AstGrepStatus::NotFound | AstGrepStatus::Error { .. } => {
             println!(
@@ -145,6 +154,7 @@ async fn install_ast_grep() -> Result<()> {
                 "  export PATH=\"{}:$PATH\"",
                 outcome.managed_bin_dir.display()
             );
+            print_ast_grep_next_steps();
         }
     }
 

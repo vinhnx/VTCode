@@ -99,6 +99,9 @@ impl ManPageGenerator {
             .text([bold("man"), roman(" "), italic("COMMAND")])
             .text([roman("Generate or display man pages for commands")])
             .control("TP", [])
+            .text([bold("check"), roman(" "), italic("SUBCOMMAND")])
+            .text([roman("Run built-in repository checks")])
+            .control("TP", [])
             .text([bold("acp")])
             .text([roman("Start Agent Client Protocol bridge for IDE integrations")])
             .control("TP", [])
@@ -154,6 +157,8 @@ impl ManPageGenerator {
             .text([bold("  vtcode create-project myapp web,auth,db")])
             .text([roman("Generate man page:")])
             .text([bold("  vtcode man chat")])
+            .text([roman("Run ast-grep checks for the current workspace:")])
+            .text([bold("  vtcode check ast-grep")])
             .control("SH", ["ENVIRONMENT"])
             .control("TP", [])
             .text([bold("GEMINI_API_KEY")])
@@ -207,6 +212,7 @@ impl ManPageGenerator {
             "ask" => Self::generate_ask_man_page(),
             "performance" => Self::generate_performance_man_page(),
             "benchmark" => Self::generate_benchmark_man_page(),
+            "check" => Self::generate_check_man_page(),
             "create-project" => Self::generate_create_project_man_page(),
             "init" => Self::generate_init_man_page(),
             "man" => Self::generate_man_man_page(),
@@ -506,6 +512,63 @@ impl ManPageGenerator {
                 bold("vtcode(1)"),
                 roman(", "),
                 bold("vtcode-create-project(1)"),
+            ])
+            .render();
+
+        Ok(page)
+    }
+
+    /// Generate man page for the check command
+    fn generate_check_man_page() -> Result<String> {
+        let current_date = Self::current_date();
+        let page = Roff::new()
+            .control(
+                "TH",
+                [
+                    "VTCODE-CHECK",
+                    "1",
+                    &current_date,
+                    "VT Code",
+                    "User Commands",
+                ],
+            )
+            .control("SH", ["NAME"])
+            .text([roman("vtcode-check - Run built-in repository checks")])
+            .control("SH", ["SYNOPSIS"])
+            .text([
+                bold("vtcode"),
+                roman(" ["),
+                bold("OPTIONS"),
+                roman("] "),
+                bold("check"),
+                roman(" "),
+                bold("ast-grep"),
+            ])
+            .control("SH", ["DESCRIPTION"])
+            .text([
+                roman("Run built-in checks against the current workspace. The "),
+                bold("ast-grep"),
+                roman(" subcommand runs "),
+                bold("ast-grep test --config sgconfig.yml"),
+                roman(" followed by "),
+                bold("ast-grep scan --config sgconfig.yml"),
+                roman("."),
+            ])
+            .control("SH", ["PREREQUISITES"])
+            .text([roman("Install ast-grep with:")])
+            .text([bold("  vtcode dependencies install ast-grep")])
+            .text([roman("Materialize the local scaffold with:")])
+            .text([bold("  vtcode init")])
+            .control("SH", ["EXAMPLES"])
+            .text([roman("Run ast-grep rule tests and scan:")])
+            .text([bold("  vtcode check ast-grep")])
+            .control("SH", ["SEE ALSO"])
+            .text([
+                bold("vtcode(1)"),
+                roman(", "),
+                bold("vtcode-init(1)"),
+                roman(", "),
+                bold("vtcode-man(1)"),
             ])
             .render();
 

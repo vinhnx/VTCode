@@ -244,6 +244,12 @@ vtcode dependencies install ripgrep
 # Install the managed ast-grep binary into ~/.vtcode/bin
 vtcode dependencies install ast-grep
 
+# Materialize the bundled ast-grep scaffold in the current workspace
+vtcode init
+
+# Run ast-grep rule tests and scan for the current workspace
+vtcode check ast-grep
+
 # Check whether VT Code can resolve ast-grep
 vtcode dependencies status ast-grep
 ```
@@ -253,9 +259,33 @@ vtcode dependencies status ast-grep
 - `vtcode deps ...` is a short alias for `vtcode dependencies ...`
 - `vtcode dependencies install search-tools` bundles the recommended `ripgrep` + `ast-grep` setup after any install method
 - `vtcode dependencies install ripgrep` installs `rg` through a supported system installer and keeps startup non-blocking when you skip it
+- `vtcode init` materializes VT Code's bundled ast-grep starter files into the current workspace: `sgconfig.yml`, `rules/`, and `rule-tests/`
+- `vtcode check ast-grep` is the first-class replacement for the repo-only `./scripts/check.sh ast-grep` flow
 - VT Code does not auto-edit your shell profile; add `export PATH="$HOME/.vtcode/bin:$PATH"` yourself if you want the managed binary outside VT Code
 - On Linux, prefer `ast-grep` over `sg`
 - The curl installer includes the search-tools bundle by default; use `--without-search-tools` to skip it
+
+## check
+
+Run built-in repository checks from VT Code.
+
+### Usage
+
+```bash
+# Install ast-grep if needed
+vtcode dependencies install ast-grep
+
+# Materialize the bundled ast-grep scaffold in the current workspace
+vtcode init
+
+# Run ast-grep rule tests and scan
+vtcode check ast-grep
+```
+
+### Notes
+
+- `vtcode check ast-grep` runs `ast-grep test --config sgconfig.yml` and then `ast-grep scan --config sgconfig.yml`
+- The command expects `sgconfig.yml` in the workspace root and points you to `vtcode init` when the scaffold has not been materialized yet
 
 ## pods
 
