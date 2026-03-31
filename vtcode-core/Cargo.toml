@@ -187,7 +187,7 @@ path = "examples/migration_test.rs"
 
 [features]
 default = []
-schema = ["dep:schemars"]
+schema = ["dep:schemars", "vtcode-config/schema"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 anthropic-api = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 desktop-notifications = ["dep:notify-rust"]
