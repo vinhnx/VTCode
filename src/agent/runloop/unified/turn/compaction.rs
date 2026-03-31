@@ -1606,10 +1606,9 @@ mod tests {
         .await
         .expect_err("unsupported provider should fail");
 
-        assert!(
-            err.to_string()
-                .contains("Manual `/compact` is available only for the native OpenAI provider on api.openai.com")
-        );
+        assert!(err.to_string().contains(
+            "Manual `/compact` is available only for the native OpenAI provider on api.openai.com"
+        ));
         assert_eq!(history, original_history);
     }
 
