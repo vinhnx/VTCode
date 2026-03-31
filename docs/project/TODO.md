@@ -129,3 +129,11 @@ https://deepwiki.com/search/does-vtcode-use-codexs-app-ser_f456c35a-3ba6-4ddb-bd
 ---
 
 when doing oauth, can not control+c to abort the oauth flow. need to ctrl+c to regain control of the terminal, but this also kills the process. need a way to abort the oauth flow without killing the process.
+
+---
+
+https://www.mintlify.com/VineeTagarwaL-code/claude-code/concepts/how-it-works
+
+---
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/claude-code-main
