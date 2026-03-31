@@ -15,8 +15,8 @@ pub mod skills;
 pub mod tools;
 
 pub use agent::{
-    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, OpenResponsesConfig,
-    PersistentMemoryConfig,
+    AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
+    OpenResponsesConfig, PersistentMemoryConfig,
 };
 pub use auth::{
     AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod, OpenRouterAuthConfig,

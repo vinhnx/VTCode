@@ -9,11 +9,25 @@ use crate::cli::{analyze, sessions};
 
 pub(crate) async fn handle_ask_single_command(
     core_cfg: CoreAgentConfig,
+    vt_cfg: Option<VTCodeConfig>,
     prompt: Option<String>,
     options: AskCommandOptions,
 ) -> Result<()> {
     let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
-    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
+    if core_cfg
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        crate::codex_app_server::handle_codex_ask_command(
+            core_cfg,
+            prompt_vec,
+            vt_cfg.as_ref(),
+            options,
+        )
+        .await
+    } else {
+        vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
+    }
 }
 
 pub(crate) async fn handle_chat_command(
@@ -38,6 +52,13 @@ pub(super) async fn handle_analyze_command(
     core_cfg: CoreAgentConfig,
     analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
+    if core_cfg
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        anyhow::bail!("provider=codex currently supports interactive chat and ask only");
+    }
+
     vtcode_core::commands::analyze::handle_analyze_command(
         core_cfg,
         analysis_type.default_depth().to_string(),

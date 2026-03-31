@@ -155,6 +155,8 @@ pub struct SessionArchiveMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_cache_lineage_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_mode: Option<SessionForkMode>,
@@ -187,6 +189,7 @@ impl SessionArchiveMetadata {
             debug_log_path: None,
             loaded_skills: Vec::new(),
             prompt_cache_lineage_id: None,
+            external_thread_id: None,
             parent_session_id: None,
             fork_mode: None,
         }
@@ -206,6 +209,11 @@ impl SessionArchiveMetadata {
 
     pub fn with_prompt_cache_lineage_id(mut self, lineage_id: impl Into<String>) -> Self {
         self.prompt_cache_lineage_id = Some(lineage_id.into());
+        self
+    }
+
+    pub fn with_external_thread_id(mut self, thread_id: impl Into<String>) -> Self {
+        self.external_thread_id = Some(thread_id.into());
         self
     }
 
@@ -917,6 +925,7 @@ async fn create_fork_archive(
         debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
         loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
         prompt_cache_lineage_id: source_snapshot.metadata.prompt_cache_lineage_id.clone(),
+        external_thread_id: source_snapshot.metadata.external_thread_id.clone(),
         parent_session_id: None,
         fork_mode: None,
     };
@@ -1634,7 +1643,8 @@ mod tests {
             "provider-y",
             "dark",
             "medium",
-        );
+        )
+        .with_external_thread_id("thread-123");
         let archive = SessionArchive::new(metadata.clone(), None).await?;
         let transcript = vec!["line one".to_owned(), "line two".to_owned()];
         let messages = vec![

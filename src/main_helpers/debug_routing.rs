@@ -31,6 +31,7 @@ fn resolve_mode_hint(
             Some(Commands::Benchmark { .. }) => "benchmark",
             Some(Commands::Analyze { .. }) => "analyze",
             Some(Commands::AgentClientProtocol { .. }) => "acp",
+            Some(Commands::AppServer { .. }) => "app-server",
             Some(_) => "command",
             None => "chat",
         }

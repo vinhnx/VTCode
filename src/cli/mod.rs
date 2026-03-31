@@ -7,6 +7,7 @@ mod acp;
 mod action_resolution;
 mod adapters;
 mod anthropic_api;
+mod app_server;
 pub(crate) mod auth;
 mod auto;
 mod background_subagent;
@@ -66,7 +67,13 @@ pub async fn dispatch(
 
     match resolve_action(args, startup, print_mode, potential_prompt)? {
         ResolvedCliAction::Ask { prompt, options } => {
-            handle_ask_single_command(core_cfg.clone(), prompt, options).await?;
+            handle_ask_single_command(
+                core_cfg.clone(),
+                Some(startup.config.clone()),
+                prompt,
+                options,
+            )
+            .await?;
         }
         ResolvedCliAction::FullAuto { prompt } => {
             auto::handle_auto_task_command(core_cfg, cfg, &prompt).await?;

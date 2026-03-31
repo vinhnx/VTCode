@@ -304,7 +304,7 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
                 http_rows.push([
                     provider.name.clone(),
                     http.endpoint.clone(),
-                    http_auth_label(&provider.name, http),
+                    http_auth_label(http),
                     protocol,
                     http_oauth_status_label(&provider.name, http),
                     format!(
@@ -373,7 +373,7 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
         McpTransportConfig::Http(http) => {
             println!("  transport: http");
             println!("  endpoint: {}", http.endpoint);
-            println!("  auth: {}", http_auth_label(&provider.name, http));
+            println!("  auth: {}", http_auth_label(http));
             println!(
                 "  oauth_status: {}",
                 http_oauth_status_label(&provider.name, http)
@@ -571,7 +571,7 @@ fn provider_http_oauth_config(provider: &McpProviderConfig) -> Result<&McpOAuthC
     }
 }
 
-fn http_auth_label(_provider_name: &str, http: &McpHttpServerConfig) -> String {
+fn http_auth_label(http: &McpHttpServerConfig) -> String {
     if http.oauth.is_some() {
         "oauth".to_string()
     } else {

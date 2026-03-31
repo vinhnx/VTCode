@@ -131,7 +131,14 @@ pub(crate) async fn run_single_agent_loop(
     }
     let vt_cfg = prepare_session_vt_config(initial_vt_cfg, &runtime_cfg, resume.as_ref());
 
-    let runtime = crate::agent::runloop::unified::UnifiedSessionRuntime;
+    let runtime = if runtime_cfg
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        EitherRuntime::Codex(crate::codex_app_server::CodexSessionRuntime)
+    } else {
+        EitherRuntime::Unified(crate::agent::runloop::unified::UnifiedSessionRuntime)
+    };
     let mut steering_receiver = None;
     let params = SessionRuntimeParams::new(
         &runtime_cfg,
@@ -143,6 +150,20 @@ pub(crate) async fn run_single_agent_loop(
         &mut steering_receiver,
     );
     runtime.run_session(params).await
+}
+
+enum EitherRuntime {
+    Unified(crate::agent::runloop::unified::UnifiedSessionRuntime),
+    Codex(crate::codex_app_server::CodexSessionRuntime),
+}
+
+impl EitherRuntime {
+    async fn run_session(self, params: SessionRuntimeParams<'_, ResumeSession>) -> Result<()> {
+        match self {
+            Self::Unified(runtime) => runtime.run_session(params).await,
+            Self::Codex(runtime) => runtime.run_session(params).await,
+        }
+    }
 }
 
 fn prepare_session_vt_config(

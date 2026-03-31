@@ -8,6 +8,7 @@ use super::skills::dispatch_skills_command;
 use crate::cli::acp::handle_acp_command;
 use crate::cli::adapters::{ask_options, skills_options};
 use crate::cli::anthropic_api::handle_anthropic_api_command;
+use crate::cli::app_server::handle_app_server_command;
 use crate::cli::{
     analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man,
     revert, review, schedule, schema, skills, snapshots, trajectory, update,
@@ -36,6 +37,9 @@ pub(crate) async fn dispatch_command(
         Commands::A2a { command } => {
             vtcode_core::cli::a2a::execute_a2a_command(command).await?;
         }
+        Commands::AppServer { listen } => {
+            handle_app_server_command(core_cfg, cfg, &listen).await?;
+        }
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
         }
@@ -58,6 +62,7 @@ pub(crate) async fn dispatch_command(
         } => {
             handle_ask_single_command(
                 core_cfg.clone(),
+                Some(cfg.clone()),
                 prompt,
                 ask_options(args, output_format, skip_confirmations),
             )
@@ -71,6 +76,12 @@ pub(crate) async fn dispatch_command(
             command,
             prompt,
         } => {
+            if core_cfg
+                .provider
+                .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+            {
+                anyhow::bail!("provider=codex currently supports interactive chat and ask only");
+            }
             let command = exec::resolve_exec_command(command, prompt)?;
             let options = exec::ExecCommandOptions {
                 json,
@@ -89,6 +100,12 @@ pub(crate) async fn dispatch_command(
                 .await?;
         }
         Commands::Review(review) => {
+            if core_cfg
+                .provider
+                .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+            {
+                anyhow::bail!("provider=codex currently supports interactive chat and ask only");
+            }
             let files = review
                 .files
                 .iter()

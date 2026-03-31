@@ -435,6 +435,11 @@ include_reasoning = true
 # Type: `boolean`
 map_tool_calls = true
 
+[agent.codex_app_server]
+command = "codex"
+args = ["app-server"]
+startup_timeout_secs = 10
+
 
 # Prompt Suggestions
 # Inline composer suggestions and lightweight model routing.

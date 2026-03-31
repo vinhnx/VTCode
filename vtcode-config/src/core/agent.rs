@@ -188,6 +188,10 @@ pub struct AgentConfig {
     #[serde(default)]
     pub harness: AgentHarnessConfig,
 
+    /// Experimental Codex app-server sidecar configuration.
+    #[serde(default)]
+    pub codex_app_server: AgentCodexAppServerConfig,
+
     /// Include current date/time in system prompt for temporal awareness
     /// Helps LLM understand context for time-sensitive tasks (default: true)
     #[serde(default = "default_include_temporal_context")]
@@ -394,6 +398,30 @@ impl Default for AgentHarnessConfig {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentCodexAppServerConfig {
+    /// Executable used to launch the official Codex app-server sidecar.
+    #[serde(default = "default_codex_app_server_command")]
+    pub command: String,
+    /// Arguments passed before VT Code appends `--listen stdio://`.
+    #[serde(default = "default_codex_app_server_args")]
+    pub args: Vec<String>,
+    /// Maximum startup handshake time when launching the sidecar.
+    #[serde(default = "default_codex_app_server_startup_timeout_secs")]
+    pub startup_timeout_secs: u64,
+}
+
+impl Default for AgentCodexAppServerConfig {
+    fn default() -> Self {
+        Self {
+            command: default_codex_app_server_command(),
+            args: default_codex_app_server_args(),
+            startup_timeout_secs: default_codex_app_server_startup_timeout_secs(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CircuitBreakerConfig {
     /// Enable circuit breaker functionality
     #[serde(default = "default_circuit_breaker_enabled")]
@@ -496,6 +524,21 @@ const fn default_open_responses_include_reasoning() -> bool {
     true // Include reasoning items by default
 }
 
+#[inline]
+fn default_codex_app_server_command() -> String {
+    "codex".to_string()
+}
+
+#[inline]
+fn default_codex_app_server_args() -> Vec<String> {
+    vec!["app-server".to_string()]
+}
+
+#[inline]
+const fn default_codex_app_server_startup_timeout_secs() -> u64 {
+    10
+}
+
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
@@ -534,6 +577,7 @@ impl Default for AgentConfig {
             vibe_coding: AgentVibeCodingConfig::default(),
             max_task_retries: default_max_task_retries(),
             harness: AgentHarnessConfig::default(),
+            codex_app_server: AgentCodexAppServerConfig::default(),
             include_temporal_context: default_include_temporal_context(),
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),

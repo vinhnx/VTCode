@@ -201,6 +201,7 @@ reqwest = { workspace = true }
 semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8" }
+uuid = { workspace = true }
 
 [features]
 default = ["tool-chat", "a2a-server"]

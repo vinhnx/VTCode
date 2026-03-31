@@ -16,6 +16,7 @@ use vtcode_tui::panic_hook;
 
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
+mod codex_app_server;
 mod main_helpers;
 mod startup;
 mod updater;

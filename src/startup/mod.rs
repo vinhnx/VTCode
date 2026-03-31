@@ -232,6 +232,13 @@ async fn resolve_runtime_provider_auth(
     selection: &RuntimeModelSelection,
     first_run_occurred: bool,
 ) -> Result<(String, Option<OpenAIChatGptAuthHandle>)> {
+    if selection
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        return Ok((String::new(), None));
+    }
+
     if selection.provider.eq_ignore_ascii_case("openai") {
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
         let resolved = resolve_openai_auth(
@@ -281,6 +288,13 @@ fn missing_api_key_message(
     first_run_occurred: bool,
 ) -> String {
     let provider_name = provider_label(&selection.provider, Some(config));
+    if selection
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        return "Codex authentication is managed by the official `codex app-server`. Run `vtcode auth codex`, `vtcode login codex`, or install `codex` if it is unavailable.".to_string();
+    }
+
     if selection.provider.eq_ignore_ascii_case("copilot") {
         return "Authentication not found for GitHub Copilot. Run `vtcode login copilot`. Install `copilot` first if needed; `gh` is only an optional fallback."
             .to_string();
@@ -335,6 +349,7 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
             Commands::Login { .. }
                 | Commands::Logout { .. }
                 | Commands::Auth { .. }
+                | Commands::AppServer { .. }
                 | Commands::Schedule { .. }
         )
     )
@@ -343,7 +358,11 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
 fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
     matches!(
         command,
-        None | Some(Commands::AgentClientProtocol { .. } | Commands::Schedule { .. })
+        None | Some(
+            Commands::AgentClientProtocol { .. }
+                | Commands::AppServer { .. }
+                | Commands::Schedule { .. }
+        )
     )
 }
 
@@ -390,6 +409,15 @@ mod validation_tests {
     }
 
     #[test]
+    fn app_server_can_start_without_provider_auth() {
+        assert!(can_start_without_provider_auth(Some(
+            &Commands::AppServer {
+                listen: "stdio://".to_string(),
+            }
+        )));
+    }
+
+    #[test]
     fn missing_api_key_message_uses_custom_provider_label_and_env_key() {
         let mut cfg = VTCodeConfig::default();
         cfg.custom_providers
@@ -412,6 +440,21 @@ mod validation_tests {
         assert!(message.contains("MyCorporateName"));
         assert!(message.contains("MYCORP_API_KEY"));
         assert!(message.contains("[[custom_providers]]"));
+    }
+
+    #[test]
+    fn missing_api_key_message_uses_codex_guidance() {
+        let cfg = VTCodeConfig::default();
+        let selection = RuntimeModelSelection {
+            model: "gpt-5-codex".to_string(),
+            provider: "codex".to_string(),
+            model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
+        };
+
+        let message = missing_api_key_message(&cfg, &selection, true);
+
+        assert!(message.contains("codex app-server"));
+        assert!(message.contains("vtcode auth codex"));
     }
 
     #[test]

@@ -141,6 +141,10 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
 }
 
 fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResult) {
+    if provider.eq_ignore_ascii_case("codex") {
+        return;
+    }
+
     match validate_model_exists(provider, model) {
         Ok(_) => {
             // Also check context window
@@ -162,6 +166,10 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
 }
 
 fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult) {
+    if config.agent.provider.eq_ignore_ascii_case("codex") {
+        return;
+    }
+
     let context_window = config.context.max_context_tokens;
     if context_window > 0
         && let Ok(Some(model_context)) =
@@ -256,6 +264,18 @@ mod tests {
     fn accepts_live_copilot_model_id() {
         let result = validate_model_exists("copilot", "gpt-5.3-codex");
         assert!(result.is_ok(), "Should accept live Copilot model ids");
+    }
+
+    #[test]
+    fn validate_config_skips_codex_model_catalog_checks() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "codex".to_string();
+        config.agent.default_model = "upstream-managed-model".to_string();
+
+        let result =
+            validate_config(&config, Path::new(".")).expect("config validation should run");
+
+        assert!(result.errors.is_empty());
     }
 
     #[test]

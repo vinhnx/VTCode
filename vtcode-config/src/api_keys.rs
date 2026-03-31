@@ -86,6 +86,10 @@ pub fn api_key_env_var(provider: &str) -> String {
         return defaults::DEFAULT_API_KEY_ENV.to_owned();
     }
 
+    if trimmed.eq_ignore_ascii_case("codex") {
+        return String::new();
+    }
+
     if let Ok(resolved) = Provider::from_str(trimmed)
         && resolved.uses_managed_auth()
     {
@@ -217,6 +221,9 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         )),
         "deepseek" => get_deepseek_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
+        "codex" => Err(anyhow::anyhow!(
+            "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`."
+        )),
         "zai" => get_zai_api_key(sources),
         "ollama" => get_ollama_api_key(sources),
         "lmstudio" => get_lmstudio_api_key(sources),
@@ -638,6 +645,7 @@ mod tests {
 
     #[test]
     fn api_key_env_var_uses_provider_defaults() {
+        assert_eq!(api_key_env_var("codex"), "");
         assert_eq!(api_key_env_var("minimax"), "MINIMAX_API_KEY");
         assert_eq!(api_key_env_var("huggingface"), "HF_TOKEN");
     }

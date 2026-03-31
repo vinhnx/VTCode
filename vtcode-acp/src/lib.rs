@@ -35,7 +35,7 @@ pub use session::{
     SessionNewParams, SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState,
     SessionUpdate, SessionUpdateNotification, ToolCallRecord, TurnStatus,
 };
-pub use transport::StdioTransport;
+pub use transport::{StdioTransport, StdioTransportOptions};
 pub use zed::{StandardAcpAdapter, ZedAcpAdapter};
 
 #[deprecated(since = "0.60.0", note = "Use AcpClientV2 for ACP protocol compliance")]

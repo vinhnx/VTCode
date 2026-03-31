@@ -126,9 +126,11 @@ impl ConfigValidator {
         let managed_auth_provider = configured_managed_auth_provider(config);
         let custom_provider = config.custom_provider(&config.agent.provider);
         let is_custom_provider = custom_provider.is_some();
+        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case("codex");
 
         // Check if configured model exists
         if !is_custom_provider
+            && !is_codex_provider
             && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
             && !self
                 .models_db
@@ -142,6 +144,7 @@ impl ConfigValidator {
 
         // Check if API key is available
         if !is_custom_provider
+            && !is_codex_provider
             && managed_auth_provider.is_none()
             && let Err(e) = get_api_key(&config.agent.provider, &ApiKeySources::default())
         {
@@ -194,9 +197,11 @@ impl ConfigValidator {
     pub fn quick_validate(&self, config: &VTCodeConfig) -> Result<()> {
         let managed_auth_provider = configured_managed_auth_provider(config);
         let is_custom_provider = config.custom_provider(&config.agent.provider).is_some();
+        let is_codex_provider = config.agent.provider.eq_ignore_ascii_case("codex");
 
         // Check model exists
         if !is_custom_provider
+            && !is_codex_provider
             && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
             && !self
                 .models_db
@@ -210,7 +215,7 @@ impl ConfigValidator {
         }
 
         // Check API key
-        if !is_custom_provider && managed_auth_provider.is_none() {
+        if !is_custom_provider && !is_codex_provider && managed_auth_provider.is_none() {
             get_api_key(&config.agent.provider, &ApiKeySources::default()).with_context(|| {
                 format!(
                     "API key not found for provider '{}'. Set {} environment variable.",
@@ -410,6 +415,19 @@ mod tests {
                 api_key_env: "MYCORP_API_KEY".to_string(),
                 model: "totally-custom-model".to_string(),
             });
+
+        let result = validator.validate(&config).unwrap();
+
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn codex_provider_skips_builtin_model_and_api_key_checks() {
+        let dir = create_test_models_db();
+        let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "codex".to_owned();
+        config.agent.default_model = "managed-by-codex".to_owned();
 
         let result = validator.validate(&config).unwrap();
 

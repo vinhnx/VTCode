@@ -37,6 +37,19 @@ use crate::error::{AcpError, AcpResult};
 /// `Ok(())` on success; errors are logged as warnings by the transport.
 type NotificationHandler = Arc<dyn Fn(Value) -> anyhow::Result<()> + Send + Sync>;
 
+#[derive(Debug, Clone, Copy)]
+pub struct StdioTransportOptions {
+    pub include_jsonrpc_version: bool,
+}
+
+impl Default for StdioTransportOptions {
+    fn default() -> Self {
+        Self {
+            include_jsonrpc_version: true,
+        }
+    }
+}
+
 /// Generic JSON-RPC-over-stdio transport for local subprocess agents.
 ///
 /// Wraps a child process and provides:
@@ -50,11 +63,12 @@ type NotificationHandler = Arc<dyn Fn(Value) -> anyhow::Result<()> + Send + Sync
 /// The child process is killed when this struct is dropped.
 pub struct StdioTransport {
     write_tx: mpsc::UnboundedSender<String>,
-    pending: Arc<StdMutex<HashMap<i64, oneshot::Sender<AcpResult<Value>>>>>,
+    pending: Arc<StdMutex<HashMap<String, oneshot::Sender<AcpResult<Value>>>>>,
     request_counter: AtomicI64,
     notification_handler: Arc<StdMutex<Option<NotificationHandler>>>,
     child: StdMutex<Option<Child>>,
     rpc_timeout: Duration,
+    options: StdioTransportOptions,
 }
 
 impl StdioTransport {
@@ -68,6 +82,24 @@ impl StdioTransport {
         stdout: ChildStdout,
         stderr: ChildStderr,
         rpc_timeout: Duration,
+    ) -> Self {
+        Self::from_child_with_options(
+            child,
+            stdin,
+            stdout,
+            stderr,
+            rpc_timeout,
+            StdioTransportOptions::default(),
+        )
+    }
+
+    pub fn from_child_with_options(
+        child: Child,
+        stdin: ChildStdin,
+        stdout: ChildStdout,
+        stderr: ChildStderr,
+        rpc_timeout: Duration,
+        options: StdioTransportOptions,
     ) -> Self {
         let (write_tx, write_rx) = mpsc::unbounded_channel();
         let pending = Arc::new(StdMutex::new(HashMap::new()));
@@ -88,6 +120,7 @@ impl StdioTransport {
             notification_handler,
             child: StdMutex::new(Some(child)),
             rpc_timeout,
+            options,
         }
     }
 
@@ -97,6 +130,15 @@ impl StdioTransport {
     /// can drive the mock by reading from the paired receiver.
     #[cfg(test)]
     pub fn new_for_testing(write_tx: mpsc::UnboundedSender<String>, rpc_timeout: Duration) -> Self {
+        Self::new_for_testing_with_options(write_tx, rpc_timeout, StdioTransportOptions::default())
+    }
+
+    #[cfg(test)]
+    pub fn new_for_testing_with_options(
+        write_tx: mpsc::UnboundedSender<String>,
+        rpc_timeout: Duration,
+        options: StdioTransportOptions,
+    ) -> Self {
         Self {
             write_tx,
             pending: Arc::new(StdMutex::new(HashMap::new())),
@@ -104,6 +146,7 @@ impl StdioTransport {
             notification_handler: Arc::new(StdMutex::new(None)),
             child: StdMutex::new(None),
             rpc_timeout,
+            options,
         }
     }
 
@@ -129,21 +172,24 @@ impl StdioTransport {
     /// [`AcpError::Internal`] if the transport is shut down.
     pub async fn call(&self, method: &str, params: Value) -> AcpResult<Value> {
         let id = self.request_counter.fetch_add(1, Ordering::SeqCst);
+        let id_value = Value::from(id);
+        let pending_key = response_id_key(&id_value);
         let (tx, rx) = oneshot::channel();
         self.pending
             .lock()
             .map_err(|_| AcpError::Internal("stdio transport pending mutex poisoned".into()))?
-            .insert(id, tx);
+            .insert(pending_key.clone(), tx);
 
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": method,
             "params": params,
         });
+        maybe_strip_jsonrpc_field(&mut payload, self.options);
         if let Err(e) = self.send_raw(payload) {
             // Clean up the pending entry so it doesn't linger until timeout.
-            self.pending.lock().ok().map(|mut g| g.remove(&id));
+            self.pending.lock().ok().map(|mut g| g.remove(&pending_key));
             return Err(e);
         }
 
@@ -160,11 +206,12 @@ impl StdioTransport {
     ///
     /// Returns an error if serialisation fails or the writer task has shut down.
     pub fn notify(&self, method: &str, params: Value) -> AcpResult<()> {
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "jsonrpc": "2.0",
             "method": method,
             "params": params,
         });
+        maybe_strip_jsonrpc_field(&mut payload, self.options);
         self.send_raw(payload)
     }
 
@@ -177,11 +224,16 @@ impl StdioTransport {
     ///
     /// Returns an error if serialisation fails or the writer task has shut down.
     pub fn respond(&self, id: i64, result: Value) -> AcpResult<()> {
-        let payload = serde_json::json!({
+        self.respond_value(Value::from(id), result)
+    }
+
+    pub fn respond_value(&self, id: Value, result: Value) -> AcpResult<()> {
+        let mut payload = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
             "result": result,
         });
+        maybe_strip_jsonrpc_field(&mut payload, self.options);
         self.send_raw(payload)
     }
 
@@ -191,7 +243,16 @@ impl StdioTransport {
     ///
     /// Returns an error if serialisation fails or the writer task has shut down.
     pub fn respond_error(&self, id: i64, code: i32, message: impl Into<String>) -> AcpResult<()> {
-        let payload = serde_json::json!({
+        self.respond_error_value(Value::from(id), code, message)
+    }
+
+    pub fn respond_error_value(
+        &self,
+        id: Value,
+        code: i32,
+        message: impl Into<String>,
+    ) -> AcpResult<()> {
+        let mut payload = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
             "error": {
@@ -199,6 +260,7 @@ impl StdioTransport {
                 "message": message.into(),
             },
         });
+        maybe_strip_jsonrpc_field(&mut payload, self.options);
         self.send_raw(payload)
     }
 
@@ -271,7 +333,7 @@ fn spawn_stderr_logger(stderr: ChildStderr) {
 
 fn spawn_reader(
     stdout: ChildStdout,
-    pending: Arc<StdMutex<HashMap<i64, oneshot::Sender<AcpResult<Value>>>>>,
+    pending: Arc<StdMutex<HashMap<String, oneshot::Sender<AcpResult<Value>>>>>,
     notification_handler: Arc<StdMutex<Option<NotificationHandler>>>,
 ) {
     tokio::spawn(async move {
@@ -292,7 +354,10 @@ fn spawn_reader(
             // Extract tx before releasing the lock so `tx.send` runs lock-free.
             if let Some(id) = response_id(&message) {
                 let result = extract_rpc_result(&message);
-                let tx = pending.lock().ok().and_then(|mut g| g.remove(&id));
+                let tx = pending
+                    .lock()
+                    .ok()
+                    .and_then(|mut g| g.remove(&response_id_key(&id)));
                 if let Some(tx) = tx {
                     let _ = tx.send(result);
                 }
@@ -318,11 +383,25 @@ fn spawn_reader(
 // ============================================================================
 
 /// Returns the `id` if the message is a JSON-RPC *response* (has `result` or `error`).
-fn response_id(message: &Value) -> Option<i64> {
+fn response_id(message: &Value) -> Option<Value> {
     if message.get("result").is_some() || message.get("error").is_some() {
-        message.get("id").and_then(Value::as_i64)
+        message.get("id").cloned()
     } else {
         None
+    }
+}
+
+fn response_id_key(id: &Value) -> String {
+    serde_json::to_string(id).unwrap_or_else(|_| "null".to_string())
+}
+
+fn maybe_strip_jsonrpc_field(payload: &mut Value, options: StdioTransportOptions) {
+    if options.include_jsonrpc_version {
+        return;
+    }
+
+    if let Some(object) = payload.as_object_mut() {
+        object.remove("jsonrpc");
     }
 }
 
@@ -380,7 +459,7 @@ mod tests {
                 "id": 3,
                 "result": { "ok": true }
             })),
-            Some(3)
+            Some(Value::from(3))
         );
 
         // Error response
@@ -390,7 +469,7 @@ mod tests {
                 "id": 5,
                 "error": { "code": -32601, "message": "method not found" }
             })),
-            Some(5)
+            Some(Value::from(5))
         );
     }
 
@@ -466,5 +545,44 @@ mod tests {
         assert_eq!(payload["id"], 9);
         assert_eq!(payload["error"]["code"], -32601);
         assert_eq!(payload["error"]["message"], "method not found");
+    }
+
+    #[test]
+    fn respond_value_supports_string_ids() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
+
+        transport
+            .respond_value(
+                Value::String("request-1".to_string()),
+                serde_json::json!({ "ok": true }),
+            )
+            .unwrap();
+
+        let raw = rx.try_recv().unwrap();
+        let payload: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(payload["id"], "request-1");
+        assert_eq!(payload["result"]["ok"], true);
+    }
+
+    #[test]
+    fn can_omit_jsonrpc_field_for_codex_mode() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let transport = StdioTransport::new_for_testing_with_options(
+            tx,
+            Duration::from_secs(5),
+            StdioTransportOptions {
+                include_jsonrpc_version: false,
+            },
+        );
+
+        transport
+            .notify("initialized", serde_json::json!({}))
+            .unwrap();
+
+        let raw = rx.try_recv().unwrap();
+        let payload: Value = serde_json::from_str(&raw).unwrap();
+        assert!(payload.get("jsonrpc").is_none());
+        assert_eq!(payload["method"], "initialized");
     }
 }

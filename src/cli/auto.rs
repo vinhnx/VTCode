@@ -21,6 +21,13 @@ pub async fn handle_auto_task_command(
     vt_cfg: &VTCodeConfig,
     prompt: &str,
 ) -> Result<()> {
+    if config
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        bail!("provider=codex currently supports interactive chat and ask only");
+    }
+
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
         bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");

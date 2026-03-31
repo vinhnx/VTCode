@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use std::future::Future;
 use std::path::PathBuf;
 use vtcode_auth::{
@@ -20,6 +20,11 @@ use vtcode_core::copilot::{
 };
 
 use crate::agent::runloop::unified::url_guard::{UrlGuardPrompt, open_external_url};
+use crate::codex_app_server::{
+    CODEX_PROVIDER, CodexAccount, CodexAccountLoginCompleted, CodexAccountReadResponse,
+    CodexAppServerClient, CodexLoginAccountResponse, CodexMcpServerStatus, ServerEvent,
+    is_codex_cli_unavailable,
+};
 
 pub(crate) const OPENAI_PROVIDER: &str = "openai";
 pub(crate) const OPENROUTER_PROVIDER: &str = "openrouter";
@@ -62,7 +67,9 @@ pub(crate) fn supports_oauth_provider(provider: &str) -> bool {
 }
 
 pub(crate) fn supports_auth_provider(provider: &str) -> bool {
-    provider.eq_ignore_ascii_case(COPILOT_PROVIDER) || supports_oauth_provider(provider)
+    provider.eq_ignore_ascii_case(COPILOT_PROVIDER)
+        || provider.eq_ignore_ascii_case(CODEX_PROVIDER)
+        || supports_oauth_provider(provider)
 }
 
 pub(crate) fn prepare_openrouter_login(
@@ -322,6 +329,49 @@ pub(crate) async fn handle_login_command(
     provider: &str,
 ) -> Result<()> {
     let provider = provider.trim().to_ascii_lowercase();
+    if provider == CODEX_PROVIDER {
+        let client = CodexAppServerClient::connect(vt_cfg).await?;
+        let status = client.account_read().await?;
+        if status.account.is_some() {
+            print_existing_codex_auth_summary(&status);
+            return Ok(());
+        }
+        if !status.requires_openai_auth {
+            println!("Codex does not currently require OpenAI authentication for this setup.");
+            return Ok(());
+        }
+
+        let response = client.account_login_chatgpt().await?;
+        let (auth_url, login_id) = match response {
+            CodexLoginAccountResponse::ChatGpt { auth_url, login_id } => (auth_url, login_id),
+            CodexLoginAccountResponse::ApiKey => {
+                println!("Codex is configured with API key authentication.");
+                return Ok(());
+            }
+            CodexLoginAccountResponse::ChatGptAuthTokens => {
+                return Err(anyhow!(
+                    "Codex requested externally managed ChatGPT tokens; `vtcode login codex` supports only browser-based ChatGPT login"
+                ));
+            }
+        };
+
+        println!("Starting Codex ChatGPT authentication...");
+        open_browser_or_print_url(&auth_url)?;
+        let mut events = client.subscribe();
+        let completion =
+            wait_for_codex_account_login_completion(&mut events, Some(&login_id)).await?;
+        if !completion.success {
+            return Err(anyhow!(
+                completion
+                    .error
+                    .unwrap_or_else(|| "Codex ChatGPT login failed".to_string())
+            ));
+        }
+        let updated = client.account_read().await?;
+        print_codex_login_summary(&updated);
+        return Ok(());
+    }
+
     if provider == COPILOT_PROVIDER {
         let workspace = current_auth_workspace();
         let auth_cfg = vt_cfg
@@ -365,7 +415,7 @@ pub(crate) async fn handle_login_command(
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
+            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
             provider
         )),
     }
@@ -376,6 +426,18 @@ pub(crate) async fn handle_logout_command(
     provider: &str,
 ) -> Result<()> {
     let provider = provider.trim().to_ascii_lowercase();
+    if provider == CODEX_PROVIDER {
+        let client = CodexAppServerClient::connect(vt_cfg).await?;
+        let status = client.account_read().await?;
+        if status.account.is_none() {
+            println!("Codex account credentials already cleared.");
+            return Ok(());
+        }
+        client.account_logout().await?;
+        println!("Codex account credentials cleared.");
+        return Ok(());
+    }
+
     if provider == COPILOT_PROVIDER {
         let workspace = current_auth_workspace();
         let auth_cfg = vt_cfg
@@ -412,7 +474,7 @@ pub(crate) async fn handle_logout_command(
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
+            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
             provider
         )),
     }
@@ -426,6 +488,13 @@ pub(crate) async fn handle_show_auth_command(
     println!();
 
     match provider.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if value.eq_ignore_ascii_case(CODEX_PROVIDER) => {
+            let client = CodexAppServerClient::connect(vt_cfg).await?;
+            render_codex_auth_status(
+                client.account_read().await?,
+                Some(client.mcp_server_status_list().await?.data.as_slice()),
+            );
+        }
         Some(value) if value.eq_ignore_ascii_case(COPILOT_PROVIDER) => {
             let workspace = current_auth_workspace();
             let auth_cfg = vt_cfg
@@ -440,12 +509,26 @@ pub(crate) async fn handle_show_auth_command(
             Ok(OAuthProvider::OpenAi) => render_openai_auth_status(openai_auth_status(vt_cfg)?),
             Err(()) => {
                 return Err(anyhow!(
-                    "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
+                    "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot, codex",
                     value
                 ));
             }
         },
         None => {
+            match CodexAppServerClient::connect(vt_cfg).await {
+                Ok(client) => {
+                    let mcp_statuses = client.mcp_server_status_list().await?;
+                    render_codex_auth_status(
+                        client.account_read().await?,
+                        Some(mcp_statuses.data.as_slice()),
+                    );
+                }
+                Err(err) if is_codex_cli_unavailable(&err) => {
+                    render_codex_unavailable_status();
+                }
+                Err(err) => return Err(err),
+            }
+            println!();
             render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?);
             println!();
             render_openai_auth_status(openai_auth_status(vt_cfg)?);
@@ -535,7 +618,7 @@ fn prompt_openai_manual_input_cli_once() -> Result<Option<String>> {
     })
 }
 
-fn open_browser_or_print_url(url: &str) -> Result<()> {
+pub(crate) fn open_browser_or_print_url(url: &str) -> Result<()> {
     println!("Open this URL to continue:");
     println!(
         "{}{}{}",
@@ -556,6 +639,91 @@ fn open_browser_or_print_url(url: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn wait_for_codex_account_login_completion(
+    events: &mut tokio::sync::broadcast::Receiver<ServerEvent>,
+    login_id: Option<&str>,
+) -> Result<CodexAccountLoginCompleted> {
+    loop {
+        let event = match events.recv().await {
+            Ok(event) => event,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                return Err(anyhow!(
+                    "lost connection while waiting for Codex login completion"
+                ));
+            }
+        };
+
+        if event.method != "account/login/completed" {
+            continue;
+        }
+
+        let completion: CodexAccountLoginCompleted =
+            serde_json::from_value(event.params).context("invalid Codex login completion event")?;
+        if login_id.is_none() || completion.login_id.as_deref() == login_id {
+            return Ok(completion);
+        }
+    }
+}
+
+fn render_codex_auth_status(
+    status: CodexAccountReadResponse,
+    mcp_statuses: Option<&[CodexMcpServerStatus]>,
+) {
+    println!("Codex");
+    match status.account {
+        Some(CodexAccount::ApiKey) => {
+            println!("  Auth: API key");
+        }
+        Some(CodexAccount::ChatGpt { email, plan_type }) => {
+            println!("  Auth: ChatGPT");
+            println!("  Account: {email}");
+            println!("  Plan: {plan_type}");
+        }
+        None if status.requires_openai_auth => {
+            println!("  Auth: not authenticated");
+        }
+        None => {
+            println!("  Auth: not required");
+        }
+    }
+
+    if let Some(mcp_statuses) = mcp_statuses
+        && !mcp_statuses.is_empty()
+    {
+        println!("  MCP:");
+        for server in mcp_statuses {
+            println!("    {}: {}", server.name, server.auth_status);
+        }
+    }
+}
+
+fn render_codex_unavailable_status() {
+    println!("Codex");
+    println!("  Auth: CLI unavailable");
+    println!("  Help: install `codex` or configure `[agent.codex_app_server].command`.");
+}
+
+fn print_codex_login_summary(status: &CodexAccountReadResponse) {
+    println!("Codex authentication complete.");
+    if let Some(CodexAccount::ChatGpt { email, plan_type }) = &status.account {
+        println!("Account: {email}");
+        println!("Plan: {plan_type}");
+    }
+}
+
+fn print_existing_codex_auth_summary(status: &CodexAccountReadResponse) {
+    match &status.account {
+        Some(CodexAccount::ApiKey) => println!("Codex is already authenticated with an API key."),
+        Some(CodexAccount::ChatGpt { email, plan_type }) => {
+            println!("Codex is already authenticated.");
+            println!("Account: {email}");
+            println!("Plan: {plan_type}");
+        }
+        None => {}
+    }
 }
 
 fn confirm_cli_browser_open(url: &str) -> Result<bool> {

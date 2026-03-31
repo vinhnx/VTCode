@@ -60,7 +60,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub model: Option<String>,
 
-    /// LLM Provider (gemini, openai, anthropic, deepseek, openrouter, zai, moonshot, minimax, ollama, lmstudio)
+    /// LLM Provider (gemini, openai, anthropic, deepseek, openrouter, codex, zai, moonshot, minimax, ollama, lmstudio)
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
@@ -606,19 +606,19 @@ pub enum Commands {
 
     /// Authenticate with a supported provider
     Login {
-        /// Provider name (`openai`, `openrouter`, or `copilot`)
+        /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
         provider: String,
     },
 
     /// Clear stored authentication credentials for a provider
     Logout {
-        /// Provider name (`openai`, `openrouter`, or `copilot`)
+        /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
         provider: String,
     },
 
     /// Show authentication status for one provider or all supported providers
     Auth {
-        /// Optional provider name (`openai`, `openrouter`, or `copilot`)
+        /// Optional provider name (`openai`, `openrouter`, `copilot`, or `codex`)
         provider: Option<String>,
     },
 
@@ -641,6 +641,14 @@ pub enum Commands {
     A2a {
         #[command(subcommand)]
         command: super::super::a2a::cli::A2aCommands,
+    },
+
+    /// Proxy to the official Codex app-server
+    #[command(name = "app-server")]
+    AppServer {
+        /// Transport listen target passed through to `codex app-server`
+        #[arg(long, default_value = "stdio://")]
+        listen: String,
     },
 
     /// Manage models and providers
@@ -1608,5 +1616,15 @@ mod tests {
         ]);
 
         assert_eq!(cli.get_api_key_env(), "CUSTOM_OPENAI_KEY");
+    }
+
+    #[test]
+    fn parses_app_server_command_with_stdio_listen_target() {
+        let cli = Cli::parse_from(["vtcode", "app-server", "--listen", "stdio://"]);
+
+        assert!(matches!(
+            cli.command,
+            Some(super::Commands::AppServer { ref listen }) if listen == "stdio://"
+        ));
     }
 }
