@@ -13,6 +13,7 @@ pub(super) async fn handle_anthropic_api_command(
         &core_cfg.model,
         core_cfg.api_key.clone(),
         None,
+        core_cfg.model_behavior.clone(),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
 
