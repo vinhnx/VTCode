@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.96.1 - 2026-03-31
+
+### Highlights
+#### Bug Fixes
+
+- Unify external URL guardrails across VT Code flows (a6444c4b) 
+- Suppress loading UI for spool chunk reads (1635a52f) 
+#### Features
+
+- Implement link click throttling and improve mouse event handling (f6746ce3) 
+- Implement ast-grep command checks and improve initialization process (11e1d04f) 
+### Other Changes
+#### Other
+
+- Update TODO.md (cb7ca5c1) (@vinhnx)
+- Transform Rust source files (0e4c43d8) (@codemod[bot])
+- Implement OAuth support for HTTP MCP providers and enhance CLI commands for login/logout (f6cd0c61) 
+- Add support for Codex app server integration and validation (a2a44dba) 
+- Update config (2d7bb992) 
+### Contributors
+@vinhnx
 ## 0.96.0 - 2026-03-30
 
 ### Highlights
