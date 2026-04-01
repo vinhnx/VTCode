@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::Notify;
 use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -8,6 +10,7 @@ use vtcode_core::ui::{InlineListSelection, OpenAIServiceTierChoice, from_tui_rea
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::ui::interactive_list::SelectionInterrupted;
 
+use crate::agent::runloop::unified::state::CtrlCState;
 use dynamic_models::DynamicModelRegistry;
 use interaction::{
     ModelSelectionListOutcome, select_model_with_ratatui_list, select_reasoning_with_ratatui,
@@ -68,6 +71,8 @@ pub(crate) struct ModelPickerState {
     selected_service_tier: Option<Option<OpenAIServiceTier>>,
     pending_api_key: Option<String>,
     workspace: Option<PathBuf>,
+    ctrl_c_state: Option<Arc<CtrlCState>>,
+    ctrl_c_notify: Option<Arc<Notify>>,
     dynamic_models: DynamicModelRegistry,
     plain_mode_active: bool,
 }
@@ -90,6 +95,8 @@ impl ModelPickerState {
         workspace: Option<PathBuf>,
         current_provider: String,
         current_model: String,
+        ctrl_c_state: Option<Arc<CtrlCState>>,
+        ctrl_c_notify: Option<Arc<Notify>>,
     ) -> Result<ModelPickerStart> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
@@ -120,6 +127,8 @@ impl ModelPickerState {
             selected_service_tier: None,
             pending_api_key: None,
             workspace,
+            ctrl_c_state,
+            ctrl_c_notify,
             dynamic_models,
             plain_mode_active: false,
         };

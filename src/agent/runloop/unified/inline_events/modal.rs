@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 use tracing::warn;
 
@@ -46,6 +48,8 @@ impl<'a> InlineModalProcessor<'a> {
         config: &'a mut CoreAgentConfig,
         vt_cfg: &'a mut Option<VTCodeConfig>,
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
+        ctrl_c_state: &'a Arc<crate::agent::runloop::unified::state::CtrlCState>,
+        ctrl_c_notify: &'a Arc<Notify>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
         conversation_history_len: usize,
@@ -56,6 +60,8 @@ impl<'a> InlineModalProcessor<'a> {
             config,
             vt_cfg,
             provider_client,
+            ctrl_c_state,
+            ctrl_c_notify,
             session_bootstrap,
             handle,
             full_auto,
@@ -545,6 +551,8 @@ struct ModelPickerCoordinator<'a> {
     config: &'a mut CoreAgentConfig,
     vt_cfg: &'a mut Option<VTCodeConfig>,
     provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    ctrl_c_state: &'a Arc<crate::agent::runloop::unified::state::CtrlCState>,
+    ctrl_c_notify: &'a Arc<Notify>,
     session_bootstrap: &'a SessionBootstrap,
     handle: &'a InlineHandle,
     full_auto: bool,
@@ -591,6 +599,8 @@ impl<'a> ModelPickerCoordinator<'a> {
                 workspace_hint,
                 self.config.provider.clone(),
                 self.config.model.clone(),
+                Some(Arc::clone(self.ctrl_c_state)),
+                Some(Arc::clone(self.ctrl_c_notify)),
             )
             .await;
             drop(loading_spinner);

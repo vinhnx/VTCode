@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -12,6 +13,7 @@ use crate::agent::runloop::unified::settings_interactive::{
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::url_guard::UrlGuardPrompt;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use tokio::sync::Notify;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
@@ -104,11 +106,15 @@ fn renderer_with_handle_and_commands() -> (
     (handle, rx, renderer)
 }
 
+fn ctrl_c_handles() -> (Arc<CtrlCState>, Arc<Notify>) {
+    (Arc::new(CtrlCState::new()), Arc::new(Notify::new()))
+}
+
 #[tokio::test]
 async fn launch_editor_event_submits_edit_command() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -128,6 +134,8 @@ async fn launch_editor_event_submits_edit_command() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -149,8 +157,8 @@ async fn launch_editor_event_submits_edit_command() {
 #[tokio::test]
 async fn open_file_in_editor_event_submits_edit_command_with_path() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -170,6 +178,8 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -192,8 +202,8 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
 #[tokio::test]
 async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
     let (handle, mut commands, mut renderer) = renderer_with_handle_and_commands();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -215,6 +225,8 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
             &mut config,
             &mut vt_cfg,
             &mut provider_client,
+            &ctrl_c_state,
+            &ctrl_c_notify,
             &session_bootstrap,
             false,
             0,
@@ -262,8 +274,8 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
 #[tokio::test]
 async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
     let (handle, mut commands, mut renderer) = renderer_with_handle_and_commands();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -284,6 +296,8 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
             &mut config,
             &mut vt_cfg,
             &mut provider_client,
+            &ctrl_c_state,
+            &ctrl_c_notify,
             &session_bootstrap,
             false,
             0,
@@ -325,8 +339,8 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
 #[tokio::test]
 async fn cancelling_url_guard_restores_previous_palette() {
     let (handle, mut commands, mut renderer) = renderer_with_handle_and_commands();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = Some(ActivePalette::ModelTarget);
@@ -347,6 +361,8 @@ async fn cancelling_url_guard_restores_previous_palette() {
             &mut config,
             &mut vt_cfg,
             &mut provider_client,
+            &ctrl_c_state,
+            &ctrl_c_notify,
             &session_bootstrap,
             false,
             0,
@@ -404,8 +420,8 @@ async fn cancelling_url_guard_restores_previous_palette() {
 #[tokio::test]
 async fn toggle_mode_event_submits_mode_command() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -425,6 +441,8 @@ async fn toggle_mode_event_submits_mode_command() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -446,8 +464,8 @@ async fn toggle_mode_event_submits_mode_command() {
 #[tokio::test]
 async fn settings_editor_selection_submits_editor_config_command() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = Some(ActivePalette::Settings {
@@ -476,6 +494,8 @@ async fn settings_editor_selection_submits_editor_config_command() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -504,8 +524,8 @@ async fn settings_editor_selection_submits_editor_config_command() {
 #[tokio::test]
 async fn plan_confirmation_events_map_to_expected_actions() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -525,6 +545,8 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -583,8 +605,8 @@ async fn plan_confirmation_events_map_to_expected_actions() {
 #[tokio::test]
 async fn interrupt_event_returns_exit_after_double_ctrl_c() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -604,6 +626,8 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -626,8 +650,8 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
 #[tokio::test]
 async fn steering_events_are_passive_in_idle_loop() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -647,6 +671,8 @@ async fn steering_events_are_passive_in_idle_loop() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -671,8 +697,8 @@ async fn steering_events_are_passive_in_idle_loop() {
 #[tokio::test]
 async fn process_latest_queued_event_primes_newest_queue_priority() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -692,6 +718,8 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,
@@ -712,8 +740,8 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
 #[tokio::test]
 async fn inline_prompt_suggestion_event_maps_to_inline_action() {
     let (handle, mut renderer) = renderer_with_handle();
-    let ctrl_c_state = CtrlCState::new();
-    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
     let mut ctrl_c_notice_displayed = false;
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
@@ -733,6 +761,8 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
         &mut config,
         &mut vt_cfg,
         &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
         &session_bootstrap,
         false,
         0,

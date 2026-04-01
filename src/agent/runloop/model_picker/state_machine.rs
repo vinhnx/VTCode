@@ -5,6 +5,9 @@ use super::*;
 use crate::agent::runloop::unified::external_url_guard::{
     ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
 };
+use crate::cli::auth::{
+    complete_openai_login_with_tui_cancel, is_oauth_flow_cancelled, prepare_openai_login,
+};
 
 impl ModelPickerState {
     pub(super) fn handle_reasoning(
@@ -440,7 +443,7 @@ impl ModelPickerState {
         if input.eq_ignore_ascii_case("login")
             && matches!(selection.provider_enum, Some(Provider::OpenAI))
         {
-            let prepared = crate::cli::auth::prepare_openai_login(self.vt_cfg.as_ref())?;
+            let prepared = prepare_openai_login(self.vt_cfg.as_ref())?;
             let auth_url = prepared.auth_url.clone();
             let started = crate::cli::auth::begin_openai_login(prepared).await?;
             match request_external_url_open(url_guard, &auth_url).await? {
@@ -481,7 +484,27 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
-            crate::cli::auth::complete_openai_login(started).await?;
+            let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() else {
+                return Err(anyhow!("OAuth login requires Ctrl+C state"));
+            };
+            let Some(ctrl_c_notify) = self.ctrl_c_notify.as_ref() else {
+                return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
+            };
+            match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await
+            {
+                Ok(_) => {}
+                Err(err) if is_oauth_flow_cancelled(&err) => {
+                    if ctrl_c_state.is_exit_requested() {
+                        return Ok(ModelPickerProgress::Exit);
+                    }
+                    renderer.line(
+                        MessageStyle::Info,
+                        "OpenAI ChatGPT authentication cancelled.",
+                    )?;
+                    return Ok(ModelPickerProgress::Cancelled);
+                }
+                Err(err) => return Err(err),
+            }
             if self.inline_enabled {
                 renderer.close_modal();
             }

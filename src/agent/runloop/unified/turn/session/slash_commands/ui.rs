@@ -426,6 +426,8 @@ pub(super) async fn start_model_picker(
             workspace_hint,
             ctx.config.provider.clone(),
             ctx.config.model.clone(),
+            Some(std::sync::Arc::clone(ctx.ctrl_c_state)),
+            Some(std::sync::Arc::clone(ctx.ctrl_c_notify)),
         )
         .await;
         drop(loading_spinner);

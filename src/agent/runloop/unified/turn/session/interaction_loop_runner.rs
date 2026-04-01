@@ -644,6 +644,8 @@ pub(super) async fn run_interaction_loop_impl(
             config: ctx.config,
             vt_cfg: ctx.vt_cfg,
             provider_client: ctx.provider_client,
+            ctrl_c_state: ctx.ctrl_c_state,
+            ctrl_c_notify: ctx.ctrl_c_notify,
             session_bootstrap: ctx.session_bootstrap,
             full_auto: ctx.full_auto,
             startup_update_notice_rx: ctx.startup_update_notice_rx,

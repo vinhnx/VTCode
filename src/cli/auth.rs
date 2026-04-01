@@ -1,6 +1,9 @@
+use crate::agent::runloop::unified::state::CtrlCState;
 use anyhow::{Context, Result, anyhow};
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Notify;
 use vtcode_auth::{
     AuthCallbackOutcome, AuthCodeCallbackServer, AuthCredentialsStoreMode, AuthStatus,
     OAuthCallbackPage, OAuthProvider, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
@@ -117,17 +120,27 @@ pub(crate) async fn complete_openrouter_login(started: StartedOpenRouterLogin) -
     } = started;
 
     match callback_server.wait().await? {
-        AuthCallbackOutcome::Code(code) => {
-            let api_key = exchange_code_for_token(&code, &prepared.pkce).await?;
-            let token = OpenRouterToken {
-                api_key: api_key.clone(),
-                obtained_at: now_secs(),
-                expires_at: None,
-                label: Some("VT Code OAuth".to_string()),
-            };
-            save_oauth_token_with_mode(&token, prepared.storage_mode)?;
-            Ok(api_key)
-        }
+        AuthCallbackOutcome::Code(code) => persist_openrouter_login_code(prepared, &code).await,
+        AuthCallbackOutcome::Cancelled => Err(anyhow!("OAuth flow was cancelled")),
+        AuthCallbackOutcome::Error(error) => Err(anyhow!(error)),
+    }
+}
+
+pub(crate) async fn complete_openrouter_login_with_tui_cancel(
+    started: StartedOpenRouterLogin,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> Result<String> {
+    let StartedOpenRouterLogin {
+        prepared,
+        callback_server,
+    } = started;
+
+    let outcome =
+        wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
+
+    match outcome {
+        AuthCallbackOutcome::Code(code) => persist_openrouter_login_code(prepared, &code).await,
         AuthCallbackOutcome::Cancelled => Err(anyhow!("OAuth flow was cancelled")),
         AuthCallbackOutcome::Error(error) => Err(anyhow!(error)),
     }
@@ -198,6 +211,23 @@ where
     persist_openai_login_code(prepared, &code).await
 }
 
+pub(crate) async fn complete_openai_login_with_tui_cancel(
+    started: StartedOpenAiLogin,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> Result<OpenAIChatGptSession> {
+    let StartedOpenAiLogin {
+        prepared,
+        callback_server,
+    } = started;
+
+    let outcome =
+        wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
+
+    let code = callback_outcome_to_openai_code(outcome)?;
+    persist_openai_login_code(prepared, &code).await
+}
+
 pub(crate) async fn complete_openai_login_from_manual_future<ManualFut>(
     prepared: PreparedOpenAiLogin,
     manual_input: ManualFut,
@@ -225,6 +255,21 @@ async fn persist_openai_login_code(
     tracing::info!("openai oauth session persisted; verifying load");
     load_openai_chatgpt_session_with_mode(prepared.storage_mode)?
         .ok_or_else(|| anyhow!("OpenAI ChatGPT session was not persisted correctly"))
+}
+
+async fn persist_openrouter_login_code(
+    prepared: PreparedOpenRouterLogin,
+    code: &str,
+) -> Result<String> {
+    let api_key = exchange_code_for_token(code, &prepared.pkce).await?;
+    let token = OpenRouterToken {
+        api_key: api_key.clone(),
+        obtained_at: now_secs(),
+        expires_at: None,
+        label: Some("VT Code OAuth".to_string()),
+    };
+    save_oauth_token_with_mode(&token, prepared.storage_mode)?;
+    Ok(api_key)
 }
 
 async fn resolve_openai_authorization_code<CallbackFut, ManualFut>(
@@ -273,6 +318,37 @@ where
     }
 }
 
+async fn wait_for_callback_or_cancel<CallbackFut>(
+    callback_future: CallbackFut,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> Result<AuthCallbackOutcome>
+where
+    CallbackFut: Future<Output = Result<AuthCallbackOutcome>>,
+{
+    let cancel_future = wait_for_ctrl_c_cancel(ctrl_c_state, ctrl_c_notify);
+    tokio::pin!(callback_future);
+    tokio::pin!(cancel_future);
+
+    tokio::select! {
+        biased;
+        _ = &mut cancel_future => {
+            if ctrl_c_state.is_cancel_requested() {
+                ctrl_c_state.mark_cancel_handled();
+            }
+            Ok(AuthCallbackOutcome::Cancelled)
+        }
+        outcome = &mut callback_future => outcome,
+    }
+}
+
+async fn wait_for_ctrl_c_cancel(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify: &Arc<Notify>) {
+    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+        return;
+    }
+    ctrl_c_notify.notified().await;
+}
+
 enum OpenAiAuthRace {
     Callback(Result<AuthCallbackOutcome>),
     Manual(Result<Option<String>>),
@@ -281,9 +357,21 @@ enum OpenAiAuthRace {
 fn callback_outcome_to_openai_code(outcome: AuthCallbackOutcome) -> Result<String> {
     match outcome {
         AuthCallbackOutcome::Code(code) => Ok(code),
-        AuthCallbackOutcome::Cancelled => Err(anyhow!("OAuth flow was cancelled")),
+        AuthCallbackOutcome::Cancelled => Err(oauth_flow_cancelled_error()),
         AuthCallbackOutcome::Error(error) => Err(anyhow!(error)),
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("OAuth flow was cancelled")]
+struct OAuthFlowCancelled;
+
+pub(crate) fn oauth_flow_cancelled_error() -> anyhow::Error {
+    anyhow!(OAuthFlowCancelled)
+}
+
+pub(crate) fn is_oauth_flow_cancelled(err: &anyhow::Error) -> bool {
+    err.is::<OAuthFlowCancelled>()
 }
 
 pub(crate) fn clear_openrouter_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
@@ -877,11 +965,14 @@ fn now_secs() -> u64 {
 mod tests {
     use super::{
         clear_openai_login, clear_openrouter_login, cli_browser_open_approved,
-        resolve_openai_authorization_code,
+        resolve_openai_authorization_code, wait_for_callback_or_cancel,
     };
+    use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
     use anyhow::anyhow;
     use serial_test::serial;
     use std::future;
+    use std::sync::Arc;
+    use tokio::sync::Notify;
     use vtcode_auth::{
         AuthCallbackOutcome, AuthCredentialsStoreMode, OpenAIAuthConfig, OpenAIChatGptSession,
         OpenAIResolvedAuth, OpenRouterToken, clear_oauth_token_with_mode,
@@ -983,6 +1074,27 @@ mod tests {
         .await
         .expect("callback code should win after invalid manual input");
         assert_eq!(code, "callback-code");
+    }
+
+    #[tokio::test]
+    async fn callback_wait_returns_cancelled_when_ctrl_c_is_pending() {
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        assert!(matches!(
+            ctrl_c_state.register_signal(),
+            CtrlCSignal::Cancel
+        ));
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let outcome = wait_for_callback_or_cancel(
+            future::pending::<Result<AuthCallbackOutcome, anyhow::Error>>(),
+            &ctrl_c_state,
+            &ctrl_c_notify,
+        )
+        .await
+        .expect("cancelled callback wait");
+
+        assert!(matches!(outcome, AuthCallbackOutcome::Cancelled));
+        assert!(!ctrl_c_state.is_cancel_requested());
     }
 
     #[test]
