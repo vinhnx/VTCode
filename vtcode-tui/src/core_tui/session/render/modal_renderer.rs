@@ -1,17 +1,20 @@
 use super::*;
 use crate::config::constants::ui;
 use crate::core_tui::session::transcript_links::decorate_detected_link_lines;
+use crate::core_tui::style::ratatui_color_from_ansi;
 use crate::core_tui::types::InlineMessageKind;
 use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
     render_wizard_modal_body,
 };
 use crate::ui::tui::types::InlineListSelection;
+use anstyle::{Ansi256Color, Color as AnsiColorEnum};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
 const MAX_INLINE_INSTRUCTION_ROWS: usize = 6;
+const MODAL_TITLE_CHROME_ROWS: usize = 2;
 
 fn list_has_two_line_items(list: &ModalListState) -> bool {
     list.visible_indices.iter().any(|&index| {
@@ -47,6 +50,32 @@ fn modal_has_title(session: &Session) -> bool {
     !modal_title_text(session).trim().is_empty()
 }
 
+fn resolve_modal_chrome_ansi_color(session: &Session) -> AnsiColorEnum {
+    session
+        .theme
+        .tool_accent
+        .or(session.theme.primary)
+        .or(session.theme.secondary)
+        .unwrap_or(AnsiColorEnum::Ansi256(Ansi256Color(
+            ui::SAFE_ANSI_BRIGHT_CYAN,
+        )))
+}
+
+fn render_modal_divider(frame: &mut Frame<'_>, area: Rect, style: Style) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            ui::INLINE_BLOCK_HORIZONTAL.repeat(area.width as usize),
+            style,
+        )))
+        .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
 fn wizard_step_has_inline_custom_editor(
     wizard: &crate::ui::tui::session::modal::WizardModalState,
 ) -> bool {
@@ -77,6 +106,11 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         return (area, None);
     }
 
+    let title_chrome_rows = if modal_has_title(session) {
+        MODAL_TITLE_CHROME_ROWS as u16
+    } else {
+        0
+    };
     let multiline_list_present = if let Some(wizard) = session.wizard_overlay() {
         wizard
             .steps
@@ -121,8 +155,8 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
                 .len()
                 .min(MAX_INLINE_INSTRUCTION_ROWS),
         );
-        if modal_has_title(session) {
-            lines = lines.saturating_add(1); // title row
+        if title_chrome_rows > 0 {
+            lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
         }
         lines
     } else if let Some(modal) = session.modal_state() {
@@ -139,8 +173,8 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         } else {
             lines = lines.saturating_add(1);
         }
-        if modal_has_title(session) {
-            lines = lines.saturating_add(1); // title row
+        if title_chrome_rows > 0 {
+            lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
         }
         lines
     } else {
@@ -157,7 +191,8 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         MAX_INLINE_MODAL_HEIGHT_MULTILINE
     } else {
         MAX_INLINE_MODAL_HEIGHT
-    };
+    }
+    .saturating_add(title_chrome_rows);
     let capped_max = modal_height_cap.min(max_panel_height).max(min_height);
     let desired_height = (desired_lines.min(u16::MAX as usize) as u16)
         .max(min_height)
@@ -221,8 +256,17 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let (body_area, title_area) = if title.is_empty() {
         (area, None)
     } else {
-        let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+        let chunks = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(area);
         let title_area = chunks[0];
+        let top_divider_area = chunks[1];
+        let body_area = chunks[2];
+        let bottom_divider_area = chunks[3];
         let title_line = Line::from(Span::styled(title, styles.title));
         let (decorated_title, link_targets) = decorate_detected_link_lines(
             vec![title_line],
@@ -238,7 +282,9 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             Paragraph::new(decorated_title).wrap(Wrap { trim: true }),
             title_area,
         );
-        (chunks[1], Some(title_area))
+        render_modal_divider(frame, top_divider_area, styles.border);
+        render_modal_divider(frame, bottom_divider_area, styles.border);
+        (body_area, Some(title_area))
     };
 
     if let Some(wizard) = session.wizard_overlay_mut() {
@@ -314,17 +360,23 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 
 pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     let default_style = session.styles.default_style();
-    let accent_style = session.styles.accent_style();
     let border_style = session.styles.border_style();
+    let chrome_color = ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(session));
+    let accent_style = session.styles.accent_style().fg(chrome_color);
+    let chrome_border_style = border_style
+        .fg(chrome_color)
+        .remove_modifier(Modifier::DIM)
+        .add_modifier(Modifier::BOLD);
+    let title_style = default_style.fg(chrome_color).add_modifier(Modifier::BOLD);
     ModalRenderStyles {
-        border: border_style,
+        border: chrome_border_style,
         highlight: modal_list_highlight_style(session),
         badge: border_style.add_modifier(Modifier::DIM | Modifier::BOLD),
         header: accent_style.add_modifier(Modifier::BOLD),
         selectable: default_style,
         detail: default_style.add_modifier(Modifier::DIM),
         search_match: accent_style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-        title: accent_style.add_modifier(Modifier::BOLD),
+        title: title_style,
         divider: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
         instruction_border: border_style,
         instruction_title: session.section_title_style(),
@@ -376,6 +428,7 @@ fn remove_trailing_empty_tool_line(session: &mut Session) {
 mod tests {
     use super::*;
     use crate::ui::tui::InlineTheme;
+    use ratatui::style::Color;
 
     #[test]
     fn modal_title_text_uses_modal_title_and_empty_default() {
@@ -387,14 +440,16 @@ mod tests {
     }
 
     #[test]
-    fn modal_title_style_is_accent_and_bold() {
+    fn modal_title_style_uses_explicit_chrome_color() {
         let session = Session::new(InlineTheme::default(), None, 20);
         let styles = modal_render_styles(&session);
 
         assert_eq!(
-            styles.title,
-            session.styles.accent_style().add_modifier(Modifier::BOLD)
+            styles.title.fg,
+            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
         );
+        assert_eq!(styles.border.fg, styles.title.fg);
+        assert!(styles.title.add_modifier.contains(Modifier::BOLD));
     }
 
     #[test]

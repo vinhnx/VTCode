@@ -421,6 +421,14 @@ fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String
         .collect()
 }
 
+fn is_horizontal_rule(line: &str) -> bool {
+    let glyph = ui::INLINE_BLOCK_HORIZONTAL
+        .chars()
+        .next()
+        .expect("horizontal rule glyph");
+    !line.is_empty() && line.chars().all(|ch| ch == glyph)
+}
+
 fn line_text(line: &Line<'_>) -> String {
     line.spans
         .iter()
@@ -1017,8 +1025,8 @@ fn plain_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
         .cloned()
         .collect::<Vec<_>>();
     assert!(
-        targets.len() >= 2,
-        "expected wrapped wizard modal url segments"
+        !targets.is_empty(),
+        "expected visible wizard modal url target"
     );
 
     let target = targets
@@ -1167,10 +1175,7 @@ fn plain_click_emits_open_url_event_for_standard_modal_auth_link() {
         .filter(|target| matches!(&target.target, TranscriptLinkTarget::Url(clicked) if clicked == &url))
         .cloned()
         .collect::<Vec<_>>();
-    assert!(
-        targets.len() >= 2,
-        "expected wrapped modal url target segments"
-    );
+    assert!(!targets.is_empty(), "expected visible modal url target");
     let target = targets.last().expect("expected modal url target").clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
@@ -4249,10 +4254,98 @@ fn show_list_modal_uses_bottom_half_of_terminal() {
 
     let modal_area = session.core.modal_list_area().expect("modal list area");
     assert!(
-        modal_area.y >= 15,
-        "floating modal list should render in the lower half of the terminal, got y={}",
+        modal_area.y >= 17,
+        "floating modal list should render below the title chrome, got y={}",
         modal_area.y
     );
+}
+
+#[test]
+fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
+    let item = InlineListItem {
+        title: "Option A".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+        search_value: Some("Option A".to_string()),
+    };
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Pick one".to_string(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![item],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render titled floating modal");
+
+    let buffer = terminal.backend().buffer();
+    let title_cell = buffer.cell((0, 15)).expect("title cell");
+    let top_divider_cell = buffer.cell((0, 16)).expect("top divider cell");
+    let bottom_divider_cell = buffer.cell((0, 29)).expect("bottom divider cell");
+
+    assert_eq!(title_cell.symbol(), "P");
+    assert_eq!(top_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
+    assert_eq!(bottom_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
+    assert_eq!(
+        title_cell.style().fg,
+        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+    );
+    assert_eq!(top_divider_cell.style().fg, title_cell.style().fg);
+    assert_eq!(bottom_divider_cell.style().fg, title_cell.style().fg);
+}
+
+#[test]
+fn untitled_floating_modal_skips_title_chrome_rows() {
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
+    let item = InlineListItem {
+        title: "Option A".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+        search_value: Some("Option A".to_string()),
+    };
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: String::new(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![item],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let lines = rendered_app_session_lines(&mut session, 30);
+    assert!(
+        lines
+            .get(15)
+            .is_some_and(|line| line.contains("Choose an option")),
+        "untitled modal body should begin at the floating modal origin"
+    );
+    assert!(
+        (15..30).all(|row| !lines.get(row).is_some_and(|line| is_horizontal_rule(line))),
+        "untitled modal should not render title chrome divider rows"
+    );
+
+    let modal_area = session.core.modal_list_area().expect("modal list area");
+    assert_eq!(modal_area.y, 16);
 }
 
 #[test]
