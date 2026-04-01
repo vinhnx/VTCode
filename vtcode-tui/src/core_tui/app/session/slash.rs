@@ -6,7 +6,8 @@ use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
-    StaticRowsListPanelModel, fixed_section_rows, render_shared_list_panel, rows_to_u16,
+    StaticRowsListPanelModel, fixed_section_rows_with_divider, render_shared_list_panel,
+    rows_to_u16,
 };
 use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 
@@ -97,7 +98,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "Slash Commands".to_owned(),
-            default_style,
+            session.core.section_title_style(),
         ))],
         info: slash_palette_instructions(session),
         search: search_line,
@@ -116,7 +117,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
-            divider_style: None,
+            divider_style: Some(session.core.styles.border_style()),
         },
         &mut model,
     );
@@ -150,7 +151,7 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
         session.core.input_manager.cursor(),
     )
     .is_some();
-    let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
+    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_search_row, true);
     let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
