@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -39,6 +41,8 @@ impl<'a> InlineEventContext<'a> {
         config: &'a mut CoreAgentConfig,
         vt_cfg: &'a mut Option<VTCodeConfig>,
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
+        ctrl_c_state: &'a Arc<crate::agent::runloop::unified::state::CtrlCState>,
+        ctrl_c_notify: &'a Arc<Notify>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
         conversation_history_len: usize,
@@ -52,6 +56,8 @@ impl<'a> InlineEventContext<'a> {
             config,
             vt_cfg,
             provider_client,
+            ctrl_c_state,
+            ctrl_c_notify,
             session_bootstrap,
             full_auto,
             conversation_history_len,

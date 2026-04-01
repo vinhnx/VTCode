@@ -26,9 +26,10 @@ use crate::cli::auth::{
     COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, begin_openai_login,
     begin_openrouter_login, clear_openai_login, clear_openrouter_login,
     complete_openai_login_from_manual_future, complete_openai_login_with_manual_future,
-    complete_openrouter_login, openai_auth_status, openai_manual_placeholder,
-    openrouter_auth_status, prepare_openai_login, prepare_openrouter_login, refresh_openai_login,
-    should_prompt_manual_openai_input, supports_auth_provider,
+    complete_openrouter_login_with_tui_cancel, is_oauth_flow_cancelled, oauth_flow_cancelled_error,
+    openai_auth_status, openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
+    prepare_openrouter_login, refresh_openai_login, should_prompt_manual_openai_input,
+    supports_auth_provider,
 };
 
 const OAUTH_PROVIDER_PREFIX: &str = "oauth-provider:";
@@ -124,7 +125,26 @@ pub(crate) async fn handle_oauth_login(
                 MessageStyle::Info,
                 "Waiting for OpenRouter OAuth callback...",
             )?;
-            let api_key = complete_openrouter_login(started).await?;
+            let api_key = match complete_openrouter_login_with_tui_cancel(
+                started,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+            )
+            .await
+            {
+                Ok(api_key) => api_key,
+                Err(err) if is_oauth_flow_cancelled(&err) => {
+                    if ctx.ctrl_c_state.is_exit_requested() {
+                        return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+                    }
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenRouter OAuth authentication cancelled.",
+                    )?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+                Err(err) => return Err(err),
+            };
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Successfully authenticated with OpenRouter.",
@@ -171,7 +191,20 @@ pub(crate) async fn handle_oauth_login(
             };
             ctx.handle.close_modal();
             ctx.handle.force_redraw();
-            let session = login_result?;
+            let session = match login_result {
+                Ok(session) => session,
+                Err(err) if is_oauth_flow_cancelled(&err) => {
+                    if ctx.ctrl_c_state.is_exit_requested() {
+                        return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+                    }
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenAI ChatGPT authentication cancelled.",
+                    )?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+                Err(err) => return Err(err),
+            };
             sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -540,7 +573,12 @@ async fn prompt_openai_manual_callback_input(
                     _ => None,
                 })
         }
-        WizardModalOutcome::Cancelled { .. } => None,
+        WizardModalOutcome::Cancelled { signal } => {
+            if matches!(signal, Some("cancel")) {
+                ctx.ctrl_c_state.mark_cancel_handled();
+            }
+            return Err(oauth_flow_cancelled_error());
+        }
     };
 
     Ok(value.and_then(|value| {
@@ -649,6 +687,92 @@ fn oauth_modal_lines(action: OAuthProviderAction) -> Vec<String> {
             "Choose a provider to refresh.".to_string(),
             "OpenAI refreshes the stored ChatGPT session; OpenRouter and GitHub Copilot require a new login.".to_string(),
         ],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hashbrown::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::llm::provider as uni;
+    use vtcode_tui::app::InlineHeaderContext;
+
+    use crate::agent::runloop::model_picker::ModelPickerState;
+    use crate::agent::runloop::unified::palettes::ActivePalette;
+    use crate::agent::runloop::unified::session_setup::IdeContextBridge;
+    use crate::agent::runloop::unified::state::CtrlCSignal;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
+    use crate::agent::runloop::welcome::SessionBootstrap;
+    use vtcode_core::skills::types::Skill;
+
+    #[tokio::test]
+    async fn openrouter_login_returns_continue_when_ctrl_c_is_pending() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let turn = backing.turn_loop_context();
+        assert!(matches!(
+            turn.ctrl_c_state.register_signal(),
+            CtrlCSignal::Cancel
+        ));
+
+        let header_context = Box::leak(Box::new(InlineHeaderContext::default()));
+        let ide_context_bridge = Box::leak(Box::new(None::<IdeContextBridge>));
+        let model_picker_state = Box::leak(Box::new(None::<ModelPickerState>));
+        let palette_state = Box::leak(Box::new(None::<ActivePalette>));
+        let conversation_history = Box::leak(Box::new(Vec::<uni::Message>::new()));
+        let loaded_skills = Box::leak(Box::new(Arc::new(RwLock::new(
+            HashMap::<String, Skill>::new(),
+        ))));
+        let linked_directories = Box::leak(Box::new(Vec::<LinkedDirectory>::new()));
+        let session_bootstrap = Box::leak(Box::new(SessionBootstrap::default()));
+        let vt_cfg = Box::leak(Box::new(None::<VTCodeConfig>));
+        let async_mcp_manager = None;
+        let checkpoint_manager = None;
+        let lifecycle_hooks = None;
+        let harness_emitter = None;
+
+        let ctx = SlashCommandContext {
+            thread_id: "test-thread",
+            active_thread_label: "main",
+            renderer: turn.renderer,
+            handle: turn.handle,
+            session: turn.session,
+            header_context,
+            ide_context_bridge,
+            config: turn.config,
+            vt_cfg,
+            provider_client: turn.provider_client,
+            session_bootstrap,
+            model_picker_state,
+            palette_state,
+            tool_registry: turn.tool_registry,
+            conversation_history,
+            decision_ledger: turn.decision_ledger,
+            context_manager: turn.context_manager,
+            session_stats: turn.session_stats,
+            input_status_state: turn.input_status_state,
+            tools: turn.tools,
+            tool_catalog: turn.tool_catalog,
+            async_mcp_manager,
+            mcp_panel_state: turn.mcp_panel_state,
+            linked_directories,
+            ctrl_c_state: turn.ctrl_c_state,
+            ctrl_c_notify: turn.ctrl_c_notify,
+            full_auto: turn.full_auto,
+            loaded_skills,
+            checkpoint_manager,
+            lifecycle_hooks,
+            harness_emitter,
+        };
+
+        let control = handle_oauth_login(ctx, OPENROUTER_PROVIDER.to_string())
+            .await
+            .expect("openrouter login should continue after cancel");
+
+        assert!(matches!(control, SlashCommandControl::Continue));
     }
 }
 

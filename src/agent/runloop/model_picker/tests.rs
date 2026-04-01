@@ -1,11 +1,16 @@
 use super::*;
+use crate::agent::runloop::unified::state::CtrlCState;
 use anyhow::Result;
 use std::fs;
+use std::sync::Arc;
 use tempfile::tempdir;
+use tokio::sync::{Notify, mpsc};
 use vtcode_config::OpenAIServiceTier;
 use vtcode_config::core::CustomProviderConfig;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
+use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::app::{InlineHandle, InlineSession};
 
 use self::options::{find_option_index, option_indexes_for_provider};
 
@@ -187,9 +192,22 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         selected_service_tier: None,
         pending_api_key: None,
         workspace: None,
+        ctrl_c_state: None,
+        ctrl_c_notify: None,
         dynamic_models: DynamicModelRegistry::default(),
         plain_mode_active: false,
     }
+}
+
+fn session_with_channels() -> (InlineHandle, InlineSession) {
+    let (command_tx, _command_rx) = mpsc::unbounded_channel();
+    let (_event_tx, event_rx) = mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(command_tx);
+    let session = InlineSession {
+        handle: handle.clone(),
+        events: event_rx,
+    };
+    (handle, session)
 }
 
 #[test]
@@ -376,4 +394,48 @@ fn build_result_uses_selected_flex_service_tier() {
 
     assert_eq!(result.service_tier, Some(OpenAIServiceTier::Flex));
     assert!(result.service_tier_changed);
+}
+
+#[tokio::test]
+async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
+    let mut picker = base_picker_state("openai", "gpt-5.2");
+    picker.selection = Some(selection::SelectionDetail {
+        provider_key: "openai".to_string(),
+        provider_label: "OpenAI".to_string(),
+        provider_enum: Some(Provider::OpenAI),
+        model_id: "gpt-5.2".to_string(),
+        model_display: "GPT-5.2".to_string(),
+        known_model: true,
+        reasoning_supported: true,
+        reasoning_optional: false,
+        reasoning_off_model: None,
+        service_tier_supported: true,
+        requires_api_key: true,
+        uses_chatgpt_auth: false,
+        env_key: "OPENAI_API_KEY".to_string(),
+    });
+
+    let (handle, mut session) = session_with_channels();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    assert!(matches!(
+        ctrl_c_state.register_signal(),
+        crate::agent::runloop::unified::state::CtrlCSignal::Cancel
+    ));
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let url_guard =
+        crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext::new(
+            &handle,
+            &mut session,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+        );
+
+    let progress = picker
+        .handle_api_key(&mut renderer, "login", url_guard)
+        .await
+        .expect("openai login should cancel cleanly");
+
+    assert!(matches!(progress, ModelPickerProgress::InProgress));
+    assert!(picker.pending_api_key.is_none());
 }

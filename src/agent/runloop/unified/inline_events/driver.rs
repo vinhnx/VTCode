@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -12,6 +13,7 @@ use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{StartupUpdateNotice, display_update_notice};
 
@@ -29,6 +31,8 @@ struct InlineEventLoop<'a> {
     config: &'a mut CoreAgentConfig,
     vt_cfg: &'a mut Option<VTCodeConfig>,
     provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    ctrl_c_state: &'a Arc<CtrlCState>,
+    ctrl_c_notify: &'a Arc<Notify>,
     session_bootstrap: &'a SessionBootstrap,
     full_auto: bool,
     startup_update_notice_rx:
@@ -59,6 +63,8 @@ impl<'a> InlineEventLoop<'a> {
             config,
             vt_cfg,
             provider_client,
+            ctrl_c_state,
+            ctrl_c_notify,
             session_bootstrap,
             full_auto,
             startup_update_notice_rx,
@@ -82,6 +88,8 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            ctrl_c_state,
+            ctrl_c_notify,
             startup_update_notice_rx,
             header_context,
             use_unicode,
@@ -93,7 +101,7 @@ impl<'a> InlineEventLoop<'a> {
     async fn poll(
         mut self,
         session: &mut InlineSession,
-        ctrl_c_notify: &Notify,
+        ctrl_c_notify: &Arc<Notify>,
     ) -> Result<InlineLoopAction> {
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
@@ -148,6 +156,8 @@ impl<'a> InlineEventLoop<'a> {
         let config = &mut *self.config;
         let vt_cfg = &mut *self.vt_cfg;
         let provider_client = &mut *self.provider_client;
+        let ctrl_c_state = self.ctrl_c_state;
+        let ctrl_c_notify = self.ctrl_c_notify;
         let conversation_history_len = self.conversation_history_len;
         let mut context = InlineEventContext::new(
             renderer,
@@ -160,6 +170,8 @@ impl<'a> InlineEventLoop<'a> {
             config,
             vt_cfg,
             provider_client,
+            ctrl_c_state,
+            ctrl_c_notify,
             session_bootstrap,
             full_auto,
             conversation_history_len,
@@ -221,6 +233,8 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub config: &'a mut CoreAgentConfig,
     pub vt_cfg: &'a mut Option<VTCodeConfig>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    pub ctrl_c_state: &'a Arc<CtrlCState>,
+    pub ctrl_c_notify: &'a Arc<Notify>,
     pub session_bootstrap: &'a SessionBootstrap,
     pub full_auto: bool,
     pub startup_update_notice_rx:
@@ -233,7 +247,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
 
 pub(crate) async fn poll_inline_loop_action(
     session: &mut InlineSession,
-    ctrl_c_notify: &Notify,
+    ctrl_c_notify: &Arc<Notify>,
     resources: InlineEventLoopResources<'_>,
 ) -> Result<InlineLoopAction> {
     InlineEventLoop::new(resources)
@@ -368,8 +382,8 @@ mod tests {
             events: event_rx,
         };
         let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
-        let ctrl_c_state = crate::agent::runloop::unified::state::CtrlCState::new();
-        let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
         let mut ctrl_c_notice_displayed = false;
         let default_placeholder = None;
         let mut queued_inputs = VecDeque::new();
@@ -382,7 +396,7 @@ mod tests {
         let session_bootstrap = SessionBootstrap::default();
         let mut startup_update_notice_rx = None;
         let mut header_context = InlineHeaderContext::default();
-        let ctrl_c_notify = Notify::new();
+        let ctrl_c_notify = Arc::new(Notify::new());
 
         let resources = InlineEventLoopResources {
             renderer: &mut renderer,
@@ -404,6 +418,8 @@ mod tests {
             use_unicode: true,
             conversation_history_len: 0,
             idle_wake_delay: Duration::from_millis(5),
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
         };
 
         let action = tokio::time::timeout(
