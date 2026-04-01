@@ -58,6 +58,10 @@ pub(super) fn install_archive(
 pub(super) fn ast_grep_version(binary: &Path) -> Result<String> {
     let output = Command::new(binary)
         .arg("--version")
+        .arg("--color")
+        .arg("never")
+        .env("NO_COLOR", "1")
+        .env("CLICOLOR", "0")
         .output()
         .with_context(|| format!("Failed to run {}", binary.display()))?;
     if !output.status.success() {
