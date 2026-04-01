@@ -25,6 +25,7 @@ Optional:
 - `compatibility`
 - `metadata`
 - `allowed-tools`
+- `disable-model-invocation`
 
 Any other frontmatter key is rejected during parsing and validation.
 
@@ -68,6 +69,7 @@ VT Code does not support:
 
 ## Runtime Surface
 
-- `skills list` and `skills info` render only strict-spec metadata
+- `skills list` and `skills info` render strict-spec metadata plus VT Code's explicit command-skill metadata
 - skill prompts include only name, description, file path, and scope
 - routing logic uses `description`; legacy trigger fields are not considered
+- skills with `disable-model-invocation: true` are hidden from the model-facing startup catalog but remain available for explicit slash or `/skills use` activation

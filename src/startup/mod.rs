@@ -346,7 +346,8 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
     matches!(
         command,
         Some(
-            Commands::Login { .. }
+            Commands::ToolPolicy { .. }
+                | Commands::Login { .. }
                 | Commands::Logout { .. }
                 | Commands::Auth { .. }
                 | Commands::AppServer { .. }
@@ -359,7 +360,8 @@ fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
     matches!(
         command,
         None | Some(
-            Commands::AgentClientProtocol { .. }
+            Commands::ToolPolicy { .. }
+                | Commands::AgentClientProtocol { .. }
                 | Commands::AppServer { .. }
                 | Commands::Schedule { .. }
         )
@@ -415,6 +417,16 @@ mod validation_tests {
                 listen: "stdio://".to_string(),
             }
         )));
+    }
+
+    #[test]
+    fn tool_policy_can_start_without_provider_auth() {
+        let command = Commands::ToolPolicy {
+            command: vtcode_core::cli::tool_policy_commands::ToolPolicyCommands::Status,
+        };
+
+        assert!(command_skips_provider_auth(Some(&command)));
+        assert!(can_start_without_provider_auth(Some(&command)));
     }
 
     #[test]

@@ -15,6 +15,13 @@ pub(super) struct CliToolRow {
 }
 
 #[derive(Debug, Clone)]
+pub(super) struct BuiltInSkillRow {
+    pub(super) name: String,
+    pub(super) description: String,
+    pub(super) usage: String,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct LoadedSkillSummary {
     pub(super) headline: String,
     pub(super) details: Vec<String>,
@@ -69,6 +76,22 @@ pub(super) fn print_cli_tools(rows: &[CliToolRow]) {
         println!(
             "⚡ {}\n  {}\n  Path: {}\n",
             row.name, row.description, row.path
+        );
+    }
+}
+
+pub(super) fn print_built_in_skills(rows: &[BuiltInSkillRow]) {
+    if rows.is_empty() {
+        return;
+    }
+
+    println!("\nAvailable Built-In Command Skills:");
+    println!("{:-<70}", "");
+
+    for row in rows {
+        println!(
+            "⌘ {}\n  {}\n  Usage: {}\n",
+            row.name, row.description, row.usage
         );
     }
 }

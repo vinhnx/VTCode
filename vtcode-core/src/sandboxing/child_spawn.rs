@@ -178,6 +178,8 @@ pub fn should_filter_env_var(key: &str) -> bool {
         || key.ends_with("_TOKEN")
         || key.ends_with("_KEY")
         || key.ends_with("_SECRET")
+        || key.ends_with("_PASS")
+        || key.ends_with("_PWD")
         || key.ends_with("_PASSWORD")
         || key.ends_with("_CREDENTIALS")
 }
@@ -245,6 +247,8 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
 mod tests {
     use super::*;
 
+    const TEST_API_KEY_VALUE: &str = "test-openai-key";
+
     #[test]
     fn test_should_filter_sensitive_vars() {
         assert!(should_filter_env_var("OPENAI_API_KEY"));
@@ -253,6 +257,8 @@ mod tests {
         assert!(should_filter_env_var("LD_PRELOAD"));
         assert!(should_filter_env_var("DYLD_INSERT_LIBRARIES"));
         assert!(should_filter_env_var("MY_CUSTOM_TOKEN"));
+        assert!(should_filter_env_var("MY_CUSTOM_PASS"));
+        assert!(should_filter_env_var("MYSQL_PWD"));
         assert!(should_filter_env_var("DATABASE_PASSWORD"));
 
         assert!(!should_filter_env_var("PATH"));
@@ -265,7 +271,7 @@ mod tests {
         let mut current = HashMap::new();
         current.insert("PATH".to_string(), "/usr/bin".to_string());
         current.insert("HOME".to_string(), "/home/user".to_string());
-        current.insert("OPENAI_API_KEY".to_string(), "sk-secret".to_string());
+        current.insert("OPENAI_API_KEY".to_string(), TEST_API_KEY_VALUE.to_string());
         current.insert("RANDOM_VAR".to_string(), "value".to_string());
 
         let sanitized = build_sanitized_env(&current, true, true, "MacosSeatbelt", &[]);
@@ -296,9 +302,11 @@ mod tests {
     fn test_filter_sensitive_env() {
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), "/usr/bin".to_string());
-        env.insert("OPENAI_API_KEY".to_string(), "sk-secret".to_string());
+        env.insert("OPENAI_API_KEY".to_string(), TEST_API_KEY_VALUE.to_string());
         env.insert("MY_VAR".to_string(), "value".to_string());
         env.insert("AWS_ACCESS_KEY_ID".to_string(), "AKIA...".to_string());
+        env.insert("CUSTOM_PASS".to_string(), "let-me-in".to_string());
+        env.insert("SERVICE_PWD".to_string(), "super-secret".to_string());
 
         let filtered = filter_sensitive_env(&env);
 
@@ -306,5 +314,7 @@ mod tests {
         assert!(filtered.contains_key("MY_VAR"));
         assert!(!filtered.contains_key("OPENAI_API_KEY"));
         assert!(!filtered.contains_key("AWS_ACCESS_KEY_ID"));
+        assert!(!filtered.contains_key("CUSTOM_PASS"));
+        assert!(!filtered.contains_key("SERVICE_PWD"));
     }
 }

@@ -601,9 +601,6 @@ mod tests {
         session.set_input("/command echo hello".to_string());
         assert!(!should_submit_immediately_from_palette(&session));
 
-        session.set_input("/add-dir ~/tmp".to_string());
-        assert!(!should_submit_immediately_from_palette(&session));
-
         session.set_input("/review-template src/lib.rs".to_string());
         assert!(!should_submit_immediately_from_palette(&session));
     }

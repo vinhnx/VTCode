@@ -1,3 +1,4 @@
+use crate::skills::command_skills::is_model_catalog_eligible;
 use crate::skills::model::SkillMetadata;
 
 pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
@@ -20,7 +21,11 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
 }
 
 pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> {
-    if skills.is_empty() {
+    let visible_skills = skills
+        .iter()
+        .filter(|skill| is_model_catalog_eligible(skill))
+        .collect::<Vec<_>>();
+    if visible_skills.is_empty() {
         return None;
     }
 
@@ -31,7 +36,7 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
             .to_string(),
     );
 
-    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
+    let mut sorted_skills = visible_skills;
     sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
     let overflow = sorted_skills.len().saturating_sub(10);
     if overflow > 0 {
@@ -196,6 +201,37 @@ mod tests {
         assert!(!output.contains("Description as trigger"));
         assert!(!output.contains("scope:"));
         assert!(!output.contains("; use:"));
+    }
+
+    #[test]
+    fn test_render_prompt_skills_section_hides_command_skills() {
+        let hidden_skill = SkillMetadata {
+            name: "hidden-skill".to_string(),
+            description: "Hidden from model activation".to_string(),
+            short_description: None,
+            path: PathBuf::from("/path/to/hidden-skill"),
+            scope: crate::skills::model::SkillScope::System,
+            manifest: Some(crate::skills::types::SkillManifest {
+                name: "hidden-skill".to_string(),
+                description: "Hidden from model activation".to_string(),
+                disable_model_invocation: Some(true),
+                ..Default::default()
+            }),
+        };
+        let normal_skill = SkillMetadata {
+            name: "repo-skill".to_string(),
+            description: "A repo skill".to_string(),
+            short_description: None,
+            path: PathBuf::from("/path/to/repo-skill"),
+            scope: crate::skills::model::SkillScope::Repo,
+            manifest: None,
+        };
+
+        let output = render_prompt_skills_section(&[hidden_skill, normal_skill])
+            .expect("prompt skills section");
+
+        assert!(output.contains("repo-skill"));
+        assert!(!output.contains("hidden-skill"));
     }
 
     #[test]

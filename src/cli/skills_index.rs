@@ -16,20 +16,46 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
             match loader.discover_all_skills().await {
                 Ok(discovery_result) => {
                     let total_skills = discovery_result.skills.len() + discovery_result.tools.len();
+                    let built_in_count = discovery_result
+                        .skills
+                        .iter()
+                        .filter(|skill_ctx| {
+                            skill_ctx.manifest().variety
+                                == vtcode_core::skills::types::SkillVariety::BuiltIn
+                        })
+                        .count();
+                    let traditional_count = discovery_result.skills.len() - built_in_count;
 
                     println!("Skills index regenerated successfully!");
                     println!("Index file: {}", index_path.display());
                     println!(
-                        "Found {} skills (traditional: {}, CLI tools: {})",
+                        "Found {} skills (traditional: {}, built-in: {}, CLI tools: {})",
                         total_skills,
-                        discovery_result.skills.len(),
+                        traditional_count,
+                        built_in_count,
                         discovery_result.tools.len()
                     );
 
-                    if !discovery_result.skills.is_empty() {
+                    if traditional_count > 0 {
                         println!("\nTraditional skills:");
                         for skill_ctx in &discovery_result.skills {
                             let manifest = skill_ctx.manifest();
+                            if manifest.variety == vtcode_core::skills::types::SkillVariety::BuiltIn
+                            {
+                                continue;
+                            }
+                            println!("   - {} - {}", manifest.name, manifest.description);
+                        }
+                    }
+
+                    if built_in_count > 0 {
+                        println!("\nBuilt-in command skills:");
+                        for skill_ctx in &discovery_result.skills {
+                            let manifest = skill_ctx.manifest();
+                            if manifest.variety != vtcode_core::skills::types::SkillVariety::BuiltIn
+                            {
+                                continue;
+                            }
                             println!("   - {} - {}", manifest.name, manifest.description);
                         }
                     }
@@ -87,8 +113,41 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
 
             for skill_ctx in &discovery_result.skills {
                 let manifest = skill_ctx.manifest();
+                if manifest.variety == vtcode_core::skills::types::SkillVariety::BuiltIn {
+                    continue;
+                }
                 let desc = manifest.description.replace('|', "\\|");
                 let _ = writeln!(content, "| `{}` | {} | Skill |", manifest.name, desc);
+            }
+            content.push('\n');
+        }
+
+        let built_in_skills = discovery_result
+            .skills
+            .iter()
+            .filter(|skill_ctx| {
+                skill_ctx.manifest().variety == vtcode_core::skills::types::SkillVariety::BuiltIn
+            })
+            .collect::<Vec<_>>();
+        if !built_in_skills.is_empty() {
+            content.push_str("### Built-In Command Skills\n\n");
+            content.push_str("| Name | Description | Slash Alias |\n");
+            content.push_str("|------|-------------|-------------|\n");
+
+            for skill_ctx in &built_in_skills {
+                let manifest = skill_ctx.manifest();
+                let desc = manifest.description.replace('|', "\\|");
+                let slash_alias = manifest
+                    .metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.get("slash_alias"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("-");
+                let _ = writeln!(
+                    content,
+                    "| `{}` | {} | `{}` |",
+                    manifest.name, desc, slash_alias
+                );
             }
             content.push('\n');
         }
@@ -115,14 +174,34 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
 
         for skill_ctx in &discovery_result.skills {
             let manifest = skill_ctx.manifest();
-            let skill_md = skill_ctx.path().join("SKILL.md");
             let _ = writeln!(content, "### {}\n", manifest.name);
             let _ = writeln!(content, "{}\n", manifest.description);
-            let _ = writeln!(
-                content,
-                "- **Type**: Skill\n- **Path**: `{}`\n",
-                skill_md.display()
-            );
+            if manifest.variety == vtcode_core::skills::types::SkillVariety::BuiltIn {
+                let slash_alias = manifest
+                    .metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.get("slash_alias"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("-");
+                let usage = manifest
+                    .metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.get("usage"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("-");
+                let _ = writeln!(
+                    content,
+                    "- **Type**: Built-in command skill\n- **Slash Alias**: `{}`\n- **Usage**: `{}`\n",
+                    slash_alias, usage
+                );
+            } else {
+                let skill_md = skill_ctx.path().join("SKILL.md");
+                let _ = writeln!(
+                    content,
+                    "- **Type**: Skill\n- **Path**: `{}`\n",
+                    skill_md.display()
+                );
+            }
         }
 
         for tool in &discovery_result.tools {

@@ -4,7 +4,6 @@ use anyhow::Result;
 use chrono::Local;
 use std::time::Duration;
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
-use vtcode_core::review::build_review_prompt;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
@@ -13,7 +12,6 @@ use crate::cli::auth::{
 };
 
 use super::SlashCommandOutcome;
-use super::parsing::parse_review_spec;
 use super::{OAuthProviderAction, SessionModeCommand, SessionPaletteMode};
 
 fn parse_session_palette_args(
@@ -148,25 +146,6 @@ pub(super) async fn handle_fork_command(
     workspace: &Path,
 ) -> Result<SlashCommandOutcome> {
     handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Fork).await
-}
-
-pub(super) fn handle_review_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
-    match parse_review_spec(args) {
-        Ok(spec) => Ok(SlashCommandOutcome::SubmitPrompt {
-            prompt: build_review_prompt(&spec),
-        }),
-        Err(err) => {
-            renderer.line(MessageStyle::Error, &err)?;
-            renderer.line(
-                MessageStyle::Info,
-                "Usage: /review [--last-diff] [--target <expr>] [--style <style>] [--file <path> | files...]",
-            )?;
-            Ok(SlashCommandOutcome::Handled)
-        }
-    }
 }
 
 pub(super) fn handle_rewind_command(
@@ -513,6 +492,46 @@ mod tests {
             outcome,
             SlashCommandOutcome::RewindLatest {
                 scope: vtcode_core::core::agent::snapshots::RevertScope::Both,
+            }
+        ));
+    }
+
+    #[test]
+    fn session_palette_args_clamp_limit_and_keep_all_flag() {
+        let mut renderer = AnsiRenderer::stdout();
+
+        let parsed =
+            parse_session_palette_args("0 --all", &mut renderer).expect("args should parse");
+
+        assert_eq!(parsed, Some((1, true)));
+    }
+
+    #[test]
+    fn session_palette_args_reject_unknown_tokens() {
+        let mut renderer = AnsiRenderer::stdout();
+
+        let parsed =
+            parse_session_palette_args("--bogus", &mut renderer).expect("parse should succeed");
+
+        assert_eq!(parsed, None);
+    }
+
+    #[tokio::test]
+    async fn resume_in_inline_ui_returns_palette_outcome_without_listing_eagerly() {
+        let (sender, _receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+
+        let outcome = handle_resume_command("7 --all", &mut renderer, Path::new("."))
+            .await
+            .expect("resume outcome");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartSessionPalette {
+                mode: SessionPaletteMode::Resume,
+                limit: 7,
+                show_all: true,
             }
         ));
     }

@@ -1,10 +1,13 @@
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools};
+use crate::skills::command_skills::{
+    BuiltInCommandSkill, built_in_command_skill, merge_built_in_command_skill_contexts,
+};
 use crate::skills::container_validation::{
     ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult,
 };
 use crate::skills::discovery::{DiscoveryConfig, DiscoveryResult, SkillDiscovery};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
-use crate::skills::system::system_cache_root_dir;
+use crate::skills::system::{install_system_skills, system_cache_root_dir};
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
 use anyhow::{Context, Result};
 use dunce::canonicalize as normalize_path;
@@ -623,6 +626,8 @@ pub enum EnhancedSkill {
     Traditional(Box<Skill>),
     /// CLI-based tool skill
     CliTool(Box<CliToolBridge>),
+    /// Built-in VT Code command skill
+    BuiltInCommand(Box<BuiltInCommandSkill>),
     /// Native code plugin skill
     NativePlugin(Box<dyn crate::skills::native_plugin::NativePluginTrait>),
 }
@@ -632,6 +637,7 @@ impl std::fmt::Debug for EnhancedSkill {
         match self {
             Self::Traditional(skill) => f.debug_tuple("Traditional").field(skill).finish(),
             Self::CliTool(tool) => f.debug_tuple("CliTool").field(tool).finish(),
+            Self::BuiltInCommand(skill) => f.debug_tuple("BuiltInCommand").field(skill).finish(),
             Self::NativePlugin(plugin) => f.debug_tuple("NativePlugin").field(plugin).finish(),
         }
     }
@@ -640,6 +646,7 @@ impl std::fmt::Debug for EnhancedSkill {
 /// High-level loader that provides discovery and validation features
 pub struct EnhancedSkillLoader {
     workspace_root: PathBuf,
+    codex_home: PathBuf,
     discovery: SkillDiscovery,
     plugin_loader: crate::skills::native_plugin::PluginLoader,
 }
@@ -707,6 +714,7 @@ impl EnhancedSkillLoader {
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
+            codex_home,
             discovery,
             plugin_loader,
         }
@@ -721,18 +729,29 @@ impl EnhancedSkillLoader {
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
+            codex_home,
             discovery,
             plugin_loader,
         }
     }
 
+    fn ensure_system_skills_installed(&self) {
+        if let Err(err) = install_system_skills(&self.codex_home) {
+            tracing::warn!("enhanced skill loader failed to install bundled system skills: {err}");
+        }
+    }
+
     /// Discover all available skills and tools
     pub async fn discover_all_skills(&mut self) -> Result<DiscoveryResult> {
-        self.discovery.discover_all(&self.workspace_root).await
+        self.ensure_system_skills_installed();
+        let mut result = self.discovery.discover_all(&self.workspace_root).await?;
+        merge_built_in_command_skill_contexts(&mut result.skills);
+        Ok(result)
     }
 
     /// Get a specific skill by name
     pub async fn get_skill(&mut self, name: &str) -> Result<EnhancedSkill> {
+        self.ensure_system_skills_installed();
         let result = self.discovery.discover_all(&self.workspace_root).await?;
 
         // Try traditional skills first
@@ -756,6 +775,10 @@ impl EnhancedSkillLoader {
                 let bridge = CliToolBridge::new(tool_config.clone())?;
                 return Ok(EnhancedSkill::CliTool(Box::new(bridge)));
             }
+        }
+
+        if let Some(skill) = built_in_command_skill(name) {
+            return Ok(EnhancedSkill::BuiltInCommand(Box::new(skill)));
         }
 
         // Try native plugins - discover plugin directories and load on demand
@@ -956,6 +979,10 @@ pub fn discover_skill_metadata_lightweight_hermetic(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skills::CommandSkillBackend;
+    use crate::skills::command_skills::command_skill_specs;
+    use crate::skills::system::{install_system_skills, system_cache_root_dir};
+    use tempfile::TempDir;
 
     fn manifest(name: &str, description: &str) -> SkillManifest {
         SkillManifest {
@@ -1015,5 +1042,113 @@ mod tests {
         };
         let mentions = detect_skill_mentions_with_options("Use $sql-checker", &skills, &options);
         assert!(mentions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn enhanced_loader_discovers_and_loads_built_in_command_skills() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+
+        let discovery = loader.discover_all_skills().await.expect("discover skills");
+        assert!(
+            discovery
+                .skills
+                .iter()
+                .any(|skill_ctx| skill_ctx.manifest().name == "cmd-status")
+        );
+
+        let skill = loader
+            .get_skill("cmd-status")
+            .await
+            .expect("load cmd-status");
+        assert!(matches!(skill, EnhancedSkill::BuiltInCommand(_)));
+    }
+
+    #[tokio::test]
+    async fn enhanced_loader_discovers_and_loads_bundled_command_skills() {
+        let workspace = TempDir::new().expect("workspace");
+        let codex_home = TempDir::new().expect("codex home");
+        install_system_skills(codex_home.path()).expect("install bundled system skills");
+        let cmd_review_dir = system_cache_root_dir(codex_home.path()).join("cmd-review");
+        assert!(
+            cmd_review_dir.join("SKILL.md").exists(),
+            "expected bundled cmd-review at {}",
+            cmd_review_dir.display()
+        );
+        let (manifest, _) =
+            crate::skills::manifest::parse_skill_file(&cmd_review_dir).expect("parse cmd-review");
+        assert_eq!(manifest.name, "cmd-review");
+        let config = discovery_config_for_codex_home(workspace.path(), codex_home.path());
+        assert!(
+            config
+                .skill_paths
+                .iter()
+                .any(|path| path == &system_cache_root_dir(codex_home.path()))
+        );
+        let mut loader = EnhancedSkillLoader::with_codex_home(
+            workspace.path().to_path_buf(),
+            codex_home.path().to_path_buf(),
+        );
+
+        let discovery = loader.discover_all_skills().await.expect("discover skills");
+        assert!(
+            discovery
+                .skills
+                .iter()
+                .any(|skill_ctx| skill_ctx.manifest().name == "cmd-review")
+        );
+
+        let skill = loader
+            .get_skill("cmd-review")
+            .await
+            .expect("load cmd-review");
+        assert!(matches!(skill, EnhancedSkill::Traditional(_)));
+    }
+
+    #[tokio::test]
+    async fn enhanced_loader_discovers_every_command_skill() {
+        let workspace = TempDir::new().expect("workspace");
+        let codex_home = TempDir::new().expect("codex home");
+        let mut loader = EnhancedSkillLoader::with_codex_home(
+            workspace.path().to_path_buf(),
+            codex_home.path().to_path_buf(),
+        );
+
+        let discovery = loader.discover_all_skills().await.expect("discover skills");
+        let discovered_names = discovery
+            .skills
+            .iter()
+            .map(|skill_ctx| skill_ctx.manifest().name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+
+        for spec in command_skill_specs() {
+            assert!(
+                discovered_names.contains(spec.skill_name),
+                "missing command skill {}",
+                spec.skill_name
+            );
+
+            let skill = loader
+                .get_skill(spec.skill_name)
+                .await
+                .unwrap_or_else(|error| panic!("failed to load {}: {error}", spec.skill_name));
+
+            match spec.backend {
+                CommandSkillBackend::TraditionalSkill { .. } => {
+                    assert!(
+                        matches!(skill, EnhancedSkill::Traditional(_)),
+                        "{} should load as a traditional skill",
+                        spec.skill_name
+                    );
+                }
+                CommandSkillBackend::BuiltInCommand { .. } => {
+                    assert!(
+                        matches!(skill, EnhancedSkill::BuiltInCommand(_)),
+                        "{} should load as a built-in command skill",
+                        spec.skill_name
+                    );
+                }
+            }
+        }
     }
 }

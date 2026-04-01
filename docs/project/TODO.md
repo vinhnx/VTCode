@@ -151,3 +151,15 @@ All in all, the reason why Claude Code works better than the plain web UI is not
 ===
 
 THIS: https://github.com/openai/codex/pull/15525
+
+==
+
+===
+
+check enter to use default doesn't work on /compact wizard
+
+===
+
+simplify /compact, no need to use wizard step by step, do it auto matically https://developers.openai.com/api/docs/guides/compaction
+
+---

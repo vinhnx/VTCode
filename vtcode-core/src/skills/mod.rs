@@ -9,7 +9,8 @@
 //! - **CLI Tool Bridge**: Integrate any command-line tool as a skill
 //! - **Dynamic Discovery**: Auto-discover skills and CLI tools from filesystem
 //! - **Context Management**: Memory-efficient loading with LRU eviction
-//! - **Spec Compliance**: Strict support for the core Agent Skills `SKILL.md` format
+//! - **Spec Compliance**: Strict support for the core Agent Skills `SKILL.md` format,
+//!   plus the client-side `disable-model-invocation` catalog filter
 //! - **Tool Integration**: Seamless integration with VT Code's tool registry
 //!
 //! ## Architecture
@@ -17,7 +18,8 @@
 //! ### Three-Level Loading System
 //!
 //! **Level 1: Metadata** (~50 tokens)
-//! - Always loaded in system prompt
+//! - Loaded into the startup catalog unless the skill opts out with
+//!   `disable-model-invocation`
 //! - Name, description, and basic info
 //! - Minimal context overhead
 //!
@@ -103,6 +105,7 @@ pub mod authoring;
 pub mod auto_verification;
 pub mod bundle;
 pub mod cli_bridge;
+pub mod command_skills;
 pub mod container;
 pub mod container_validation;
 pub mod context_manager;
@@ -140,6 +143,11 @@ pub use bundle::{
     import_inline_bundle, import_skill_bundle, load_skill_index,
 };
 pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_tools};
+pub use command_skills::{
+    BuiltInCommandExecutor, BuiltInCommandSkill, CommandSkillBackend, CommandSkillSpec,
+    built_in_command_skill, built_in_command_skill_contexts, command_skill_specs,
+    find_command_skill_by_skill_name, find_command_skill_by_slash_name,
+};
 pub use container::{
     SkillContainer, SkillSource as ContainerSkillSource, SkillSpec, SkillType, SkillVersion,
 };

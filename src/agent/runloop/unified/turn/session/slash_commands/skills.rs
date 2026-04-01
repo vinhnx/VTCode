@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
+use vtcode_core::skills::types::SkillVariety;
 use vtcode_core::tools::handlers::ToolModelCapabilities;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{
@@ -13,6 +14,7 @@ use crate::agent::runloop::unified::tool_catalog::tool_catalog_change_notifier;
 use crate::agent::runloop::unified::turn::utils::{
     enforce_history_limits, truncate_message_content,
 };
+use crate::agent::runloop::unified::ui_interaction::start_loading_status;
 use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
@@ -39,6 +41,40 @@ struct InteractiveSkillEntry {
     name: String,
     description: String,
     loaded: bool,
+    kind: InteractiveSkillKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InteractiveSkillKind {
+    Traditional,
+    BuiltIn,
+    Utility,
+}
+
+impl InteractiveSkillEntry {
+    fn is_loadable(&self) -> bool {
+        matches!(self.kind, InteractiveSkillKind::Traditional)
+    }
+
+    fn supports_validation(&self) -> bool {
+        matches!(self.kind, InteractiveSkillKind::Traditional)
+    }
+
+    fn supports_packaging(&self) -> bool {
+        matches!(self.kind, InteractiveSkillKind::Traditional)
+    }
+
+    fn badge(&self) -> String {
+        if self.loaded {
+            return "Enabled".to_string();
+        }
+
+        match self.kind {
+            InteractiveSkillKind::Traditional => "Available".to_string(),
+            InteractiveSkillKind::BuiltIn => "Built-in".to_string(),
+            InteractiveSkillKind::Utility => "Utility".to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -112,8 +148,14 @@ async fn apply_skill_command_outcome(
             use vtcode_core::skills::execute_skill_with_sub_llm;
 
             let skill_name = skill.name().to_string();
+            let status_message = skill_invocation_status_message(&skill_name);
             let available_tools = ctx.tools.read().await.clone();
             let model = ctx.config.model.clone();
+            let loading_spinner = ctx.renderer.supports_inline_ui().then(|| {
+                start_loading_status(ctx.handle, ctx.input_status_state, status_message.clone())
+            });
+
+            ctx.renderer.line(MessageStyle::Info, &status_message)?;
 
             match execute_skill_with_sub_llm(
                 &skill,
@@ -126,20 +168,22 @@ async fn apply_skill_command_outcome(
             .await
             {
                 Ok(result) => {
-                    ctx.renderer.line(MessageStyle::Output, &result)?;
+                    drop(loading_spinner);
+                    ctx.renderer
+                        .render_markdown_output(MessageStyle::Output, &result)?;
                     ctx.conversation_history.push(uni::Message::user(format!(
                         "/skills use {} [executed]",
                         skill_name
                     )));
 
-                    let result_string: String = result;
-                    let limited = truncate_message_content(&result_string);
+                    let limited = truncate_message_content(&result);
                     ctx.conversation_history
                         .push(uni::Message::assistant(limited));
                     enforce_history_limits(ctx.conversation_history);
                     Ok(SlashCommandControl::Continue)
                 }
                 Err(e) => {
+                    drop(loading_spinner);
                     ctx.renderer.line(
                         MessageStyle::Error,
                         &format!("Failed to execute skill: {}", e),
@@ -148,11 +192,62 @@ async fn apply_skill_command_outcome(
                 }
             }
         }
+        SkillCommandOutcome::UseBuiltInCommand {
+            name,
+            slash_name,
+            input,
+        } => {
+            let status_message = skill_invocation_status_message(&name);
+            let loading_spinner = ctx.renderer.supports_inline_ui().then(|| {
+                start_loading_status(ctx.handle, ctx.input_status_state, status_message.clone())
+            });
+
+            ctx.renderer.line(MessageStyle::Info, &status_message)?;
+            let outcome = crate::agent::runloop::slash_commands::execute_command_skill_by_name(
+                &slash_name,
+                &input,
+                ctx.renderer,
+                &ctx.config.workspace,
+            )
+            .await?;
+            drop(loading_spinner);
+            let control = Box::pin(
+                crate::agent::runloop::unified::turn::session::slash_commands::handle_outcome(
+                    outcome,
+                    ctx.reborrow(),
+                ),
+            )
+            .await?;
+            match control {
+                SlashCommandControl::Continue => Ok(SlashCommandControl::Continue),
+                SlashCommandControl::SubmitPrompt(prompt) => {
+                    Ok(SlashCommandControl::SubmitPrompt(prompt))
+                }
+                SlashCommandControl::ReplaceInput(content) => {
+                    Ok(SlashCommandControl::ReplaceInput(content))
+                }
+                SlashCommandControl::BreakWithReason(reason) => {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Built-in command skill '{}' exited the session.", name),
+                    )?;
+                    Ok(SlashCommandControl::BreakWithReason(reason))
+                }
+            }
+        }
         SkillCommandOutcome::Error { message } => {
             ctx.renderer.line(MessageStyle::Error, &message)?;
             Ok(SlashCommandControl::Continue)
         }
     }
+}
+
+fn skill_invocation_status_message(skill_name: &str) -> String {
+    let invocation_target = skill_name
+        .strip_prefix("cmd-")
+        .map(|slash_name| format!("/{}", slash_name))
+        .unwrap_or_else(|| skill_name.to_string());
+    format!("Running {}...", invocation_target)
 }
 
 fn skill_runtime(
@@ -258,6 +353,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Unloaded,
                     "Enable Skill",
                     "Select a skill to enable for this session.",
+                    PickerMode::TraditionalOnly,
                 )
                 .await?
                 {
@@ -270,6 +366,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Loaded,
                     "Disable Skill",
                     "Select an enabled skill to unload from this session.",
+                    PickerMode::TraditionalOnly,
                 )
                 .await?
                 {
@@ -282,6 +379,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Any,
                     "Skill Details",
                     "Select a skill to inspect.",
+                    PickerMode::Any,
                 )
                 .await?
                 {
@@ -294,6 +392,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Any,
                     "Run Skill",
                     "Select a skill to execute with input.",
+                    PickerMode::Any,
                 )
                 .await?
                     && let Some(input) = prompt_optional_text(
@@ -314,6 +413,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Any,
                     "Validate Skill",
                     "Select a skill to validate.",
+                    PickerMode::TraditionalOnly,
                 )
                 .await?
                 {
@@ -326,6 +426,7 @@ async fn run_interactive_skills_manager(
                     SkillFilter::Any,
                     "Package Skill",
                     "Select a skill to package to .skill.",
+                    PickerMode::TraditionalOnly,
                 )
                 .await?
                 {
@@ -479,6 +580,11 @@ async fn discover_interactive_skills(
                 name: manifest.name.clone(),
                 description: manifest.description.clone(),
                 loaded: loaded.contains_key(&manifest.name),
+                kind: if manifest.variety == SkillVariety::BuiltIn {
+                    InteractiveSkillKind::BuiltIn
+                } else {
+                    InteractiveSkillKind::Traditional
+                },
             }
         })
         .collect();
@@ -490,6 +596,7 @@ async fn discover_interactive_skills(
                 name: tool.name,
                 description: tool.description,
                 loaded: false,
+                kind: InteractiveSkillKind::Utility,
             }),
     );
 
@@ -502,11 +609,12 @@ async fn pick_skill_name(
     filter: SkillFilter,
     title: &str,
     description: &str,
+    picker_mode: PickerMode,
 ) -> Result<Option<String>> {
     let entries = discover_interactive_skills(ctx).await?;
     let filtered: Vec<InteractiveSkillEntry> = entries
         .into_iter()
-        .filter(|entry| filter.matches(entry))
+        .filter(|entry| filter.matches(entry) && picker_mode.allows(entry))
         .collect();
 
     if filtered.is_empty() {
@@ -532,6 +640,21 @@ async fn pick_skill_name(
     Ok(action
         .strip_prefix(SKILL_PICK_PREFIX)
         .map(std::string::ToString::to_string))
+}
+
+#[derive(Clone, Copy)]
+enum PickerMode {
+    Any,
+    TraditionalOnly,
+}
+
+impl PickerMode {
+    fn allows(self, entry: &InteractiveSkillEntry) -> bool {
+        match self {
+            PickerMode::Any => true,
+            PickerMode::TraditionalOnly => entry.is_loadable(),
+        }
+    }
 }
 
 async fn prompt_required_text(
@@ -812,7 +935,7 @@ fn show_skills_list_modal(ctx: &mut SlashCommandContext<'_>, entries: &[Interact
         .map(|entry| InlineListItem {
             title: entry.name.clone(),
             subtitle: Some(entry.description.clone()),
-            badge: Some(if entry.loaded { "Enabled" } else { "Available" }.to_string()),
+            badge: Some(entry.badge()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{}{}",
@@ -863,7 +986,7 @@ fn show_skill_picker_modal(
         .map(|entry| InlineListItem {
             title: entry.name.clone(),
             subtitle: Some(entry.description.clone()),
-            badge: Some(if entry.loaded { "Enabled" } else { "Available" }.to_string()),
+            badge: Some(entry.badge()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{}{}",
@@ -902,7 +1025,7 @@ fn show_skill_picker_modal(
 
 fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &InteractiveSkillEntry) {
     let mut items = Vec::new();
-    if entry.loaded {
+    if entry.is_loadable() && entry.loaded {
         items.push(InlineListItem {
             title: "Disable for this session".to_string(),
             subtitle: Some("Unload this skill from the active session".to_string()),
@@ -914,7 +1037,7 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
             ))),
             search_value: Some("disable unload session".to_string()),
         });
-    } else {
+    } else if entry.is_loadable() {
         items.push(InlineListItem {
             title: "Enable for this session".to_string(),
             subtitle: Some("Load this skill into the active session".to_string()),
@@ -952,29 +1075,33 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
         search_value: Some("run execute use".to_string()),
     });
 
-    items.push(InlineListItem {
-        title: "Validate".to_string(),
-        subtitle: Some("Validate this skill structure".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}",
-            SKILL_VALIDATE_PREFIX, entry.name
-        ))),
-        search_value: Some("validate".to_string()),
-    });
+    if entry.supports_validation() {
+        items.push(InlineListItem {
+            title: "Validate".to_string(),
+            subtitle: Some("Validate this skill structure".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                SKILL_VALIDATE_PREFIX, entry.name
+            ))),
+            search_value: Some("validate".to_string()),
+        });
+    }
 
-    items.push(InlineListItem {
-        title: "Package".to_string(),
-        subtitle: Some("Package this skill to .skill".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}",
-            SKILL_PACKAGE_PREFIX, entry.name
-        ))),
-        search_value: Some("package bundle".to_string()),
-    });
+    if entry.supports_packaging() {
+        items.push(InlineListItem {
+            title: "Package".to_string(),
+            subtitle: Some("Package this skill to .skill".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                SKILL_PACKAGE_PREFIX, entry.name
+            ))),
+            search_value: Some("package bundle".to_string()),
+        });
+    }
 
     items.push(InlineListItem {
         title: "Back".to_string(),
@@ -996,4 +1123,25 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
         default_selection,
         None,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::skill_invocation_status_message;
+
+    #[test]
+    fn command_skills_use_slash_alias_in_status() {
+        assert_eq!(
+            skill_invocation_status_message("cmd-review"),
+            "Running /review..."
+        );
+    }
+
+    #[test]
+    fn non_command_skills_use_skill_name_in_status() {
+        assert_eq!(
+            skill_invocation_status_message("rust-skills"),
+            "Running rust-skills..."
+        );
+    }
 }

@@ -159,11 +159,24 @@ pub fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
         || lower.contains("invalid_request_error")
 }
 
+/// Detect if an OpenAI API error indicates `service_tier=flex` is unsupported.
+pub fn is_flex_service_tier_unsupported(status: StatusCode, body: &str) -> bool {
+    if status != StatusCode::BAD_REQUEST {
+        return false;
+    }
+
+    let lower = body.to_ascii_lowercase();
+    lower.contains("flex")
+        && (lower.contains("flex is not available for this model")
+            || (lower.contains("service tier") || lower.contains("service_tier"))
+                && (lower.contains("not available") || lower.contains("unsupported")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        format_openai_error, is_model_not_found, is_responses_api_unsupported,
-        parse_openai_error_details,
+        OpenAIErrorDetails, format_openai_error, is_flex_service_tier_unsupported,
+        is_model_not_found, is_responses_api_unsupported, parse_openai_error_details,
     };
     use reqwest::StatusCode;
     use reqwest::header::{HeaderMap, HeaderValue};
@@ -192,6 +205,22 @@ mod tests {
     }
 
     #[test]
+    fn flex_service_tier_detection_matches_backend_error() {
+        assert!(is_flex_service_tier_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Flex is not available for this model.","type":"invalid_request_error"}}"#
+        ));
+        assert!(!is_flex_service_tier_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Bad request","type":"invalid_request_error"}}"#
+        ));
+        assert!(!is_flex_service_tier_unsupported(
+            StatusCode::TOO_MANY_REQUESTS,
+            r#"{"error":{"message":"Flex is not available for this model.","type":"invalid_request_error"}}"#
+        ));
+    }
+
+    #[test]
     fn parse_openai_error_details_extracts_message_and_codes() {
         let details = parse_openai_error_details(
             r#"{"error":{"message":"Bad request","type":"invalid_request_error","param":"text.verbosity","code":"unsupported_parameter"}}"#,
@@ -201,6 +230,13 @@ mod tests {
         assert_eq!(details.error_type.as_deref(), Some("invalid_request_error"));
         assert_eq!(details.param.as_deref(), Some("text.verbosity"));
         assert_eq!(details.code.as_deref(), Some("unsupported_parameter"));
+    }
+
+    #[test]
+    fn parse_openai_error_details_handles_empty_body() {
+        let details = parse_openai_error_details("");
+
+        assert_eq!(details, OpenAIErrorDetails::default());
     }
 
     #[test]

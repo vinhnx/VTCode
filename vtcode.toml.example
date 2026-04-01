@@ -313,7 +313,7 @@ allowed_domains = []
 
 # Additional blocked patterns (merged with defaults)
 # These patterns prevent access to URLs containing sensitive information
-# Example: ["internal_token=", "company_secret="]
+# Example: ["auth_token=<redacted>", "session_secret=<redacted>"]
 blocked_patterns = []
 
 # Log all URL validation decisions for audit trail

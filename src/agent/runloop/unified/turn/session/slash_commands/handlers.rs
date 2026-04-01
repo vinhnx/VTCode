@@ -88,7 +88,7 @@ pub(super) use ui::{
     handle_theme_changed, handle_toggle_ide_context, handle_toggle_vim_mode,
 };
 pub(super) use update::handle_update;
-pub(super) use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
+pub(super) use workspace::handle_initialize_workspace;
 
 pub(super) async fn handle_manage_loop(
     ctx: SlashCommandContext<'_>,

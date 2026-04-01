@@ -18,6 +18,7 @@ pub const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
     "description",
     "license",
     "allowed-tools",
+    "disable-model-invocation",
     "compatibility",
     "metadata",
 ];
@@ -33,6 +34,10 @@ pub struct SkillYaml {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "allowed-tools")]
     pub allowed_tools: Option<AllowedToolsField>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disable-model-invocation")]
+    #[serde(alias = "disable_model_invocation")]
+    pub disable_model_invocation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,7 +137,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         mode: None,
         vtcode_native: None,
         allowed_tools: allowed_tools_string,
-        disable_model_invocation: None,
+        disable_model_invocation: yaml.disable_model_invocation,
         when_to_use: None,
         when_not_to_use: None,
         argument_hint: None,
@@ -214,6 +219,7 @@ license: Apache-2.0
 # Optional fields (uncomment to use):
 # compatibility: "Requires git and network access"
 # allowed-tools: "Read Write Bash"
+# disable-model-invocation: true
 # metadata:
 #   author: your-team
 #   version: "1.0"
@@ -347,6 +353,21 @@ metadata:
             metadata.get("sources"),
             Some(&json!(["Rust API Guidelines", "Rust Performance Book"]))
         );
+    }
+
+    #[test]
+    fn test_parse_skill_disable_model_invocation_flag() {
+        let content = r#"---
+name: command-skill
+description: A skill hidden from model-driven activation
+disable-model-invocation: true
+---
+
+# Command Skill
+"#;
+
+        let (manifest, _) = parse_skill_content(content).expect("flag should parse");
+        assert_eq!(manifest.disable_model_invocation, Some(true));
     }
 
     #[test]

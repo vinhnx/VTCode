@@ -182,9 +182,6 @@ pub(crate) async fn handle_outcome(
             force,
         } => handlers::handle_update(ctx, check_only, install, force).await,
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
-        SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
-            handlers::handle_manage_workspace_directories(ctx, command).await
-        }
         SlashCommandOutcome::ManageLoop { command } => {
             handlers::handle_manage_loop(ctx, command).await
         }

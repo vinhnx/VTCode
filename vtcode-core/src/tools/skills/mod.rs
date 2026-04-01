@@ -3,6 +3,7 @@ use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
 use crate::skills::cli_bridge::CliToolConfig;
+use crate::skills::command_skills::merge_built_in_command_skill_metadata;
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
 use crate::skills::executor::{ForkSkillExecutor, SkillToolAdapter};
 use crate::skills::file_references::FileReferenceValidator;
@@ -293,11 +294,13 @@ fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> 
     let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_enabled);
 
     #[cfg(test)]
-    let discovery = crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);
+    let mut discovery =
+        crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);
 
     #[cfg(not(test))]
-    let discovery = crate::skills::loader::discover_skill_metadata_lightweight(&config);
+    let mut discovery = crate::skills::loader::discover_skill_metadata_lightweight(&config);
 
+    merge_built_in_command_skill_metadata(&mut discovery.skills);
     discovery
 }
 
@@ -454,6 +457,13 @@ impl Tool for LoadSkillTool {
             Ok(EnhancedSkill::CliTool(_)) => {
                 return Err(anyhow::anyhow!(
                     "Skill '{}' is a system utility and cannot be activated via load_skill",
+                    name
+                ));
+            }
+            Ok(EnhancedSkill::BuiltInCommand(_)) => {
+                return Err(anyhow::anyhow!(
+                    "Skill '{}' is a built-in command skill and cannot be activated via load_skill; use /skills use {} instead",
+                    name,
                     name
                 ));
             }

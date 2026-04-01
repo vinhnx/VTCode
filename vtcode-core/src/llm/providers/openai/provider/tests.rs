@@ -3491,6 +3491,86 @@ async fn responses_request_retries_with_fallback_model_after_not_found() {
 }
 
 #[tokio::test]
+async fn responses_request_retries_without_flex_service_tier() {
+    let server = MockServer::start().await;
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        None,
+        Some(models::openai::GPT_5_CODEX.to_string()),
+        Some(native_openai_mock_base_url(&server)),
+        None,
+        None,
+        None,
+        Some(flex_openai_config()),
+        None,
+    );
+    let seen_service_tiers = Arc::new(Mutex::new(Vec::new()));
+    let seen_service_tiers_for_response = Arc::clone(&seen_service_tiers);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            let service_tier = payload
+                .get("service_tier")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            seen_service_tiers_for_response
+                .lock()
+                .expect("service tier mutex should not be poisoned")
+                .push(service_tier.clone());
+
+            match service_tier.as_deref() {
+                Some("flex") => ResponseTemplate::new(400).set_body_json(json!({
+                    "error": {
+                        "message": "Flex is not available for this model.",
+                        "type": "invalid_request_error"
+                    }
+                })),
+                None => ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "resp_retry_without_flex",
+                    "status": "completed",
+                    "output": [{
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{
+                            "type": "output_text",
+                            "text": "retry without flex succeeded"
+                        }]
+                    }]
+                })),
+                other => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected service tier: {other:?}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("retry without flex should succeed");
+
+    assert_eq!(
+        response.content.as_deref(),
+        Some("retry without flex succeeded")
+    );
+    assert_eq!(
+        seen_service_tiers
+            .lock()
+            .expect("service tier mutex should not be poisoned")
+            .as_slice(),
+        &[Some("flex".to_string()), None]
+    );
+}
+
+#[tokio::test]
 async fn responses_stream_retries_with_fallback_model_after_not_found() {
     let server = MockServer::start().await;
     let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
@@ -3562,6 +3642,85 @@ async fn responses_stream_retries_with_fallback_model_after_not_found() {
             models::openai::GPT_5_NANO.to_string(),
             models::openai::GPT_5_MINI.to_string(),
         ]
+    );
+}
+
+#[tokio::test]
+async fn chat_request_retries_without_flex_service_tier() {
+    let server = MockServer::start().await;
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        None,
+        Some(models::openai::GPT_5_CODEX.to_string()),
+        Some(native_openai_mock_base_url(&server)),
+        None,
+        None,
+        None,
+        Some(flex_openai_config()),
+        None,
+    );
+    provider.set_responses_api_state(models::openai::GPT_5_CODEX, ResponsesApiState::Disabled);
+
+    let seen_service_tiers = Arc::new(Mutex::new(Vec::new()));
+    let seen_service_tiers_for_response = Arc::clone(&seen_service_tiers);
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(move |request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            let service_tier = payload
+                .get("service_tier")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            seen_service_tiers_for_response
+                .lock()
+                .expect("service tier mutex should not be poisoned")
+                .push(service_tier.clone());
+
+            match service_tier.as_deref() {
+                Some("flex") => ResponseTemplate::new(400).set_body_json(json!({
+                    "error": {
+                        "message": "Flex is not available for this model.",
+                        "type": "invalid_request_error"
+                    }
+                })),
+                None => ResponseTemplate::new(200).set_body_json(json!({
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": "chat retry without flex succeeded"
+                        },
+                        "finish_reason": "stop"
+                    }]
+                })),
+                other => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected service tier: {other:?}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("chat retry without flex should succeed");
+
+    assert_eq!(
+        response.content.as_deref(),
+        Some("chat retry without flex succeeded")
+    );
+    assert_eq!(
+        seen_service_tiers
+            .lock()
+            .expect("service tier mutex should not be poisoned")
+            .as_slice(),
+        &[Some("flex".to_string()), None]
     );
 }
 
@@ -3655,6 +3814,55 @@ async fn responses_requests_include_client_request_id_and_surface_debug_metadata
     assert!(error_text.contains("type=invalid_request_error"));
     assert!(error_text.contains("code=unsupported_parameter"));
     assert!(error_text.contains("param=text.verbosity"));
+}
+
+#[tokio::test]
+async fn responses_requests_send_json_content_type() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(|request: &wiremock::Request| {
+            let content_type = request
+                .headers
+                .get("content-type")
+                .and_then(|value| value.to_str().ok())
+                .expect("request should include content-type");
+            assert!(
+                content_type.starts_with("application/json"),
+                "unexpected content-type: {content_type}"
+            );
+
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_json(json!({
+                    "id": "resp_content_type",
+                    "status": "completed",
+                    "output": [{
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{
+                            "type": "output_text",
+                            "text": "done"
+                        }]
+                    }]
+                }))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("request should succeed");
+
+    assert_eq!(response.content.as_deref(), Some("done"));
 }
 
 #[tokio::test]

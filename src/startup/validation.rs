@@ -5,7 +5,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::validator::ConfigValidator;
 use vtcode_core::tools::RipgrepStatus;
 use vtcode_core::utils::path::canonicalize_workspace;
-use vtcode_core::utils::validation::validate_is_directory;
 
 pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Result<()> {
     use vtcode_config::constants::tools;
@@ -159,20 +158,6 @@ pub(super) fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf
     } else {
         workspace_candidate
     }
-}
-
-pub(super) fn validate_additional_directories(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    let mut validated_dirs = Vec::new();
-
-    for dir in dirs {
-        validate_is_directory(dir, "Additional directory")?;
-        let absolute_dir = dir
-            .canonicalize()
-            .with_context(|| format!("Failed to resolve path '{}'", dir.display()))?;
-        validated_dirs.push(absolute_dir);
-    }
-
-    Ok(validated_dirs)
 }
 
 pub(super) fn validate_full_auto_configuration(
@@ -395,18 +380,6 @@ mod tests {
                 env::remove_var("VTCODE_CONFIG");
             }
         }
-        Ok(())
-    }
-
-    #[test]
-    fn canonicalizes_additional_directories() -> Result<()> {
-        let temp_dir = TempDir::new()?;
-        let extra_dir = temp_dir.path().join("extra");
-        std::fs::create_dir(&extra_dir)?;
-
-        let validated = validate_additional_directories(std::slice::from_ref(&extra_dir))?;
-
-        assert_eq!(validated, vec![extra_dir.canonicalize()?]);
         Ok(())
     }
 }

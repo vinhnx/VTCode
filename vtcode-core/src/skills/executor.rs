@@ -18,11 +18,13 @@ use crate::config::models::ModelId;
 use crate::core::agent::runner::{AgentRunner, RunnerSettings};
 use crate::core::agent::task::{ContextItem, Task};
 use crate::core::agent::types::AgentType;
+use crate::core::loop_detector::LoopDetector;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
 use crate::skills::types::{Skill, SkillNetworkPolicy};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::ToolRegistry;
+use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use crate::tools::tool_intent;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
@@ -37,6 +39,18 @@ use tracing::{debug, info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type SkillToolArgTransform = dyn Fn(&str, Value) -> Value + Send + Sync;
+
+const EMPTY_SKILL_INPUT_PROMPT: &str = "No explicit user input was provided. Follow the skill instructions using their default behavior for empty input.";
+const SKILL_TOOL_FREE_SYNTHESIS_PROMPT: &str = "Do not make any more tool calls. Provide the best final answer you can using the information already gathered.";
+const MAX_SKILL_LLM_ITERATIONS: usize = 10;
+
+fn skill_tool_free_synthesis_prompt(reason: &str) -> String {
+    format!("{reason}\n\n{SKILL_TOOL_FREE_SYNTHESIS_PROMPT}")
+}
+
+fn should_force_tool_free_synthesis(error: &ToolExecutionError) -> bool {
+    matches!(error.error_type, ToolErrorType::ToolNotFound)
+}
 
 /// Network-capable tool names that should be filtered based on skill network policy
 const NETWORK_TOOLS: &[&str] = &[
@@ -421,8 +435,16 @@ fn fork_agent_type(skill: &Skill) -> AgentType {
 
 fn format_skill_user_input(user_input: &Value) -> String {
     match user_input {
-        Value::String(text) => text.clone(),
+        Value::String(text) => normalized_skill_user_input(text),
         other => other.to_string(),
+    }
+}
+
+fn normalized_skill_user_input(user_input: &str) -> String {
+    if user_input.trim().is_empty() {
+        EMPTY_SKILL_INPUT_PROMPT.to_string()
+    } else {
+        user_input.to_string()
     }
 }
 
@@ -572,70 +594,102 @@ pub async fn execute_skill_with_sub_llm(
 
     // Apply network policy filtering
     let available_tools = filter_tools_for_skill(skill, available_tools);
+    let tool_definitions = if available_tools.is_empty() {
+        None
+    } else {
+        Some(Arc::new(available_tools.clone()))
+    };
+    let normalized_user_input = normalized_skill_user_input(&user_input);
 
     // Build conversation starting with user input
-    let mut messages = vec![Message::user(user_input.clone())];
+    let mut messages = vec![Message::user(normalized_user_input)];
 
     // Create LLM request with skill instructions as system prompt
     let mut request = LLMRequest {
         messages: messages.clone(),
         system_prompt: Some(Arc::new(skill.instructions.clone())),
-        tools: if available_tools.is_empty() {
-            None
-        } else {
-            Some(Arc::new(available_tools.clone()))
-        },
+        tools: tool_definitions.clone(),
         model: model.clone(),
         max_tokens: Some(4096),
         ..Default::default()
     };
 
     // Loop: Make LLM request and handle tool calls
-    const MAX_ITERATIONS: usize = 10;
     const BACKOFF_BASE_MS: u64 = 50; // initial back‑off delay
     const MAX_RATE_LIMIT_WAIT_CYCLES: usize = 20;
     const SKILL_RATE_LIMIT_KEY: &str = "skill_sub_llm";
     let mut iterations = 0;
     let mut backoff = BACKOFF_BASE_MS;
     let mut wait_cycles = 0usize;
+    let mut loop_detector = LoopDetector::new();
+    let mut force_tool_free_synthesis = None;
 
     loop {
-        // Rate‑limit tool execution before each iteration
-        if let Err(wait_hint) =
-            crate::tools::adaptive_rate_limiter::try_acquire_global(SKILL_RATE_LIMIT_KEY)
-        {
-            wait_cycles += 1;
-            if wait_cycles > MAX_RATE_LIMIT_WAIT_CYCLES {
-                return Err(anyhow!(
-                    "Skill execution stayed rate-limited for too long ({} cycles)",
-                    MAX_RATE_LIMIT_WAIT_CYCLES
+        let tool_free_synthesis_reason = force_tool_free_synthesis.take();
+        let is_tool_free_synthesis = tool_free_synthesis_reason.is_some();
+
+        if let Some(reason) = tool_free_synthesis_reason {
+            messages.push(Message::user(reason));
+            request.messages = messages.clone();
+            request.tools = None;
+        } else {
+            request.tools = tool_definitions.clone();
+        }
+
+        // Rate-limit tool-bearing iterations, but let the final no-tools recovery
+        // pass complete immediately so a stalled skill can still synthesize a result.
+        if !is_tool_free_synthesis {
+            if let Err(wait_hint) =
+                crate::tools::adaptive_rate_limiter::try_acquire_global(SKILL_RATE_LIMIT_KEY)
+            {
+                wait_cycles += 1;
+                if wait_cycles > MAX_RATE_LIMIT_WAIT_CYCLES {
+                    return Err(anyhow!(
+                        "Skill execution stayed rate-limited for too long ({} cycles)",
+                        MAX_RATE_LIMIT_WAIT_CYCLES
+                    ));
+                }
+
+                let delay = wait_hint
+                    .max(Duration::from_millis(backoff))
+                    .min(Duration::from_secs(2));
+                // If rate limited, wait a bit and retry without counting as an iteration
+                warn!(
+                    "Rate limit hit for skill execution – backing off {}ms",
+                    delay.as_millis()
+                );
+                tokio::time::sleep(delay).await;
+                backoff = (backoff * 2).min(2000); // cap back‑off at 2 s
+                continue;
+            }
+            wait_cycles = 0;
+            backoff = BACKOFF_BASE_MS;
+        }
+
+        if is_tool_free_synthesis {
+            info!(
+                "Skill '{}' entering tool-free final synthesis",
+                skill.name()
+            );
+        } else {
+            iterations += 1;
+            if iterations > MAX_SKILL_LLM_ITERATIONS {
+                let reason = skill_tool_free_synthesis_prompt(&format!(
+                    "Skill execution reached the maximum tool-call iterations ({}).",
+                    MAX_SKILL_LLM_ITERATIONS
                 ));
+                warn!(
+                    skill = skill.name(),
+                    iterations = iterations - 1,
+                    max_iterations = MAX_SKILL_LLM_ITERATIONS,
+                    "Skill hit max iterations; forcing tool-free final synthesis"
+                );
+                force_tool_free_synthesis = Some(reason);
+                continue;
             }
 
-            let delay = wait_hint
-                .max(Duration::from_millis(backoff))
-                .min(Duration::from_secs(2));
-            // If rate limited, wait a bit and retry without counting as an iteration
-            warn!(
-                "Rate limit hit for skill execution – backing off {}ms",
-                delay.as_millis()
-            );
-            tokio::time::sleep(delay).await;
-            backoff = (backoff * 2).min(2000); // cap back‑off at 2 s
-            continue;
+            info!("Skill LLM iteration {} for '{}'", iterations, skill.name());
         }
-        wait_cycles = 0;
-        backoff = BACKOFF_BASE_MS;
-
-        iterations += 1;
-        if iterations > MAX_ITERATIONS {
-            return Err(anyhow!(
-                "Skill execution exceeded max iterations ({})",
-                MAX_ITERATIONS
-            ));
-        }
-
-        info!("Skill LLM iteration {} for '{}'", iterations, skill.name());
 
         // Make LLM request
         let response = provider.generate(request.clone()).await?;
@@ -661,6 +715,7 @@ pub async fn execute_skill_with_sub_llm(
                     skill.name(),
                     tool_calls.len()
                 );
+                let mut force_tool_free_synthesis_reason = None;
 
                 // Execute each tool call
                 for tool_call in tool_calls {
@@ -681,20 +736,56 @@ pub async fn execute_skill_with_sub_llm(
                         let tool_args =
                             merge_skill_command_permissions(skill, tool_name, tool_args);
 
+                        if let Some(loop_warning) = loop_detector.record_call(tool_name, &tool_args)
+                            && loop_detector.is_hard_limit_exceeded(tool_name)
+                        {
+                            messages.push(Message::tool_response(
+                                tool_call.id.clone(),
+                                format!(
+                                    "{}\n\nTool execution was skipped to prevent a loop.",
+                                    loop_warning
+                                ),
+                            ));
+                            force_tool_free_synthesis_reason =
+                                Some(skill_tool_free_synthesis_prompt(&loop_warning));
+                            break;
+                        }
+
                         // Execute tool via registry
-                        let tool_result = match tool_registry
+                        let tool_output = match tool_registry
                             .execute_public_tool_ref(tool_name, &tool_args)
                             .await
                         {
-                            Ok(result) => result.to_string(),
+                            Ok(result) => result,
                             Err(e) => {
                                 warn!("Tool '{}' failed: {}", tool_name, e);
-                                format!("Error executing {}: {}", tool_name, e)
+                                ToolExecutionError::from_anyhow(
+                                    tool_name.to_string(),
+                                    &e,
+                                    0,
+                                    false,
+                                    false,
+                                    Some("skill_sub_llm"),
+                                )
+                                .to_json_value()
                             }
                         };
+                        let tool_error = ToolExecutionError::from_tool_output(&tool_output);
+                        let tool_result = tool_output.to_string();
 
                         // Add tool result to conversation
                         messages.push(Message::tool_response(tool_call.id.clone(), tool_result));
+                        if let Some(tool_error) = tool_error
+                            && should_force_tool_free_synthesis(&tool_error)
+                        {
+                            force_tool_free_synthesis_reason =
+                                Some(skill_tool_free_synthesis_prompt(&format!(
+                                    "The tool '{}' is not available for this skill. {}",
+                                    tool_name,
+                                    tool_error.user_message()
+                                )));
+                            break;
+                        }
                     } else {
                         warn!("Tool call has no function: {:?}", tool_call.call_type);
                     }
@@ -702,6 +793,10 @@ pub async fn execute_skill_with_sub_llm(
 
                 // Update request for next iteration
                 request.messages = messages.clone();
+                if let Some(reason) = force_tool_free_synthesis_reason {
+                    force_tool_free_synthesis = Some(reason);
+                    continue;
+                }
 
                 // Continue loop to process tool results
             } else {
@@ -892,11 +987,222 @@ impl SkillExecutionContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::types::CapabilityLevel;
+    use crate::llm::provider::{
+        FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+    };
     use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
+    use crate::tools::registry::ToolRegistration;
     use crate::tools::traits::Tool;
+    use serde_json::json;
     use std::path::PathBuf;
+    use std::sync::Mutex;
+    use tempfile::tempdir;
 
     struct FakeForkExecutor;
+
+    struct EchoFirstUserProvider;
+    struct UnknownToolThenFinalizeProvider {
+        calls: Mutex<usize>,
+    }
+    struct RepeatToolThenFinalizeProvider {
+        tool_name: &'static str,
+        calls: Mutex<usize>,
+    }
+    struct MaxIterationsThenFinalizeProvider {
+        tool_names: Vec<String>,
+        calls: Mutex<usize>,
+    }
+    struct CountingSkillTool {
+        calls: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait]
+    impl LLMProvider for EchoFirstUserProvider {
+        fn name(&self) -> &str {
+            "echo-first-user"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let first_message = request
+                .messages
+                .first()
+                .map(|message| message.content.as_text().to_string())
+                .unwrap_or_default();
+
+            Ok(LLMResponse {
+                content: Some(first_message),
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            })
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for UnknownToolThenFinalizeProvider {
+        fn name(&self) -> &str {
+            "unknown-tool-then-finalize"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let mut calls = self.calls.lock().expect("provider calls mutex");
+            *calls += 1;
+
+            match *calls {
+                1 => Ok(LLMResponse {
+                    content: Some(String::new()),
+                    model: request.model,
+                    tool_calls: Some(vec![ToolCall::function(
+                        "call_unknown_tool".to_string(),
+                        "unified_diff".to_string(),
+                        "{}".to_string(),
+                    )]),
+                    finish_reason: FinishReason::ToolCalls,
+                    ..Default::default()
+                }),
+                2 => {
+                    assert!(request.tools.is_none());
+                    let prompt = request
+                        .messages
+                        .last()
+                        .map(|message| message.content.as_text().to_string())
+                        .unwrap_or_default();
+                    assert!(prompt.contains("unified_diff"));
+                    assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+                    Ok(LLMResponse {
+                        content: Some("finalized after unknown tool".to_string()),
+                        model: request.model,
+                        finish_reason: FinishReason::Stop,
+                        ..Default::default()
+                    })
+                }
+                _ => panic!("unexpected provider call count: {}", *calls),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for RepeatToolThenFinalizeProvider {
+        fn name(&self) -> &str {
+            "repeat-tool-then-finalize"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let mut calls = self.calls.lock().expect("provider calls mutex");
+            *calls += 1;
+
+            match *calls {
+                1 | 2 => Ok(LLMResponse {
+                    content: Some(String::new()),
+                    model: request.model,
+                    tool_calls: Some(vec![ToolCall::function(
+                        format!("repeat_tool_call_{}", *calls),
+                        self.tool_name.to_string(),
+                        "{\"input\":\"same\"}".to_string(),
+                    )]),
+                    finish_reason: FinishReason::ToolCalls,
+                    ..Default::default()
+                }),
+                3 => {
+                    assert!(request.tools.is_none());
+                    let prompt = request
+                        .messages
+                        .last()
+                        .map(|message| message.content.as_text().to_string())
+                        .unwrap_or_default();
+                    assert!(prompt.contains("HARD STOP"));
+                    assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+                    Ok(LLMResponse {
+                        content: Some("finalized after loop detection".to_string()),
+                        model: request.model,
+                        finish_reason: FinishReason::Stop,
+                        ..Default::default()
+                    })
+                }
+                _ => panic!("unexpected provider call count: {}", *calls),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for MaxIterationsThenFinalizeProvider {
+        fn name(&self) -> &str {
+            "max-iterations-then-finalize"
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.1-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let mut calls = self.calls.lock().expect("provider calls mutex");
+            *calls += 1;
+
+            if *calls <= MAX_SKILL_LLM_ITERATIONS {
+                let tool_name = self.tool_names[*calls - 1].clone();
+                return Ok(LLMResponse {
+                    content: Some(String::new()),
+                    model: request.model,
+                    tool_calls: Some(vec![ToolCall::function(
+                        format!("max_iterations_tool_call_{}", *calls),
+                        tool_name,
+                        format!("{{\"step\":{}}}", *calls),
+                    )]),
+                    finish_reason: FinishReason::ToolCalls,
+                    ..Default::default()
+                });
+            }
+
+            assert_eq!(*calls, MAX_SKILL_LLM_ITERATIONS + 1);
+            assert!(request.tools.is_none());
+            let prompt = request
+                .messages
+                .last()
+                .map(|message| message.content.as_text().to_string())
+                .unwrap_or_default();
+            assert!(prompt.contains("maximum tool-call iterations"));
+            assert!(prompt.contains(&MAX_SKILL_LLM_ITERATIONS.to_string()));
+            assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+            Ok(LLMResponse {
+                content: Some("finalized after max iterations".to_string()),
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            })
+        }
+    }
 
     #[async_trait]
     impl ForkSkillExecutor for FakeForkExecutor {
@@ -909,6 +1215,26 @@ mod tests {
                 "delegate_session_id": "child-session",
                 "echo": user_input,
             }))
+        }
+    }
+
+    #[async_trait]
+    impl Tool for CountingSkillTool {
+        async fn execute(&self, args: Value) -> Result<Value> {
+            let mut calls = self.calls.lock().expect("tool calls mutex");
+            *calls += 1;
+            Ok(json!({
+                "success": true,
+                "echo": args,
+            }))
+        }
+
+        fn name(&self) -> &'static str {
+            "counting_skill_tool"
+        }
+
+        fn description(&self) -> &'static str {
+            "Counts skill tool invocations"
         }
     }
 
@@ -982,6 +1308,224 @@ mod tests {
         assert_eq!(result["execution_context"], "fork");
         assert_eq!(result["delegate_session_id"], "child-session");
         assert_eq!(result["echo"], args);
+    }
+
+    #[tokio::test]
+    async fn blank_skill_input_uses_default_prompt_for_sub_llm() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            String::new(),
+            &EchoFirstUserProvider,
+            &mut registry,
+            Vec::new(),
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("blank input should be normalized");
+
+        assert_eq!(result, EMPTY_SKILL_INPUT_PROMPT);
+    }
+
+    #[tokio::test]
+    async fn non_empty_skill_input_is_preserved_for_sub_llm() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "security".to_string(),
+            &EchoFirstUserProvider,
+            &mut registry,
+            Vec::new(),
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("non-empty input should be preserved");
+
+        assert_eq!(result, "security");
+    }
+
+    #[tokio::test]
+    async fn skill_executor_forces_final_synthesis_after_unknown_tool() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        registry.allow_all_tools().await.expect("allow tools");
+        let provider = UnknownToolThenFinalizeProvider {
+            calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &provider,
+            &mut registry,
+            vec![ToolDefinition::function(
+                "read_file".to_string(),
+                "Read".to_string(),
+                json!({"type": "object"}),
+            )],
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("unknown tool should trigger final synthesis");
+
+        assert_eq!(result, "finalized after unknown tool");
+    }
+
+    #[tokio::test]
+    async fn skill_executor_skips_repeated_tool_call_and_finalizes() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let tool_name = "skill_loop_test_tool";
+        let tool_calls = Arc::new(Mutex::new(0usize));
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                tool_name,
+                CapabilityLevel::CodeSearch,
+                CountingSkillTool {
+                    calls: Arc::clone(&tool_calls),
+                },
+            ))
+            .await
+            .expect("register tool");
+        registry.allow_all_tools().await.expect("allow tools");
+        let provider = RepeatToolThenFinalizeProvider {
+            tool_name,
+            calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "review".to_string(),
+            &provider,
+            &mut registry,
+            vec![ToolDefinition::function(
+                tool_name.to_string(),
+                "Loop test tool".to_string(),
+                json!({"type": "object"}),
+            )],
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("looping tool calls should force a final synthesis");
+
+        assert_eq!(result, "finalized after loop detection");
+        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
+    }
+
+    #[tokio::test]
+    async fn skill_executor_forces_final_synthesis_after_max_iterations() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+        let workspace = tempdir().expect("temp workspace");
+        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+        let tool_calls = Arc::new(Mutex::new(0usize));
+        let mut available_tools = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
+        let mut tool_names = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
+
+        for index in 0..MAX_SKILL_LLM_ITERATIONS {
+            let tool_name = format!("skill_iteration_test_tool_{index}");
+            registry
+                .register_tool(ToolRegistration::from_tool_instance(
+                    tool_name.as_str(),
+                    CapabilityLevel::CodeSearch,
+                    CountingSkillTool {
+                        calls: Arc::clone(&tool_calls),
+                    },
+                ))
+                .await
+                .unwrap_or_else(|error| panic!("register tool {tool_name}: {error}"));
+            available_tools.push(ToolDefinition::function(
+                tool_name.clone(),
+                format!("Iteration tool {index}"),
+                json!({"type": "object"}),
+            ));
+            tool_names.push(tool_name);
+        }
+
+        registry.allow_all_tools().await.expect("allow tools");
+        let provider = MaxIterationsThenFinalizeProvider {
+            tool_names,
+            calls: Mutex::new(0),
+        };
+
+        let result = execute_skill_with_sub_llm(
+            &skill,
+            "analyze".to_string(),
+            &provider,
+            &mut registry,
+            available_tools,
+            "gpt-5.1-codex".to_string(),
+        )
+        .await
+        .expect("max-iteration recovery should force a final synthesis");
+
+        assert_eq!(result, "finalized after max iterations");
+        assert_eq!(
+            *tool_calls.lock().expect("tool calls mutex"),
+            MAX_SKILL_LLM_ITERATIONS
+        );
     }
 
     #[test]

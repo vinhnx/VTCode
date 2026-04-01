@@ -16,22 +16,26 @@ use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::loader::{
     SkillMentionDetectionOptions, detect_skill_mentions_with_options,
 };
-use vtcode_core::skills::types::Skill;
-#[cfg(test)]
-use vtcode_core::skills::types::SkillManifest;
+use vtcode_core::skills::types::{Skill, SkillManifest};
 
 use super::skills_commands_parser::parse_skill_command as parse_skill_command_impl;
 
 async fn regenerate_skills_index_best_effort(workspace: &std::path::Path) {
-    use vtcode_core::exec::skill_manager::SkillManager;
-    let skill_manager = SkillManager::new(workspace);
-    if let Err(e) = skill_manager.generate_index().await {
+    if let Err(e) = crate::cli::skills_index::generate_comprehensive_skills_index(workspace).await {
         tracing::warn!("Failed to regenerate skills index: {}", e);
     }
 }
 
 fn workspace_skill_dir(workspace: &std::path::Path, name: &str) -> PathBuf {
     workspace.join(".agents").join("skills").join(name)
+}
+
+fn list_label_for_manifest(manifest: &SkillManifest) -> &'static str {
+    match manifest.variety {
+        vtcode_core::skills::types::SkillVariety::BuiltIn => "built_in",
+        vtcode_core::skills::types::SkillVariety::SystemUtility => "system_utility",
+        vtcode_core::skills::types::SkillVariety::AgentSkill => "agent_skill",
+    }
 }
 
 /// Skill-related command actions
@@ -72,6 +76,12 @@ pub(crate) enum SkillCommandOutcome {
     UnloadSkill { name: String },
     /// Execute skill with input
     UseSkill { skill: Skill, input: String },
+    /// Execute a built-in command skill with input
+    UseBuiltInCommand {
+        name: String,
+        slash_name: String,
+        input: String,
+    },
     /// Error occurred
     Error { message: String },
 }
@@ -203,8 +213,10 @@ Shortcuts:
             for skill_ctx in &skills {
                 let manifest = skill_ctx.manifest();
                 output.push_str(&format!(
-                    "  • {} - {}\n",
-                    manifest.name, manifest.description
+                    "  • {} [{}] - {}\n",
+                    manifest.name,
+                    list_label_for_manifest(manifest),
+                    manifest.description
                 ));
             }
             if !cli_tools.is_empty() {
@@ -240,6 +252,14 @@ Shortcuts:
                             message: format!(
                                 "Skill '{}' is a CLI tool, not a traditional skill",
                                 name
+                            ),
+                        })
+                    }
+                    vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(_) => {
+                        Ok(SkillCommandOutcome::Error {
+                            message: format!(
+                                "Skill '{}' is a built-in command skill and cannot be loaded into the persistent session prompt. Use `/skills use {}` instead.",
+                                name, name
                             ),
                         })
                     }
@@ -296,6 +316,17 @@ Shortcuts:
                         output.push_str("Tool available for execution");
                         Ok(SkillCommandOutcome::Handled { message: output })
                     }
+                    vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(skill) => {
+                        let mut output = String::new();
+                        output.push_str(&format!("Built-In Command Skill: {}\n", skill.name()));
+                        output.push_str(&format!("Description: {}\n", skill.description()));
+                        output.push_str(&format!("Slash alias: /{}\n", skill.slash_name()));
+                        output.push_str(&format!("Usage: {}\n", skill.usage()));
+                        output.push_str(&format!("Category: {}\n", skill.category()));
+                        output.push_str("\n--- Backend ---\n");
+                        output.push_str("Executes the existing slash command backend");
+                        Ok(SkillCommandOutcome::Handled { message: output })
+                    }
                     vtcode_core::skills::loader::EnhancedSkill::NativePlugin(plugin) => {
                         let meta = plugin.metadata();
                         let mut output = String::new();
@@ -325,6 +356,13 @@ Shortcuts:
                         message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
                     })
                 }
+                vtcode_core::skills::loader::EnhancedSkill::BuiltInCommand(skill) => {
+                    Ok(SkillCommandOutcome::UseBuiltInCommand {
+                        name: skill.name().to_string(),
+                        slash_name: skill.slash_name().to_string(),
+                        input,
+                    })
+                }
                 vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
                     Ok(SkillCommandOutcome::Error {
                         message: format!("Skill '{}' is a native plugin, not a traditional skill", name),
@@ -341,11 +379,7 @@ Shortcuts:
             let discovery_result = loader.discover_all_skills().await?;
             let total_skills = discovery_result.skills.len() + discovery_result.tools.len();
 
-            // Use the traditional SkillManager to update the index file
-            use vtcode_core::exec::skill_manager::SkillManager;
-            let skill_manager = SkillManager::new(&workspace);
-
-            match skill_manager.generate_index().await {
+            match crate::cli::skills_index::generate_comprehensive_skills_index(&workspace).await {
                 Ok(index_path) => {
                     let message = format!(
                         "Skills index regenerated successfully!\nIndex file: {}\nFound {} skills.",
@@ -423,6 +457,7 @@ async fn detect_mentioned_skills(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[tokio::test]
     async fn test_detect_explicit_skill_mention() {
@@ -432,5 +467,100 @@ mod tests {
         let workspace = PathBuf::from("/tmp");
         let _result = detect_mentioned_skills(input, workspace).await;
         // In real test, would assert skills are detected
+    }
+
+    #[tokio::test]
+    async fn built_in_command_skill_info_reports_metadata() {
+        let temp = tempdir().expect("tempdir");
+
+        let outcome = handle_skill_command(
+            SkillCommandAction::Info {
+                name: "cmd-status".to_string(),
+            },
+            temp.path().to_path_buf(),
+        )
+        .await
+        .expect("info outcome");
+
+        match outcome {
+            SkillCommandOutcome::Handled { message } => {
+                assert!(message.contains("Built-In Command Skill: cmd-status"));
+                assert!(message.contains("Slash alias: /status"));
+                assert!(message.contains("Usage:"));
+            }
+            other => panic!("expected handled outcome, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn built_in_command_skill_use_returns_built_in_outcome() {
+        let temp = tempdir().expect("tempdir");
+
+        let outcome = handle_skill_command(
+            SkillCommandAction::Use {
+                name: "cmd-status".to_string(),
+                input: "show session".to_string(),
+            },
+            temp.path().to_path_buf(),
+        )
+        .await
+        .expect("use outcome");
+
+        match outcome {
+            SkillCommandOutcome::UseBuiltInCommand {
+                name,
+                slash_name,
+                input,
+            } => {
+                assert_eq!(name, "cmd-status");
+                assert_eq!(slash_name, "status");
+                assert_eq!(input, "show session");
+            }
+            other => panic!("expected built-in use outcome, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn built_in_command_skill_load_is_rejected() {
+        let temp = tempdir().expect("tempdir");
+
+        let outcome = handle_skill_command(
+            SkillCommandAction::Load {
+                name: "cmd-status".to_string(),
+            },
+            temp.path().to_path_buf(),
+        )
+        .await
+        .expect("load outcome");
+
+        match outcome {
+            SkillCommandOutcome::Error { message } => {
+                assert!(message.contains("built-in command skill"));
+                assert!(message.contains("/skills use cmd-status"));
+            }
+            other => panic!("expected error outcome, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn built_in_command_skill_list_includes_query_match() {
+        let temp = tempdir().expect("tempdir");
+
+        let outcome = handle_skill_command(
+            SkillCommandAction::List {
+                query: Some("cmd-status".to_string()),
+            },
+            temp.path().to_path_buf(),
+        )
+        .await
+        .expect("list outcome");
+
+        match outcome {
+            SkillCommandOutcome::Handled { message } => {
+                assert!(message.contains("Available Skills:"));
+                assert!(message.contains("cmd-status [built_in] -"));
+            }
+            other => panic!("expected handled outcome, got {other:?}"),
+        }
     }
 }

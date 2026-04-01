@@ -37,7 +37,9 @@ my-skill/
 
 ## SKILL.md
 
-VT Code accepts only the core Agent Skills frontmatter fields:
+VT Code accepts the core Agent Skills frontmatter fields plus the client-side
+`disable-model-invocation` flag used to hide a skill from the model-facing startup catalog while
+keeping it available for explicit harness activation:
 
 ```yaml
 ---
@@ -62,6 +64,7 @@ Optional fields:
 - `compatibility`
 - `metadata`
 - `allowed-tools`
+- `disable-model-invocation`
 
 Legacy VT Code frontmatter such as `version`, `author`, `when-to-use`, `when-not-to-use`, `model`, `mode`, `context`, `agent`, `network`, `permissions`, container flags, and similar extensions is rejected.
 
@@ -106,8 +109,19 @@ Show configured paths:
 vtcode skills config
 ```
 
+## Slash Command Skills
+
+VT Code also exposes the interactive slash-command surface as skills.
+
+- Canonical skill names use the `cmd-<slash-name>` form, for example `cmd-status` or `cmd-review`.
+- The `/status` or `/review` slash command remains the primary interactive alias.
+- Built-in session/UI commands are surfaced as built-in command skills.
+- Prompt-oriented slash commands are shipped as bundled system skills in the release binary and installed under the system skill cache at runtime.
+- Command skills are intentionally excluded from the default prompt-side skill index to avoid spending context on slash-command metadata that is already exposed elsewhere in the harness.
+- Built-in command skills support `info` and `use`, but not `load`.
+
 ## Notes
 
-- `vtcode skills create` generates a strict-spec `SKILL.md` scaffold.
+- `vtcode skills create` generates a spec-first `SKILL.md` scaffold with optional commented guidance for `disable-model-invocation`.
 - User-facing skill metadata in VT Code is limited to the strict `SKILL.md` fields above.
 - Bundled system skills are surfaced as `system` scope.

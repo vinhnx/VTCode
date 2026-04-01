@@ -1,6 +1,6 @@
 use super::super::errors::{
-    fallback_model_if_not_found, format_openai_error, is_model_not_found,
-    is_responses_api_unsupported,
+    fallback_model_if_not_found, format_openai_error, is_flex_service_tier_unsupported,
+    is_model_not_found, is_responses_api_unsupported,
 };
 use super::super::headers;
 use super::super::types::ResponsesApiState;
@@ -22,6 +22,21 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
 
 fn truncate_for_log(input: &str, max_chars: usize) -> String {
     input.chars().take(max_chars).collect()
+}
+
+fn payload_uses_flex_service_tier(payload: &Value) -> bool {
+    payload
+        .get("service_tier")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value.eq_ignore_ascii_case("flex"))
+}
+
+fn payload_without_service_tier(payload: &Value) -> Value {
+    let mut payload = payload.clone();
+    if let Some(object) = payload.as_object_mut() {
+        object.remove("service_tier");
+    }
+    payload
 }
 
 fn append_manual_compaction_instructions(
@@ -82,6 +97,33 @@ async fn collect_streamed_response(
 }
 
 impl OpenAIProvider {
+    async fn retry_without_service_tier(
+        &self,
+        url: &str,
+        metadata: &Option<Value>,
+        payload: &Value,
+        include_responses_beta: bool,
+    ) -> Result<(reqwest::Response, String), provider::LLMError> {
+        let retry_payload = payload_without_service_tier(payload);
+        let retry_client_request_id = Self::new_client_request_id();
+        let response = self
+            .send_authorized(|auth| {
+                let builder = self.authorize_with_api_key(self.http_client.post(url), auth);
+                let builder = if include_responses_beta {
+                    headers::apply_responses_beta(builder)
+                } else {
+                    builder
+                };
+                headers::apply_turn_metadata(
+                    headers::apply_client_request_id(builder, &retry_client_request_id),
+                    metadata,
+                )
+                .json(&retry_payload)
+            })
+            .await?;
+        Ok((response, retry_client_request_id))
+    }
+
     pub(crate) async fn compact_history_request(
         &self,
         model: &str,
@@ -288,9 +330,46 @@ impl OpenAIProvider {
                 .await?;
 
             if !response.status().is_success() {
-                let status = response.status();
-                let headers = response.headers().clone();
-                let error_text = response.text().await.unwrap_or_default();
+                let mut status = response.status();
+                let mut headers = response.headers().clone();
+                let mut error_text = response.text().await.unwrap_or_default();
+                let mut effective_client_request_id = client_request_id.clone();
+
+                if payload_uses_flex_service_tier(&openai_request)
+                    && is_flex_service_tier_unsupported(status, &error_text)
+                {
+                    tracing::warn!(
+                        model = %request.model,
+                        client_request_id = %client_request_id,
+                        "OpenAI Responses request rejected service_tier=flex; retrying without it"
+                    );
+
+                    let (retry_response, retry_client_request_id) = self
+                        .retry_without_service_tier(&url, &request.metadata, &openai_request, true)
+                        .await?;
+                    effective_client_request_id = retry_client_request_id;
+
+                    if retry_response.status().is_success() {
+                        let openai_response: Value = retry_response.json().await.map_err(|e| {
+                            let formatted_error = error_display::format_llm_error(
+                                "OpenAI",
+                                &format!("Failed to parse response: {}", e),
+                            );
+                            provider::LLMError::Provider {
+                                message: formatted_error,
+                                metadata: None,
+                            }
+                        })?;
+
+                        let response =
+                            self.parse_openai_responses_response(openai_response, model.clone())?;
+                        return Ok(response);
+                    }
+
+                    status = retry_response.status();
+                    headers = retry_response.headers().clone();
+                    error_text = retry_response.text().await.unwrap_or_default();
+                }
                 let lower_error = error_text.to_ascii_lowercase();
                 if status == reqwest::StatusCode::BAD_REQUEST
                     && lower_error.contains("invalid_request_error")
@@ -357,7 +436,7 @@ impl OpenAIProvider {
                             &error_text,
                             &headers,
                             "Model not available",
-                            Some(&client_request_id),
+                            Some(&effective_client_request_id),
                         ),
                     );
                     return Err(provider::LLMError::Provider {
@@ -379,7 +458,7 @@ impl OpenAIProvider {
                             &error_text,
                             &headers,
                             "Responses API error",
-                            Some(&client_request_id),
+                            Some(&effective_client_request_id),
                         ),
                     );
                     return Err(provider::LLMError::Provider {
@@ -396,7 +475,7 @@ impl OpenAIProvider {
                             &error_text,
                             &headers,
                             "Responses API error",
-                            Some(&client_request_id),
+                            Some(&effective_client_request_id),
                         ),
                     );
                     return Err(provider::LLMError::Provider {
@@ -448,9 +527,45 @@ impl OpenAIProvider {
             .await?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let headers = response.headers().clone();
-            let error_text = response.text().await.unwrap_or_default();
+            let mut status = response.status();
+            let mut headers = response.headers().clone();
+            let mut error_text = response.text().await.unwrap_or_default();
+            let mut effective_client_request_id = client_request_id.clone();
+
+            if payload_uses_flex_service_tier(&openai_request)
+                && is_flex_service_tier_unsupported(status, &error_text)
+            {
+                tracing::warn!(
+                    model = %request.model,
+                    client_request_id = %client_request_id,
+                    "OpenAI Chat Completions request rejected service_tier=flex; retrying without it"
+                );
+
+                let (retry_response, retry_client_request_id) = self
+                    .retry_without_service_tier(&url, &request.metadata, &openai_request, false)
+                    .await?;
+                effective_client_request_id = retry_client_request_id;
+
+                if retry_response.status().is_success() {
+                    let openai_response: Value = retry_response.json().await.map_err(|e| {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenAI",
+                            &format!("Failed to parse response: {}", e),
+                        );
+                        provider::LLMError::Provider {
+                            message: formatted_error,
+                            metadata: None,
+                        }
+                    })?;
+
+                    let response = self.parse_openai_response(openai_response, model.clone())?;
+                    return Ok(response);
+                }
+
+                status = retry_response.status();
+                headers = retry_response.headers().clone();
+                error_text = retry_response.text().await.unwrap_or_default();
+            }
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
                 return Err(parse_api_error("OpenAI", status, &error_text));
@@ -463,7 +578,7 @@ impl OpenAIProvider {
                     &error_text,
                     &headers,
                     "Chat Completions error",
-                    Some(&client_request_id),
+                    Some(&effective_client_request_id),
                 ),
             );
             return Err(provider::LLMError::Provider {

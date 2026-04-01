@@ -20,7 +20,7 @@ mod init;
 mod init_project;
 mod man;
 mod sessions;
-mod skills_index;
+pub(crate) mod skills_index;
 mod snapshots;
 mod trajectory;
 

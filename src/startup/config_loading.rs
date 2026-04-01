@@ -6,10 +6,7 @@ use vtcode_core::config::loader::{ConfigBuilder, VTCodeConfig};
 use vtcode_core::utils::validation::validate_path_exists;
 
 use super::first_run::maybe_run_first_run_setup;
-use super::validation::{
-    parse_cli_config_entries, resolve_config_path, resolve_workspace_path,
-    validate_additional_directories,
-};
+use super::validation::{parse_cli_config_entries, resolve_config_path, resolve_workspace_path};
 
 pub(super) struct LoadedStartupConfig {
     pub(super) workspace: PathBuf,
@@ -31,7 +28,6 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
         validate_path_exists(&workspace, "Workspace")?;
     }
 
-    validate_additional_directories(&args.additional_dirs)?;
     let (cli_config_path_override, inline_config_overrides) =
         parse_cli_config_entries(&args.config);
     let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH").ok().and_then(|value| {

@@ -90,6 +90,7 @@ fn test_ui_component_combinations() {
         model: "claude-3".to_string(),
         mode: "alternate".to_string(),
         reasoning_stage: None,
+        version: "test-version".to_string(),
         ..Default::default()
     };
 

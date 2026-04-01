@@ -3,11 +3,9 @@ use vtcode_core::commands::init::generate_agents_file;
 use vtcode_core::persistent_memory::scaffold_persistent_memory;
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand;
 use crate::agent::runloop::unified::turn::workspace::{
     bootstrap_config_files, build_workspace_index,
 };
-use crate::agent::runloop::unified::workspace_links::handle_workspace_directory_command;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -108,20 +106,5 @@ pub(crate) async fn handle_initialize_workspace(
             )?;
         }
     }
-    Ok(SlashCommandControl::Continue)
-}
-
-pub(crate) async fn handle_manage_workspace_directories(
-    ctx: SlashCommandContext<'_>,
-    command: WorkspaceDirectoryCommand,
-) -> Result<SlashCommandControl> {
-    handle_workspace_directory_command(
-        ctx.renderer,
-        &ctx.config.workspace,
-        command,
-        ctx.linked_directories,
-    )
-    .await?;
-    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }

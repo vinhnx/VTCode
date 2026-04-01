@@ -3,8 +3,9 @@ use std::path::Path;
 use anyhow::Result;
 
 use vtcode_core::prompts::find_prompt_template;
+use vtcode_core::skills::find_command_skill_by_slash_name;
 use vtcode_core::terminal_setup::detector::TerminalType;
-use vtcode_core::ui::slash::{find_command, visible_commands};
+use vtcode_core::ui::slash::{SlashCommandInfo, find_command, visible_commands};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -56,24 +57,6 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_add_dir_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Usage: /add-dir <path> [more paths...]")?;
-    renderer.line(MessageStyle::Info, "       /add-dir --list")?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /add-dir --remove <alias|path> [more]",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Linked directories are mounted under .vtcode/external/.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Use quotes if your path contains spaces.",
-    )?;
-    Ok(())
-}
-
 pub(super) fn render_loop_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -111,15 +94,6 @@ pub(super) fn render_schedule_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_generate_agent_file_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Usage: /generate-agent-file [--force]")?;
-    renderer.line(
-        MessageStyle::Info,
-        "  --force  Overwrite an existing AGENTS.md with regenerated content.",
-    )?;
-    Ok(())
-}
-
 pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     let available_themes = theme::available_themes();
     renderer.line(MessageStyle::Info, "Available themes:")?;
@@ -152,13 +126,15 @@ pub(super) async fn render_help(
     workspace: &Path,
 ) -> Result<()> {
     if let Some(cmd_name) = specific_command {
-        if let Some(cmd) = find_command(cmd_name) {
+        if let Some(cmd) = resolve_help_command(cmd_name) {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
             renderer.line(
                 MessageStyle::Info,
                 &format!("  Description: {}", cmd.description),
             )?;
-            // Additional usage examples could be added here in the future
+            if let Some(spec) = find_command_skill_by_slash_name(cmd.name) {
+                renderer.line(MessageStyle::Info, &format!("  Usage: {}", spec.usage))?;
+            }
         } else if let Some(template) = find_prompt_template(workspace, cmd_name).await {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", template.name))?;
             renderer.line(
@@ -285,4 +261,42 @@ pub(super) async fn render_help(
         )?;
     }
     Ok(())
+}
+
+fn resolve_help_command(name: &str) -> Option<&'static SlashCommandInfo> {
+    let trimmed = name.trim();
+    find_command(trimmed).or_else(|| {
+        let lower = trimmed.to_ascii_lowercase();
+        let canonical = super::normalize_command_key(&lower);
+        find_command(canonical)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_help_command;
+
+    #[test]
+    fn help_resolution_supports_aliases() {
+        assert_eq!(
+            resolve_help_command("settings").map(|command| command.name),
+            Some("config")
+        );
+        assert_eq!(
+            resolve_help_command("sharelog").map(|command| command.name),
+            Some("share-log")
+        );
+        assert_eq!(
+            resolve_help_command("comman").map(|command| command.name),
+            Some("command")
+        );
+    }
+
+    #[test]
+    fn help_resolution_is_case_insensitive() {
+        assert_eq!(
+            resolve_help_command("Review").map(|command| command.name),
+            Some("review")
+        );
+    }
 }

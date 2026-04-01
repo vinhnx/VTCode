@@ -1,6 +1,7 @@
 use crate::config::ConfigManager;
 use crate::config::types::CapabilityLevel;
 use crate::ide_context::EditorContextSnapshot;
+use crate::skills::command_skills::is_model_catalog_eligible;
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::SkillMetadata;
 use crate::tools::search_runtime::snapshot_for_workspace;
@@ -146,7 +147,13 @@ impl PromptContext {
             bundled_skills_enabled,
         );
         let outcome = manager.skills_metadata_lightweight(workspace);
-        self.add_skill_metadata_entries(outcome.skills);
+        self.add_skill_metadata_entries(
+            outcome
+                .skills
+                .into_iter()
+                .filter(is_model_catalog_eligible)
+                .collect(),
+        );
     }
 
     /// Build prompt context from a workspace and the tool names exposed to the model.
@@ -261,5 +268,6 @@ mod tests {
         assert!(skill_names.contains(&"ast-grep"));
         assert!(skill_names.contains(&"repo-skill"));
         assert!(skill_names.contains(&"skill-creator"));
+        assert!(!skill_names.contains(&"cmd-review"));
     }
 }

@@ -4,6 +4,9 @@ use anyhow::Result;
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
 use vtcode_core::scheduler::{LoopCommand, ScheduleCreateInput};
+use vtcode_core::skills::{
+    CommandSkillBackend, CommandSkillSpec, find_command_skill_by_slash_name,
+};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -17,17 +20,14 @@ mod parsing;
 mod rendering;
 use flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
-    handle_mode_command, handle_plan_command, handle_resume_command, handle_review_command,
-    handle_rewind_command,
+    handle_mode_command, handle_plan_command, handle_resume_command, handle_rewind_command,
 };
-use management::{
-    handle_add_dir_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
-};
+use management::{handle_loop_command, handle_mcp_command, handle_schedule_command};
 use parsing::{
-    parse_compact_command, parse_prompt_template_args, parse_session_log_export_format,
-    split_command_and_args,
+    parse_analyze_scope, parse_compact_command, parse_prompt_template_args, parse_review_spec,
+    parse_session_log_export_format, split_command_and_args,
 };
-use rendering::{render_generate_agent_file_usage, render_help, render_theme_list};
+use rendering::{render_help, render_theme_list};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ThemePaletteMode {
@@ -180,9 +180,6 @@ pub(crate) enum SlashCommandOutcome {
         install: bool,
         force: bool,
     },
-    ManageWorkspaceDirectories {
-        command: WorkspaceDirectoryCommand,
-    },
     ManageLoop {
         command: LoopCommand,
     },
@@ -268,13 +265,6 @@ pub(crate) enum McpCommandAction {
     Logout(String),
 }
 
-#[derive(Clone, Debug)]
-pub(crate) enum WorkspaceDirectoryCommand {
-    Add(Vec<String>),
-    List,
-    Remove(Vec<String>),
-}
-
 pub(crate) async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
@@ -287,9 +277,144 @@ pub(crate) async fn handle_slash_command(
 
     let (command, rest) = split_command_and_args(trimmed);
     let command_key = command.to_ascii_lowercase();
+    let command_key = normalize_command_key(&command_key);
     let args = rest.trim();
 
-    match command_key.as_str() {
+    if let Some(spec) = find_command_skill_by_slash_name(command_key) {
+        return execute_command_skill_spec(spec, args, trimmed, renderer, workspace).await;
+    }
+
+    if let Some(template) = find_prompt_template(workspace, command_key).await {
+        let template_args = match parse_prompt_template_args(args) {
+            Ok(parsed) => parsed,
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+        };
+        let expanded = expand_prompt_template(&template.body, &template_args);
+        return Ok(SlashCommandOutcome::ReplaceInput { content: expanded });
+    }
+
+    Ok(SlashCommandOutcome::SubmitPrompt {
+        prompt: format!("/{}", input.trim()),
+    })
+}
+
+pub(crate) async fn execute_command_skill_by_name(
+    slash_name: &str,
+    input: &str,
+    renderer: &mut AnsiRenderer,
+    workspace: &Path,
+) -> Result<SlashCommandOutcome> {
+    let command_key = normalize_command_key(slash_name.trim());
+    let Some(spec) = find_command_skill_by_slash_name(command_key) else {
+        anyhow::bail!("unknown command skill '{}'", slash_name);
+    };
+
+    execute_command_skill_spec(spec, input.trim(), input.trim(), renderer, workspace).await
+}
+
+async fn execute_command_skill_spec(
+    spec: &'static CommandSkillSpec,
+    args: &str,
+    input: &str,
+    renderer: &mut AnsiRenderer,
+    workspace: &Path,
+) -> Result<SlashCommandOutcome> {
+    match spec.backend {
+        CommandSkillBackend::TraditionalSkill { skill_name, .. } => {
+            dispatch_traditional_command_skill(spec, skill_name, args, renderer)
+        }
+        CommandSkillBackend::BuiltInCommand { .. } => {
+            execute_built_in_command_skill(spec, args, input, renderer, workspace).await
+        }
+    }
+}
+
+fn dispatch_traditional_command_skill(
+    spec: &CommandSkillSpec,
+    skill_name: &str,
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    let input = match spec.slash_name {
+        "command" => {
+            if args.trim().is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            args.trim().to_string()
+        }
+        "review" => {
+            if matches!(args.trim(), "--help" | "help") {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Usage: /review [--last-diff] [--target <expr>] [--style <style>] [--file <path> | files...]",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            if let Err(err) = parse_review_spec(args) {
+                renderer.line(MessageStyle::Error, &err)?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Usage: /review [--last-diff] [--target <expr>] [--style <style>] [--file <path> | files...]",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            args.trim().to_string()
+        }
+        "analyze" => {
+            if matches!(args.trim(), "--help" | "help") {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Usage: /analyze [full|security|performance]",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            match parse_analyze_scope(args) {
+                Ok(Some(scope)) => scope,
+                Ok(None) => String::new(),
+                Err(err) => {
+                    renderer.line(MessageStyle::Error, &err)?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Usage: /analyze [full|security|performance]",
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            }
+        }
+        _ => args.trim().to_string(),
+    };
+
+    Ok(SlashCommandOutcome::ManageSkills {
+        action: crate::agent::runloop::SkillCommandAction::Use {
+            name: skill_name.to_string(),
+            input,
+        },
+    })
+}
+
+fn normalize_command_key(command_key: &str) -> &str {
+    match command_key {
+        "settings" | "setttings" => "config",
+        "comman" => "command",
+        "sharelog" | "export-log" => "share-log",
+        "subprocesses" => "subprocess",
+        "context" => "compact",
+        other => other,
+    }
+}
+
+async fn execute_built_in_command_skill(
+    spec: &CommandSkillSpec,
+    args: &str,
+    input: &str,
+    renderer: &mut AnsiRenderer,
+    workspace: &Path,
+) -> Result<SlashCommandOutcome> {
+    match spec.slash_name {
         "donate" => {
             renderer.line(
                 MessageStyle::Info,
@@ -349,38 +474,6 @@ pub(crate) async fn handle_slash_command(
                 }
             }
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
-        }
-        "review" => handle_review_command(args, renderer),
-        "generate-agent-file" => {
-            let mut overwrite = false;
-            for flag in args.split_whitespace() {
-                match flag {
-                    "--force" | "-f" | "--overwrite" => overwrite = true,
-                    "--help" | "help" => {
-                        render_generate_agent_file_usage(renderer)?;
-                        return Ok(SlashCommandOutcome::Handled);
-                    }
-                    unknown => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Unknown flag '{}' for /generate-agent-file", unknown),
-                        )?;
-                        render_generate_agent_file_usage(renderer)?;
-                        return Ok(SlashCommandOutcome::Handled);
-                    }
-                }
-            }
-
-            // Create a custom prompt for generating the agent file
-            let prompt_text = if overwrite {
-                "Generate a comprehensive AGENTS.md file for this workspace that documents the project structure, available tools, and recommended usage patterns. The file should overwrite any existing AGENTS.md file. Include detailed information about the project's architecture, main components, and how to work with the codebase effectively."
-            } else {
-                "Generate a comprehensive AGENTS.md file for this workspace that documents the project structure, available tools, and recommended usage patterns. If an AGENTS.md file already exists, consider updating it rather than overwriting, unless specifically needed. Include detailed information about the project's architecture, main components, and how to work with the codebase effectively."
-            };
-
-            Ok(SlashCommandOutcome::SubmitPrompt {
-                prompt: prompt_text.to_string(),
-            })
         }
         "config" | "settings" | "setttings" => {
             if args.is_empty() {
@@ -501,18 +594,6 @@ pub(crate) async fn handle_slash_command(
                 Ok(SlashCommandOutcome::Handled)
             }
         },
-        "analyze" => {
-            let scope = if args.trim().is_empty() {
-                "full"
-            } else {
-                args.trim()
-            };
-            let prompt = format!(
-                "Perform a comprehensive {} codebase analysis for this workspace. Include key findings, risks, and prioritized next actions.",
-                scope
-            );
-            Ok(SlashCommandOutcome::SubmitPrompt { prompt })
-        }
         "mcp" => handle_mcp_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "ide" => {
@@ -521,19 +602,6 @@ pub(crate) async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::ToggleIdeContext)
-        }
-        "command" | "comman" => {
-            if args.trim().is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-
-            let command = args.trim();
-            let prompt = format!(
-                "Run this terminal command in the current workspace and show the result: {}",
-                command
-            );
-            Ok(SlashCommandOutcome::SubmitPrompt { prompt })
         }
         "files" => {
             let initial_filter = if args.trim().is_empty() {
@@ -552,7 +620,6 @@ pub(crate) async fn handle_slash_command(
             )?;
             Ok(SlashCommandOutcome::Handled)
         }
-        "add-dir" => handle_add_dir_command(args, renderer),
         "loop" => handle_loop_command(args, renderer),
         "schedule" => handle_schedule_command(args, renderer),
         "share-log" | "sharelog" | "export-log" => match parse_session_log_export_format(args) {
@@ -665,23 +732,7 @@ pub(crate) async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::StartTerminalSetup)
         }
-        _ => {
-            if let Some(template) = find_prompt_template(workspace, &command_key).await {
-                let template_args = match parse_prompt_template_args(args) {
-                    Ok(parsed) => parsed,
-                    Err(message) => {
-                        renderer.line(MessageStyle::Error, &message)?;
-                        return Ok(SlashCommandOutcome::Handled);
-                    }
-                };
-                let expanded = expand_prompt_template(&template.body, &template_args);
-                return Ok(SlashCommandOutcome::ReplaceInput { content: expanded });
-            }
-
-            Ok(SlashCommandOutcome::SubmitPrompt {
-                prompt: format!("/{}", input.trim()),
-            })
-        }
+        _ => unreachable!("unknown built-in command skill: {}", spec.slash_name),
     }
 }
 
@@ -827,6 +878,7 @@ mod tests {
         SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
         parse_doctor_args, parse_update_args,
     };
+    use vtcode_core::skills::command_skill_specs;
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
 
@@ -1419,6 +1471,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn review_slash_routes_through_cmd_review_skill() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("review --last-diff", &mut renderer, workspace.path())
+            .await
+            .expect("review should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ManageSkills {
+                action: crate::agent::runloop::SkillCommandAction::Use { ref name, ref input }
+            } if name == "cmd-review" && input == "--last-diff"
+        ));
+    }
+
+    #[tokio::test]
+    async fn command_alias_typo_routes_through_cmd_command_skill() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("comman cargo check", &mut renderer, workspace.path())
+            .await
+            .expect("comman alias should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ManageSkills {
+                action: crate::agent::runloop::SkillCommandAction::Use { ref name, ref input }
+            } if name == "cmd-command" && input == "cargo check"
+        ));
+    }
+
+    #[tokio::test]
+    async fn analyze_slash_routes_normalized_scope_through_cmd_analyze_skill() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("analyze SECURITY", &mut renderer, workspace.path())
+            .await
+            .expect("analyze should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ManageSkills {
+                action: crate::agent::runloop::SkillCommandAction::Use { ref name, ref input }
+            } if name == "cmd-analyze" && input == "security"
+        ));
+    }
+
+    #[tokio::test]
+    async fn invalid_analyze_scope_is_handled_locally() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("analyze nope", &mut renderer, workspace.path())
+            .await
+            .expect("analyze should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[tokio::test]
     async fn unknown_slash_command_falls_back_to_normal_prompt_submission() {
         let workspace = tempfile::TempDir::new().expect("workspace");
         let mut renderer = renderer_for_tests();
@@ -1448,5 +1563,23 @@ mod tests {
             .expect("permissions should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::ShowPermissions));
+    }
+
+    #[tokio::test]
+    async fn every_registered_slash_command_resolves_without_prompt_fallback() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+
+        for spec in command_skill_specs() {
+            let mut renderer = renderer_for_tests();
+            let outcome = handle_slash_command(spec.slash_name, &mut renderer, workspace.path())
+                .await
+                .unwrap_or_else(|error| panic!("{} should parse: {error}", spec.slash_name));
+
+            assert!(
+                !matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. }),
+                "/{} fell through to plain prompt submission",
+                spec.slash_name
+            );
+        }
     }
 }

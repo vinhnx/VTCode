@@ -230,10 +230,6 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "AGENT")]
     pub agent: Option<String>,
 
-    /// Add additional working directories for the agent to access
-    #[arg(long = "add-dir", global = true, value_name = "PATH", value_hint = ValueHint::DirPath)]
-    pub additional_dirs: Vec<PathBuf>,
-
     /// Tools that execute without prompting (comma-separated, supports patterns like "Bash(git:*)")
     #[arg(long = "allowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub allowed_tools: Vec<String>,
@@ -1385,7 +1381,6 @@ impl Default for Cli {
             tick_rate: 250,                      // Default tick rate: 250ms
             frame_rate: 60,                      // Default frame rate: 60 FPS
             agent: None,                         // No agent override by default
-            additional_dirs: Vec::new(),         // No additional directories by default
             allowed_tools: Vec::new(),           // No tool restrictions by default
             disallowed_tools: Vec::new(),        // No tool restrictions by default
             dangerously_skip_permissions: false, // Safety confirmations enabled by default

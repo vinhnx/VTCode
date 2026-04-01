@@ -263,11 +263,34 @@ pub(super) fn parse_review_spec(args: &str) -> std::result::Result<ReviewSpec, S
     build_review_spec(last_diff, target, files, style).map_err(|err| err.to_string())
 }
 
+pub(super) fn parse_analyze_scope(args: &str) -> std::result::Result<Option<String>, String> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let tokens =
+        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+
+    if tokens.len() != 1 {
+        return Err("Usage: /analyze [full|security|performance]".to_string());
+    }
+
+    let scope = tokens[0].to_ascii_lowercase();
+    match scope.as_str() {
+        "full" | "security" | "performance" => Ok(Some(scope)),
+        _ => Err(format!(
+            "Unknown analysis scope '{}'. Use full, security, or performance.",
+            tokens[0]
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CompactConversationCommand, SessionLogExportFormat, parse_compact_command,
-        parse_review_spec, parse_session_log_export_format,
+        CompactConversationCommand, SessionLogExportFormat, parse_analyze_scope,
+        parse_compact_command, parse_review_spec, parse_session_log_export_format,
     };
     use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
     use vtcode_core::review::ReviewTarget;
@@ -353,6 +376,7 @@ mod tests {
     fn review_defaults_to_current_diff() {
         let spec = parse_review_spec("").expect("review spec");
         assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
+        assert_eq!(spec.style, None);
     }
 
     #[test]
@@ -371,6 +395,22 @@ mod tests {
     }
 
     #[test]
+    fn review_accepts_multiple_positional_files() {
+        let spec = parse_review_spec("src/main.rs src/lib.rs").expect("spec");
+        assert!(
+            matches!(spec.target, ReviewTarget::Files(ref files) if files == &["src/main.rs".to_string(), "src/lib.rs".to_string()])
+        );
+        assert_eq!(spec.style, None);
+    }
+
+    #[test]
+    fn review_rejects_conflicting_target_selectors() {
+        let err = parse_review_spec("--last-diff --target HEAD~1..HEAD")
+            .expect_err("conflicting selectors should fail");
+        assert!(err.contains("--last-diff"));
+    }
+
+    #[test]
     fn review_rejects_missing_target_value() {
         let err = parse_review_spec("--target").expect_err("missing value should fail");
         assert!(err.contains("Missing value"));
@@ -380,5 +420,31 @@ mod tests {
     fn review_rejects_unknown_flag() {
         let err = parse_review_spec("--bogus").expect_err("unknown flag should fail");
         assert!(err.contains("Unknown option"));
+    }
+
+    #[test]
+    fn analyze_defaults_to_full_when_empty() {
+        assert_eq!(parse_analyze_scope("").expect("analyze scope"), None);
+    }
+
+    #[test]
+    fn analyze_accepts_known_scopes() {
+        assert_eq!(
+            parse_analyze_scope("security").expect("analyze scope"),
+            Some("security".to_string())
+        );
+        assert_eq!(
+            parse_analyze_scope("PERFORMANCE").expect("analyze scope"),
+            Some("performance".to_string())
+        );
+    }
+
+    #[test]
+    fn analyze_rejects_unknown_or_extra_arguments() {
+        let err = parse_analyze_scope("foo").expect_err("unknown scope should fail");
+        assert!(err.contains("Unknown analysis scope"));
+
+        let err = parse_analyze_scope("security extra").expect_err("extra args should fail");
+        assert!(err.contains("Usage: /analyze"));
     }
 }

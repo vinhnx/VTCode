@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use tracing::info;
-use vtcode_core::exec::skill_manager::SkillManager;
 use vtcode_core::skills::container_validation::ContainerSkillsRequirement;
 use vtcode_core::skills::loader::{EnhancedSkill, EnhancedSkillLoader};
 use vtcode_core::skills::manifest::parse_skill_file;
@@ -10,9 +9,9 @@ use vtcode_core::skills::types::Skill;
 use crate::cli::SkillsCommandOptions;
 
 use super::render::{
-    CliToolRow, LoadedSkillSummary, TraditionalSkillRow, print_cli_tools, print_empty_list,
-    print_list_header, print_list_usage, print_loaded_skill, print_skill_config, print_skill_ready,
-    print_traditional_skills,
+    BuiltInSkillRow, CliToolRow, LoadedSkillSummary, TraditionalSkillRow, print_built_in_skills,
+    print_cli_tools, print_empty_list, print_list_header, print_list_usage, print_loaded_skill,
+    print_skill_config, print_skill_ready, print_traditional_skills,
 };
 
 /// List available skills.
@@ -34,6 +33,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
     let mut warnings = Vec::new();
     let mut skill_rows = Vec::new();
+    let mut built_in_rows = Vec::new();
 
     for skill_ctx in &discovery_result.skills {
         let manifest = skill_ctx.manifest();
@@ -65,6 +65,13 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                     description: manifest.description.clone(),
                 });
             }
+            Ok(EnhancedSkill::BuiltInCommand(skill)) => {
+                built_in_rows.push(BuiltInSkillRow {
+                    name: manifest.name.clone(),
+                    description: manifest.description.clone(),
+                    usage: skill.usage().to_string(),
+                });
+            }
             Ok(EnhancedSkill::CliTool(_)) | Ok(EnhancedSkill::NativePlugin(_)) => {}
             Err(_) => {
                 warnings.push(format!(
@@ -91,6 +98,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
         .collect::<Vec<_>>();
 
     print_traditional_skills(&skill_rows, &warnings);
+    print_built_in_skills(&built_in_rows);
     print_cli_tools(&cli_tool_rows);
     print_list_usage();
 
@@ -189,6 +197,15 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             println!("\n--- Tool Configuration ---");
             println!("Tool available for execution");
         }
+        EnhancedSkill::BuiltInCommand(skill) => {
+            println!("Built-In Command Skill: {}", skill.name());
+            println!("Description: {}", skill.description());
+            println!("Slash alias: /{}", skill.slash_name());
+            println!("Usage: {}", skill.usage());
+            println!("Category: {}", skill.category());
+            println!("\n--- Backend ---");
+            println!("Executes the existing slash command backend");
+        }
         EnhancedSkill::NativePlugin(plugin) => {
             let meta = plugin.metadata();
             println!("Native Plugin: {}", meta.name);
@@ -237,10 +254,20 @@ async fn resolve_skill_load(
     }
 
     let mut loader = prepare_loader(options).await?;
-    loader
+    let skill = loader
         .get_skill(requested_name)
         .await
-        .with_context(|| format!("Failed to load skill '{}'", requested_name))
+        .with_context(|| format!("Failed to load skill '{}'", requested_name))?;
+
+    if matches!(skill, EnhancedSkill::BuiltInCommand(_)) {
+        bail!(
+            "Skill '{}' is a built-in command skill and cannot be loaded. Use `/skills use {}` in chat instead.",
+            requested_name,
+            requested_name
+        );
+    }
+
+    Ok(skill)
 }
 
 fn load_skill_from_path(path: &Path) -> Result<Skill> {
@@ -285,6 +312,18 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
             print_loaded_skill(&summary);
             name
         }
+        EnhancedSkill::BuiltInCommand(skill) => {
+            let name = skill.name().to_string();
+            let summary = LoadedSkillSummary {
+                headline: format!("Built-in command skill: {}", name),
+                details: vec![
+                    format!("Slash alias: /{}", skill.slash_name()),
+                    format!("Usage: {}", skill.usage()),
+                ],
+            };
+            print_loaded_skill(&summary);
+            name
+        }
         EnhancedSkill::NativePlugin(plugin) => {
             let meta = plugin.metadata();
             let name = meta.name.clone();
@@ -299,8 +338,9 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
 }
 
 async fn refresh_skill_index(options: &SkillsCommandOptions) {
-    let skill_manager = SkillManager::new(&options.workspace);
-    if let Err(err) = skill_manager.generate_index().await {
+    if let Err(err) =
+        crate::cli::skills_index::generate_comprehensive_skills_index(&options.workspace).await
+    {
         eprintln!("Warning: Failed to regenerate skills index: {}", err);
     }
 }

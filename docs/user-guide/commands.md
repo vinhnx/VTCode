@@ -132,6 +132,10 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 
 ### Slash-command notes
 
+- Slash commands are skill-backed. Each command routes through a namespaced command skill such as `cmd-status` or `cmd-review`.
+- The `/name` form remains the compatibility alias. You can also inspect or execute the same behavior through `/skills info cmd-name` and `/skills use cmd-name ...`.
+- Prompt-oriented slash commands such as `/review`, `/analyze`, and `/command` are shipped as bundled system skills in the release binary.
+- To keep the default prompt lean, command skills are not injected into the runtime `## Skills` prompt section; use slash completion or `/skills` discovery when you need them.
 - `/resume` opens archived sessions when the current run is idle.
 - `/fork` opens the session picker and then lets you choose between a full-copy fork and a summarized fork.
 - `/compact` manually compacts the current conversation context. On the local fallback path, VT Code keeps a structured summary plus retained user prompts instead of a mixed recent tail.

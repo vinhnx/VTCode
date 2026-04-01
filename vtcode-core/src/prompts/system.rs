@@ -51,7 +51,7 @@ You are VT Code. Be concise, direct, and safe.
 - If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
 - Prefer simple changes; measure before optimizing performance.
 - Preserve task goal, acceptance criteria, touched files, test or error outcomes, and decisions with rationale across compaction.
-- Use `@file` and `/add-dir` to focus the right code.
+- Use `@file` to focus the right code.
 - Verify changes yourself; never claim a check passed unless you ran it.
 - Respect approval gates and keep destructive or external actions explicit.
 - For research or citation-sensitive work, use retrieved evidence and label inference clearly.
@@ -630,7 +630,7 @@ mod tests {
         );
         assert!(result.contains("task_tracker"));
         assert!(result.contains("<proposed_plan>"));
-        assert!(result.contains("/add-dir"));
+        assert!(result.contains("Use `@file` to focus the right code."));
     }
 
     #[test]
