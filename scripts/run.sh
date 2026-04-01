@@ -39,6 +39,11 @@ fi
 # Increase stack floor for spawned threads to reduce overflow risk.
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 
+stage_ghostty_runtime() {
+    local stage_dir="$1"
+    bash scripts/ensure-ghostty-vt-runtime.sh "$stage_dir"
+}
+
 # Check if user wants debug build
 if [[ "${1:-}" == "debug" ]]; then
     echo "Building vtcode in debug mode for faster compilation..."
@@ -47,6 +52,8 @@ if [[ "${1:-}" == "debug" ]]; then
     cargo build
     echo ""
     echo "Debug build complete!"
+    echo ""
+    stage_ghostty_runtime "target/debug/ghostty-vt"
     echo ""
     echo "Starting vtcode chat with advanced features..."
     echo "  - Async file operations enabled for better performance"
@@ -63,6 +70,8 @@ else
     cargo build --release
     echo ""
     echo "Build complete!"
+    echo ""
+    stage_ghostty_runtime "target/release/ghostty-vt"
     echo ""
     echo "Starting vtcode chat with advanced features..."
     echo "  - Async file operations enabled for better performance"

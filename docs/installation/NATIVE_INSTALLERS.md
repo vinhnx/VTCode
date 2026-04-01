@@ -23,10 +23,17 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 2. Fetches latest version from GitHub API (or uses specified version)
 3. Downloads release tarball from GitHub Releases
 4. Extracts and installs to `$VTCode_INSTALL_DIR/vtcode`
-5. Copies the optional `ghostty-vt/` sidecar when present in the release archive
+5. Copies the bundled `ghostty-vt/` runtime library directory from the release archive
 6. Adds to PATH if needed (updates `.bashrc`, `.zshrc`, or `.profile`)
 
-If the `ghostty-vt/` sidecar is missing or cannot be installed, VT Code still installs successfully and falls back to `legacy_vt100`.
+If the bundled `ghostty-vt/` runtime library directory is missing or cannot be installed, VT Code still installs successfully and falls back to `legacy_vt100`.
+
+This differs from the optional search tools flow:
+
+- `ripgrep` and `ast-grep` can be installed after the fact with `vtcode dependencies install search-tools`
+- Ghostty VT is not managed through `vtcode dependencies install ...`
+- Official macOS/Linux release archives are expected to include `ghostty-vt/` next to the VT Code binary
+- Fresh configs default to Ghostty and still fall back to `legacy_vt100` if the runtime library is absent.
 
 ### Supported Platforms
 
@@ -45,4 +52,6 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 
 See `install.ps1` for details.
 
-The Windows installer also copies an optional `ghostty-vt\` sidecar directory when present in the release archive. Failure to install the sidecar is non-fatal; VT Code falls back to `legacy_vt100`.
+The Windows installer currently ships only the VT Code binary. Ghostty VT remains unsupported there, so Windows continues to use `legacy_vt100`.
+
+As on macOS/Linux, Ghostty VT is a packaged runtime-library add-on rather than a VT Code-managed dependency command.

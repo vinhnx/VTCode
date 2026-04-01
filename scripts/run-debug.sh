@@ -88,25 +88,8 @@ echo ""
 echo "Debug build complete!"
 echo ""
 
-HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
-if [[ -n "$HOST_TARGET" ]]; then
-    if [[ "${VTCODE_GHOSTTY_VT_AUTO_SETUP:-0}" == "1" && ! -f "dist/ghostty-vt/$HOST_TARGET/include/ghostty/vt.h" ]]; then
-        echo "Bootstrapping Ghostty VT dev assets for $HOST_TARGET..."
-        if ! bash scripts/setup-ghostty-vt-dev.sh "$HOST_TARGET"; then
-            echo "Ghostty VT bootstrap failed. Falling back to legacy_vt100 snapshots."
-        fi
-    fi
-
-    bash scripts/stage-ghostty-vt-assets.sh "$HOST_TARGET" "target/debug" >/dev/null 2>&1 || true
-    if [[ -x "target/debug/ghostty-vt/ghostty_vt_host" || -x "target/debug/ghostty-vt/ghostty_vt_host.exe" ]]; then
-        export VTCODE_GHOSTTY_VT_DIR="$(pwd)/target/debug/ghostty-vt"
-        echo "Ghostty VT sidecar staged in target/debug/ghostty-vt"
-    else
-        unset VTCODE_GHOSTTY_VT_DIR
-        echo "Ghostty VT sidecar unavailable. PTY snapshots will use legacy_vt100."
-    fi
-    echo ""
-fi
+bash scripts/ensure-ghostty-vt-runtime.sh "target/debug/ghostty-vt"
+echo ""
 
 echo "Starting vtcode chat with advanced features..."
 echo "  - Async file operations enabled for better performance"
@@ -114,7 +97,7 @@ echo "  - Real-time file diffs enabled in chat"
 echo "  - Type your coding questions and requests"
 echo "  - Press Ctrl+C to exit"
 echo "  - The agent has access to file operations and coding tools"
-echo "  - Set VTCODE_GHOSTTY_VT_AUTO_SETUP=1 to download/build local Ghostty VT sidecar assets"
+echo "  - Ghostty VT runtime libraries auto-bootstrap when missing; set VTCODE_GHOSTTY_VT_AUTO_SETUP=0 to disable"
 echo ""
 echo "Tip: Use './scripts/rrf.sh' for fast optimized runs (release-fast profile)"
 echo "      Or add 'alias rrf=\"$(pwd)/scripts/rrf.sh\"' to your shell config for convenience"

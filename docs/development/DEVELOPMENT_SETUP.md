@@ -18,6 +18,22 @@ cd vtcode
 
 `./scripts/setup.sh` verifies `rustfmt`/`clippy`, installs `cargo-nextest` when missing, and runs `cargo check`.
 
+Optional Ghostty VT runtime libraries are not part of `./scripts/setup.sh`.
+If you want local PTY snapshot parity with packaged Ghostty builds, bootstrap them separately:
+
+```bash
+bash scripts/setup-ghostty-vt-dev.sh "$(rustc -vV | sed -n 's/^host: //p')"
+```
+
+For debug or release launches, VT Code bootstraps and stages them automatically:
+
+```bash
+./scripts/run.sh
+./scripts/run-debug.sh
+```
+
+If you skip this, VT Code continues to work and falls back to `legacy_vt100` for PTY snapshots.
+
 ## Daily Development Loop
 
 ```bash

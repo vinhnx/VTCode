@@ -22,15 +22,13 @@ The `lib/` directory must contain the platform runtime library:
 
 ## Runtime
 
-At runtime, VT Code searches for the Ghostty helper in this order:
+At runtime, VT Code loads the Ghostty runtime library from one of these locations:
 
-1. `$VTCODE_GHOSTTY_VT_HOST`
-2. `$VTCODE_GHOSTTY_VT_DIR/ghostty_vt_host`
-3. `<vtcode executable dir>/ghostty-vt/ghostty_vt_host`
-4. `<vtcode executable dir>/ghostty_vt_host`
-5. build-time helper path for local development builds
+1. `<vtcode executable dir>/ghostty-vt/`
+2. `<vtcode executable dir>/`
 
-If no helper is available, VT Code falls back to `pty.emulation_backend = "legacy_vt100"`.
+On macOS, VT Code looks for `libghostty-vt*.dylib`. On Linux, it looks for `libghostty-vt*.so*`.
+If no compatible runtime library is available, VT Code falls back to `pty.emulation_backend = "legacy_vt100"`.
 
 ## Release Packaging
 
@@ -40,23 +38,25 @@ Use:
 bash scripts/stage-ghostty-vt-assets.sh <target-triple> <release-dir>
 ```
 
-The script stages sidecar assets into `<release-dir>/ghostty-vt/`.
-Release archives include that directory when it exists.
-Installers copy the sidecar when present, but VT Code installation remains successful if the sidecar is missing or cannot be installed.
+The script stages runtime libraries into `<release-dir>/ghostty-vt/`.
+Official macOS/Linux release archives are expected to include that directory by default.
+Native installers copy the runtime libraries during release installs, but VT Code installation remains successful if they are missing or cannot be installed.
 
 ## Local Debug Runs
 
-For local `./scripts/run-debug.sh` sessions, you can bootstrap and stage a matching sidecar with:
+For local `./scripts/run.sh` and `./scripts/run-debug.sh` sessions, VT Code bootstraps and stages matching runtime libraries automatically. You can also pre-stage them manually with:
 
 ```bash
-VTCODE_GHOSTTY_VT_AUTO_SETUP=1 ./scripts/run-debug.sh
+bash scripts/setup-ghostty-vt-dev.sh "$(rustc -vV | sed -n 's/^host: //p')"
 ```
 
-`run-debug.sh` now:
+`run.sh` and `run-debug.sh` now:
 
-- downloads and builds the pinned Ghostty VT assets on demand when `VTCODE_GHOSTTY_VT_AUTO_SETUP=1`
-- stages the sidecar into `target/debug/ghostty-vt/`
-- exports `VTCODE_GHOSTTY_VT_DIR` when the sidecar is available
+- download and build the pinned Ghostty VT assets on demand when they are missing
+- stage the runtime libraries into `target/<profile>/ghostty-vt/`
+- run with Ghostty by default and fall back to `legacy_vt100` if the runtime libraries are unavailable
+
+Set `VTCODE_GHOSTTY_VT_AUTO_SETUP=0` to skip the automatic bootstrap step if you want to exercise the fallback path or avoid the download.
 
 When Ghostty is active, PTY snapshot logs include `Ghostty VT snapshot rendered successfully`.
 If setup or staging fails, VT Code logs a fallback warning and continues with `legacy_vt100`.

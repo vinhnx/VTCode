@@ -18,7 +18,7 @@
 
 **Native Installer (Recommended)** - No dependencies, instant setup:
 The default macOS/Linux installer also attempts the recommended [ripgrep](https://github.com/BurntSushi/ripgrep) + [ast-grep](https://ast-grep.github.io/) bundle for enhanced semantic grep and programming language-level understanding (optional).
-Release archives may also include an optional `ghostty-vt/` sidecar for richer PTY screen snapshots. VT Code installs and runs without it, and falls back to the built-in `legacy_vt100` backend when Ghostty assets are unavailable.
+Official macOS/Linux release archives bundle `ghostty-vt/` runtime libraries for richer PTY screen snapshots. VT Code still falls back to the built-in `legacy_vt100` backend when those assets are unavailable in non-release or custom installs.
 
 **macOS & Linux:**
 
@@ -56,6 +56,16 @@ brew install vtcode  # or: brew install vinhnx/tap/vtcode
 # Optional: install the search tools bundle later
 vtcode dependencies install search-tools
 ```
+
+Ghostty VT is not installed through `vtcode dependencies install ...`.
+Instead, VT Code uses runtime libraries that are either:
+
+- bundled in official macOS/Linux release archives under `ghostty-vt/`
+- copied by the native installers during release installs
+- staged locally for development with `scripts/setup-ghostty-vt-dev.sh`
+- auto-bootstrapped by `./scripts/run.sh` and `./scripts/run-debug.sh` when the runtime libraries are missing
+
+See [Installation Guide](./docs/installation/README.md), [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), and [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
 
 > **Note:** If you encounter "installed from different tap" errors, uninstall the existing formula first: `brew uninstall vtcode`, then install from your preferred tap.
 
@@ -202,11 +212,11 @@ VT Code supports a rich set of configuration options, with preferences stored in
 - **Tool Policies**: Control which tools are allowed, prompted, or denied
 - **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
 - **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
-- **PTY Backend Selection**: Prefer Ghostty VT when packaged sidecar assets are available, or force `legacy_vt100`
+- **PTY Backend Selection**: Ghostty VT is the default backend; it falls back to `legacy_vt100` when runtime libraries are unavailable
 
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
-For Ghostty VT sidecar packaging details, see [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
+For Ghostty VT runtime library packaging details, see [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
 
 ### CLI Design Principles
 
@@ -233,7 +243,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 - **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 - **Context Management**: Advanced token budget tracking and context curation
 - **TUI Interface**: Rich terminal user interface with real-time streaming
-- **Optional Ghostty VT Snapshots**: PTY sessions can use a packaged Ghostty VT sidecar for terminal emulation snapshots while preserving a built-in `legacy_vt100` fallback
+- **Ghostty VT Snapshots**: PTY sessions use Ghostty VT runtime libraries when available and fall back to built-in `legacy_vt100`
 - **Auto-Update System**: Built-in update manager with release channels, version pinning, and mirror support ([docs](./docs/guides/UPDATE_SYSTEM.md))
 
 ### Security & Safety

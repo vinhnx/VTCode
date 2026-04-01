@@ -17,13 +17,21 @@ if [[ -z "$TARGET" ]]; then
     exit 1
 fi
 
-helper_name() {
-    if [[ "$TARGET" == *windows* ]]; then
-        printf 'ghostty_vt_host.exe'
-    else
-        printf 'ghostty_vt_host'
-    fi
+supports_ghostty_runtime() {
+    case "$TARGET" in
+        *darwin* | *linux*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
+
+if ! supports_ghostty_runtime; then
+    echo "Ghostty VT dev assets are only supported for macOS and Linux targets: $TARGET" >&2
+    exit 1
+fi
 
 zig_target() {
     case "$TARGET" in
@@ -31,8 +39,6 @@ zig_target() {
         x86_64-unknown-linux-musl) printf 'x86_64-linux-musl' ;;
         aarch64-unknown-linux-gnu) printf 'aarch64-linux-gnu' ;;
         aarch64-unknown-linux-musl) printf 'aarch64-linux-musl' ;;
-        x86_64-pc-windows-msvc) printf 'x86_64-windows-msvc' ;;
-        aarch64-pc-windows-msvc) printf 'aarch64-windows-msvc' ;;
         x86_64-apple-darwin) printf 'x86_64-macos' ;;
         aarch64-apple-darwin) printf 'aarch64-macos' ;;
         *)
@@ -60,31 +66,7 @@ fi
 
 TARGET_DIR="$REPO_ROOT/dist/ghostty-vt/$TARGET"
 
-build_helper() {
-    local asset_dir="$1"
-
-    if [[ -f "$asset_dir/$(helper_name)" ]]; then
-        echo "Ghostty VT helper already available at $asset_dir/$(helper_name)" >&2
-        return 0
-    fi
-
-    echo "Building Ghostty VT helper for $TARGET..." >&2
-    zig cc \
-        -target "$(zig_target)" \
-        "$REPO_ROOT/vtcode-ghostty-vt-sys/csrc/ghostty_vt_host.c" \
-        -std=c11 \
-        -O2 \
-        "-I$asset_dir/include" \
-        "-L$asset_dir/lib" \
-        -lghostty-vt \
-        $( [[ "$TARGET" == *darwin* ]] && printf '%s' '-Wl,-rpath,@loader_path' ) \
-        $( [[ "$TARGET" == *linux* ]] && printf '%s' '-Wl,-rpath,$ORIGIN' ) \
-        -o "$asset_dir/$(helper_name)"
-    chmod +x "$asset_dir/$(helper_name)" 2>/dev/null || true
-}
-
 if [[ -f "$TARGET_DIR/include/ghostty/vt.h" && -d "$TARGET_DIR/lib" ]]; then
-    build_helper "$TARGET_DIR"
     echo "Ghostty VT assets already available at $TARGET_DIR" >&2
     exit 0
 fi
@@ -119,6 +101,5 @@ echo "Building Ghostty lib-vt for $TARGET..." >&2
 mkdir -p "$TARGET_DIR"
 cp -R "$SRC_DIR/zig-out/include" "$TARGET_DIR/"
 cp -R "$SRC_DIR/zig-out/lib" "$TARGET_DIR/"
-build_helper "$TARGET_DIR"
 
-echo "Ghostty VT assets staged at $TARGET_DIR" >&2
+echo "Ghostty VT runtime libraries staged at $TARGET_DIR" >&2

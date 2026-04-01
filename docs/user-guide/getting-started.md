@@ -56,7 +56,8 @@ cargo build --release
 # The binary will be available at target/release/vtcode
 ```
 
-GitHub release archives may also include an optional `ghostty-vt/` sidecar directory for enhanced PTY snapshots. VT Code still runs without it and falls back to `legacy_vt100`.
+Official macOS/Linux GitHub release archives bundle a `ghostty-vt/` runtime library directory for enhanced PTY snapshots. VT Code still runs without it and falls back to `legacy_vt100`.
+Unlike the optional search tools bundle, Ghostty VT is not installed through `vtcode dependencies install ...`; for local repo builds you stage the runtime libraries separately or let the debug launcher do it automatically.
 
 ### Option 2: Using Provided Scripts
 
@@ -70,6 +71,18 @@ cd vtcode
 
 # Or build and run in development mode
 ./scripts/run-debug.sh
+```
+
+If you want Ghostty-backed PTY snapshots while developing locally, the debug runner bootstraps them on demand:
+
+```bash
+./scripts/run-debug.sh
+```
+
+Or stage them yourself first:
+
+```bash
+bash scripts/setup-ghostty-vt-dev.sh "$(rustc -vV | sed -n 's/^host: //p')"
 ```
 
 ### Option 3: Cargo Install (Future)
@@ -223,7 +236,7 @@ enabled = true
 default_rows = 24
 default_cols = 80
 command_timeout_seconds = 300
-emulation_backend = "ghostty" # or "legacy_vt100"
+emulation_backend = "ghostty" # default; falls back to "legacy_vt100" when unavailable
 
 # Lifecycle hooks - Execute shell commands in response to agent events
 # For comprehensive examples and setup, see: ../../guides/lifecycle-hooks.md

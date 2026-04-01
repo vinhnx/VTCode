@@ -8,9 +8,9 @@ fn shell_zsh_fork_disabled_allows_missing_zsh_path() {
 }
 
 #[test]
-fn pty_defaults_to_legacy_vt100_backend() {
+fn pty_defaults_to_ghostty_backend() {
     let config = PtyConfig::default();
-    assert_eq!(config.emulation_backend, PtyEmulationBackend::LegacyVt100);
+    assert_eq!(config.emulation_backend, PtyEmulationBackend::Ghostty);
 }
 
 #[test]

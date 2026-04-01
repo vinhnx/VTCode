@@ -257,6 +257,60 @@ async fn legacy_vt100_backend_keeps_session_snapshots_working() -> Result<()> {
 }
 
 #[tokio::test]
+async fn ghostty_backend_falls_back_to_legacy_when_runtime_library_is_missing() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(
+        temp_dir.path().to_path_buf(),
+        PtyConfig {
+            emulation_backend: PtyEmulationBackend::Ghostty,
+            ..Default::default()
+        },
+    );
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+    let size = PtySize {
+        rows: 24,
+        cols: 80,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let session_id = "ghostty-fallback".to_string();
+    manager.create_session(
+        session_id.clone(),
+        vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "printf ghostty-fallback && sleep 0.1".to_string(),
+        ],
+        working_dir,
+        size,
+    )?;
+
+    std::thread::sleep(Duration::from_millis(150));
+
+    let snapshot = manager.snapshot_session(&session_id)?;
+    assert!(
+        snapshot
+            .screen_contents
+            .as_deref()
+            .map(|contents| contents.contains("ghostty-fallback"))
+            .unwrap_or(false)
+    );
+    assert!(
+        snapshot
+            .scrollback
+            .as_deref()
+            .map(|contents| contents.contains("ghostty-fallback"))
+            .unwrap_or(false)
+    );
+
+    manager.close_session(&session_id)?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn run_pty_command_applies_max_tokens_truncation() -> Result<()> {
     let temp_dir = tempdir()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());

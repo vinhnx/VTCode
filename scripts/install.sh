@@ -262,11 +262,16 @@ download_binary() {
 verify_checksum() {
     local binary_file="$1"
     local release_tag="$2"
+    local release_filename="${3:-}"
     
     log_info "Verifying binary integrity..."
     
     local basename_file
-    basename_file=$(basename "$binary_file")
+    if [[ -n "$release_filename" ]]; then
+        basename_file="$release_filename"
+    else
+        basename_file=$(basename "$binary_file")
+    fi
     
     local temp_checksums
     temp_checksums=$(mktemp)
@@ -373,28 +378,30 @@ install_binary() {
     log_success "Binary installed to $target"
 }
 
-install_ghostty_sidecar() {
+install_ghostty_runtime_libraries() {
     local binary_source="$1"
     local install_dir="$2"
-    local sidecar_source
-    sidecar_source="$(dirname "$binary_source")/ghostty-vt"
+    local runtime_source
+    runtime_source="$(dirname "$binary_source")/ghostty-vt"
 
-    if [[ ! -d "$sidecar_source" ]]; then
+    if [[ ! -d "$runtime_source" ]]; then
+        log_warning "Release archive did not include bundled Ghostty VT runtime libraries"
+        log_warning "VT Code will continue and fall back to legacy_vt100 until they are present"
         return 0
     fi
 
-    local sidecar_target="$install_dir/ghostty-vt"
-    rm -rf "$sidecar_target"
-    mkdir -p "$sidecar_target"
+    local runtime_target="$install_dir/ghostty-vt"
+    rm -rf "$runtime_target"
+    mkdir -p "$runtime_target"
 
-    if ! cp -R "$sidecar_source/." "$sidecar_target/"; then
-        log_warning "Failed to install Ghostty VT sidecar to $sidecar_target"
+    if ! cp -R "$runtime_source/." "$runtime_target/"; then
+        log_warning "Failed to install Ghostty VT runtime libraries to $runtime_target"
         log_warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
-        rm -rf "$sidecar_target"
+        rm -rf "$runtime_target"
         return 0
     fi
 
-    log_success "Ghostty VT sidecar installed to $sidecar_target"
+    log_success "Ghostty VT runtime libraries installed to $runtime_target"
 }
 
 # Check if install directory is in PATH
@@ -501,7 +508,7 @@ main() {
     log_success "Downloaded successfully"
 
     # Verify checksum
-    verify_checksum "$archive_file" "$release_tag"
+    verify_checksum "$archive_file" "$release_tag" "$(basename "$download_url")"
 
     # Extract binary
     local binary_path
@@ -510,7 +517,7 @@ main() {
     # Install binary
     local target_path="$INSTALL_DIR/$BIN_NAME"
     install_binary "$binary_path" "$target_path"
-    install_ghostty_sidecar "$binary_path" "$INSTALL_DIR"
+    install_ghostty_runtime_libraries "$binary_path" "$INSTALL_DIR"
 
     # Check if in PATH
     if ! check_path "$INSTALL_DIR"; then

@@ -32,6 +32,8 @@ project_doc_max_bytes = 16384
 project_doc_fallback_filenames = []
 instruction_max_bytes = 16384
 instruction_files = []
+instruction_excludes = []
+instruction_import_max_depth = 5
 credential_storage_mode = "keyring"
 max_task_retries = 2
 include_temporal_context = true
@@ -40,8 +42,6 @@ include_working_directory = true
 default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
-instruction_excludes = []
-instruction_import_max_depth = 5
 
 [agent.small_model]
 enabled = true
@@ -77,16 +77,16 @@ recommended_actions = [
     "Ask for a workspace tour if you need more context.",
 ]
 
-[agent.checkpointing]
-enabled = true
-max_snapshots = 50
-max_age_days = 30
-
 [agent.persistent_memory]
 enabled = false
 auto_write = true
 startup_line_limit = 200
 startup_byte_limit = 25600
+
+[agent.checkpointing]
+enabled = true
+max_snapshots = 50
+max_age_days = 30
 
 [agent.vibe_coding]
 enabled = false
@@ -117,6 +117,11 @@ event_log_path = ""
 orchestration_mode = "single"
 max_revision_rounds = 2
 
+[agent.codex_app_server]
+command = "codex"
+args = ["app-server"]
+startup_timeout_secs = 10
+
 [agent.circuit_breaker]
 enabled = true
 failure_threshold = 7
@@ -130,11 +135,6 @@ emit_events = true
 include_extensions = true
 map_tool_calls = true
 include_reasoning = true
-
-[agent.codex_app_server]
-command = "codex"
-args = ["app-server"]
-startup_timeout_secs = 10
 
 [auth.openrouter]
 use_oauth = false
@@ -492,23 +492,6 @@ log_permission_prompts = true
 cache_enabled = true
 cache_ttl_seconds = 300
 
-[security]
-human_in_the_loop = true
-require_write_tool_for_claims = true
-auto_apply_detected_patches = false
-zero_trust_mode = true
-encrypt_payloads = true
-integrity_checks = true
-hitl_notification_bell = true
-
-[security.gatekeeper]
-warn_on_quarantine = true
-auto_clear_quarantine = false
-auto_clear_paths = [
-    ".vtcode/bin",
-    "~/.vtcode/bin",
-]
-
 [permissions.auto_mode]
 model = ""
 probe_model = ""
@@ -530,16 +513,33 @@ allow_exceptions = [
     "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
 ]
 
-[sandbox]
-enabled = false
-default_mode = "read_only"
-
 [permissions.auto_mode.environment]
 trusted_paths = []
 trusted_domains = []
 trusted_git_hosts = []
 trusted_git_orgs = []
 trusted_services = []
+
+[security]
+human_in_the_loop = true
+require_write_tool_for_claims = true
+auto_apply_detected_patches = false
+zero_trust_mode = true
+encrypt_payloads = true
+integrity_checks = true
+hitl_notification_bell = true
+
+[security.gatekeeper]
+warn_on_quarantine = true
+auto_clear_quarantine = false
+auto_clear_paths = [
+    ".vtcode/bin",
+    "~/.vtcode/bin",
+]
+
+[sandbox]
+enabled = false
+default_mode = "read_only"
 
 [sandbox.network]
 allow_all = false
@@ -647,7 +647,7 @@ command_timeout_seconds = 300
 stdout_tail_lines = 20
 scrollback_lines = 400
 max_scrollback_bytes = 25000000
-emulation_backend = "legacy_vt100"
+emulation_backend = "ghostty"
 large_output_threshold_kb = 5000
 shell_zsh_fork = false
 
@@ -809,6 +809,22 @@ allowed_tools = [
 ]
 require_profile_ack = true
 
+[automation.scheduled_tasks]
+enabled = false
+
+[subagents]
+enabled = true
+max_concurrent = 3
+max_depth = 1
+default_timeout_seconds = 300
+auto_delegate_read_only = true
+
+[subagents.background]
+enabled = false
+refresh_interval_ms = 2000
+auto_restore = false
+toggle_shortcut = "ctrl+b"
+
 [prompt_cache]
 enabled = true
 cache_dir = "~/.vtcode/cache/prompts"
@@ -824,7 +840,6 @@ min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
 prompt_cache_key_mode = "session"
-# prompt_cache_retention = "24h"
 
 [prompt_cache.providers.anthropic]
 enabled = true
@@ -843,9 +858,6 @@ mode = "implicit"
 min_prefix_tokens = 1024
 explicit_ttl_seconds = 3600
 
-[automation.scheduled_tasks]
-enabled = false
-
 [prompt_cache.providers.openrouter]
 enabled = true
 propagate_provider_capabilities = true
@@ -854,22 +866,9 @@ report_savings = true
 [prompt_cache.providers.moonshot]
 enabled = true
 
-[subagents]
-enabled = true
-max_concurrent = 3
-max_depth = 1
-default_timeout_seconds = 300
-auto_delegate_read_only = true
-
 [prompt_cache.providers.deepseek]
 enabled = true
 surface_metrics = true
-
-[subagents.background]
-enabled = false
-refresh_interval_ms = 2000
-auto_restore = false
-toggle_shortcut = "ctrl+b"
 
 [prompt_cache.providers.zai]
 enabled = false
@@ -960,6 +959,8 @@ enabled = true
 quiet_success_output = false
 session_start = []
 session_end = []
+subagent_start = []
+subagent_stop = []
 user_prompt_submit = []
 pre_tool_use = []
 post_tool_use = []
@@ -967,8 +968,6 @@ pre_compact = []
 task_completion = []
 task_completed = []
 notification = []
-subagent_start = []
-subagent_stop = []
 
 [model]
 skip_loop_detection = false
@@ -978,9 +977,14 @@ loop_detection_interactive = true
 [provider.openai]
 websocket_mode = false
 
+[provider.openai.manual_compaction]
+
 [provider.openai.hosted_shell]
 enabled = false
 environment = "container_auto"
+
+[provider.openai.hosted_shell.network_policy]
+type = "disabled"
 
 [provider.openai.tool_search]
 enabled = true
@@ -1017,8 +1021,6 @@ enabled = true
 [output_style]
 active_style = "default"
 
-[provider.openai.manual_compaction]
-
 [dotfile_protection]
 enabled = true
 require_explicit_confirmation = true
@@ -1043,6 +1045,3 @@ blocked_operations = [
     "auto_fix",
 ]
 require_secondary_auth_for_whitelist = true
-
-[provider.openai.hosted_shell.network_policy]
-type = "disabled"

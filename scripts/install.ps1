@@ -111,12 +111,17 @@ function Download-Binary {
 function Verify-Checksum {
     param(
         [string]$BinaryPath,
-        [string]$ReleaseTag
+        [string]$ReleaseTag,
+        [string]$ReleaseFilename
     )
     
     Write-Info "Verifying binary integrity..."
     
-    $Filename = (Get-Item $BinaryPath).Name
+    $Filename = if ([string]::IsNullOrEmpty($ReleaseFilename)) {
+        (Get-Item $BinaryPath).Name
+    } else {
+        $ReleaseFilename
+    }
     $TempChecksumFile = Join-Path $env:TEMP "vtcode-checksums.txt"
     $ExpectedChecksum = ""
 
@@ -220,33 +225,33 @@ function Install-Binary {
     }
 }
 
-function Install-GhosttySidecar {
+function Install-GhosttyRuntimeLibraries {
     param(
         [string]$BinaryPath,
         [string]$InstallDir
     )
 
-    $SidecarSource = Join-Path (Split-Path $BinaryPath -Parent) "ghostty-vt"
-    if (-not (Test-Path $SidecarSource)) {
+    $RuntimeSource = Join-Path (Split-Path $BinaryPath -Parent) "ghostty-vt"
+    if (-not (Test-Path $RuntimeSource)) {
         return
     }
 
-    $SidecarTarget = Join-Path $InstallDir "ghostty-vt"
-    Write-Info "Installing Ghostty VT sidecar to $SidecarTarget..."
+    $RuntimeTarget = Join-Path $InstallDir "ghostty-vt"
+    Write-Info "Installing Ghostty VT runtime libraries to $RuntimeTarget..."
 
     try {
-        if (Test-Path $SidecarTarget) {
-            Remove-Item -Path $SidecarTarget -Recurse -Force -ErrorAction Stop
+        if (Test-Path $RuntimeTarget) {
+            Remove-Item -Path $RuntimeTarget -Recurse -Force -ErrorAction Stop
         }
-        New-Item -ItemType Directory -Path $SidecarTarget -Force > $null
-        Copy-Item -Path (Join-Path $SidecarSource '*') -Destination $SidecarTarget -Recurse -Force -ErrorAction Stop
-        Write-Success "Ghostty VT sidecar installed to $SidecarTarget"
+        New-Item -ItemType Directory -Path $RuntimeTarget -Force > $null
+        Copy-Item -Path (Join-Path $RuntimeSource '*') -Destination $RuntimeTarget -Recurse -Force -ErrorAction Stop
+        Write-Success "Ghostty VT runtime libraries installed to $RuntimeTarget"
     }
     catch {
-        Write-Warning "Failed to install Ghostty VT sidecar"
+        Write-Warning "Failed to install Ghostty VT runtime libraries"
         Write-Warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
-        if (Test-Path $SidecarTarget) {
-            Remove-Item -Path $SidecarTarget -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path $RuntimeTarget) {
+            Remove-Item -Path $RuntimeTarget -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
@@ -302,7 +307,7 @@ function Main {
         Download-Binary -Url $DownloadInfo.Url -OutputPath $ArchivePath
         
         # Verify checksum
-        Verify-Checksum -BinaryPath $ArchivePath -ReleaseTag $DownloadInfo.Tag
+        Verify-Checksum -BinaryPath $ArchivePath -ReleaseTag $DownloadInfo.Tag -ReleaseFilename $DownloadInfo.Filename
         
         # Extract binary
         $ExtractDir = Join-Path $TempDir "extract"
@@ -312,7 +317,7 @@ function Main {
         # Install binary
         $TargetPath = Join-Path $InstallDir $BinName
         Install-Binary -Source $BinaryPath -Target $TargetPath
-        Install-GhosttySidecar -BinaryPath $BinaryPath -InstallDir $InstallDir
+        Install-GhosttyRuntimeLibraries -BinaryPath $BinaryPath -InstallDir $InstallDir
         
         # Check if in PATH
         if (-not (Check-Path $InstallDir)) {

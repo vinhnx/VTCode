@@ -42,15 +42,6 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
-check ghostty sidebar unvaiable
-
-```
-
-Ghostty VT sidecar unavailable. PTY snapshots will use legacy_vt100.
-```
-
-use https://github.com/Uzaaft/libghostty-rs/ replace existing libghostty-vt impl.
-
 ---
 
 use PLAN mode: handle interactive model picker for /subagent create/edit/udpate interactively instead of requiring manual YAML editing. This is a common source of friction for users creating new subagents, and the current YAML editing approach is error-prone and not user-friendly.

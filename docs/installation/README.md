@@ -5,7 +5,7 @@ VT Code supports multiple installation methods. Choose the one that works best f
 ## Quick Install
 
 The default macOS/Linux native installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
-Some release archives may also contain an optional `ghostty-vt/` sidecar directory for enhanced PTY snapshots. Installation still succeeds without it, and VT Code falls back to `legacy_vt100` automatically when Ghostty assets are unavailable.
+Official macOS/Linux release archives bundle a `ghostty-vt/` runtime library directory for enhanced PTY snapshots. Installation still succeeds without it, and VT Code falls back to `legacy_vt100` automatically when Ghostty assets are unavailable.
 
 ### macOS & Linux
 
@@ -31,6 +31,9 @@ brew install vtcode
 vtcode dependencies install search-tools
 ```
 
+Homebrew does not fetch Ghostty VT runtime libraries separately. VT Code only uses them when they were already packaged next to the installed binary.
+Fresh configs default to Ghostty; missing runtime libraries automatically fall back to `legacy_vt100`.
+
 ### Cargo (Rust)
 
 ```bash
@@ -39,6 +42,8 @@ cargo install vtcode
 # Optional after any install method
 vtcode dependencies install search-tools
 ```
+
+`cargo install vtcode` installs the VT Code binary only. If you want Ghostty-backed PTY snapshots for a local build, stage the runtime libraries separately as described below.
 
 ### npm (Node.js)
 
@@ -64,13 +69,25 @@ npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 vtcode --version
 ```
 
-### 1a. Optional Ghostty VT sidecar
+### 1a. Ghostty VT runtime libraries
 
-If your release archive or installer provided a `ghostty-vt/` directory next to the VT Code binary, VT Code can use it for PTY screen snapshots.
+Official macOS/Linux release archives and native installers place a `ghostty-vt/` directory next to the VT Code binary for PTY screen snapshots.
 
-- Native installers copy the sidecar when present.
+- Native installers copy the bundled runtime libraries automatically.
 - Homebrew/Cargo/npm installs may not include Ghostty VT assets.
-- VT Code continues to work without the sidecar by falling back to `pty.emulation_backend = "legacy_vt100"`.
+- VT Code continues to work without the runtime libraries by falling back to `pty.emulation_backend = "legacy_vt100"`.
+- VT Code does not currently install Ghostty VT through `vtcode dependencies install ...`; unlike the search tools bundle, Ghostty is supplied as packaged runtime libraries.
+- `run.sh` and `run-debug.sh` will auto-bootstrap and stage the runtime libraries locally when they are missing.
+
+For local repository builds, bootstrap and stage them with:
+
+```bash
+bash scripts/setup-ghostty-vt-dev.sh "$(rustc -vV | sed -n 's/^host: //p')"
+./scripts/run.sh
+./scripts/run-debug.sh
+```
+
+For packaging details, see [Ghostty VT Packaging](../development/GHOSTTY_VT_PACKAGING.md).
 
 ### 2. Set your API key
 
@@ -198,13 +215,13 @@ Remove-Item "C:\Program Files\VT Code\ghostty-vt" -Recurse -Force -ErrorAction S
 -   `/usr/local/bin/vtcode` (standard)
 -   `/opt/local/bin/vtcode` (Homebrew ARM64)
 -   `~/.local/bin/vtcode` (user fallback)
--   Optional sidecar: sibling `ghostty-vt/` directory
+-   Optional Ghostty runtime libraries: sibling `ghostty-vt/` directory
 
 ### Windows
 
 -   `C:\Program Files\VT Code\vtcode.exe` (system-wide, requires admin)
 -   `%LOCALAPPDATA%\VT Code\vtcode.exe` (user-scoped)
--   Optional sidecar: sibling `ghostty-vt\` directory
+-   No bundled Ghostty runtime libraries; Windows uses `legacy_vt100`
 
 The native installers automatically select the best location and add it to PATH.
 

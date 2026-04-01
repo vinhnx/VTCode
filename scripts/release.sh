@@ -14,7 +14,8 @@
 set -euo pipefail
 
 # Source common utilities
-source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 # Temporary file to store release notes
 RELEASE_NOTES_FILE=$(mktemp)
@@ -22,6 +23,16 @@ trap 'rm -f "$RELEASE_NOTES_FILE"' EXIT
 
 print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
+}
+
+package_release_archive_with_ghostty() {
+    local target=$1
+    local binary_name=$2
+    local archive_path=$3
+    local release_dir="target/$target/release"
+
+    bash "$SCRIPT_DIR/prepare-ghostty-vt-release-assets.sh" "$target" "$release_dir"
+    tar -C "$release_dir" -czf "$archive_path" "$binary_name" ghostty-vt
 }
 
 # Get GitHub username from commit author email
@@ -1087,7 +1098,10 @@ main() {
         
         # x86_64-apple-darwin
         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
-            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" vtcode
+            package_release_archive_with_ghostty \
+                "x86_64-apple-darwin" \
+                "vtcode" \
+                "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz"
             shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
             print_success "Built macOS x86_64"
         else
@@ -1096,7 +1110,10 @@ main() {
 
         # aarch64-apple-darwin
         if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
-            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" vtcode
+            package_release_archive_with_ghostty \
+                "aarch64-apple-darwin" \
+                "vtcode" \
+                "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz"
             shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
             print_success "Built macOS aarch64 (Apple Silicon)"
         else
@@ -1150,7 +1167,7 @@ main() {
             if [[ "$require_windows" == "true" ]]; then
                 print_info "Downloading Windows x86_64 artifact..."
                 if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
-                    mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                    mv "$ci_artifacts_dir"/*.zip "$binaries_dir/" 2>/dev/null || true
                     mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                     print_success "Downloaded: Windows x86_64"
                     windows_downloaded=true
@@ -1207,7 +1224,11 @@ main() {
             done
         )
         
-        if gh release upload "$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 "$binaries_dir"/checksums.txt --clobber; then
+        shopt -s nullglob
+        release_files=("$binaries_dir"/*.tar.gz "$binaries_dir"/*.zip "$binaries_dir"/*.sha256 "$binaries_dir"/checksums.txt)
+        shopt -u nullglob
+
+        if gh release upload "$released_version" "${release_files[@]}" --clobber; then
             print_success "All binaries and checksums.txt uploaded successfully"
         else
             print_error "Failed to upload binaries to GitHub Release"

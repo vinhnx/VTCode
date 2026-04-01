@@ -232,7 +232,7 @@ Key functions:
 - `download_binary()` - Download and extract
 - `determine_install_path()` - Find best installation location
 - `install_binary()` - Copy binary and make executable
-- `install_ghostty_sidecar()` - Copy optional `ghostty-vt/` sidecar when present
+- `install_ghostty_runtime_libraries()` - Copy bundled `ghostty-vt/` runtime libraries from official macOS/Linux release archives
 - `verify_installation()` - Run vtcode --version
 - `print_next_steps()` - Show post-install guidance
 
@@ -248,7 +248,7 @@ Key functions:
 - `Expand-Binary` - Extract binary
 - `Get-InstallDirectory` - Find best location
 - `Install-Binary` - Copy and verify
-- `Install-GhosttySidecar` - Copy optional `ghostty-vt\` sidecar when present
+- `Install-GhosttyRuntimeLibraries` - Copy `ghostty-vt\` runtime libraries when present for backward compatibility
 - `Add-ToPATH` - Configure PATH
 - `Test-Installation` - Verify installation
 - `Cleanup-TempFiles` - Remove temp files

@@ -6662,6 +6662,7 @@ name = "vtcode-ghostty-vt-sys"
 version = "0.96.9"
 dependencies = [
  "anyhow",
+ "libloading",
  "tempfile",
 ]
 

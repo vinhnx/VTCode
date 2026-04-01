@@ -8,10 +8,10 @@ persistence = "file"
 [tui]
 
 [agent]
-provider = "huggingface"
-api_key_env = "HF_TOKEN"
-default_model = "zai-org/GLM-5:novita"
-theme = "mono"
+provider = "ollama"
+api_key_env = "OLLAMA_API_KEY"
+default_model = "minimax-m2.7:cloud"
+theme = "ciapre"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
@@ -44,7 +44,7 @@ autonomous_mode = true
 
 [agent.small_model]
 enabled = true
-model = "gpt-5-nano"
+model = ""
 temperature = 0.3
 use_for_large_reads = true
 use_for_web_summary = true
@@ -679,7 +679,7 @@ command_timeout_seconds = 3600
 stdout_tail_lines = 20
 scrollback_lines = 400
 max_scrollback_bytes = 25000000
-emulation_backend = "legacy_vt100"
+emulation_backend = "ghostty"
 large_output_threshold_kb = 5000
 shell_zsh_fork = false
 

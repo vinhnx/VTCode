@@ -15,7 +15,7 @@ Inspired by [caniuse.rs](https://caniuse.rs), this document tracks feature avail
 | Desktop Notifications | Yes | Yes | Yes | No | Optional feature |
 | Bash Runner | Yes | Yes | Partial | No | Windows uses PowerShell |
 | PTY Sessions | Yes | Yes | Partial | No | Limited on Windows |
-| Ghostty VT Sidecar | Yes | Yes | Partial | No | Optional packaged sidecar; falls back to `legacy_vt100` when missing |
+| Ghostty VT Runtime Library | Yes | Yes | No | No | Default PTY backend on supported platforms; official macOS/Linux releases bundle it and other installs fall back to `legacy_vt100` when missing |
 
 **Legend:** Yes = Fully Supported | Partial = Partial Support | No = Not Supported
 
@@ -57,7 +57,7 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Secret Service (Keyring) | Yes | `libsecret` | Requires `secret-service` DBus interface |
 | Desktop Notifications | Yes | `libnotify` | Via `notify-rust` crate |
 | PTY Sessions | Yes | `libc` | Full Unix PTY support |
-| Ghostty VT Sidecar | Yes | Packaged sidecar | Optional `ghostty-vt/` runtime assets |
+| Ghostty VT Runtime Library | Yes | Packaged runtime library | Default PTY backend; official releases bundle `ghostty-vt/` by default |
 | File Permissions | Yes | `libc` | Unix permission model |
 | Signal Handling | Yes | `signal-hook` | POSIX signals |
 
@@ -68,7 +68,7 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Keychain (Keyring) | Yes | Security Framework | Native macOS keychain |
 | Desktop Notifications | Yes | `mac-notification-sys` | Native NSUserNotification |
 | PTY Sessions | Yes | `libc` | Full Unix PTY support |
-| Ghostty VT Sidecar | Yes | Packaged sidecar | Optional `ghostty-vt/` runtime assets |
+| Ghostty VT Runtime Library | Yes | Packaged runtime library | Default PTY backend; official releases bundle `ghostty-vt/` by default |
 | File Permissions | Yes | `libc` | Unix permission model |
 | Signal Handling | Yes | `signal-hook` | POSIX signals |
 | Touch ID Auth | No | - | Not yet implemented |
@@ -80,7 +80,7 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Credential Manager (Keyring) | Yes | Windows API | Via `keyring` crate |
 | Desktop Notifications | Yes | Windows Runtime | Via `windows` crate |
 | PTY Sessions | Partial | `conpty` | Limited via ConPTY |
-| Ghostty VT Sidecar | Partial | Packaged sidecar | Optional `ghostty-vt\` runtime assets; packaging support depends on release assets |
+| Ghostty VT Runtime Library | No | - | Windows remains on `legacy_vt100` |
 | File Permissions | Partial | `windows-sys` | ACL-based, not Unix perms |
 | Signal Handling | Partial | `windows-sys` | Limited Ctrl+C/Ctrl+Break |
 | PowerShell Integration | Yes | - | Default shell backend |

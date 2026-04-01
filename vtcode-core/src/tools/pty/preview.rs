@@ -101,10 +101,11 @@ fn normalize_preview_chunk(chunk: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::PtyPreviewRenderer;
+    use crate::config::{PtyConfig, PtyEmulationBackend};
 
     #[test]
     fn carriage_return_snapshot_keeps_latest_screen_contents() {
-        let mut preview = PtyPreviewRenderer::from_config(&crate::config::PtyConfig::default());
+        let mut preview = PtyPreviewRenderer::from_config(&PtyConfig::default());
         preview.push_str("start\rreplace\n");
 
         assert_eq!(preview.snapshot_text(), "replace");
@@ -112,9 +113,20 @@ mod tests {
 
     #[test]
     fn trims_trailing_blank_screen_rows() {
-        let mut preview = PtyPreviewRenderer::from_config(&crate::config::PtyConfig::default());
+        let mut preview = PtyPreviewRenderer::from_config(&PtyConfig::default());
         preview.push_str("line 1\nline 2\n");
 
         assert_eq!(preview.snapshot_text(), "line 1\nline 2");
+    }
+
+    #[test]
+    fn ghostty_backend_falls_back_to_legacy_snapshot_when_runtime_library_is_missing() {
+        let mut preview = PtyPreviewRenderer::from_config(&PtyConfig {
+            emulation_backend: PtyEmulationBackend::Ghostty,
+            ..PtyConfig::default()
+        });
+        preview.push_str("ghostty fallback\n");
+
+        assert_eq!(preview.snapshot_text(), "ghostty fallback");
     }
 }

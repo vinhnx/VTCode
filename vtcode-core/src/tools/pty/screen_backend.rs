@@ -1,5 +1,6 @@
 use anyhow::Result;
 use portable_pty::PtySize;
+use std::sync::OnceLock;
 use tracing::warn;
 use vt100::Parser;
 use vtcode_ghostty_vt_sys::{GhosttyRenderRequest, render_terminal_snapshot};
@@ -71,12 +72,7 @@ impl PreparedScreenSnapshot {
                 match self.snapshot_with_ghostty(size, &raw_vt_snapshot.bytes) {
                     Ok(snapshot) => snapshot,
                     Err(error) => {
-                        warn!(
-                            configured_backend = self.backend.as_str(),
-                            active_backend = PtyEmulationBackend::LegacyVt100.as_str(),
-                            error = %error,
-                            "PTY snapshot backend resolved via fallback"
-                        );
+                        warn_ghostty_fallback_once(self.backend, &error);
                         self.legacy_snapshot(fallback_scrollback)
                     }
                 }
@@ -105,6 +101,19 @@ impl PreparedScreenSnapshot {
             screen_contents: self.legacy_screen_contents.clone(),
             scrollback: fallback_scrollback.to_owned(),
         }
+    }
+}
+
+fn warn_ghostty_fallback_once(configured_backend: PtyEmulationBackend, error: &anyhow::Error) {
+    static WARNED: OnceLock<()> = OnceLock::new();
+
+    if WARNED.set(()).is_ok() {
+        warn!(
+            configured_backend = configured_backend.as_str(),
+            active_backend = PtyEmulationBackend::LegacyVt100.as_str(),
+            error = %error,
+            "PTY snapshot backend resolved via fallback"
+        );
     }
 }
 

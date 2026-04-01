@@ -63,6 +63,11 @@ jobs:
           cache-on-failure: true
           key: ${{ matrix.target }}
 
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.0
+
       - name: Install Cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
 
@@ -92,20 +97,16 @@ jobs:
             echo "✗ Binary not found!" && exit 1
           fi
 
-      - name: Stage Ghostty VT sidecar
+      - name: Prepare bundled Ghostty VT runtime
         shell: bash
         run: |
-          bash scripts/stage-ghostty-vt-assets.sh "${{ matrix.target }}" "target/${{ matrix.target }}/release"
+          bash scripts/prepare-ghostty-vt-release-assets.sh "${{ matrix.target }}" "target/${{ matrix.target }}/release"
 
       - name: Package
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          if [ -d ghostty-vt ]; then
-            tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz vtcode ghostty-vt
-          else
-            tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
-          fi
+          tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz vtcode ghostty-vt
           cd ../../../
           if command -v sha256sum &> /dev/null; then
             sha256sum vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
@@ -159,33 +160,20 @@ jobs:
             echo "✗ Binary not found!" && exit 1
           fi
 
-      - name: Stage Ghostty VT sidecar
-        shell: bash
-        run: |
-          bash scripts/stage-ghostty-vt-assets.sh "x86_64-pc-windows-msvc" "target/x86_64-pc-windows-msvc/release"
-
       - name: Package
-        shell: bash
+        shell: pwsh
         run: |
-          cd target/x86_64-pc-windows-msvc/release
-          if [ -d ghostty-vt ]; then
-            tar -czf ../../../vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz vtcode.exe ghostty-vt
-          else
-            tar -czf ../../../vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz vtcode.exe
-          fi
-          cd ../../../
-          if command -v sha256sum &> /dev/null; then
-            sha256sum vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
-          elif command -v shasum &> /dev/null; then
-            shasum -a 256 vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
-          fi
+          $archive = "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip"
+          Compress-Archive -Path "target/x86_64-pc-windows-msvc/release/vtcode.exe" -DestinationPath $archive -Force
+          $hash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256" -Value $hash -NoNewline
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         with:
           name: vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc
           path: |
-            vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz
+            vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip
             vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
           if-no-files-found: error
           retention-days: 7

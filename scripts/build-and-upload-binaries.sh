@@ -6,11 +6,31 @@
 set -e
 
 # Source common utilities
-source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 BUILD_TOOL="cargo"
 TARGET_ENV_ASSIGNMENTS=()
 DRY_RUN=false
+
+package_release_archive_with_ghostty() {
+    local target=$1
+    local dist_dir=$2
+    local archive_name=$3
+    local binary_name="${4:-vtcode}"
+    local release_dir="target/$target/release"
+
+    bash "$SCRIPT_DIR/prepare-ghostty-vt-release-assets.sh" "$target" "$release_dir"
+
+    rm -rf "$dist_dir/ghostty-vt"
+    cp "$release_dir/$binary_name" "$dist_dir/$binary_name"
+    cp -R "$release_dir/ghostty-vt" "$dist_dir/ghostty-vt"
+    (
+        cd "$dist_dir"
+        tar -czf "$archive_name" "$binary_name" ghostty-vt
+        rm -rf "$binary_name" ghostty-vt
+    )
+}
 
 # Function to check if required tools are available
 check_dependencies() {
@@ -22,6 +42,14 @@ check_dependencies() {
 
     if ! command -v rustc &> /dev/null; then
         missing_tools+=("rustc")
+    fi
+
+    if ! command -v zig &> /dev/null; then
+        missing_tools+=("zig")
+    fi
+
+    if ! command -v curl &> /dev/null; then
+        missing_tools+=("curl")
     fi
 
     if ! command -v gh &> /dev/null; then
@@ -205,29 +233,23 @@ build_binaries() {
     print_info "Packaging binaries..."
 
     # macOS x86_64
-    cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-    (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+    package_release_archive_with_ghostty \
+        "x86_64-apple-darwin" \
+        "$dist_dir" \
+        "vtcode-$version-x86_64-apple-darwin.tar.gz"
 
     # macOS aarch64
-    cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-    (cd "$dist_dir" && tar -czf "vtcode-$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
-
-    # Create macOS Universal Binary
-    if [ -f "target/x86_64-apple-darwin/release/vtcode" ] && [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
-        print_info "Creating macOS Universal Binary using lipo..."
-        lipo -create \
-            "target/x86_64-apple-darwin/release/vtcode" \
-            "target/aarch64-apple-darwin/release/vtcode" \
-            -output "$dist_dir/vtcode-universal"
-
-        (cd "$dist_dir" && tar -czf "vtcode-$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
-        print_success "macOS Universal Binary created"
-    fi
+    package_release_archive_with_ghostty \
+        "aarch64-apple-darwin" \
+        "$dist_dir" \
+        "vtcode-$version-aarch64-apple-darwin.tar.gz"
 
     # Linux
     if [ "$build_linux" = true ] && [ -f "target/x86_64-unknown-linux-gnu/release/vtcode" ]; then
-        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
-        (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+        package_release_archive_with_ghostty \
+            "x86_64-unknown-linux-gnu" \
+            "$dist_dir" \
+            "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz"
     fi
 
     print_success "Binaries build and packaging process completed"
@@ -268,8 +290,10 @@ build_binaries_local() {
         
         # Package x86_64
         if [ -f "target/x86_64-apple-darwin/release/vtcode" ]; then
-            cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-            (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            package_release_archive_with_ghostty \
+                "x86_64-apple-darwin" \
+                "$dist_dir" \
+                "vtcode-$version-x86_64-apple-darwin.tar.gz"
             print_success "x86_64 binary packaged"
         else
             print_warning "x86_64 binary not found"
@@ -277,22 +301,13 @@ build_binaries_local() {
         
         # Package aarch64
         if [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
-            cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-            (cd "$dist_dir" && tar -czf "vtcode-$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            package_release_archive_with_ghostty \
+                "aarch64-apple-darwin" \
+                "$dist_dir" \
+                "vtcode-$version-aarch64-apple-darwin.tar.gz"
             print_success "aarch64 binary packaged"
         else
             print_warning "aarch64 binary not found"
-        fi
-        
-        # Create universal binary if both architectures are available
-        if [ -f "target/x86_64-apple-darwin/release/vtcode" ] && [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
-            print_info "Creating macOS Universal Binary..."
-            lipo -create \
-                "target/x86_64-apple-darwin/release/vtcode" \
-                "target/aarch64-apple-darwin/release/vtcode" \
-                -output "$dist_dir/vtcode-universal"
-            (cd "$dist_dir" && tar -czf "vtcode-$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
-            print_success "Universal binary created"
         fi
         
         print_success "Local macOS build completed (x86_64 + aarch64)"
@@ -308,8 +323,10 @@ build_binaries_local() {
         
         # Package Linux binary
         print_info "Packaging Linux binary..."
-        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
-        (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+        package_release_archive_with_ghostty \
+            "x86_64-unknown-linux-gnu" \
+            "$dist_dir" \
+            "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz"
         print_success "Local Linux build completed"
     else
         print_error "Unsupported platform: $OSTYPE"
