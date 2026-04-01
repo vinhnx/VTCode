@@ -44,10 +44,6 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
-use PLAN mode: handle interactive model picker for /subagent create/edit/udpate interactively instead of requiring manual YAML editing. This is a common source of friction for users creating new subagents, and the current YAML editing approach is error-prone and not user-friendly.
-
----
-
 Two of the most powerful features in Claude Code: /loop and /schedule
 
 Use these to schedule Claude to run automatically at a set interval, for up to a week at a time.
@@ -151,3 +147,7 @@ This is probably no surprise that Claude Code parallizes work with subagents. Th
 Here, forked agents reuse the parent's cache while being aware or mutable states. So, that lets the system do side work such as summarization, memory extraction, or background analysis without contaminating the main agent loop.
 Why This Probably Feels And Works Better Than Coding in the Web UI
 All in all, the reason why Claude Code works better than the plain web UI is not prompt engineering or a better model. It's all these little performance and context handling improvement listed above. And there is the convenience, of course, too, in having everything nice and organized on your computer versus uploading files to a Chat UI.
+
+===
+
+THIS: https://github.com/openai/codex/pull/15525

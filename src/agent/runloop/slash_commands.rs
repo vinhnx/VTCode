@@ -83,11 +83,11 @@ pub(crate) enum AgentManagerAction {
         id: String,
     },
     Create {
-        scope: AgentDefinitionScope,
-        name: String,
+        scope: Option<AgentDefinitionScope>,
+        name: Option<String>,
     },
     Edit {
-        name: String,
+        name: Option<String>,
     },
     Delete {
         name: String,
@@ -702,22 +702,35 @@ fn parse_agents_command(args: &str) -> std::result::Result<AgentManagerAction, S
         ["close", id] => Ok(AgentManagerAction::Close {
             id: (*id).to_string(),
         }),
+        ["edit"] => Ok(AgentManagerAction::Edit { name: None }),
         ["edit", name] => Ok(AgentManagerAction::Edit {
-            name: (*name).to_string(),
+            name: Some((*name).to_string()),
         }),
         ["delete", name] => Ok(AgentManagerAction::Delete {
             name: (*name).to_string(),
         }),
+        ["create"] => Ok(AgentManagerAction::Create {
+            scope: None,
+            name: None,
+        }),
+        ["create", "project"] => Ok(AgentManagerAction::Create {
+            scope: Some(AgentDefinitionScope::Project),
+            name: None,
+        }),
+        ["create", "user"] => Ok(AgentManagerAction::Create {
+            scope: Some(AgentDefinitionScope::User),
+            name: None,
+        }),
         ["create", "project", name] => Ok(AgentManagerAction::Create {
-            scope: AgentDefinitionScope::Project,
-            name: (*name).to_string(),
+            scope: Some(AgentDefinitionScope::Project),
+            name: Some((*name).to_string()),
         }),
         ["create", "user", name] => Ok(AgentManagerAction::Create {
-            scope: AgentDefinitionScope::User,
-            name: (*name).to_string(),
+            scope: Some(AgentDefinitionScope::User),
+            name: Some((*name).to_string()),
         }),
         _ => Err(
-            "Usage: /agents [list|threads|inspect <id>|close <id>|create project <name>|create user <name>|edit <name>|delete <name>]".to_string(),
+            "Usage: /agents [list|threads|inspect <id>|close <id>|create [project|user] [name]|edit [name]|delete <name>]".to_string(),
         ),
     }
 }
@@ -1034,6 +1047,73 @@ mod tests {
             SlashCommandOutcome::ManageAgents {
                 action: AgentManagerAction::Close { ref id }
             } if id == "thread-1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn agents_create_and_edit_commands_parse_guided_forms() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let create_default = handle_slash_command("agents create", &mut renderer, &workspace)
+            .await
+            .expect("agents create should parse");
+        assert!(matches!(
+            create_default,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Create {
+                    scope: None,
+                    name: None,
+                }
+            }
+        ));
+
+        let create_project =
+            handle_slash_command("agents create project", &mut renderer, &workspace)
+                .await
+                .expect("agents create project should parse");
+        assert!(matches!(
+            create_project,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Create {
+                    scope: Some(super::AgentDefinitionScope::Project),
+                    name: None,
+                }
+            }
+        ));
+
+        let create_named =
+            handle_slash_command("agents create project reviewer", &mut renderer, &workspace)
+                .await
+                .expect("agents create project <name> should parse");
+        assert!(matches!(
+            create_named,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Create {
+                    scope: Some(super::AgentDefinitionScope::Project),
+                    name: Some(ref name),
+                }
+            } if name == "reviewer"
+        ));
+
+        let edit_default = handle_slash_command("agents edit", &mut renderer, &workspace)
+            .await
+            .expect("agents edit should parse");
+        assert!(matches!(
+            edit_default,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Edit { name: None }
+            }
+        ));
+
+        let edit_named = handle_slash_command("agents edit reviewer", &mut renderer, &workspace)
+            .await
+            .expect("agents edit <name> should parse");
+        assert!(matches!(
+            edit_named,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Edit { name: Some(ref name) }
+            } if name == "reviewer"
         ));
     }
 

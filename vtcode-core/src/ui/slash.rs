@@ -110,7 +110,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "agents",
-            description: "Manage subagents and delegated child threads (usage: /agents [list|create|edit|delete|threads])",
+            description: "Manage subagents and delegated child threads (usage: /agents [list|create [project|user] [name]|edit [name]|delete <name>|threads])",
         },
         SlashCommandInfo {
             name: "agent",

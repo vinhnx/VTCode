@@ -86,6 +86,95 @@ fn model_picker_lists_new_openai_codex_models() {
 }
 
 #[test]
+fn subagent_model_shortcuts_include_expected_aliases() {
+    let shortcuts = super::subagent_model_shortcuts()
+        .iter()
+        .map(|(shortcut, _)| *shortcut)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        shortcuts,
+        vec!["inherit", "small", "haiku", "sonnet", "opus"]
+    );
+}
+
+#[test]
+fn subagent_dynamic_model_filter_keeps_only_parseable_model_ids() {
+    let registry = DynamicModelRegistry {
+        entries: vec![
+            selection::selection_from_dynamic(Provider::OpenAI, "gpt-5.4", "gpt-5.4", None, None),
+            selection::selection_from_dynamic(
+                Provider::Ollama,
+                "custom-local-model",
+                "custom-local-model",
+                None,
+                None,
+            ),
+        ],
+        ..Default::default()
+    };
+
+    let indexes = super::parseable_subagent_dynamic_indexes(&registry);
+    assert_eq!(indexes, vec![0]);
+}
+
+#[test]
+fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
+    let supported = super::subagent_reasoning_levels("gpt-5.2", true);
+    assert!(supported.contains(&ReasoningEffortLevel::XHigh));
+
+    let shortcut = super::subagent_reasoning_levels("haiku", true);
+    assert!(!shortcut.contains(&ReasoningEffortLevel::XHigh));
+
+    let unsupported = super::subagent_reasoning_levels("gpt-4.1", true);
+    assert!(!unsupported.contains(&ReasoningEffortLevel::XHigh));
+}
+
+#[test]
+fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
+    let shortcut = super::SubagentModelTarget::Shortcut {
+        model: "Haiku".to_string(),
+    };
+    assert_eq!(
+        super::normalized_subagent_reasoning(&shortcut, Some("high")),
+        Some("high".to_string())
+    );
+    assert_eq!(
+        super::normalized_subagent_reasoning(&shortcut, Some("xhigh")),
+        None
+    );
+    assert_eq!(
+        super::normalized_subagent_reasoning(&shortcut, Some("bogus")),
+        None
+    );
+
+    let concrete = super::SubagentModelTarget::Concrete(selection::selection_from_dynamic(
+        Provider::OpenAI,
+        "gpt-5.2",
+        "gpt-5.2",
+        None,
+        None,
+    ));
+    assert_eq!(
+        super::normalized_subagent_reasoning(&concrete, Some("xhigh")),
+        Some("xhigh".to_string())
+    );
+}
+
+#[test]
+fn preferred_subagent_model_selection_canonicalizes_shortcuts() {
+    let registry = DynamicModelRegistry::default();
+    let selection = super::preferred_subagent_model_selection(&registry, "HaIkU");
+
+    assert_eq!(
+        selection,
+        Some(InlineListSelection::ConfigAction(
+            "subagent-model:shortcut:haiku".to_string()
+        ))
+    );
+}
+
+#[test]
 fn model_search_value_includes_provider_model_aliases() {
     let extra_terms = vec![
         "reasoning".to_string(),

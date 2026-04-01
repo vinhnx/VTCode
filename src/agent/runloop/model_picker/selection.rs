@@ -11,7 +11,7 @@ use vtcode_core::llm::{DynamicModelMeta, ModelResolver, ResolvedModel};
 
 use super::options::{ModelOption, find_option_index};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct SelectionDetail {
     pub(super) provider_key: String,
     pub(super) provider_label: String,

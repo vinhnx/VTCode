@@ -202,6 +202,7 @@ semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8" }
 uuid = { workspace = true }
+serde_yaml = { workspace = true }
 
 [features]
 default = ["tool-chat", "a2a-server"]

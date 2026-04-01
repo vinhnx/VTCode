@@ -9,7 +9,7 @@ use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCa
 use vtcode_tui::app::{
     AgentPaletteItem, InlineListItem, InlineListSearchConfig, InlineListSelection,
     ListOverlayRequest, TransientEvent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
-    TransientRequest, TransientSelectionChange, TransientSubmission, WizardModalMode, WizardStep,
+    TransientRequest, TransientSelectionChange, TransientSubmission,
 };
 
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
@@ -18,9 +18,9 @@ use crate::agent::runloop::slash_commands::{
     AgentDefinitionScope, AgentManagerAction, SubprocessManagerAction,
 };
 use crate::agent::runloop::unified::session_setup::refresh_local_agents;
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+
+#[path = "agents_authoring.rs"]
+mod authoring;
 
 const AGENT_ACTION_PREFIX: &str = "agents:";
 const AGENT_INSPECT_PREFIX: &str = "agents:inspect:";
@@ -31,8 +31,11 @@ const SUBPROCESS_TRANSCRIPT_PREFIX: &str = "subprocesses:transcript:";
 const SUBPROCESS_ARCHIVE_PREFIX: &str = "subprocesses:archive:";
 const SUBPROCESS_STOP_PREFIX: &str = "subprocesses:stop:";
 const SUBPROCESS_CANCEL_PREFIX: &str = "subprocesses:cancel:";
-const PROMPT_QUESTION_ID: &str = "agent-name";
 const ACTIVE_AGENT_INSPECTOR_REFRESH_MS: u64 = 750;
+const DEFAULT_AGENT_DESCRIPTION_TEXT: &str = "Describe when VT Code should delegate to this agent.";
+const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behavior narrow and task-specific.\n\nConstraints:\n- Use VT Code tool ids in frontmatter such as `read_file`, `list_files`, `unified_search`, and `unified_exec`.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarize findings or changes.\n- Call out verification or remaining risks when relevant.\n";
+const DEFAULT_AGENT_TOOL_IDS: [&str; 3] =
+    [tools::READ_FILE, tools::LIST_FILES, tools::UNIFIED_SEARCH];
 
 pub(crate) async fn handle_manage_agents(
     mut ctx: SlashCommandContext<'_>,
@@ -64,8 +67,7 @@ pub(crate) async fn handle_manage_agents(
             }
         }
         AgentManagerAction::Create { scope, name } => {
-            let mut ctx = ctx;
-            handle_create_agent(&mut ctx, scope, &name).await
+            authoring::handle_create_agent(ctx, scope, name.as_deref()).await
         }
         AgentManagerAction::Inspect { id } => {
             let Some(controller) = ctx.tool_registry.subagent_controller() else {
@@ -101,7 +103,9 @@ pub(crate) async fn handle_manage_agents(
             )?;
             Ok(SlashCommandControl::Continue)
         }
-        AgentManagerAction::Edit { name } => handle_edit_agent(ctx, &name).await,
+        AgentManagerAction::Edit { name } => {
+            authoring::handle_edit_agent(ctx, name.as_deref()).await
+        }
         AgentManagerAction::Delete { name } => {
             let mut ctx = ctx;
             handle_delete_agent(&mut ctx, &name).await
@@ -204,23 +208,23 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
             ),
             action_item(
                 "Create project agent",
-                "Scaffold `.vtcode/agents/<name>.md` with VT Code-native frontmatter",
+                "Guided flow for `.vtcode/agents/<name>.md` with VT Code-native frontmatter",
                 Some("Project"),
-                "create project agent scaffold",
+                "create project agent guided authoring",
                 "create-project",
             ),
             action_item(
                 "Create user agent",
-                "Scaffold `~/.vtcode/agents/<name>.md` with VT Code-native frontmatter",
+                "Guided flow for `~/.vtcode/agents/<name>.md` with VT Code-native frontmatter",
                 Some("User"),
-                "create user agent scaffold",
+                "create user agent guided authoring",
                 "create-user",
             ),
             action_item(
                 "Edit custom agent",
-                "Pick a project or user agent file and open it in your editor",
+                "Guided editor for native `.vtcode` agents; imported files still open in your editor",
                 None,
-                "edit custom agent file",
+                "edit custom agent guided authoring",
                 "edit",
             ),
             action_item(
@@ -251,26 +255,13 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
         value if value == format!("{AGENT_ACTION_PREFIX}browse") => show_agent_catalog(ctx).await,
         value if value == format!("{AGENT_ACTION_PREFIX}threads") => show_threads_modal(ctx).await,
         value if value == format!("{AGENT_ACTION_PREFIX}create-project") => {
-            let name = prompt_agent_name(&mut ctx, "Create project agent", "Agent name").await?;
-            if let Some(name) = name {
-                handle_create_agent(&mut ctx, AgentDefinitionScope::Project, &name).await
-            } else {
-                Ok(SlashCommandControl::Continue)
-            }
+            authoring::handle_create_agent(ctx, Some(AgentDefinitionScope::Project), None).await
         }
         value if value == format!("{AGENT_ACTION_PREFIX}create-user") => {
-            let name = prompt_agent_name(&mut ctx, "Create user agent", "Agent name").await?;
-            if let Some(name) = name {
-                handle_create_agent(&mut ctx, AgentDefinitionScope::User, &name).await
-            } else {
-                Ok(SlashCommandControl::Continue)
-            }
+            authoring::handle_create_agent(ctx, Some(AgentDefinitionScope::User), None).await
         }
         value if value == format!("{AGENT_ACTION_PREFIX}edit") => {
-            let Some(name) = select_custom_agent_name(&mut ctx, "Edit custom agent").await? else {
-                return Ok(SlashCommandControl::Continue);
-            };
-            handle_edit_agent(ctx, &name).await
+            authoring::handle_edit_agent(ctx, None).await
         }
         value if value == format!("{AGENT_ACTION_PREFIX}delete") => {
             let Some(name) = select_custom_agent_name(&mut ctx, "Delete custom agent").await?
@@ -1590,7 +1581,7 @@ async fn handle_list_threads_text(
     Ok(SlashCommandControl::Continue)
 }
 
-async fn handle_create_agent(
+async fn legacy_create_agent_scaffold(
     ctx: &mut SlashCommandContext<'_>,
     scope: AgentDefinitionScope,
     name: &str,
@@ -1633,7 +1624,7 @@ async fn handle_create_agent(
     Ok(SlashCommandControl::Continue)
 }
 
-async fn handle_edit_agent(
+async fn legacy_open_agent_editor(
     ctx: SlashCommandContext<'_>,
     name: &str,
 ) -> Result<SlashCommandControl> {
@@ -1720,75 +1711,6 @@ async fn select_custom_agent_name(
     Ok(action
         .strip_prefix(AGENT_INSPECT_PREFIX)
         .map(ToString::to_string))
-}
-
-async fn prompt_agent_name(
-    ctx: &mut SlashCommandContext<'_>,
-    title: &str,
-    freeform_label: &str,
-) -> Result<Option<String>> {
-    let step = WizardStep {
-        title: "Name".to_string(),
-        question: "Enter a lowercase hyphenated agent name.".to_string(),
-        items: vec![InlineListItem {
-            title: "Save".to_string(),
-            subtitle: Some(
-                "Press Tab to type the agent name, then Enter to scaffold it.".to_string(),
-            ),
-            badge: Some("Required".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: PROMPT_QUESTION_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("save agent name".to_string()),
-        }],
-        completed: false,
-        answer: None,
-        allow_freeform: true,
-        freeform_label: Some(freeform_label.to_string()),
-        freeform_placeholder: Some("example-agent".to_string()),
-    };
-
-    let outcome = show_wizard_modal_and_wait(
-        ctx.handle,
-        ctx.session,
-        title.to_string(),
-        vec![step],
-        0,
-        None,
-        WizardModalMode::MultiStep,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-    )
-    .await?;
-    let Some(value) = (match outcome {
-        WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == PROMPT_QUESTION_ID => {
-                        other.or_else(|| selected.first().cloned())
-                    }
-                    _ => None,
-                })
-        }
-        WizardModalOutcome::Cancelled { .. } => None,
-    }) else {
-        return Ok(None);
-    };
-
-    let trimmed = value.trim().to_string();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    validate_agent_name(&trimmed)?;
-    Ok(Some(trimmed))
 }
 
 async fn confirm_delete_agent(ctx: &mut SlashCommandContext<'_>, name: &str) -> Result<bool> {
@@ -1910,10 +1832,12 @@ fn validate_agent_name(name: &str) -> Result<()> {
 
 fn scaffold_agent_markdown(name: &str) -> String {
     format!(
-        "---\nname: {name}\ndescription: Describe when VT Code should delegate to this agent.\ntools:\n  - {read_file}\n  - {list_files}\n  - {unified_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\n---\n\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behavior narrow and task-specific.\n\nConstraints:\n- Use VT Code tool ids in frontmatter such as `read_file`, `list_files`, `unified_search`, and `unified_exec`.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarize findings or changes.\n- Call out verification or remaining risks when relevant.\n",
-        read_file = tools::READ_FILE,
-        list_files = tools::LIST_FILES,
-        unified_search = tools::UNIFIED_SEARCH,
+        "---\nname: {name}\ndescription: {description}\ntools:\n  - {read_file}\n  - {list_files}\n  - {unified_search}\nmodel: inherit\ncolor: blue\nreasoning_effort: medium\n---\n{body}",
+        description = DEFAULT_AGENT_DESCRIPTION_TEXT,
+        read_file = DEFAULT_AGENT_TOOL_IDS[0],
+        list_files = DEFAULT_AGENT_TOOL_IDS[1],
+        unified_search = DEFAULT_AGENT_TOOL_IDS[2],
+        body = DEFAULT_AGENT_BODY_TEXT,
     )
 }
 

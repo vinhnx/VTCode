@@ -70,6 +70,44 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
+impl<'a> SlashCommandContext<'a> {
+    pub(crate) fn reborrow(&mut self) -> SlashCommandContext<'_> {
+        SlashCommandContext {
+            thread_id: self.thread_id,
+            active_thread_label: self.active_thread_label,
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            header_context: self.header_context,
+            ide_context_bridge: self.ide_context_bridge,
+            config: self.config,
+            vt_cfg: self.vt_cfg,
+            provider_client: self.provider_client,
+            session_bootstrap: self.session_bootstrap,
+            model_picker_state: self.model_picker_state,
+            palette_state: self.palette_state,
+            tool_registry: self.tool_registry,
+            conversation_history: self.conversation_history,
+            decision_ledger: self.decision_ledger,
+            context_manager: self.context_manager,
+            session_stats: self.session_stats,
+            input_status_state: self.input_status_state,
+            tools: self.tools,
+            tool_catalog: self.tool_catalog,
+            async_mcp_manager: self.async_mcp_manager,
+            mcp_panel_state: self.mcp_panel_state,
+            linked_directories: self.linked_directories,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            full_auto: self.full_auto,
+            loaded_skills: self.loaded_skills,
+            checkpoint_manager: self.checkpoint_manager,
+            lifecycle_hooks: self.lifecycle_hooks,
+            harness_emitter: self.harness_emitter,
+        }
+    }
+}
+
 pub(crate) async fn handle_outcome(
     outcome: SlashCommandOutcome,
     ctx: SlashCommandContext<'_>,
