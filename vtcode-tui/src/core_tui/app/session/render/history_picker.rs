@@ -167,6 +167,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
             base_style: default_style,
             selected_style: Some(modal_list_highlight_style(session)),
             text_style: default_style,
+            divider_style: None,
         },
         &mut panel_model,
     );

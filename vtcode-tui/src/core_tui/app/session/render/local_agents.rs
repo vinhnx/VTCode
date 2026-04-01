@@ -201,6 +201,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
             base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
+            divider_style: None,
         },
         &mut list_model,
     );

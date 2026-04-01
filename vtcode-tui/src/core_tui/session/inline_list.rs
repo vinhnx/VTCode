@@ -18,10 +18,20 @@ impl InlineListRow {
             style,
         }
     }
+
+    pub(crate) fn apply_style(&mut self, style: Style) {
+        self.style = style;
+        for line in &mut self.lines {
+            for span in &mut line.spans {
+                span.style = span.style.patch(style);
+            }
+        }
+    }
 }
 
 impl Widget for InlineListRow {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        buf.set_style(area, self.style);
         Paragraph::new(self.lines)
             .style(self.style)
             .wrap(Wrap { trim: false })
@@ -66,7 +76,7 @@ pub(crate) fn render_inline_list_with_options(
         if context.is_selected
             && let Some(style) = options.selected_style
         {
-            row.style = style;
+            row.apply_style(style);
         }
         (row, *height)
     });

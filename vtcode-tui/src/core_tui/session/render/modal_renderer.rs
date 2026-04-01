@@ -129,6 +129,9 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
             lines = lines.saturating_add(1);
         }
         lines = lines.saturating_add(2); // question and spacing
+        if wizard.search.is_some() {
+            lines = lines.saturating_add(1); // divider before list
+        }
         let (list_rows, summary_rows) = wizard
             .steps
             .get(wizard.current_step)
@@ -166,6 +169,9 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         }
         if modal.secure_prompt.is_some() {
             lines = lines.saturating_add(2);
+        }
+        if modal.list.is_some() && modal.search.is_some() {
+            lines = lines.saturating_add(1); // divider before list
         }
         if let Some(list) = modal.list.as_ref() {
             lines = lines.saturating_add(list_desired_rows(list));

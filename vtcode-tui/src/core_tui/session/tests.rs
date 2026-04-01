@@ -4199,7 +4199,10 @@ fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
                 footer_hint: None,
                 items: vec![item],
                 selected: None,
-                search: None,
+                search: Some(InlineListSearchConfig {
+                    label: "Search models".to_string(),
+                    placeholder: Some("provider, name, id".to_string()),
+                }),
                 hotkeys: Vec::new(),
             },
         )),
@@ -4305,6 +4308,68 @@ fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
     );
     assert_eq!(top_divider_cell.style().fg, title_cell.style().fg);
     assert_eq!(bottom_divider_cell.style().fg, title_cell.style().fg);
+}
+
+#[test]
+fn selected_modal_row_uses_full_width_accent_background() {
+    let theme = InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
+        primary: Some(AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56))),
+        ..InlineTheme::default()
+    };
+    let mut session = AppSession::new(theme, None, 30);
+    let selection = InlineListSelection::SlashCommand("a".to_string());
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Pick one".to_string(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![InlineListItem {
+                    title: "Option A".to_string(),
+                    subtitle: None,
+                    badge: Some("Active".to_string()),
+                    indent: 0,
+                    selection: Some(selection.clone()),
+                    search_value: Some("Option A".to_string()),
+                }],
+                selected: Some(selection),
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render selected modal row");
+
+    let modal_area = session.core.modal_list_area().expect("modal list area");
+    let far_right = terminal
+        .backend()
+        .buffer()
+        .cell((
+            modal_area.x + modal_area.width.saturating_sub(1),
+            modal_area.y,
+        ))
+        .expect("selected row far-right cell");
+    assert_eq!(far_right.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+    let badge_cell = terminal
+        .backend()
+        .buffer()
+        .cell((modal_area.x, modal_area.y))
+        .expect("selected row badge cell");
+    assert_eq!(badge_cell.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+    let title_cell = terminal
+        .backend()
+        .buffer()
+        .cell((modal_area.x + 10, modal_area.y))
+        .expect("selected row title cell");
+    assert_eq!(title_cell.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 }
 
 #[test]

@@ -148,6 +148,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
+            divider_style: None,
         },
         &mut model,
     );
@@ -270,6 +271,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
             base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
+            divider_style: None,
         },
         &mut model,
     );

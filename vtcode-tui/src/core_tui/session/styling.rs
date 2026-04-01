@@ -25,6 +25,39 @@ fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
     )
 }
 
+fn highlight_foreground_for(background: AnsiColorEnum) -> Color {
+    match background {
+        AnsiColorEnum::Rgb(rgb) => {
+            let luminance = (0.2126 * f32::from(rgb.0) / 255.0)
+                + (0.7152 * f32::from(rgb.1) / 255.0)
+                + (0.0722 * f32::from(rgb.2) / 255.0);
+            if luminance >= 0.55 {
+                Color::Black
+            } else {
+                Color::White
+            }
+        }
+        AnsiColorEnum::Ansi(color) => match color {
+            AnsiColor::White
+            | AnsiColor::BrightWhite
+            | AnsiColor::Yellow
+            | AnsiColor::BrightYellow
+            | AnsiColor::Cyan
+            | AnsiColor::BrightCyan
+            | AnsiColor::Green
+            | AnsiColor::BrightGreen => Color::Black,
+            _ => Color::White,
+        },
+        AnsiColorEnum::Ansi256(value) => {
+            if value.index() >= 244 {
+                Color::Black
+            } else {
+                Color::White
+            }
+        }
+    }
+}
+
 pub fn normalize_tool_name(tool_name: &str) -> &'static str {
     match tool_name.to_lowercase().as_str() {
         "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search",
@@ -76,9 +109,16 @@ impl SessionStyles {
 
     /// Get the modal list highlight style
     pub fn modal_list_highlight_style(&self) -> Style {
-        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
-            style = style.fg(ratatui_color_from_ansi(primary));
+        let accent = self
+            .theme
+            .primary
+            .or(self.theme.tool_accent)
+            .or(self.theme.foreground);
+        let mut style = self.default_style().add_modifier(Modifier::BOLD);
+        if let Some(accent) = accent {
+            style = style
+                .bg(ratatui_color_from_ansi(accent))
+                .fg(highlight_foreground_for(accent));
         }
         style
     }

@@ -265,6 +265,7 @@ pub fn render_modal_list(
             base_style: styles.selectable,
             selected_style: Some(styles.highlight),
             text_style: styles.detail,
+            divider_style: Some(styles.border),
         },
         &mut panel_model,
     );
@@ -440,6 +441,10 @@ pub(crate) fn render_wizard_modal_body(
     if wizard.search.is_some() {
         constraints.push(Constraint::Length(1));
     }
+    let show_list_divider = wizard.search.is_some();
+    if show_list_divider {
+        constraints.push(Constraint::Length(1));
+    }
     constraints.push(Constraint::Min(3));
 
     let chunks = Layout::vertical(constraints).split(area);
@@ -480,6 +485,18 @@ pub(crate) fn render_wizard_modal_body(
         && idx < chunks.len()
     {
         render_modal_search(frame, text_alignment_fn(chunks[idx]), search, styles);
+        idx += 1;
+    }
+
+    if show_list_divider && idx < chunks.len() {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                ui::INLINE_BLOCK_HORIZONTAL.repeat(chunks[idx].width as usize),
+                styles.border,
+            )))
+            .wrap(Wrap { trim: false }),
+            chunks[idx],
+        );
         idx += 1;
     }
 
@@ -605,17 +622,24 @@ pub(crate) fn render_modal_body(
             ModalSection::List => constraints.push(Constraint::Min(1)),
         }
     }
+    let show_list_divider = context.list.is_some() && context.search.is_some();
+    if show_list_divider {
+        let insert_at = constraints.len().saturating_sub(1);
+        constraints.insert(insert_at, Constraint::Length(1));
+    }
 
     let chunks = Layout::vertical(constraints).split(area);
     let mut list_state = context.list;
 
-    for (section, chunk) in sections.into_iter().zip(chunks.iter()) {
+    let mut chunk_idx = 0usize;
+    for section in sections {
+        let chunk = chunks[chunk_idx];
         match section {
             ModalSection::Instructions => {
                 if chunk.height > 0 && !instruction_lines.is_empty() {
                     render_modal_text_lines(
                         frame,
-                        *chunk,
+                        chunk,
                         instruction_lines.clone(),
                         workspace_root,
                         last_mouse_position,
@@ -627,19 +651,31 @@ pub(crate) fn render_modal_body(
             }
             ModalSection::Prompt => {
                 if let Some(config) = context.secure_prompt {
-                    render_secure_prompt(frame, *chunk, config, context.input, context.cursor);
+                    render_secure_prompt(frame, chunk, config, context.input, context.cursor);
                 }
             }
             ModalSection::Search => {
                 if let Some(config) = context.search {
-                    render_modal_search(frame, *chunk, config, context.styles);
+                    render_modal_search(frame, chunk, config, context.styles);
                 }
             }
             ModalSection::List => {
+                if show_list_divider && chunk_idx > 0 {
+                    let divider_chunk = chunks[chunk_idx];
+                    frame.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            ui::INLINE_BLOCK_HORIZONTAL.repeat(divider_chunk.width as usize),
+                            context.styles.border,
+                        )))
+                        .wrap(Wrap { trim: false }),
+                        divider_chunk,
+                    );
+                    chunk_idx += 1;
+                }
                 if let Some(list_state) = list_state.as_deref_mut() {
                     outcome.list_area = Some(render_modal_list(
                         frame,
-                        *chunk,
+                        chunks[chunk_idx],
                         list_state,
                         context.styles,
                         context.footer_hint,
@@ -648,6 +684,7 @@ pub(crate) fn render_modal_body(
                 }
             }
         }
+        chunk_idx += 1;
     }
 
     outcome

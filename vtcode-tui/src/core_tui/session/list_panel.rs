@@ -133,6 +133,7 @@ pub(crate) struct SharedListPanelStyles {
     pub base_style: Style,
     pub selected_style: Option<Style>,
     pub text_style: Style,
+    pub divider_style: Option<Style>,
 }
 
 pub(crate) fn shared_search_field_line(
@@ -220,6 +221,11 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if sections.search.is_some() {
         constraints.push(Constraint::Length(1));
     }
+    let show_divider = styles.divider_style.is_some()
+        && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
+    if show_divider {
+        constraints.push(Constraint::Length(1));
+    }
     constraints.push(Constraint::Min(1));
 
     let chunks = Layout::vertical(constraints).split(inner);
@@ -262,6 +268,20 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
         idx += 1;
     }
 
+    if show_divider && idx < chunks.len() {
+        let divider_style = styles.divider_style.expect("divider style");
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                crate::config::constants::ui::INLINE_BLOCK_HORIZONTAL
+                    .repeat(chunks[idx].width as usize),
+                divider_style,
+            )))
+            .wrap(Wrap { trim: false }),
+            chunks[idx],
+        );
+        idx += 1;
+    }
+
     if idx >= chunks.len() {
         return;
     }
@@ -289,5 +309,67 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
         );
         model.set_selected(widget_state.selected);
         model.set_scroll_offset(widget_state.scroll_offset_index());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::ui;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn shared_list_panel_renders_divider_before_list_when_enabled() {
+        let backend = TestBackend::new(40, 6);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut model = StaticRowsListPanelModel {
+            rows: vec![(
+                InlineListRow::single(
+                    Line::from(Span::styled("Item A".to_string(), Style::default())),
+                    Style::default(),
+                ),
+                1,
+            )],
+            selected: Some(0),
+            offset: 0,
+            visible_rows: 0,
+        };
+
+        terminal
+            .draw(|frame| {
+                render_shared_list_panel(
+                    frame,
+                    Rect::new(0, 0, 40, 6),
+                    SharedListPanelSections {
+                        header: vec![Line::from("Header")],
+                        info: vec![Line::from("Info")],
+                        search: Some(SharedSearchField {
+                            label: "Search".to_string(),
+                            placeholder: Some("query".to_string()),
+                            query: String::new(),
+                        }),
+                    },
+                    SharedListPanelStyles {
+                        base_style: Style::default(),
+                        selected_style: Some(Style::default()),
+                        text_style: Style::default(),
+                        divider_style: Some(Style::default()),
+                    },
+                    &mut model,
+                );
+            })
+            .expect("list panel render");
+
+        let buffer = terminal.backend().buffer();
+        let divider_row = (0..buffer.area.width)
+            .filter_map(|x| buffer.cell((x, 3)).map(|cell| cell.symbol().to_string()))
+            .collect::<String>()
+            .trim_end()
+            .to_string();
+
+        assert_eq!(
+            divider_row,
+            ui::INLINE_BLOCK_HORIZONTAL.repeat(buffer.area.width as usize)
+        );
     }
 }

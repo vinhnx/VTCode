@@ -86,6 +86,8 @@ See https://code.claude.com/docs/en/hooks
 
 ---
 
+https://deepwiki.com/instructkr/claw-code
+
 --
 
 https://developers.openai.com/codex/app-server
