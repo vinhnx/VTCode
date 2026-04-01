@@ -116,8 +116,9 @@ pub(crate) enum ScheduleCommandAction {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum CompactConversationCommand {
-    InteractiveManager,
     Run { options: ResponsesCompactionOptions },
+    EditDefaultPrompt,
+    ResetDefaultPrompt,
 }
 
 pub(crate) enum SlashCommandOutcome {
@@ -528,6 +529,10 @@ async fn execute_built_in_command_skill(
                         MessageStyle::Info,
                         "Usage: /compact [--instructions <text>] [--max-output-tokens <n>] [--reasoning-effort <none|minimal|low|medium|high|xhigh>] [--verbosity <low|medium|high>] [--include <selector> ...] [--store|--no-store] [--service-tier <flex|priority>] [--prompt-cache-key <key>]",
                     )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "       /compact edit-prompt | /compact reset-prompt",
+                )?;
                 Ok(SlashCommandOutcome::Handled)
             }
         },
@@ -878,6 +883,7 @@ mod tests {
         SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
         parse_doctor_args, parse_update_args,
     };
+    use vtcode_core::llm::provider::ResponsesCompactionOptions;
     use vtcode_core::skills::command_skill_specs;
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
@@ -1366,17 +1372,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compact_commands_parse_to_interactive_and_direct_outcomes() {
+    async fn compact_commands_parse_to_automatic_and_direct_outcomes() {
         let workspace = std::env::current_dir().expect("workspace");
         let mut renderer = renderer_for_tests();
 
-        let interactive = handle_slash_command("compact", &mut renderer, &workspace)
+        let automatic = handle_slash_command("compact", &mut renderer, &workspace)
             .await
             .expect("compact should parse");
         assert!(matches!(
-            interactive,
+            automatic,
             SlashCommandOutcome::CompactConversation {
-                command: CompactConversationCommand::InteractiveManager
+                command: CompactConversationCommand::Run { ref options }
+            } if *options == ResponsesCompactionOptions::default()
+        ));
+
+        let edit_prompt = handle_slash_command("compact edit-prompt", &mut renderer, &workspace)
+            .await
+            .expect("compact edit-prompt should parse");
+        assert!(matches!(
+            edit_prompt,
+            SlashCommandOutcome::CompactConversation {
+                command: CompactConversationCommand::EditDefaultPrompt
+            }
+        ));
+
+        let reset_prompt = handle_slash_command("compact reset-prompt", &mut renderer, &workspace)
+            .await
+            .expect("compact reset-prompt should parse");
+        assert!(matches!(
+            reset_prompt,
+            SlashCommandOutcome::CompactConversation {
+                command: CompactConversationCommand::ResetDefaultPrompt
             }
         ));
 

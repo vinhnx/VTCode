@@ -3,283 +3,41 @@ use std::fs;
 use anyhow::{Context, Result};
 use tempfile::Builder as TempFileBuilder;
 use toml::Value as TomlValue;
-use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::build_openai_prompt_cache_key;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
-};
 
 use crate::agent::runloop::slash_commands::CompactConversationCommand;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
 
 use super::apps::run_with_event_loop_suspended;
 use super::config_toml::{
     ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value,
 };
-use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
 use super::{SlashCommandContext, SlashCommandControl};
-
-const COMPACT_ACTION_NOW: &str = "compact.action.now";
-const COMPACT_ACTION_EDIT_PROMPT: &str = "compact.action.edit_prompt";
-const COMPACT_ACTION_RESET_PROMPT: &str = "compact.action.reset_prompt";
-const COMPACT_ACTION_BACK: &str = "compact.action.back";
-const COMPACT_INPUT_ID: &str = "compact.input";
 
 pub(crate) async fn handle_compact_conversation(
     mut ctx: SlashCommandContext<'_>,
     command: CompactConversationCommand,
 ) -> Result<SlashCommandControl> {
-    if !manual_openai_compaction_available(&mut ctx)? {
-        return Ok(SlashCommandControl::Continue);
-    }
-
     match command {
-        CompactConversationCommand::InteractiveManager if ctx.renderer.supports_inline_ui() => {
-            run_compact_manager(&mut ctx).await
-        }
-        CompactConversationCommand::InteractiveManager => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Interactive `/compact` options require inline UI. Running compaction with current OpenAI defaults.",
-            )?;
-            execute_manual_compaction(&mut ctx, ResponsesCompactionOptions::default()).await
-        }
         CompactConversationCommand::Run { options } => {
+            if !manual_openai_compaction_available(&mut ctx)? {
+                return Ok(SlashCommandControl::Continue);
+            }
             execute_manual_compaction(&mut ctx, options).await
         }
-    }
-}
-
-async fn run_compact_manager(ctx: &mut SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if !ensure_selection_ui_available(ctx, "opening compact controls")? {
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    loop {
-        show_compact_actions_modal(ctx);
-        let Some(selection) = wait_for_list_modal_selection(ctx).await else {
-            return Ok(SlashCommandControl::Continue);
-        };
-        let InlineListSelection::ConfigAction(action) = selection else {
-            return Ok(SlashCommandControl::Continue);
-        };
-
-        match action.as_str() {
-            COMPACT_ACTION_NOW => {
-                let Some(options) = collect_interactive_compaction_options(ctx).await? else {
-                    continue;
-                };
-                return execute_manual_compaction(ctx, options).await;
-            }
-            COMPACT_ACTION_EDIT_PROMPT => {
-                edit_default_prompt(ctx).await?;
-            }
-            COMPACT_ACTION_RESET_PROMPT => {
-                reset_default_prompt(ctx).await?;
-            }
-            COMPACT_ACTION_BACK => return Ok(SlashCommandControl::Continue),
-            _ => return Ok(SlashCommandControl::Continue),
+        CompactConversationCommand::EditDefaultPrompt => {
+            edit_default_prompt(&mut ctx).await?;
+            Ok(SlashCommandControl::Continue)
+        }
+        CompactConversationCommand::ResetDefaultPrompt => {
+            reset_default_prompt(&mut ctx).await?;
+            Ok(SlashCommandControl::Continue)
         }
     }
-}
-
-fn show_compact_actions_modal(ctx: &mut SlashCommandContext<'_>) {
-    let default_prompt = current_default_prompt(ctx);
-    let prompt_badge = default_prompt
-        .as_ref()
-        .map(|_| "Configured".to_string())
-        .unwrap_or_else(|| "Default".to_string());
-    let compact_subtitle = if ctx.conversation_history.is_empty() {
-        "No conversation history yet. Prompt actions are still available.".to_string()
-    } else {
-        "Run a one-off OpenAI `/responses/compact` request with optional overrides.".to_string()
-    };
-
-    ctx.handle.show_list_modal(
-        "Compact conversation".to_string(),
-        vec![
-            format!(
-                "Provider: {} · Model: {}",
-                ctx.provider_client.name(),
-                ctx.config.model
-            ),
-            "Available only for native OpenAI Responses models on api.openai.com.".to_string(),
-        ],
-        vec![
-            InlineListItem {
-                title: "Compact now".to_string(),
-                subtitle: Some(compact_subtitle),
-                badge: Some("Recommended".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    COMPACT_ACTION_NOW.to_string(),
-                )),
-                search_value: Some("compact now run manual openai".to_string()),
-            },
-            InlineListItem {
-                title: "Edit default prompt".to_string(),
-                subtitle: Some(
-                    "Open the saved default manual compaction instructions in your external editor."
-                        .to_string(),
-                ),
-                badge: Some(prompt_badge),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    COMPACT_ACTION_EDIT_PROMPT.to_string(),
-                )),
-                search_value: Some("edit default prompt instructions".to_string()),
-            },
-            InlineListItem {
-                title: "Reset default prompt".to_string(),
-                subtitle: Some(
-                    "Remove the saved workspace default and fall back to built-in behavior."
-                        .to_string(),
-                ),
-                badge: None,
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    COMPACT_ACTION_RESET_PROMPT.to_string(),
-                )),
-                search_value: Some("reset default prompt".to_string()),
-            },
-            InlineListItem {
-                title: "Back".to_string(),
-                subtitle: Some("Close the compact manager.".to_string()),
-                badge: None,
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    COMPACT_ACTION_BACK.to_string(),
-                )),
-                search_value: Some("back close".to_string()),
-            },
-        ],
-        Some(InlineListSelection::ConfigAction(
-            COMPACT_ACTION_NOW.to_string(),
-        )),
-        Some(InlineListSearchConfig {
-            label: "Search actions".to_string(),
-            placeholder: Some("compact, prompt, reset".to_string()),
-        }),
-    );
-}
-
-async fn collect_interactive_compaction_options(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<Option<ResponsesCompactionOptions>> {
-    let Some(instructions) = prompt_optional_text(
-        ctx,
-        "Compaction instructions",
-        "Optionally append one-off instructions to the standalone `/responses/compact` request. Leave blank to use defaults.",
-        "Instructions:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(max_output_tokens) = prompt_optional_text(
-        ctx,
-        "Max output tokens",
-        "Optionally override the compaction response token limit. Leave blank to use defaults.",
-        "Max output tokens:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(reasoning_effort) = prompt_optional_text(
-        ctx,
-        "Reasoning effort",
-        "Optionally set reasoning effort (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`). Leave blank to use defaults.",
-        "Reasoning effort:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(verbosity) = prompt_optional_text(
-        ctx,
-        "Verbosity",
-        "Optionally set text verbosity (`low`, `medium`, `high`). Leave blank to use defaults.",
-        "Verbosity:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(include) = prompt_optional_text(
-        ctx,
-        "Include selectors",
-        "Optionally enter comma-separated Responses include selectors. Leave blank to use defaults.",
-        "Include selectors:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(store) = prompt_optional_text(
-        ctx,
-        "Store override",
-        "Optionally set `true` or `false` for the standalone compaction request. Leave blank to use defaults.",
-        "Store:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(service_tier) = prompt_optional_text(
-        ctx,
-        "Service tier",
-        "Optionally set `flex` or `priority`. Leave blank to use defaults.",
-        "Service tier:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let Some(prompt_cache_key) = prompt_optional_text(
-        ctx,
-        "Prompt cache key",
-        "Optionally override the OpenAI prompt cache routing key. Leave blank to use defaults.",
-        "Prompt cache key:",
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-
-    let max_output_tokens = parse_optional_u32(&max_output_tokens, "--max-output-tokens")?;
-    let reasoning_effort =
-        parse_optional_reasoning_effort(&reasoning_effort, "--reasoning-effort")?;
-    let verbosity = parse_optional_verbosity(&verbosity, "--verbosity")?;
-    let responses_include = parse_optional_include(&include);
-    let response_store = parse_optional_store(&store)?;
-    let service_tier = parse_optional_service_tier(&service_tier)?;
-
-    Ok(Some(ResponsesCompactionOptions {
-        instructions: trimmed_optional(instructions),
-        max_output_tokens,
-        reasoning_effort,
-        verbosity,
-        responses_include,
-        response_store,
-        service_tier,
-        prompt_cache_key: trimmed_optional(prompt_cache_key),
-    }))
 }
 
 async fn edit_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
@@ -485,130 +243,6 @@ fn manual_openai_compaction_available(ctx: &mut SlashCommandContext<'_>) -> Resu
         .manual_openai_compaction_unavailable_message(&ctx.config.model);
     ctx.renderer.line(MessageStyle::Error, &message)?;
     Ok(false)
-}
-
-async fn prompt_optional_text(
-    ctx: &mut SlashCommandContext<'_>,
-    title: &str,
-    question: &str,
-    freeform_label: &str,
-) -> Result<Option<String>> {
-    let step = WizardStep {
-        title: "Input".to_string(),
-        question: question.to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some(
-                "Press Enter to keep this field blank, or Tab to type a value.".to_string(),
-            ),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: COMPACT_INPUT_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit input".to_string()),
-        }],
-        completed: false,
-        answer: None,
-        allow_freeform: true,
-        freeform_label: Some(freeform_label.to_string()),
-        freeform_placeholder: Some(String::new()),
-    };
-
-    let outcome = show_wizard_modal_and_wait(
-        ctx.handle,
-        ctx.session,
-        title.to_string(),
-        vec![step],
-        0,
-        None,
-        WizardModalMode::MultiStep,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-    )
-    .await?;
-
-    Ok(match outcome {
-        WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == COMPACT_INPUT_ID => {
-                        other.or_else(|| selected.first().cloned())
-                    }
-                    _ => None,
-                })
-        }
-        WizardModalOutcome::Cancelled { .. } => None,
-    })
-}
-
-fn parse_optional_u32(value: &str, flag: &str) -> Result<Option<u32>> {
-    let Some(value) = trimmed_optional(value.to_string()) else {
-        return Ok(None);
-    };
-    value
-        .parse::<u32>()
-        .map(Some)
-        .with_context(|| format!("Invalid value for {}: {}", flag, value))
-}
-
-fn parse_optional_reasoning_effort(
-    value: &str,
-    flag: &str,
-) -> Result<Option<ReasoningEffortLevel>> {
-    let Some(value) = trimmed_optional(value.to_string()) else {
-        return Ok(None);
-    };
-    ReasoningEffortLevel::parse(&value)
-        .map(Some)
-        .with_context(|| format!("Invalid value for {}: {}", flag, value))
-}
-
-fn parse_optional_verbosity(value: &str, flag: &str) -> Result<Option<VerbosityLevel>> {
-    let Some(value) = trimmed_optional(value.to_string()) else {
-        return Ok(None);
-    };
-    VerbosityLevel::parse(&value)
-        .map(Some)
-        .with_context(|| format!("Invalid value for {}: {}", flag, value))
-}
-
-fn parse_optional_include(value: &str) -> Option<Vec<String>> {
-    let value = trimmed_optional(value.to_string())?;
-    let include = value
-        .split(',')
-        .map(|item| item.trim())
-        .filter(|item| !item.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
-    (!include.is_empty()).then_some(include)
-}
-
-fn parse_optional_store(value: &str) -> Result<Option<bool>> {
-    let Some(value) = trimmed_optional(value.to_string()) else {
-        return Ok(None);
-    };
-    match value.to_ascii_lowercase().as_str() {
-        "true" | "yes" | "store" => Ok(Some(true)),
-        "false" | "no" | "no-store" => Ok(Some(false)),
-        _ => anyhow::bail!("Invalid value for --store: {}", value),
-    }
-}
-
-fn parse_optional_service_tier(value: &str) -> Result<Option<String>> {
-    let Some(value) = trimmed_optional(value.to_string()) else {
-        return Ok(None);
-    };
-    OpenAIServiceTier::parse(&value)
-        .map(|tier| Some(tier.as_str().to_string()))
-        .with_context(|| format!("Invalid value for --service-tier: {}", value))
 }
 
 fn trimmed_optional(value: String) -> Option<String> {

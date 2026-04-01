@@ -55,7 +55,8 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 
 ### Session Context Commands
 
-- `/compact` compacts the current session history when you want to shed context manually.
+- `/compact` compacts the current session history immediately when you want to shed context manually.
+- `/compact edit-prompt` and `/compact reset-prompt` manage the saved default prompt for manual compaction requests.
 - For providers with native Responses compaction, VT Code uses the provider-owned compacted state.
 - For local fallback compaction, VT Code rebuilds history around one structured summary plus retained recent user messages, then injects the session memory envelope.
 - `/fork` opens the archived-session picker. After selecting a session, VT Code now asks whether the new session should start from the full copied transcript or from a summarized fork.

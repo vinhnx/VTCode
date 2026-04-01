@@ -18,11 +18,11 @@ list_files = true
 read_file = true
 
 [agent]
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 autonomous_mode = true
 credential_storage_mode = "keyring"
 default_editing_mode = "edit"
-default_model = "nemotron-3-super:cloud"
+default_model = "gpt-5.2"
 enable_self_review = false
 enable_split_tool_results = true
 include_temporal_context = true
@@ -36,7 +36,7 @@ max_review_passes = 1
 max_task_retries = 2
 project_doc_fallback_filenames = []
 project_doc_max_bytes = 16384
-provider = "ollama"
+provider = "openai"
 reasoning_effort = "low"
 refine_prompts_enabled = false
 refine_prompts_max_passes = 1

@@ -28,11 +28,21 @@ pub(super) fn parse_compact_command(
 ) -> std::result::Result<CompactConversationCommand, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
-        return Ok(CompactConversationCommand::InteractiveManager);
+        return Ok(CompactConversationCommand::Run {
+            options: ResponsesCompactionOptions::default(),
+        });
     }
 
     let tokens =
         shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
+    if tokens.len() == 1 {
+        match tokens[0].as_str() {
+            "edit-prompt" => return Ok(CompactConversationCommand::EditDefaultPrompt),
+            "reset-prompt" => return Ok(CompactConversationCommand::ResetDefaultPrompt),
+            _ => {}
+        }
+    }
+
     let mut options = ResponsesCompactionOptions::default();
     let mut index = 0;
 
@@ -296,10 +306,24 @@ mod tests {
     use vtcode_core::review::ReviewTarget;
 
     #[test]
-    fn compact_defaults_to_interactive_manager() {
+    fn compact_defaults_to_automatic_run() {
         assert_eq!(
             parse_compact_command("").expect("compact command"),
-            CompactConversationCommand::InteractiveManager
+            CompactConversationCommand::Run {
+                options: Default::default(),
+            }
+        );
+    }
+
+    #[test]
+    fn compact_parses_prompt_subcommands() {
+        assert_eq!(
+            parse_compact_command("edit-prompt").expect("edit prompt"),
+            CompactConversationCommand::EditDefaultPrompt
+        );
+        assert_eq!(
+            parse_compact_command("reset-prompt").expect("reset prompt"),
+            CompactConversationCommand::ResetDefaultPrompt
         );
     }
 

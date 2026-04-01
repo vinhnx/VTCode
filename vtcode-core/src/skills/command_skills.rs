@@ -348,8 +348,8 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     ),
     built_in_command_spec!(
         "compact",
-        "Open the OpenAI compact manager or run standalone /responses/compact with flags (usage: /compact [--instructions ...])",
-        "/compact [--instructions <text>] [--max-output-tokens <n>] [--reasoning-effort <none|minimal|low|medium|high|xhigh>] [--verbosity <low|medium|high>] [--include <selector> ...] [--store|--no-store] [--service-tier <flex|priority>] [--prompt-cache-key <key>]",
+        "Compact the current conversation immediately or manage the saved manual compaction prompt",
+        "/compact [--instructions <text>] [--max-output-tokens <n>] [--reasoning-effort <none|minimal|low|medium|high|xhigh>] [--verbosity <low|medium|high>] [--include <selector> ...] [--store|--no-store] [--service-tier <flex|priority>] [--prompt-cache-key <key>] | /compact edit-prompt | /compact reset-prompt",
         "session"
     ),
     built_in_command_spec!("new", "Start a new session", "/new", "session"),

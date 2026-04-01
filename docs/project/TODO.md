@@ -160,6 +160,10 @@ check enter to use default doesn't work on /compact wizard
 
 ===
 
-simplify /compact, no need to use wizard step by step, do it auto matically https://developers.openai.com/api/docs/guides/compaction
+check default enter in all wizard modal doesn't work, it doesn't accept default value and move to next step. currently it stuck when user press enter without input anything, it should use default value and move to next step, but it doesn't work. need to fix this issue.
 
----
+===
+
+/init becomes a guided AGENTS.md setup
+
+it reads the repo, figures out the stuff agents actually need to know, and asks a couple targeted questions when the important bits aren’t obvious from the codebase
