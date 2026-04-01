@@ -1,6 +1,6 @@
 use ratatui::{
     prelude::*,
-    widgets::{Paragraph, Wrap},
+    widgets::{Block, Paragraph, Wrap},
 };
 
 use super::inline_list::{InlineListRenderOptions, InlineListRow, render_inline_list_with_options};
@@ -68,9 +68,19 @@ pub(crate) fn rows_to_u16(rows: usize) -> u16 {
 }
 
 pub(crate) fn fixed_section_rows(header_rows: usize, info_rows: usize, has_search: bool) -> u16 {
+    fixed_section_rows_with_divider(header_rows, info_rows, has_search, false)
+}
+
+pub(crate) fn fixed_section_rows_with_divider(
+    header_rows: usize,
+    info_rows: usize,
+    has_search: bool,
+    has_divider: bool,
+) -> u16 {
     rows_to_u16(header_rows)
         .saturating_add(rows_to_u16(info_rows))
         .saturating_add(if has_search { 1 } else { 0 })
+        .saturating_add(if has_divider { 1 } else { 0 })
 }
 
 pub(crate) struct ListPanelLayout {
@@ -206,6 +216,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
         return;
     }
     let inner = area;
+    frame.render_widget(Block::default().style(styles.base_style), inner);
 
     let mut constraints = Vec::new();
     let header_rows = rows_to_u16(sections.header.len());

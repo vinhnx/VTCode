@@ -2,7 +2,8 @@ use super::*;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
-    StaticRowsListPanelModel, fixed_section_rows, render_shared_list_panel, rows_to_u16,
+    StaticRowsListPanelModel, fixed_section_rows, fixed_section_rows_with_divider,
+    render_shared_list_panel, rows_to_u16,
 };
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -165,7 +166,7 @@ pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLa
     } else {
         1
     };
-    let fixed_rows = fixed_section_rows(1, info_rows, palette.has_files());
+    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, palette.has_files(), true);
     let list_rows = if palette.has_files() {
         let mut rows = palette.current_page_items().len().max(1);
         if palette.has_more_items() {
@@ -248,7 +249,10 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         .collect::<Vec<_>>();
 
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("Files".to_owned(), default_style))],
+        header: vec![Line::from(Span::styled(
+            "Files".to_owned(),
+            session.core.section_title_style(),
+        ))],
         info: instructions,
         search: Some(SharedSearchField {
             label: "Search files".to_owned(),
@@ -271,7 +275,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
             base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
-            divider_style: None,
+            divider_style: Some(session.core.styles.border_style()),
         },
         &mut model,
     );
