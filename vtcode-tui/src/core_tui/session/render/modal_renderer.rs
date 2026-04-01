@@ -9,7 +9,7 @@ use crate::ui::tui::session::modal::{
 };
 use crate::ui::tui::types::InlineListSelection;
 use anstyle::{Ansi256Color, Color as AnsiColorEnum};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
@@ -82,6 +82,7 @@ fn render_modal_background(frame: &mut Frame<'_>, area: Rect, style: Style) {
         return;
     }
 
+    frame.render_widget(Clear, area);
     frame.render_widget(Block::default().style(style), area);
 }
 
@@ -274,6 +275,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     }
 
     let styles = modal_render_styles(session);
+    render_modal_background(frame, area, styles.selectable);
     let link_style = session
         .styles
         .transcript_link_style()
