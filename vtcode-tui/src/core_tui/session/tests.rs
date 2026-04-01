@@ -4443,6 +4443,68 @@ fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
 }
 
 #[test]
+fn floating_modal_clears_stale_buffer_content_before_painting() {
+    let theme = InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0x22, 0x22, 0x22))),
+        background: Some(AnsiColorEnum::Rgb(RgbColor(0xF5, 0xF5, 0xF0))),
+        primary: Some(AnsiColorEnum::Rgb(RgbColor(0x7A, 0x8F, 0xFF))),
+        ..InlineTheme::default()
+    };
+    let mut session = AppSession::new(theme, None, 30);
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Theme".to_string(),
+                lines: vec!["Choose a theme".to_string()],
+                footer_hint: None,
+                items: vec![InlineListItem {
+                    title: "Clapre".to_string(),
+                    subtitle: None,
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
+                    search_value: Some("Clapre".to_string()),
+                }],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| {
+            let filler = (0..30)
+                .map(|_| Line::from("X".repeat(VIEW_WIDTH as usize)))
+                .collect::<Vec<_>>();
+            frame.render_widget(ratatui::widgets::Paragraph::new(filler), frame.area());
+        })
+        .expect("failed to prefill terminal buffer");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render modal over stale buffer");
+
+    let buffer = terminal.backend().buffer();
+    let title_tail_cell = buffer
+        .cell((VIEW_WIDTH.saturating_sub(1), 15))
+        .expect("title tail cell");
+    let body_blank_cell = buffer.cell((10, 25)).expect("body blank cell");
+
+    assert_eq!(title_tail_cell.symbol(), " ");
+    assert_eq!(body_blank_cell.symbol(), " ");
+    assert_eq!(
+        title_tail_cell.style().bg,
+        Some(Color::Rgb(0xF5, 0xF5, 0xF0))
+    );
+    assert_eq!(
+        body_blank_cell.style().bg,
+        Some(Color::Rgb(0xF5, 0xF5, 0xF0))
+    );
+}
+
+#[test]
 fn selected_modal_row_uses_full_width_accent_background() {
     let theme = InlineTheme {
         foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
