@@ -9,12 +9,24 @@ use crate::ui::tui::session::modal::{
 };
 use crate::ui::tui::types::InlineListSelection;
 use anstyle::{Ansi256Color, Color as AnsiColorEnum};
-use ratatui::widgets::{Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, Paragraph, Wrap};
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
 const MAX_INLINE_INSTRUCTION_ROWS: usize = 6;
 const MODAL_TITLE_CHROME_ROWS: usize = 2;
+
+fn modal_base_style(session: &Session) -> Style {
+    session.styles.default_style()
+}
+
+fn modal_heading_style(session: &Session) -> Style {
+    modal_base_style(session)
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
+            session,
+        )))
+        .add_modifier(Modifier::BOLD)
+}
 
 fn list_has_two_line_items(list: &ModalListState) -> bool {
     list.visible_indices.iter().any(|&index| {
@@ -59,6 +71,18 @@ fn resolve_modal_chrome_ansi_color(session: &Session) -> AnsiColorEnum {
         .unwrap_or(AnsiColorEnum::Ansi256(Ansi256Color(
             ui::SAFE_ANSI_BRIGHT_CYAN,
         )))
+}
+
+fn modal_chrome_style(session: &Session) -> Style {
+    modal_heading_style(session)
+}
+
+fn render_modal_background(frame: &mut Frame<'_>, area: Rect, style: Style) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    frame.render_widget(Block::default().style(style), area);
 }
 
 fn render_modal_divider(frame: &mut Frame<'_>, area: Rect, style: Style) {
@@ -283,9 +307,11 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             hovered_link_style,
         );
         title_link_targets = link_targets;
-        frame.render_widget(Clear, title_area);
+        render_modal_background(frame, title_area, styles.selectable);
         frame.render_widget(
-            Paragraph::new(decorated_title).wrap(Wrap { trim: true }),
+            Paragraph::new(decorated_title)
+                .style(styles.title)
+                .wrap(Wrap { trim: true }),
             title_area,
         );
         render_modal_divider(frame, top_divider_area, styles.border);
@@ -294,7 +320,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     };
 
     if let Some(wizard) = session.wizard_overlay_mut() {
-        frame.render_widget(Clear, body_area);
+        render_modal_background(frame, body_area, styles.selectable);
         if body_area.width == 0 || body_area.height == 0 {
             session.set_modal_list_area(None);
             session.set_modal_text_areas(Vec::new());
@@ -330,7 +356,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         return;
     };
 
-    frame.render_widget(Clear, body_area);
+    render_modal_background(frame, body_area, styles.selectable);
     if body_area.width == 0 || body_area.height == 0 {
         session.set_modal_list_area(None);
         session.set_modal_text_areas(Vec::new());
@@ -365,28 +391,30 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 }
 
 pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
-    let default_style = session.styles.default_style();
-    let border_style = session.styles.border_style();
-    let chrome_color = ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(session));
-    let accent_style = session.styles.accent_style().fg(chrome_color);
-    let chrome_border_style = border_style
-        .fg(chrome_color)
+    let default_style = modal_base_style(session);
+    let header_style = modal_heading_style(session);
+    let chrome_style = modal_chrome_style(session);
+    let chrome_border_style = session
+        .styles
+        .border_style()
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
+            session,
+        )))
         .remove_modifier(Modifier::DIM)
         .add_modifier(Modifier::BOLD);
-    let title_style = default_style.fg(chrome_color).add_modifier(Modifier::BOLD);
     ModalRenderStyles {
         border: chrome_border_style,
         highlight: modal_list_highlight_style(session),
-        badge: border_style.add_modifier(Modifier::DIM | Modifier::BOLD),
-        header: accent_style.add_modifier(Modifier::BOLD),
+        badge: default_style.add_modifier(Modifier::DIM | Modifier::BOLD),
+        header: header_style,
         selectable: default_style,
         detail: default_style.add_modifier(Modifier::DIM),
-        search_match: accent_style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-        title: title_style,
-        divider: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
-        instruction_border: border_style,
-        instruction_title: session.section_title_style(),
-        instruction_bullet: accent_style.add_modifier(Modifier::BOLD),
+        search_match: header_style.add_modifier(Modifier::UNDERLINED),
+        title: chrome_style,
+        divider: default_style.add_modifier(Modifier::DIM),
+        instruction_border: chrome_border_style,
+        instruction_title: header_style,
+        instruction_bullet: header_style,
         instruction_body: default_style,
         hint: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
     }
@@ -454,8 +482,30 @@ mod tests {
             styles.title.fg,
             Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
         );
-        assert_eq!(styles.border.fg, styles.title.fg);
+        assert!(styles.title.bg.is_none());
+        assert_eq!(
+            styles.border.fg,
+            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+        );
         assert!(styles.title.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn modal_section_headers_use_chrome_color_on_base_background() {
+        let theme = InlineTheme {
+            foreground: Some(AnsiColorEnum::Ansi256(Ansi256Color(16))),
+            background: Some(AnsiColorEnum::Ansi256(Ansi256Color(231))),
+            primary: Some(AnsiColorEnum::Ansi256(Ansi256Color(117))),
+            ..InlineTheme::default()
+        };
+        let session = Session::new(theme, None, 20);
+        let styles = modal_render_styles(&session);
+
+        assert_eq!(styles.header.fg, Some(Color::Indexed(117)));
+        assert_eq!(styles.header.bg, Some(Color::Indexed(231)));
+        assert_eq!(styles.instruction_title.fg, Some(Color::Indexed(117)));
+        assert_eq!(styles.instruction_title.bg, Some(Color::Indexed(231)));
+        assert!(styles.header.add_modifier.contains(Modifier::BOLD));
     }
 
     #[test]

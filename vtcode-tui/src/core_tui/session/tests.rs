@@ -4302,12 +4302,18 @@ fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
     assert_eq!(title_cell.symbol(), "P");
     assert_eq!(top_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
     assert_eq!(bottom_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
-    assert_eq!(
-        title_cell.style().fg,
+    assert_ne!(
+        title_cell.style().bg,
         Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
     );
-    assert_eq!(top_divider_cell.style().fg, title_cell.style().fg);
-    assert_eq!(bottom_divider_cell.style().fg, title_cell.style().fg);
+    assert_eq!(
+        top_divider_cell.style().fg,
+        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+    );
+    assert_eq!(
+        bottom_divider_cell.style().fg,
+        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
+    );
 }
 
 #[test]
@@ -4370,6 +4376,77 @@ fn selected_modal_row_uses_full_width_accent_background() {
         .cell((modal_area.x + 10, modal_area.y))
         .expect("selected row title cell");
     assert_eq!(title_cell.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+}
+
+#[test]
+fn modal_section_header_uses_foreground_contrast_on_light_theme() {
+    let theme = InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0x22, 0x22, 0x22))),
+        background: Some(AnsiColorEnum::Rgb(RgbColor(0xF5, 0xF5, 0xF0))),
+        primary: Some(AnsiColorEnum::Rgb(RgbColor(0x7A, 0x8F, 0xFF))),
+        ..InlineTheme::default()
+    };
+    let mut session = AppSession::new(theme, None, 30);
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Theme".to_string(),
+                lines: vec!["Choose a theme".to_string()],
+                footer_hint: None,
+                items: vec![
+                    InlineListItem {
+                        title: "Built-in themes".to_string(),
+                        subtitle: None,
+                        badge: None,
+                        indent: 0,
+                        selection: None,
+                        search_value: Some("Built-in themes".to_string()),
+                    },
+                    InlineListItem {
+                        title: "Clapre".to_string(),
+                        subtitle: None,
+                        badge: None,
+                        indent: 0,
+                        selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
+                        search_value: Some("Clapre".to_string()),
+                    },
+                ],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render modal section header");
+
+    let lines = rendered_app_session_lines(&mut session, 30);
+    let title_row = lines
+        .iter()
+        .position(|line| line.trim() == "Theme")
+        .expect("title row");
+    let modal_area = session.core.modal_list_area().expect("modal list area");
+    let header_cell = terminal
+        .backend()
+        .buffer()
+        .cell((modal_area.x + 1, modal_area.y))
+        .expect("section header cell");
+    let title_cell = terminal
+        .backend()
+        .buffer()
+        .cell((modal_area.x, title_row as u16))
+        .expect("title cell");
+
+    assert_eq!(title_cell.symbol(), "T");
+    assert_eq!(title_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
+    assert_eq!(header_cell.symbol(), "B");
+    assert_eq!(header_cell.style().fg, Some(Color::Rgb(0x7A, 0x8F, 0xFF)));
+    assert_eq!(header_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
+    assert!(header_cell.style().add_modifier.contains(Modifier::BOLD));
 }
 
 #[test]
