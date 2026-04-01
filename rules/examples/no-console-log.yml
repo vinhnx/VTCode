@@ -1,0 +1,11 @@
+id: no-console-log
+language: JavaScript
+severity: error
+message: Avoid `console.log` in checked JavaScript files.
+note: |
+  This starter rule is scoped to `__ast_grep_examples__/` so fresh repositories can
+  validate the scaffold without scanning unrelated project files.
+rule:
+  pattern: console.log($$$ARGS)
+files:
+  - __ast_grep_examples__/**/*.js
