@@ -134,7 +134,7 @@ impl ToolRegistry {
                     }
                     Err(err) => {
                         last_err = Some(err);
-                        let jitter = (attempt as u64 * 37) % 80;
+                        let jitter = (attempt * 37) % 80;
                         let pow = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent
                         let backoff =
                             Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));

@@ -100,8 +100,7 @@ pub mod telemetry {
     //! Streaming telemetry helpers shared across provider implementations.
     pub use vtcode_core::llm::providers::shared::{
         NoopStreamTelemetry, StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry,
-        ToolCallBuilder, append_reasoning_segments, append_text_with_reasoning,
-        finalize_tool_calls, update_tool_calls,
+        ToolCallBuilder, append_text_with_reasoning, finalize_tool_calls, update_tool_calls,
     };
 }
 

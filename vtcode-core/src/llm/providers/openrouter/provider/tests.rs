@@ -14,6 +14,32 @@ use serde_json::json;
 use wiremock::matchers::{body_partial_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+    "unknown panic".to_string()
+}
+
+async fn start_mock_server_or_skip() -> Option<MockServer> {
+    match tokio::spawn(async { MockServer::start().await }).await {
+        Ok(server) => Some(server),
+        Err(err) if err.is_panic() => {
+            let message = panic_message(err.into_panic());
+            if message.contains("Operation not permitted")
+                || message.contains("PermissionDenied")
+            {
+                return None;
+            }
+            panic!("mock server should start: {message}");
+        }
+        Err(err) => panic!("mock server task should complete: {err}"),
+    }
+}
+
 fn sample_tool() -> ToolDefinition {
     ToolDefinition::function(
         "fetch_data".to_string(),
@@ -222,7 +248,9 @@ fn parse_usage_value_includes_cache_metrics() {
 #[tokio::test]
 async fn generate_retries_without_tools_when_openrouter_rejects_tool_endpoints() {
     let model_id = "moonshotai/kimi-latest";
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), model_id);
 
     Mock::given(method("POST"))
@@ -270,7 +298,9 @@ async fn generate_retries_without_tools_when_openrouter_rejects_tool_endpoints()
 
 #[tokio::test]
 async fn stream_normalized_emits_tool_call_start_and_delta_events() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openrouter::OPENAI_GPT_5);
 
     Mock::given(method("POST"))

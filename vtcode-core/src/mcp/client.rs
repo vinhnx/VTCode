@@ -936,12 +936,10 @@ impl McpClient {
     }
 
     fn build_initialize_params(&self, _provider: &McpProvider) -> InitializeRequestParams {
-        let mut capabilities = ClientCapabilities {
-            roots: Some(RootsCapabilities {
-                list_changed: Some(true),
-            }),
-            ..Default::default()
-        };
+        let mut capabilities = ClientCapabilities::default();
+        capabilities.roots = Some(RootsCapabilities {
+            list_changed: Some(true),
+        });
 
         if self.elicitation_handler.is_some() {
             // Elicitation is now a first-class capability in rmcp
@@ -953,12 +951,8 @@ impl McpClient {
             });
         }
 
-        InitializeRequestParams {
-            meta: None,
-            capabilities,
-            client_info: super::utils::build_client_implementation(),
-            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
-        }
+        InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
+            .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05)
     }
 
     pub(super) fn normalize_arguments(args: &Value) -> Map<String, Value> {

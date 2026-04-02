@@ -5,7 +5,7 @@
 //! using their own path, telemetry, and error-reporting implementations
 //! without relying on VT Code's built-in `.vtcode` directory layout.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Error, Result};
 use vtcode_commons::{
@@ -110,7 +110,7 @@ where
     }
 
     /// Builds a [`ToolRegistry`] using the configured hooks.
-    pub fn build(mut self) -> Result<ToolRegistry> {
+    pub async fn build(mut self) -> Result<ToolRegistry> {
         let workspace_root = self.workspace_paths.workspace_root().to_path_buf();
         let policy_manager = match self.policy_manager.take() {
             Some(manager) => manager,
@@ -124,7 +124,9 @@ where
                     config_path: config_path.clone(),
                 });
 
-                match ToolPolicyManager::new_with_config_path(&config_path).with_context(|| {
+                match ToolPolicyManager::new_with_config_path(&config_path)
+                    .await
+                    .with_context(|| {
                     format!(
                         "failed to initialize tool policy manager at {}",
                         config_path.display()
@@ -132,19 +134,21 @@ where
                 }) {
                     Ok(manager) => manager,
                     Err(err) => {
-                        self.report_error(err.clone());
+                        self.report_error(&err);
                         return Err(err);
                     }
                 }
             }
         };
 
+        let _todo_planning_enabled = self.todo_planning_enabled;
+
         Ok(ToolRegistry::new_with_custom_policy_and_config(
             workspace_root,
             self.pty_config,
-            self.todo_planning_enabled,
             policy_manager,
-        ))
+        )
+        .await)
     }
 
     fn record_event(&self, event: RegistryEvent) {
@@ -155,9 +159,9 @@ where
         }
     }
 
-    fn report_error(&self, error: Error) {
-        let message = self.error_formatter.format_error(&error).into_owned();
-        let _ = self.error_reporter.capture(&error);
+    fn report_error(&self, error: &Error) {
+        let message = self.error_formatter.format_error(error).into_owned();
+        let _ = self.error_reporter.capture(error);
         let _ = self
             .telemetry
             .record(&RegistryEvent::AdapterError { message });
@@ -180,8 +184,8 @@ mod tests {
         DisplayErrorFormatter, MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths,
     };
 
-    #[test]
-    fn builds_registry_with_workspace_paths() {
+    #[tokio::test]
+    async fn builds_registry_with_workspace_paths() {
         let temp = TempDir::new().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let config_dir = temp.path().join("config");
@@ -194,9 +198,11 @@ mod tests {
         let formatter = DisplayErrorFormatter;
 
         let builder = RegistryBuilder::new(&paths, &telemetry, &reporter, &formatter);
-        let registry = builder.build().expect("registry");
+        let registry = builder.build().await.expect("registry");
 
-        assert!(registry.has_tool(vtcode_core::config::constants::tools::UNIFIED_SEARCH));
+        assert!(registry
+            .has_tool(vtcode_core::config::constants::tools::UNIFIED_SEARCH)
+            .await);
 
         let events = telemetry.take();
         assert!(matches!(

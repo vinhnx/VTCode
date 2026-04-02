@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use vtcode_commons::utils::calculate_sha256;
 
 use crate::config::types::CapabilityLevel;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
@@ -48,8 +48,7 @@ pub fn model_visible_mcp_tool_name(provider: &str, tool_name: &str) -> String {
         return qualified;
     }
 
-    let digest = Sha256::digest(qualified.as_bytes());
-    let hash = format!("{:x}", digest);
+    let hash = calculate_sha256(qualified.as_bytes());
     let hash = &hash[..MCP_HASH_SUFFIX_LEN];
     let keep = MCP_TOOL_NAME_MAX_LEN.saturating_sub(1 + MCP_HASH_SUFFIX_LEN);
     let prefix = &qualified[..keep];

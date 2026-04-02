@@ -45,6 +45,32 @@ impl OpenAIChatGptSessionRefresher for ExternalSessionRefresher {
     }
 }
 
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+    "unknown panic".to_string()
+}
+
+async fn start_mock_server_or_skip() -> Option<MockServer> {
+    match tokio::spawn(async { MockServer::start().await }).await {
+        Ok(server) => Some(server),
+        Err(err) if err.is_panic() => {
+            let message = panic_message(err.into_panic());
+            if message.contains("Operation not permitted")
+                || message.contains("PermissionDenied")
+            {
+                return None;
+            }
+            panic!("mock server should start: {message}");
+        }
+        Err(err) => panic!("mock server task should complete: {err}"),
+    }
+}
+
 fn sample_tool() -> provider::ToolDefinition {
     provider::ToolDefinition::function(
         "search_workspace".to_owned(),
@@ -193,7 +219,9 @@ fn sample_chatgpt_auth_handle() -> OpenAIChatGptAuthHandle {
 
 #[tokio::test]
 async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::new_with_client(
         "api-key".to_string(),
         Some(OpenAIChatGptAuthHandle::new(
@@ -258,7 +286,9 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
 
 #[tokio::test]
 async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let refresh_calls = Arc::new(Mutex::new(0usize));
     let seen_bearer_tokens = Arc::new(Mutex::new(Vec::new()));
     let seen_bearer_tokens_for_response = Arc::clone(&seen_bearer_tokens);
@@ -3425,7 +3455,9 @@ mod caching_tests {
 
 #[tokio::test]
 async fn responses_request_retries_with_fallback_model_after_not_found() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
     let seen_models = Arc::new(Mutex::new(Vec::new()));
     let seen_models_for_response = Arc::clone(&seen_models);
@@ -3492,7 +3524,9 @@ async fn responses_request_retries_with_fallback_model_after_not_found() {
 
 #[tokio::test]
 async fn responses_request_retries_without_flex_service_tier() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
         None,
@@ -3572,7 +3606,9 @@ async fn responses_request_retries_without_flex_service_tier() {
 
 #[tokio::test]
 async fn responses_stream_retries_with_fallback_model_after_not_found() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
     let seen_models = Arc::new(Mutex::new(Vec::new()));
     let seen_models_for_response = Arc::clone(&seen_models);
@@ -3647,7 +3683,9 @@ async fn responses_stream_retries_with_fallback_model_after_not_found() {
 
 #[tokio::test]
 async fn chat_request_retries_without_flex_service_tier() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
         None,
@@ -3726,7 +3764,9 @@ async fn chat_request_retries_without_flex_service_tier() {
 
 #[tokio::test]
 async fn chatgpt_stream_does_not_retry_with_non_streaming_responses() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
         Some(sample_chatgpt_auth_handle()),
@@ -3770,7 +3810,9 @@ async fn chatgpt_stream_does_not_retry_with_non_streaming_responses() {
 
 #[tokio::test]
 async fn responses_requests_include_client_request_id_and_surface_debug_metadata() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5);
 
     Mock::given(method("POST"))
@@ -3818,7 +3860,9 @@ async fn responses_requests_include_client_request_id_and_surface_debug_metadata
 
 #[tokio::test]
 async fn responses_requests_send_json_content_type() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5);
 
     Mock::given(method("POST"))
@@ -3867,7 +3911,9 @@ async fn responses_requests_send_json_content_type() {
 
 #[tokio::test]
 async fn gpt5_codex_generate_strips_reasoning_summaries() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
 
     Mock::given(method("POST"))
@@ -3916,7 +3962,9 @@ async fn gpt5_codex_generate_strips_reasoning_summaries() {
 
 #[tokio::test]
 async fn gpt5_codex_stream_omits_reasoning_events_and_final_reasoning() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
 
     Mock::given(method("POST"))
@@ -3969,7 +4017,9 @@ async fn gpt5_codex_stream_omits_reasoning_events_and_final_reasoning() {
 
 #[tokio::test]
 async fn gpt54_generate_uses_streaming_responses_path() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_4);
 
     Mock::given(method("POST"))
@@ -4009,7 +4059,9 @@ async fn gpt54_generate_uses_streaming_responses_path() {
 
 #[tokio::test]
 async fn gpt5_stream_normalized_emits_live_tool_call_events() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5);
 
     Mock::given(method("POST"))
@@ -4070,7 +4122,9 @@ async fn gpt5_stream_normalized_emits_live_tool_call_events() {
 
 #[tokio::test]
 async fn gpt5_codex_stream_normalized_suppresses_reasoning_events() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
 
     Mock::given(method("POST"))
@@ -4123,7 +4177,9 @@ async fn gpt5_codex_stream_normalized_suppresses_reasoning_events() {
 
 #[tokio::test]
 async fn stream_normalized_falls_back_to_chat_completions_when_responses_api_is_unsupported() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
 
     Mock::given(method("POST"))
@@ -4179,7 +4235,9 @@ async fn stream_normalized_falls_back_to_chat_completions_when_responses_api_is_
 
 #[tokio::test]
 async fn manual_compaction_payload_includes_selected_fields_and_appends_instructions() {
-    let server = MockServer::start().await;
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(
         &native_openai_mock_base_url(&server),
         models::openai::GPT_5_4,

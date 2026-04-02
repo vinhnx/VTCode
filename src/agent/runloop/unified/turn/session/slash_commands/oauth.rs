@@ -117,10 +117,10 @@ pub(crate) async fn handle_oauth_login(
             )?;
             let prepared = prepare_openrouter_login(vt_cfg)?;
             let auth_url = prepared.auth_url.clone();
-            let started = begin_openrouter_login(prepared).await?;
             if let Some(control) = open_browser_with_guidance(&mut ctx, &auth_url).await? {
                 return Ok(control);
             }
+            let started = begin_openrouter_login(prepared).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Waiting for OpenRouter OAuth callback...",

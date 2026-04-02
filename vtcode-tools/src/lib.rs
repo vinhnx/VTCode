@@ -111,5 +111,6 @@ pub use policies::{ToolPolicy, ToolPolicyManager};
 pub mod examples {
     //! File helper methods used by the headless integration examples
     //! under `vtcode-tools/examples`.
+    #[allow(unused_imports)]
     pub use vtcode_core::tools::registry::file_helpers::*;
 }

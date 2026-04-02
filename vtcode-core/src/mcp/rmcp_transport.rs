@@ -3,7 +3,7 @@
 /// This module provides wrappers around rmcp's transport types to integrate
 /// with VT Code's configuration and error handling.
 use anyhow::{Context, Result};
-use reqwest::header::HeaderMap;
+use rmcp_reqwest::header::HeaderMap;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::TokioChildProcess;
 use std::ffi::OsString;
@@ -13,7 +13,7 @@ use tokio::process::Command;
 use vtcode_config::mcp::McpStdioServerConfig;
 
 /// Type alias for HTTP transport
-pub type HttpTransport = StreamableHttpClientTransport<reqwest::Client>;
+pub type HttpTransport = StreamableHttpClientTransport<rmcp_reqwest::Client>;
 
 /// Create a stdio-based transport from configuration
 ///

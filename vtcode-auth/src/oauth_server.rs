@@ -586,7 +586,11 @@ mod tests {
 
     #[tokio::test]
     async fn callback_server_starts_listening_before_wait() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temp port");
+        let listener = match std::net::TcpListener::bind(("127.0.0.1", 0)) {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("bind temp port: {err}"),
+        };
         let port = listener.local_addr().expect("local addr").port();
         drop(listener);
 

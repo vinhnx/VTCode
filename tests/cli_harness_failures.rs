@@ -19,6 +19,9 @@ fn base_command(harness: &TestHarness) -> Command {
 #[test]
 fn print_mode_requires_prompt_or_stdin() {
     let harness = TestHarness::new().expect("failed to init harness workspace");
+    harness
+        .write_file(".vtcode/.keep", "")
+        .expect("failed to mark workspace initialized");
     let mut cmd = base_command(&harness);
     cmd.arg("--print");
 

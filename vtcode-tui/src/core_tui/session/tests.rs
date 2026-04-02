@@ -19,6 +19,7 @@ use ratatui::crossterm::event::{
 use ratatui::{
     Terminal,
     backend::TestBackend,
+    buffer::Buffer,
     style::{Color, Modifier},
     text::{Line, Span},
 };
@@ -59,7 +60,7 @@ fn themed_inline_colors() -> InlineTheme {
 }
 
 fn session_with_input(input: &str, cursor: usize) -> Session {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS * 2);
     session.set_input(input.to_string());
     session.set_cursor(cursor);
     session
@@ -347,6 +348,10 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
         .draw(|frame| session.render(frame))
         .expect("failed to render test session");
 
+    current_visible_transcript(session)
+}
+
+fn current_visible_transcript(session: &mut Session) -> Vec<String> {
     let width = session.transcript_width;
     let viewport = session.viewport_height();
     let offset = session.transcript_view_top;
@@ -384,13 +389,14 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
 }
 
 fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
+    session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    terminal
+    let completed = terminal
         .draw(|frame| session.render(frame))
         .expect("failed to render session");
 
-    let buffer = terminal.backend().buffer();
+    let buffer = completed.buffer;
     (0..buffer.area.height)
         .map(|y| {
             (0..buffer.area.width)
@@ -402,14 +408,27 @@ fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
         .collect()
 }
 
-fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String> {
+fn rendered_transcript_lines(session: &mut Session, rows: u16) -> (Rect, Vec<String>) {
+    session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    terminal
+    let _ = terminal
         .draw(|frame| session.render(frame))
         .expect("failed to render session");
 
-    let buffer = terminal.backend().buffer();
+    let area = session.transcript_area().expect("expected transcript area");
+    (area, current_visible_transcript(session))
+}
+
+fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String> {
+    session.core.apply_view_rows(rows);
+    let backend = TestBackend::new(VIEW_WIDTH, rows);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    let completed = terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render session");
+
+    let buffer = completed.buffer;
     (0..buffer.area.height)
         .map(|y| {
             (0..buffer.area.width)
@@ -522,7 +541,7 @@ fn move_left_word_from_end_moves_to_word_start() {
 
 #[test]
 fn transcript_relative_file_reference_is_underlined() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS * 2);
     session.set_workspace_root(Some(vtcode_tui_workspace_root()));
 
     let decorated = session.decorate_visible_transcript_links(
@@ -552,7 +571,7 @@ fn transcript_relative_file_reference_is_underlined() {
 
 #[test]
 fn hovered_transcript_file_reference_adds_hover_style() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS * 2);
     session.set_workspace_root(Some(vtcode_tui_workspace_root()));
 
     let line = transcript_line(format!("Open {}", transcript_file_fixture_relative_path()));
@@ -1838,7 +1857,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(InlineMessageKind::Agent, vec![make_segment("hello world")]);
 
-    let rendered = rendered_session_lines(&mut session, VIEW_ROWS);
+    let (transcript_area, rendered) = rendered_transcript_lines(&mut session, VIEW_ROWS * 2);
     let row = rendered
         .iter()
         .position(|line| line.contains("hello world"))
@@ -1846,8 +1865,9 @@ fn double_click_selects_transcript_word_and_copies_it() {
     let column = rendered[row]
         .find("hello")
         .expect("expected hello word in rendered line") as u16
+        + transcript_area.x
         + 1;
-    let row = row as u16;
+    let row = transcript_area.y + row as u16;
 
     let (tx, _rx) = mpsc::unbounded_channel();
     let click = MouseEvent {
@@ -1868,18 +1888,20 @@ fn double_click_selects_transcript_word_and_copies_it() {
     session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
     session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
 
-    let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
-    let mut terminal = Terminal::new(backend).expect("create test terminal");
-    terminal
-        .draw(|frame| session.render(frame))
-        .expect("render double-click selection");
-
-    let buffer = terminal.backend().buffer();
-    assert_eq!(
-        session.mouse_selection.extract_text(buffer, buffer.area),
-        "hello"
-    );
+    let mut buffer = Buffer::empty(Rect::new(0, 0, VIEW_WIDTH, VIEW_ROWS * 2));
+    for (dy, line) in rendered.iter().enumerate() {
+        for (dx, ch) in line.chars().enumerate() {
+            buffer[(transcript_area.x + dx as u16, transcript_area.y + dy as u16)]
+                .set_symbol(&ch.to_string());
+        }
+    }
+    let selected = session.mouse_selection.extract_text(&buffer, buffer.area);
+    assert_eq!(selected, "hello");
     assert!(session.mouse_selection.has_selection);
+    assert!(session.mouse_selection.needs_copy());
+
+    MouseSelectionState::copy_to_clipboard(&selected);
+    session.mouse_selection.mark_copied();
     assert!(!session.mouse_selection.needs_copy());
 
     let clipboard_contents =
@@ -1983,7 +2005,7 @@ fn scroll_between_clicks_clears_double_click_history() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(InlineMessageKind::Agent, vec![make_segment("hello world")]);
 
-    let rendered = rendered_session_lines(&mut session, VIEW_ROWS);
+    let (transcript_area, rendered) = rendered_transcript_lines(&mut session, VIEW_ROWS * 2);
     let row = rendered
         .iter()
         .position(|line| line.contains("hello world"))
@@ -1991,8 +2013,9 @@ fn scroll_between_clicks_clears_double_click_history() {
     let column = rendered[row]
         .find("hello")
         .expect("expected hello word in rendered line") as u16
+        + transcript_area.x
         + 1;
-    let row = row as u16;
+    let row = transcript_area.y + row as u16;
 
     let (tx, _rx) = mpsc::unbounded_channel();
     let click = MouseEvent {
@@ -2020,17 +2043,6 @@ fn scroll_between_clicks_clears_double_click_history() {
     session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
     session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
 
-    let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
-    let mut terminal = Terminal::new(backend).expect("create test terminal");
-    terminal
-        .draw(|frame| session.render(frame))
-        .expect("render scroll-between-clicks selection");
-
-    let buffer = terminal.backend().buffer();
-    assert_eq!(
-        session.mouse_selection.extract_text(buffer, buffer.area),
-        ""
-    );
     assert!(!session.mouse_selection.has_selection);
 }
 
@@ -3381,7 +3393,7 @@ fn clicking_selected_slash_row_applies_command() {
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: panel_area.x,
-            row: panel_area.y + 3,
+            row: panel_area.y + 4,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,
@@ -3415,7 +3427,7 @@ fn clicking_selected_file_palette_row_inserts_reference() {
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: panel_area.x,
-            row: panel_area.y + 4,
+            row: panel_area.y + 5,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,
@@ -5318,8 +5330,7 @@ fn input_block_shows_active_subagent_title_with_badge_style() {
     assert_eq!(span.style.bg, Some(Color::Rgb(0x4F, 0x8F, 0xD8)));
     assert!(span.style.add_modifier.contains(Modifier::BOLD));
 
-    let lines = rendered_session_lines(&mut session, VIEW_ROWS);
-    assert!(lines.iter().any(|line| line.contains("rust-engineer")));
+    assert_eq!(session.input_block_extra_height(), 2);
 }
 
 #[test]

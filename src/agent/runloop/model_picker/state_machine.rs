@@ -443,9 +443,22 @@ impl ModelPickerState {
         if input.eq_ignore_ascii_case("login")
             && matches!(selection.provider_enum, Some(Provider::OpenAI))
         {
+            if let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() {
+                if ctrl_c_state.is_exit_requested() {
+                    return Ok(ModelPickerProgress::Exit);
+                }
+                if ctrl_c_state.is_cancel_requested() {
+                    ctrl_c_state.mark_cancel_handled();
+                    renderer.line(
+                        MessageStyle::Info,
+                        "OpenAI ChatGPT authentication cancelled.",
+                    )?;
+                    return Ok(ModelPickerProgress::InProgress);
+                }
+            }
+
             let prepared = prepare_openai_login(self.vt_cfg.as_ref())?;
             let auth_url = prepared.auth_url.clone();
-            let started = crate::cli::auth::begin_openai_login(prepared).await?;
             match request_external_url_open(url_guard, &auth_url).await? {
                 ExternalUrlOpenOutcome::Opened => {
                     renderer.line(
@@ -484,6 +497,7 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
+            let started = crate::cli::auth::begin_openai_login(prepared).await?;
             let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() else {
                 return Err(anyhow!("OAuth login requires Ctrl+C state"));
             };

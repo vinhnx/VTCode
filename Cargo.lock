@@ -4153,6 +4153,7 @@ version = "0.11.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
 dependencies = [
+ "aws-lc-rs",
  "bytes",
  "getrandom 0.3.4",
  "lru-slab",
@@ -4561,6 +4562,7 @@ dependencies = [
  "log",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
@@ -6567,6 +6569,7 @@ dependencies = [
  "ratatui",
  "regex",
  "reqwest 0.12.28",
+ "reqwest 0.13.2",
  "rig-core",
  "ring",
  "rmcp",

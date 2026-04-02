@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use hashbrown::HashMap;
 use iana_time_zone::get_timezone;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use rmcp_reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::Implementation;
 use serde_json::{Map, Value};
 use std::env;
@@ -51,14 +51,7 @@ pub(crate) fn clear_test_env_override(key: &str) {
 ///
 /// This ensures consistent client identification across all MCP connections.
 pub fn build_client_implementation() -> Implementation {
-    Implementation {
-        name: "vtcode".to_owned(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        title: None,
-        description: None,
-        icons: None,
-        website_url: None,
-    }
+    Implementation::new("vtcode", env!("CARGO_PKG_VERSION"))
 }
 
 /// Environment variable for explicit local timezone override.

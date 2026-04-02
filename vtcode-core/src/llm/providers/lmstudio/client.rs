@@ -287,6 +287,32 @@ impl LMStudioClient {
 mod tests {
     use super::*;
 
+    fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+        if let Some(message) = payload.downcast_ref::<String>() {
+            return message.clone();
+        }
+        if let Some(message) = payload.downcast_ref::<&str>() {
+            return (*message).to_string();
+        }
+        "unknown panic".to_string()
+    }
+
+    async fn start_mock_server_or_skip() -> Option<wiremock::MockServer> {
+        match tokio::spawn(async { wiremock::MockServer::start().await }).await {
+            Ok(server) => Some(server),
+            Err(err) if err.is_panic() => {
+                let message = panic_message(err.into_panic());
+                if message.contains("Operation not permitted")
+                    || message.contains("PermissionDenied")
+                {
+                    return None;
+                }
+                panic!("mock server should start: {message}");
+            }
+            Err(err) => panic!("mock server task should complete: {err}"),
+        }
+    }
+
     #[test]
     fn test_find_lms() {
         let result = LMStudioClient::find_lms();
@@ -326,7 +352,9 @@ mod tests {
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/v1/models"))
             .respond_with(
@@ -357,7 +385,9 @@ mod tests {
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/api/v1/models"))
             .respond_with(
@@ -388,7 +418,9 @@ mod tests {
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/v1/models"))
             .respond_with(
@@ -417,7 +449,9 @@ mod tests {
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/v1/models"))
             .respond_with(wiremock::ResponseTemplate::new(200))
@@ -434,7 +468,9 @@ mod tests {
             return;
         }
 
-        let server = wiremock::MockServer::start().await;
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/v1/models"))
             .respond_with(wiremock::ResponseTemplate::new(404))

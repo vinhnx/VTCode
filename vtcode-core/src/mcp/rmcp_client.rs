@@ -4,7 +4,6 @@ use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
 use hashbrown::HashMap;
 use jsonschema::Validator;
-use reqwest::header::HeaderMap;
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, CancelledNotificationParam,
@@ -18,6 +17,7 @@ use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
+use rmcp_reqwest::header::HeaderMap;
 use serde_json::{Value, json};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -55,7 +55,7 @@ enum ClientState {
 
 enum PendingTransport {
     ChildProcess(TokioChildProcess),
-    StreamableHttp(StreamableHttpClientTransport<reqwest::Client>),
+    StreamableHttp(StreamableHttpClientTransport<rmcp_reqwest::Client>),
 }
 
 impl RmcpClient {
@@ -142,7 +142,7 @@ impl RmcpClient {
             provider_name, url
         );
 
-        let mut client_builder = reqwest::Client::builder();
+        let mut client_builder = rmcp_reqwest::Client::builder();
         if !headers.is_empty() {
             client_builder = client_builder.default_headers(headers);
         }
@@ -553,10 +553,7 @@ impl ClientHandler for LoggingClientHandler {
             match std::env::current_dir() {
                 Ok(dir) => {
                     if let Some(uri) = directory_to_file_uri(&dir) {
-                        roots.push(Root {
-                            name: Some("workspace".to_owned()),
-                            uri,
-                        });
+                        roots.push(Root::new(uri).with_name("workspace"));
                     } else {
                         warn!(
                             provider = provider.as_str(),
@@ -574,7 +571,7 @@ impl ClientHandler for LoggingClientHandler {
                 }
             }
 
-            Ok(ListRootsResult { roots })
+            Ok(ListRootsResult::new(roots))
         }
     }
 
@@ -670,12 +667,10 @@ impl ClientHandler for LoggingClientHandler {
                 error = %error,
                 "Failed to convert MCP initialize params; using fallback client info"
             );
-            rmcp::model::ClientInfo {
-                protocol_version: Default::default(),
-                capabilities: Default::default(),
-                client_info: super::utils::build_client_implementation(),
-                meta: None,
-            }
+            rmcp::model::ClientInfo::new(
+                Default::default(),
+                super::utils::build_client_implementation(),
+            )
         })
     }
 }

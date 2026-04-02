@@ -16,6 +16,9 @@
   ],
   "policies": {
     "apply_patch": "allow",
+    "cron_create": "allow",
+    "cron_delete": "allow",
+    "cron_list": "allow",
     "enter_plan_mode": "allow",
     "exit_plan_mode": "allow",
     "plan_task_tracker": "allow",
@@ -24,9 +27,6 @@
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
-    "cron_create": "allow",
-    "cron_delete": "allow",
-    "cron_list": "allow",
     "list_files": "allow",
     "read_file": "allow"
   },

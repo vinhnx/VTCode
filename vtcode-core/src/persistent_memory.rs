@@ -2922,6 +2922,14 @@ mod tests {
         }
     }
 
+    fn enabled_memory_config_for(workspace: &Path) -> PersistentMemoryConfig {
+        PersistentMemoryConfig {
+            enabled: true,
+            directory_override: Some(workspace.join(".memory").display().to_string()),
+            ..PersistentMemoryConfig::default()
+        }
+    }
+
     #[test]
     fn dedup_latest_facts_extracts_user_and_tool_memory() {
         let facts = dedup_latest_facts(&message_history(), 8);
@@ -3240,7 +3248,7 @@ mod tests {
     async fn rebuild_summary_uses_summary_file_not_registry() {
         let workspace = tempdir().expect("workspace");
         std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
-        let memory_config = enabled_memory_config();
+        let memory_config = enabled_memory_config_for(workspace.path());
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.persistent_memory = memory_config.clone();
 
@@ -3288,6 +3296,7 @@ mod tests {
         let workspace = tempdir().expect("workspace");
         let config = PersistentMemoryConfig {
             enabled: false,
+            directory_override: Some(workspace.path().join(".memory").display().to_string()),
             ..PersistentMemoryConfig::default()
         };
 
@@ -3309,7 +3318,7 @@ mod tests {
         let workspace = tempdir().expect("workspace");
         std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
         let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.agent.persistent_memory.enabled = true;
+        vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
         let plan = MemoryOpPlan {
             kind: MemoryOpKind::Remember,
             facts: vec![MemoryPlannedFact {
@@ -3343,7 +3352,7 @@ mod tests {
         std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
         let runtime = runtime_config(workspace.path());
         let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.agent.persistent_memory.enabled = true;
+        vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
         let remember_plan = MemoryOpPlan {
             kind: MemoryOpKind::Remember,
             facts: vec![MemoryPlannedFact {
@@ -3420,7 +3429,8 @@ mod tests {
     #[test]
     fn cleanup_status_flags_legacy_prompt_lines() {
         let workspace = tempdir().expect("workspace");
-        let memory_dir = resolve_persistent_memory_dir(&enabled_memory_config(), workspace.path())
+        let memory_config = enabled_memory_config_for(workspace.path());
+        let memory_dir = resolve_persistent_memory_dir(&memory_config, workspace.path())
             .expect("memory dir")
             .expect("resolved dir");
         let files = PersistentMemoryFiles::new(memory_dir);
@@ -3446,7 +3456,8 @@ mod tests {
     #[test]
     fn cleanup_status_ignores_normalized_user_assertion_fact() {
         let workspace = tempdir().expect("workspace");
-        let memory_dir = resolve_persistent_memory_dir(&enabled_memory_config(), workspace.path())
+        let memory_config = enabled_memory_config_for(workspace.path());
+        let memory_dir = resolve_persistent_memory_dir(&memory_config, workspace.path())
             .expect("memory dir")
             .expect("resolved dir");
         let files = PersistentMemoryFiles::new(memory_dir);
@@ -3466,7 +3477,8 @@ mod tests {
     #[test]
     fn cleanup_status_ignores_embedded_remember_word_in_fact() {
         let workspace = tempdir().expect("workspace");
-        let memory_dir = resolve_persistent_memory_dir(&enabled_memory_config(), workspace.path())
+        let memory_config = enabled_memory_config_for(workspace.path());
+        let memory_dir = resolve_persistent_memory_dir(&memory_config, workspace.path())
             .expect("memory dir")
             .expect("resolved dir");
         let files = PersistentMemoryFiles::new(memory_dir);

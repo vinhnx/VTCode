@@ -17,7 +17,7 @@ mod execution_facade;
 mod execution_history;
 mod execution_kernel;
 mod executors;
-mod file_helpers;
+pub mod file_helpers;
 mod file_monitor_facade;
 mod harness;
 mod harness_facade;

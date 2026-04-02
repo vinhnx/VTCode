@@ -744,14 +744,16 @@ mod tests {
 
     async fn spawn_scripted_websocket_server(
         sessions: Vec<Vec<ScriptedReply>>,
-    ) -> (
+    ) -> Option<(
         String,
         Arc<StdMutex<Vec<Value>>>,
         tokio::task::JoinHandle<()>,
-    ) {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("listener should bind");
+    )> {
+        let listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return None,
+            Err(err) => panic!("listener should bind: {err}"),
+        };
         let addr = listener.local_addr().expect("listener addr");
         let recorded = Arc::new(StdMutex::new(Vec::new()));
         let recorded_handle = Arc::clone(&recorded);
@@ -826,11 +828,11 @@ mod tests {
         });
 
         ready_rx.await.expect("server ready");
-        (
+        Some((
             format!("http://api.openai.com@127.0.0.1:{}/v1", addr.port()),
             recorded,
             handle,
-        )
+        ))
     }
 
     fn websocket_test_provider(base_url: String) -> OpenAIProvider {
@@ -889,7 +891,7 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_reconnects_after_connection_limit_error() {
-        let (base_url, recorded, handle) = spawn_scripted_websocket_server(vec![
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
             vec![ScriptedReply::Error {
                 code: WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE,
                 message: "Responses websocket connection limit reached (60 minutes).",
@@ -899,7 +901,10 @@ mod tests {
                 text: "ok",
             }],
         ])
-        .await;
+        .await
+        else {
+            return;
+        };
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
         seed_continuation_cache(&provider, &request, "resp_cached", true);
@@ -930,7 +935,7 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_previous_response_not_found_restarts_new_chain() {
-        let (base_url, recorded, handle) = spawn_scripted_websocket_server(vec![
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
             vec![ScriptedReply::Error {
                 code: PREVIOUS_RESPONSE_NOT_FOUND_CODE,
                 message: "Previous response with id 'resp_cached' not found.",
@@ -946,7 +951,10 @@ mod tests {
                 },
             ],
         ])
-        .await;
+        .await
+        else {
+            return;
+        };
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
         seed_continuation_cache(&provider, &request, "resp_cached", true);
@@ -982,7 +990,7 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_reconnects_after_close_frame() {
-        let (base_url, recorded, handle) = spawn_scripted_websocket_server(vec![
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
             vec![ScriptedReply::Close {
                 reason: "limit reached",
             }],
@@ -991,7 +999,10 @@ mod tests {
                 text: "closed then ok",
             }],
         ])
-        .await;
+        .await
+        else {
+            return;
+        };
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
         seed_continuation_cache(&provider, &request, "resp_cached", true);
@@ -1016,7 +1027,7 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_reconnect_drops_nonpersistent_continuation_before_retry() {
-        let (base_url, recorded, handle) = spawn_scripted_websocket_server(vec![
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
             vec![ScriptedReply::Close {
                 reason: "network reset",
             }],
@@ -1031,7 +1042,10 @@ mod tests {
                 },
             ],
         ])
-        .await;
+        .await
+        else {
+            return;
+        };
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
         seed_continuation_cache(&provider, &request, "resp_cached", false);

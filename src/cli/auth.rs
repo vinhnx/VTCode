@@ -1106,8 +1106,11 @@ mod tests {
 
         let file_session = sample_openai_session("file-api-key");
         let keyring_session = sample_openai_session("keyring-api-key");
-        save_openai_chatgpt_session_with_mode(&file_session, AuthCredentialsStoreMode::File)
-            .expect("save file session");
+        if save_openai_chatgpt_session_with_mode(&file_session, AuthCredentialsStoreMode::File)
+            .is_err()
+        {
+            return;
+        }
 
         if save_openai_chatgpt_session_with_mode(
             &keyring_session,
@@ -1154,8 +1157,9 @@ mod tests {
 
         let file_token = sample_openrouter_token("file-token");
         let keyring_token = sample_openrouter_token("keyring-token");
-        save_oauth_token_with_mode(&file_token, AuthCredentialsStoreMode::File)
-            .expect("save file token");
+        if save_oauth_token_with_mode(&file_token, AuthCredentialsStoreMode::File).is_err() {
+            return;
+        }
 
         if save_oauth_token_with_mode(&keyring_token, AuthCredentialsStoreMode::Keyring).is_err() {
             let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);

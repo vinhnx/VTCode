@@ -83,13 +83,20 @@ impl Language {
             return workspace_venv.to_string_lossy().into_owned();
         }
 
-        // 3. Check for uv in PATH
+        // 3. Prefer a direct system python3 before shelling through uv.
+        if let Ok(system_python) = which::which("python3") {
+            debug!("Using system python3: {:?}", system_python);
+            return system_python.to_string_lossy().into_owned();
+        }
+
+        // 4. Check for uv in PATH
         if which::which("uv").is_ok() {
             debug!("Using uv for Python execution");
             return "uv".to_string();
         }
 
-        // 4. Fall back to system python3
+        // 5. Fall back to the plain python3 name for environments where
+        // path lookup is restricted but the interpreter is still invocable.
         debug!("Using system python3");
         "python3".to_string()
     }

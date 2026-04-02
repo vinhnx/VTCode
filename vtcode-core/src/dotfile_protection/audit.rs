@@ -13,6 +13,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
+use vtcode_commons::utils::calculate_sha256;
 
 use crate::utils::file_utils::ensure_dir_exists;
 
@@ -170,7 +171,7 @@ impl AuditEntry {
             hasher.update(ctx.as_bytes());
         }
         hasher.update([self.during_automation as u8]);
-        format!("{:x}", hasher.finalize())
+        calculate_sha256(&hasher.finalize())
     }
 
     /// Verify the entry hash is valid.

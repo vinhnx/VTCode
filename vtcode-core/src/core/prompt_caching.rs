@@ -189,10 +189,7 @@ impl PromptCache {
 
     /// Generate hash for prompt
     pub fn hash_prompt(prompt: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(prompt.as_bytes());
-        format!("{:x}", hasher.finalize())
+        vtcode_commons::utils::calculate_sha256(prompt.as_bytes())
     }
 
     /// Save cache to disk

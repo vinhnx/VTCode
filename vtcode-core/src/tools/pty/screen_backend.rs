@@ -44,7 +44,7 @@ impl PtyScreenState {
     }
 
     pub(super) fn resize(&mut self, size: PtySize) {
-        self.parser.set_size(size.rows, size.cols);
+        self.parser.screen_mut().set_size(size.rows, size.cols);
     }
 
     pub(super) fn prepare_snapshot(&self) -> PreparedScreenSnapshot {

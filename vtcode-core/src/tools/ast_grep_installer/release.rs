@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use vtcode_commons::utils::calculate_sha256;
 
 const AST_GREP_RELEASE_API: &str = "https://api.github.com/repos/ast-grep/ast-grep/releases/latest";
 
@@ -219,9 +219,7 @@ pub(super) fn parse_expected_checksum(
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    calculate_sha256(bytes)
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use vtcode_commons::utils::calculate_sha256;
 
 use crate::utils::file_utils::{ensure_dir_exists, read_json_file, write_json_file};
 
@@ -53,7 +53,7 @@ impl DotfileBackup {
             .await
             .with_context(|| format!("Failed to read backup: {}", self.backup_path))?;
 
-        let hash = format!("{:x}", Sha256::digest(&content));
+        let hash = calculate_sha256(&content);
         if hash != self.content_hash {
             bail!(
                 "Backup integrity check failed: hash mismatch for {}",
@@ -133,7 +133,7 @@ impl BackupManager {
             .with_context(|| format!("Failed to get metadata: {:?}", file_path))?;
 
         // Compute content hash
-        let content_hash = format!("{:x}", Sha256::digest(&content));
+        let content_hash = calculate_sha256(&content);
 
         // Generate backup path
         let timestamp = Utc::now();
@@ -313,7 +313,7 @@ impl BackupManager {
             let valid = if backup_path.exists() {
                 match tokio::fs::read(backup_path).await {
                     Ok(content) => {
-                        let hash = format!("{:x}", Sha256::digest(&content));
+                        let hash = calculate_sha256(&content);
                         hash == backup.content_hash
                     }
                     Err(_) => false,

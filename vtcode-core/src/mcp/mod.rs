@@ -346,24 +346,12 @@ mod tests {
 
     #[tokio::test]
     async fn convert_to_rmcp_round_trip() {
-        let params = InitializeRequestParams {
-            capabilities: ClientCapabilities {
-                roots: Some(RootsCapabilities {
-                    list_changed: Some(true),
-                }),
-                ..Default::default()
-            },
-            client_info: Implementation {
-                name: "vtcode".to_owned(),
-                version: "1.0".to_owned(),
-                title: None,
-                description: None,
-                icons: None,
-                website_url: None,
-            },
-            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
-            meta: None,
-        };
+        let mut capabilities = ClientCapabilities::default();
+        capabilities.roots = Some(RootsCapabilities {
+            list_changed: Some(true),
+        });
+        let params = InitializeRequestParams::new(capabilities, Implementation::new("vtcode", "1.0"))
+            .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
 
         let converted: InitializeRequestParams = convert_to_rmcp(params.clone()).unwrap();
         // Verify the conversion succeeded by checking the name

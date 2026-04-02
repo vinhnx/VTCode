@@ -253,12 +253,7 @@ impl McpProvider {
                     tool_name, self.name
                 )
             })?;
-        let params = CallToolRequestParams {
-            name: tool_name.to_string().into(),
-            arguments: Some(arguments),
-            meta: None,
-            task: None,
-        };
+        let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
         let client = self.client.load_full();
         client.call_tool(params, timeout).await
     }
@@ -384,10 +379,7 @@ impl McpProvider {
             .acquire_owned()
             .await
             .context("Failed to acquire MCP request slot")?;
-        let params = ReadResourceRequestParams {
-            uri: uri.to_string(),
-            meta: None,
-        };
+        let params = ReadResourceRequestParams::new(uri.to_string());
         let client = self.client.load_full();
         let result = client.read_resource(params, timeout).await?;
         Ok(McpResourceData {
@@ -483,11 +475,7 @@ impl McpProvider {
             .map(|(k, v)| (k, Value::String(v)))
             .collect();
 
-        let params = GetPromptRequestParams {
-            name: prompt_name.to_string(),
-            arguments: Some(args_json),
-            meta: None,
-        };
+        let params = GetPromptRequestParams::new(prompt_name.to_string()).with_arguments(args_json);
         let client = self.client.load_full();
         let result = client.get_prompt(params, timeout).await?;
         Ok(McpPromptDetail {
@@ -553,12 +541,11 @@ impl McpProvider {
         self.invalidate_caches();
 
         // Re-initialise (handshake + tool refresh).
-        let init_params = InitializeRequestParams {
-            meta: None,
-            capabilities: rmcp::model::ClientCapabilities::default(),
-            client_info: super::utils::build_client_implementation(),
-            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
-        };
+        let init_params = InitializeRequestParams::new(
+            rmcp::model::ClientCapabilities::default(),
+            super::utils::build_client_implementation(),
+        )
+        .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
         self.initialize(init_params, startup_timeout, tool_timeout, allowlist)
             .await
             .with_context(|| {
