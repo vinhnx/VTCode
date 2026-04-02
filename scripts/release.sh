@@ -389,7 +389,7 @@ update_changelog_from_commits() {
     if [[ -n "$previous_version" ]]; then
         print_info "Previous version tag: $previous_version"
     else
-        print_warning "No previous semver tag found"
+        print_info "No previous semver tag found"
     fi
 
     # Check if git-cliff is available
@@ -548,7 +548,11 @@ update_changelog_builtin() {
         echo ""
         echo "$structured_changelog"
         echo ""
-        echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...${version}"
+        if [[ -n "$previous_tag" ]]; then
+            echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...${version}"
+        else
+            echo "**Full Changelog**: https://github.com/vinhnx/vtcode/releases/tag/${version}"
+        fi
     } > "$RELEASE_NOTES_FILE"
 
     if [[ "$dry_run_flag" == 'true' ]]; then
@@ -824,23 +828,41 @@ main() {
     if command -v gh >/dev/null 2>&1; then
         print_info "Checking GitHub CLI authentication..."
 
-        # Check current GitHub user
-        current_user=$(gh api user --jq '.login' 2>/dev/null || echo "")
-        print_info "Currently logged in as: $current_user"
+        if gh auth status >/dev/null 2>&1; then
+            local current_user=""
+            current_user=$(gh api user --jq '.login' 2>/dev/null || true)
 
-        if [[ "$current_user" != "vinhnx" ]]; then
-            print_info "Switching to GitHub account vinhnx..."
-            if gh auth switch -u vinhnx 2>/dev/null; then
-                print_success "Switched to GitHub account vinhnx"
+            if [[ -n "$current_user" ]]; then
+                print_info "Currently logged in as: $current_user"
             else
-                print_warning "Could not switch to GitHub account vinhnx"
+                print_info "GitHub CLI authentication is valid"
             fi
+
+            if [[ -n "$current_user" && "$current_user" != "vinhnx" ]]; then
+                print_info "Switching to GitHub account vinhnx..."
+                if gh auth switch -u vinhnx >/dev/null 2>&1; then
+                    print_success "Switched to GitHub account vinhnx"
+                elif [[ "$dry_run" == 'true' ]]; then
+                    print_info "Dry run - continuing without switching GitHub account"
+                else
+                    print_error "Could not switch to GitHub account vinhnx. Run \`gh auth switch -u vinhnx\` or re-authenticate before releasing."
+                    exit 1
+                fi
+            fi
+        elif [[ "$dry_run" == 'true' ]]; then
+            print_info "GitHub CLI is not authenticated; dry run will continue without GitHub publishing."
+        else
+            print_error "GitHub CLI is not authenticated. Run \`gh auth login -h github.com\` before releasing."
+            exit 1
         fi
 
-        # Skip the refresh step that causes hangs, assuming user has proper scopes
-        print_warning "Skipping GitHub CLI scopes refresh (may need manual refresh if issues occur)"
+        # Skip the refresh step that causes hangs, assuming user has proper scopes.
+        print_info "GitHub CLI scopes refresh is skipped; re-authenticate manually if GitHub operations fail."
+    elif [[ "$dry_run" == 'true' ]]; then
+        print_info "GitHub CLI not found. Dry run will continue without GitHub publishing."
     else
-        print_warning "GitHub CLI not found. Release will continue but binary uploads may fail."
+        print_error "GitHub CLI not found. Install \`gh\` before releasing."
+        exit 1
     fi
 
     local current_version
@@ -867,9 +889,9 @@ main() {
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
-        print_warning "Running in dry-run mode for $next_version"
+        print_info "Running in dry-run mode for $next_version"
     else
-        print_warning "Releasing version: $next_version"
+        print_info "Releasing version: $next_version"
     fi
 
     # Check if using full CI mode
