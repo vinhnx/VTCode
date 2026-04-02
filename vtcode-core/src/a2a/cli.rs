@@ -45,8 +45,8 @@ pub enum A2aCommands {
     /// showing capabilities, skills, and supported features.
     ///
     /// Examples:
-    ///   vtcode a2a discover https://agent.example.com
-    ///   vtcode a2a discover https://localhost:8080
+    ///   vtcode a2a discover <https://agent.example.com>
+    ///   vtcode a2a discover <https://localhost:8080>
     Discover {
         /// URL of the remote A2A agent
         agent_url: String,
@@ -58,8 +58,8 @@ pub enum A2aCommands {
     /// The agent will process the request and return structured results.
     ///
     /// Examples:
-    ///   vtcode a2a send-task https://agent.example.com "Help me refactor this code"
-    ///   vtcode a2a send-task https://localhost:8080 "Explain this error message"
+    ///   vtcode a2a send-task <https://agent.example.com> "Help me refactor this code"
+    ///   vtcode a2a send-task <https://localhost:8080> "Explain this error message"
     SendTask {
         /// URL of the remote A2A agent
         agent_url: String,
@@ -81,8 +81,8 @@ pub enum A2aCommands {
     /// Queries a remote A2A agent for its current and recent tasks.
     ///
     /// Examples:
-    ///   vtcode a2a list-tasks https://agent.example.com
-    ///   vtcode a2a list-tasks https://localhost:8080 --context-id my-conversation
+    ///   vtcode a2a list-tasks <https://agent.example.com>
+    ///   vtcode a2a list-tasks <https://localhost:8080> --context-id my-conversation
     ListTasks {
         /// URL of the remote A2A agent
         agent_url: String,
@@ -101,8 +101,8 @@ pub enum A2aCommands {
     /// Retrieves the current status, artifacts, and history of a task.
     ///
     /// Examples:
-    ///   vtcode a2a get-task https://agent.example.com task-123
-    ///   vtcode a2a get-task https://localhost:8080 task-456
+    ///   vtcode a2a get-task <https://agent.example.com> task-123
+    ///   vtcode a2a get-task <https://localhost:8080> task-456
     GetTask {
         /// URL of the remote A2A agent
         agent_url: String,
@@ -116,7 +116,7 @@ pub enum A2aCommands {
     /// Requests cancellation of a task that is currently being processed.
     ///
     /// Examples:
-    ///   vtcode a2a cancel-task https://agent.example.com task-123
+    ///   vtcode a2a cancel-task <https://agent.example.com> task-123
     CancelTask {
         /// URL of the remote A2A agent
         agent_url: String,

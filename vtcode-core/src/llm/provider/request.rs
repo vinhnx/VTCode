@@ -126,7 +126,7 @@ pub struct ResponsesCompactionOptions {
 pub struct CodingAgentSettings {
     /// Encourage the model to use XML tags for structured responses
     pub force_xml_tags: bool,
-    /// Automatically prefill with <thought> to encourage reasoning
+    /// Automatically prefill with `<thought>` to encourage reasoning
     pub prefill_thought: bool,
     /// Explicitly allow the model to say "I don't know" or "I am unsure"
     pub allow_uncertainty: bool,
@@ -140,7 +140,7 @@ pub struct CodingAgentSettings {
     pub force_quote_grounding: bool,
     /// Optional specialized role for Claude (e.g., "Senior Software Architect")
     pub role_specialization: Option<String>,
-    /// Enforce the use of <thinking> and <answer> tags for manual chain-of-thought
+    /// Enforce the use of `<thinking>` and `<answer>` tags for manual chain-of-thought
     pub enforce_structured_thought: bool,
 }
 

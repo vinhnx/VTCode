@@ -178,7 +178,7 @@ pub type ToolPermissionCacheStats = PermissionCacheStats;
 
 /// Extension methods for ToolPermissionCache to maintain API compatibility
 impl ToolPermissionCache {
-    /// Cache a permission grant for a tool (accepts impl Into<String>)
+    /// Cache a permission grant for a tool (accepts `impl Into<String>`)
     #[inline]
     pub fn cache_grant_tool(&mut self, tool_name: impl Into<String>, grant: PermissionGrant) {
         self.cache_grant(tool_name.into(), grant);

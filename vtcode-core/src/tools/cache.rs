@@ -23,7 +23,7 @@ static FILE_READ_CACHE_CONFIG: Lazy<RwLock<FileReadCacheConfig>> =
 ///
 /// Uses `tokio::sync::Mutex` for async-safe stats access across `.await` boundaries.
 /// Stores `Arc<Value>` internally for zero-copy cache hits.
-/// See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
+/// See: <https://ratatui.rs/faq/>
 pub struct FileCache {
     file_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,
     directory_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,

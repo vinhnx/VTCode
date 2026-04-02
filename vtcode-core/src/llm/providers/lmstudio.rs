@@ -10,7 +10,7 @@
 //! compatibility. Future versions may migrate to the native v1 API for enhanced
 //! features like stateful chats, MCP via API, and model management endpoints.
 //!
-//! See: https://lmstudio.ai/docs/developer/rest
+//! See: <https://lmstudio.ai/docs/developer/rest>
 
 use super::common::resolve_model;
 use super::openai::OpenAIProvider;

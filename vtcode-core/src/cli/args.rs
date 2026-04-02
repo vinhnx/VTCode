@@ -9,7 +9,7 @@ use std::path::PathBuf;
 ///
 /// Displays version, authors, and directory information following the
 /// XDG Base Directory Specification for organized file storage.
-/// See: https://ratatui.rs/recipes/apps/config-directories/
+/// See: <https://ratatui.rs/recipes/apps/config-directories/>
 ///
 /// This function is called at runtime to provide dynamic version info
 /// that includes actual resolved directory paths.

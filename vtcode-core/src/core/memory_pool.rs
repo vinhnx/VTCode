@@ -126,7 +126,7 @@ impl MemoryPool {
         }
     }
 
-    /// Get a reusable Vec<String>
+    /// Get a reusable `Vec<String>`
     pub fn get_vec(&self) -> Vec<String> {
         let mut stats = self.stats.lock();
         let result = self.vec_pool.lock().pop_front();
@@ -141,7 +141,7 @@ impl MemoryPool {
         }
     }
 
-    /// Return a Vec<String> to the pool after clearing it
+    /// Return a `Vec<String>` to the pool after clearing it
     /// Optimization: Preserve capacity for vectors with reasonable size
     pub fn return_vec(&self, mut v: Vec<String>) {
         // Optimization: Shrink large vectors to avoid memory bloat

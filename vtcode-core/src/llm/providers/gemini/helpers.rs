@@ -99,7 +99,7 @@ impl GeminiProvider {
     }
 
     /// Get supported thinking levels for a model
-    /// Reference: https://ai.google.dev/gemini-api/docs/gemini-3
+    /// Reference: <https://ai.google.dev/gemini-api/docs/gemini-3>
     pub fn supported_thinking_levels(model: &str) -> Vec<&'static str> {
         if model.contains("gemini-3-flash") {
             // Gemini 3 Flash supports all levels

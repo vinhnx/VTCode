@@ -113,7 +113,7 @@ impl LLMFactory {
 ///
 /// Attempts, in order:
 /// 1. Parse the override if provided.
-/// 2. Parse the model into a [`ModelId`] and return its provider.
+/// 2. Parse the model into a [`crate::config::models::ModelId`] and return its provider.
 /// 3. Fall back to heuristic detection via [`LLMFactory::provider_from_model`].
 pub fn infer_provider(override_provider: Option<&str>, model: &str) -> Option<Provider> {
     ModelResolver::resolve_provider(override_provider, model, &[])

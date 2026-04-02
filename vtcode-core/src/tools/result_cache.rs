@@ -87,8 +87,8 @@ impl ToolResultCache {
         self.insert_owned(key, output);
     }
 
-    /// Insert an Arc-wrapped result into the cache to avoid cloning when the caller
-    /// already has an Arc<String> available.
+    /// Insert an `Arc<String>`-wrapped result into the cache to avoid cloning when the caller
+    /// already has an `Arc<String>` available.
     pub fn insert_arc(&mut self, key: ToolCacheKey, output: Arc<String>) {
         self.insert_owned(key, (*output).clone());
     }

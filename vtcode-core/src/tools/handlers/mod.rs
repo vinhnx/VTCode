@@ -17,7 +17,7 @@
 //! - [`router`]: Tool routing and dispatch (ToolRouter, DispatchRegistry, DispatchRegistryBuilder)
 //! - [`adapter`]: Bidirectional adapters between ToolHandler and Tool trait
 //! - [`turn_diff_tracker`]: Aggregates file diffs across patches in a turn
-//! - [`intercept_apply_patch`]: Shell command interception for apply_patch
+//! - [`mod@intercept_apply_patch`]: Shell command interception for apply_patch
 //!
 //! ## Handlers
 //!

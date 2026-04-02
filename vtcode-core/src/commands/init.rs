@@ -907,7 +907,7 @@ where
 ///
 /// The `ProjectAnalyzer` struct bundles related functionality for project analysis,
 /// following Rust's preference for combining structs with implementations for OOP-style organization.
-/// See: https://corrode.dev/blog/paradigms/
+/// See: <https://corrode.dev/blog/paradigms/>
 #[derive(Debug, Clone)]
 pub struct ProjectAnalyzer {
     pub name: String,

@@ -376,7 +376,7 @@ pub enum AnthropicOutputFormat {
 }
 
 /// Request body for Anthropic's count_tokens endpoint
-/// https://docs.anthropic.com/en/api/messages-count-tokens
+/// <https://docs.anthropic.com/en/api/messages-count-tokens>
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CountTokensRequest {
     pub model: String,

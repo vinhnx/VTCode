@@ -98,7 +98,7 @@ pub fn create_stdio_transport_with_stderr(
 /// Create an HTTP-based transport from endpoint URL (Phase 3.2)
 ///
 /// # Arguments
-/// * `endpoint` - HTTP endpoint URL (e.g., "https://api.example.com/mcp")
+/// * `endpoint` - HTTP endpoint URL (e.g., `https://api.example.com/mcp`)
 /// * `bearer_token` - Optional bearer token for authentication
 /// * `headers` - Custom HTTP headers to include in requests
 ///
