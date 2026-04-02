@@ -1133,6 +1133,45 @@ impl SubagentController {
         .await
     }
 
+    pub async fn spawn_custom(
+        &self,
+        spec: SubagentSpec,
+        request: SpawnAgentRequest,
+    ) -> Result<SubagentStatusEntry> {
+        if !spec.is_read_only() {
+            bail!(
+                "custom subagent spawn only supports read-only specs; '{}' exposes write-capable behavior",
+                spec.name
+            );
+        }
+
+        let mut request = request;
+        sanitize_subagent_input_items(&mut request.items);
+
+        let prompt = request_prompt(&request.message, &request.items)
+            .or_else(|| spec.initial_prompt.clone())
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow!("custom subagent spawn requires a task message or items"))?;
+        if delegated_task_requires_clarification(&prompt) {
+            bail!(
+                "custom subagent task for '{}' is too vague ('{}'). Provide a specific delegated task before spawning the subagent.",
+                spec.name,
+                prompt.trim()
+            );
+        }
+
+        self.spawn_with_spec(
+            spec,
+            prompt,
+            request.fork_context,
+            request.background,
+            request.max_turns,
+            request.model,
+            request.reasoning_effort,
+        )
+        .await
+    }
+
     pub async fn send_input(&self, request: SendInputRequest) -> Result<SubagentStatusEntry> {
         let prompt = request_prompt(&request.message, &request.items)
             .ok_or_else(|| anyhow!("send_input requires a message or items"))?;
@@ -3875,6 +3914,75 @@ mod tests {
         );
 
         controller.close(&spawned.id).await.expect("close");
+    }
+
+    #[tokio::test]
+    async fn spawn_custom_uses_explicit_spec_without_delegation_hints() {
+        let temp = TempDir::new().expect("tempdir");
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "explorer")
+            .expect("explorer");
+        spec.name = "init-grounding-explorer".to_string();
+        spec.description = "VT Code /init grounding explorer.".to_string();
+        spec.source = SubagentSource::ProjectVtcode;
+
+        let spawned = controller
+            .spawn_custom(
+                spec,
+                SpawnAgentRequest {
+                    message: Some(
+                        "Inspect the repository and report agent-facing findings.".to_string(),
+                    ),
+                    max_turns: Some(2),
+                    ..SpawnAgentRequest::default()
+                },
+            )
+            .await
+            .expect("spawn");
+
+        assert_eq!(spawned.agent_name, "init-grounding-explorer");
+        assert_eq!(spawned.source, SubagentSource::ProjectVtcode.label());
+        controller.close(&spawned.id).await.expect("close");
+    }
+
+    #[tokio::test]
+    async fn spawn_custom_rejects_write_capable_spec() {
+        let temp = TempDir::new().expect("tempdir");
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+
+        let err = controller
+            .spawn_custom(
+                spec,
+                SpawnAgentRequest {
+                    message: Some("Implement a change.".to_string()),
+                    ..SpawnAgentRequest::default()
+                },
+            )
+            .await
+            .expect_err("write-capable custom spec should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("custom subagent spawn only supports read-only specs")
+        );
     }
 
     #[tokio::test]

@@ -141,7 +141,7 @@ macro_rules! traditional_command_spec {
 pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!(
         "init",
-        "Create vtcode.toml and index the workspace (usage: /init [--force])",
+        "Guided workspace setup for vtcode.toml, AGENTS.md, and indexing (usage: /init [--force])",
         "/init [--force]",
         "workspace"
     ),

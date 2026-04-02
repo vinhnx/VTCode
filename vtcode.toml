@@ -119,7 +119,7 @@ temperature = 0.3
 
 [agent.small_model]
 enabled = true
-model = "gpt-5-nano"
+model = "gpt-5.2"
 temperature = 0.3
 use_for_git_history = true
 use_for_large_reads = true

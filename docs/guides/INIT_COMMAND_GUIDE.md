@@ -2,12 +2,13 @@
 
 ## Overview
 
-The `/init` command prepares a repository for VT Code guidance and memory. It still generates a root `AGENTS.md` that complies with the open specification published at [agents.md](https://agents.md/), and it now also scaffolds the repository rule and persistent-memory layout that VT Code uses at runtime.
+The `/init` command prepares a repository for VT Code guidance and memory. It generates a root `AGENTS.md` that complies with the open specification published at [agents.md](https://agents.md/), scaffolds the repository rule and persistent-memory layout that VT Code uses at runtime, and now runs a guided AGENTS setup when key guidance is ambiguous.
 
 ## Key Features
 
 - **Specification alignment** – follows the section structure encouraged by agents.md and produces Markdown that other tooling can parse without customization.
-- **Repository analysis** – detects languages, build tools, dependency manifests, documentation, and CI artifacts to tailor instructions.
+- **Repository analysis** – inspects manifests, scripts, docs, CI workflows, and recent git history to tailor instructions.
+- **Targeted questions** – asks up to three high-value questions only when verification commands, orientation docs, or one critical repo rule are not obvious from the codebase.
 - **Focused guidance** – surfaces the most relevant commands and conventions within the recommended 200–400 word budget.
 - **Workspace scaffolding** – creates `.vtcode/rules/README.md` and initializes the per-repository memory directory layout used by VT Code.
 - **Portable output** – works for any project layout; update the file as conventions evolve and regenerate when new components are added.
@@ -32,7 +33,15 @@ The `/init` command prepares a repository for VT Code guidance and memory. It st
    /init
    ```
 
-The assistant will analyze the repository, synthesize the relevant guidance, and scaffold the workspace instruction layout. By default that includes `AGENTS.md` at the workspace root, `.vtcode/rules/README.md`, and the repository memory directory layout.
+The assistant will analyze the repository, synthesize the relevant guidance, ask targeted questions when needed, and scaffold the workspace instruction layout. By default that includes `AGENTS.md` at the workspace root, `.vtcode/rules/README.md`, and the repository memory directory layout.
+
+You can run the same flow from the CLI with:
+
+```bash
+vtcode init
+```
+
+Use `vtcode init --force` or `/init --force` to overwrite an existing `AGENTS.md` without an overwrite confirmation.
 
 ## Generated Content Structure
 
@@ -50,12 +59,13 @@ The resulting workspace scaffold includes:
 The generated `AGENTS.md` always includes the following sections when data is available:
 
 - `# AGENTS.md` – top-level heading for compatibility.
-- `## Project overview` – high-level summary of languages, directories, and automation.
-- `## Setup commands` – environment preparation commands grouped by detected tooling.
+- `## Quick start` – environment preparation commands and the default verification command when selected.
+- `## Architecture & layout` – high-level summary of languages, directories, entrypoints, and the preferred orientation doc when selected.
+- `## Important instructions` – optional repo-wide rule captured from guided setup.
 - `## Code style` – formatter and naming expectations for each language.
-- `## Testing instructions` – how to execute local checks and match CI requirements.
-- `## PR instructions` – commit hygiene and review guidelines.
-- `## Additional context` – optional section with documentation pointers and highlighted dependencies.
+- `## Testing` – how to execute local checks and match CI requirements.
+- `## PR guidelines` – commit hygiene and review guidelines.
+- `## Additional guidance` – optional section with documentation pointers and highlighted dependencies.
 
 Empty sections are replaced with actionable placeholders so maintainers know where to add project-specific details.
 
@@ -80,39 +90,40 @@ For a Rust service with Docker support and conventional commits:
 ```markdown
 # AGENTS.md
 
-## Project overview
+## Quick start
 
-- Primary languages: Rust
-- Key directories: `src/`, `tests/`
-- Application entrypoints live under the source directories above.
-- Continuous integration workflows detected; review `.github/workflows/` for required checks.
-- Docker artifacts detected; container workflows may be required for local testing.
+- Default verification command: `./scripts/check.sh` before calling work complete.
+- Build with `cargo check` (preferred) or `cargo build --release`.
 
-## Setup commands
+## Architecture & layout
 
-- Install the Rust toolchain via `rustup` and warm the cache with `cargo fetch`.
-- Container workflows available; use `docker compose up --build` when services are required.
+- Start with `docs/ARCHITECTURE.md` when you need repo orientation or architectural context.
+- Primary languages: Rust.
+- Key source directories: `src/`, `tests/`.
+
+## Important instructions
+
+- Use Conventional Commits (`type(scope): subject`).
 
 ## Code style
 
-- Rust: 4-space indentation, snake_case functions, PascalCase types, run `cargo fmt` and `cargo clippy`.
+- Rust code uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` for fallible paths.
 
-## Testing instructions
+## Testing
 
-- Run Rust tests with `cargo test` and address clippy warnings.
-- Match CI expectations; replicate workflows from `.github/workflows` when possible.
+- Default verification command: `./scripts/check.sh`.
+- Rust suite: `cargo nextest run` for speed, or `cargo test` for targeted fallback.
 
-## PR instructions
+## PR guidelines
 
 - Use Conventional Commits (`type(scope): subject`) and keep summaries under 72 characters.
 - Reference issues with `Fixes #123` or `Closes #123` when applicable.
-- Run linters and test suites before opening a pull request; attach logs for failures.
-- Keep pull requests focused; split large features into reviewable chunks.
+- Keep pull requests focused and include test evidence for non-trivial changes.
 
-## Additional context
+## Additional guidance
 
-- Additional documentation available in: README.md.
-- Rust (Cargo) dependencies include anyhow, serde, tokio (see manifest for more).
+- Preferred orientation doc: `docs/ARCHITECTURE.md`.
+- Repository docs spotted: README.md, docs/ARCHITECTURE.md.
 ```
 
 Regenerate the root guidance whenever the build, testing, or review process changes so future contributors and agents stay aligned. For more on runtime guidance loading and persistent-memory behavior, see [Guidance and Persistent Memory for VT Code](./memory-management.md).

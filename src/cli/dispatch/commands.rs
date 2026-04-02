@@ -150,8 +150,8 @@ pub(crate) async fn dispatch_command(
         Commands::CleanupSnapshots { max } => {
             snapshots::handle_cleanup_snapshots_command(core_cfg, Some(max)).await?;
         }
-        Commands::Init => {
-            init::handle_init_command(&startup.workspace, false, false).await?;
+        Commands::Init { force } => {
+            init::handle_init_command(&startup.workspace, force, false).await?;
         }
         Commands::Config { output, global } => {
             config::handle_config_command(output.as_deref(), global).await?;

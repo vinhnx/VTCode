@@ -94,7 +94,7 @@ impl ManPageGenerator {
             .text([roman("Create complete Rust project with features")])
             .control("TP", [])
             .text([bold("init")])
-            .text([roman("Initialize project with enhanced structure")])
+            .text([roman("Guided AGENTS.md and workspace setup")])
             .control("TP", [])
             .text([bold("man"), roman(" "), italic("COMMAND")])
             .text([roman("Generate or display man pages for commands")])
@@ -478,9 +478,7 @@ impl ManPageGenerator {
                 ],
             )
             .control("SH", ["NAME"])
-            .text([roman(
-                "vtcode-init - Initialize project with enhanced structure",
-            )])
+            .text([roman("vtcode-init - Guided AGENTS.md and workspace setup")])
             .control("SH", ["SYNOPSIS"])
             .text([
                 bold("vtcode"),
@@ -488,25 +486,21 @@ impl ManPageGenerator {
                 bold("OPTIONS"),
                 roman("] "),
                 bold("init"),
+                roman(" ["),
+                bold("--force"),
+                roman("]"),
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman("Initialize a project with enhanced dot-folder structure for VT Code."),
-                roman(" Creates project directory structure, config files, cache directories,"),
-                roman(" embeddings storage, and security policies."),
+                roman("Bootstrap vtcode.toml, repository memory scaffolding, indexing,"),
+                roman(" and a guided root AGENTS.md generated from repository signals."),
+                roman(" Existing AGENTS.md files prompt for confirmation unless --force is used."),
             ])
-            .control("SH", ["DIRECTORY STRUCTURE"])
-            .text([roman(
-                "• .vtcode/ - Main project cache and context directory",
-            )])
-            .text([roman("• .vtcode/config/ - Configuration files")])
-            .text([roman("• .vtcode/cache/ - File and analysis cache")])
-            .text([roman("• .vtcode/embeddings/ - Code embeddings storage")])
-            .text([roman("• .vtcode/parsers/ - Tree-sitter parsers")])
-            .text([roman("• .vtcode/context/ - Agent context stores")])
             .control("SH", ["EXAMPLES"])
             .text([roman("Initialize current directory:")])
             .text([bold("  vtcode init")])
+            .text([roman("Overwrite an existing AGENTS.md without prompting:")])
+            .text([bold("  vtcode init --force")])
             .control("SH", ["SEE ALSO"])
             .text([
                 bold("vtcode(1)"),

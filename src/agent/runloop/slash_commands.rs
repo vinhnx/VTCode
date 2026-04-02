@@ -1592,6 +1592,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn init_slash_command_parses_force_flag() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("init --force", &mut renderer, workspace.path())
+            .await
+            .expect("init should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::InitializeWorkspace { force: true }
+        ));
+    }
+
+    #[tokio::test]
     async fn every_registered_slash_command_resolves_without_prompt_fallback() {
         let workspace = tempfile::TempDir::new().expect("workspace");
 

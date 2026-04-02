@@ -152,12 +152,6 @@ All in all, the reason why Claude Code works better than the plain web UI is not
 
 THIS: https://github.com/openai/codex/pull/15525
 
-==
-
-===
-
-check default enter in all wizard modal doesn't work, it doesn't accept default value and move to next step. currently it stuck when user press enter without input anything, it should use default value and move to next step, but it doesn't work. need to fix this issue.
-
 ===
 
 /init becomes a guided AGENTS.md setup
@@ -177,3 +171,47 @@ https://github.com/vinhnx/VTCode/issues/621
 sticky last user message in header on scroll, so that user can always see the last message they sent to the agent, which is important for context and reference when the conversation gets long.
 
 For example, if the user sends a message with a task specification or important instructions, they can always see that message at the top of the conversation even as they scroll through the agent's responses and tool outputs. This helps maintain context and ensures that the user can easily refer back to their last input without having to scroll all the way back up.
+
+===
+
+fix deploy
+
+https://github.com/vinhnx/VTCode/actions/runs/23882925364/job/69639657112
+
+https://github.com/vinhnx/VTCode/actions/runs/23882925364/job/69639657115#logs
+
+==
+
+https://platform.claude.com/cookbook/tool-use-context-engineering-context-engineering-tools
+
+===
+
+https://www.anthropic.com/engineering/harness-design-long-running-apps
+
+===
+
+Anthropic published two context engineering posts last month. The cookbook covers compaction, clearing, and memory. The harness post covers multi-agent architecture for long-running coding sessions.
+
+The cookbook is a good starting point if you're new to context management. If you've been building agents, most of it is familiar.
+
+But a few patterns were useful regardless of what SDK or framework you're using:
+
+- When you clear old tool results from context, you invalidate your cached prompt prefix. So clearing needs to be worth the cache miss. If you clear too often and free too little each time, you're paying cache-write overhead every turn for minimal gain. Clear in bigger, less frequent chunks.
+
+- When you override the default compaction/summarization prompt, you're replacing it entirely. The default usually includes task-continuation scaffolding (state, next steps, open threads). If you write your own, you need to cover that yourself. Easy to miss.
+
+- If you're combining context clearing with a memory/note-taking tool, exclude the memory tool from clearing. Otherwise the agent's own memory reads get wiped and it loses track of what it just saved. This applies to any agent system where one tool's outputs are inputs to another.
+
+The harness post had more I didn't know.
+
+Context anxiety is different from context rot. Context rot is recall degrading as the window fills. Context anxiety is the model wrapping up prematurely because it thinks it's running out of context. Compaction doesn't fix it because the conversational history is still there, just compressed. Only a full context reset (fresh agent + structured handoff) fixes it.
+
+In self-evaluation, the generator reliably praised its own work, even when the output was broken. Separating the evaluator into its own agent and calibrating it to be skeptical was far more tractable than making a generator self-critical. The calibration took multiple rounds of reading evaluator logs and fixing where its judgment diverged from the developer's. Few-shot examples with score breakdowns.
+
+Every component in an agent harness encodes an assumption about what the model can't do on its own. When they upgraded from Opus 4.5 to 4.6, the sprint decomposition became unnecessary (this is a good example of why you have to rewrite all your code from scratch every 6 months). The model held coherence over 2+ hour builds without it. The harness doesn't shrink as models improve.
+
+One last note that seems like Claude is keeping the planner focused on product context and high-level technical design, not granular implementation details, while Codex folks are posting against a separate planning mode. If the planner gets a technical detail wrong, the error cascades into downstream implementation. Better to constrain on what to build and let the generator figure out how.
+
+===
+
+check implement lightweight model selection picker, besides current options. like main model picker and remember settings preference. Currently we don't have the options to pick from different models, but we can implement a lightweight model selector that allows users to choose from available models and remember their preferences for future sessions. This would enhance user experience by providing more flexibility and personalization in their interactions with the agent.

@@ -573,8 +573,12 @@ pub enum Commands {
         max: usize,
     },
 
-    /// Initialize project with dot-folder structure
-    Init,
+    /// Initialize project guidance and workspace scaffolding
+    Init {
+        /// Overwrite an existing AGENTS.md without prompting
+        #[arg(long, short = 'f')]
+        force: bool,
+    },
 
     /// Initialize project in ~/.vtcode/projects/
     #[command(name = "init-project")]
@@ -1620,6 +1624,16 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(super::Commands::AppServer { ref listen }) if listen == "stdio://"
+        ));
+    }
+
+    #[test]
+    fn parses_init_force_flag() {
+        let cli = Cli::parse_from(["vtcode", "init", "--force"]);
+
+        assert!(matches!(
+            cli.command,
+            Some(super::Commands::Init { force: true })
         ));
     }
 }
