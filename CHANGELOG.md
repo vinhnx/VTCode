@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.96.12 - 2026-04-02
+
+### Highlights
+#### Bug Fixes
+
+- Encode SHA256 digest as hex manually (db7768f8) 
+- Encode config fingerprint digest as lowercase hex (4d470c5e) 
+### Other Changes
+#### Other
+
+- Fix script (5655308f) 
+- Refactor mock server initialization and error handling in tests; streamline MCP parameter building; update checksum calculation; enhance session rendering in TUI tests; adjust file permissions in configuration. (03d8ccc9) 
+### Contributors
+@vinhnx
 ## 0.96.11 - 2026-04-02
 
 ### Highlights
