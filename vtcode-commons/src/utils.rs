@@ -24,7 +24,23 @@ pub fn current_timestamp_result() -> Result<u64> {
 pub fn calculate_sha256(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content);
-    format!("{:x}", hasher.finalize())
+    let digest = hasher.finalize();
+    let mut output = String::with_capacity(digest.len() * 2);
+
+    for byte in digest {
+        output.push(nibble_to_hex(byte >> 4));
+        output.push(nibble_to_hex(byte & 0x0f));
+    }
+
+    output
+}
+
+fn nibble_to_hex(nibble: u8) -> char {
+    match nibble {
+        0..=9 => char::from(b'0' + nibble),
+        10..=15 => char::from(b'a' + (nibble - 10)),
+        _ => unreachable!("nibble must be in 0..=15"),
+    }
 }
 
 /// Extract a string value from a simple TOML key assignment within [package]
