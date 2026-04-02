@@ -132,6 +132,7 @@ mod tests {
     };
     use crate::agent::runloop::model_picker::ModelSelectionResult;
     use vtcode_config::OpenAIServiceTier;
+    use vtcode_config::VTCodeConfig;
     use vtcode_core::config::loader::ConfigManager;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::ReasoningEffortLevel;
@@ -246,6 +247,11 @@ mod tests {
     #[tokio::test]
     async fn persist_lightweight_selection_enables_shared_model_and_saves_model() {
         let temp = tempfile::tempdir().expect("tempdir");
+        let mut initial = VTCodeConfig::default();
+        initial.agent.provider = "openai".to_string();
+        initial.agent.default_model = "gpt-5.4".to_string();
+        ConfigManager::save_config_to_path(temp.path().join("vtcode.toml"), &initial)
+            .expect("seed config");
 
         let updated = persist_lightweight_selection(temp.path(), "gpt-5.4-mini")
             .await
@@ -253,10 +259,14 @@ mod tests {
 
         assert!(updated.agent.small_model.enabled);
         assert_eq!(updated.agent.small_model.model, "gpt-5.4-mini");
+        assert_eq!(updated.agent.default_model, "gpt-5.4");
+        assert_eq!(updated.agent.provider, "openai");
 
         let manager =
             ConfigManager::load_from_workspace(temp.path()).expect("load persisted config");
         assert!(manager.config().agent.small_model.enabled);
         assert_eq!(manager.config().agent.small_model.model, "gpt-5.4-mini");
+        assert_eq!(manager.config().agent.default_model, "gpt-5.4");
+        assert_eq!(manager.config().agent.provider, "openai");
     }
 }

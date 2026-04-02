@@ -17,9 +17,10 @@ use crate::agent::runloop::slash_commands::SessionPaletteMode;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODEL_TARGET_ACTION_LIGHTWEIGHT,
-    MODEL_TARGET_ACTION_MAIN, handle_palette_cancel, handle_palette_preview,
-    handle_palette_selection, show_fork_mode_palette, show_lightweight_model_palette,
-    show_model_target_palette, show_sessions_palette, show_theme_palette,
+    MODEL_TARGET_ACTION_MAIN, build_lightweight_palette_view, handle_palette_cancel,
+    handle_palette_preview, handle_palette_selection, show_fork_mode_palette,
+    show_lightweight_model_palette, show_model_target_palette, show_sessions_palette,
+    show_theme_palette,
 };
 use crate::agent::runloop::unified::settings_interactive::{
     ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL,
@@ -151,6 +152,35 @@ impl<'a> InlineModalProcessor<'a> {
             }
             ModelPickerOutcome::Continue => Ok(InlineLoopAction::Continue),
         }
+    }
+
+    async fn open_lightweight_palette(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        let vt_cfg = self.model_picker.vt_cfg.clone();
+        let view = {
+            let loading_spinner = if renderer.supports_inline_ui() {
+                Some(PlaceholderSpinner::new(
+                    self.model_picker.handle,
+                    Some(String::new()),
+                    Some(String::new()),
+                    "Loading lightweight model lists...",
+                ))
+            } else {
+                renderer.line(MessageStyle::Info, "Loading lightweight model lists...")?;
+                None
+            };
+            let result =
+                build_lightweight_palette_view(self.model_picker.config, vt_cfg.as_ref()).await;
+            drop(loading_spinner);
+            result
+        };
+
+        if show_lightweight_model_palette(renderer, &view, None)? {
+            *self.palette.state = Some(ActivePalette::LightweightModel {
+                view: Box::new(view),
+            });
+        }
+
+        Ok(())
     }
 
     pub(crate) fn handle_cancel(
@@ -318,13 +348,9 @@ impl<'a> InlineModalProcessor<'a> {
                     *self.palette.state = Some(ActivePalette::ModelTarget);
                 }
             }
-            ActivePalette::LightweightModel => {
-                if show_lightweight_model_palette(
-                    renderer,
-                    self.model_picker.config,
-                    self.model_picker.vt_cfg.as_ref(),
-                )? {
-                    *self.palette.state = Some(ActivePalette::LightweightModel);
+            ActivePalette::LightweightModel { view } => {
+                if show_lightweight_model_palette(renderer, view.as_ref(), None)? {
+                    *self.palette.state = Some(ActivePalette::LightweightModel { view });
                 }
             }
             ActivePalette::UrlGuard { previous, .. } => {
@@ -356,13 +382,7 @@ impl<'a> InlineModalProcessor<'a> {
                 if action == MODEL_TARGET_ACTION_LIGHTWEIGHT =>
             {
                 self.palette.state.take();
-                if show_lightweight_model_palette(
-                    renderer,
-                    self.model_picker.config,
-                    self.model_picker.vt_cfg.as_ref(),
-                )? {
-                    *self.palette.state = Some(ActivePalette::LightweightModel);
-                }
+                self.open_lightweight_palette(renderer).await?;
                 Ok(true)
             }
             (ActivePalette::Settings { .. }, InlineListSelection::ConfigAction(action))
@@ -376,16 +396,10 @@ impl<'a> InlineModalProcessor<'a> {
                 if action == ACTION_PICK_LIGHTWEIGHT_MODEL =>
             {
                 self.palette.state.take();
-                if show_lightweight_model_palette(
-                    renderer,
-                    self.model_picker.config,
-                    self.model_picker.vt_cfg.as_ref(),
-                )? {
-                    *self.palette.state = Some(ActivePalette::LightweightModel);
-                }
+                self.open_lightweight_palette(renderer).await?;
                 Ok(true)
             }
-            (ActivePalette::LightweightModel, InlineListSelection::ConfigAction(action))
+            (ActivePalette::LightweightModel { .. }, InlineListSelection::ConfigAction(action))
                 if action.starts_with(LIGHTWEIGHT_MODEL_ACTION_PREFIX) =>
             {
                 Ok(false)

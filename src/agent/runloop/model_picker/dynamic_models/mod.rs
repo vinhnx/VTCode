@@ -22,7 +22,7 @@ use super::selection::{SelectionDetail, selection_from_dynamic};
 type StaticModelIndex = HashMap<Provider, HashSet<String>>;
 
 #[derive(Clone, Default)]
-pub(super) struct DynamicModelRegistry {
+pub(crate) struct DynamicModelRegistry {
     pub(super) entries: Vec<SelectionDetail>,
     pub(super) provider_models: HashMap<Provider, Vec<usize>>,
     pub(super) provider_errors: HashMap<Provider, String>,

@@ -22,7 +22,6 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
-use dynamic_models::DynamicModelRegistry;
 use interaction::{
     ModelSelectionListOutcome, select_model_with_ratatui_list, select_reasoning_with_ratatui,
     select_service_tier_with_ratatui,
@@ -43,12 +42,19 @@ use selection::{
 mod config_persistence;
 mod dynamic_models;
 mod interaction;
+mod lightweight_palette;
 mod options;
 mod rendering;
 mod selection;
 mod state_machine;
 
 pub(crate) use self::config_persistence::persist_lightweight_selection;
+pub(crate) use self::dynamic_models::DynamicModelRegistry;
+#[cfg(test)]
+pub(crate) use self::lightweight_palette::build_lightweight_model_palette_view;
+pub(crate) use self::lightweight_palette::{
+    LightweightModelPaletteView, prepare_lightweight_model_palette_view,
+};
 pub(crate) use selection::ModelSelectionResult;
 pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 

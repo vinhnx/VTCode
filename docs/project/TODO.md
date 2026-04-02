@@ -211,7 +211,3 @@ In self-evaluation, the generator reliably praised its own work, even when the o
 Every component in an agent harness encodes an assumption about what the model can't do on its own. When they upgraded from Opus 4.5 to 4.6, the sprint decomposition became unnecessary (this is a good example of why you have to rewrite all your code from scratch every 6 months). The model held coherence over 2+ hour builds without it. The harness doesn't shrink as models improve.
 
 One last note that seems like Claude is keeping the planner focused on product context and high-level technical design, not granular implementation details, while Codex folks are posting against a separate planning mode. If the planner gets a technical detail wrong, the error cascades into downstream implementation. Better to constrain on what to build and let the generator figure out how.
-
-===
-
-check implement lightweight model selection picker, besides current options. like main model picker and remember settings preference. Currently we don't have the options to pick from different models, but we can implement a lightweight model selector that allows users to choose from available models and remember their preferences for future sessions. This would enhance user experience by providing more flexibility and personalization in their interactions with the agent.

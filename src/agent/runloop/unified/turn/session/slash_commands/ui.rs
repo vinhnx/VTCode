@@ -16,8 +16,9 @@ use crate::agent::runloop::unified::overlay_prompt::{
     OverlayWaitOutcome, wait_for_overlay_submission,
 };
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, apply_prompt_style, show_lightweight_model_palette, show_model_target_palette,
-    show_sessions_palette, show_theme_palette,
+    ActivePalette, apply_prompt_style, build_lightweight_palette_view,
+    show_lightweight_model_palette, show_model_target_palette, show_sessions_palette,
+    show_theme_palette,
 };
 use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
@@ -326,8 +327,30 @@ pub(super) async fn start_model_selection_target(
     match target {
         ModelPickerTarget::Main => start_model_picker(ctx).await,
         ModelPickerTarget::Lightweight => {
-            if show_lightweight_model_palette(ctx.renderer, ctx.config, ctx.vt_cfg.as_ref())? {
-                *ctx.palette_state = Some(ActivePalette::LightweightModel);
+            let vt_cfg = ctx.vt_cfg.clone();
+            let restore_status_left = ctx.input_status_state.left.clone();
+            let restore_status_right = ctx.input_status_state.right.clone();
+            let view = {
+                let loading_spinner = if ctx.renderer.supports_inline_ui() {
+                    Some(PlaceholderSpinner::new(
+                        ctx.handle,
+                        restore_status_left,
+                        restore_status_right,
+                        "Loading lightweight model lists...",
+                    ))
+                } else {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "Loading lightweight model lists...")?;
+                    None
+                };
+                let result = build_lightweight_palette_view(ctx.config, vt_cfg.as_ref()).await;
+                drop(loading_spinner);
+                result
+            };
+            if show_lightweight_model_palette(ctx.renderer, &view, None)? {
+                *ctx.palette_state = Some(ActivePalette::LightweightModel {
+                    view: Box::new(view),
+                });
             }
             ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
             Ok(SlashCommandControl::Continue)
