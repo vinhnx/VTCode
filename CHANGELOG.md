@@ -2,6 +2,26 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.96.10 - 2026-04-02
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix ast-grep init (0e622cd5) 
+- Fix TUI OAuth cancel without exiting VT Code (ce034434) 
+- Enhance modal rendering with title chrome and divider styles (339be092) 
+- Improve modal list dividers and highlight styling (803a63b5) 
+- Enhance modal rendering with improved styles and background handling (0b4278fb) 
+- Refactor palette rendering to include dividers and improve header styling (a4dde38f) 
+- Add Ghostty VT integration and update dependencies (53431d41) 
+- Add clear background rendering to floating modal and improve tests (c6b1afa0) 
+- Implement reborrow method in SlashCommandContext, update agents command usage, and change OpenAI provider settings in configuration. (2fb54da2) 
+- Update example blocked patterns in vtcode.toml.example (15c69b16) 
+- Enhance /compact command functionality and update configuration settings (8c31b153) 
+- Add freeform default handling to wizard steps and update related prompts (39926d0b) 
+### Contributors
+@vinhnx
 ## 0.96.9 - 2026-03-31
 
 ### Highlights
