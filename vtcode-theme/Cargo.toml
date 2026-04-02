@@ -20,8 +20,8 @@ catppuccin = { version = "2.7", default-features = false }
 hashbrown = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = "0.12"
-vtcode-commons = { path = "../vtcode-commons", version = "0.96.11" }
-vtcode-config = { path = "../vtcode-config", version = "0.96.11" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.96.12" }
+vtcode-config = { path = "../vtcode-config", version = "0.96.12" }
 
 [lints]
 workspace = true

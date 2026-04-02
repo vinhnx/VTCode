@@ -32,8 +32,8 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = "0.25.4"
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.96.11" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.96.11" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.96.12" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.96.12" }
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
 walkdir = { workspace = true }
