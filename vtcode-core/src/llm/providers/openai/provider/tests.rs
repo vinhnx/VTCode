@@ -60,9 +60,7 @@ async fn start_mock_server_or_skip() -> Option<MockServer> {
         Ok(server) => Some(server),
         Err(err) if err.is_panic() => {
             let message = panic_message(err.into_panic());
-            if message.contains("Operation not permitted")
-                || message.contains("PermissionDenied")
-            {
+            if message.contains("Operation not permitted") || message.contains("PermissionDenied") {
                 return None;
             }
             panic!("mock server should start: {message}");

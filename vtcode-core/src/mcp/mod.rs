@@ -350,8 +350,9 @@ mod tests {
         capabilities.roots = Some(RootsCapabilities {
             list_changed: Some(true),
         });
-        let params = InitializeRequestParams::new(capabilities, Implementation::new("vtcode", "1.0"))
-            .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
+        let params =
+            InitializeRequestParams::new(capabilities, Implementation::new("vtcode", "1.0"))
+                .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
 
         let converted: InitializeRequestParams = convert_to_rmcp(params.clone()).unwrap();
         // Verify the conversion succeeded by checking the name

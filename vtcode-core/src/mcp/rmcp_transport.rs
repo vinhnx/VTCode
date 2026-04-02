@@ -3,9 +3,9 @@
 /// This module provides wrappers around rmcp's transport types to integrate
 /// with VT Code's configuration and error handling.
 use anyhow::{Context, Result};
-use rmcp_reqwest::header::HeaderMap;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::TokioChildProcess;
+use rmcp_reqwest::header::HeaderMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use tokio::process::Command;

@@ -127,11 +127,11 @@ where
                 match ToolPolicyManager::new_with_config_path(&config_path)
                     .await
                     .with_context(|| {
-                    format!(
-                        "failed to initialize tool policy manager at {}",
-                        config_path.display()
-                    )
-                }) {
+                        format!(
+                            "failed to initialize tool policy manager at {}",
+                            config_path.display()
+                        )
+                    }) {
                     Ok(manager) => manager,
                     Err(err) => {
                         self.report_error(&err);
@@ -200,9 +200,11 @@ mod tests {
         let builder = RegistryBuilder::new(&paths, &telemetry, &reporter, &formatter);
         let registry = builder.build().await.expect("registry");
 
-        assert!(registry
-            .has_tool(vtcode_core::config::constants::tools::UNIFIED_SEARCH)
-            .await);
+        assert!(
+            registry
+                .has_tool(vtcode_core::config::constants::tools::UNIFIED_SEARCH)
+                .await
+        );
 
         let events = telemetry.take();
         assert!(matches!(
