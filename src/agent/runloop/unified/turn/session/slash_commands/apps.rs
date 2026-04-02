@@ -488,6 +488,7 @@ fn build_editor_config_steps(
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
         WizardStep {
             title: "Preset".to_string(),
@@ -505,6 +506,7 @@ fn build_editor_config_steps(
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
         WizardStep {
             title: "Suspend TUI".to_string(),
@@ -543,6 +545,7 @@ fn build_editor_config_steps(
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
         WizardStep {
             title: "Next".to_string(),
@@ -571,6 +574,7 @@ fn build_editor_config_steps(
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
     ]
 }
@@ -587,28 +591,7 @@ async fn prompt_for_custom_editor_command(
     } else {
         editor_config.preferred_editor.clone()
     };
-    let step = WizardStep {
-        title: "Custom command".to_string(),
-        question: "Enter the raw editor command. Include any flags you want VT Code to keep using."
-            .to_string(),
-        items: vec![InlineListItem {
-            title: "Save command".to_string(),
-            subtitle: Some("Press Tab to type the command, then Enter to save.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: EDITOR_CUSTOM_COMMAND_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("editor command custom raw command".to_string()),
-        }],
-        completed: false,
-        answer: None,
-        allow_freeform: true,
-        freeform_label: Some("Editor command".to_string()),
-        freeform_placeholder: Some(placeholder),
-    };
+    let step = build_custom_editor_command_step(placeholder);
 
     let outcome = show_wizard_modal_and_wait(
         ctx.handle,
@@ -651,6 +634,32 @@ async fn prompt_for_custom_editor_command(
     }
 
     Ok(value)
+}
+
+fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
+    WizardStep {
+        title: "Custom command".to_string(),
+        question: "Enter the raw editor command. Include any flags you want VT Code to keep using."
+            .to_string(),
+        items: vec![InlineListItem {
+            title: "Save command".to_string(),
+            subtitle: Some("Press Tab to type the command, then Enter to save.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: EDITOR_CUSTOM_COMMAND_ID.to_string(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            search_value: Some("editor command custom raw command".to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some("Editor command".to_string()),
+        freeform_placeholder: Some(placeholder.clone()),
+        freeform_default: Some(placeholder),
+    }
 }
 
 fn parse_editor_workflow_answers(
@@ -815,5 +824,13 @@ mod tests {
         assert!(should_wait_for_editor(false, true));
         assert!(!should_wait_for_editor(true, false));
         assert!(should_wait_for_editor(true, true));
+    }
+
+    #[test]
+    fn custom_editor_command_step_uses_placeholder_as_default() {
+        let step = build_custom_editor_command_step("code --wait".to_string());
+
+        assert_eq!(step.freeform_placeholder.as_deref(), Some("code --wait"));
+        assert_eq!(step.freeform_default.as_deref(), Some("code --wait"));
     }
 }

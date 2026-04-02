@@ -717,6 +717,7 @@ async fn prompt_text(
         allow_freeform: true,
         freeform_label: Some(freeform_label.to_string()),
         freeform_placeholder: Some(placeholder.to_string()),
+        freeform_default: None,
     };
 
     let outcome = show_wizard_modal_and_wait(

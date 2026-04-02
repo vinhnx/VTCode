@@ -880,6 +880,7 @@ async fn handle_memory_action(
                 "Enter the number of `memory_summary.md` lines to inject at startup.",
                 "Lines",
                 &current.to_string(),
+                Some(current.to_string()),
             )
             .await?
             else {
@@ -905,6 +906,7 @@ async fn handle_memory_action(
                 "Enter the byte budget loaded from `memory_summary.md` at startup.",
                 "Bytes",
                 &current.to_string(),
+                Some(current.to_string()),
             )
             .await?
             else {
@@ -930,6 +932,7 @@ async fn handle_memory_action(
                 "Enter the maximum recursive `@path` import depth for AGENTS.md and rules.",
                 "Depth",
                 &current.to_string(),
+                Some(current.to_string()),
             )
             .await?
             else {
@@ -951,6 +954,9 @@ async fn handle_memory_action(
                 "Enter a user-level persistent memory directory override.",
                 "Directory",
                 &placeholder,
+                ctx.vt_cfg
+                    .as_ref()
+                    .and_then(|cfg| cfg.agent.persistent_memory.directory_override.clone()),
             )
             .await?
             else {
@@ -976,6 +982,7 @@ async fn handle_memory_action(
                 "Add an exclude glob for AGENTS.md or `.vtcode/rules/` discovery.",
                 "Pattern",
                 "**/other-team/.vtcode/rules/**",
+                None,
             )
             .await?
             else {
@@ -1005,6 +1012,7 @@ async fn handle_memory_action(
                 "Enter the exact exclude pattern to remove.",
                 "Pattern",
                 "**/other-team/.vtcode/rules/**",
+                None,
             )
             .await?
             else {
@@ -1327,8 +1335,18 @@ async fn prompt_required_text(
     question: &str,
     freeform_label: &str,
     placeholder: &str,
+    default_value: Option<String>,
 ) -> Result<Option<String>> {
-    let Some(value) = prompt_text(ctx, title, question, freeform_label, placeholder, false).await?
+    let Some(value) = prompt_text(
+        ctx,
+        title,
+        question,
+        freeform_label,
+        placeholder,
+        default_value,
+        false,
+    )
+    .await?
     else {
         return Ok(None);
     };
@@ -1347,8 +1365,18 @@ async fn prompt_optional_text(
     question: &str,
     freeform_label: &str,
     placeholder: &str,
+    default_value: Option<String>,
 ) -> Result<Option<String>> {
-    prompt_text(ctx, title, question, freeform_label, placeholder, true).await
+    prompt_text(
+        ctx,
+        title,
+        question,
+        freeform_label,
+        placeholder,
+        default_value,
+        true,
+    )
+    .await
 }
 
 async fn prompt_text(
@@ -1357,29 +1385,10 @@ async fn prompt_text(
     question: &str,
     freeform_label: &str,
     placeholder: &str,
+    default_value: Option<String>,
     allow_empty: bool,
 ) -> Result<Option<String>> {
-    let step = WizardStep {
-        title: "Input".to_string(),
-        question: question.to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: MEMORY_PROMPT_QUESTION_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit memory input".to_string()),
-        }],
-        completed: false,
-        answer: None,
-        allow_freeform: true,
-        freeform_label: Some(freeform_label.to_string()),
-        freeform_placeholder: Some(placeholder.to_string()),
-    };
+    let step = build_diagnostics_prompt_step(question, freeform_label, placeholder, default_value);
 
     let outcome = show_wizard_modal_and_wait(
         ctx.handle,
@@ -1423,6 +1432,36 @@ async fn prompt_text(
         return Ok(None);
     }
     Ok(Some(trimmed))
+}
+
+fn build_diagnostics_prompt_step(
+    question: &str,
+    freeform_label: &str,
+    placeholder: &str,
+    default_value: Option<String>,
+) -> WizardStep {
+    WizardStep {
+        title: "Input".to_string(),
+        question: question.to_string(),
+        items: vec![InlineListItem {
+            title: "Submit".to_string(),
+            subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: MEMORY_PROMPT_QUESTION_ID.to_string(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            search_value: Some("submit memory input".to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some(freeform_label.to_string()),
+        freeform_placeholder: Some(placeholder.to_string()),
+        freeform_default: default_value,
+    }
 }
 
 pub(crate) async fn handle_run_doctor(
@@ -1667,5 +1706,34 @@ mod tests {
                 .and_then(TomlValue::as_bool),
             Some(false)
         );
+    }
+
+    #[test]
+    fn diagnostics_prompt_step_keeps_placeholder_only_when_no_default_is_set() {
+        let step = build_diagnostics_prompt_step(
+            "Add an exclude glob.",
+            "Pattern",
+            "**/other-team/.vtcode/rules/**",
+            None,
+        );
+
+        assert_eq!(
+            step.freeform_placeholder.as_deref(),
+            Some("**/other-team/.vtcode/rules/**")
+        );
+        assert_eq!(step.freeform_default, None);
+    }
+
+    #[test]
+    fn diagnostics_prompt_step_uses_explicit_current_value_default() {
+        let step = build_diagnostics_prompt_step(
+            "Enter the byte budget.",
+            "Bytes",
+            "25600",
+            Some("25600".to_string()),
+        );
+
+        assert_eq!(step.freeform_placeholder.as_deref(), Some("25600"));
+        assert_eq!(step.freeform_default.as_deref(), Some("25600"));
     }
 }

@@ -985,6 +985,7 @@ async fn prompt_subagent_model_id(
                 allow_freeform: true,
                 freeform_label: Some("Model id".to_string()),
                 freeform_placeholder: Some("gpt-5.4".to_string()),
+                freeform_default: None,
             }],
             0,
             None,

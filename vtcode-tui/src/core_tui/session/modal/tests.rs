@@ -73,6 +73,28 @@ fn make_key_with_modifiers(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent::new(code, modifiers)
 }
 
+fn single_custom_note_step(default: Option<&str>) -> WizardStep {
+    WizardStep {
+        title: "Q1".to_owned(),
+        question: "Pick".to_owned(),
+        items: vec![InlineListItem {
+            title: "Custom note".to_owned(),
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: "q1".to_owned(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            ..base_item("Custom note")
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some("Custom note".to_string()),
+        freeform_placeholder: Some("Type your response...".to_string()),
+        freeform_default: default.map(ToOwned::to_owned),
+    }
+}
+
 #[test]
 fn wizard_tabbed_list_allows_tab_switching_without_completion() {
     let steps = vec![
@@ -93,6 +115,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
         WizardStep {
             title: "Tab B".to_owned(),
@@ -111,6 +134,7 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
     ];
 
@@ -152,6 +176,7 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        freeform_default: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -208,6 +233,7 @@ fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        freeform_default: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -265,6 +291,7 @@ fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
         allow_freeform: true,
         freeform_label: Some("Other".to_owned()),
         freeform_placeholder: Some("Type your response...".to_owned()),
+        freeform_default: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -301,6 +328,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
         WizardStep {
             title: "Q2".to_owned(),
@@ -319,6 +347,7 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             allow_freeform: false,
             freeform_label: None,
             freeform_placeholder: None,
+            freeform_default: None,
         },
     ];
 
@@ -373,6 +402,7 @@ fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
         allow_freeform: true,
         freeform_label: Some("Custom note".to_string()),
         freeform_placeholder: Some("Type your response...".to_string()),
+        freeform_default: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -413,6 +443,127 @@ fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
 }
 
 #[test]
+fn wizard_inline_custom_note_uses_default_on_empty_enter() {
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        vec![single_custom_note_step(Some("10m"))],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
+            assert_eq!(selections.len(), 1);
+            match &selections[0] {
+                InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                    assert_eq!(other.as_deref(), Some("10m"));
+                }
+                other => panic!("unexpected selection: {:?}", other),
+            }
+        }
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_inline_custom_note_accepts_empty_string_default_on_enter() {
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        vec![single_custom_note_step(Some(""))],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
+            assert_eq!(selections.len(), 1);
+            match &selections[0] {
+                InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                    assert_eq!(other.as_deref(), Some(""));
+                }
+                other => panic!("unexpected selection: {:?}", other),
+            }
+        }
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_inline_custom_note_without_default_still_requires_input() {
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        vec![single_custom_note_step(None)],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(wizard.notes_active());
+}
+
+#[test]
+fn wizard_inline_custom_note_typed_text_overrides_default() {
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        vec![single_custom_note_step(Some("10m"))],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let _ = wizard.handle_key_event(&make_key(KeyCode::Char('2')), ModalKeyModifiers::default());
+    let _ = wizard.handle_key_event(&make_key(KeyCode::Char('0')), ModalKeyModifiers::default());
+    let _ = wizard.handle_key_event(&make_key(KeyCode::Char('m')), ModalKeyModifiers::default());
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => match &selections[0] {
+            InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                assert_eq!(other.as_deref(), Some("20m"));
+            }
+            other => panic!("unexpected selection: {:?}", other),
+        },
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_multistep_mouse_click_uses_default_submission_path() {
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        vec![single_custom_note_step(Some("10m"))],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_mouse_click(0);
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => match &selections[0] {
+            InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                assert_eq!(other.as_deref(), Some("10m"));
+            }
+            other => panic!("unexpected selection: {:?}", other),
+        },
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
 fn wizard_multistep_numeric_select_submits() {
     let steps = vec![WizardStep {
         title: "Q1".to_owned(),
@@ -442,6 +593,7 @@ fn wizard_multistep_numeric_select_submits() {
         allow_freeform: false,
         freeform_label: None,
         freeform_placeholder: None,
+        freeform_default: None,
     }];
 
     let mut wizard = WizardModalState::new(

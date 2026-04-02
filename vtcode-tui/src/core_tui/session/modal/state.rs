@@ -56,6 +56,7 @@ pub struct WizardStepState {
     pub allow_freeform: bool,
     pub freeform_label: Option<String>,
     pub freeform_placeholder: Option<String>,
+    pub freeform_default: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1054,6 +1055,7 @@ impl WizardModalState {
                     allow_freeform: step.allow_freeform,
                     freeform_label: step.freeform_label,
                     freeform_placeholder: step.freeform_placeholder,
+                    freeform_default: step.freeform_default,
                 }
             })
             .collect();
@@ -1290,6 +1292,7 @@ impl WizardModalState {
             };
 
             let clicked_custom_note = is_custom_note_selection(selection);
+            let already_selected = step.list.list_state.selected() == Some(visible_index);
 
             if self.mode == WizardModalMode::TabbedList {
                 step.list.list_state.select(Some(visible_index));
@@ -1297,19 +1300,18 @@ impl WizardModalState {
                     step.list.ensure_visible(rows);
                 }
 
-                if clicked_custom_note && step.notes.trim().is_empty() {
+                if clicked_custom_note
+                    && step.notes.trim().is_empty()
+                    && !step.has_freeform_default()
+                {
                     step.notes_active = true;
                     return ModalListKeyResult::Redraw;
                 }
 
                 true
+            } else if already_selected {
+                true
             } else {
-                if step.list.list_state.selected() == Some(visible_index) {
-                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
-                        OverlayEvent::Submitted(OverlaySubmission::Selection(selection.clone())),
-                    ));
-                }
-
                 step.list.list_state.select(Some(visible_index));
                 if let Some(rows) = step.list.viewport_rows {
                     step.list.ensure_visible(rows);
@@ -1359,13 +1361,12 @@ impl WizardModalState {
                     selected,
                     other,
                 } => {
-                    let notes = step.notes.trim();
                     let next_other = if other.is_some() {
-                        Some(notes.to_string())
-                    } else if notes.is_empty() {
+                        step.submitted_freeform_value()
+                    } else if step.notes.trim().is_empty() {
                         None
                     } else {
-                        Some(notes.to_string())
+                        Some(step.notes.trim().to_string())
                     };
                     InlineListSelection::RequestUserInputAnswer {
                         question_id,
@@ -1433,6 +1434,12 @@ impl WizardModalState {
             })
     }
 
+    fn current_step_has_freeform_default(&self) -> bool {
+        self.steps
+            .get(self.current_step)
+            .is_some_and(WizardStepState::has_freeform_default)
+    }
+
     pub fn unanswered_count(&self) -> usize {
         self.steps.iter().filter(|step| !step.completed).count()
     }
@@ -1476,14 +1483,23 @@ impl WizardModalState {
 
         if self.notes_active() {
             if custom_note_selected {
-                vec!["type custom note | enter to continue | esc to clear".to_string()]
+                vec![if self.current_step_has_freeform_default() {
+                    "type custom note | enter to submit or accept default | esc to clear"
+                        .to_string()
+                } else {
+                    "type custom note | enter to continue | esc to clear".to_string()
+                }]
             } else {
                 vec!["tab or esc to clear notes | enter to submit answer".to_string()]
             }
         } else {
             let mut lines = Vec::new();
             if custom_note_selected {
-                lines.push("type custom note | enter to continue".to_string());
+                lines.push(if self.current_step_has_freeform_default() {
+                    "type custom note | enter to accept default".to_string()
+                } else {
+                    "type custom note | enter to continue".to_string()
+                });
             } else if step.allow_freeform {
                 lines.push("tab to add notes | enter to submit answer".to_string());
             } else {
@@ -1514,6 +1530,7 @@ impl WizardModalState {
         if self.current_step_requires_custom_note_input()
             && let Some(step) = self.steps.get_mut(self.current_step)
             && step.notes.trim().is_empty()
+            && !step.has_freeform_default()
         {
             step.notes_active = true;
             return ModalListKeyResult::Redraw;
@@ -1544,5 +1561,20 @@ impl WizardModalState {
     /// Check if all steps are completed
     pub fn all_steps_completed(&self) -> bool {
         self.steps.iter().all(|step| step.completed)
+    }
+}
+
+impl WizardStepState {
+    fn has_freeform_default(&self) -> bool {
+        self.freeform_default.is_some()
+    }
+
+    fn submitted_freeform_value(&self) -> Option<String> {
+        let notes = self.notes.trim();
+        if !notes.is_empty() {
+            return Some(notes.to_string());
+        }
+
+        self.freeform_default.clone()
     }
 }

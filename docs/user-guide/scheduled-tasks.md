@@ -71,6 +71,8 @@ Command summary:
 - `vtcode schedule install-service` installs a user service for the daemon
 - `vtcode schedule uninstall-service` removes the installed user service
 
+In the interactive `/schedule` wizard, pressing `Enter` on an empty inline input accepts the displayed default value for fields such as prompt cadence, label, and workspace path.
+
 Behavior:
 
 - Task definitions are stored under the VT Code config directory in `scheduled_tasks/tasks/`

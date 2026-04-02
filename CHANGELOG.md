@@ -5,6 +5,9 @@ All notable changes to vtcode will be documented in this file.
 ## 0.96.9 - 2026-03-31
 
 ### Highlights
+#### Bug Fixes
+
+- Make wizard modal `Enter` apply explicit freeform defaults and advance consistently with mouse submission
 ### Other Changes
 ### Contributors
 @vinhnx

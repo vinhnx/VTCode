@@ -119,4 +119,5 @@ pub struct WizardStep {
     pub allow_freeform: bool,
     pub freeform_label: Option<String>,
     pub freeform_placeholder: Option<String>,
+    pub freeform_default: Option<String>,
 }

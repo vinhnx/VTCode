@@ -953,6 +953,7 @@ fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                freeform_default: None,
             }],
             current_step: 0,
             search: None,
@@ -1009,6 +1010,7 @@ fn plain_click_emits_open_url_event_for_wrapped_wizard_modal_auth_link() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                freeform_default: None,
             }],
             current_step: 0,
             search: None,
@@ -1077,6 +1079,7 @@ fn modal_auth_text_in_app_session_is_selectable_and_copied() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                freeform_default: None,
             }],
             current_step: 0,
             search: None,
@@ -1668,6 +1671,7 @@ fn app_session_double_click_emits_open_url_event_for_modal_auth_link() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                freeform_default: None,
             }],
             current_step: 0,
             search: None,
@@ -4243,6 +4247,32 @@ fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
         allow_freeform: true,
         freeform_label: None,
         freeform_placeholder: None,
+        freeform_default: None,
+    }
+}
+
+fn request_user_input_custom_step(question_id: &str, label: &str, default: &str) -> WizardStep {
+    WizardStep {
+        title: format!("Question {question_id}"),
+        question: format!("Enter {question_id}"),
+        items: vec![InlineListItem {
+            title: label.to_string(),
+            subtitle: Some("Input".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: question_id.to_string(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            search_value: Some(label.to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some(label.to_string()),
+        freeform_placeholder: Some(default.to_string()),
+        freeform_default: Some(default.to_string()),
     }
 }
 
@@ -4847,6 +4877,51 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
 }
 
 #[test]
+fn wizard_multistep_defaulted_enter_advances_and_returns_default_answer() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let steps = vec![
+        request_user_input_custom_step("q1", "Cadence", "10m"),
+        request_user_input_step("q2", "Priority"),
+    ];
+
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
+            title: "Questions".to_string(),
+            steps,
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        })),
+    });
+    assert!(session.wizard_overlay().is_some());
+
+    let first_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(first_submit.is_none());
+    assert!(session.wizard_overlay().is_some());
+    assert_eq!(
+        session.wizard_overlay().map(|wizard| wizard.current_step),
+        Some(1)
+    );
+
+    let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    match final_submit {
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(
+            selections,
+        )))) => {
+            assert_eq!(selections.len(), 2);
+            match &selections[0] {
+                InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                    assert_eq!(other.as_deref(), Some("10m"));
+                }
+                other => panic!("unexpected first selection: {:?}", other),
+            }
+        }
+        other => panic!("Expected final wizard submission, got {:?}", other),
+    }
+    assert!(session.wizard_overlay().is_none());
+}
+
+#[test]
 fn wizard_search_paste_updates_filter_in_session_handle_event() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let (tx, _rx) = mpsc::unbounded_channel();
@@ -4880,6 +4955,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
                 allow_freeform: false,
                 freeform_label: None,
                 freeform_placeholder: None,
+                freeform_default: None,
             }],
             current_step: 0,
             search: Some(InlineListSearchConfig {

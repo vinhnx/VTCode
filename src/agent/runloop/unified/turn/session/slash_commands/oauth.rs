@@ -543,6 +543,7 @@ async fn prompt_openai_manual_callback_input(
         allow_freeform: true,
         freeform_label: Some("Redirect URL or query".to_string()),
         freeform_placeholder: Some(openai_manual_placeholder(callback_port)),
+        freeform_default: None,
     };
 
     let outcome = show_wizard_modal_and_wait(

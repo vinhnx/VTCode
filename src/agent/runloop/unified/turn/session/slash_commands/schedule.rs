@@ -754,29 +754,7 @@ async fn prompt_text(
     placeholder: &str,
     allow_empty: bool,
 ) -> Result<Option<String>> {
-    let step = WizardStep {
-        title: "Input".to_string(),
-        question: question.to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some(
-                "Press Enter to accept the placeholder, or Tab to type a custom value.".to_string(),
-            ),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: SCHEDULE_INPUT_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit input".to_string()),
-        }],
-        completed: false,
-        answer: None,
-        allow_freeform: true,
-        freeform_label: Some(freeform_label.to_string()),
-        freeform_placeholder: Some(placeholder.to_string()),
-    };
+    let step = build_schedule_prompt_step(question, freeform_label, placeholder);
 
     let outcome = show_wizard_modal_and_wait(
         ctx.handle,
@@ -815,6 +793,37 @@ async fn prompt_text(
             .line(MessageStyle::Info, "Input was empty. Nothing executed.")?;
     }
     Ok(resolved)
+}
+
+fn build_schedule_prompt_step(
+    question: &str,
+    freeform_label: &str,
+    placeholder: &str,
+) -> WizardStep {
+    WizardStep {
+        title: "Input".to_string(),
+        question: question.to_string(),
+        items: vec![InlineListItem {
+            title: "Submit".to_string(),
+            subtitle: Some(
+                "Press Enter to accept the placeholder, or Tab to type a custom value.".to_string(),
+            ),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: SCHEDULE_INPUT_ID.to_string(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            search_value: Some("submit input".to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some(freeform_label.to_string()),
+        freeform_placeholder: Some(placeholder.to_string()),
+        freeform_default: Some(placeholder.to_string()),
+    }
 }
 
 fn format_task_time(value: Option<chrono::DateTime<chrono::Utc>>) -> String {
@@ -893,7 +902,7 @@ fn resolve_prompt_submission(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_prompt_submission;
+    use super::{build_schedule_prompt_step, resolve_prompt_submission};
 
     #[test]
     fn schedule_prompt_submission_accepts_placeholder_on_empty_enter() {
@@ -925,5 +934,13 @@ mod tests {
             resolve_prompt_submission(Some(String::new()), "", false),
             None
         );
+    }
+
+    #[test]
+    fn schedule_prompt_step_uses_placeholder_as_default() {
+        let step = build_schedule_prompt_step("Enter a cadence.", "Cadence", "10m");
+
+        assert_eq!(step.freeform_placeholder.as_deref(), Some("10m"));
+        assert_eq!(step.freeform_default.as_deref(), Some("10m"));
     }
 }

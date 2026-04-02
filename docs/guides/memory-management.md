@@ -156,6 +156,8 @@ The focused controls cover:
 
 `directory_override` is intentionally restricted to system, user, or project-profile config layers. A workspace-root `vtcode.toml` cannot redirect persistent memory storage.
 
+For current-value fields such as startup line limits, byte limits, and import depth, pressing `Enter` on an empty inline input keeps the displayed value.
+
 ## `/init` and Scaffolding
 
 `/init` still generates the root `AGENTS.md`, and now also scaffolds:
