@@ -1,0 +1,18 @@
+[package]
+name = "vtcode-terminal-detection"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Shared terminal detection primitives for VT Code"
+license.workspace = true
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-terminal-detection"
+
+[dependencies]
+anyhow = { workspace = true }
+dirs = { workspace = true }
+
+[lints]
+workspace = true

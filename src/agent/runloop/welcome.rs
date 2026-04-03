@@ -9,9 +9,9 @@ use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc::{self, ProjectDocOptions};
-use vtcode_core::terminal_setup::detector::{TerminalFeature, TerminalType};
 use vtcode_core::ui::slash::find_visible_command;
 use vtcode_core::utils::common::summarize_workspace_languages;
+use vtcode_terminal_detection::{TerminalFeature, TerminalType};
 use vtcode_tui::app::InlineHeaderHighlight;
 
 #[derive(Default, Clone)]

@@ -4,6 +4,8 @@
 //! call sites continue to access configuration types and helpers through
 //! `vtcode_core::config`.
 
+use vtcode_terminal_detection::is_ghostty_terminal;
+
 pub mod acp;
 pub mod api;
 pub mod api_keys;
@@ -161,13 +163,7 @@ fn should_force_report_all_keys(
 
     // Ghostty on macOS needs "report all keys" enabled so bare Command presses
     // surface as modifier-key events that transcript link clicks can merge in.
-    terminal_name_contains(term_program, "ghostty") || terminal_name_contains(term, "ghostty")
-}
-
-fn terminal_name_contains(value: Option<&str>, needle: &str) -> bool {
-    value
-        .map(|value| value.to_ascii_lowercase().contains(needle))
-        .unwrap_or(false)
+    is_ghostty_terminal(term_program, term)
 }
 
 #[cfg(test)]

@@ -58,6 +58,7 @@ unicode-segmentation = "1.13"
 unicode-width = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.96.12" }
 vtcode-config = { path = "../vtcode-config", version = "0.96.12" }
+vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.96.12" }
 vtcode-theme = { path = "../vtcode-theme", version = "0.96.12" }
 vtcode-vim = { path = "../vtcode-vim", version = "0.96.12" }
 

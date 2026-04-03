@@ -7,13 +7,12 @@ use anyhow::Result;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::models::ModelId;
+use vtcode_terminal_detection::TerminalType;
 use vtcode_tui::app::InlineHandle;
 
 use super::status_line_command::run_status_line_command;
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
 use vtcode_core::llm::providers::clean_reasoning_text;
-use vtcode_core::terminal_setup::detector::TerminalType;
-
 #[derive(Default, Clone)]
 pub(crate) struct InputStatusState {
     pub(crate) terminal_name: Option<String>,

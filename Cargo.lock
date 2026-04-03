@@ -6372,6 +6372,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-terminal-detection",
  "vtcode-tui",
  "walkdir",
  "webbrowser",
@@ -6620,6 +6621,7 @@ dependencies = [
  "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
  "vtcode-markdown-store",
+ "vtcode-terminal-detection",
  "vtcode-theme",
  "vtcode-tui",
  "walkdir",
@@ -6724,6 +6726,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-terminal-detection"
+version = "0.96.12"
+dependencies = [
+ "anyhow",
+ "dirs",
+]
+
+[[package]]
 name = "vtcode-theme"
 version = "0.96.12"
 dependencies = [
@@ -6797,6 +6807,7 @@ dependencies = [
  "unicode-width",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-terminal-detection",
  "vtcode-theme",
  "vtcode-vim",
 ]

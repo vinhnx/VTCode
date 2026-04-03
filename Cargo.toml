@@ -100,6 +100,7 @@ members = [
     "vtcode-auth",
     "vtcode-acp",
     "vtcode-core",
+    "vtcode-terminal-detection",
     "vtcode-ghostty-vt-sys",
     "vtcode-theme",
     "vtcode-tui",
@@ -155,6 +156,7 @@ vtcode-commons = { path = "vtcode-commons", version = "0.96.12" }
 vtcode-config = { path = "vtcode-config", version = "0.96.12" }
 vtcode-auth = { path = "vtcode-auth", version = "0.96.12" }
 vtcode-core = { path = "vtcode-core", version = "0.96.12", default-features = false }
+vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.96.12" }
 vtcode-tui = { path = "vtcode-tui", version = "0.96.12" }
 anyhow = { workspace = true }
 clap = { workspace = true }
