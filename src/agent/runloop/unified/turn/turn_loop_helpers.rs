@@ -723,17 +723,15 @@ pub(super) async fn maybe_handle_tool_loop_limit(
             }
             let previous_max_tool_loops = *current_max_tool_loops;
             *current_max_tool_loops = (*current_max_tool_loops).saturating_add(increment);
-            {
-                let mut validator = ctx.safety_validator.write().await;
-                let current_session_limit = validator.get_session_limit();
-                validator.set_limits(*current_max_tool_loops, current_session_limit);
-                tracing::info!(
-                    "Updated safety validator limits: turn={} (was {}), session={}",
-                    *current_max_tool_loops,
-                    previous_max_tool_loops,
-                    current_session_limit
-                );
-            }
+            let current_session_limit = ctx.safety_validator.get_session_limit();
+            ctx.safety_validator
+                .set_limits(*current_max_tool_loops, current_session_limit);
+            tracing::info!(
+                "Updated safety validator limits: turn={} (was {}), session={}",
+                *current_max_tool_loops,
+                previous_max_tool_loops,
+                current_session_limit
+            );
             display_status(
                 ctx.renderer,
                 &format!(

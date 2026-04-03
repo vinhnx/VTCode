@@ -117,12 +117,10 @@ async fn run_safety_validation_loop(
     effective_args: &serde_json::Value,
 ) -> Result<Option<ValidationResult>> {
     loop {
-        let validation_result = {
-            let mut validator = ctx.safety_validator.write().await;
-            validator
-                .validate_call(canonical_tool_name, effective_args)
-                .await
-        };
+        let validation_result = ctx
+            .safety_validator
+            .validate_call(canonical_tool_name, effective_args)
+            .await;
 
         match validation_result {
             Ok(_) => return Ok(None),
@@ -137,8 +135,7 @@ async fn run_safety_validation_loop(
                 .await
                 {
                     Ok(Some(increment)) => {
-                        let mut validator = ctx.safety_validator.write().await;
-                        validator.increase_session_limit(increment);
+                        ctx.safety_validator.increase_session_limit(increment);
                     }
                     _ => {
                         ctx.push_tool_response(

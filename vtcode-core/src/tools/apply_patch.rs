@@ -8,13 +8,11 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_json::json;
 
 pub use crate::tools::editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
-
-pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
-    "Prefer stable semantic @@ anchors such as function, class, method, or impl names.";
-pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Alias for input";
+pub use vtcode_utility_tool_specs::{
+    APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, with_semantic_anchor_guidance,
+};
 
 /// Input structure for the apply_patch tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -57,35 +55,8 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
     }))
 }
 
-pub fn with_semantic_anchor_guidance(base: &str) -> String {
-    let trimmed = base.trim_end();
-    if trimmed.contains(SEMANTIC_ANCHOR_GUIDANCE) {
-        trimmed.to_string()
-    } else if trimmed.ends_with('.') {
-        format!("{trimmed} {SEMANTIC_ANCHOR_GUIDANCE}")
-    } else {
-        format!("{trimmed}. {SEMANTIC_ANCHOR_GUIDANCE}")
-    }
-}
-
 pub fn parameter_schema(input_description: &str) -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "input": {
-                "type": "string",
-                "description": with_semantic_anchor_guidance(input_description)
-            },
-            "patch": {
-                "type": "string",
-                "description": APPLY_PATCH_ALIAS_DESCRIPTION
-            }
-        },
-        "anyOf": [
-            {"required": ["input"]},
-            {"required": ["patch"]}
-        ]
-    })
+    vtcode_utility_tool_specs::apply_patch_parameter_schema(input_description)
 }
 
 #[cfg(test)]

@@ -83,54 +83,53 @@ impl ToolRegistry {
             .collect();
         let available = self.available_tools().await;
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .enable_full_auto_mode(&normalized_allowed_tools, &available);
     }
 
     pub async fn disable_full_auto_mode(&self) {
-        self.policy_gateway.write().await.disable_full_auto_mode();
+        self.policy_gateway.lock().await.disable_full_auto_mode();
     }
 
     pub async fn set_enforce_safe_mode_prompts(&self, enabled: bool) {
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .set_enforce_safe_mode_prompts(enabled);
     }
 
     pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
         self.policy_gateway
-            .read()
+            .lock()
             .await
             .current_full_auto_allowlist()
     }
 
     pub async fn is_allowed_in_full_auto(&self, tool_name: &str) -> bool {
         self.policy_gateway
-            .read()
+            .lock()
             .await
             .is_allowed_in_full_auto(&self.resolve_runtime_policy_name(tool_name))
     }
 
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
-        self.policy_gateway
-            .write()
-            .await
-            .set_policy_manager(manager);
+        self.policy_gateway.lock().await.set_policy_manager(manager);
         self.sync_policy_catalog().await;
     }
 
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
-        let mut gateway = self.policy_gateway.write().await;
-        gateway
-            .set_tool_policy(&self.resolve_runtime_policy_name(tool_name), policy)
+        let normalized_name = self.resolve_runtime_policy_name(tool_name);
+        self.policy_gateway
+            .lock()
+            .await
+            .set_tool_policy(&normalized_name, policy)
             .await
     }
 
     pub async fn persist_approval_cache_key(&self, approval_key: &str) -> Result<()> {
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .add_approval_cache_key(approval_key)
             .await
@@ -138,7 +137,7 @@ impl ToolRegistry {
 
     pub async fn persist_approval_cache_prefix(&self, prefix_entry: &str) -> Result<()> {
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .add_approval_cache_prefix(prefix_entry)
             .await
@@ -146,7 +145,7 @@ impl ToolRegistry {
 
     pub async fn has_persisted_approval(&self, approval_key: &str) -> bool {
         self.policy_gateway
-            .read()
+            .lock()
             .await
             .has_approval_cache_key(approval_key)
     }
@@ -157,41 +156,37 @@ impl ToolRegistry {
         scope_signature: &str,
     ) -> Option<String> {
         self.policy_gateway
-            .read()
+            .lock()
             .await
             .matching_shell_approval_prefix(command_words, scope_signature)
     }
 
     pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
         self.policy_gateway
-            .read()
+            .lock()
             .await
             .get_tool_policy(&self.resolve_runtime_policy_name(tool_name))
     }
 
     pub async fn reset_tool_policies(&self) -> Result<()> {
-        self.policy_gateway
-            .write()
-            .await
-            .reset_tool_policies()
-            .await
+        self.policy_gateway.lock().await.reset_tool_policies().await
     }
 
     pub async fn allow_all_tools(&self) -> Result<()> {
-        self.policy_gateway.write().await.allow_all_tools().await
+        self.policy_gateway.lock().await.allow_all_tools().await
     }
 
     pub async fn deny_all_tools(&self) -> Result<()> {
-        self.policy_gateway.write().await.deny_all_tools().await
+        self.policy_gateway.lock().await.deny_all_tools().await
     }
 
     pub async fn print_policy_status(&self) {
-        self.policy_gateway.read().await.print_policy_status();
+        self.policy_gateway.lock().await.print_policy_status();
     }
 
     pub async fn apply_config_policies(&self, tools_config: &ToolsConfig) -> Result<()> {
         let normalized_tools_config = self.normalize_tools_config_policies(tools_config);
-        let mut policy_gateway = self.policy_gateway.write().await;
+        let mut policy_gateway = self.policy_gateway.lock().await;
         if let Ok(policy_manager) = policy_gateway.policy_manager_mut() {
             policy_manager
                 .apply_tools_config(&normalized_tools_config)
@@ -269,7 +264,7 @@ impl ToolRegistry {
             .unwrap_or((ToolPolicy::Prompt, false));
 
         {
-            let gateway = self.policy_gateway.read().await;
+            let gateway = self.policy_gateway.lock().await;
             if !gateway.has_policy_manager() {
                 return Ok(match default_permission {
                     ToolPolicy::Allow => ToolPermissionDecision::Allow,
@@ -280,7 +275,7 @@ impl ToolRegistry {
         }
 
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .evaluate_tool_policy(&resolved_name, safe_mode_prompt, default_permission)
             .await
@@ -300,14 +295,14 @@ impl ToolRegistry {
         };
 
         {
-            let gateway = self.policy_gateway.read().await;
+            let gateway = self.policy_gateway.lock().await;
             // Check full-auto allowlist first (aligned with policy_gateway behavior)
             if gateway.has_full_auto_allowlist() && !gateway.is_allowed_in_full_auto(full_name) {
                 return Ok(ToolPermissionDecision::Deny);
             }
         }
 
-        let mut gateway = self.policy_gateway.write().await;
+        let mut gateway = self.policy_gateway.lock().await;
         if let Ok(policy_manager) = gateway.policy_manager_mut() {
             match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
                 ToolPolicy::Allow => {
@@ -316,20 +311,14 @@ impl ToolRegistry {
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
-                    // In full-auto mode with Prompt policy, we still need to check
-                    // if this specific tool is in the allowlist
                     if gateway.has_full_auto_allowlist() {
                         Ok(ToolPermissionDecision::Prompt)
                     } else {
-                        // In normal mode with Prompt policy, default to prompt for MCP tools
-                        // (MCP tools don't have risk metadata for auto-approval like built-in tools)
                         Ok(ToolPermissionDecision::Prompt)
                     }
                 }
             }
         } else {
-            // Policy manager not available - default to prompt for safety
-            // This aligns with MCP tools' default_permission of Prompt
             Ok(ToolPermissionDecision::Prompt)
         }
     }
@@ -341,15 +330,13 @@ impl ToolRegistry {
     /// allowlist restriction.
     pub async fn mark_tool_preapproved(&self, name: &str) {
         let normalized_name = self.resolve_runtime_policy_name(name);
-        let mut gateway = self.policy_gateway.write().await;
-        // Allow all when TUI mode is active (approval already captured by modal)
+        let mut gateway = self.policy_gateway.lock().await;
         if is_tui_mode() {
             gateway.preapprove(&normalized_name);
             tracing::trace!(tool = %normalized_name, "Preapproved tool in TUI mode");
             return;
         }
 
-        // Legacy CLI allowlist of tools that can be preapproved
         const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
 
         if PREAPPROVABLE_TOOLS.contains(&normalized_name.as_str()) {
@@ -385,7 +372,7 @@ impl ToolRegistry {
         };
 
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .persist_mcp_tool_policy(&provider, &tool_name, policy)
             .await

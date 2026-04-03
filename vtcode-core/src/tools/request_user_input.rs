@@ -1,6 +1,9 @@
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::Value;
+use vtcode_collaboration_tool_specs::{
+    request_user_input_description, request_user_input_parameters,
+};
 
 use crate::config::constants::tools;
 use crate::tool_policy::ToolPolicy;
@@ -28,75 +31,11 @@ impl Tool for RequestUserInputTool {
     }
 
     fn description(&self) -> &'static str {
-        "Request user input for one to three short questions and wait for the response. Canonical HITL tool; only available in Plan mode."
+        request_user_input_description()
     }
 
     fn parameter_schema(&self) -> Option<Value> {
-        Some(json!({
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["questions"],
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "description": "Questions to show the user (1-3). Prefer 1 unless multiple independent decisions block progress.",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["id", "header", "question"],
-                        "properties": {
-                            "id": {
-                                "type": "string",
-                                "description": "Stable identifier for mapping answers (snake_case)."
-                            },
-                            "header": {
-                                "type": "string",
-                                "description": "Short header label shown in the UI (12 or fewer chars)."
-                            },
-                            "question": {
-                                "type": "string",
-                                "description": "Single-sentence prompt shown to the user."
-                            },
-                            "focus_area": {
-                                "type": "string",
-                                "description": "Optional short topic hint used to bias auto-suggested choices when options are omitted."
-                            },
-                            "analysis_hints": {
-                                "type": "array",
-                                "description": "Optional weakness/risk hints used by the UI to generate suggested options.",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "maxItems": 8
-                            },
-                            "options": {
-                                "type": "array",
-                                "description": "Optional 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option; the UI provides that automatically. If omitted, the UI auto-suggests options using question text and hints.",
-                                "minItems": 2,
-                                "maxItems": 3,
-                                "items": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "required": ["label", "description"],
-                                    "properties": {
-                                        "label": {
-                                            "type": "string",
-                                            "description": "User-facing label (1-5 words)."
-                                        },
-                                        "description": {
-                                            "type": "string",
-                                            "description": "One short sentence explaining impact/tradeoff if selected."
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }))
+        Some(request_user_input_parameters())
     }
 
     fn default_permission(&self) -> ToolPolicy {

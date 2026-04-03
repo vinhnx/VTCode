@@ -240,7 +240,7 @@ impl ToolRegistry {
                 .collect();
             if let Some(allowlist) = self
                 .policy_gateway
-                .write()
+                .lock()
                 .await
                 .update_mcp_tools(&std_index)
                 .await?

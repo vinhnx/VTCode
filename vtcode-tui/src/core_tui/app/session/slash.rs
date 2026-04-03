@@ -184,10 +184,7 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
     };
     session.ensure_inline_lists_visible_for_trigger();
 
-    match session
-        .slash_palette
-        .update(Some(&prefix), ui::SLASH_SUGGESTION_LIMIT)
-    {
+    match session.slash_palette.update(Some(&prefix)) {
         SlashPaletteUpdate::NoChange => {}
         SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
             if !session.slash_palette.is_empty() {

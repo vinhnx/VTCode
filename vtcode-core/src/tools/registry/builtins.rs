@@ -3,17 +3,20 @@ use std::path::PathBuf;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
-use crate::tools::handlers::session_tool_catalog::{
-    apply_patch_parameters, close_agent_parameters, cron_create_parameters, cron_delete_parameters,
-    cron_list_parameters, list_files_parameters, read_file_parameters, resume_agent_parameters,
-    send_input_parameters, spawn_agent_parameters, unified_exec_parameters,
-    unified_file_parameters, unified_search_parameters, wait_agent_parameters,
-};
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
 };
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
+use vtcode_collaboration_tool_specs::{
+    close_agent_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    wait_agent_parameters,
+};
+use vtcode_utility_tool_specs::{
+    apply_patch_parameters, cron_create_parameters, cron_delete_parameters, cron_list_parameters,
+    list_files_parameters, read_file_parameters, unified_exec_parameters, unified_file_parameters,
+    unified_search_parameters,
+};
 
 use super::registration::{ToolCatalogSource, ToolRegistration};
 use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};

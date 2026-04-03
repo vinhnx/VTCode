@@ -122,6 +122,8 @@ vtcode-auth = { path = "../vtcode-auth", version = "0.96.12" }
 vtcode-config = { path = "../vtcode-config", version = "0.96.12" }
 vtcode-theme = { path = "../vtcode-theme", version = "0.96.12" }
 vtcode-tui = { path = "../vtcode-tui", version = "0.96.12" }
+vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.96.12" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.96.12" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.96.12" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.96.12" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.96.12" }

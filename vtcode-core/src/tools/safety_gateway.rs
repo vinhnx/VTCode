@@ -9,6 +9,7 @@
 //! This provides consistent safety decisions across all tool execution paths.
 
 use hashbrown::HashSet;
+use parking_lot::{Mutex, RwLock};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,7 +17,6 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::config::CommandsConfig;
 use crate::config::constants::tools;
@@ -201,13 +201,13 @@ struct RateLimiterState {
 /// safety decision point.
 pub struct SafetyGateway {
     /// Configuration
-    config: SafetyGatewayConfig,
+    config: RwLock<SafetyGatewayConfig>,
     /// Command policy evaluator (optional, for shell commands)
     command_policy: Option<CommandPolicyEvaluator>,
     /// Rate limiter state
-    rate_state: Arc<Mutex<RateLimiterState>>,
+    rate_state: Mutex<RateLimiterState>,
     /// Preapproved tools for this session
-    preapproved: Arc<Mutex<HashSet<String>>>,
+    preapproved: Mutex<HashSet<String>>,
     /// Dotfile guardian for protected file access
     dotfile_guardian: Option<Arc<DotfileGuardian>>,
 }
@@ -426,10 +426,10 @@ impl SafetyGateway {
     /// Create a new safety gateway with custom configuration
     pub fn with_config(config: SafetyGatewayConfig) -> Self {
         Self {
-            config,
+            config: RwLock::new(config),
             command_policy: None,
-            rate_state: Arc::new(Mutex::new(RateLimiterState::default())),
-            preapproved: Arc::new(Mutex::new(HashSet::new())),
+            rate_state: Mutex::new(RateLimiterState::default()),
+            preapproved: Mutex::new(HashSet::new()),
             dotfile_guardian: None,
         }
     }
@@ -463,62 +463,69 @@ impl SafetyGateway {
     }
 
     /// Enable or disable plan mode
-    pub fn set_plan_mode(&mut self, active: bool) {
-        self.config.plan_mode_active = active;
+    pub fn set_plan_mode(&self, active: bool) {
+        self.config.write().plan_mode_active = active;
     }
 
     /// Set workspace trust level
-    pub fn set_workspace_trust(&mut self, trust: WorkspaceTrust) {
-        self.config.workspace_trust = trust;
+    pub fn set_workspace_trust(&self, trust: WorkspaceTrust) {
+        self.config.write().workspace_trust = trust;
     }
 
     /// Update rate limits
-    pub fn set_limits(&mut self, max_per_turn: usize, max_per_session: usize) {
-        self.config.max_per_turn = max_per_turn;
-        self.config.max_per_session = max_per_session;
+    pub fn set_limits(&self, max_per_turn: usize, max_per_session: usize) {
+        let mut config = self.config.write();
+        config.max_per_turn = max_per_turn;
+        config.max_per_session = max_per_session;
     }
 
     /// Update rate-limiter thresholds.
     pub fn set_rate_limits(
-        &mut self,
+        &self,
         rate_limit_per_second: usize,
         rate_limit_per_minute: Option<usize>,
     ) {
+        let mut config = self.config.write();
         if rate_limit_per_second > 0 {
-            self.config.rate_limit_per_second = rate_limit_per_second;
+            config.rate_limit_per_second = rate_limit_per_second;
         }
-        self.config.rate_limit_per_minute = rate_limit_per_minute.filter(|v| *v > 0);
+        config.rate_limit_per_minute = rate_limit_per_minute.filter(|v| *v > 0);
     }
 
     /// Enable or disable rate-limit enforcement while preserving counters.
-    pub fn set_rate_limit_enforcement(&mut self, enabled: bool) {
-        self.config.enforce_rate_limits = enabled;
+    pub fn set_rate_limit_enforcement(&self, enabled: bool) {
+        self.config.write().enforce_rate_limits = enabled;
     }
 
     /// Increase session limit dynamically
-    pub fn increase_session_limit(&mut self, increment: usize) {
-        let new_max = self.config.max_per_session.saturating_add(increment);
-        self.config.max_per_session = new_max;
+    pub fn increase_session_limit(&self, increment: usize) {
+        let mut config = self.config.write();
+        let new_max = config.max_per_session.saturating_add(increment);
+        config.max_per_session = new_max;
         tracing::info!("Session tool limit increased to {}", new_max);
     }
 
+    pub fn max_per_session(&self) -> usize {
+        self.config.read().max_per_session
+    }
+
     /// Reset turn counters (call at start of new turn)
-    pub async fn start_turn(&self) {
-        let mut state = self.rate_state.lock().await;
+    pub fn start_turn(&self) {
+        let mut state = self.rate_state.lock();
         state.current_turn_count = 0;
         state.calls_per_second.clear();
         state.calls_per_minute.clear();
     }
 
     /// Preapprove a tool for this session
-    pub async fn preapprove(&self, tool_name: &str) {
-        let mut preapproved = self.preapproved.lock().await;
+    pub fn preapprove(&self, tool_name: &str) {
+        let mut preapproved = self.preapproved.lock();
         preapproved.insert(tool_name.to_string());
     }
 
     /// Check if a tool is preapproved
-    pub async fn is_preapproved(&self, tool_name: &str) -> bool {
-        let preapproved = self.preapproved.lock().await;
+    pub fn is_preapproved(&self, tool_name: &str) -> bool {
+        let preapproved = self.preapproved.lock();
         preapproved.contains(tool_name)
     }
 
@@ -570,7 +577,7 @@ impl SafetyGateway {
             "SafetyGateway: checking safety"
         );
 
-        if let Err(err) = self.check_rate_limits().await {
+        if let Err(err) = self.check_rate_limits() {
             tracing::warn!(
                 invocation_id = %inv_id,
                 error = %err,
@@ -627,7 +634,7 @@ impl SafetyGateway {
         }
 
         let now = Instant::now();
-        let mut state = self.rate_state.lock().await;
+        let mut state = self.rate_state.lock();
         match self.check_rate_limits_locked(&mut state, now) {
             Ok(()) => {
                 self.record_execution_locked(&mut state, now);
@@ -671,7 +678,7 @@ impl SafetyGateway {
             return decision;
         }
 
-        if self.config.plan_mode_active && self.is_mutating_call(tool_name, args) {
+        if self.config.read().plan_mode_active && self.is_mutating_call(tool_name, args) {
             let reason = format!(
                 "Tool '{}' is blocked in plan mode (read-only). Switch to edit mode to execute.",
                 tool_name
@@ -697,7 +704,7 @@ impl SafetyGateway {
             return SafetyDecision::Deny(reason);
         }
 
-        if self.is_preapproved(tool_name).await {
+        if self.is_preapproved(tool_name) {
             tracing::trace!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
@@ -719,7 +726,10 @@ impl SafetyGateway {
         let risk_ctx = self.build_risk_context(tool_name, args);
         let risk_level = ToolRiskScorer::calculate_risk(&risk_ctx);
 
-        if ToolRiskScorer::requires_justification(risk_level, self.config.approval_risk_threshold) {
+        if ToolRiskScorer::requires_justification(
+            risk_level,
+            self.config.read().approval_risk_threshold,
+        ) {
             let justification = self.build_approval_justification(tool_name, &risk_level, args);
             tracing::info!(
                 invocation_id = %inv_id,
@@ -747,14 +757,14 @@ impl SafetyGateway {
     }
 
     /// Record that a tool call was executed (for rate limiting)
-    pub async fn record_execution(&self) {
-        let mut state = self.rate_state.lock().await;
+    pub fn record_execution(&self) {
+        let mut state = self.rate_state.lock();
         self.record_execution_locked(&mut state, Instant::now());
     }
 
     /// Check rate limits without recording
-    async fn check_rate_limits(&self) -> Result<(), SafetyError> {
-        let mut state = self.rate_state.lock().await;
+    fn check_rate_limits(&self) -> Result<(), SafetyError> {
+        let mut state = self.rate_state.lock();
         self.check_rate_limits_locked(&mut state, Instant::now())
     }
 
@@ -763,18 +773,19 @@ impl SafetyGateway {
         state: &mut RateLimiterState,
         now: Instant,
     ) -> Result<(), SafetyError> {
+        let config = self.config.read();
         self.prune_rate_windows(state, now);
 
-        if self.config.enforce_rate_limits {
-            if state.calls_per_second.len() >= self.config.rate_limit_per_second {
+        if config.enforce_rate_limits {
+            if state.calls_per_second.len() >= config.rate_limit_per_second {
                 return Err(SafetyError::RateLimitExceeded {
                     current: state.calls_per_second.len(),
-                    max: self.config.rate_limit_per_second,
+                    max: config.rate_limit_per_second,
                     window: "1s",
                 });
             }
 
-            if let Some(limit) = self.config.rate_limit_per_minute
+            if let Some(limit) = config.rate_limit_per_minute
                 && state.calls_per_minute.len() >= limit
             {
                 return Err(SafetyError::RateLimitExceeded {
@@ -785,15 +796,15 @@ impl SafetyGateway {
             }
         }
 
-        if state.current_turn_count >= self.config.max_per_turn {
+        if state.current_turn_count >= config.max_per_turn {
             return Err(SafetyError::TurnLimitReached {
-                max: self.config.max_per_turn,
+                max: config.max_per_turn,
             });
         }
 
-        if state.session_count >= self.config.max_per_session {
+        if state.session_count >= config.max_per_session {
             return Err(SafetyError::SessionLimitReached {
-                max: self.config.max_per_session,
+                max: config.max_per_session,
             });
         }
 
@@ -962,7 +973,7 @@ impl SafetyGateway {
         let mut ctx = ToolRiskContext::new(
             risk_tool_name.to_string(),
             source,
-            self.config.workspace_trust,
+            self.config.read().workspace_trust,
         );
 
         // Set flags based on tool type
@@ -1021,16 +1032,17 @@ impl SafetyGateway {
     }
 
     /// Get current session statistics
-    pub async fn get_stats(&self) -> SafetyStats {
-        let state = self.rate_state.lock().await;
-        let preapproved = self.preapproved.lock().await;
+    pub fn get_stats(&self) -> SafetyStats {
+        let state = self.rate_state.lock();
+        let preapproved = self.preapproved.lock();
+        let config = self.config.read();
 
         SafetyStats {
             turn_count: state.current_turn_count,
             session_count: state.session_count,
-            max_per_turn: self.config.max_per_turn,
-            max_per_session: self.config.max_per_session,
-            plan_mode_active: self.config.plan_mode_active,
+            max_per_turn: config.max_per_turn,
+            max_per_session: config.max_per_session,
+            plan_mode_active: config.plan_mode_active,
             preapproved_count: preapproved.len(),
         }
     }
@@ -1092,7 +1104,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_plan_mode_blocks_mutating() {
-        let mut gateway = SafetyGateway::new();
+        let gateway = SafetyGateway::new();
         gateway.set_plan_mode(true);
         let ctx = make_ctx();
 
@@ -1111,7 +1123,7 @@ mod tests {
     #[tokio::test]
     async fn test_preapproved_tools_allowed() {
         let gateway = SafetyGateway::new();
-        gateway.preapprove("delete_file").await;
+        gateway.preapprove("delete_file");
         let ctx = make_ctx();
 
         let decision = gateway
@@ -1152,8 +1164,8 @@ mod tests {
         let ctx = make_ctx();
 
         // First two calls should succeed
-        gateway.record_execution().await;
-        gateway.record_execution().await;
+        gateway.record_execution();
+        gateway.record_execution();
 
         // Third call should be denied
         let decision = gateway
@@ -1358,11 +1370,11 @@ mod tests {
     #[tokio::test]
     async fn test_stats_tracking() {
         let gateway = SafetyGateway::new();
-        gateway.preapprove("test_tool").await;
-        gateway.record_execution().await;
-        gateway.record_execution().await;
+        gateway.preapprove("test_tool");
+        gateway.record_execution();
+        gateway.record_execution();
 
-        let stats = gateway.get_stats().await;
+        let stats = gateway.get_stats();
         assert_eq!(stats.turn_count, 2);
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.preapproved_count, 1);
@@ -1372,22 +1384,22 @@ mod tests {
     async fn test_start_turn_resets_counters() {
         let gateway = SafetyGateway::new();
 
-        gateway.record_execution().await;
-        gateway.record_execution().await;
+        gateway.record_execution();
+        gateway.record_execution();
 
-        let stats_before = gateway.get_stats().await;
+        let stats_before = gateway.get_stats();
         assert_eq!(stats_before.turn_count, 2);
 
-        gateway.start_turn().await;
+        gateway.start_turn();
 
-        let stats_after = gateway.get_stats().await;
+        let stats_after = gateway.get_stats();
         assert_eq!(stats_after.turn_count, 0);
         assert_eq!(stats_after.session_count, 2); // Session count preserved
     }
 
     #[tokio::test]
     async fn test_increase_session_limit_updates_limit() {
-        let mut gateway = SafetyGateway::new();
+        let gateway = SafetyGateway::new();
         gateway.set_limits(10, 1);
         let ctx = make_ctx();
 

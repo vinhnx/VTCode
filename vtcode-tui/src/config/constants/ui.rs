@@ -2,7 +2,6 @@ pub const TOOL_OUTPUT_MODE_COMPACT: &str = vtcode_config::constants::ui::TOOL_OU
 pub const TOOL_OUTPUT_MODE_FULL: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_FULL;
 pub const DEFAULT_REASONING_VISIBLE: bool = vtcode_config::constants::ui::DEFAULT_REASONING_VISIBLE;
 pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
-pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
 pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
 pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
 pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;

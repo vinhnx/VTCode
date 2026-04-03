@@ -66,7 +66,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     approval_recorder: &'a vtcode_core::tools::ApprovalRecorder,
     decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
-    safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
+    safety_validator: &'a Arc<ToolCallSafetyValidator>,
     lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
     approval_policy: AskForApproval,
     hitl_notification_bell: bool,
@@ -98,7 +98,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         approval_recorder: &'a vtcode_core::tools::ApprovalRecorder,
         decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
-        safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
+        safety_validator: &'a Arc<ToolCallSafetyValidator>,
         lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
         vt_cfg: Option<&'a vtcode_config::loader::VTCodeConfig>,
         traj: &'a TrajectoryLogger,
@@ -383,8 +383,6 @@ impl<'a> CopilotRuntimeHost<'a> {
         arguments: &Value,
     ) -> Result<Option<CopilotToolCallResponse>> {
         self.safety_validator
-            .write()
-            .await
             .validate_call(tool_name, arguments)
             .await
             .with_context(|| format!("copilot tool safety validation for '{tool_name}'"))?;
@@ -2152,7 +2150,7 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let traj = TrajectoryLogger::new(&workspace);
@@ -2247,7 +2245,7 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let traj = TrajectoryLogger::new(&workspace);
@@ -2334,7 +2332,7 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let traj = TrajectoryLogger::new(&workspace);
@@ -2465,8 +2463,8 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
-        safety_validator.write().await.start_turn().await;
+        let safety_validator = Arc::new(ToolCallSafetyValidator::new());
+        safety_validator.start_turn();
         let traj = TrajectoryLogger::new(&workspace);
         let mut harness_state = HarnessTurnState::new(
             TurnRunId("run-test".to_string()),

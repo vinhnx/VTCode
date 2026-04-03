@@ -7,6 +7,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use dialoguer::{Select, theme::ColorfulTheme};
 use serde_json::{Value, json};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
 use tokio::sync::broadcast;
 use vtcode_core::cli::args::AskCommandOptions;
@@ -25,9 +26,155 @@ use vtcode_core::utils::session_archive::{
 
 const APPROVAL_POLICY_INTERACTIVE: &str = "on-request";
 const APPROVAL_POLICY_AUTOMATIC: &str = "never";
+const MCP_SERVER_STATUS_UPDATED_METHOD: &str = "mcpServerStatus/updated";
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct CodexSessionRuntime;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CodexMcpStartupStatus {
+    Starting,
+    Ready,
+    Failed { error: String },
+    Cancelled,
+}
+
+#[derive(Debug, Default)]
+struct CodexMcpStartupTracker {
+    expected_servers: Option<BTreeSet<String>>,
+    current_status: HashMap<String, CodexMcpStartupStatus>,
+    warned_failed_servers: HashSet<String>,
+    saw_starting: bool,
+    startup_finished: bool,
+}
+
+impl CodexMcpStartupTracker {
+    fn new(expected_servers: Option<impl IntoIterator<Item = String>>) -> Self {
+        Self {
+            expected_servers: expected_servers.map(|servers| servers.into_iter().collect()),
+            current_status: HashMap::new(),
+            warned_failed_servers: HashSet::new(),
+            saw_starting: false,
+            startup_finished: false,
+        }
+    }
+
+    fn record_update(&mut self, server: String, status: CodexMcpStartupStatus) -> Vec<String> {
+        if self.startup_finished {
+            if !matches!(status, CodexMcpStartupStatus::Starting) {
+                return Vec::new();
+            }
+            self.reset_round();
+        }
+
+        if matches!(status, CodexMcpStartupStatus::Starting) {
+            self.saw_starting = true;
+        }
+
+        let mut messages = Vec::new();
+        if let CodexMcpStartupStatus::Failed { error } = &status
+            && self.warned_failed_servers.insert(server.clone())
+        {
+            messages.push(error.clone());
+        }
+
+        self.current_status.insert(server, status);
+        if self.should_finish_round() {
+            messages.extend(self.finish_round_summary());
+        }
+        messages
+    }
+
+    fn finish_after_lag(&mut self) -> Vec<String> {
+        if self.startup_finished || self.current_status.is_empty() {
+            return Vec::new();
+        }
+        self.finish_round_summary()
+    }
+
+    fn should_finish_round(&self) -> bool {
+        if self.startup_finished || self.current_status.is_empty() {
+            return false;
+        }
+
+        let Some(expected_servers) = self.expected_server_names() else {
+            return false;
+        };
+
+        if !expected_servers.is_empty()
+            && !expected_servers
+                .iter()
+                .all(|name| self.current_status.contains_key(name))
+        {
+            return false;
+        }
+
+        if !self.saw_starting && !expected_servers.is_empty() {
+            return false;
+        }
+
+        self.current_status
+            .values()
+            .all(|status| !matches!(status, CodexMcpStartupStatus::Starting))
+    }
+
+    fn finish_round_summary(&mut self) -> Vec<String> {
+        let mut failed = Vec::new();
+        let mut cancelled = Vec::new();
+
+        for server in self.expected_server_names().unwrap_or_default() {
+            match self.current_status.get(&server) {
+                Some(CodexMcpStartupStatus::Ready) => {}
+                Some(CodexMcpStartupStatus::Failed { .. }) => failed.push(server),
+                Some(CodexMcpStartupStatus::Cancelled | CodexMcpStartupStatus::Starting) | None => {
+                    cancelled.push(server);
+                }
+            }
+        }
+
+        failed.sort();
+        failed.dedup();
+        cancelled.sort();
+        cancelled.dedup();
+        self.startup_finished = true;
+
+        let mut messages = Vec::new();
+        if !cancelled.is_empty() {
+            messages.push(format!(
+                "MCP startup interrupted. The following servers were not initialized: {}",
+                cancelled.join(", ")
+            ));
+        }
+        if !failed.is_empty() {
+            messages.push(format!(
+                "MCP startup incomplete (failed: {})",
+                failed.join(", ")
+            ));
+        }
+        messages
+    }
+
+    fn reset_round(&mut self) {
+        self.current_status.clear();
+        self.warned_failed_servers.clear();
+        self.saw_starting = false;
+        self.startup_finished = false;
+    }
+
+    fn expected_server_names(&self) -> Option<BTreeSet<String>> {
+        if let Some(expected) = &self.expected_servers {
+            let mut servers = expected.clone();
+            servers.extend(self.current_status.keys().cloned());
+            return Some(servers);
+        }
+
+        if self.current_status.is_empty() {
+            None
+        } else {
+            Some(self.current_status.keys().cloned().collect())
+        }
+    }
+}
 
 #[async_trait]
 impl SessionRuntime<ResumeSession> for CodexSessionRuntime {
@@ -64,14 +211,19 @@ pub(crate) async fn handle_codex_ask_command(
     }
 
     let client = CodexAppServerClient::connect(vt_cfg).await?;
+    let mut events = client.subscribe();
+    let mut mcp_startup = load_mcp_startup_tracker(&client).await;
     let thread = client
         .thread_start(
             build_thread_request(&config, true, options.skip_confirmations),
             true,
         )
         .await?;
+    drain_startup_notifications(&mut events, &mut mcp_startup)?;
     let output = run_turn(
         &client,
+        &mut events,
+        &mut mcp_startup,
         build_turn_request(
             &config,
             thread.thread.id,
@@ -120,9 +272,12 @@ async fn run_interactive_session(
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     let client = CodexAppServerClient::connect(vt_cfg).await?;
+    let mut events = client.subscribe();
+    let mut mcp_startup = load_mcp_startup_tracker(&client).await;
     let history_enabled = history_persistence_enabled();
     let (thread, mut archive, mut messages, mut turn_number) =
         prepare_session_state(&client, config, resume, history_enabled, skip_confirmations).await?;
+    drain_startup_notifications(&mut events, &mut mcp_startup)?;
 
     println!("Codex thread: {}", thread.thread.id);
     println!("Type `exit` or `/exit` to end the session.");
@@ -142,6 +297,8 @@ async fn run_interactive_session(
 
         match run_turn(
             &client,
+            &mut events,
+            &mut mcp_startup,
             build_turn_request(
                 config,
                 thread.thread.id.clone(),
@@ -311,20 +468,25 @@ fn approval_policy(skip_confirmations: bool) -> &'static str {
 
 async fn run_turn(
     client: &CodexAppServerClient,
+    events: &mut broadcast::Receiver<ServerEvent>,
+    mcp_startup: &mut CodexMcpStartupTracker,
     request: CodexTurnRequest,
     render_stream: bool,
 ) -> Result<String> {
-    let mut events = client.subscribe();
     let started = client.turn_start(request.clone()).await?;
     let turn_id = started.turn.id;
     let mut output = String::new();
 
     loop {
-        let event = next_event(&mut events).await?;
+        let event = next_event(events, mcp_startup).await?;
         if let Some(request_id) = event.id.clone() {
             if approval_request_matches(&event, &request.thread_id, &turn_id) {
                 handle_approval_request(client, request_id, &event).await?;
             }
+            continue;
+        }
+
+        if handle_mcp_startup_notification(&event, mcp_startup) {
             continue;
         }
 
@@ -393,6 +555,78 @@ async fn handle_approval_request(
     Ok(())
 }
 
+async fn load_mcp_startup_tracker(client: &CodexAppServerClient) -> CodexMcpStartupTracker {
+    let expected_servers = client.mcp_server_status_list().await.ok().map(|response| {
+        response
+            .data
+            .into_iter()
+            .map(|server| server.name)
+            .collect::<Vec<_>>()
+    });
+    CodexMcpStartupTracker::new(expected_servers)
+}
+
+fn drain_startup_notifications(
+    receiver: &mut broadcast::Receiver<ServerEvent>,
+    tracker: &mut CodexMcpStartupTracker,
+) -> Result<()> {
+    loop {
+        match receiver.try_recv() {
+            Ok(event) => {
+                let _ = handle_mcp_startup_notification(&event, tracker);
+            }
+            Err(broadcast::error::TryRecvError::Empty) => return Ok(()),
+            Err(broadcast::error::TryRecvError::Lagged(_)) => {
+                emit_mcp_startup_messages(tracker.finish_after_lag());
+            }
+            Err(broadcast::error::TryRecvError::Closed) => {
+                bail!("lost connection to Codex app-server")
+            }
+        }
+    }
+}
+
+fn handle_mcp_startup_notification(
+    event: &ServerEvent,
+    tracker: &mut CodexMcpStartupTracker,
+) -> bool {
+    let Some((server, status)) = parse_mcp_startup_notification(event) else {
+        return false;
+    };
+    emit_mcp_startup_messages(tracker.record_update(server, status));
+    true
+}
+
+fn emit_mcp_startup_messages(messages: Vec<String>) {
+    for message in messages {
+        vtcode_core::ui::styled::warning(&message);
+    }
+}
+
+fn parse_mcp_startup_notification(event: &ServerEvent) -> Option<(String, CodexMcpStartupStatus)> {
+    if event.id.is_some() || event.method != MCP_SERVER_STATUS_UPDATED_METHOD {
+        return None;
+    }
+
+    let server = event.params.get("name")?.as_str()?.to_string();
+    let status = match event.params.get("status")?.as_str()? {
+        "starting" | "Starting" => CodexMcpStartupStatus::Starting,
+        "ready" | "Ready" => CodexMcpStartupStatus::Ready,
+        "failed" | "Failed" => CodexMcpStartupStatus::Failed {
+            error: event
+                .params
+                .get("error")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| format!("MCP client for `{server}` failed to start")),
+        },
+        "cancelled" | "Cancelled" => CodexMcpStartupStatus::Cancelled,
+        _ => return None,
+    };
+
+    Some((server, status))
+}
+
 fn prompt_for_approval_decision(method: &str, params: &Value) -> Result<Value> {
     if terminal::is_piped_input() || terminal::is_piped_output() {
         return Ok(json!({ "decision": "decline" }));
@@ -440,11 +674,16 @@ fn prompt_for_approval_decision(method: &str, params: &Value) -> Result<Value> {
     Ok(options[selection].1.clone())
 }
 
-async fn next_event(receiver: &mut broadcast::Receiver<ServerEvent>) -> Result<ServerEvent> {
+async fn next_event(
+    receiver: &mut broadcast::Receiver<ServerEvent>,
+    mcp_startup: &mut CodexMcpStartupTracker,
+) -> Result<ServerEvent> {
     loop {
         match receiver.recv().await {
             Ok(event) => return Ok(event),
-            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(broadcast::error::RecvError::Lagged(_)) => {
+                emit_mcp_startup_messages(mcp_startup.finish_after_lag());
+            }
             Err(broadcast::error::RecvError::Closed) => {
                 bail!("lost connection to Codex app-server")
             }
@@ -521,4 +760,135 @@ fn workspace_archive_label(workspace: &std::path::Path) -> String {
         .and_then(|value| value.to_str())
         .unwrap_or("workspace")
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CodexMcpStartupStatus, CodexMcpStartupTracker, MCP_SERVER_STATUS_UPDATED_METHOD,
+        ServerEvent, parse_mcp_startup_notification,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn tracker_emits_immediate_failure_and_settled_summary() {
+        let mut tracker =
+            CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
+
+        assert!(
+            tracker
+                .record_update("alpha".to_string(), CodexMcpStartupStatus::Starting)
+                .is_empty()
+        );
+
+        let alpha_failure = tracker.record_update(
+            "alpha".to_string(),
+            CodexMcpStartupStatus::Failed {
+                error: "MCP client for `alpha` failed to start: handshake failed".to_string(),
+            },
+        );
+        assert_eq!(
+            alpha_failure,
+            vec!["MCP client for `alpha` failed to start: handshake failed".to_string()]
+        );
+
+        assert!(
+            tracker
+                .record_update("beta".to_string(), CodexMcpStartupStatus::Starting)
+                .is_empty()
+        );
+
+        let settled = tracker.record_update("beta".to_string(), CodexMcpStartupStatus::Ready);
+        assert_eq!(
+            settled,
+            vec!["MCP startup incomplete (failed: alpha)".to_string()]
+        );
+    }
+
+    #[test]
+    fn tracker_ignores_stale_terminal_updates_after_finish() {
+        let mut tracker = CodexMcpStartupTracker::new(Some(["alpha".to_string()]));
+        let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Starting);
+        let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Ready);
+
+        assert!(
+            tracker
+                .record_update("alpha".to_string(), CodexMcpStartupStatus::Ready)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn tracker_resets_when_next_round_starts() {
+        let mut tracker = CodexMcpStartupTracker::new(Some(["alpha".to_string()]));
+        let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Starting);
+        let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Ready);
+
+        assert!(
+            tracker
+                .record_update("alpha".to_string(), CodexMcpStartupStatus::Starting)
+                .is_empty()
+        );
+
+        let next_round = tracker.record_update(
+            "alpha".to_string(),
+            CodexMcpStartupStatus::Failed {
+                error: "MCP client for `alpha` failed to start".to_string(),
+            },
+        );
+        assert_eq!(
+            next_round,
+            vec![
+                "MCP client for `alpha` failed to start".to_string(),
+                "MCP startup incomplete (failed: alpha)".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn finish_after_lag_marks_missing_expected_servers_interrupted() {
+        let mut tracker =
+            CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
+        let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Starting);
+        let _ = tracker.record_update(
+            "alpha".to_string(),
+            CodexMcpStartupStatus::Failed {
+                error: "MCP client for `alpha` failed to start".to_string(),
+            },
+        );
+
+        let lagged = tracker.finish_after_lag();
+        assert_eq!(
+            lagged,
+            vec![
+                "MCP startup interrupted. The following servers were not initialized: beta"
+                    .to_string(),
+                "MCP startup incomplete (failed: alpha)".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_mcp_startup_notification_reads_failed_update() {
+        let event = ServerEvent {
+            method: MCP_SERVER_STATUS_UPDATED_METHOD.to_string(),
+            params: json!({
+                "name": "alpha",
+                "status": "failed",
+                "error": "MCP client for `alpha` failed to start: handshake failed"
+            }),
+            id: None,
+        };
+
+        let parsed = parse_mcp_startup_notification(&event);
+        assert_eq!(
+            parsed,
+            Some((
+                "alpha".to_string(),
+                CodexMcpStartupStatus::Failed {
+                    error: "MCP client for `alpha` failed to start: handshake failed".to_string(),
+                },
+            ))
+        );
+    }
 }

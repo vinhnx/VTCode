@@ -122,7 +122,7 @@ const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
 pub struct ToolRegistry {
     inventory: ToolInventory,
     edited_file_monitor: Arc<EditedFileMonitor>,
-    policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
+    policy_gateway: Arc<tokio::sync::Mutex<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
     exec_sessions: ExecSessionManager,
     mcp_client: Arc<RwLock<Option<Arc<McpClient>>>>,

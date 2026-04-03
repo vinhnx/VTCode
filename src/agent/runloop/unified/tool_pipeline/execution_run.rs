@@ -167,16 +167,9 @@ pub(crate) async fn run_tool_call_with_args(
         }
 
         if let Some(safety_validator) = ctx.safety_validator {
-            let validation = {
-                let mut validator = safety_validator.write().await;
-                validator
-                    .validate_call_with_invocation_id(
-                        &canonical_name,
-                        args_val,
-                        safety_invocation_id,
-                    )
-                    .await
-            };
+            let validation = safety_validator
+                .validate_call_with_invocation_id(&canonical_name, args_val, safety_invocation_id)
+                .await;
             if let Err(err) = validation {
                 return Ok(ToolPipelineOutcome::from_status(
                     ToolExecutionStatus::Failure {

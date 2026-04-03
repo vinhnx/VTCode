@@ -96,7 +96,7 @@ pub(crate) struct TestTurnProcessingBacking {
     renderer: vtcode_core::utils::ansi::AnsiRenderer,
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
-    safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    safety_validator: Arc<ToolCallSafetyValidator>,
     circuit_breaker: Arc<CircuitBreaker>,
     tool_health_tracker: Arc<ToolHealthTracker>,
     rate_limiter: Arc<AdaptiveRateLimiter>,
@@ -142,8 +142,8 @@ impl TestTurnProcessingBacking {
         );
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
-        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
-        safety_validator.write().await.start_turn().await;
+        let safety_validator = Arc::new(ToolCallSafetyValidator::new());
+        safety_validator.start_turn();
         let circuit_breaker = Arc::new(CircuitBreaker::default());
         let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
         let rate_limiter = Arc::new(AdaptiveRateLimiter::default());

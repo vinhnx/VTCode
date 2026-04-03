@@ -7,6 +7,8 @@ use anyhow::anyhow;
 #[cfg(test)]
 use serde_json::Map;
 use serde_json::Value;
+#[cfg(test)]
+use std::sync::Mutex;
 use thiserror::Error;
 use vtcode_core::tools::{
     RiskLevel, SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
@@ -32,14 +34,12 @@ pub(crate) enum SafetyError {
 
 /// Safety validation rules for tool calls
 pub(crate) struct ToolCallSafetyValidator {
-    /// Total tool limit per session
-    max_per_session: usize,
     /// Shared safety gateway for canonical checks
     safety_gateway: SafetyGateway,
     /// Validator-scoped execution context
     gateway_ctx: SafetyContext,
     #[cfg(test)]
-    test_rate_limits: TestRateLimits,
+    test_rate_limits: Mutex<TestRateLimits>,
 }
 
 #[cfg(test)]
@@ -77,60 +77,58 @@ impl ToolCallSafetyValidator {
         };
 
         Self {
-            max_per_session,
             safety_gateway: SafetyGateway::with_config(gateway_config),
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
             #[cfg(test)]
-            test_rate_limits: TestRateLimits {
+            test_rate_limits: Mutex::new(TestRateLimits {
                 per_second: rate_limit_per_second,
                 per_minute: rate_limit_per_minute,
-            },
+            }),
         }
     }
 
     /// Reset per-turn counters; call at the start of a turn
-    pub(crate) async fn start_turn(&mut self) {
-        self.safety_gateway.start_turn().await;
+    pub(crate) fn start_turn(&self) {
+        self.safety_gateway.start_turn();
     }
 
     /// Override per-turn and session limits based on runtime config
-    pub(crate) fn set_limits(&mut self, max_per_turn: usize, max_per_session: usize) {
-        self.max_per_session = max_per_session;
+    pub(crate) fn set_limits(&self, max_per_turn: usize, max_per_session: usize) {
         self.safety_gateway
             .set_limits(max_per_turn, max_per_session);
     }
 
     /// Increase the session tool limit
-    pub(crate) fn increase_session_limit(&mut self, increment: usize) {
-        self.max_per_session = self.max_per_session.saturating_add(increment);
+    pub(crate) fn increase_session_limit(&self, increment: usize) {
         self.safety_gateway.increase_session_limit(increment);
-        tracing::info!("Session tool limit increased to {}", self.max_per_session);
     }
 
     #[cfg(test)]
-    pub fn set_rate_limit_per_second(&mut self, limit: usize) {
+    pub fn set_rate_limit_per_second(&self, limit: usize) {
         if limit > 0 {
-            self.test_rate_limits.per_second = limit;
-            self.safety_gateway.set_rate_limits(
-                self.test_rate_limits.per_second,
-                self.test_rate_limits.per_minute,
-            );
+            let mut test_rate_limits = self
+                .test_rate_limits
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            test_rate_limits.per_second = limit;
+            self.safety_gateway
+                .set_rate_limits(test_rate_limits.per_second, test_rate_limits.per_minute);
         }
     }
 
     #[cfg(test)]
-    pub fn set_rate_limit_enforcement(&mut self, enabled: bool) {
+    pub fn set_rate_limit_enforcement(&self, enabled: bool) {
         self.safety_gateway.set_rate_limit_enforcement(enabled);
     }
 
     /// Get the current session limit
     pub(crate) fn get_session_limit(&self) -> usize {
-        self.max_per_session
+        self.safety_gateway.max_per_session()
     }
 
     /// Validate a tool call before execution
     pub(crate) async fn validate_call(
-        &mut self,
+        &self,
         tool_name: &str,
         args: &Value,
     ) -> std::result::Result<(), SafetyError> {
@@ -140,7 +138,7 @@ impl ToolCallSafetyValidator {
 
     /// Validate a tool call with an explicit invocation id for log correlation.
     pub(crate) async fn validate_call_with_invocation_id(
-        &mut self,
+        &self,
         tool_name: &str,
         args: &Value,
         invocation_id: ToolInvocationId,
@@ -210,10 +208,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiting() {
-        let mut validator = ToolCallSafetyValidator::new();
+        let validator = ToolCallSafetyValidator::new();
         validator.set_rate_limit_per_second(2);
         validator.set_rate_limit_enforcement(true);
-        validator.start_turn().await;
+        validator.start_turn();
 
         assert!(
             validator
@@ -235,8 +233,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_validation_allows_safe_and_destructive_tools() {
-        let mut validator = ToolCallSafetyValidator::new();
-        validator.start_turn().await;
+        let validator = ToolCallSafetyValidator::new();
+        validator.start_turn();
 
         assert!(
             validator
@@ -254,10 +252,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_turn_and_session_limits() {
-        let mut validator = ToolCallSafetyValidator::new();
+        let validator = ToolCallSafetyValidator::new();
         validator.set_limits(2, 3);
 
-        validator.start_turn().await;
+        validator.start_turn();
         assert!(
             validator
                 .validate_call("read_file", &json!({}))
@@ -277,7 +275,7 @@ mod tests {
                 .is_err()
         );
 
-        validator.start_turn().await;
+        validator.start_turn();
         assert!(
             validator
                 .validate_call("read_file", &json!({}))

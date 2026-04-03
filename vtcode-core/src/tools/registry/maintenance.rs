@@ -13,7 +13,7 @@ impl ToolRegistry {
         let available = self.available_tools().await;
         let mcp_keys = self.mcp_policy_keys().await;
         self.policy_gateway
-            .write()
+            .lock()
             .await
             .sync_available_tools(available, &mcp_keys)
             .await;
@@ -30,7 +30,7 @@ impl ToolRegistry {
                 .map(|(name, metadata)| (name.clone(), metadata.clone()))
                 .collect::<Vec<_>>()
         };
-        let mut policy_gateway = self.policy_gateway.write().await;
+        let mut policy_gateway = self.policy_gateway.lock().await;
         if let Ok(policy) = policy_gateway.policy_manager_mut() {
             let mut seeded = 0usize;
             for (name, metadata) in policy_seeds {

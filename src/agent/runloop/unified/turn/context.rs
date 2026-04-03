@@ -184,11 +184,8 @@ pub(crate) struct ToolContext<'a> {
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub safety_validator: &'a Arc<
-        tokio::sync::RwLock<
-            crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
-        >,
-    >,
+    pub safety_validator:
+        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
@@ -269,11 +266,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub safety_validator: &'a Arc<
-        tokio::sync::RwLock<
-            crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
-        >,
-    >,
+    pub safety_validator:
+        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,

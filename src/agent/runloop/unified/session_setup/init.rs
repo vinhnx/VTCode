@@ -373,7 +373,7 @@ pub(crate) async fn initialize_session(
             tool_result_cache,
             tool_permission_cache,
             approval_recorder,
-            safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
+            safety_validator: Arc::new(ToolCallSafetyValidator::new()),
             circuit_breaker: circuit_breaker.clone(),
             tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
             rate_limiter: Arc::new(

@@ -170,3 +170,11 @@ One last note that seems like Claude is keeping the planner focused on product c
 ---
 
 https://code.claude.com/docs/en/fullscreen
+
+---
+
+https://zread.ai/instructkr/claude-code
+
+---
+
+https://x.com/jpschroeder/status/2038960058499768427

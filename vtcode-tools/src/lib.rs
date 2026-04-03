@@ -26,6 +26,18 @@ pub use adapters::{RegistryBuilder, RegistryEvent};
 pub mod acp_tool;
 pub use acp_tool::{AcpDiscoveryTool, AcpHealthTool, AcpTool};
 
+pub use vtcode_collaboration_tool_specs::{
+    close_agent_parameters, request_user_input_description, request_user_input_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters, wait_agent_parameters,
+};
+pub use vtcode_utility_tool_specs::{
+    APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE,
+    apply_patch_parameter_schema, apply_patch_parameters, cron_create_parameters,
+    cron_delete_parameters, cron_list_parameters, list_files_parameters, read_file_parameters,
+    unified_exec_parameters, unified_file_parameters, unified_search_parameters,
+    with_semantic_anchor_guidance,
+};
+
 pub mod cache;
 pub use cache::{CacheObserver, CacheStats, EvictionReason, LruCache, NoopObserver};
 

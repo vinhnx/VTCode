@@ -68,11 +68,8 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     pub harness_emitter:
         Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
-    pub safety_validator: &'a Arc<
-        tokio::sync::RwLock<
-            crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
-        >,
-    >,
+    pub safety_validator:
+        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,

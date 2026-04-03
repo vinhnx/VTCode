@@ -6452,6 +6452,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-collaboration-tool-specs"
+version = "0.96.12"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "vtcode-commons"
 version = "0.96.12"
 dependencies = [
@@ -6614,6 +6621,7 @@ dependencies = [
  "vt100",
  "vtcode-auth",
  "vtcode-bash-runner",
+ "vtcode-collaboration-tool-specs",
  "vtcode-commons",
  "vtcode-config",
  "vtcode-exec-events",
@@ -6624,6 +6632,7 @@ dependencies = [
  "vtcode-terminal-detection",
  "vtcode-theme",
  "vtcode-tui",
+ "vtcode-utility-tool-specs",
  "walkdir",
  "webbrowser",
  "which",
@@ -6761,8 +6770,10 @@ dependencies = [
  "serde_json",
  "tokio",
  "vtcode-acp",
+ "vtcode-collaboration-tool-specs",
  "vtcode-commons",
  "vtcode-core",
+ "vtcode-utility-tool-specs",
 ]
 
 [[package]]
@@ -6810,6 +6821,13 @@ dependencies = [
  "vtcode-terminal-detection",
  "vtcode-theme",
  "vtcode-vim",
+]
+
+[[package]]
+name = "vtcode-utility-tool-specs"
+version = "0.96.12"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

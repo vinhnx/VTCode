@@ -5,8 +5,7 @@ use crate::tools::command_resolver::CommandResolver;
 use regex::Regex;
 use std::env;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex, PoisonError};
 use tracing::warn;
 
 #[derive(Clone)]
@@ -55,14 +54,25 @@ impl CommandPolicyEvaluator {
         }
     }
 
-    /// Get a mutable reference to the resolver for external initialization
-    pub fn resolver_mut(&self) -> Arc<Mutex<CommandResolver>> {
-        Arc::clone(&self.resolver)
+    fn cached_decision(&self, command_text: &str) -> Option<bool> {
+        self.cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(command_text)
     }
 
-    /// Get a mutable reference to the cache for external access
-    pub fn cache_mut(&self) -> Arc<Mutex<PermissionCache>> {
-        Arc::clone(&self.cache)
+    fn resolve_path(&self, command_text: &str) -> Option<PathBuf> {
+        self.resolver
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .resolve(command_text)
+            .resolved_path
+            .clone()
+    }
+
+    fn cache_decision(&self, command_text: &str, allowed: bool, reason: &str) {
+        let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+        cache.put(command_text, allowed, reason);
     }
 
     pub fn allows(&self, command: &[String]) -> bool {
@@ -100,36 +110,29 @@ impl CommandPolicyEvaluator {
 
     /// Enhanced async evaluation with command resolution and caching
     /// Returns (allowed, resolved_path, reason, decision)
-    pub async fn evaluate_with_resolution(
+    pub fn evaluate_with_resolution(
         &self,
         command_text: &str,
     ) -> (bool, Option<PathBuf>, String, PermissionDecision) {
         let cmd = command_text.trim();
 
         // Check cache first
-        {
-            let mut cache = self.cache.lock().await;
-            if let Some(allowed) = cache.get(cmd) {
-                let reason = if allowed {
-                    "Cached allow decision"
-                } else {
-                    "Cached deny decision"
-                };
-                return (
-                    allowed,
-                    None,
-                    reason.to_string(),
-                    PermissionDecision::Cached,
-                );
-            }
+        if let Some(allowed) = self.cached_decision(cmd) {
+            let reason = if allowed {
+                "Cached allow decision"
+            } else {
+                "Cached deny decision"
+            };
+            return (
+                allowed,
+                None,
+                reason.to_string(),
+                PermissionDecision::Cached,
+            );
         }
 
         // Resolve command to actual path
-        let resolved_path = {
-            let mut resolver = self.resolver.lock().await;
-            let resolution = resolver.resolve(cmd);
-            resolution.resolved_path.clone()
-        };
+        let resolved_path = self.resolve_path(cmd);
 
         // Evaluate policy
         let allowed = self.allows_text(cmd);
@@ -152,10 +155,7 @@ impl CommandPolicyEvaluator {
         };
 
         // Cache the result
-        {
-            let mut cache = self.cache.lock().await;
-            cache.put(cmd, allowed, &reason);
-        }
+        self.cache_decision(cmd, allowed, &reason);
 
         let decision = if allowed {
             PermissionDecision::Allowed

@@ -49,7 +49,7 @@ pub(crate) struct ToolExecutionContext {
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
     pub approval_recorder: Arc<ApprovalRecorder>,
-    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    pub safety_validator: Arc<ToolCallSafetyValidator>,
     pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,

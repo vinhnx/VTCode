@@ -79,7 +79,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
-    pub safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
+    pub safety_validator: &'a Arc<ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
@@ -122,7 +122,7 @@ impl<'a> TurnLoopContext<'a> {
         lifecycle_hooks: Option<&'a LifecycleHookEngine>,
         default_placeholder: &'a Option<String>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
-        safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
+        safety_validator: &'a Arc<ToolCallSafetyValidator>,
         circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
         tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
         rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
@@ -472,9 +472,9 @@ pub(crate) async fn run_turn_loop(
         } else {
             turn_config.max_session_turns
         };
-        let mut validator = ctx.safety_validator.write().await;
-        validator.set_limits(current_max_tool_loops, max_session_turns);
-        validator.start_turn().await;
+        ctx.safety_validator
+            .set_limits(current_max_tool_loops, max_session_turns);
+        ctx.safety_validator.start_turn();
     }
 
     loop {

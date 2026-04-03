@@ -771,13 +771,11 @@ impl ToolRegistry {
             }
         }
 
-        if self.policy_gateway.read().await.has_full_auto_allowlist()
-            && !self
-                .policy_gateway
-                .read()
-                .await
-                .is_allowed_in_full_auto(&tool_name)
-        {
+        let full_auto_denied = {
+            let gateway = self.policy_gateway.lock().await;
+            gateway.has_full_auto_allowlist() && !gateway.is_allowed_in_full_auto(&tool_name)
+        };
+        if full_auto_denied {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
@@ -809,7 +807,7 @@ impl ToolRegistry {
 
         let skip_policy_prompt = self
             .policy_gateway
-            .write()
+            .lock()
             .await
             .take_preapproved(&tool_name);
 
@@ -819,7 +817,7 @@ impl ToolRegistry {
             // In TUI mode, permission should have been collected via ensure_tool_permission().
             // If not preapproved, check policy as fallback.
             self.policy_gateway
-                .write()
+                .lock()
                 .await
                 .should_execute_tool(&tool_name)
                 .await?
@@ -857,7 +855,7 @@ impl ToolRegistry {
 
         let args = match self
             .policy_gateway
-            .read()
+            .lock()
             .await
             .apply_policy_constraints(&tool_name, args)
         {

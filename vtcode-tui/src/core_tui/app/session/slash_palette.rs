@@ -167,7 +167,7 @@ impl SlashPalette {
         self.navigator.visible_rows()
     }
 
-    pub fn update(&mut self, prefix: Option<&str>, limit: usize) -> SlashPaletteUpdate {
+    pub fn update(&mut self, prefix: Option<&str>) -> SlashPaletteUpdate {
         let Some(prefix) = prefix else {
             if self.clear_internal() {
                 return SlashPaletteUpdate::Cleared;
@@ -183,11 +183,6 @@ impl SlashPalette {
                 .into_iter()
                 .map(SlashPaletteSuggestion::Static),
         );
-
-        // Apply limit if prefix is not empty
-        if !prefix.is_empty() {
-            new_suggestions.truncate(limit);
-        }
 
         let filter_query = {
             let normalized = normalize_query(prefix);
@@ -462,7 +457,7 @@ mod tests {
 
     fn palette_with_commands() -> SlashPalette {
         let mut palette = SlashPalette::with_commands(test_commands());
-        let _ = palette.update(Some(""), usize::MAX);
+        let _ = palette.update(Some(""));
         palette
     }
 
@@ -470,7 +465,7 @@ mod tests {
     fn update_applies_prefix_and_highlights_matches() {
         let mut palette = SlashPalette::with_commands(test_commands());
 
-        let update = palette.update(Some("co"), 10);
+        let update = palette.update(Some("co"));
         assert!(matches!(
             update,
             SlashPaletteUpdate::Changed {
@@ -500,7 +495,7 @@ mod tests {
     fn update_matches_fuzzy_command_name() {
         let mut palette = SlashPalette::with_commands(test_commands());
 
-        let update = palette.update(Some("sts"), 10);
+        let update = palette.update(Some("sts"));
         assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
 
         let names: Vec<String> = palette
@@ -516,7 +511,7 @@ mod tests {
     fn update_matches_command_description() {
         let mut palette = SlashPalette::with_commands(test_commands());
 
-        let update = palette.update(Some("terminal"), 10);
+        let update = palette.update(Some("terminal"));
         assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
 
         let names: Vec<String> = palette
@@ -531,10 +526,10 @@ mod tests {
     #[test]
     fn update_without_matches_resets_highlights() {
         let mut palette = SlashPalette::with_commands(test_commands());
-        let _ = palette.update(Some("co"), 10);
+        let _ = palette.update(Some("co"));
         assert!(!palette.items().is_empty());
 
-        let update = palette.update(Some("zzz"), 10);
+        let update = palette.update(Some("zzz"));
         assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
         assert!(palette.items().is_empty());
 
@@ -603,13 +598,43 @@ mod tests {
     #[test]
     fn clear_resets_state() {
         let mut palette = SlashPalette::with_commands(test_commands());
-        let _ = palette.update(Some("co"), 10);
+        let _ = palette.update(Some("co"));
         palette.set_visible_rows(3);
 
         assert!(palette.clear());
         assert!(palette.suggestions().is_empty());
         assert_eq!(palette.selected_index(), None);
         assert_eq!(palette.visible_rows(), 0);
+    }
+
+    #[test]
+    fn update_keeps_all_filtered_matches_scrollable() {
+        let commands = (0..60)
+            .map(|index| {
+                SlashCommandItem::new(
+                    format!("command-{index:02}"),
+                    "Run a terminal command".to_string(),
+                )
+            })
+            .collect();
+        let mut palette = SlashPalette::with_commands(commands);
+
+        let update = palette.update(Some("command"));
+        assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
+        assert_eq!(palette.suggestions().len(), 60);
+
+        palette.set_visible_rows(10);
+        for _ in 0..5 {
+            assert!(palette.page_down());
+        }
+
+        assert_eq!(palette.selected_index(), Some(50));
+        assert_eq!(
+            palette
+                .selected_command()
+                .map(|command| command.name.as_str()),
+            Some("command-50")
+        );
     }
 
     #[test]
