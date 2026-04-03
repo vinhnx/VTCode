@@ -127,7 +127,11 @@ mod tests {
             workspace.path(),
             None,
             &[],
-            &[("explorer".to_string(), "Read-only repo explorer".to_string(), true)],
+            &[(
+                "explorer".to_string(),
+                "Read-only repo explorer".to_string(),
+                true,
+            )],
         )
         .await;
 
