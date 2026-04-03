@@ -26,6 +26,12 @@ use crate::startup::require_full_auto_workspace_trust;
 
 use super::super::exec::ExecCommandOptions;
 
+enum StdinPromptBehavior {
+    RequiredIfPiped,
+    Forced,
+    OptionalAppend,
+}
+
 #[derive(Debug, Clone)]
 pub enum ExecCommandKind {
     Run {
@@ -207,28 +213,78 @@ pub(super) fn validate_resume_prompt_requirement(
 
 fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
     let prompt = match prompt_arg {
-        Some(p) if p != "-" => p,
+        Some(prompt) if prompt != "-" => {
+            if let Some(stdin_text) =
+                read_prompt_from_stdin(StdinPromptBehavior::OptionalAppend, quiet)?
+            {
+                prompt_with_stdin_context(&prompt, &stdin_text)
+            } else {
+                prompt
+            }
+        }
         maybe_dash => {
-            let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
-            if io::stdin().is_tty_ext() && !force_stdin {
-                bail!(
-                    "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
-                );
-            }
-            if !force_stdin && !quiet {
-                eprintln!("Reading prompt from stdin...");
-            }
-            let mut buffer = String::with_capacity(1024);
-            io::stdin()
-                .read_to_string(&mut buffer)
-                .context("Failed to read prompt from stdin")?;
-            validate_non_empty(&buffer, "Prompt via stdin")?;
-            buffer
+            let behavior = if matches!(maybe_dash.as_deref(), Some("-")) {
+                StdinPromptBehavior::Forced
+            } else {
+                StdinPromptBehavior::RequiredIfPiped
+            };
+            read_prompt_from_stdin(behavior, quiet)?
+                .expect("required stdin prompt should produce content")
         }
     };
 
     validate_agent_safe_text("prompt", &prompt)?;
     Ok(prompt)
+}
+
+fn read_prompt_from_stdin(behavior: StdinPromptBehavior, quiet: bool) -> Result<Option<String>> {
+    let stdin_is_tty = io::stdin().is_tty_ext();
+
+    match behavior {
+        StdinPromptBehavior::RequiredIfPiped if stdin_is_tty => {
+            bail!(
+                "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
+            );
+        }
+        StdinPromptBehavior::RequiredIfPiped => {
+            if !quiet {
+                eprintln!("Reading prompt from stdin...");
+            }
+        }
+        StdinPromptBehavior::Forced => {}
+        StdinPromptBehavior::OptionalAppend if stdin_is_tty => return Ok(None),
+        StdinPromptBehavior::OptionalAppend => {
+            if !quiet {
+                eprintln!("Reading additional input from stdin...");
+            }
+        }
+    }
+
+    let mut buffer = String::with_capacity(1024);
+    io::stdin()
+        .read_to_string(&mut buffer)
+        .context("Failed to read prompt from stdin")?;
+
+    if buffer.trim().is_empty() {
+        return match behavior {
+            StdinPromptBehavior::OptionalAppend => Ok(None),
+            StdinPromptBehavior::RequiredIfPiped | StdinPromptBehavior::Forced => {
+                validate_non_empty(&buffer, "Prompt via stdin")?;
+                Ok(None)
+            }
+        };
+    }
+
+    Ok(Some(buffer))
+}
+
+fn prompt_with_stdin_context(prompt: &str, stdin_text: &str) -> String {
+    let mut combined = format!("{prompt}\n\n<stdin>\n{stdin_text}");
+    if !stdin_text.ends_with('\n') {
+        combined.push('\n');
+    }
+    combined.push_str("</stdin>");
+    combined
 }
 
 fn exec_workspace_label(workspace: &Path) -> String {
@@ -355,8 +411,8 @@ async fn resolve_resume_listing(
 #[cfg(test)]
 mod tests {
     use super::{
-        ExecCommandKind, build_exec_archive_metadata, next_exec_session_id, resolve_exec_command,
-        validate_resume_prompt_requirement,
+        ExecCommandKind, build_exec_archive_metadata, next_exec_session_id,
+        prompt_with_stdin_context, resolve_exec_command, validate_resume_prompt_requirement,
     };
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
@@ -438,6 +494,26 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
+    }
+
+    #[test]
+    fn prompt_with_stdin_context_wraps_stdin_block() {
+        let combined = prompt_with_stdin_context("Summarize this concisely", "my output");
+
+        assert_eq!(
+            combined,
+            "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>"
+        );
+    }
+
+    #[test]
+    fn prompt_with_stdin_context_preserves_trailing_newline() {
+        let combined = prompt_with_stdin_context("Summarize this concisely", "my output\n");
+
+        assert_eq!(
+            combined,
+            "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>"
+        );
     }
 
     #[tokio::test]

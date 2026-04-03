@@ -64,7 +64,7 @@ impl RmcpClient {
         program: OsString,
         args: Vec<OsString>,
         working_dir: Option<PathBuf>,
-        env: Option<HashMap<String, String>>,
+        env: Option<HashMap<OsString, OsString>>,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     ) -> Result<Self> {
         let env = create_env_for_mcp_server(env);

@@ -116,6 +116,16 @@ impl CodexAppServerClient {
             .await
     }
 
+    pub(crate) async fn account_login_chatgpt_device_code(
+        &self,
+    ) -> Result<CodexLoginAccountResponse> {
+        self.request(
+            "account/login/start",
+            json!({ "type": "chatgptDeviceCode" }),
+        )
+        .await
+    }
+
     pub(crate) async fn account_logout(&self) -> Result<()> {
         let _: CodexLogoutAccountResponse = self.request("account/logout", json!({})).await?;
         Ok(())
@@ -445,6 +455,15 @@ pub(crate) enum CodexLoginAccountResponse {
         #[serde(rename = "loginId")]
         login_id: String,
     },
+    #[serde(rename = "chatgptDeviceCode")]
+    ChatGptDeviceCode {
+        #[serde(rename = "loginId")]
+        login_id: String,
+        #[serde(rename = "verificationUrl")]
+        verification_url: String,
+        #[serde(rename = "userCode")]
+        user_code: String,
+    },
     #[serde(rename = "chatgptAuthTokens")]
     ChatGptAuthTokens,
 }
@@ -512,8 +531,12 @@ pub(crate) struct ChatGptAuthTokens {
 
 #[cfg(test)]
 mod tests {
-    use super::{STDIO_LISTEN_TARGET, is_codex_cli_unavailable, launch_app_server_proxy};
+    use super::{
+        CodexLoginAccountResponse, CodexThreadRequest, CodexTurnRequest, STDIO_LISTEN_TARGET,
+        is_codex_cli_unavailable, launch_app_server_proxy,
+    };
     use anyhow::anyhow;
+    use serde_json::json;
 
     #[test]
     fn codex_cli_unavailable_detection_matches_install_guidance() {
@@ -540,5 +563,52 @@ mod tests {
                 .to_string()
                 .contains("supports only `--listen stdio://`")
         );
+    }
+
+    #[test]
+    fn deserializes_chatgpt_device_code_login_response() {
+        let response: CodexLoginAccountResponse = serde_json::from_value(json!({
+            "type": "chatgptDeviceCode",
+            "loginId": "login-123",
+            "verificationUrl": "https://auth.example.test/device",
+            "userCode": "ABCD-1234"
+        }))
+        .expect("device-code response should deserialize");
+
+        assert!(matches!(
+            response,
+            CodexLoginAccountResponse::ChatGptDeviceCode {
+                login_id,
+                verification_url,
+                user_code
+            } if login_id == "login-123"
+                && verification_url == "https://auth.example.test/device"
+                && user_code == "ABCD-1234"
+        ));
+    }
+
+    #[test]
+    fn thread_and_turn_requests_include_approvals_reviewer() {
+        let thread = CodexThreadRequest {
+            cwd: "/tmp/demo".to_string(),
+            model: Some("gpt-5".to_string()),
+            approval_policy: "interactive",
+            sandbox: "workspace-write",
+        };
+        let turn = CodexTurnRequest {
+            thread_id: "thread-123".to_string(),
+            input: "hello".to_string(),
+            cwd: "/tmp/demo".to_string(),
+            model: Some("gpt-5".to_string()),
+            approval_policy: "interactive",
+            sandbox_policy: json!({"type": "workspaceWrite", "networkAccess": false}),
+            reasoning_effort: Some("medium".to_string()),
+        };
+
+        assert_eq!(
+            thread.thread_start_params(false)["approvalsReviewer"],
+            json!("user")
+        );
+        assert_eq!(turn.as_json()["approvalsReviewer"], json!("user"));
     }
 }

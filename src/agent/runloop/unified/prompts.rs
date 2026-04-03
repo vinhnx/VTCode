@@ -52,13 +52,13 @@ pub(crate) async fn read_system_prompt(
     if !available_subagents.is_empty() {
         let mut section = String::from("## Subagents\n");
         section.push_str(
-            "Delegated child agents available in this session. Read-only agents may be used proactively when their description matches; write-capable agents require explicit delegation.\n",
+            "Delegated child agents available in this session. Treat the main thread as the controller: keep the next blocking step local, and delegate only bounded independent work. Read-only agents may be used proactively when their description matches; write-capable agents require explicit delegation.\n",
         );
         section.push_str(
             "Users can explicitly target one with natural language or an `@agent-<name>` mention.\n",
         );
         section.push_str(
-            "If the user explicitly selects a subagent for the task, delegate with `spawn_agent` to that subagent instead of handling the task on the main thread.\n",
+            "If the user explicitly selects a subagent for the task, delegate with `spawn_agent` to that subagent instead of handling the task on the main thread. Join child results back into the parent flow before you depend on them.\n",
         );
         for (name, description, read_only) in available_subagents {
             let suffix = if *read_only {
@@ -117,5 +117,22 @@ mod tests {
             fallback_base_system_prompt(Some(&config)),
             specialized_system_prompt()
         );
+    }
+
+    #[tokio::test]
+    async fn test_read_system_prompt_includes_explicit_subagent_execution_model() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+
+        let prompt = read_system_prompt(
+            workspace.path(),
+            None,
+            &[],
+            &[("explorer".to_string(), "Read-only repo explorer".to_string(), true)],
+        )
+        .await;
+
+        assert!(prompt.contains("main thread as the controller"));
+        assert!(prompt.contains("bounded independent work"));
+        assert!(prompt.contains("Join child results back into the parent flow"));
     }
 }

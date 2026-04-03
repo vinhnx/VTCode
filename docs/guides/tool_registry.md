@@ -44,6 +44,9 @@ First decide whether this should be a built-in VT Code tool at all.
 
 - If the capability is external or org-specific, prefer MCP or a plugin/skill
   manifest instead of adding a new compile-time tool trait implementation.
+- Treat this as an extension-boundary rule, not just an implementation
+  preference: public Rust trait seams create the same "everyone must target the
+  first trait" pressure that Rust coherence makes hard to unwind later.
 - Add a built-in registry tool when VT Code must own the runtime behavior,
   policy surface, or UX directly.
 

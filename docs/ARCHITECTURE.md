@@ -7,7 +7,9 @@ extensibility, and performance. Internally, VT Code uses Rust traits for
 runtime composition. Externally, VT Code prefers protocol- and manifest-driven
 extension seams such as MCP, skills, plugin manifests, and
 `[[custom_providers]]` so third-party integrations do not need to land new Rust
-impls in the core workspace.
+impls in the core workspace. This is deliberate: Rust coherence and orphan-rule
+constraints make public trait APIs a poor default extension boundary for an
+ecosystem-style project.
 
 ## Model + Harness
 
@@ -39,6 +41,15 @@ The harness configuration is intentionally split across three existing surfaces 
 That split keeps VT Code aligned with the current runtime while making the harness explicit enough to evolve. Multi-agent
 orchestration, dynamic tool assembly, and harness self-analysis remain follow-on work after single-agent long-horizon execution is
 stable.
+
+### Explicit Delegation Model
+
+VT Code treats delegation like explicit thread spawning rather than ambient background concurrency.
+
+- The main session stays responsible for the current control flow, user-visible plan, and final integration.
+- Child agents are for bounded sidecar work: focused exploration, isolated verification, or disjoint implementation slices.
+- If the next local action depends on a result, the main session should usually do that work itself instead of delegating and waiting.
+- Child output is advisory until the parent thread reads it, validates it, and folds it back into the main task state.
 
 ### Rig Alignment Boundary
 
@@ -161,7 +172,7 @@ pub trait CacheableTool: Tool {
 
 ## Design Principles
 
-1. **Internal Traits, External Protocols** - Keep Rust traits as internal composition seams; prefer config, manifests, and protocols for third-party extension points
+1. **Internal Traits, External Protocols** - Keep Rust traits as internal composition seams; prefer config, manifests, and protocols for third-party extension points so external integrations do not depend on compile-time impl slots in VT Code
 2. **Mode-based Execution** - Single tools support multiple execution modes
 3. **Simplicity First** - Prefer simple algorithms and control flow until real workload data justifies more complexity
 4. **Data-Oriented Design** - Choose data structures and boundaries so the right algorithm is obvious

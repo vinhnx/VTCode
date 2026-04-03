@@ -52,14 +52,9 @@ impl Session {
             lines.push(Line::from(spans));
         }
 
-        let hint = if cfg!(target_os = "macos") {
-            "⌥ + ↑ edit"
-        } else {
-            "Alt + ↑ edit"
-        };
         let muted_style = self.styles.default_style().add_modifier(Modifier::DIM);
         lines.push(Line::from(vec![Span::styled(
-            hint.to_string(),
+            super::terminal_capabilities::queued_input_edit_hint().to_string(),
             muted_style,
         )]));
 

@@ -376,7 +376,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Up => {
             let edit_queue_modifier = has_alt || (raw_meta && !has_super);
-            if edit_queue_modifier && !session.queued_inputs.is_empty() {
+            if !terminal_capabilities::queued_input_edit_uses_shift_left()
+                && edit_queue_modifier
+                && !session.queued_inputs.is_empty()
+            {
                 if let Some(latest) = session.pop_latest_queued_input() {
                     session.clear_inline_prompt_suggestion();
                     session.input_manager.set_content(latest);
@@ -516,6 +519,23 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Left => {
             if session.input_enabled {
+                let tmux_queue_edit = has_shift
+                    && !has_control
+                    && !has_command
+                    && !has_alt
+                    && terminal_capabilities::queued_input_edit_uses_shift_left()
+                    && !session.queued_inputs.is_empty();
+                if tmux_queue_edit {
+                    if let Some(latest) = session.pop_latest_queued_input() {
+                        session.clear_inline_prompt_suggestion();
+                        session.input_manager.set_content(latest);
+                        session.input_compact_mode = session.input_compact_placeholder().is_some();
+                        session.scroll_manager.set_offset(0);
+                    }
+                    session.mark_dirty();
+                    return Some(InlineEvent::EditQueue);
+                }
+
                 session.clear_inline_prompt_suggestion();
                 if has_shift && has_command {
                     session.select_to_start();

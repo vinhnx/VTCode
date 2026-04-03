@@ -59,6 +59,7 @@ pub use utils::{
 use anyhow::{Result, anyhow};
 use hashbrown::HashMap;
 pub use rmcp::model::ElicitationAction;
+use std::ffi::OsString;
 
 /// MCP protocol version constants
 pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -75,15 +76,11 @@ where
 }
 
 fn create_env_for_mcp_server(
-    extra_env: Option<HashMap<String, String>>,
-) -> HashMap<String, String> {
+    extra_env: Option<HashMap<OsString, OsString>>,
+) -> HashMap<OsString, OsString> {
     DEFAULT_ENV_VARS
         .iter()
-        .filter_map(|var| {
-            std::env::var(var)
-                .ok()
-                .map(|value| (var.to_string(), value))
-        })
+        .filter_map(|var| std::env::var_os(var).map(|value| (OsString::from(*var), value)))
         .chain(extra_env.unwrap_or_default())
         .collect()
 }
@@ -277,12 +274,20 @@ mod tests {
         build_elicitation_validator, directory_to_file_uri, validate_elicitation_payload,
     };
     use crate::mcp::utils::{clear_test_env_override, set_test_env_override};
+    use hashbrown::HashMap;
     use serde_json::{Map, Value, json};
+    use std::ffi::OsString;
 
     // Re-export rmcp types for tests
     use rmcp::model::{
         ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
     };
+
+    #[cfg(unix)]
+    use serial_test::serial;
+
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt;
 
     struct EnvGuard {
         key: &'static str,
@@ -342,6 +347,44 @@ mod tests {
             arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str),
             Some("America/New_York")
         );
+    }
+
+    #[test]
+    fn create_env_merges_configured_values() {
+        let mut extra_env = HashMap::new();
+        extra_env.insert(OsString::from("A"), OsString::from("1"));
+        extra_env.insert(OsString::from("B"), OsString::from("2"));
+
+        let env = create_env_for_mcp_server(Some(extra_env));
+
+        assert_eq!(env.get(&OsString::from("A")), Some(&OsString::from("1")));
+        assert_eq!(env.get(&OsString::from("B")), Some(&OsString::from("2")));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    #[serial]
+    fn create_env_preserves_non_utf8_path() {
+        let original_path = std::env::var_os("PATH");
+        let non_utf8_path = OsString::from_vec(b"/tmp/alpha:\xFFbeta".to_vec());
+
+        // SAFETY: this test runs serially and restores PATH before returning.
+        unsafe {
+            std::env::set_var("PATH", &non_utf8_path);
+        }
+
+        let env = create_env_for_mcp_server(None);
+
+        match original_path {
+            Some(value) => unsafe {
+                std::env::set_var("PATH", value);
+            },
+            None => unsafe {
+                std::env::remove_var("PATH");
+            },
+        }
+
+        assert_eq!(env.get(&OsString::from("PATH")), Some(&non_utf8_path));
     }
 
     #[tokio::test]

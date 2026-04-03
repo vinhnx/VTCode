@@ -129,12 +129,6 @@ https://draft.ryhl.io/blog/shared-mutable-state/
 
 https://github.com/vinhnx/VTCode/issues/621
 
----
-
-sticky last user message in header on scroll, so that user can always see the last message they sent to the agent, which is important for context and reference when the conversation gets long.
-
-For example, if the user sends a message with a task specification or important instructions, they can always see that message at the top of the conversation even as they scroll through the agent's responses and tool outputs. This helps maintain context and ensures that the user can easily refer back to their last input without having to scroll all the way back up.
-
 ===
 
 https://platform.claude.com/cookbook/tool-use-context-engineering-context-engineering-tools

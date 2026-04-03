@@ -22,7 +22,8 @@ Before contributing, please familiarize yourself with:
 
 1. The [README.md](README.md) for an overview of the project
 2. The [Architecture documentation](docs/ARCHITECTURE.md) for understanding the system design
-3. The [Development Guide](docs/development/README.md) for detailed development processes
+3. The [Extension Boundaries guide](docs/development/EXTENSION_BOUNDARIES.md) before adding new trait- or provider-shaped extension points
+4. The [Development Guide](docs/development/README.md) for detailed development processes
 
 ## Development Setup
 
@@ -229,6 +230,7 @@ pub async fn example_function(path: &str) -> Result<()> {
 
 - **LLM Abstractions**: Provider traits with uniform async interfaces supporting OpenAI, Anthropic, Gemini, xAI, DeepSeek, Z.AI, Moonshot AI, OpenRouter, and Ollama
 - **Modular Tools**: Internal trait-based composition for built-in tools, with MCP/manifests preferred for external extensions
+- **Extension Boundaries**: Prefer config, manifests, plugins, and MCP over new public Rust traits for third-party integrations
 - **Configuration Engine**: Deserializes `vtcode.toml` into validated structs
 - **Context Engineering System**: Implements iterative, per-turn curation with token budgeting
 - **Security & Safety**: Tree-sitter-bash for critical shell command validation and OS-native sandboxing

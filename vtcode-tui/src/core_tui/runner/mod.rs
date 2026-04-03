@@ -96,7 +96,45 @@ use events::{EventListener, spawn_event_loop};
 use signal::SignalCleanupGuard;
 use surface::TerminalSurface;
 use terminal_io::{drain_terminal_events, finalize_terminal, prepare_terminal};
-use terminal_modes::{enable_terminal_modes, restore_terminal_modes};
+use terminal_modes::{TerminalModeState, enable_terminal_modes, restore_terminal_modes};
+
+struct TerminalModeRestoreGuard {
+    state: Option<TerminalModeState>,
+}
+
+impl TerminalModeRestoreGuard {
+    fn new(state: TerminalModeState) -> Self {
+        Self { state: Some(state) }
+    }
+
+    fn state_mut(&mut self) -> &mut TerminalModeState {
+        self.state
+            .as_mut()
+            .expect("terminal mode restore guard must stay armed until shutdown")
+    }
+
+    fn restore(&mut self) -> Result<()> {
+        if let Some(state) = self.state.take() {
+            restore_terminal_modes(&state)?;
+        }
+        Ok(())
+    }
+
+    fn restore_silently(&mut self) {
+        if self.state.is_some() {
+            let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
+            if let Err(error) = self.restore() {
+                tracing::warn!(%error, "failed to restore terminal modes");
+            }
+        }
+    }
+}
+
+impl Drop for TerminalModeRestoreGuard {
+    fn drop(&mut self) {
+        self.restore_silently();
+    }
+}
 
 pub struct TuiOptions<E> {
     pub surface_preference: UiSurfacePreference,
@@ -146,10 +184,18 @@ where
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
-    let mut mode_state = enable_terminal_modes(&mut stderr, keyboard_flags, &options.fullscreen)?;
-    mode_state.save_cursor_position(&mut stderr);
+    let mut mode_restore_guard = TerminalModeRestoreGuard::new(enable_terminal_modes(
+        &mut stderr,
+        keyboard_flags,
+        &options.fullscreen,
+    )?);
+    mode_restore_guard
+        .state_mut()
+        .save_cursor_position(&mut stderr);
     if surface.use_alternate() {
-        mode_state.enter_alternate_screen(&mut stderr)?;
+        mode_restore_guard
+            .state_mut()
+            .enter_alternate_screen(&mut stderr)?;
     }
 
     session.update_terminal_title();
@@ -215,8 +261,7 @@ where
     let finalize_result = finalize_terminal(&mut terminal);
 
     // Restore terminal modes (handles all modes including raw mode)
-    let restore_modes_result = restore_terminal_modes(&mode_state);
-    if let Err(error) = restore_modes_result {
+    if let Err(error) = mode_restore_guard.restore() {
         tracing::warn!(%error, "failed to restore terminal modes");
     }
 

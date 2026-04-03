@@ -415,8 +415,15 @@ pub(crate) async fn refresh_openai_login_if_available(
 pub(crate) async fn handle_login_command(
     vt_cfg: Option<&VTCodeConfig>,
     provider: &str,
+    device_code: bool,
 ) -> Result<()> {
     let provider = provider.trim().to_ascii_lowercase();
+    if device_code && provider != CODEX_PROVIDER {
+        return Err(anyhow!(
+            "`--device-code` is currently supported only for `vtcode login codex`."
+        ));
+    }
+
     if provider == CODEX_PROVIDER {
         let client = CodexAppServerClient::connect(vt_cfg).await?;
         let status = client.account_read().await?;
@@ -429,22 +436,42 @@ pub(crate) async fn handle_login_command(
             return Ok(());
         }
 
-        let response = client.account_login_chatgpt().await?;
-        let (auth_url, login_id) = match response {
-            CodexLoginAccountResponse::ChatGpt { auth_url, login_id } => (auth_url, login_id),
+        let response = if device_code {
+            client.account_login_chatgpt_device_code().await?
+        } else {
+            client.account_login_chatgpt().await?
+        };
+        let login_id = match response {
+            CodexLoginAccountResponse::ChatGpt { auth_url, login_id } => {
+                println!("Starting Codex ChatGPT authentication...");
+                open_browser_or_print_url(&auth_url)?;
+                login_id
+            }
+            CodexLoginAccountResponse::ChatGptDeviceCode {
+                verification_url,
+                user_code,
+                login_id,
+            } => {
+                println!("Starting Codex ChatGPT device-code authentication...");
+                println!("Enter this code after signing in:");
+                println!("{user_code}");
+                vtcode_commons::ansi_codes::notify_attention(
+                    true,
+                    Some(&format!("Codex device code: {user_code}")),
+                );
+                open_browser_or_print_url(&verification_url)?;
+                login_id
+            }
             CodexLoginAccountResponse::ApiKey => {
                 println!("Codex is configured with API key authentication.");
                 return Ok(());
             }
             CodexLoginAccountResponse::ChatGptAuthTokens => {
                 return Err(anyhow!(
-                    "Codex requested externally managed ChatGPT tokens; `vtcode login codex` supports only browser-based ChatGPT login"
+                    "Codex requested externally managed ChatGPT tokens; `vtcode login codex` supports only Codex-managed ChatGPT login flows"
                 ));
             }
         };
-
-        println!("Starting Codex ChatGPT authentication...");
-        open_browser_or_print_url(&auth_url)?;
         let mut events = client.subscribe();
         let completion =
             wait_for_codex_account_login_completion(&mut events, Some(&login_id)).await?;
@@ -965,7 +992,7 @@ fn now_secs() -> u64 {
 mod tests {
     use super::{
         clear_openai_login, clear_openrouter_login, cli_browser_open_approved,
-        resolve_openai_authorization_code, wait_for_callback_or_cancel,
+        handle_login_command, resolve_openai_authorization_code, wait_for_callback_or_cancel,
     };
     use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
     use anyhow::anyhow;
@@ -1095,6 +1122,19 @@ mod tests {
 
         assert!(matches!(outcome, AuthCallbackOutcome::Cancelled));
         assert!(!ctrl_c_state.is_cancel_requested());
+    }
+
+    #[tokio::test]
+    async fn device_code_flag_is_rejected_for_non_codex_provider() {
+        let error = handle_login_command(None, "openai", true)
+            .await
+            .expect_err("non-codex device-code login should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("supported only for `vtcode login codex`")
+        );
     }
 
     #[test]

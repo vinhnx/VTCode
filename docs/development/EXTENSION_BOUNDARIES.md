@@ -7,13 +7,19 @@ This document records VT Code's extension policy for contributors.
 Rust traits are a strong internal composition tool, but they are a poor default
 boundary for ecosystem-style extension. When a third party must add support for
 VT Code by implementing or waiting on a crate-local trait, we create the same
-kind of "got there first" pressure that shows up in broader Rust coherence
-discussions.
+kind of "got there first" pressure that shows up in broader Rust coherence and
+orphan-rule discussions. In practice, that pressure makes alternatives harder to
+ship: whichever compile-time trait surface lands first tends to become the one
+every integration must target.
 
 For VT Code, the practical rule is simple:
 
 **Use Rust traits inside the VT Code workspace. Use config, manifests, and
 protocols at the boundary.**
+
+This is a design constraint, not just a style preference. If an external
+integration should work without patching VT Code or coordinating a new upstream
+impl, do not make a public Rust trait the default integration story.
 
 ## Default Extension Order
 
@@ -27,6 +33,14 @@ When adding a new extension point, prefer these seams in order:
 
 If a feature must work for third parties without patching VT Code itself, it
 should usually not start as a new trait in `vtcode-core`.
+
+Two concrete red flags:
+
+- The main expected adopters live outside the VT Code workspace.
+- Two independent integrations could reasonably want to provide the same kind of
+  capability without depending on each other.
+
+If either is true, prefer a protocol or data boundary first.
 
 ## What Counts As Internal
 
@@ -78,3 +92,5 @@ boundary. If the fourth is "yes", stop and redesign.
   for third-party capabilities.
 - Keep adding built-in providers and tools when VT Code must own the runtime
   behavior, but avoid making that the only path for extension.
+- Treat new public traits as a review burden: the proposer should explain why a
+  manifest, config schema, MCP server, or plugin surface is insufficient.

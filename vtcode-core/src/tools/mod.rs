@@ -375,3 +375,4 @@ pub use handlers::{
     intercept_apply_patch,
     new_shared_tracker,
 };
+pub use vtcode_utility_tool_specs::parse_tool_input_schema;

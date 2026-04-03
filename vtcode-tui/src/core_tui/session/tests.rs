@@ -40,6 +40,31 @@ const LABEL_PREFIX: &str = "line";
 const EXTRA_SEGMENT: &str = "\nextra-line";
 static TRANSCRIPT_TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static CLIPBOARD_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+fn with_terminal_env<R>(tmux: Option<&str>, term: Option<&str>, f: impl FnOnce() -> R) -> R {
+    let _guard = TERMINAL_ENV_TEST_LOCK
+        .lock()
+        .expect("terminal env test lock");
+    let original_tmux = std::env::var("TMUX").ok();
+    let original_term = std::env::var("TERM").ok();
+
+    terminal_capabilities::set_test_env_override("TMUX", tmux);
+    terminal_capabilities::set_test_env_override("TERM", term);
+
+    let result = f();
+
+    match original_tmux {
+        Some(value) => terminal_capabilities::set_test_env_override("TMUX", Some(&value)),
+        None => terminal_capabilities::clear_test_env_override("TMUX"),
+    }
+    match original_term {
+        Some(value) => terminal_capabilities::set_test_env_override("TERM", Some(&value)),
+        None => terminal_capabilities::clear_test_env_override("TERM"),
+    }
+
+    result
+}
 
 fn make_segment(text: &str) -> InlineSegment {
     InlineSegment {
@@ -3776,15 +3801,55 @@ fn file_palette_keeps_base_input_and_cursor_active() {
 
 #[test]
 fn alt_up_edits_latest_queued_input() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    with_terminal_env(None, Some("xterm-256color"), || {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    session.handle_command(InlineCommand::SetQueuedInputs {
-        entries: vec!["first".to_string(), "second".to_string()],
+        session.handle_command(InlineCommand::SetQueuedInputs {
+            entries: vec!["first".to_string(), "second".to_string()],
+        });
+
+        let event = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+        assert!(matches!(event, Some(InlineEvent::EditQueue)));
+        assert_eq!(session.input_manager.content(), "second");
     });
+}
 
-    let event = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
-    assert!(matches!(event, Some(InlineEvent::EditQueue)));
-    assert_eq!(session.input_manager.content(), "second");
+#[test]
+fn shift_left_edits_latest_queued_input_in_tmux() {
+    with_terminal_env(
+        Some("/tmp/tmux-1000/default,123,0"),
+        Some("tmux-256color"),
+        || {
+            let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+            session.handle_command(InlineCommand::SetQueuedInputs {
+                entries: vec!["first".to_string(), "second".to_string()],
+            });
+
+            let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+            assert!(matches!(event, Some(InlineEvent::EditQueue)));
+            assert_eq!(session.input_manager.content(), "second");
+        },
+    );
+}
+
+#[test]
+fn app_session_shift_left_edits_latest_queued_input_in_tmux() {
+    with_terminal_env(
+        Some("/tmp/tmux-1000/default,123,0"),
+        Some("tmux-256color"),
+        || {
+            let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+
+            session.handle_command(app_types::InlineCommand::SetQueuedInputs {
+                entries: vec!["first".to_string(), "second".to_string()],
+            });
+
+            let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+            assert!(matches!(event, Some(app_types::InlineEvent::EditQueue)));
+            assert_eq!(session.core.input_manager.content(), "second");
+        },
+    );
 }
 
 #[test]
@@ -6205,38 +6270,69 @@ fn timeline_hidden_keeps_navigation_unselected() {
 
 #[test]
 fn queued_inputs_overlay_bottom_rows() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::SetQueuedInputs {
-        entries: vec![
-            "first queued message".to_string(),
-            "second queued message".to_string(),
-            "third queued message".to_string(),
-        ],
+    with_terminal_env(None, Some("xterm-256color"), || {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.handle_command(InlineCommand::SetQueuedInputs {
+            entries: vec![
+                "first queued message".to_string(),
+                "second queued message".to_string(),
+                "third queued message".to_string(),
+            ],
+        });
+
+        let view = visible_transcript(&mut session);
+        let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
+
+        assert!(
+            footer
+                .iter()
+                .any(|line| line.contains("↳ third queued message")),
+            "latest queued message should render first"
+        );
+        assert!(
+            footer
+                .iter()
+                .any(|line| line.contains("↳ second queued message")),
+            "second-latest queued message should render second"
+        );
+        let hint = if cfg!(target_os = "macos") {
+            "⌥ + ↑ edit"
+        } else {
+            "Alt + ↑ edit"
+        };
+        assert!(
+            footer.iter().any(|line| line.contains(hint)),
+            "hint line should show how to edit queue"
+        );
     });
+}
 
-    let view = visible_transcript(&mut session);
-    let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
+#[test]
+fn queued_inputs_overlay_shows_shift_left_hint_in_tmux() {
+    with_terminal_env(
+        Some("/tmp/tmux-1000/default,123,0"),
+        Some("tmux-256color"),
+        || {
+            let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+            session.handle_command(InlineCommand::SetQueuedInputs {
+                entries: vec![
+                    "first queued message".to_string(),
+                    "second queued message".to_string(),
+                ],
+            });
 
-    assert!(
-        footer
-            .iter()
-            .any(|line| line.contains("↳ third queued message")),
-        "latest queued message should render first"
-    );
-    assert!(
-        footer
-            .iter()
-            .any(|line| line.contains("↳ second queued message")),
-        "second-latest queued message should render second"
-    );
-    let hint = if cfg!(target_os = "macos") {
-        "⌥ + ↑ edit"
-    } else {
-        "Alt + ↑ edit"
-    };
-    assert!(
-        footer.iter().any(|line| line.contains(hint)),
-        "hint line should show how to edit queue"
+            let view = visible_transcript(&mut session);
+            let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
+            let hint = if cfg!(target_os = "macos") {
+                "⇧ + ← edit"
+            } else {
+                "Shift + ← edit"
+            };
+            assert!(
+                footer.iter().any(|line| line.contains(hint)),
+                "hint line should show the tmux-safe queue edit binding"
+            );
+        },
     );
 }
 

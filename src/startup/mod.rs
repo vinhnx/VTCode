@@ -401,6 +401,7 @@ mod validation_tests {
         assert!(can_start_without_provider_auth(None));
         assert!(!can_start_without_provider_auth(Some(&Commands::Login {
             provider: "openai".to_string(),
+            device_code: false,
         })));
     }
 

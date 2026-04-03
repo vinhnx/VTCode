@@ -25,7 +25,7 @@ pub type HttpTransport = StreamableHttpClientTransport<rmcp_reqwest::Client>;
 /// A TokioChildProcess transport ready to use with RMCP client
 pub fn create_stdio_transport(
     stdio_config: &McpStdioServerConfig,
-    env: &hashbrown::HashMap<String, String>,
+    env: &hashbrown::HashMap<OsString, OsString>,
 ) -> Result<TokioChildProcess> {
     let mut cmd = Command::new(&stdio_config.command);
 
@@ -64,7 +64,7 @@ pub fn create_stdio_transport_with_stderr(
     program: &OsString,
     args: &[OsString],
     working_dir: Option<&PathBuf>,
-    env: &hashbrown::HashMap<String, String>,
+    env: &hashbrown::HashMap<OsString, OsString>,
 ) -> Result<(TokioChildProcess, Option<tokio::process::ChildStderr>)> {
     let mut cmd = Command::new(program);
 

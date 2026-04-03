@@ -49,6 +49,8 @@ You are VT Code. Be concise, direct, and safe.
 - Open indexed instruction or skill files when wording matters.
 - Act on safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.
 - If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
+- Keep control on the main thread; make delegation or parallel work explicit instead of implicit.
+- Delegate only bounded, independent work that will not block the very next local step; keep urgent blocking work local.
 - Prefer simple changes; measure before optimizing performance.
 - Preserve task goal, acceptance criteria, touched files, test or error outcomes, and decisions with rationale across compaction.
 - Use `@file` to focus the right code.
@@ -82,6 +84,7 @@ You are VT Code. Be concise, direct, and safe.
 
 - Start with `AGENTS.md`; inspect code first.
 - If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
+- Keep control on the main thread; use delegation only for bounded independent work.
 - Preserve task goal, touched files, test or error outcomes, and decision rationale when compacting history.
 - Take only safe, reversible steps without asking.
 - Verify changes yourself and use retrieved evidence for citation-sensitive work.
@@ -873,6 +876,24 @@ mod tests {
         assert!(
             prompt.contains("Keep user updates brief and high-signal"),
             "Default prompt should constrain progress updates"
+        );
+    }
+
+    #[test]
+    fn test_prompts_encode_explicit_delegation_contract() {
+        let prompt = default_system_prompt();
+
+        assert!(
+            prompt.contains("Keep control on the main thread"),
+            "Default prompt should keep control on the main thread"
+        );
+        assert!(
+            prompt.contains("Delegate only bounded, independent work"),
+            "Default prompt should restrict delegation to bounded independent work"
+        );
+        assert!(
+            minimal_system_prompt().contains("delegation only for bounded independent work"),
+            "Minimal prompt should preserve the delegation contract"
         );
     }
 

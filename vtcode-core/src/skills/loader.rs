@@ -117,9 +117,18 @@ struct CodexSkillsConfig {
 
 #[derive(Debug, Deserialize)]
 struct CodexSkillToggle {
-    path: PathBuf,
+    #[serde(default)]
+    path: Option<PathBuf>,
+    #[serde(default)]
+    name: Option<String>,
     #[serde(default = "default_skill_toggle_enabled")]
     enabled: bool,
+}
+
+#[derive(Debug, Default)]
+struct DisabledSkillSelectors {
+    paths: HashSet<PathBuf>,
+    names: HashSet<String>,
 }
 
 fn default_skill_toggle_enabled() -> bool {
@@ -127,37 +136,50 @@ fn default_skill_toggle_enabled() -> bool {
 }
 
 fn filter_disabled_skills(outcome: &mut SkillLoadOutcome, home_dir: Option<&Path>) {
-    let disabled = disabled_skill_paths(home_dir);
-    if disabled.is_empty() {
+    let disabled = disabled_skill_selectors(home_dir);
+    if disabled.paths.is_empty() && disabled.names.is_empty() {
         return;
     }
 
     outcome.skills.retain(|skill| {
         let canonical = normalize_path(&skill.path).unwrap_or_else(|_| skill.path.clone());
-        !disabled.contains(&canonical)
+        !disabled.paths.contains(&canonical) && !disabled.names.contains(&skill.name)
     });
 }
 
-fn disabled_skill_paths(home_dir: Option<&Path>) -> HashSet<PathBuf> {
+fn disabled_skill_selectors(home_dir: Option<&Path>) -> DisabledSkillSelectors {
     let Some(home_dir) = home_dir else {
-        return HashSet::new();
+        return DisabledSkillSelectors::default();
     };
 
     let config_path = home_dir.join(".codex").join("config.toml");
     let Ok(content) = fs::read_to_string(&config_path) else {
-        return HashSet::new();
+        return DisabledSkillSelectors::default();
     };
     let Ok(config) = toml::from_str::<CodexConfig>(&content) else {
-        return HashSet::new();
+        return DisabledSkillSelectors::default();
     };
 
-    config
+    let mut selectors = DisabledSkillSelectors::default();
+    for entry in config
         .skills
         .config
         .into_iter()
         .filter(|entry| !entry.enabled)
-        .map(|entry| normalize_path(&entry.path).unwrap_or(entry.path))
-        .collect()
+    {
+        if let Some(path) = entry.path {
+            selectors
+                .paths
+                .insert(normalize_path(&path).unwrap_or(path));
+        }
+        if let Some(name) = entry.name.map(|name| name.trim().to_string())
+            && !name.is_empty()
+        {
+            selectors.names.insert(name);
+        }
+    }
+
+    selectors
 }
 
 fn skill_roots_with_home_dir(
@@ -982,7 +1004,9 @@ mod tests {
     use crate::skills::CommandSkillBackend;
     use crate::skills::command_skills::command_skill_specs;
     use crate::skills::system::{install_system_skills, system_cache_root_dir};
+    use std::fs;
     use tempfile::TempDir;
+    use tempfile::tempdir;
 
     fn manifest(name: &str, description: &str) -> SkillManifest {
         SkillManifest {
@@ -1150,5 +1174,111 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn write_skill(dir: &Path, name: &str, description: &str) {
+        fs::create_dir_all(dir).expect("create skill dir");
+        fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: {description}\n---\n\nUse this skill.\n"),
+        )
+        .expect("write SKILL.md");
+    }
+
+    fn write_codex_skill_config(home_dir: &Path, contents: &str) {
+        let config_dir = home_dir.join(".codex");
+        fs::create_dir_all(&config_dir).expect("create config dir");
+        fs::write(config_dir.join("config.toml"), contents).expect("write config");
+    }
+
+    fn skill_loader_config_for(workspace: &Path, codex_home: &Path) -> SkillLoaderConfig {
+        SkillLoaderConfig {
+            codex_home: codex_home.to_path_buf(),
+            cwd: workspace.to_path_buf(),
+            project_root: find_git_root(workspace),
+            include_bundled_system_skills: false,
+        }
+    }
+
+    #[test]
+    fn disabled_skill_config_supports_stable_names() {
+        let workspace = tempdir().expect("workspace");
+        fs::create_dir(workspace.path().join(".git")).expect("create .git");
+
+        let home = tempdir().expect("home");
+        let codex_home = tempdir().expect("codex home");
+
+        let old_plugin_skill_dir = workspace
+            .path()
+            .join(".agents/plugins/example-plugin-v1/skills/release-helper");
+        write_skill(
+            &old_plugin_skill_dir,
+            "release-helper",
+            "Prepare release notes",
+        );
+
+        write_codex_skill_config(
+            home.path(),
+            &format!(
+                "[[skills.config]]\nname = \"release-helper\"\npath = \"{}\"\nenabled = false\n",
+                old_plugin_skill_dir.display()
+            ),
+        );
+
+        let new_plugin_skill_dir = workspace
+            .path()
+            .join(".agents/plugins/example-plugin-v2/skills/release-helper");
+        write_skill(
+            &new_plugin_skill_dir,
+            "release-helper",
+            "Prepare release notes",
+        );
+
+        fs::remove_dir_all(workspace.path().join(".agents/plugins/example-plugin-v1"))
+            .expect("remove old plugin version");
+
+        let outcome = load_skills_with_home_dir(
+            &skill_loader_config_for(workspace.path(), codex_home.path()),
+            Some(home.path()),
+        );
+
+        assert!(
+            outcome
+                .skills
+                .iter()
+                .all(|skill| skill.name != "release-helper"),
+            "expected release-helper to stay disabled after plugin path changed"
+        );
+    }
+
+    #[test]
+    fn disabled_skill_config_preserves_path_based_entries() {
+        let workspace = tempdir().expect("workspace");
+        let home = tempdir().expect("home");
+        let codex_home = tempdir().expect("codex home");
+
+        let skill_dir = home.path().join(".agents/skills/path-disabled");
+        write_skill(&skill_dir, "path-disabled", "Disabled by explicit path");
+
+        write_codex_skill_config(
+            home.path(),
+            &format!(
+                "[[skills.config]]\npath = \"{}\"\nenabled = false\n",
+                skill_dir.join("SKILL.md").display()
+            ),
+        );
+
+        let outcome = load_skills_with_home_dir(
+            &skill_loader_config_for(workspace.path(), codex_home.path()),
+            Some(home.path()),
+        );
+
+        assert!(
+            outcome
+                .skills
+                .iter()
+                .all(|skill| skill.name != "path-disabled"),
+            "expected path-disabled to remain filtered by legacy path config"
+        );
     }
 }

@@ -174,6 +174,10 @@ impl SandboxManager {
         profile.push_str("(allow process-fork)\n");
         profile.push_str("(allow sysctl-read)\n");
         profile.push_str("(allow mach-lookup)\n");
+        profile
+            .push_str("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))\n");
+        profile.push_str("(allow mach-lookup (global-name \"com.apple.cfprefsd.daemon\") (global-name \"com.apple.cfprefsd.agent\") (local-name \"com.apple.cfprefsd.agent\"))\n");
+        profile.push_str("(allow user-preference-read)\n");
 
         // Block sensitive paths BEFORE allowing general read access
         // This ensures deny rules take precedence
@@ -342,5 +346,22 @@ mod tests {
         // Read-only = platform default
         let result = manager.determine_sandbox_type(&SandboxPolicy::read_only());
         assert_eq!(result.unwrap(), SandboxType::platform_default());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn seatbelt_profile_includes_default_preferences_policy() {
+        let manager = SandboxManager::new();
+        let profile =
+            manager.build_seatbelt_profile(&SandboxPolicy::read_only(), Path::new("/tmp"));
+
+        assert!(
+            profile
+                .contains("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))")
+        );
+        assert!(profile.contains("(global-name \"com.apple.cfprefsd.daemon\")"));
+        assert!(profile.contains("(global-name \"com.apple.cfprefsd.agent\")"));
+        assert!(profile.contains("(local-name \"com.apple.cfprefsd.agent\")"));
+        assert!(profile.contains("(allow user-preference-read)"));
     }
 }

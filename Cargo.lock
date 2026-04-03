@@ -6827,6 +6827,8 @@ dependencies = [
 name = "vtcode-utility-tool-specs"
 version = "0.96.12"
 dependencies = [
+ "rmcp",
+ "serde",
  "serde_json",
 ]
 

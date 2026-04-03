@@ -11,12 +11,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
-use tracing::warn;
+use tracing::{Instrument, Span, warn};
+use url::Url;
 
 use super::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS};
 
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig, McpTransportConfig};
 use vtcode_config::auth::McpOAuthService;
+use vtcode_utility_tool_specs::parse_mcp_tool;
 
 use super::{McpClient, RmcpClient};
 use super::{
@@ -61,12 +63,17 @@ impl McpProvider {
                 let program = OsString::from(&stdio.command);
                 let args: Vec<OsString> = stdio.args.iter().map(OsString::from).collect();
                 let working_dir = stdio.working_directory.as_ref().map(PathBuf::from);
+                let env: HashMap<OsString, OsString> = config
+                    .env
+                    .iter()
+                    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+                    .collect();
                 let client = RmcpClient::new_stdio_client(
                     config.name.clone(),
                     program,
                     args,
                     working_dir,
-                    Some(config.env.clone()),
+                    Some(env),
                     elicitation_handler.clone(),
                 )
                 .await?;
@@ -255,7 +262,13 @@ impl McpProvider {
             })?;
         let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
         let client = self.client.load_full();
-        client.call_tool(params, timeout).await
+        async move { client.call_tool(params, timeout).await }
+            .instrument(mcp_tool_call_span(
+                &self.name,
+                tool_name,
+                &self.config.transport,
+            ))
+            .await
     }
 
     async fn add_argument_defaults(
@@ -560,11 +573,14 @@ impl McpProvider {
         tools
             .into_iter()
             .filter(|tool| allowlist.is_tool_allowed(&self.name, &tool.name))
-            .map(|tool| McpToolInfo {
-                description: tool.description.unwrap_or_default().to_string(),
-                input_schema: serde_json::to_value(&tool.input_schema).unwrap_or(Value::Null),
-                provider: self.name.clone(),
-                name: tool.name.to_string(),
+            .map(|tool| {
+                let parsed = parse_mcp_tool(&tool);
+                McpToolInfo {
+                    description: parsed.description,
+                    input_schema: parsed.input_schema,
+                    provider: self.name.clone(),
+                    name: parsed.name,
+                }
             })
             .collect()
     }
@@ -603,5 +619,107 @@ impl McpProvider {
                 arguments: prompt.arguments.clone().unwrap_or_default(),
             })
             .collect()
+    }
+}
+
+fn mcp_tool_call_span(
+    provider_name: &str,
+    tool_name: &str,
+    transport: &McpTransportConfig,
+) -> Span {
+    let (transport_label, server_address, server_port) = match transport {
+        McpTransportConfig::Stdio(_) => ("stdio", String::new(), 0_u16),
+        McpTransportConfig::Http(http) => {
+            let (server_address, server_port) = Url::parse(&http.endpoint)
+                .ok()
+                .and_then(|url| {
+                    url.host_str().map(|host| {
+                        (
+                            host.to_string(),
+                            url.port_or_known_default().unwrap_or_default(),
+                        )
+                    })
+                })
+                .unwrap_or_default();
+            ("streamable_http", server_address, server_port)
+        }
+    };
+
+    tracing::info_span!(
+        "mcp.tools.call",
+        provider = provider_name,
+        tool = tool_name,
+        rpc_system = "jsonrpc",
+        rpc_method = "tools/call",
+        transport = transport_label,
+        server_address = server_address.as_str(),
+        server_port = server_port,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mcp_tool_call_span;
+    use crate::config::mcp::{McpHttpServerConfig, McpStdioServerConfig, McpTransportConfig};
+    use crate::utils::trace_writer::FlushableWriter;
+    use std::fs;
+    use tempfile::tempdir;
+    use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
+
+    #[test]
+    fn mcp_tool_call_span_records_http_metadata() {
+        let tempdir = tempdir().expect("tempdir");
+        let log_file = tempdir.path().join("trace.log");
+        let writer = FlushableWriter::open(&log_file).expect("trace writer");
+        let writer_for_layer = writer.clone();
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(move || writer_for_layer.clone())
+                .with_span_events(FmtSpan::FULL)
+                .with_ansi(false),
+        );
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        {
+            let span = mcp_tool_call_span(
+                "calendar",
+                "get_events",
+                &McpTransportConfig::Http(McpHttpServerConfig {
+                    endpoint: "https://example.com:8443/mcp".to_string(),
+                    api_key_env: None,
+                    oauth: None,
+                    protocol_version: "2024-11-05".to_string(),
+                    http_headers: Default::default(),
+                    env_http_headers: Default::default(),
+                }),
+            );
+            let _entered = span.enter();
+        }
+
+        writer.flush();
+        let logs = fs::read_to_string(&log_file).expect("trace log");
+        assert!(logs.contains("mcp.tools.call"));
+        assert!(logs.contains("provider=\"calendar\""));
+        assert!(logs.contains("tool=\"get_events\""));
+        assert!(logs.contains("rpc_system=\"jsonrpc\""));
+        assert!(logs.contains("rpc_method=\"tools/call\""));
+        assert!(logs.contains("transport=\"streamable_http\""));
+        assert!(logs.contains("server_address=\"example.com\""));
+        assert!(logs.contains("server_port=8443"));
+    }
+
+    #[test]
+    fn mcp_tool_call_span_defaults_stdio_transport() {
+        let span = mcp_tool_call_span(
+            "filesystem",
+            "read_file",
+            &McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "rmcp-server".to_string(),
+                args: Vec::new(),
+                working_directory: None,
+            }),
+        );
+
+        assert_eq!(span.metadata().expect("metadata").name(), "mcp.tools.call");
     }
 }

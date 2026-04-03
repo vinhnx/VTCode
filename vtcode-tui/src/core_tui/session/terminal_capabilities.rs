@@ -40,6 +40,16 @@ fn read_env_var(key: &str) -> Option<String> {
     env::var(key).ok()
 }
 
+#[cfg(test)]
+pub(crate) fn set_test_env_override(key: &str, value: Option<&str>) {
+    test_env_overrides::set(key, value);
+}
+
+#[cfg(test)]
+pub(crate) fn clear_test_env_override(key: &str) {
+    test_env_overrides::clear(key);
+}
+
 /// Detects if the current terminal supports Unicode box drawing characters
 ///
 /// This function checks various environment variables and terminal settings
@@ -109,6 +119,30 @@ pub fn get_border_type() -> ratatui::widgets::BorderType {
         ratatui::widgets::BorderType::Rounded
     } else {
         ratatui::widgets::BorderType::Plain
+    }
+}
+
+pub(crate) fn queued_input_edit_uses_shift_left() -> bool {
+    if read_env_var("TMUX").is_some() {
+        return true;
+    }
+
+    read_env_var("TERM")
+        .map(|term| term.to_lowercase().contains("tmux"))
+        .unwrap_or(false)
+}
+
+pub(crate) fn queued_input_edit_hint() -> &'static str {
+    if queued_input_edit_uses_shift_left() {
+        if cfg!(target_os = "macos") {
+            "⇧ + ← edit"
+        } else {
+            "Shift + ← edit"
+        }
+    } else if cfg!(target_os = "macos") {
+        "⌥ + ↑ edit"
+    } else {
+        "Alt + ↑ edit"
     }
 }
 
@@ -202,6 +236,32 @@ mod tests {
         assert!(matches!(border_type, ratatui::widgets::BorderType::Plain));
 
         // Restore original TERM
+        match original_term {
+            Some(val) => set_var("TERM", &val),
+            None => clear_var("TERM"),
+        }
+    }
+
+    #[test]
+    fn queued_input_edit_binding_switches_for_tmux() {
+        let original_tmux = env::var("TMUX").ok();
+        let original_term = env::var("TERM").ok();
+
+        remove_var("TMUX");
+        set_var("TERM", "xterm-256color");
+        assert!(!queued_input_edit_uses_shift_left());
+
+        set_var("TMUX", "/tmp/tmux-1000/default,123,0");
+        assert!(queued_input_edit_uses_shift_left());
+
+        remove_var("TMUX");
+        set_var("TERM", "tmux-256color");
+        assert!(queued_input_edit_uses_shift_left());
+
+        match original_tmux {
+            Some(val) => set_var("TMUX", &val),
+            None => clear_var("TMUX"),
+        }
         match original_term {
             Some(val) => set_var("TERM", &val),
             None => clear_var("TERM"),

@@ -18,6 +18,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+pub use vtcode_utility_tool_specs::{
+    AdditionalProperties, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool,
+};
 
 /// Tool kind classification (from Codex)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -425,82 +428,6 @@ impl ToolSpec {
             ToolSpec::WebSearch {} => "web_search",
             ToolSpec::LocalShell {} => "local_shell",
         }
-    }
-}
-
-/// OpenAI Responses API tool definition (from Codex)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ResponsesApiTool {
-    pub name: String,
-    pub description: String,
-    #[serde(default)]
-    pub strict: bool,
-    pub parameters: JsonSchema,
-}
-
-/// Freeform tool definition (from Codex)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FreeformTool {
-    pub name: String,
-    pub description: String,
-    pub format: FreeformToolFormat,
-}
-
-/// Freeform tool format
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FreeformToolFormat {
-    pub lark_grammar: Option<String>,
-    pub examples: Vec<String>,
-}
-
-/// JSON Schema for tool parameters (from Codex)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum JsonSchema {
-    Object {
-        #[serde(default)]
-        properties: std::collections::BTreeMap<String, JsonSchema>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        required: Option<Vec<String>>,
-        #[serde(
-            rename = "additionalProperties",
-            skip_serializing_if = "Option::is_none"
-        )]
-        additional_properties: Option<AdditionalProperties>,
-        #[serde(rename = "anyOf", skip_serializing_if = "Option::is_none")]
-        any_of: Option<Vec<Value>>,
-    },
-    String {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Number {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Boolean {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Array {
-        items: Box<JsonSchema>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Null,
-}
-
-/// Additional properties configuration
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum AdditionalProperties {
-    Boolean(bool),
-    Schema(Box<JsonSchema>),
-}
-
-impl From<bool> for AdditionalProperties {
-    fn from(value: bool) -> Self {
-        AdditionalProperties::Boolean(value)
     }
 }
 

@@ -14,10 +14,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::str::FromStr;
+use vtcode_utility_tool_specs::parse_tool_input_schema;
 
-use super::tool_handler::{
-    AdditionalProperties, ConfiguredToolSpec, JsonSchema, ResponsesApiTool, ToolSpec,
-};
+use super::tool_handler::{ConfiguredToolSpec, ResponsesApiTool, ToolSpec};
 
 pub use crate::tools::registry::ToolCatalogSource;
 
@@ -481,7 +480,7 @@ impl ToolCatalogEntry {
                 name: public_name.clone(),
                 description: description.clone(),
                 strict: false,
-                parameters: json_schema_from_value(&parameters),
+                parameters: parse_tool_input_schema(&parameters),
             }),
             supports_parallel_tool_calls,
         );
@@ -673,90 +672,6 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
             }
         }
         _ => {}
-    }
-}
-
-fn json_schema_from_value(value: &Value) -> JsonSchema {
-    match value {
-        Value::Object(map) => match map.get("type").and_then(Value::as_str) {
-            Some("object") => {
-                let properties = map
-                    .get("properties")
-                    .and_then(Value::as_object)
-                    .map(|props| {
-                        props
-                            .iter()
-                            .map(|(key, value)| (key.clone(), json_schema_from_value(value)))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let required = map.get("required").and_then(Value::as_array).map(|items| {
-                    items
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(ToOwned::to_owned)
-                        .collect::<Vec<_>>()
-                });
-                let additional_properties =
-                    map.get("additionalProperties").map(|value| match value {
-                        Value::Bool(flag) => AdditionalProperties::Boolean(*flag),
-                        Value::Object(_) => {
-                            AdditionalProperties::Schema(Box::new(json_schema_from_value(value)))
-                        }
-                        _ => AdditionalProperties::Boolean(true),
-                    });
-                let any_of = map.get("anyOf").and_then(Value::as_array).cloned();
-
-                JsonSchema::Object {
-                    properties,
-                    required,
-                    additional_properties,
-                    any_of,
-                }
-            }
-            Some("array") => JsonSchema::Array {
-                items: Box::new(
-                    map.get("items")
-                        .map(json_schema_from_value)
-                        .unwrap_or(JsonSchema::Null),
-                ),
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("boolean") => JsonSchema::Boolean {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("integer" | "number") => JsonSchema::Number {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("string") => JsonSchema::String {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            _ => {
-                if map.contains_key("enum") {
-                    JsonSchema::String {
-                        description: map
-                            .get("description")
-                            .and_then(Value::as_str)
-                            .map(ToOwned::to_owned),
-                    }
-                } else {
-                    JsonSchema::Null
-                }
-            }
-        },
-        _ => JsonSchema::Null,
     }
 }
 

@@ -608,6 +608,9 @@ pub enum Commands {
     Login {
         /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
         provider: String,
+        /// Use device-code login when the provider supports it (currently `codex` only)
+        #[arg(long, default_value_t = false)]
+        device_code: bool,
     },
 
     /// Clear stored authentication credentials for a provider
@@ -1634,6 +1637,19 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(super::Commands::Init { force: true })
+        ));
+    }
+
+    #[test]
+    fn parses_codex_login_device_code_flag() {
+        let cli = Cli::parse_from(["vtcode", "login", "codex", "--device-code"]);
+
+        assert!(matches!(
+            cli.command,
+            Some(super::Commands::Login {
+                ref provider,
+                device_code: true
+            }) if provider == "codex"
         ));
     }
 }

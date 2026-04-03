@@ -2,6 +2,14 @@
 
 use serde_json::{Value, json};
 
+mod json_schema;
+mod mcp_tool;
+mod responses_api;
+
+pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
+pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
+pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
+
 pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
     "Prefer stable semantic @@ anchors such as function, class, method, or impl names.";
 pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Alias for input";
