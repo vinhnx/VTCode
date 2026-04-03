@@ -178,3 +178,7 @@ https://zread.ai/instructkr/claude-code
 ---
 
 https://x.com/jpschroeder/status/2038960058499768427
+
+===
+
+https://x.com/cryptodavidw/status/2039198363615457538
