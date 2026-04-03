@@ -125,6 +125,7 @@ vtcode-tui = { path = "../vtcode-tui", version = "0.96.12" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.96.12" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.96.12" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.96.12" }
+vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.96.12" }
 vtcode-ghostty-vt-sys = { path = "../vtcode-ghostty-vt-sys", version = "0.96.12" }
 
 # Schema generation

@@ -21,8 +21,8 @@ use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::terminal_setup::detector::TerminalType;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_terminal_detection::TerminalType;
 use vtcode_tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};

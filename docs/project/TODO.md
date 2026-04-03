@@ -44,22 +44,6 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
-Two of the most powerful features in Claude Code: /loop and /schedule
-
-Use these to schedule Claude to run automatically at a set interval, for up to a week at a time.
-
-I have a bunch of loops running locally:
-
-- /loop 5m /babysit, to auto-address code review, auto-rebase, and shepherd my PRs to production
-- /loop 30m /slack-feedback, to automatically put up PRs for Slack feedback every 30 mins
-- /loop /post-merge-sweeper to put up PRs to address code review comments I missed
-- /loop 1h /pr-pruner to close out stale and no longer necessary PRs
-- lots more!..
-
-Experiment with turning workflows into skills + loops. It's powerful.
-
----
-
 Use hooks to deterministically run logic as part of the agent lifecycle
 
 For example, use hooks to:
@@ -78,21 +62,6 @@ https://deepwiki.com/instructkr/claw-code
 --
 
 https://developers.openai.com/codex/app-server
-
----
-
-check and fix codemod follow Alex advices
-
-```
-what do you think about these
-
-1. [if possible] a deterministic step with no FP that transforms simple cases
-2. [if possible] A determinism step with no FN that grabs (dont change) all possible remaining cases, even if some should not change but ai will decide that later in the next step.
-3. An AI step that has the instructions to handle only the tricky cases and instructions not to change things that it shouldn’t.
-   a) Point out any cases that aren’t/can’t be automated
-   b) Point out any edge cases so AI can review them
-   c) Post-codemod review instructions
-```
 
 ---
 
@@ -154,12 +123,6 @@ THIS: https://github.com/openai/codex/pull/15525
 
 ===
 
-/init becomes a guided AGENTS.md setup
-
-it reads the repo, figures out the stuff agents actually need to know, and asks a couple targeted questions when the important bits aren’t obvious from the codebase
-
-===
-
 https://draft.ryhl.io/blog/shared-mutable-state/
 
 ---
@@ -173,14 +136,6 @@ sticky last user message in header on scroll, so that user can always see the la
 For example, if the user sends a message with a task specification or important instructions, they can always see that message at the top of the conversation even as they scroll through the agent's responses and tool outputs. This helps maintain context and ensures that the user can easily refer back to their last input without having to scroll all the way back up.
 
 ===
-
-fix deploy
-
-https://github.com/vinhnx/VTCode/actions/runs/23882925364/job/69639657112
-
-https://github.com/vinhnx/VTCode/actions/runs/23882925364/job/69639657115#logs
-
-==
 
 https://platform.claude.com/cookbook/tool-use-context-engineering-context-engineering-tools
 
@@ -211,3 +166,7 @@ In self-evaluation, the generator reliably praised its own work, even when the o
 Every component in an agent harness encodes an assumption about what the model can't do on its own. When they upgraded from Opus 4.5 to 4.6, the sprint decomposition became unnecessary (this is a good example of why you have to rewrite all your code from scratch every 6 months). The model held coherence over 2+ hour builds without it. The harness doesn't shrink as models improve.
 
 One last note that seems like Claude is keeping the planner focused on product context and high-level technical design, not granular implementation details, while Codex folks are posting against a separate planning mode. If the planner gets a technical detail wrong, the error cascades into downstream implementation. Better to constrain on what to build and let the generator figure out how.
+
+---
+
+https://code.claude.com/docs/en/fullscreen
