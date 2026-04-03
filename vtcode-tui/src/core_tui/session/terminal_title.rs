@@ -1,39 +1,79 @@
-/// Terminal title management for dynamic title updates
-///
-/// This module provides functionality to update the terminal title
-/// based on the current agent activity state.
-///
-/// ## Terminal Compatibility
-///
-/// Uses Crossterm `terminal::SetTitle`, which maps to standard terminal title
-/// sequences across:
-/// - iTerm2 (macOS)
-/// - Kitty (cross-platform)
-/// - Alacritty (cross-platform)
-/// - Ghostty (cross-platform)
-/// - Warp (macOS)
-/// - Terminal.app (macOS)
-/// - WezTerm (cross-platform)
-/// - Windows Terminal (Windows 10+)
-/// - Most XTerm-compatible terminals
-///
-/// References:
-/// - XTerm control sequences: OSC 2 sets window title
-/// - Crossterm SetTitle uses OSC 2 internally
-use ratatui::crossterm::{execute, terminal::SetTitle};
+use std::io::Write;
+
+use crate::config::constants::ui;
 
 use super::Session;
 
-/// Maximum length for terminal title to avoid truncation issues
 const MAX_TITLE_LENGTH: usize = 128;
+const OSC_SET_WINDOW_TITLE: &str = "\u{1b}]0;";
+const OSC_TERMINATOR: &str = "\u{7}";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerminalTitleItem {
+    AppName,
+    Project,
+    Spinner,
+    Status,
+    Thread,
+    GitBranch,
+    Model,
+    TaskProgress,
+}
+
+impl TerminalTitleItem {
+    fn from_id(id: &str) -> Option<Self> {
+        match id.trim() {
+            "app-name" => Some(Self::AppName),
+            "project" => Some(Self::Project),
+            "spinner" => Some(Self::Spinner),
+            "status" => Some(Self::Status),
+            "thread" => Some(Self::Thread),
+            "git-branch" => Some(Self::GitBranch),
+            "model" => Some(Self::Model),
+            "task-progress" => Some(Self::TaskProgress),
+            _ => None,
+        }
+    }
+
+    fn default_items() -> [Self; 2] {
+        [Self::Spinner, Self::Project]
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerminalTitleStatus {
+    Ready,
+    Thinking,
+    Working,
+    Waiting,
+    Undoing,
+    ActionRequired,
+}
+
+impl TerminalTitleStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Ready => "Ready",
+            Self::Thinking => "Thinking",
+            Self::Working => "Working",
+            Self::Waiting => "Waiting",
+            Self::Undoing => "Undoing",
+            Self::ActionRequired => "Action Required",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RenderedTitlePart {
+    text: String,
+    spinner: bool,
+}
 
 impl Session {
-    /// Set the workspace root path for dynamic title generation
     pub fn set_workspace_root(&mut self, workspace_root: Option<std::path::PathBuf>) {
         self.workspace_root = workspace_root;
     }
 
-    /// Extract a short project name from the workspace path
     fn extract_project_name(&self) -> String {
         self.workspace_root
             .as_ref()
@@ -45,252 +85,372 @@ impl Session {
             .unwrap_or_else(|| self.app_name.clone())
     }
 
-    /// Strip spinner characters and leading whitespace from status text
     fn strip_spinner_prefix(text: &str) -> &str {
         text.trim_start_matches(|c: char| {
-            // Braille spinner frames
-            c == '⠋' || c == '⠙' || c == '⠹' || c == '⠸' || c == '⠼'
-                || c == '⠴' || c == '⠦' || c == '⠧' || c == '⠇' || c == '⠏'
-                // Simple spinners
-                || c == '-' || c == '\\' || c == '|' || c == '/' || c == '.'
+            c == '⠋'
+                || c == '⠙'
+                || c == '⠹'
+                || c == '⠸'
+                || c == '⠼'
+                || c == '⠴'
+                || c == '⠦'
+                || c == '⠧'
+                || c == '⠇'
+                || c == '⠏'
+                || c == '-'
+                || c == '\\'
+                || c == '|'
+                || c == '/'
+                || c == '.'
         })
         .trim_start()
     }
 
-    /// Extract action verb from status text
-    /// Status format: "⠋ Running command: cargo build" or "Running tool: read_file"
-    fn extract_action_from_status(&self) -> Option<String> {
-        let left = self.input_status_left.as_deref()?;
-        let cleaned = Self::strip_spinner_prefix(left);
+    fn terminal_title_status(&self) -> TerminalTitleStatus {
+        let left = self
+            .input_status_left
+            .as_deref()
+            .map(Self::strip_spinner_prefix)
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
 
-        // Check for common action patterns
-        if cleaned.contains("Running command:") || cleaned.contains("Running tool:") {
-            return Some("Running".to_string());
+        if self.has_status_spinner()
+            || left.contains("action required")
+            || left.contains("approval")
+            || left.contains("input required")
+        {
+            TerminalTitleStatus::ActionRequired
+        } else if left.contains("undo") || left.contains("rewind") || left.contains("revert") {
+            TerminalTitleStatus::Undoing
+        } else if left.contains("waiting") || left.contains("queued") || left.contains("paused") {
+            TerminalTitleStatus::Waiting
+        } else if self.thinking_spinner.is_active
+            || left.contains("thinking")
+            || left.contains("processing")
+        {
+            TerminalTitleStatus::Thinking
+        } else if self.is_running_activity() {
+            TerminalTitleStatus::Working
+        } else {
+            TerminalTitleStatus::Ready
         }
-        if cleaned.starts_with("Running:") || cleaned.starts_with("Running ") {
-            return Some("Running".to_string());
-        }
-        if cleaned.starts_with("Executing") {
-            return Some("Executing".to_string());
-        }
-        if cleaned.contains("Editing") {
-            return Some("Editing".to_string());
-        }
-        if cleaned.contains("Debugging") {
-            return Some("Debugging".to_string());
-        }
-        if cleaned.contains("Building") {
-            return Some("Building".to_string());
-        }
-        if cleaned.contains("Testing") {
-            return Some("Testing".to_string());
-        }
-        if cleaned.contains("Searching") || cleaned.contains("Finding") {
-            return Some("Searching".to_string());
-        }
-        if cleaned.contains("Creating") {
-            return Some("Creating".to_string());
-        }
-        if cleaned.contains("Reading") || cleaned.contains("Writing") {
-            return Some("Editing".to_string());
-        }
-        if cleaned.contains("Waiting") || cleaned.contains("Action Required") {
-            return Some("Action Required".to_string());
-        }
-        if cleaned.contains("Thinking") || cleaned.contains("Processing") {
-            return Some("Thinking".to_string());
-        }
-        if cleaned.contains("Checking") {
-            return Some("Checking".to_string());
-        }
-        if cleaned.contains("Loading") {
-            return Some("Loading".to_string());
-        }
-
-        None
     }
 
-    /// Generate the dynamic terminal title based on current state
-    fn generate_terminal_title(&self) -> String {
-        let project_name = self.extract_project_name();
+    fn resolve_terminal_title_items(&self) -> Option<Vec<TerminalTitleItem>> {
+        let items = match &self.terminal_title_items {
+            Some(items) if items.is_empty() => return None,
+            Some(items) => items
+                .iter()
+                .filter_map(|item| TerminalTitleItem::from_id(item))
+                .collect::<Vec<_>>(),
+            None => TerminalTitleItem::default_items().to_vec(),
+        };
 
-        // Check if we're in an active state
-        if let Some(action) = self.extract_action_from_status() {
-            // Try to extract additional context (e.g., filename or command)
-            let context = self.extract_context_from_status();
-
-            if let Some(ctx) = context {
-                // Sanitize context for terminal title (remove special chars)
-                let sanitized_ctx = sanitize_for_terminal_title(&ctx);
-                return truncate_title(format!(
-                    "> {} ({}) | {} {}",
-                    self.app_name, project_name, action, sanitized_ctx
-                ));
-            } else {
-                return truncate_title(format!(
-                    "> {} ({}) | {}",
-                    self.app_name, project_name, action
-                ));
-            }
-        }
-
-        // Check for PTY sessions (long-running processes)
-        if self.is_running_activity() {
-            return truncate_title(format!("> {} ({}) | Running", self.app_name, project_name));
-        }
-
-        // Check for HITL (Human in the Loop) states
-        if self.has_status_spinner() {
-            return truncate_title(format!(
-                "> {} ({}) | Action Required",
-                self.app_name, project_name
-            ));
-        }
-
-        // Default idle state
-        truncate_title(format!("> {} ({})", self.app_name, project_name))
+        (!items.is_empty()).then_some(items)
     }
 
-    /// Extract additional context from status (filename, command, etc.)
-    fn extract_context_from_status(&self) -> Option<String> {
-        let left = self.input_status_left.as_deref()?;
-        let cleaned = Self::strip_spinner_prefix(left);
-
-        // Try to extract command from running status
-        if cleaned.contains("Running command:") {
-            // Split on "Running command:" and take the part after it
-            let parts: Vec<&str> = cleaned.splitn(2, "Running command:").collect();
-            if parts.len() == 2 {
-                let command = parts[1].split_whitespace().next()?;
-                // Get basename only (remove path)
-                let cmd_name = command.split('/').next_back().unwrap_or(command);
-                return Some(cmd_name.to_string());
+    fn title_item_value(&self, item: TerminalTitleItem) -> Option<RenderedTitlePart> {
+        let status = self.terminal_title_status();
+        let text = match item {
+            TerminalTitleItem::AppName => Some(self.app_name.clone()),
+            TerminalTitleItem::Project => Some(self.extract_project_name()),
+            TerminalTitleItem::Spinner => self.spinner_title_value(status),
+            TerminalTitleItem::Status => Some(status.label().to_string()),
+            TerminalTitleItem::Thread => self.terminal_title_thread_label.clone(),
+            TerminalTitleItem::GitBranch => self.terminal_title_git_branch.clone(),
+            TerminalTitleItem::Model => {
+                strip_header_value(&self.header_context.model, ui::HEADER_MODEL_PREFIX)
             }
-        }
+            TerminalTitleItem::TaskProgress => self.terminal_title_task_progress.clone(),
+        }?;
 
-        // Try to extract tool name
-        if cleaned.contains("Running tool:") {
-            // Split on "Running tool:" and take the part after it
-            let parts: Vec<&str> = cleaned.splitn(2, "Running tool:").collect();
-            if parts.len() == 2 {
-                let tool = parts[1].split_whitespace().next()?;
-                return Some(tool.to_string());
-            }
-        }
-
-        // Try to extract filename from editing status
-        if cleaned.contains("Editing") {
-            // Split on "Editing" and take the part after it
-            let parts: Vec<&str> = cleaned.splitn(2, "Editing").collect();
-            if parts.len() == 2 {
-                let after = parts[1].trim();
-                // Find the end of the filename (space, colon, or end of string)
-                let end_pos = after
-                    .find(|c: char| c == ':' || c.is_whitespace())
-                    .unwrap_or(after.len());
-                let filename = after[..end_pos].trim();
-                if !filename.is_empty() {
-                    // Just show the filename without path
-                    let name = filename.split('/').next_back().unwrap_or(filename);
-                    return Some(name.to_string());
-                }
-            }
-        }
-
-        None
+        Some(RenderedTitlePart {
+            text,
+            spinner: item == TerminalTitleItem::Spinner,
+        })
     }
 
-    /// Update the terminal title if it has changed.
+    fn spinner_title_value(&self, status: TerminalTitleStatus) -> Option<String> {
+        match status {
+            TerminalTitleStatus::Ready => None,
+            TerminalTitleStatus::ActionRequired => Some("!".to_string()),
+            TerminalTitleStatus::Thinking => {
+                Some(self.thinking_spinner.current_frame().to_string())
+            }
+            TerminalTitleStatus::Working
+            | TerminalTitleStatus::Waiting
+            | TerminalTitleStatus::Undoing => Some("...".to_string()),
+        }
+    }
+
+    fn render_terminal_title(&self) -> Option<String> {
+        let items = self.resolve_terminal_title_items()?;
+        let parts = items
+            .into_iter()
+            .filter_map(|item| self.title_item_value(item))
+            .collect::<Vec<_>>();
+        if parts.is_empty() {
+            return None;
+        }
+
+        let mut title = String::new();
+        for (index, part) in parts.iter().enumerate() {
+            if index > 0 {
+                let previous_spinner = parts[index - 1].spinner;
+                title.push_str(if previous_spinner || part.spinner {
+                    " "
+                } else {
+                    " | "
+                });
+            }
+            title.push_str(&part.text);
+        }
+
+        sanitize_terminal_title(&title)
+    }
+
     pub fn update_terminal_title(&mut self) {
-        let new_title = self.generate_terminal_title();
+        let Some(new_title) = self.render_terminal_title() else {
+            self.clear_terminal_title();
+            return;
+        };
 
-        // Only update if the title has changed to avoid redundant operations
         if self.last_terminal_title.as_ref() != Some(&new_title) {
-            if let Err(error) = execute!(std::io::stderr(), SetTitle(new_title.as_str())) {
+            if let Err(error) = write_terminal_title(&new_title) {
                 tracing::debug!(%error, "failed to update terminal title");
+            } else {
+                self.last_terminal_title = Some(new_title);
             }
-
-            self.last_terminal_title = Some(new_title);
         }
     }
 
-    /// Clear terminal title (reset to default)
     pub fn clear_terminal_title(&mut self) {
-        if let Err(error) = execute!(std::io::stderr(), SetTitle("")) {
-            tracing::debug!(%error, "failed to clear terminal title");
+        if self.last_terminal_title.is_none() {
+            return;
         }
 
+        if let Err(error) = write_terminal_title("") {
+            tracing::debug!(%error, "failed to clear terminal title");
+            return;
+        }
         self.last_terminal_title = None;
     }
 }
 
-/// Sanitize string for use in terminal title (remove problematic characters)
-fn sanitize_for_terminal_title(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            // Replace problematic characters with safe alternatives
-            match c {
-                // Remove control characters
-                c if c.is_control() => ' ',
-                // Replace backslash with forward slash for cleaner display
-                '\\' => '/',
-                // Keep alphanumeric and common punctuation
-                c if c.is_ascii_alphanumeric() || "_.-".contains(c) => c,
-                // Replace other special chars with space
-                _ => ' ',
+fn strip_header_value(value: &str, prefix: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let stripped = trimmed.strip_prefix(prefix).unwrap_or(trimmed).trim();
+    if stripped.is_empty() || stripped == ui::HEADER_UNKNOWN_PLACEHOLDER {
+        None
+    } else {
+        Some(stripped.to_string())
+    }
+}
+
+fn write_terminal_title(title: &str) -> std::io::Result<()> {
+    let mut stdout = std::io::stdout();
+    stdout.write_all(OSC_SET_WINDOW_TITLE.as_bytes())?;
+    stdout.write_all(title.as_bytes())?;
+    stdout.write_all(OSC_TERMINATOR.as_bytes())?;
+    stdout.flush()
+}
+
+fn sanitize_terminal_title(title: &str) -> Option<String> {
+    let collapsed = title
+        .chars()
+        .filter_map(|ch| {
+            if is_stripped_terminal_title_char(ch) {
+                None
+            } else if ch.is_control() {
+                Some(' ')
+            } else {
+                Some(ch)
             }
         })
         .collect::<String>()
         .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ")
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if collapsed.is_empty() {
+        return None;
+    }
+
+    Some(truncate_title(&collapsed))
 }
 
-/// Truncate title to maximum length while preserving readability
-fn truncate_title(title: String) -> String {
-    const ELLIPSIS: &str = "…";
-    if title.len() <= MAX_TITLE_LENGTH {
-        title
-    } else {
-        // Truncate and add ellipsis
-        let truncated = &title[..MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.len())];
-        format!("{}{}", truncated, ELLIPSIS)
+fn is_stripped_terminal_title_char(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00ad}'
+            | '\u{200b}'
+            | '\u{200c}'
+            | '\u{200d}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+    )
+}
+
+fn truncate_title(title: &str) -> String {
+    const ELLIPSIS: &str = "...";
+    let char_count = title.chars().count();
+    if char_count <= MAX_TITLE_LENGTH {
+        return title.to_string();
     }
+
+    let keep = MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.len());
+    let truncated = title.chars().take(keep).collect::<String>();
+    format!("{truncated}{ELLIPSIS}")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        Session, TerminalTitleStatus, is_stripped_terminal_title_char, sanitize_terminal_title,
+        truncate_title,
+    };
 
-    #[test]
-    fn test_strip_spinner_prefix() {
-        assert_eq!(
-            Session::strip_spinner_prefix("⠋ Running command: cargo"),
-            "Running command: cargo"
-        );
-        assert_eq!(
-            Session::strip_spinner_prefix("⠙ Running tool: test"),
-            "Running tool: test"
-        );
-        assert_eq!(Session::strip_spinner_prefix("- Building"), "Building");
-        assert_eq!(Session::strip_spinner_prefix("| Checking"), "Checking");
-        assert_eq!(Session::strip_spinner_prefix("  No spinner"), "No spinner");
+    fn session_for_title_tests() -> Session {
+        let mut session = Session::new(Default::default(), None, 24);
+        session.app_name = "VT Code".to_string();
+        session
     }
 
     #[test]
-    fn test_sanitize_for_terminal_title() {
-        assert_eq!(sanitize_for_terminal_title("cargo build"), "cargo build");
-        assert_eq!(sanitize_for_terminal_title("cargo\\build"), "cargo/build");
-        assert_eq!(sanitize_for_terminal_title("test$cmd"), "test cmd");
-        assert_eq!(sanitize_for_terminal_title("file\tname"), "file name");
+    fn default_title_uses_spinner_and_project_items() {
+        let mut session = session_for_title_tests();
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+        session.input_status_left = Some("Thinking".to_string());
+        session.thinking_spinner.start();
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("⠋ demo-project")
+        );
     }
 
     #[test]
-    fn test_truncate_title() {
-        assert_eq!(truncate_title("Short".to_string()), "Short");
-        let long = "a".repeat(150);
-        let truncated = truncate_title(long.clone());
-        assert!(truncated.len() <= MAX_TITLE_LENGTH);
-        assert!(truncated.ends_with("…"));
+    fn unavailable_items_are_omitted() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items = Some(vec![
+            "thread".to_string(),
+            "project".to_string(),
+            "git-branch".to_string(),
+        ]);
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("demo-project")
+        );
+    }
+
+    #[test]
+    fn spinner_uses_plain_space_separator() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items = Some(vec![
+            "project".to_string(),
+            "spinner".to_string(),
+            "status".to_string(),
+        ]);
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+        session.input_status_left = Some("Thinking".to_string());
+        session.thinking_spinner.start();
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("demo-project ⠋ Thinking")
+        );
+    }
+
+    #[test]
+    fn status_label_mapping_prefers_short_labels() {
+        let mut session = session_for_title_tests();
+        session.input_status_left = Some("Action Required: approve command".to_string());
+        assert_eq!(
+            session.terminal_title_status(),
+            TerminalTitleStatus::ActionRequired
+        );
+
+        session.input_status_left = Some("Rewinding last turn".to_string());
+        assert_eq!(
+            session.terminal_title_status(),
+            TerminalTitleStatus::Undoing
+        );
+
+        session.input_status_left = Some("Waiting for tool".to_string());
+        assert_eq!(
+            session.terminal_title_status(),
+            TerminalTitleStatus::Waiting
+        );
+    }
+
+    #[test]
+    fn explicit_empty_items_disable_title_updates() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items = Some(Vec::new());
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+
+        assert_eq!(session.render_terminal_title(), None);
+    }
+
+    #[test]
+    fn sanitization_strips_control_and_bidi_chars() {
+        let sanitized = sanitize_terminal_title("demo\u{1b}]0;bad\u{7}\u{202e} title\tok")
+            .expect("title should survive sanitization");
+
+        assert_eq!(sanitized, "demo ]0;bad title ok");
+    }
+
+    #[test]
+    fn invisible_formatting_chars_are_removed() {
+        assert!(is_stripped_terminal_title_char('\u{2066}'));
+        assert!(is_stripped_terminal_title_char('\u{200b}'));
+        assert!(!is_stripped_terminal_title_char('a'));
+    }
+
+    #[test]
+    fn sanitization_returns_none_when_title_is_empty_after_cleanup() {
+        assert_eq!(sanitize_terminal_title("\u{200b}\u{202e}\t"), None);
+    }
+
+    #[test]
+    fn title_truncation_caps_length() {
+        let title = "x".repeat(200);
+        let truncated = truncate_title(&title);
+
+        assert_eq!(truncated.chars().count(), 128);
+        assert!(truncated.ends_with("..."));
+    }
+
+    #[test]
+    fn task_progress_item_uses_parsed_summary() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items =
+            Some(vec!["task-progress".to_string(), "project".to_string()]);
+        session.terminal_title_task_progress = Some("2/5".to_string());
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("2/5 | demo-project")
+        );
+    }
+
+    #[test]
+    fn invalid_terminal_title_items_are_ignored() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items = Some(vec!["not-real".to_string(), "project".to_string()]);
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("demo-project")
+        );
     }
 }

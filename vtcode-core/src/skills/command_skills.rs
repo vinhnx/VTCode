@@ -409,6 +409,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "terminal"
     ),
     built_in_command_spec!(
+        "title",
+        "Configure the terminal title items interactively",
+        "/title",
+        "terminal"
+    ),
+    built_in_command_spec!(
         "login",
         "Authenticate with OpenAI, OpenRouter, or GitHub Copilot (usage: /login [provider])",
         "/login [provider]",

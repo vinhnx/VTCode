@@ -985,6 +985,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preflight_normalizes_raw_apply_patch_payload_to_input_object() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let patch = "*** Begin Patch\n*** End Patch\n";
+
+        let outcome = registry.preflight_validate_call(tools::APPLY_PATCH, &json!(patch))?;
+
+        assert_eq!(outcome.normalized_tool_name, tools::APPLY_PATCH);
+        assert_eq!(outcome.effective_args, json!({ "input": patch }));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn preflight_normalizes_repo_browser_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
@@ -1372,6 +1386,26 @@ mod tests {
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
         let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_input.txt"))?;
+        assert_eq!(file_contents, "patched\n");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn public_apply_patch_accepts_raw_string_payload() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let patch =
+            "*** Begin Patch\n*** Add File: patched_via_raw_string.txt\n+patched\n*** End Patch\n";
+        let response = registry
+            .execute_public_tool_ref(tools::APPLY_PATCH, &json!(patch))
+            .await?;
+
+        assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
+
+        let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_raw_string.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
         Ok(())

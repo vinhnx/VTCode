@@ -434,9 +434,8 @@ impl AppSession {
                 self.show_transient_surface(TransientSurface::SlashPalette);
             }
             TransientRequest::TaskPanel(TaskPanelTransientRequest { lines, visible }) => {
-                if !lines.is_empty() {
-                    self.task_panel_lines = lines;
-                }
+                self.core.set_task_panel_lines(lines.clone());
+                self.task_panel_lines = lines;
                 if let Some(visible) = visible {
                     self.set_task_panel_visible(visible);
                 } else {
@@ -642,6 +641,19 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
             left: left.clone(),
             right: right.clone(),
         },
+        InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems {
+            items: items.clone(),
+        },
+        InlineCommand::SetTerminalTitleThreadLabel { label } => {
+            CoreCommand::SetTerminalTitleThreadLabel {
+                label: label.clone(),
+            }
+        }
+        InlineCommand::SetTerminalTitleGitBranch { branch } => {
+            CoreCommand::SetTerminalTitleGitBranch {
+                branch: branch.clone(),
+            }
+        }
         InlineCommand::SetTheme { theme } => CoreCommand::SetTheme {
             theme: theme.clone(),
         },

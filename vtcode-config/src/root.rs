@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::status_line::StatusLineConfig;
+use crate::terminal_title::TerminalTitleConfig;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -233,6 +234,10 @@ pub struct UiConfig {
     /// Status line configuration settings
     #[serde(default)]
     pub status_line: StatusLineConfig,
+
+    /// Terminal title configuration settings
+    #[serde(default)]
+    pub terminal_title: TerminalTitleConfig,
 
     /// Keyboard protocol enhancements for modern terminals (e.g. Kitty protocol)
     #[serde(default)]
@@ -496,6 +501,7 @@ impl Default for UiConfig {
             reasoning_visible_default: default_reasoning_visible_default(),
             vim_mode: default_vim_mode(),
             status_line: StatusLineConfig::default(),
+            terminal_title: TerminalTitleConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
             layout_mode: LayoutModeOverride::default(),
             display_mode: UiDisplayMode::default(),

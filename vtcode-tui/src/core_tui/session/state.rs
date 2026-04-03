@@ -27,6 +27,11 @@ use crate::config::constants::ui;
 use crate::options::FullscreenInteractionSettings;
 
 impl Session {
+    pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
+        self.terminal_title_task_progress = extract_task_progress(&lines);
+        self.mark_dirty();
+    }
+
     pub(crate) fn clear_inline_prompt_suggestion(&mut self) {
         if self.inline_prompt_suggestion.suggestion.is_none() {
             return;
@@ -726,4 +731,12 @@ impl Session {
         self.mark_dirty();
         self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
     }
+}
+
+fn extract_task_progress(lines: &[String]) -> Option<String> {
+    let line = lines
+        .iter()
+        .find_map(|line| line.trim().strip_prefix("Progress: ").map(str::trim))?;
+    let summary = line.split_whitespace().next()?.trim();
+    (!summary.is_empty()).then(|| summary.to_string())
 }

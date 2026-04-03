@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use serde_json::Map;
 use serde_json::Value;
+use serde_json::json;
 
 use crate::config::constants::tools as tool_names;
 use crate::tools::error_messages::agent_execution;
@@ -263,6 +264,12 @@ pub(super) fn normalize_tool_args<'a>(
     parameter_schema: Option<&Value>,
 ) -> Result<std::borrow::Cow<'a, Value>> {
     let mut normalized = std::borrow::Cow::Borrowed(args);
+
+    if normalized_tool_name == tool_names::APPLY_PATCH
+        && let Some(raw_patch) = normalized.as_ref().as_str()
+    {
+        normalized = std::borrow::Cow::Owned(json!({ "input": raw_patch }));
+    }
 
     if matches!(
         normalized_tool_name,

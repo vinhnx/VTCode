@@ -313,6 +313,14 @@ pub struct Session {
     pub(crate) app_name: String,
     /// Workspace root path for dynamic title generation
     pub(crate) workspace_root: Option<std::path::PathBuf>,
+    /// Raw config items for terminal title rendering (`None` means use defaults).
+    pub(crate) terminal_title_items: Option<Vec<String>>,
+    /// Active thread label shown in terminal title when configured.
+    pub(crate) terminal_title_thread_label: Option<String>,
+    /// Active git branch shown in terminal title when configured.
+    pub(crate) terminal_title_git_branch: Option<String>,
+    /// Latest task tracker progress label extracted from the task panel.
+    pub(crate) terminal_title_task_progress: Option<String>,
     /// Last set terminal title to avoid redundant updates
     last_terminal_title: Option<String>,
 

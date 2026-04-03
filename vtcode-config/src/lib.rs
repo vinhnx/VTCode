@@ -45,6 +45,7 @@ pub mod schema;
 pub mod status_line;
 pub mod subagents;
 pub mod telemetry;
+pub mod terminal_title;
 pub mod timeouts;
 pub mod types;
 pub mod update;
@@ -119,6 +120,7 @@ pub use subagents::{
     load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
+pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,

@@ -291,11 +291,11 @@ impl AgentRunner {
         agent_prefix: &str,
         is_gemini: bool,
     ) -> Result<RunnerCallAdmission> {
-        let requested_name = match call.function.as_ref() {
-            Some(func) => func.name.clone(),
+        let requested_name = match call.tool_name() {
+            Some(name) => name.to_string(),
             None => return Ok(RunnerCallAdmission::Rejected),
         };
-        let args = match call.parsed_arguments() {
+        let args = match call.execution_arguments() {
             Ok(args) => args,
             Err(err) => {
                 let error_msg = format!("Invalid arguments for tool '{}': {}", requested_name, err);

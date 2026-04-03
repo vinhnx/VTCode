@@ -104,6 +104,18 @@ impl Session {
                 }
                 self.needs_redraw = true;
             }
+            InlineCommand::SetTerminalTitleItems { items } => {
+                self.terminal_title_items = items;
+                self.needs_redraw = true;
+            }
+            InlineCommand::SetTerminalTitleThreadLabel { label } => {
+                self.terminal_title_thread_label = label.filter(|value| !value.trim().is_empty());
+                self.needs_redraw = true;
+            }
+            InlineCommand::SetTerminalTitleGitBranch { branch } => {
+                self.terminal_title_git_branch = branch.filter(|value| !value.trim().is_empty());
+                self.needs_redraw = true;
+            }
             InlineCommand::SetTheme { theme } => {
                 let previous_theme = self.theme.clone();
                 self.theme = theme.clone();

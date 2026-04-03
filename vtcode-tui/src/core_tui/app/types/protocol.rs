@@ -53,6 +53,15 @@ pub enum InlineCommand {
         left: Option<String>,
         right: Option<String>,
     },
+    SetTerminalTitleItems {
+        items: Option<Vec<String>>,
+    },
+    SetTerminalTitleThreadLabel {
+        label: Option<String>,
+    },
+    SetTerminalTitleGitBranch {
+        branch: Option<String>,
+    },
     SetTheme {
         theme: InlineTheme,
     },
@@ -271,6 +280,18 @@ impl InlineHandle {
 
     pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
         self.send_command(InlineCommand::SetInputStatus { left, right });
+    }
+
+    pub fn set_terminal_title_items(&self, items: Option<Vec<String>>) {
+        self.send_command(InlineCommand::SetTerminalTitleItems { items });
+    }
+
+    pub fn set_terminal_title_thread_label(&self, label: Option<String>) {
+        self.send_command(InlineCommand::SetTerminalTitleThreadLabel { label });
+    }
+
+    pub fn set_terminal_title_git_branch(&self, branch: Option<String>) {
+        self.send_command(InlineCommand::SetTerminalTitleGitBranch { branch });
     }
 
     pub fn set_theme(&self, theme: InlineTheme) {

@@ -9,10 +9,57 @@ use crate::llm::providers::shared::{
     collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
     tool_result_content_from_message_content,
 };
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use serde_json::{Value, json};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ResponsesToolCallKind {
+    Function,
+    Custom,
+}
+
+fn responses_tool_call_kind(call: &ToolCall) -> ResponsesToolCallKind {
+    if call.is_custom() {
+        ResponsesToolCallKind::Custom
+    } else {
+        ResponsesToolCallKind::Function
+    }
+}
+
+fn responses_tool_call_output_type(kind: ResponsesToolCallKind) -> &'static str {
+    match kind {
+        ResponsesToolCallKind::Function => "function_call_output",
+        ResponsesToolCallKind::Custom => "custom_tool_call_output",
+    }
+}
+
 fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
+    let item_type = item
+        .get("type")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    if item_type == "custom_tool_call" {
+        let call_id = item
+            .get("call_id")
+            .and_then(|v| v.as_str())
+            .or_else(|| item.get("id").and_then(|v| v.as_str()))
+            .unwrap_or("");
+        let name = item.get("name").and_then(|value| value.as_str())?;
+        let input = item
+            .get("input")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        return Some(ToolCall::custom(
+            call_id.to_string(),
+            name.to_string(),
+            input.to_string(),
+        ));
+    }
+
+    parse_responses_function_tool_call(item)
+}
+
+fn parse_responses_function_tool_call(item: &Value) -> Option<ToolCall> {
     let call_id = item
         .get("call_id")
         .and_then(|v| v.as_str())
@@ -267,7 +314,7 @@ pub fn parse_responses_payload(
                                     reasoning_text_fragments.push(text.to_string());
                                 }
                             }
-                            "function_call" | "tool_call" => {
+                            "function_call" | "tool_call" | "custom_tool_call" => {
                                 if let Some(call) = parse_responses_tool_call(entry) {
                                     tool_calls_vec.push(call);
                                 }
@@ -285,7 +332,7 @@ pub fn parse_responses_payload(
                     }
                 }
             }
-            "function_call" | "tool_call" => {
+            "function_call" | "tool_call" | "custom_tool_call" => {
                 if let Some(call) = parse_responses_tool_call(item) {
                     tool_calls_vec.push(call);
                 }
@@ -427,7 +474,7 @@ pub fn build_standard_responses_payload(
     include_structured_history_in_input: bool,
 ) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut input = Vec::new();
-    let mut active_tool_call_ids: HashSet<String> = HashSet::new();
+    let mut active_tool_calls: HashMap<String, ResponsesToolCallKind> = HashMap::new();
     let mut pending_tool_call_order: Vec<String> = Vec::new();
     let mut deferred_tool_outputs: HashMap<String, Value> = HashMap::new();
     let mut instructions_segments = Vec::new();
@@ -468,7 +515,7 @@ pub fn build_standard_responses_payload(
                 }
 
                 let mut content_parts = Vec::new();
-                let mut function_call_items = Vec::new();
+                let mut tool_call_items = Vec::new();
                 if !msg.content.is_empty() {
                     if include_structured_history_in_input {
                         content_parts.push(json!({
@@ -486,22 +533,35 @@ pub fn build_standard_responses_payload(
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
                         if let Some(ref func) = call.function {
-                            if active_tool_call_ids.insert(call.id.clone()) {
+                            let call_kind = responses_tool_call_kind(call);
+                            if active_tool_calls
+                                .insert(call.id.clone(), call_kind)
+                                .is_none()
+                            {
                                 pending_tool_call_order.push(call.id.clone());
                             }
                             if include_structured_history_in_input {
-                                function_call_items.push(json!({
-                                    "type": "function_call",
-                                    "call_id": &call.id,
-                                    "name": &func.name,
-                                    "arguments": &func.arguments
-                                }));
+                                let replay_item = match call_kind {
+                                    ResponsesToolCallKind::Function => json!({
+                                        "type": "function_call",
+                                        "call_id": &call.id,
+                                        "name": &func.name,
+                                        "arguments": &func.arguments
+                                    }),
+                                    ResponsesToolCallKind::Custom => json!({
+                                        "type": "custom_tool_call",
+                                        "call_id": &call.id,
+                                        "name": &func.name,
+                                        "input": call.text.as_deref().unwrap_or(&func.arguments)
+                                    }),
+                                };
+                                tool_call_items.push(replay_item);
                                 if let Some(deferred_output) =
                                     deferred_tool_outputs.remove(&call.id)
                                 {
-                                    active_tool_call_ids.remove(&call.id);
-                                    function_call_items.push(json!({
-                                        "type": "function_call_output",
+                                    active_tool_calls.remove(&call.id);
+                                    tool_call_items.push(json!({
+                                        "type": responses_tool_call_output_type(call_kind),
                                         "call_id": &call.id,
                                         "output": deferred_output,
                                     }));
@@ -514,7 +574,7 @@ pub fn build_standard_responses_payload(
                 if !content_parts.is_empty() {
                     input.push(assistant_input_item(content_parts, msg.phase));
                 }
-                input.extend(function_call_items);
+                input.extend(tool_call_items);
             }
             MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
@@ -528,7 +588,7 @@ pub fn build_standard_responses_payload(
                     }
                 })?;
 
-                if !active_tool_call_ids.contains(tool_call_id) {
+                if !active_tool_calls.contains_key(tool_call_id) {
                     if include_structured_history_in_input {
                         deferred_tool_outputs.insert(
                             tool_call_id.clone(),
@@ -544,13 +604,15 @@ pub fn build_standard_responses_payload(
                         Some(tool_call_id),
                         &msg.content,
                     );
-                    active_tool_call_ids.remove(tool_call_id);
+                    active_tool_calls.remove(tool_call_id);
                     continue;
                 }
 
-                active_tool_call_ids.remove(tool_call_id);
+                let call_kind = active_tool_calls
+                    .remove(tool_call_id)
+                    .unwrap_or(ResponsesToolCallKind::Function);
                 input.push(json!({
-                    "type": "function_call_output",
+                    "type": responses_tool_call_output_type(call_kind),
                     "call_id": tool_call_id,
                     "output": function_output_value_from_message_content(&msg.content),
                 }));
@@ -558,16 +620,16 @@ pub fn build_standard_responses_payload(
         }
     }
 
-    // Responses API requires every function_call item to have a paired
-    // function_call_output. Synthesize any missing outputs so replay cannot
+    // Responses API requires every tool call item to have a paired output item.
+    // Synthesize any missing outputs so replay cannot
     // fail on partially paired history.
     if include_structured_history_in_input {
         for call_id in pending_tool_call_order {
-            if !active_tool_call_ids.contains(&call_id) {
+            let Some(call_kind) = active_tool_calls.remove(&call_id) else {
                 continue;
-            }
+            };
             input.push(json!({
-                "type": "function_call_output",
+                "type": responses_tool_call_output_type(call_kind),
                 "call_id": call_id,
                 "output": "aborted",
             }));
@@ -877,6 +939,68 @@ mod tests {
             .and_then(|function| function.namespace.as_deref());
 
         assert_eq!(namespace, Some("repo_browser"));
+    }
+
+    #[test]
+    fn parse_responses_payload_parses_custom_tool_calls() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "custom_tool_call",
+                    "id": "ct_123",
+                    "call_id": "call_patch_1",
+                    "name": "apply_patch",
+                    "input": "*** Begin Patch\n*** End Patch\n"
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        let tool_calls = parsed.tool_calls.expect("tool calls should exist");
+        assert_eq!(tool_calls.len(), 1);
+        assert!(tool_calls[0].is_custom());
+        assert_eq!(tool_calls[0].id, "call_patch_1");
+        assert_eq!(tool_calls[0].tool_name(), Some("apply_patch"));
+        assert_eq!(
+            tool_calls[0].raw_input(),
+            Some("*** Begin Patch\n*** End Patch\n")
+        );
+    }
+
+    #[test]
+    fn standard_payload_replays_custom_tool_turns_with_custom_items() {
+        let request = LLMRequest {
+            messages: vec![
+                Message::user("Apply patch".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::custom(
+                        "call_patch_1".to_string(),
+                        "apply_patch".to_string(),
+                        "*** Begin Patch\n*** End Patch\n".to_string(),
+                    )],
+                ),
+                Message::tool_response("call_patch_1".to_string(), "patched".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
+
+        assert_eq!(payload.input.len(), 3);
+        assert_eq!(payload.input[1]["type"], "custom_tool_call");
+        assert_eq!(payload.input[1]["call_id"], "call_patch_1");
+        assert_eq!(payload.input[1]["name"], "apply_patch");
+        assert_eq!(
+            payload.input[1]["input"],
+            "*** Begin Patch\n*** End Patch\n"
+        );
+        assert_eq!(payload.input[2]["type"], "custom_tool_call_output");
+        assert_eq!(payload.input[2]["call_id"], "call_patch_1");
+        assert_eq!(payload.input[2]["output"], "patched");
     }
 
     #[test]

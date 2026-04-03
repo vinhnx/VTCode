@@ -720,9 +720,8 @@ pub async fn execute_skill_with_sub_llm(
                 // Execute each tool call
                 for tool_call in tool_calls {
                     // Extract function name and arguments
-                    if let Some(function) = &tool_call.function {
-                        let tool_name = &function.name;
-                        let tool_args_str = &function.arguments;
+                    if let Some(tool_name) = tool_call.tool_name() {
+                        let tool_name = tool_name.to_string();
 
                         debug!(
                             "Executing tool '{}' for skill '{}'",
@@ -730,14 +729,15 @@ pub async fn execute_skill_with_sub_llm(
                             skill.name()
                         );
 
-                        // Parse arguments as JSON
-                        let tool_args = serde_json::from_str::<Value>(tool_args_str)
+                        let tool_args = tool_call
+                            .execution_arguments()
                             .unwrap_or_else(|_| serde_json::json!({}));
                         let tool_args =
-                            merge_skill_command_permissions(skill, tool_name, tool_args);
+                            merge_skill_command_permissions(skill, &tool_name, tool_args);
 
-                        if let Some(loop_warning) = loop_detector.record_call(tool_name, &tool_args)
-                            && loop_detector.is_hard_limit_exceeded(tool_name)
+                        if let Some(loop_warning) =
+                            loop_detector.record_call(&tool_name, &tool_args)
+                            && loop_detector.is_hard_limit_exceeded(&tool_name)
                         {
                             messages.push(Message::tool_response(
                                 tool_call.id.clone(),
@@ -753,7 +753,7 @@ pub async fn execute_skill_with_sub_llm(
 
                         // Execute tool via registry
                         let tool_output = match tool_registry
-                            .execute_public_tool_ref(tool_name, &tool_args)
+                            .execute_public_tool_ref(&tool_name, &tool_args)
                             .await
                         {
                             Ok(result) => result,

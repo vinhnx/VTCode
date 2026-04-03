@@ -187,6 +187,10 @@ impl Session {
             // --- Terminal Title ---
             app_name,
             workspace_root: None,
+            terminal_title_items: None,
+            terminal_title_thread_label: None,
+            terminal_title_git_branch: None,
+            terminal_title_task_progress: None,
             last_terminal_title: None,
 
             // --- Streaming State ---

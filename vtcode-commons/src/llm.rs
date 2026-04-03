@@ -232,6 +232,27 @@ impl ToolCall {
         }
     }
 
+    /// Returns true when this tool call uses GPT-5 custom/freeform semantics.
+    pub fn is_custom(&self) -> bool {
+        self.call_type == "custom"
+    }
+
+    /// Returns the tool name when the call includes function details.
+    pub fn tool_name(&self) -> Option<&str> {
+        self.function
+            .as_ref()
+            .map(|function| function.name.as_str())
+    }
+
+    /// Returns the raw payload text exactly as emitted by the model.
+    pub fn raw_input(&self) -> Option<&str> {
+        self.text.as_deref().or_else(|| {
+            self.function
+                .as_ref()
+                .map(|function| function.arguments.as_str())
+        })
+    }
+
     /// Parse the arguments as JSON Value (for function-type tools)
     pub fn parsed_arguments(&self) -> Result<serde_json::Value, serde_json::Error> {
         if let Some(ref func) = self.function {
@@ -240,6 +261,21 @@ impl ToolCall {
             // Return an error by trying to parse invalid JSON
             serde_json::from_str("")
         }
+    }
+
+    /// Returns the execution payload for this tool call.
+    ///
+    /// Function tools keep their JSON semantics. Custom tools execute with their
+    /// raw text payload wrapped as a JSON string value so freeform inputs can
+    /// flow through the existing tool pipeline.
+    pub fn execution_arguments(&self) -> Result<serde_json::Value, serde_json::Error> {
+        if self.is_custom() {
+            return Ok(serde_json::Value::String(
+                self.raw_input().unwrap_or_default().to_string(),
+            ));
+        }
+
+        self.parsed_arguments()
     }
 
     /// Validate that this tool call is properly formed
@@ -630,5 +666,27 @@ mod tests {
         let json = serde_json::to_value(&call).expect("tool call should serialize");
         assert_eq!(json["function"]["namespace"], "workspace");
         assert_eq!(json["function"]["name"], "read_file");
+    }
+
+    #[test]
+    fn custom_tool_call_exposes_raw_execution_arguments() {
+        let patch = "*** Begin Patch\n*** End Patch\n".to_string();
+        let call = ToolCall::custom(
+            "call_patch".to_string(),
+            "apply_patch".to_string(),
+            patch.clone(),
+        );
+
+        assert!(call.is_custom());
+        assert_eq!(call.tool_name(), Some("apply_patch"));
+        assert_eq!(call.raw_input(), Some(patch.as_str()));
+        assert_eq!(
+            call.execution_arguments().expect("custom arguments"),
+            json!(patch)
+        );
+        assert!(
+            call.parsed_arguments().is_err(),
+            "custom tool payload should stay freeform rather than JSON"
+        );
     }
 }

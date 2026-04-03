@@ -74,6 +74,7 @@ pub use vtcode_config::root::{
     ReasoningDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode,
 };
 pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
+pub use vtcode_config::terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use vtcode_config::{
     FileOpener, HistoryConfig, HistoryPersistence, TerminalNotificationMethod, TuiAlternateScreen,
     TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,

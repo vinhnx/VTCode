@@ -750,6 +750,11 @@ refresh_interval_ms = 2000
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
 
+# Terminal title configuration
+[ui.terminal_title]
+# Ordered terminal title items (empty list disables VT Code-managed titles)
+items = ["spinner", "project"]
+
 # Enable Vim-style prompt editing in interactive mode
 vim_mode = false
 

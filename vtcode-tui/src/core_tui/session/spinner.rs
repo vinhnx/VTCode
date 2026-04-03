@@ -48,6 +48,10 @@ impl ThinkingSpinner {
     pub fn is_active(&self) -> bool {
         self.is_active
     }
+
+    pub fn current_frame(&self) -> &'static str {
+        SPINNER_FRAMES[self.spinner_index % SPINNER_FRAMES.len()]
+    }
 }
 
 /// Spinner animation frames (Braille pattern for smooth animation)
