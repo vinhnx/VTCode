@@ -152,6 +152,9 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::StartStatuslineSetup { instructions } => {
             handlers::handle_start_statusline_setup(ctx, instructions).await
         }
+        SlashCommandOutcome::StartTerminalTitleSetup => {
+            handlers::handle_start_terminal_title_setup(ctx).await
+        }
         SlashCommandOutcome::StartModelSelection => {
             handlers::handle_start_model_selection(ctx).await
         }

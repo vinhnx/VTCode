@@ -58,11 +58,7 @@ pub(crate) struct PreparedAssistantToolCall {
 
 impl PreparedAssistantToolCall {
     pub(crate) fn new(raw_call: uni::ToolCall) -> Self {
-        let tool_name = raw_call
-            .function
-            .as_ref()
-            .map(|function| function.name.as_str())
-            .unwrap_or(raw_call.call_type.as_str());
+        let tool_name = raw_call.tool_name().unwrap_or(raw_call.call_type.as_str());
 
         let (parsed_args, args_error, is_parallel_safe, is_command_execution) = if raw_call
             .function
@@ -75,12 +71,14 @@ impl PreparedAssistantToolCall {
                 false,
             )
         } else {
-            match raw_call.parsed_arguments() {
+            match raw_call.execution_arguments() {
                 Ok(args) => {
-                    let is_parallel_safe =
-                        vtcode_core::tools::tool_intent::is_parallel_safe_call(tool_name, &args);
-                    let is_command_execution =
-                        vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, &args);
+                    let is_parallel_safe = !raw_call.is_custom()
+                        && vtcode_core::tools::tool_intent::is_parallel_safe_call(tool_name, &args);
+                    let is_command_execution = !raw_call.is_custom()
+                        && vtcode_core::tools::tool_intent::is_command_run_tool_call(
+                            tool_name, &args,
+                        );
                     (Some(args), None, is_parallel_safe, is_command_execution)
                 }
                 Err(err) => (None, Some(err.to_string()), false, false),

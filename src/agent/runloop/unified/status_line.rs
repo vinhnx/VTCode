@@ -74,13 +74,9 @@ pub(crate) async fn update_input_status_if_changed(
     let mode = status_config
         .map(|cfg| cfg.effective_mode())
         .unwrap_or(StatusLineMode::Auto);
+    let status_line_hidden = matches!(mode, StatusLineMode::Hidden);
 
-    if matches!(mode, StatusLineMode::Hidden) {
-        state.last_git_refresh = None;
-        state.git_left = None;
-        state.git_summary = None;
-        state.terminal_name = None;
-    } else {
+    if !status_line_hidden {
         // Detect terminal name if not already cached
         if state.terminal_name.is_none() {
             state.terminal_name = TerminalType::detect()
@@ -88,53 +84,64 @@ pub(crate) async fn update_input_status_if_changed(
                 .filter(|t| *t != TerminalType::Unknown)
                 .map(|t| t.name().to_string());
         }
+    } else {
+        state.git_left = None;
+        state.terminal_name = None;
+    }
 
-        let should_refresh_git = match state.last_git_refresh {
-            Some(last_refresh) => last_refresh.elapsed() >= GIT_STATUS_REFRESH_INTERVAL,
-            None => true,
-        };
+    let should_refresh_git = match state.last_git_refresh {
+        Some(last_refresh) => last_refresh.elapsed() >= GIT_STATUS_REFRESH_INTERVAL,
+        None => true,
+    };
 
-        if should_refresh_git {
-            let workspace_buf = workspace.to_path_buf();
-            match tokio::task::spawn_blocking(move || git_status_summary(&workspace_buf)).await? {
-                Ok(Some(summary)) => {
-                    let indicator = if summary.dirty {
-                        ui::HEADER_GIT_DIRTY_SUFFIX
-                    } else {
-                        ui::HEADER_GIT_CLEAN_SUFFIX
-                    };
-                    let git_display = if summary.branch.is_empty() {
-                        indicator.to_string()
-                    } else {
-                        format!("{}{}", summary.branch, indicator)
-                    };
+    if should_refresh_git {
+        let workspace_buf = workspace.to_path_buf();
+        match tokio::task::spawn_blocking(move || git_status_summary(&workspace_buf)).await? {
+            Ok(Some(summary)) => {
+                let indicator = if summary.dirty {
+                    ui::HEADER_GIT_DIRTY_SUFFIX
+                } else {
+                    ui::HEADER_GIT_CLEAN_SUFFIX
+                };
+                let git_display = if summary.branch.is_empty() {
+                    indicator.to_string()
+                } else {
+                    format!("{}{}", summary.branch, indicator)
+                };
 
-                    let display = if let Some(term) = &state.terminal_name {
-                        format!("{} | {}", term, git_display)
-                    } else {
-                        git_display
-                    };
+                let display = if let Some(term) = &state.terminal_name {
+                    format!("{} | {}", term, git_display)
+                } else {
+                    git_display
+                };
 
-                    state.git_left = Some(display);
-                    state.git_summary = Some(summary);
-                }
-                Ok(None) => {
-                    state.git_left = state.terminal_name.clone();
-                    state.git_summary = None;
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        workspace = %workspace.display(),
-                        error = ?error,
-                        "Failed to resolve git status"
-                    );
-                    state.git_summary = None;
-                    state.git_left = state.terminal_name.clone();
-                }
+                state.git_left = (!status_line_hidden).then_some(display);
+                state.git_summary = Some(summary);
             }
-
-            state.last_git_refresh = Some(Instant::now());
+            Ok(None) => {
+                state.git_left = if status_line_hidden {
+                    None
+                } else {
+                    state.terminal_name.clone()
+                };
+                state.git_summary = None;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    workspace = %workspace.display(),
+                    error = ?error,
+                    "Failed to resolve git status"
+                );
+                state.git_summary = None;
+                state.git_left = if status_line_hidden {
+                    None
+                } else {
+                    state.terminal_name.clone()
+                };
+            }
         }
+
+        state.last_git_refresh = Some(Instant::now());
     }
 
     let trimmed_model = model.trim();

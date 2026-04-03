@@ -708,6 +708,8 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.command_timeout_ms` | `integer` | no | `200` | - |
 | `ui.status_line.mode` | `string` | no | `"Auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
+| `ui.terminal_title.items` | `array \| null` | no | `null` | - |
+| `ui.terminal_title.items[]` | `string` | no | `-` | - |
 | `ui.tool_output_max_lines` | `integer` | no | `600` | Maximum number of lines to display in tool output (prevents transcript flooding) |
 | `ui.tool_output_mode` | `string` | no | `"compact"` | Tool output display mode ("compact" or "full") |
 | `ui.tool_output_spool_bytes` | `integer` | no | `200000` | Maximum bytes of output to display before auto-spooling to disk |

@@ -586,6 +586,28 @@ mod tests {
     }
 
     #[test]
+    fn prepare_tool_calls_keeps_custom_tool_payload_as_raw_string() {
+        let tool_calls = vec![vtcode_core::llm::provider::ToolCall::custom(
+            "call_patch".to_string(),
+            tools::APPLY_PATCH.to_string(),
+            "*** Begin Patch\n*** End Patch\n".to_string(),
+        )];
+
+        let prepared = prepare_tool_calls(tool_calls);
+
+        assert_eq!(prepared.len(), 1);
+        assert_eq!(prepared[0].call_id(), "call_patch");
+        assert_eq!(prepared[0].tool_name(), tools::APPLY_PATCH);
+        assert_eq!(
+            prepared[0].args(),
+            Some(&serde_json::json!("*** Begin Patch\n*** End Patch\n"))
+        );
+        assert!(prepared[0].args_error().is_none());
+        assert!(!prepared[0].is_parallel_safe());
+        assert!(!prepared[0].is_command_execution());
+    }
+
+    #[test]
     fn extract_interview_questions_from_numbered_lines() {
         let text = "1. First question?\n2) Second question?\n3. Third question?";
         let questions = extract_interview_questions(text);

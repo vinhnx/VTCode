@@ -75,19 +75,16 @@ pub(crate) async fn run_tool_call(
     turn_index: usize,
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
-    let function = match call.function.as_ref() {
-        Some(func) => func,
-        None => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure {
-                    error: structured_failure_from_message("tool", "Tool call missing function"),
-                },
-            ));
-        }
-    };
+    let requested_name = call.tool_name().unwrap_or(call.call_type.as_str());
+    if call.function.is_none() {
+        return Ok(ToolPipelineOutcome::from_status(
+            ToolExecutionStatus::Failure {
+                error: structured_failure_from_message("tool", "Tool call missing function"),
+            },
+        ));
+    }
 
-    let requested_name = function.name.as_str();
-    let args_val = match call.parsed_arguments() {
+    let args_val = match call.execution_arguments() {
         Ok(args) => args,
         Err(err) => {
             return Ok(ToolPipelineOutcome::from_status(

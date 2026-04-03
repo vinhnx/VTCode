@@ -85,8 +85,9 @@ pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
     handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
-    handle_start_session_palette, handle_start_statusline_setup, handle_start_theme_palette,
-    handle_theme_changed, handle_toggle_ide_context, handle_toggle_vim_mode,
+    handle_start_session_palette, handle_start_statusline_setup, handle_start_terminal_title_setup,
+    handle_start_theme_palette, handle_theme_changed, handle_toggle_ide_context,
+    handle_toggle_vim_mode,
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::handle_initialize_workspace;
