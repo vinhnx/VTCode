@@ -6,6 +6,8 @@
 /// - Tool and PTY output formatting with borders
 /// - Diff line padding
 /// - Block line wrapping with borders
+use std::path::Path;
+
 use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
@@ -77,7 +79,10 @@ impl Session {
         };
 
         if message.kind == InlineMessageKind::Tool {
-            return into_transcript_lines(self.reflow_tool_lines(index, width));
+            return into_transcript_lines(
+                self.reflow_tool_lines(index, width),
+                self.workspace_root.as_deref(),
+            );
         }
 
         if message.kind == InlineMessageKind::Pty {
@@ -99,10 +104,10 @@ impl Session {
         let spans = render::render_message_spans(self, index);
         let base_line = Line::from(spans);
         if width == 0 {
-            return vec![TranscriptLine {
-                line: base_line,
-                explicit_links: Vec::new(),
-            }];
+            return vec![transcript_line_with_detected_links(
+                base_line,
+                self.workspace_root.as_deref(),
+            )];
         }
 
         let mut wrapped: Vec<TranscriptLine> = Vec::new();
@@ -130,10 +135,10 @@ impl Session {
                 }
             }
             let divider = self.message_divider_line(max_width, message.kind);
-            wrapped.push(TranscriptLine {
-                line: divider,
-                explicit_links: Vec::new(),
-            });
+            wrapped.push(transcript_line_with_detected_links(
+                divider,
+                self.workspace_root.as_deref(),
+            ));
         }
 
         let lines = if message.kind == InlineMessageKind::Agent {
@@ -146,7 +151,7 @@ impl Session {
             if lines.is_empty() {
                 lines.push(Line::default());
             }
-            into_transcript_lines(lines)
+            into_transcript_lines(lines, self.workspace_root.as_deref())
         };
 
         wrapped.extend(lines);
@@ -202,6 +207,45 @@ impl Session {
         wrapped
     }
 
+    pub(crate) fn reflow_message_lines_for_review(
+        &self,
+        index: usize,
+        width: u16,
+    ) -> Vec<TranscriptLine> {
+        let Some(collapsed) = self
+            .collapsed_pastes
+            .iter()
+            .find(|paste| paste.line_index == index)
+        else {
+            return self.reflow_message_lines(index, width);
+        };
+
+        let Some(line) = self.lines.get(index) else {
+            return vec![TranscriptLine::default()];
+        };
+
+        let mut expanded = line.clone();
+        expanded.segments = vec![crate::core_tui::types::InlineSegment {
+            text: collapsed.full_text.clone(),
+            style: std::sync::Arc::new(crate::core_tui::types::InlineTextStyle::default()),
+        }];
+        expanded.link_ranges.clear();
+
+        let rendered = Line::from(self.render_message_spans_for_line(&expanded));
+        if width == 0 {
+            return vec![transcript_line_with_detected_links(
+                rendered,
+                self.workspace_root.as_deref(),
+            )];
+        }
+
+        let mut wrapped = self.wrap_line(rendered, width as usize);
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+        into_transcript_lines(wrapped, self.workspace_root.as_deref())
+    }
+
     /// Reflow error, warning, and info messages with a bordered block.
     #[allow(dead_code)]
     pub(super) fn reflow_error_warning_lines(
@@ -241,7 +285,7 @@ impl Session {
         }
 
         if max_width == usize::MAX {
-            return into_transcript_lines(grouped_lines);
+            return into_transcript_lines(grouped_lines, self.workspace_root.as_deref());
         }
 
         let border_style = self.styles.dimmed_border_style(true);
@@ -261,7 +305,7 @@ impl Session {
         let content_width = max_width.saturating_sub(prefix_width + border_width);
 
         if content_width == 0 {
-            return into_transcript_lines(grouped_lines);
+            return into_transcript_lines(grouped_lines, self.workspace_root.as_deref());
         }
 
         let inner_width = content_width + 1;
@@ -333,7 +377,7 @@ impl Session {
             lines.push(Line::default());
         }
 
-        into_transcript_lines(lines)
+        into_transcript_lines(lines, self.workspace_root.as_deref())
     }
 
     /// Wrap a line of text to fit within a maximum width.
@@ -392,10 +436,14 @@ impl Session {
             );
             (wrapped, explicit_links)
         } else if let Some(prefix) = code_continuation_prefix.as_deref() {
-            (
-                text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix),
-                Vec::new(),
-            )
+            let wrapped =
+                text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix);
+            let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
+                &wrapped,
+                &content_text,
+                self.workspace_root.as_deref(),
+            );
+            (wrapped, explicit_links)
         } else {
             let wrapped = self.wrap_line(content_line, content_width);
             let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
@@ -489,12 +537,23 @@ impl Session {
     }
 }
 
-fn into_transcript_lines(lines: Vec<Line<'static>>) -> Vec<TranscriptLine> {
+fn transcript_line_with_detected_links(
+    line: Line<'static>,
+    workspace_root: Option<&Path>,
+) -> TranscriptLine {
+    let explicit_links = transcript_links::detect_rendered_transcript_links(&line, workspace_root);
+    TranscriptLine {
+        line,
+        explicit_links,
+    }
+}
+
+fn into_transcript_lines(
+    lines: Vec<Line<'static>>,
+    workspace_root: Option<&Path>,
+) -> Vec<TranscriptLine> {
     lines
         .into_iter()
-        .map(|line| TranscriptLine {
-            line,
-            explicit_links: Vec::new(),
-        })
+        .map(|line| transcript_line_with_detected_links(line, workspace_root))
         .collect()
 }

@@ -639,6 +639,11 @@ tool_success = false
 repeat_window_seconds = 30
 max_identical_in_window = 1
 
+[ui.fullscreen]
+mouse_capture = true
+copy_on_select = true
+scroll_speed = 3
+
 [chat.askQuestions]
 enabled = true
 

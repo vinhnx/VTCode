@@ -910,7 +910,7 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
 
     let transcript_lines = session.reflow_message_lines(0, 60);
     let decorated =
-        session.decorate_visible_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
+        session.decorate_visible_cached_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
     let targets = session
         .transcript_file_link_targets
         .iter()
@@ -947,6 +947,24 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
+}
+
+#[test]
+fn reflowed_tool_lines_include_detected_raw_links() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://example.com/tool-output".to_string();
+    session.push_line(
+        InlineMessageKind::Tool,
+        vec![make_segment(&format!("open {url}"))],
+    );
+
+    let transcript_lines = session.reflow_message_lines(0, 80);
+
+    assert!(transcript_lines.iter().any(|line| {
+        line.explicit_links
+            .iter()
+            .any(|link| matches!(&link.target, InlineLinkTarget::Url(target) if target == &url))
+    }));
 }
 
 #[test]
@@ -2705,6 +2723,30 @@ fn pasted_message_collapses_large_json_for_tool() {
         .collect();
     assert!(expanded_text.contains("\"key0\": \"value0\""));
     assert!(expanded_text.contains("\"end\": true"));
+}
+
+#[test]
+fn collapsed_paste_review_reflow_includes_detected_raw_links() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://example.com/collapsed-review".to_string();
+
+    let mut json = String::from("{\n");
+    for idx in 0..ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD {
+        json.push_str(&format!("  \"key{idx}\": \"value{idx}\",\n"));
+    }
+    json.push_str(&format!("  \"link\": \"{url}\",\n"));
+    json.push_str("  \"end\": true\n}");
+
+    session.append_pasted_message(InlineMessageKind::Tool, json.clone(), json.lines().count());
+
+    let collapsed_index = session.collapsed_pastes[0].line_index;
+    let review_lines = session.reflow_message_lines_for_review(collapsed_index, 80);
+
+    assert!(review_lines.iter().any(|line| {
+        line.explicit_links
+            .iter()
+            .any(|link| matches!(&link.target, InlineLinkTarget::Url(target) if target == &url))
+    }));
 }
 
 #[test]
@@ -5605,6 +5647,64 @@ fn wrap_line_keeps_explicit_blank_rows() {
     assert_eq!(
         rendered,
         vec!["top".to_string(), String::new(), "bottom".to_string()]
+    );
+}
+
+#[test]
+fn wrap_line_prefers_word_boundaries_for_plain_text() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let style = session.default_style();
+    let line = Line::from(vec![Span::styled(
+        "alpha beta gamma".to_string(),
+        ratatui_style_from_inline(&style, None),
+    )]);
+
+    let wrapped = session.wrap_line(line, 7);
+    let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+    assert_eq!(
+        rendered,
+        vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()]
+    );
+}
+
+#[test]
+fn wrap_line_keeps_words_intact_across_same_style_stream_chunks() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let style = ratatui_style_from_inline(&session.default_style(), None);
+    let line = Line::from(vec![
+        Span::styled("alpha be".to_string(), style),
+        Span::styled("ta gamma".to_string(), style),
+    ]);
+
+    let wrapped = session.wrap_line(line, 7);
+    let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+    assert_eq!(
+        rendered,
+        vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()]
+    );
+}
+
+#[test]
+fn wrap_line_keeps_list_continuation_aligned() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let style = session.default_style();
+    let line = Line::from(vec![Span::styled(
+        "• alpha beta gamma".to_string(),
+        ratatui_style_from_inline(&style, None),
+    )]);
+
+    let wrapped = session.wrap_line(line, 8);
+    let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+    assert_eq!(
+        rendered,
+        vec![
+            "• alpha".to_string(),
+            "  beta".to_string(),
+            "  gamma".to_string()
+        ]
     );
 }
 

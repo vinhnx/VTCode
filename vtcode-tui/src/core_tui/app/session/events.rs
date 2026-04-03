@@ -23,7 +23,12 @@ fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
 }
 
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
-    if session.core.input_enabled() {
+    if let Some(review) = session.transcript_review_state_mut()
+        && review.search_active()
+    {
+        review.insert_search_text(content);
+        session.mark_dirty();
+    } else if session.core.input_enabled() {
         session.insert_paste_text(content);
         session.update_input_triggers();
         session.mark_dirty();
@@ -182,6 +187,12 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
     if slash::try_handle_slash_navigation(session, &key, has_control, has_alt, has_command) {
         return None;
+    }
+
+    match handle_transcript_review_key(session, &key, has_control, has_alt, has_command) {
+        TranscriptReviewKeyResult::Emit(event) => return Some(event),
+        TranscriptReviewKeyResult::Handled => return None,
+        TranscriptReviewKeyResult::NotHandled => {}
     }
 
     if let Some(event) = handle_diff_preview_key(session, &key) {
@@ -392,6 +403,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.scroll_page_down();
             session.mark_dirty();
             Some(InlineEvent::ScrollPageDown)
+        }
+        KeyCode::Home if has_control && session.core.fullscreen.active => {
+            session.scroll_to_top();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::End if has_control && session.core.fullscreen.active => {
+            session.scroll_to_bottom();
+            session.mark_dirty();
+            None
         }
         KeyCode::Up => {
             let edit_queue_modifier = has_alt || (raw_meta && !has_super);
@@ -762,9 +783,176 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),
+        "Ctrl+Home / Ctrl+End: Jump transcript to top or bottom in fullscreen.".to_string(),
+        "Ctrl+O: Open fullscreen transcript review.".to_string(),
         "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
         "Esc: Close this overlay.".to_string(),
     ]
+}
+
+enum TranscriptReviewKeyResult {
+    NotHandled,
+    Handled,
+    Emit(InlineEvent),
+}
+
+fn handle_transcript_review_key(
+    session: &mut Session,
+    key: &KeyEvent,
+    has_control: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> TranscriptReviewKeyResult {
+    let open_shortcut = has_control
+        && !has_alt
+        && !has_command
+        && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'));
+    if session.transcript_review_state().is_none() {
+        if !session.core.fullscreen.active || !open_shortcut {
+            return TranscriptReviewKeyResult::NotHandled;
+        }
+
+        let width = session.core.transcript_width.max(1);
+        let height = session.core.transcript_rows.max(1);
+        session.open_transcript_review(width, height);
+        return TranscriptReviewKeyResult::Handled;
+    }
+
+    if open_shortcut {
+        session.close_transcript_review();
+        return TranscriptReviewKeyResult::Handled;
+    }
+
+    let review_copy_shortcut = matches!(
+        key.code,
+        KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('\u{3}')
+    ) && has_control;
+    if review_copy_shortcut && session.core.mouse_selection.has_selection {
+        session.core.mouse_selection.request_copy();
+        session.mark_dirty();
+        return TranscriptReviewKeyResult::Handled;
+    }
+
+    let viewport_height = session.core.transcript_rows.max(1);
+    let Some(review) = session.transcript_review_state_mut() else {
+        return TranscriptReviewKeyResult::Handled;
+    };
+
+    if review.search_active() {
+        match key.code {
+            KeyCode::Esc => {
+                review.cancel_search();
+                session.mark_dirty();
+                return TranscriptReviewKeyResult::Handled;
+            }
+            KeyCode::Enter => {
+                review.commit_search(viewport_height);
+                session.mark_dirty();
+                return TranscriptReviewKeyResult::Handled;
+            }
+            KeyCode::Backspace => {
+                review.backspace_search();
+                session.mark_dirty();
+                return TranscriptReviewKeyResult::Handled;
+            }
+            KeyCode::Char(ch) if !has_control && !has_alt && !has_command => {
+                review.insert_search_text(&ch.to_string());
+                session.mark_dirty();
+                return TranscriptReviewKeyResult::Handled;
+            }
+            _ => {
+                return TranscriptReviewKeyResult::Handled;
+            }
+        }
+    }
+
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+            session.close_transcript_review();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('/') if !has_control && !has_alt && !has_command => {
+            review.start_search();
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('n') if !has_control && !has_alt && !has_command => {
+            review.jump_next_match(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('N') if !has_control && !has_alt && !has_command => {
+            review.jump_previous_match(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Up | KeyCode::Char('k') if !has_control && !has_alt && !has_command => {
+            review.scroll_line_up(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Down | KeyCode::Char('j') if !has_control && !has_alt && !has_command => {
+            review.scroll_line_down(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::PageUp => {
+            review.scroll_half_page_up(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::PageDown => {
+            review.scroll_half_page_down(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('u') | KeyCode::Char('U') if has_control && !has_alt && !has_command => {
+            review.scroll_half_page_up(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('d') | KeyCode::Char('D') if has_control && !has_alt && !has_command => {
+            review.scroll_half_page_down(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('b') | KeyCode::Char('B') if !has_alt && !has_command => {
+            review.scroll_full_page_up(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('f') | KeyCode::Char('F') if has_control && !has_alt && !has_command => {
+            review.scroll_full_page_down(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char(' ') if !has_control && !has_alt && !has_command => {
+            review.scroll_full_page_down(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Home | KeyCode::Char('g') if !has_control && !has_alt && !has_command => {
+            review.scroll_to_top();
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::End | KeyCode::Char('G') if !has_control && !has_alt && !has_command => {
+            review.scroll_to_bottom(viewport_height);
+            session.mark_dirty();
+            TranscriptReviewKeyResult::Handled
+        }
+        KeyCode::Char('[') if !has_control && !has_alt && !has_command => {
+            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewScrollback(
+                review.export_text(),
+            ))
+        }
+        KeyCode::Char('v') | KeyCode::Char('V') if !has_control && !has_alt && !has_command => {
+            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewInEditor(
+                review.export_text(),
+            ))
+        }
+        _ => TranscriptReviewKeyResult::Handled,
+    }
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {
@@ -810,7 +998,7 @@ fn handle_running_slash_command_block(session: &mut Session) -> bool {
             style: Arc::new(InlineTextStyle::default()),
         }],
     );
-    session.core.transcript_content_changed = true;
+    session.core.request_transcript_clear();
     session.mark_dirty();
     true
 }
@@ -974,5 +1162,172 @@ pub(super) fn handle_diff_preview_key(
             )))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::ui;
+    use crate::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use std::sync::Arc;
+
+    fn build_session() -> Session {
+        let mut session = Session::new(InlineTheme::default(), None, 24);
+        session.core.set_fullscreen_active(true);
+        session.core.apply_transcript_rows(8);
+        session.core.apply_transcript_width(60);
+        session
+    }
+
+    fn text_segment(text: impl Into<String>) -> InlineSegment {
+        InlineSegment {
+            text: text.into(),
+            style: Arc::new(InlineTextStyle::default()),
+        }
+    }
+
+    #[test]
+    fn ctrl_o_opens_and_closes_transcript_review() {
+        let mut session = build_session();
+        session
+            .core
+            .push_line(InlineMessageKind::Agent, vec![text_segment("hello review")]);
+
+        assert!(session.transcript_review_state().is_none());
+
+        assert!(
+            session
+                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL))
+                .is_none()
+        );
+        assert!(session.transcript_review_state().is_some());
+
+        assert!(
+            session
+                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL))
+                .is_none()
+        );
+        assert!(session.transcript_review_state().is_none());
+    }
+
+    #[test]
+    fn ctrl_home_and_end_jump_transcript_in_fullscreen() {
+        let mut session = build_session();
+        for index in 0..40 {
+            session.core.push_line(
+                InlineMessageKind::Agent,
+                vec![text_segment(format!("line {index}"))],
+            );
+        }
+
+        session.core.scroll_page_up();
+        assert!(session.core.scroll_offset() > 0);
+
+        let _ = session.process_key(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL));
+        assert_eq!(session.core.scroll_offset(), 0);
+
+        let _ = session.process_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL));
+        assert_eq!(
+            session.core.scroll_offset(),
+            session.core.current_max_scroll_offset()
+        );
+    }
+
+    #[test]
+    fn transcript_review_search_accept_and_cancel_work() {
+        let mut session = build_session();
+        for line in ["alpha", "beta alpha", "gamma alpha"] {
+            session
+                .core
+                .push_line(InlineMessageKind::Agent, vec![text_segment(line)]);
+        }
+
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for ch in ['a', 'l', 'p', 'h', 'a'] {
+            let _ = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+        let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+
+        let status = session
+            .transcript_review_state()
+            .expect("review open")
+            .status_label();
+        assert!(status.contains("search 'alpha'"));
+        assert!(status.contains("(2/3)"));
+
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        let status = session
+            .transcript_review_state()
+            .expect("review open")
+            .status_label();
+        assert!(status.contains("search 'alpha'"));
+    }
+
+    #[test]
+    fn transcript_review_exports_expanded_collapsed_content() {
+        let mut session = build_session();
+        let line_total = ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD + 5;
+        let payload = format!(
+            "[\n{}\n]",
+            (0..line_total)
+                .map(|index| format!("  {{\"line\": {index}}}"))
+                .collect::<Vec<_>>()
+                .join(",\n")
+        );
+        session
+            .core
+            .append_pasted_message(InlineMessageKind::Tool, payload.clone(), line_total);
+
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+
+        match session.process_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE)) {
+            Some(InlineEvent::OpenTranscriptReviewInEditor(text)) => {
+                assert!(text.contains("\"line\": 0"));
+                assert!(text.contains(&format!("\"line\": {}", line_total - 1)));
+            }
+            other => panic!("unexpected review editor event: {other:?}"),
+        }
+
+        match session.process_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE)) {
+            Some(InlineEvent::OpenTranscriptReviewScrollback(text)) => {
+                assert!(text.contains("\"line\": 0"));
+                assert!(text.contains(&format!("\"line\": {}", line_total - 1)));
+            }
+            other => panic!("unexpected review scrollback event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mouse_events_are_ignored_when_fullscreen_mouse_capture_is_disabled() {
+        let mut session = build_session();
+        session.core.fullscreen.interaction.mouse_capture = false;
+        for index in 0..20 {
+            session.core.push_line(
+                InlineMessageKind::Agent,
+                vec![text_segment(format!("line {index}"))],
+            );
+        }
+        session.core.scroll_page_up();
+        let initial_offset = session.core.scroll_offset();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        session.handle_event(
+            CrosstermEvent::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: 0,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            }),
+            &tx,
+            None,
+        );
+
+        assert_eq!(session.core.scroll_offset(), initial_offset);
     }
 }

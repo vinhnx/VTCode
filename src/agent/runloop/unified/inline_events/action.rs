@@ -4,6 +4,8 @@ pub(crate) enum InlineLoopAction {
     Continue,
     Submit(String),
     RequestInlinePromptSuggestion(String),
+    OpenTranscriptReviewInEditor(String),
+    OpenTranscriptReviewScrollback(String),
     Exit(SessionEndReason),
     ResumeSession(String), // Session identifier to resume
     ForkSession {

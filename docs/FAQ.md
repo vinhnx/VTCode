@@ -108,24 +108,38 @@ VT Code is an **AI coding agent** with:
 
 ### How does VT Code manage terminal state?
 
-VT Code uses a robust state machine in `src/tui.rs`:
-1. **Enter:** Enable raw mode → alternate screen → start event handler
-2. **Running:** Process events → update state → render UI
-3. **Exit:** Stop event handler → leave alternate screen → disable raw mode
+The fullscreen TUI uses the shared runner in `vtcode-tui/src/core_tui/runner/` and writes terminal control sequences through `stderr`.
+
+1. **Enter:** Save cursor position, enable terminal modes (raw mode, bracketed paste, focus events, keyboard enhancements, optional mouse capture), then enter alternate screen.
+2. **Running:** Process events, update state, and render only the current viewport.
+3. **Exit:** Stop the event loop, finalize the terminal, leave alternate screen, restore terminal modes in reverse order, and restore the saved cursor position.
 
 The `ExternalAppLauncher` trait allows suspending the TUI to launch editors, git clients, etc.
 
 ### Why suspend the TUI to launch external apps?
 
-See `src/tui.rs:303` (`with_suspended_tui`):
-1. Stops event handler
-2. Leaves alternate screen
-3. **Drains pending events** (critical!)
-4. Disables raw mode
-5. Runs external app
-6. Re-enables raw mode and returns
+VT Code suspends the event loop, drains pending terminal events, leaves alternate-screen rendering, launches the external app, and then restores the fullscreen session. The same pattern is used for editor launches and for fullscreen transcript review handoff to native scrollback.
 
 This prevents terminal artifacts and ensures external apps get clean input/output.
+
+### How does fullscreen transcript review work?
+
+Press `Ctrl+O` while fullscreen rendering is active to open transcript review. VT Code builds a plain-text cache of the full transcript, including expanded collapsed tool payloads, then lets you:
+
+- search with `/`, `n`, and `N`
+- page through the conversation with `Ctrl+U`, `Ctrl+D`, `Ctrl+B`, and `Ctrl+F`
+- export to native terminal scrollback with `[`
+- open the expanded transcript in your editor with `v`
+
+### What should I configure for tmux?
+
+If you want wheel scrolling and click support inside fullscreen rendering, enable tmux mouse mode:
+
+```tmux
+set -g mouse on
+```
+
+VT Code's alternate-screen fullscreen mode is intended for normal tmux sessions. Avoid using it with iTerm2 control mode (`tmux -CC`), where mouse capture and alternate-screen behavior are unreliable.
 
 ## Debugging & Troubleshooting
 

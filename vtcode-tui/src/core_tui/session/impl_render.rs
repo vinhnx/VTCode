@@ -24,6 +24,10 @@ impl Session {
         let Some(line) = self.lines.get(index) else {
             return vec![Span::raw(String::new())];
         };
+        self.render_message_spans_for_line(line)
+    }
+
+    pub(crate) fn render_message_spans_for_line(&self, line: &MessageLine) -> Vec<Span<'static>> {
         message_renderer::render_message_spans(
             line,
             &self.theme,

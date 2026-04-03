@@ -13,14 +13,7 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
     let Some(line) = session.lines.get(index) else {
         return vec![Span::raw(String::new())];
     };
-    message_renderer::render_message_spans(
-        line,
-        &session.theme,
-        &session.labels,
-        |kind| session.prefix_text(kind),
-        |line| session.prefix_style(line),
-        |kind| session.text_fallback(kind),
-    )
+    session.render_message_spans_for_line(line)
 }
 
 pub(super) fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {

@@ -70,10 +70,26 @@ fn wrap_mixed_content(
     let mut current_width = 0usize;
     let mut text_pos = 0usize;
 
+    fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
+        while let Some(last) = spans.last_mut() {
+            let trimmed_len = last.content.trim_end_matches(char::is_whitespace).len();
+            if trimmed_len == last.content.len() {
+                break;
+            }
+            if trimmed_len == 0 {
+                spans.pop();
+                continue;
+            }
+            last.content.to_mut().truncate(trimmed_len);
+            break;
+        }
+    }
+
     let flush_line = |spans: &mut Vec<Span<'static>>, result: &mut Vec<Line<'static>>| {
         if spans.is_empty() {
             result.push(Line::default());
         } else {
+            trim_trailing_wrap_whitespace(spans);
             result.push(Line::from(std::mem::take(spans)));
         }
     };
@@ -81,20 +97,101 @@ fn wrap_mixed_content(
     // Merge spans into a single style for simplicity when dealing with URLs
     let default_style = line.spans.first().map(|s| s.style).unwrap_or_default();
 
+    let push_wrapped_token = |token: &str,
+                              current_line: &mut Vec<Span<'static>>,
+                              current_width: &mut usize,
+                              result: &mut Vec<Line<'static>>| {
+        for grapheme in UnicodeSegmentation::graphemes(token, true) {
+            let grapheme_width = grapheme.width();
+            if grapheme_width == 0 {
+                current_line.push(Span::styled(grapheme.to_string(), default_style));
+                continue;
+            }
+            if *current_width + grapheme_width > max_width && *current_width > 0 {
+                flush_line(current_line, result);
+                *current_width = 0;
+            }
+            current_line.push(Span::styled(grapheme.to_string(), default_style));
+            *current_width += grapheme_width;
+        }
+    };
+
+    let push_wrapped_text = |segment: &str,
+                             current_line: &mut Vec<Span<'static>>,
+                             current_width: &mut usize,
+                             result: &mut Vec<Line<'static>>| {
+        for piece in segment.split_inclusive('\n') {
+            let mut text = piece;
+            let mut had_newline = false;
+            if let Some(stripped) = text.strip_suffix('\n') {
+                text = stripped;
+                had_newline = true;
+                if let Some(without_carriage) = text.strip_suffix('\r') {
+                    text = without_carriage;
+                }
+            }
+
+            for token in UnicodeSegmentation::split_word_bounds(text) {
+                if token.is_empty() {
+                    continue;
+                }
+
+                let token_width = token.width();
+                if token_width == 0 {
+                    current_line.push(Span::styled(token.to_string(), default_style));
+                    continue;
+                }
+
+                let token_is_whitespace = token.chars().all(char::is_whitespace);
+                let has_content = *current_width > 0;
+
+                if token_is_whitespace && !result.is_empty() && !has_content {
+                    continue;
+                }
+
+                if *current_width + token_width <= max_width {
+                    current_line.push(Span::styled(token.to_string(), default_style));
+                    *current_width += token_width;
+                    continue;
+                }
+
+                if token_is_whitespace {
+                    if has_content {
+                        flush_line(current_line, result);
+                        *current_width = 0;
+                    }
+                    continue;
+                }
+
+                if token_width <= max_width {
+                    if has_content {
+                        flush_line(current_line, result);
+                        *current_width = 0;
+                    }
+                    current_line.push(Span::styled(token.to_string(), default_style));
+                    *current_width += token_width;
+                    continue;
+                }
+
+                push_wrapped_token(token, current_line, current_width, result);
+            }
+
+            if had_newline {
+                flush_line(current_line, result);
+                *current_width = 0;
+            }
+        }
+    };
+
     for (url_start, url_end, url_text) in urls {
         // Process text before this URL
         if *url_start > text_pos {
-            let before = &text[text_pos..*url_start];
-
-            for grapheme in UnicodeSegmentation::graphemes(before, true) {
-                let gw = grapheme.width();
-                if current_width + gw > max_width && current_width > 0 {
-                    flush_line(&mut current_line, &mut result);
-                    current_width = 0;
-                }
-                current_line.push(Span::styled(grapheme.to_string(), default_style));
-                current_width += gw;
-            }
+            push_wrapped_text(
+                &text[text_pos..*url_start],
+                &mut current_line,
+                &mut current_width,
+                &mut result,
+            );
         }
 
         // Add URL — keep atomic if it fits, otherwise break it across lines
@@ -112,15 +209,7 @@ fn wrap_mixed_content(
                 flush_line(&mut current_line, &mut result);
                 current_width = 0;
             }
-            for grapheme in UnicodeSegmentation::graphemes(*url_text, true) {
-                let gw = grapheme.width();
-                if current_width + gw > max_width && current_width > 0 {
-                    flush_line(&mut current_line, &mut result);
-                    current_width = 0;
-                }
-                current_line.push(Span::styled(grapheme.to_string(), default_style));
-                current_width += gw;
-            }
+            push_wrapped_token(url_text, &mut current_line, &mut current_width, &mut result);
         }
 
         text_pos = *url_end;
@@ -128,17 +217,12 @@ fn wrap_mixed_content(
 
     // Process remaining text after last URL
     if text_pos < text.len() {
-        let remaining = &text[text_pos..];
-
-        for grapheme in UnicodeSegmentation::graphemes(remaining, true) {
-            let gw = grapheme.width();
-            if current_width + gw > max_width && current_width > 0 {
-                flush_line(&mut current_line, &mut result);
-                current_width = 0;
-            }
-            current_line.push(Span::styled(grapheme.to_string(), default_style));
-            current_width += gw;
-        }
+        push_wrapped_text(
+            &text[text_pos..],
+            &mut current_line,
+            &mut current_width,
+            &mut result,
+        );
     }
 
     flush_line(&mut current_line, &mut result);
@@ -252,5 +336,29 @@ mod tests {
         let line = Line::from(Span::raw("Regular text without URLs"));
         let wrapped = wrap_line_preserving_urls(line, 10);
         assert!(!wrapped.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_content_prefers_word_boundaries_around_urls() {
+        let line = Line::from(Span::raw("alpha https://x.io beta gamma"));
+        let wrapped = wrap_line_preserving_urls(line, 12);
+        let rendered: Vec<String> = wrapped
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect();
+
+        assert_eq!(
+            rendered,
+            vec![
+                "alpha".to_string(),
+                "https://x.io".to_string(),
+                "beta gamma".to_string()
+            ]
+        );
     }
 }

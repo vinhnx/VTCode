@@ -3,15 +3,16 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ratatui::crossterm::{
-    cursor::{MoveToColumn, RestorePosition, SavePosition},
+    cursor::MoveToColumn,
     execute,
-    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{Clear, ClearType},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::types::UiSurfacePreference;
+use crate::options::FullscreenInteractionSettings;
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
 type EventCallback<E> = std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>;
@@ -56,6 +57,8 @@ pub trait TuiSessionDriver {
     );
     fn set_workspace_root(&mut self, root: Option<std::path::PathBuf>);
     fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::core_tui::log::LogEntry>);
+    fn set_fullscreen_active(&mut self, active: bool);
+    fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings);
 }
 
 impl TuiCommand for crate::core_tui::types::InlineCommand {
@@ -95,8 +98,6 @@ use surface::TerminalSurface;
 use terminal_io::{drain_terminal_events, finalize_terminal, prepare_terminal};
 use terminal_modes::{enable_terminal_modes, restore_terminal_modes};
 
-const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
-
 pub struct TuiOptions<E> {
     pub surface_preference: UiSurfacePreference,
     pub inline_rows: u16,
@@ -107,6 +108,7 @@ pub struct TuiOptions<E> {
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
+    pub fullscreen: FullscreenInteractionSettings,
     pub workspace_root: Option<std::path::PathBuf>,
 }
 
@@ -132,6 +134,8 @@ where
     session.set_show_logs(options.show_logs);
     session.set_active_pty_sessions(options.active_pty_sessions);
     session.set_workspace_root(options.workspace_root.clone());
+    session.set_fullscreen_active(surface.use_alternate());
+    session.set_fullscreen_interaction(options.fullscreen.clone());
     if options.show_logs {
         let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
         session.set_log_receiver(log_rx);
@@ -142,16 +146,10 @@ where
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
-    let cursor_position_saved = match execute!(stderr, SavePosition) {
-        Ok(_) => true,
-        Err(error) => {
-            tracing::debug!(%error, "failed to save cursor position for inline session");
-            false
-        }
-    };
-    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags)?;
+    let mut mode_state = enable_terminal_modes(&mut stderr, keyboard_flags, &options.fullscreen)?;
+    mode_state.save_cursor_position(&mut stderr);
     if surface.use_alternate() {
-        execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
+        mode_state.enter_alternate_screen(&mut stderr)?;
     }
 
     session.update_terminal_title();
@@ -199,6 +197,7 @@ where
             use_alternate_screen: surface.use_alternate(),
             input_activity_counter: options.input_activity_counter,
             keyboard_flags,
+            fullscreen: options.fullscreen,
         },
     )
     .await;
@@ -214,17 +213,6 @@ where
     let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
     let finalize_result = finalize_terminal(&mut terminal);
-    let leave_alternate_result = if surface.use_alternate() {
-        Some(execute!(terminal.backend_mut(), LeaveAlternateScreen))
-    } else {
-        None
-    };
-
-    if let Some(result) = leave_alternate_result
-        && let Err(error) = result
-    {
-        tracing::warn!(%error, "failed to leave alternate screen");
-    }
 
     // Restore terminal modes (handles all modes including raw mode)
     let restore_modes_result = restore_terminal_modes(&mode_state);
@@ -234,10 +222,6 @@ where
 
     // Clear terminal title on exit.
     session.clear_terminal_title();
-
-    if cursor_position_saved && let Err(error) = execute!(io::stderr(), RestorePosition) {
-        tracing::debug!(%error, "failed to restore cursor position for inline session");
-    }
 
     drive_result?;
     finalize_result?;

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::Path;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
@@ -17,7 +18,6 @@ use super::{
     wrapping,
 };
 use crate::ui::tui::types::InlineLinkTarget;
-
 static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
 const LINK_OPEN_THROTTLE_INTERVAL: Duration = Duration::from_millis(500);
@@ -54,6 +54,12 @@ struct StyledLinkMatch {
     hovered: bool,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct TranscriptLinkStyles {
+    link: Style,
+    hovered: Style,
+}
+
 pub(crate) enum TranscriptLinkClickAction {
     Open(InlineEvent),
     Consume,
@@ -66,84 +72,124 @@ impl Session {
         self.hovered_transcript_file_link = None;
     }
 
-    pub(crate) fn decorate_visible_transcript_links(
+    pub(crate) fn decorate_borrowed_cached_transcript_links(
         &mut self,
-        lines: Vec<TranscriptLine>,
+        lines: &[TranscriptLine],
         area: Rect,
     ) -> Vec<Line<'static>> {
+        self.decorate_borrowed_transcript_links_impl(lines, area, false)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn decorate_borrowed_transcript_links(
+        &mut self,
+        lines: &[TranscriptLine],
+        area: Rect,
+    ) -> Vec<Line<'static>> {
+        self.decorate_borrowed_transcript_links_impl(lines, area, true)
+    }
+
+    fn decorate_borrowed_transcript_links_impl(
+        &mut self,
+        lines: &[TranscriptLine],
+        area: Rect,
+        detect_raw_links: bool,
+    ) -> Vec<Line<'static>> {
+        if !detect_raw_links && lines.iter().all(|line| line.explicit_links.is_empty()) {
+            self.transcript_file_link_targets.clear();
+            self.hovered_transcript_file_link = None;
+            return lines.iter().map(|line| line.line.clone()).collect();
+        }
+
         let workspace_root = self.workspace_root.as_deref();
         let link_style = self
             .styles
             .transcript_link_style()
             .add_modifier(Modifier::UNDERLINED);
-        let hovered_style = link_style.add_modifier(Modifier::BOLD);
+        let styles = TranscriptLinkStyles {
+            link: link_style,
+            hovered: link_style.add_modifier(Modifier::BOLD),
+        };
         let mut targets = Vec::new();
         let mut decorated = Vec::with_capacity(lines.len());
 
-        for (row_idx, transcript_line) in lines.into_iter().enumerate() {
-            let line = transcript_line.line;
-            let text: String = line
-                .spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect();
-            let matches = detect_transcript_link_matches(&text, workspace_root);
-            let mut styled_matches =
-                Vec::with_capacity(matches.len() + transcript_line.explicit_links.len());
-            append_explicit_link_matches(
-                &mut targets,
-                &mut styled_matches,
-                transcript_line.explicit_links,
+        for (row_idx, transcript_line) in lines.iter().enumerate() {
+            decorated.push(decorate_transcript_line(
+                transcript_line.line.clone(),
+                &transcript_line.explicit_links,
                 row_idx,
                 area,
                 workspace_root,
                 self.last_mouse_position,
-            );
-            for DetectedLinkMatch { start, end, target } in matches {
-                if styled_matches
-                    .iter()
-                    .any(|existing| start < existing.end && end > existing.start)
-                {
-                    continue;
-                }
+                detect_raw_links,
+                styles,
+                &mut targets,
+            ));
+        }
 
-                let start_col = UnicodeWidthStr::width(&text[..start]);
-                let width = UnicodeWidthStr::width(&text[start..end]);
-                if width == 0 {
-                    continue;
-                }
+        self.transcript_file_link_targets = targets;
+        self.hovered_transcript_file_link = self.mouse_hovered_transcript_file_link_index();
 
-                let target_area = Rect::new(
-                    area.x.saturating_add(start_col as u16),
-                    area.y.saturating_add(row_idx as u16),
-                    width as u16,
-                    1,
-                );
-                let hovered = self
-                    .last_mouse_position
-                    .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+        decorated
+    }
 
-                targets.push(TranscriptFileLinkTarget {
-                    area: target_area,
-                    target,
-                });
-                styled_matches.push(StyledLinkMatch {
-                    start,
-                    end,
-                    hovered,
-                });
-            }
+    #[allow(dead_code)]
+    pub(crate) fn decorate_visible_transcript_links(
+        &mut self,
+        lines: Vec<TranscriptLine>,
+        area: Rect,
+    ) -> Vec<Line<'static>> {
+        self.decorate_visible_transcript_links_impl(lines, area, true)
+    }
 
-            if styled_matches.is_empty() {
-                decorated.push(line);
-            } else {
-                decorated.push(style_transcript_file_link_line(
-                    line,
-                    &styled_matches,
-                    link_style,
-                    hovered_style,
-                ));
-            }
+    pub(crate) fn decorate_visible_cached_transcript_links(
+        &mut self,
+        lines: Vec<TranscriptLine>,
+        area: Rect,
+    ) -> Vec<Line<'static>> {
+        self.decorate_visible_transcript_links_impl(lines, area, false)
+    }
+
+    fn decorate_visible_transcript_links_impl(
+        &mut self,
+        lines: Vec<TranscriptLine>,
+        area: Rect,
+        detect_raw_links: bool,
+    ) -> Vec<Line<'static>> {
+        if !detect_raw_links && lines.iter().all(|line| line.explicit_links.is_empty()) {
+            self.transcript_file_link_targets.clear();
+            self.hovered_transcript_file_link = None;
+            return lines.into_iter().map(|line| line.line).collect();
+        }
+
+        let workspace_root = self.workspace_root.as_deref();
+        let link_style = self
+            .styles
+            .transcript_link_style()
+            .add_modifier(Modifier::UNDERLINED);
+        let styles = TranscriptLinkStyles {
+            link: link_style,
+            hovered: link_style.add_modifier(Modifier::BOLD),
+        };
+        let mut targets = Vec::new();
+        let mut decorated = Vec::with_capacity(lines.len());
+
+        for (row_idx, transcript_line) in lines.into_iter().enumerate() {
+            let TranscriptLine {
+                line,
+                explicit_links,
+            } = transcript_line;
+            decorated.push(decorate_transcript_line(
+                line,
+                &explicit_links,
+                row_idx,
+                area,
+                workspace_root,
+                self.last_mouse_position,
+                detect_raw_links,
+                styles,
+                &mut targets,
+            ));
         }
 
         self.transcript_file_link_targets = targets;
@@ -348,6 +394,74 @@ impl Session {
     }
 }
 
+fn decorate_transcript_line(
+    line: Line<'static>,
+    explicit_links: &[RenderedTranscriptLink],
+    row_idx: usize,
+    area: Rect,
+    workspace_root: Option<&Path>,
+    last_mouse_position: Option<(u16, u16)>,
+    detect_raw_links: bool,
+    styles: TranscriptLinkStyles,
+    targets: &mut Vec<TranscriptFileLinkTarget>,
+) -> Line<'static> {
+    let mut styled_matches = Vec::new();
+    append_explicit_link_matches(
+        targets,
+        &mut styled_matches,
+        explicit_links,
+        row_idx,
+        area,
+        workspace_root,
+        last_mouse_position,
+    );
+
+    if detect_raw_links && may_contain_link_candidate(&line, explicit_links) {
+        let text = transcript_line_text(&line);
+        let matches = detect_transcript_link_matches(&text, workspace_root);
+        styled_matches.reserve(matches.len());
+        for DetectedLinkMatch { start, end, target } in matches {
+            if styled_matches
+                .iter()
+                .any(|existing| start < existing.end && end > existing.start)
+            {
+                continue;
+            }
+
+            let start_col = UnicodeWidthStr::width(&text[..start]);
+            let width = UnicodeWidthStr::width(&text[start..end]);
+            if width == 0 {
+                continue;
+            }
+
+            let target_area = Rect::new(
+                area.x.saturating_add(start_col as u16),
+                area.y.saturating_add(row_idx as u16),
+                width as u16,
+                1,
+            );
+            let hovered = last_mouse_position
+                .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+
+            targets.push(TranscriptFileLinkTarget {
+                area: target_area,
+                target,
+            });
+            styled_matches.push(StyledLinkMatch {
+                start,
+                end,
+                hovered,
+            });
+        }
+    }
+
+    if styled_matches.is_empty() {
+        line
+    } else {
+        style_transcript_file_link_line(line, &styled_matches, styles.link, styles.hovered)
+    }
+}
+
 fn point_in_rect(area: Rect, column: u16, row: u16) -> bool {
     row >= area.y
         && row < area.y.saturating_add(area.height)
@@ -396,7 +510,7 @@ fn modifier_key_flag(code: KeyCode) -> Option<KeyModifiers> {
 fn append_explicit_link_matches(
     targets: &mut Vec<TranscriptFileLinkTarget>,
     styled_matches: &mut Vec<StyledLinkMatch>,
-    explicit_links: Vec<RenderedTranscriptLink>,
+    explicit_links: &[RenderedTranscriptLink],
     row_idx: usize,
     area: Rect,
     workspace_root: Option<&Path>,
@@ -411,10 +525,10 @@ fn append_explicit_link_matches(
         );
         let hovered = last_mouse_position
             .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
-        let target = match explicit.target {
-            InlineLinkTarget::Url(url) => resolve_transcript_file_target(&url, workspace_root)
+        let target = match &explicit.target {
+            InlineLinkTarget::Url(url) => resolve_transcript_file_target(url, workspace_root)
                 .map(TranscriptLinkTarget::File)
-                .unwrap_or(TranscriptLinkTarget::Url(url)),
+                .unwrap_or_else(|| TranscriptLinkTarget::Url(url.clone())),
         };
         targets.push(TranscriptFileLinkTarget {
             area: target_area,
@@ -425,6 +539,38 @@ fn append_explicit_link_matches(
             end: explicit.end,
             hovered,
         });
+    }
+}
+
+fn may_contain_link_candidate(line: &Line<'_>, explicit_links: &[RenderedTranscriptLink]) -> bool {
+    !explicit_links.is_empty()
+        || line
+            .spans
+            .iter()
+            .any(|span| may_contain_link_candidate_text(span.content.as_ref()))
+}
+
+fn may_contain_link_candidate_text(text: &str) -> bool {
+    text.contains("://")
+        || text.contains('/')
+        || text.contains('\\')
+        || text.contains("~/")
+        || text.contains("./")
+        || text.contains("../")
+}
+
+pub(crate) fn transcript_line_text<'a>(line: &'a Line<'a>) -> Cow<'a, str> {
+    match line.spans.as_slice() {
+        [] => Cow::Borrowed(""),
+        [span] => Cow::Borrowed(span.content.as_ref()),
+        spans => {
+            let capacity = spans.iter().map(|span| span.content.len()).sum();
+            let mut text = String::with_capacity(capacity);
+            for span in spans {
+                text.push_str(span.content.as_ref());
+            }
+            Cow::Owned(text)
+        }
     }
 }
 
@@ -526,11 +672,7 @@ pub(crate) fn decorate_detected_link_lines(
             break;
         }
 
-        let original_text: String = line
-            .spans
-            .iter()
-            .map(|span| span.content.as_ref())
-            .collect();
+        let original_text = transcript_line_text(&line);
         let matches = detect_transcript_link_matches(&original_text, workspace_root);
         let wrapped_lines = wrapping::wrap_line_preserving_urls(line, area.width.max(1) as usize);
         let mut original_offset = 0usize;
@@ -540,11 +682,7 @@ pub(crate) fn decorate_detected_link_lines(
                 break;
             }
 
-            let wrapped_text: String = wrapped_line
-                .spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect();
+            let wrapped_text = transcript_line_text(&wrapped_line);
             let wrapped_start = original_offset;
             let wrapped_end = wrapped_start + wrapped_text.len();
             original_offset = wrapped_end;
@@ -611,11 +749,7 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
     let mut original_offset = 0usize;
 
     for wrapped_line in wrapped_lines {
-        let wrapped_text: String = wrapped_line
-            .spans
-            .iter()
-            .map(|span| span.content.as_ref())
-            .collect();
+        let wrapped_text = transcript_line_text(wrapped_line);
         let wrapped_start = original_offset;
         let wrapped_end = wrapped_start + wrapped_text.len();
         original_offset = wrapped_end;
@@ -649,6 +783,34 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
     }
 
     projected
+}
+
+pub(crate) fn detect_rendered_transcript_links(
+    line: &Line<'_>,
+    workspace_root: Option<&Path>,
+) -> Vec<RenderedTranscriptLink> {
+    if !may_contain_link_candidate(line, &[]) {
+        return Vec::new();
+    }
+
+    let text = transcript_line_text(line);
+    detect_transcript_link_matches(&text, workspace_root)
+        .into_iter()
+        .filter_map(|DetectedLinkMatch { start, end, target }| {
+            let width = UnicodeWidthStr::width(&text[start..end]);
+            if width == 0 {
+                return None;
+            }
+
+            Some(RenderedTranscriptLink {
+                start,
+                end,
+                start_col: UnicodeWidthStr::width(&text[..start]),
+                width,
+                target: InlineLinkTarget::Url(transcript_link_target_string(&target)),
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn detect_transcript_link_matches(
@@ -830,4 +992,51 @@ fn looks_like_transcript_path(token: &str) -> bool {
                 && ext.len() <= 12
                 && ext.chars().all(|c| c.is_ascii_alphanumeric())
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::borrow::Cow;
+
+    use crate::core_tui::types::InlineTheme;
+
+    #[test]
+    fn plain_text_prefilter_skips_link_detection() {
+        assert!(!may_contain_link_candidate_text("plain text only"));
+        assert!(may_contain_link_candidate_text("see src/main.rs"));
+        assert!(may_contain_link_candidate_text("https://example.com"));
+    }
+
+    #[test]
+    fn borrowed_decoration_keeps_plain_text_undecorated() {
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+        let lines = vec![TranscriptLine {
+            line: Line::from("plain text only"),
+            explicit_links: Vec::new(),
+        }];
+
+        let decorated = session.decorate_borrowed_transcript_links(&lines, Rect::new(0, 0, 20, 2));
+
+        assert_eq!(decorated, vec![Line::from("plain text only")]);
+        assert!(session.transcript_file_link_targets.is_empty());
+    }
+
+    #[test]
+    fn transcript_line_text_borrows_single_span_content() {
+        let line = Line::from("plain text only");
+
+        let text = transcript_line_text(&line);
+
+        assert!(matches!(text, Cow::Borrowed("plain text only")));
+    }
+
+    #[test]
+    fn transcript_line_text_allocates_once_for_multi_span_content() {
+        let line = Line::from(vec![Span::raw("plain "), Span::raw("text only")]);
+
+        let text = transcript_line_text(&line);
+
+        assert!(matches!(text, Cow::Owned(ref content) if content == "plain text only"));
+    }
 }

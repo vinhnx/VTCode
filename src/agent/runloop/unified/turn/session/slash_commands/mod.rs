@@ -108,6 +108,17 @@ impl<'a> SlashCommandContext<'a> {
     }
 }
 
+pub(crate) async fn run_with_event_loop_suspended<T, F>(
+    handle: &InlineHandle,
+    suspend_tui: bool,
+    launch: F,
+) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    handlers::run_with_event_loop_suspended(handle, suspend_tui, launch).await
+}
+
 pub(crate) async fn handle_outcome(
     outcome: SlashCommandOutcome,
     ctx: SlashCommandContext<'_>,

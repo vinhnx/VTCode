@@ -69,6 +69,7 @@ impl Session {
     pub(crate) fn invalidate_queue_overlay(&mut self) {
         self.queue_overlay_version = self.queue_overlay_version.wrapping_add(1);
         self.queue_overlay_cache = None;
+        self.request_transcript_clear();
     }
 
     pub(crate) fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {

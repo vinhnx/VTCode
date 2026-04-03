@@ -3,6 +3,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::core_tui::log::LogEntry;
 use crate::core_tui::runner::TuiSessionDriver;
 use crate::core_tui::types::{InlineCommand, InlineEvent};
+use crate::options::FullscreenInteractionSettings;
 
 use super::Session;
 
@@ -96,5 +97,13 @@ impl TuiSessionDriver for Session {
 
     fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
         self.set_log_receiver(receiver);
+    }
+
+    fn set_fullscreen_active(&mut self, active: bool) {
+        self.set_fullscreen_active(active);
+    }
+
+    fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings) {
+        self.set_fullscreen_interaction(config);
     }
 }

@@ -4,7 +4,9 @@ use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 use crate::ui::slash::SlashCommandInfo;
 use crate::ui::theme::ThemeStyles;
 use vtcode_tui::ReasoningEffortLevel as TuiReasoningEffortLevel;
-use vtcode_tui::app::{KeyboardProtocolSettings, SessionSurface, SlashCommandItem};
+use vtcode_tui::app::{
+    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface, SlashCommandItem,
+};
 use vtcode_tui::core::{
     LayoutModeOverride, ReasoningDisplayMode, SessionAppearanceConfig, UiMode, theme_from_styles,
 };
@@ -48,6 +50,14 @@ pub fn to_tui_keyboard_protocol(keyboard: KeyboardProtocolConfig) -> KeyboardPro
         report_event_types: keyboard.report_event_types,
         report_alternate_keys: keyboard.report_alternate_keys,
         report_all_keys: keyboard.report_all_keys,
+    }
+}
+
+pub fn to_tui_fullscreen(config: &VTCodeConfig) -> FullscreenInteractionSettings {
+    FullscreenInteractionSettings {
+        mouse_capture: config.ui.fullscreen.mouse_capture,
+        copy_on_select: config.ui.fullscreen.copy_on_select,
+        scroll_speed: config.ui.fullscreen.scroll_speed,
     }
 }
 

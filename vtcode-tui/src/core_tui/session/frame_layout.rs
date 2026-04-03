@@ -114,7 +114,9 @@ impl Session {
         self.mouse_selection
             .apply_highlight(frame.buffer_mut(), viewport);
 
-        if self.mouse_selection.has_copy_request() || self.mouse_selection.needs_copy() {
+        let auto_copy_requested =
+            self.fullscreen.interaction.copy_on_select && self.mouse_selection.needs_copy();
+        if self.mouse_selection.has_copy_request() || auto_copy_requested {
             let text = self
                 .mouse_selection
                 .extract_text(frame.buffer_mut(), viewport);

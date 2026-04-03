@@ -2,13 +2,16 @@ use std::io;
 
 use anyhow::Result;
 use ratatui::crossterm::{
+    cursor::{RestorePosition, SavePosition},
     event::{
         DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
         EnableFocusChange, EnableMouseCapture,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+
+use crate::options::FullscreenInteractionSettings;
 
 /// Represents the state of terminal modes before TUI initialization.
 ///
@@ -26,6 +29,10 @@ pub(super) struct TerminalModeState {
     focus_change_enabled: bool,
     /// Whether keyboard enhancement flags were pushed (we push them)
     keyboard_enhancements_pushed: bool,
+    /// Whether the cursor position was saved before entering fullscreen
+    cursor_position_saved: bool,
+    /// Whether the alternate screen buffer is active
+    alternate_screen_active: bool,
 }
 
 impl TerminalModeState {
@@ -37,7 +44,25 @@ impl TerminalModeState {
             mouse_capture_enabled: false,
             focus_change_enabled: false,
             keyboard_enhancements_pushed: false,
+            cursor_position_saved: false,
+            alternate_screen_active: false,
         }
+    }
+
+    pub(super) fn save_cursor_position(&mut self, stderr: &mut io::Stderr) {
+        match execute!(stderr, SavePosition) {
+            Ok(_) => self.cursor_position_saved = true,
+            Err(error) => {
+                tracing::debug!(%error, "failed to save cursor position for inline session");
+            }
+        }
+    }
+
+    pub(super) fn enter_alternate_screen(&mut self, stderr: &mut io::Stderr) -> Result<()> {
+        execute!(stderr, EnterAlternateScreen)
+            .map_err(|error| anyhow::anyhow!("failed to enter alternate inline screen: {error}"))?;
+        self.alternate_screen_active = true;
+        Ok(())
     }
 }
 
@@ -50,6 +75,7 @@ impl Default for TerminalModeState {
 pub(super) fn enable_terminal_modes(
     stderr: &mut io::Stderr,
     keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+    fullscreen: &FullscreenInteractionSettings,
 ) -> Result<TerminalModeState> {
     use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
 
@@ -71,11 +97,12 @@ pub(super) fn enable_terminal_modes(
         }
     }
 
-    // Enable mouse capture
-    match execute!(stderr, EnableMouseCapture) {
-        Ok(_) => state.mouse_capture_enabled = true,
-        Err(error) => {
-            tracing::warn!(%error, "failed to enable mouse capture");
+    if fullscreen.mouse_capture {
+        match execute!(stderr, EnableMouseCapture) {
+            Ok(_) => state.mouse_capture_enabled = true,
+            Err(error) => {
+                tracing::warn!(%error, "failed to enable mouse capture");
+            }
         }
     }
 
@@ -109,7 +136,14 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
 
     let mut errors = Vec::new();
 
-    // Restore in reverse order of enabling
+    // Restore in reverse order of enabling/entering.
+
+    if state.alternate_screen_active
+        && let Err(error) = execute!(stderr, LeaveAlternateScreen)
+    {
+        tracing::debug!(%error, "failed to leave alternate screen");
+        errors.push(format!("alternate screen: {}", error));
+    }
 
     // 1. Pop keyboard enhancement flags (if they were pushed)
     if state.keyboard_enhancements_pushed {
@@ -150,6 +184,13 @@ pub(super) fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     {
         tracing::debug!(%error, "failed to disable raw mode");
         errors.push(format!("raw mode: {}", error));
+    }
+
+    if state.cursor_position_saved
+        && let Err(error) = execute!(stderr, RestorePosition)
+    {
+        tracing::debug!(%error, "failed to restore cursor position for inline session");
+        errors.push(format!("cursor position: {}", error));
     }
 
     if errors.is_empty() {

@@ -101,11 +101,12 @@ pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str
 
 /// Wrap a line of text to fit within the specified width.
 ///
-/// This is the standard wrapping function that wraps at grapheme boundaries.
-/// For URL-aware wrapping that preserves URLs as atomic units, use
-/// `super::wrapping::adaptive_wrap_line` instead.
+/// This is the standard wrapping function for plain transcript text. It prefers
+/// word boundaries for readable prose and falls back to grapheme wrapping for
+/// oversized tokens. For URL-aware wrapping that preserves URLs as atomic units,
+/// use `super::wrapping::adaptive_wrap_line` instead.
 pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
-    wrap_line_internal(line, max_width, "")
+    wrap_line_internal(line, max_width, "", true)
 }
 
 pub(super) fn wrap_line_with_hanging_prefix(
@@ -113,17 +114,30 @@ pub(super) fn wrap_line_with_hanging_prefix(
     max_width: usize,
     continuation_prefix: &str,
 ) -> Vec<Line<'static>> {
-    wrap_line_internal(line, max_width, continuation_prefix)
+    wrap_line_internal(line, max_width, continuation_prefix, false)
 }
 
 fn wrap_line_internal(
-    line: Line<'static>,
+    mut line: Line<'static>,
     max_width: usize,
     continuation_prefix: &str,
+    prefer_word_boundaries: bool,
 ) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];
     }
+
+    line.spans = coalesce_adjacent_spans(line.spans);
+    let derived_continuation_prefix = if prefer_word_boundaries && continuation_prefix.is_empty() {
+        wrapped_continuation_prefix(&line)
+    } else {
+        String::new()
+    };
+    let continuation_prefix = if continuation_prefix.is_empty() {
+        derived_continuation_prefix.as_str()
+    } else {
+        continuation_prefix
+    };
 
     fn push_span(spans: &mut Vec<Span<'static>>, style: &Style, text: &str) {
         if text.is_empty() {
@@ -136,6 +150,21 @@ fn wrap_line_internal(
         }
 
         spans.push(Span::styled(text.to_owned(), *style));
+    }
+
+    fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
+        while let Some(last) = spans.last_mut() {
+            let trimmed_len = last.content.trim_end_matches(char::is_whitespace).len();
+            if trimmed_len == last.content.len() {
+                break;
+            }
+            if trimmed_len == 0 {
+                spans.pop();
+                continue;
+            }
+            last.content.to_mut().truncate(trimmed_len);
+            break;
+        }
     }
 
     let continuation_width = UnicodeWidthStr::width(continuation_prefix);
@@ -151,6 +180,9 @@ fn wrap_line_internal(
         if spans.is_empty() {
             rows.push(Line::default());
         } else {
+            if prefer_word_boundaries {
+                trim_trailing_wrap_whitespace(spans);
+            }
             rows.push(Line::from(mem::take(spans)));
         }
     };
@@ -162,6 +194,84 @@ fn wrap_line_internal(
                 *current_width = continuation_width;
             }
         };
+
+    let line_start_width = |rows: &[Line<'static>]| -> usize {
+        if use_continuation_prefix && !rows.is_empty() {
+            continuation_width
+        } else {
+            0
+        }
+    };
+
+    let push_wrapped_token = |token: &str,
+                              style: &Style,
+                              current_spans: &mut Vec<Span<'static>>,
+                              current_width: &mut usize,
+                              rows: &mut Vec<Line<'static>>| {
+        for grapheme in UnicodeSegmentation::graphemes(token, true) {
+            if grapheme.is_empty() {
+                continue;
+            }
+
+            let width = UnicodeWidthStr::width(grapheme);
+            if width == 0 {
+                ensure_continuation_prefix(current_spans, current_width, rows);
+                push_span(current_spans, style, grapheme);
+                continue;
+            }
+
+            let mut attempts = 0usize;
+            loop {
+                ensure_continuation_prefix(current_spans, current_width, rows);
+                let segment = LineSegment::new(
+                    Point::new(*current_width as f64, 0.0),
+                    Point::new((*current_width + width) as f64, 0.0),
+                );
+
+                match clip_line(segment, window) {
+                    Some(clipped) => {
+                        let visible = (clipped.p2.x - clipped.p1.x).round() as usize;
+                        if visible == width {
+                            push_span(current_spans, style, grapheme);
+                            *current_width += width;
+                            break;
+                        }
+
+                        if *current_width == 0 {
+                            push_span(current_spans, style, grapheme);
+                            *current_width += width;
+                            break;
+                        }
+
+                        flush_current(current_spans, rows);
+                        *current_width = 0;
+                    }
+                    None => {
+                        if *current_width == 0 {
+                            push_span(current_spans, style, grapheme);
+                            *current_width += width;
+                            break;
+                        }
+
+                        flush_current(current_spans, rows);
+                        *current_width = 0;
+                    }
+                }
+
+                attempts += 1;
+                if attempts > 4 {
+                    push_span(current_spans, style, grapheme);
+                    *current_width += width;
+                    break;
+                }
+            }
+
+            if *current_width >= max_width {
+                flush_current(current_spans, rows);
+                *current_width = 0;
+            }
+        }
+    };
 
     for span in line.spans.into_iter() {
         let style = span.style;
@@ -182,68 +292,77 @@ fn wrap_line_internal(
             }
 
             if !text.is_empty() {
-                for grapheme in UnicodeSegmentation::graphemes(text, true) {
-                    if grapheme.is_empty() {
-                        continue;
-                    }
+                if prefer_word_boundaries {
+                    for token in UnicodeSegmentation::split_word_bounds(text) {
+                        if token.is_empty() {
+                            continue;
+                        }
 
-                    let width = UnicodeWidthStr::width(grapheme);
-                    if width == 0 {
-                        ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
-                        push_span(&mut current_spans, &style, grapheme);
-                        continue;
-                    }
+                        let token_width = UnicodeWidthStr::width(token);
+                        if token_width == 0 {
+                            ensure_continuation_prefix(
+                                &mut current_spans,
+                                &mut current_width,
+                                &rows,
+                            );
+                            push_span(&mut current_spans, &style, token);
+                            continue;
+                        }
 
-                    let mut attempts = 0usize;
-                    loop {
+                        let token_is_whitespace = token.chars().all(char::is_whitespace);
+                        let line_start = line_start_width(&rows);
+                        let has_content = current_width > line_start;
+
+                        if token_is_whitespace && !rows.is_empty() && !has_content {
+                            continue;
+                        }
+
                         ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
-                        let line_segment = LineSegment::new(
-                            Point::new(current_width as f64, 0.0),
-                            Point::new((current_width + width) as f64, 0.0),
+                        if current_width + token_width <= max_width {
+                            push_span(&mut current_spans, &style, token);
+                            current_width += token_width;
+                            continue;
+                        }
+
+                        if token_is_whitespace {
+                            if has_content {
+                                flush_current(&mut current_spans, &mut rows);
+                                current_width = 0;
+                            }
+                            continue;
+                        }
+
+                        if token_width <= max_width {
+                            if has_content {
+                                flush_current(&mut current_spans, &mut rows);
+                                current_width = 0;
+                                ensure_continuation_prefix(
+                                    &mut current_spans,
+                                    &mut current_width,
+                                    &rows,
+                                );
+                            }
+                            push_span(&mut current_spans, &style, token);
+                            current_width += token_width;
+                            continue;
+                        }
+
+                        push_wrapped_token(
+                            token,
+                            &style,
+                            &mut current_spans,
+                            &mut current_width,
+                            &mut rows,
                         );
-
-                        match clip_line(line_segment, window) {
-                            Some(clipped) => {
-                                let visible = (clipped.p2.x - clipped.p1.x).round() as usize;
-                                if visible == width {
-                                    push_span(&mut current_spans, &style, grapheme);
-                                    current_width += width;
-                                    break;
-                                }
-
-                                if current_width == 0 {
-                                    push_span(&mut current_spans, &style, grapheme);
-                                    current_width += width;
-                                    break;
-                                }
-
-                                flush_current(&mut current_spans, &mut rows);
-                                current_width = 0;
-                            }
-                            None => {
-                                if current_width == 0 {
-                                    push_span(&mut current_spans, &style, grapheme);
-                                    current_width += width;
-                                    break;
-                                }
-
-                                flush_current(&mut current_spans, &mut rows);
-                                current_width = 0;
-                            }
-                        }
-
-                        attempts += 1;
-                        if attempts > 4 {
-                            push_span(&mut current_spans, &style, grapheme);
-                            current_width += width;
-                            break;
-                        }
                     }
-
-                    if current_width >= max_width {
-                        flush_current(&mut current_spans, &mut rows);
-                        current_width = 0;
-                    }
+                } else {
+                    push_wrapped_token(
+                        text,
+                        &style,
+                        &mut current_spans,
+                        &mut current_width,
+                        &mut rows,
+                    );
                 }
             }
 
@@ -261,6 +380,113 @@ fn wrap_line_internal(
     }
 
     rows
+}
+
+fn coalesce_adjacent_spans(spans: Vec<Span<'static>>) -> Vec<Span<'static>> {
+    let mut merged: Vec<Span<'static>> = Vec::with_capacity(spans.len());
+    for span in spans {
+        if span.content.is_empty() {
+            continue;
+        }
+        if let Some(last) = merged.last_mut().filter(|last| last.style == span.style) {
+            last.content.to_mut().push_str(span.content.as_ref());
+        } else {
+            merged.push(span);
+        }
+    }
+    merged
+}
+
+fn wrapped_continuation_prefix(line: &Line<'static>) -> String {
+    let text: String = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    structural_continuation_prefix(&text)
+}
+
+fn structural_continuation_prefix(text: &str) -> String {
+    let stripped = strip_ansi_codes(text);
+    let text = stripped.as_ref();
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
+    let mut width = 0usize;
+
+    while index < bytes.len() {
+        let Some(ch) = text[index..].chars().next() else {
+            break;
+        };
+        if !ch.is_whitespace() || ch == '\n' || ch == '\r' {
+            break;
+        }
+        width += UnicodeWidthStr::width(ch.encode_utf8(&mut [0u8; 4]) as &str);
+        index += ch.len_utf8();
+    }
+
+    while text[index..].starts_with("│ ") {
+        width += UnicodeWidthStr::width("│ ");
+        index += "│ ".len();
+    }
+
+    let remaining = &text[index..];
+    let marker_width = if remaining.starts_with("- ") {
+        Some(UnicodeWidthStr::width("- "))
+    } else if remaining.starts_with("* ") {
+        Some(UnicodeWidthStr::width("* "))
+    } else if remaining.starts_with("+ ") {
+        Some(UnicodeWidthStr::width("+ "))
+    } else if remaining.starts_with("• ") {
+        Some(UnicodeWidthStr::width("• "))
+    } else if remaining.starts_with("◦ ") {
+        Some(UnicodeWidthStr::width("◦ "))
+    } else if remaining.starts_with("▪ ") {
+        Some(UnicodeWidthStr::width("▪ "))
+    } else {
+        numbered_list_marker_width(remaining)
+    };
+
+    if let Some(marker_width) = marker_width {
+        return " ".repeat(width + marker_width);
+    }
+
+    if width > 0 {
+        " ".repeat(width)
+    } else {
+        String::new()
+    }
+}
+
+fn numbered_list_marker_width(text: &str) -> Option<usize> {
+    let mut chars = text.char_indices().peekable();
+    let mut end_after_head = None;
+
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch.is_ascii_digit() || ch.is_ascii_alphabetic() {
+            end_after_head = Some(idx + ch.len_utf8());
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    end_after_head?;
+
+    let (idx, separator) = chars.next()?;
+    if separator != '.' && separator != ')' {
+        return None;
+    }
+    let end_after_separator = idx + separator.len_utf8();
+
+    let (idx, space) = chars.next()?;
+    if !space.is_whitespace() {
+        return None;
+    }
+    let end = idx + space.len_utf8();
+
+    Some(UnicodeWidthStr::width(
+        &text[..end.max(end_after_separator)],
+    ))
 }
 
 /// Detect if a line is a todo/checkbox item and its state

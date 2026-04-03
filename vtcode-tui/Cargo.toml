@@ -73,5 +73,9 @@ ignored = ["insta"]
 name = "markdown_render"
 harness = false
 
+[[bench]]
+name = "transcript"
+harness = false
+
 [lints]
 workspace = true

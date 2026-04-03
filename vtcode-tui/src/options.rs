@@ -72,6 +72,24 @@ impl From<KeyboardProtocolSettings> for KeyboardProtocolConfig {
     }
 }
 
+/// Standalone fullscreen interaction settings for alternate-screen behavior.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FullscreenInteractionSettings {
+    pub mouse_capture: bool,
+    pub copy_on_select: bool,
+    pub scroll_speed: u8,
+}
+
+impl Default for FullscreenInteractionSettings {
+    fn default() -> Self {
+        Self {
+            mouse_capture: true,
+            copy_on_select: true,
+            scroll_speed: 3,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +124,14 @@ mod tests {
         let restored = KeyboardProtocolSettings::from(config);
 
         assert_eq!(settings, restored);
+    }
+
+    #[test]
+    fn fullscreen_interaction_settings_default_values() {
+        let settings = FullscreenInteractionSettings::default();
+
+        assert!(settings.mouse_capture);
+        assert!(settings.copy_on_select);
+        assert_eq!(settings.scroll_speed, 3);
     }
 }

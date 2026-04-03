@@ -10,6 +10,7 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 - [Model selection](#model-selection)
 - [Instruction guidance and memory](#instruction-guidance-and-persistent-memory)
 - [External editor](#external-editor)
+- [Fullscreen interaction](#fullscreen-interaction)
 - [Execution environment](#execution-environment)
 - [MCP integration](#mcp-integration)
 - [Security and approvals](#security-and-approvals)
@@ -286,6 +287,35 @@ You can manage this feature without editing TOML directly:
 - The guided flow can also take you to `/config file_opener` when you want to tune ANSI hyperlink URI handling separately.
 
 For full editor detection, launcher behavior, and examples, see [External Editor Configuration](../tools/EDITOR_CONFIG.md).
+
+## Fullscreen interaction
+
+When VT Code is using alternate-screen rendering, you can tune fullscreen-specific mouse and transcript behavior with the `ui.fullscreen` table.
+
+```toml
+[ui.fullscreen]
+mouse_capture = true
+copy_on_select = true
+scroll_speed = 3
+```
+
+- `mouse_capture` keeps mouse events inside VT Code for click-to-expand, click-to-position, link activation, and wheel scrolling. Set it to `false` when you want the terminal's native text selection while keeping fullscreen rendering.
+- `copy_on_select` controls whether text selected inside VT Code is copied automatically on mouse release.
+- `scroll_speed` multiplies mouse-wheel scrolling from `1` to `20`. It only affects wheel accumulation; page-based keyboard navigation is unchanged.
+
+VT Code also honors these environment variables for default fullscreen behavior:
+
+- `VTCODE_FULLSCREEN_MOUSE_CAPTURE=0|1`
+- `VTCODE_FULLSCREEN_COPY_ON_SELECT=0|1`
+- `VTCODE_FULLSCREEN_SCROLL_SPEED=<1-20>`
+
+Interactive fullscreen review uses the same rendering surface:
+
+- `Ctrl+O` opens a transcript review overlay with search, paging, and export controls.
+- `[` hands the expanded transcript to native terminal scrollback until you return.
+- `v` opens the expanded transcript in your configured editor.
+
+For the full shortcut list and tmux notes, see [Interactive Mode Reference](../user-guide/interactive-mode.md).
 
 ## Execution environment
 

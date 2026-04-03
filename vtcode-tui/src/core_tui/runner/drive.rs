@@ -11,6 +11,7 @@ use ratatui::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use crate::core_tui::types::FocusChangeCallback;
+use crate::options::FullscreenInteractionSettings;
 
 use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEvent};
 use super::{TuiCommand, TuiSessionDriver};
@@ -56,6 +57,7 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
     event_channels: &EventChannels,
     use_alternate_screen: bool,
     keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+    fullscreen: &FullscreenInteractionSettings,
 ) -> Result<()> {
     use ratatui::crossterm::{
         event::{
@@ -76,13 +78,13 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
                 .context("failed to leave alternate screen before suspend")?;
         }
 
-        if let Err(error) = execute!(
-            stderr,
-            DisableMouseCapture,
-            DisableFocusChange,
-            DisableBracketedPaste
-        ) {
+        if let Err(error) = execute!(stderr, DisableFocusChange, DisableBracketedPaste) {
             tracing::debug!(%error, "failed to disable terminal enhancements before suspend");
+        }
+        if fullscreen.mouse_capture
+            && let Err(error) = execute!(stderr, DisableMouseCapture)
+        {
+            tracing::debug!(%error, "failed to disable mouse capture before suspend");
         }
         if let Err(error) = disable_raw_mode() {
             tracing::debug!(%error, "failed to disable raw mode before suspend");
@@ -91,13 +93,13 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
         raise(SIGTSTP).context("failed to suspend process with SIGTSTP")?;
 
         enable_raw_mode().context("failed to re-enable raw mode after resume")?;
-        if let Err(error) = execute!(
-            stderr,
-            EnableBracketedPaste,
-            EnableMouseCapture,
-            EnableFocusChange
-        ) {
+        if let Err(error) = execute!(stderr, EnableBracketedPaste, EnableFocusChange) {
             tracing::debug!(%error, "failed to re-enable terminal enhancements after resume");
+        }
+        if fullscreen.mouse_capture
+            && let Err(error) = execute!(stderr, EnableMouseCapture)
+        {
+            tracing::debug!(%error, "failed to restore mouse capture after resume");
         }
         if !keyboard_flags.is_empty()
             && let Err(error) = execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags))
@@ -230,6 +232,7 @@ pub(super) struct DriveRuntimeOptions<E> {
     pub(super) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub(super) use_alternate_screen: bool,
     pub(super) keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+    pub(super) fullscreen: FullscreenInteractionSettings,
 }
 
 fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {
@@ -254,6 +257,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     let _ = (
         runtime_options.use_alternate_screen,
         runtime_options.keyboard_flags,
+        &runtime_options.fullscreen,
     );
 
     let mut cursor_steady = false;
@@ -316,6 +320,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                                 &event_channels,
                                 runtime_options.use_alternate_screen,
                                 runtime_options.keyboard_flags,
+                                &runtime_options.fullscreen,
                             ) {
                                 tracing::warn!(%error, "failed to suspend inline session");
                             }
@@ -327,7 +332,8 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                             // Only coalesce scroll events when no modal/palette is active
                             // (otherwise Up/Down should navigate the list, not scroll)
                             let can_coalesce_scroll = !has_active_navigation_ui(session);
-                            let mut scroll_accum = ScrollAccumulator::default();
+                            let mut scroll_accum =
+                                ScrollAccumulator::new(runtime_options.fullscreen.scroll_speed);
                             let input_started_at = Instant::now();
                             let mut processed_terminal_events = 1;
                             let mut saw_tick = false;
@@ -367,7 +373,9 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                                             // Not a scroll event or can't coalesce - apply accumulated first
                                             if scroll_accum.has_scroll() {
                                                 scroll_accum.apply(session);
-                                                scroll_accum = ScrollAccumulator::default();
+                                                scroll_accum = ScrollAccumulator::new(
+                                                    runtime_options.fullscreen.scroll_speed,
+                                                );
                                             }
                                             // Then process this event
                                             session.handle_event(

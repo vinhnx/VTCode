@@ -124,6 +124,8 @@ pub enum InlineEvent {
     OpenFileInEditor(String),
     OpenUrl(String),
     LaunchEditor,
+    OpenTranscriptReviewInEditor(String),
+    OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).

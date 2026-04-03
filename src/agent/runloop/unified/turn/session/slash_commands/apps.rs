@@ -280,7 +280,7 @@ pub(crate) async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<Sl
     Ok(SlashCommandControl::Continue)
 }
 
-pub(super) async fn run_with_event_loop_suspended<T, F>(
+pub(crate) async fn run_with_event_loop_suspended<T, F>(
     handle: &InlineHandle,
     suspend_tui: bool,
     launch: F,

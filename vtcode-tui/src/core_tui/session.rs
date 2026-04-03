@@ -25,6 +25,7 @@ use super::{
 };
 use crate::config::constants::ui;
 use crate::core_tui::types::LocalAgentEntry;
+use crate::options::FullscreenInteractionSettings;
 use crate::ui::tui::widgets::SessionWidget;
 
 mod frame_layout;
@@ -184,6 +185,12 @@ pub(crate) enum MouseDragTarget {
     Input,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct FullscreenSessionState {
+    pub(crate) active: bool,
+    pub(crate) interaction: FullscreenInteractionSettings,
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
@@ -218,8 +225,8 @@ pub struct Session {
     cursor_visible: bool,
     pub(crate) needs_redraw: bool,
     pub(crate) needs_full_clear: bool,
-    /// Track if transcript content changed (not just scroll position)
-    pub(crate) transcript_content_changed: bool,
+    /// Track whether the transcript viewport must be cleared before repainting.
+    pub(crate) transcript_clear_required: bool,
     should_exit: bool,
     scroll_cursor_steady_until: Option<Instant>,
     last_shimmer_active: bool,
@@ -252,7 +259,7 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
     /// Avoids expensive clone on cache hits
-    pub(crate) visible_lines_cache: Option<(usize, u16, Arc<Vec<TranscriptLine>>)>,
+    pub(crate) visible_lines_cache: Option<(usize, u16, usize, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
     pub(crate) local_agents: Vec<LocalAgentEntry>,
     pub(crate) local_agents_drawer_visible: bool,
@@ -291,6 +298,7 @@ pub struct Session {
     // --- Mouse Text Selection ---
     pub(crate) mouse_selection: MouseSelectionState,
     pub(crate) mouse_drag_target: MouseDragTarget,
+    pub(crate) fullscreen: FullscreenSessionState,
 
     pub(crate) skip_confirmations: bool,
 

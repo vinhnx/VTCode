@@ -10,7 +10,7 @@ use crate::core_tui::app::types::{
 use crate::core_tui::log;
 use crate::core_tui::runner::{TuiOptions, run_tui};
 use crate::core_tui::session::config::AppearanceConfig;
-use crate::options::{KeyboardProtocolSettings, SessionSurface};
+use crate::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 /// Standalone session launch options for reusable integrations.
 #[derive(Clone)]
@@ -23,6 +23,7 @@ pub struct SessionOptions {
     pub active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     pub input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     pub keyboard_protocol: KeyboardProtocolSettings,
+    pub fullscreen: FullscreenInteractionSettings,
     pub workspace_root: Option<PathBuf>,
     pub slash_commands: Vec<SlashCommandItem>,
     pub appearance: Option<AppearanceConfig>,
@@ -41,6 +42,7 @@ impl Default for SessionOptions {
             active_pty_sessions: None,
             input_activity_counter: None,
             keyboard_protocol: KeyboardProtocolSettings::default(),
+            fullscreen: FullscreenInteractionSettings::default(),
             workspace_root: None,
             slash_commands: Vec::new(),
             appearance: None,
@@ -58,6 +60,7 @@ impl SessionOptions {
             surface_preference: defaults.surface_preference,
             inline_rows: defaults.inline_rows,
             keyboard_protocol: defaults.keyboard_protocol,
+            fullscreen: defaults.fullscreen,
             workspace_root: host.workspace_root(),
             slash_commands: host.slash_commands(),
             app_name: host.app_name(),
@@ -99,6 +102,7 @@ pub fn spawn_session_with_options(
                 active_pty_sessions: options.active_pty_sessions,
                 input_activity_counter: options.input_activity_counter,
                 keyboard_protocol: KeyboardProtocolConfig::from(options.keyboard_protocol),
+                fullscreen: options.fullscreen,
                 workspace_root: options.workspace_root,
             },
             move |rows| {
@@ -180,6 +184,7 @@ mod tests {
                 surface_preference: SessionSurface::Inline,
                 inline_rows: 24,
                 keyboard_protocol: KeyboardProtocolSettings::default(),
+                fullscreen: FullscreenInteractionSettings::default(),
             }
         }
     }

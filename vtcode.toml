@@ -9,9 +9,9 @@ persistence = "file"
 [tui]
 
 [agent]
-provider = "openai"
-api_key_env = "OPENAI_API_KEY"
-default_model = "gpt-5.2-codex"
+provider = "ollama"
+api_key_env = "OLLAMA_API_KEY"
+default_model = "gpt-oss:120b-cloud"
 theme = "ciapre"
 system_prompt_mode = "default"
 tool_documentation_mode = "progressive"
@@ -19,7 +19,7 @@ enable_split_tool_results = true
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "low"
+reasoning_effort = "high"
 verbosity = "medium"
 temperature = 0.7
 refine_temperature = 0.3
@@ -507,7 +507,7 @@ deny_regex = [
 ]
 
 [permissions]
-default_mode = "default"
+default_mode = "auto"
 allowed_tools = []
 disallowed_tools = []
 allow = []
@@ -665,6 +665,11 @@ request = false
 tool_success = false
 repeat_window_seconds = 30
 max_identical_in_window = 1
+
+[ui.fullscreen]
+mouse_capture = true
+copy_on_select = true
+scroll_speed = 3
 
 [chat.askQuestions]
 enabled = true

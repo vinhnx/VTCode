@@ -78,14 +78,17 @@ impl ScrollManager {
 
     /// Updates total rows and max offset, returns if changed
     pub fn set_total_rows(&mut self, total: usize) -> bool {
-        if self.total_rows != total {
+        let changed = self.total_rows != total;
+        if changed {
             self.total_rows = total;
+        }
+
+        if changed || self.metrics_dirty {
             self.update_max_offset();
             self.metrics_dirty = false;
-            true
-        } else {
-            false
         }
+
+        changed
     }
 
     /// Invalidates metrics cache (e.g., due to theme/width changes)
@@ -207,6 +210,21 @@ mod tests {
         manager.scroll_down(100);
         assert_eq!(manager.offset(), manager.max_offset());
         assert!(manager.at_bottom());
+    }
+
+    #[test]
+    fn viewport_resize_recomputes_max_offset_when_total_rows_stay_the_same() {
+        let mut manager = ScrollManager::new(2);
+        manager.set_total_rows(6);
+        assert_eq!(manager.max_offset(), 4);
+
+        manager.set_viewport_rows(8);
+        assert!(manager.metrics_dirty);
+
+        manager.set_total_rows(6);
+
+        assert_eq!(manager.max_offset(), 0);
+        assert!(manager.metrics_valid());
     }
 
     #[test]

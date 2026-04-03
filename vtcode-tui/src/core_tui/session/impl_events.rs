@@ -548,12 +548,7 @@ impl Session {
         );
         let line = visible_lines.get(row_in_view)?;
 
-        let text: String = line
-            .line
-            .spans
-            .iter()
-            .map(|span| span.content.as_ref())
-            .collect();
+        let text = transcript_links::transcript_line_text(&line.line);
         let local_column = column.saturating_sub(area.x);
         let (start_col, end_col) = mouse_selection::word_selection_range(&text, local_column)?;
 

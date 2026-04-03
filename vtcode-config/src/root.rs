@@ -163,6 +163,36 @@ impl Default for UiNotificationsConfig {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiFullscreenConfig {
+    /// Capture mouse events inside the fullscreen UI.
+    /// Can also be controlled via VTCODE_FULLSCREEN_MOUSE_CAPTURE=0/1.
+    #[serde(default = "default_fullscreen_mouse_capture")]
+    pub mouse_capture: bool,
+
+    /// Copy selected transcript text immediately when the mouse selection ends.
+    /// Can also be controlled via VTCODE_FULLSCREEN_COPY_ON_SELECT=0/1.
+    #[serde(default = "default_fullscreen_copy_on_select")]
+    pub copy_on_select: bool,
+
+    /// Multiplier applied to mouse wheel transcript scrolling in fullscreen mode.
+    /// Values are clamped to the range 1..=20.
+    /// Can also be controlled via VTCODE_FULLSCREEN_SCROLL_SPEED.
+    #[serde(default = "default_fullscreen_scroll_speed")]
+    pub scroll_speed: u8,
+}
+
+impl Default for UiFullscreenConfig {
+    fn default() -> Self {
+        Self {
+            mouse_capture: default_fullscreen_mouse_capture(),
+            copy_on_select: default_fullscreen_copy_on_select(),
+            scroll_speed: default_fullscreen_scroll_speed(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
     /// Tool output display mode ("compact" or "full")
     #[serde(default = "default_tool_output_mode")]
@@ -273,6 +303,10 @@ pub struct UiConfig {
     /// Notification preferences for attention events.
     #[serde(default)]
     pub notifications: UiNotificationsConfig,
+
+    /// Fullscreen interaction settings for alternate-screen rendering.
+    #[serde(default)]
+    pub fullscreen: UiFullscreenConfig,
 
     /// Screen reader mode: disables animations, uses plain text indicators,
     /// and optimizes output for assistive technology compatibility.
@@ -401,7 +435,7 @@ fn default_notifications_max_identical_in_window() -> u32 {
 }
 
 fn env_bool_var(name: &str) -> Option<bool> {
-    std::env::var(name).ok().and_then(|v| {
+    read_env_var(name).and_then(|v| {
         let normalized = v.trim().to_ascii_lowercase();
         match normalized.as_str() {
             "1" | "true" | "yes" | "on" => Some(true),
@@ -409,6 +443,28 @@ fn env_bool_var(name: &str) -> Option<bool> {
             _ => None,
         }
     })
+}
+
+fn env_u8_var(name: &str) -> Option<u8> {
+    read_env_var(name)
+        .and_then(|value| value.trim().parse::<u8>().ok())
+        .map(clamp_fullscreen_scroll_speed)
+}
+
+fn clamp_fullscreen_scroll_speed(value: u8) -> u8 {
+    value.clamp(1, 20)
+}
+
+fn default_fullscreen_mouse_capture() -> bool {
+    env_bool_var("VTCODE_FULLSCREEN_MOUSE_CAPTURE").unwrap_or(true)
+}
+
+fn default_fullscreen_copy_on_select() -> bool {
+    env_bool_var("VTCODE_FULLSCREEN_COPY_ON_SELECT").unwrap_or(true)
+}
+
+fn default_fullscreen_scroll_speed() -> u8 {
+    env_u8_var("VTCODE_FULLSCREEN_SCROLL_SPEED").unwrap_or(3)
 }
 
 fn default_screen_reader_mode() -> bool {
@@ -454,9 +510,58 @@ impl Default for UiConfig {
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
             notifications: UiNotificationsConfig::default(),
+            fullscreen: UiFullscreenConfig::default(),
             screen_reader_mode: default_screen_reader_mode(),
             reduce_motion_mode: default_reduce_motion_mode(),
             reduce_motion_keep_progress_animation: default_reduce_motion_keep_progress_animation(),
+        }
+    }
+}
+
+fn read_env_var(name: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(name) {
+        return override_value;
+    }
+
+    std::env::var(name).ok()
+}
+
+#[cfg(test)]
+mod test_env_overrides {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static ENV_OVERRIDES: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+
+    fn overrides() -> &'static Mutex<HashMap<String, Option<String>>> {
+        ENV_OVERRIDES.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub(super) fn get(name: &str) -> Option<Option<String>> {
+        overrides()
+            .lock()
+            .expect("env overrides lock poisoned")
+            .get(name)
+            .cloned()
+    }
+
+    pub(super) fn set(name: &str, value: Option<&str>) {
+        overrides()
+            .lock()
+            .expect("env overrides lock poisoned")
+            .insert(name.to_string(), value.map(ToOwned::to_owned));
+    }
+
+    pub(super) fn restore(name: &str, previous: Option<Option<String>>) {
+        let mut guard = overrides().lock().expect("env overrides lock poisoned");
+        match previous {
+            Some(value) => {
+                guard.insert(name.to_string(), value);
+            }
+            None => {
+                guard.remove(name);
+            }
         }
     }
 }
@@ -484,6 +589,59 @@ impl Default for AskQuestionsConfig {
         Self {
             enabled: default_ask_questions_enabled(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    fn with_env_var<F>(key: &str, value: Option<&str>, f: F)
+    where
+        F: FnOnce(),
+    {
+        let previous = test_env_overrides::get(key);
+        test_env_overrides::set(key, value);
+        f();
+        test_env_overrides::restore(key, previous);
+    }
+
+    #[test]
+    #[serial]
+    fn fullscreen_defaults_match_expected_values() {
+        let fullscreen = UiFullscreenConfig::default();
+
+        assert!(fullscreen.mouse_capture);
+        assert!(fullscreen.copy_on_select);
+        assert_eq!(fullscreen.scroll_speed, 3);
+    }
+
+    #[test]
+    #[serial]
+    fn fullscreen_env_overrides_apply_to_defaults() {
+        with_env_var("VTCODE_FULLSCREEN_MOUSE_CAPTURE", Some("0"), || {
+            with_env_var("VTCODE_FULLSCREEN_COPY_ON_SELECT", Some("false"), || {
+                with_env_var("VTCODE_FULLSCREEN_SCROLL_SPEED", Some("7"), || {
+                    let fullscreen = UiFullscreenConfig::default();
+                    assert!(!fullscreen.mouse_capture);
+                    assert!(!fullscreen.copy_on_select);
+                    assert_eq!(fullscreen.scroll_speed, 7);
+                });
+            });
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn fullscreen_scroll_speed_is_clamped() {
+        with_env_var("VTCODE_FULLSCREEN_SCROLL_SPEED", Some("0"), || {
+            assert_eq!(UiFullscreenConfig::default().scroll_speed, 1);
+        });
+
+        with_env_var("VTCODE_FULLSCREEN_SCROLL_SPEED", Some("99"), || {
+            assert_eq!(UiFullscreenConfig::default().scroll_speed, 20);
+        });
     }
 }
 

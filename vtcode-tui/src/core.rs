@@ -18,7 +18,7 @@ pub use crate::core_tui::types::{
     OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction,
     SecurePromptConfig, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
-pub use crate::options::{KeyboardProtocolSettings, SessionSurface};
+pub use crate::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 pub type CoreCommand = core_tui::types::InlineCommand;
 pub type CoreEvent = core_tui::types::InlineEvent;
@@ -36,6 +36,7 @@ pub struct CoreSessionOptions {
     pub active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     pub input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     pub keyboard_protocol: KeyboardProtocolSettings,
+    pub fullscreen: FullscreenInteractionSettings,
     pub workspace_root: Option<PathBuf>,
     pub appearance: Option<SessionAppearanceConfig>,
     pub app_name: String,
@@ -53,6 +54,7 @@ impl Default for CoreSessionOptions {
             active_pty_sessions: None,
             input_activity_counter: None,
             keyboard_protocol: KeyboardProtocolSettings::default(),
+            fullscreen: FullscreenInteractionSettings::default(),
             workspace_root: None,
             appearance: None,
             app_name: "Agent TUI".to_string(),
@@ -76,6 +78,7 @@ pub fn spawn_core_session(
         options.active_pty_sessions,
         options.input_activity_counter,
         KeyboardProtocolConfig::from(options.keyboard_protocol),
+        options.fullscreen,
         options.workspace_root,
         options.appearance,
         options.app_name,
@@ -86,9 +89,10 @@ pub fn spawn_core_session(
 /// Commonly used core TUI API items.
 pub mod prelude {
     pub use super::{
-        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions, InlineHeaderContext,
-        InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineMessageKind,
-        InlineSegment, InlineTextStyle, InlineTheme, KeyboardProtocolSettings, LayoutModeOverride,
+        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions,
+        FullscreenInteractionSettings, InlineHeaderContext, InlineHeaderHighlight,
+        InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineMessageKind, InlineSegment,
+        InlineTextStyle, InlineTheme, KeyboardProtocolSettings, LayoutModeOverride,
         ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
         OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission,
         ReasoningDisplayMode, SessionAppearanceConfig, SessionSurface, UiMode, WizardModalMode,

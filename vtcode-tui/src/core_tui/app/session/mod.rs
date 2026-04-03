@@ -27,6 +27,7 @@ mod palette;
 pub mod render;
 pub mod slash;
 pub mod slash_palette;
+mod transcript_review;
 mod transient;
 pub mod trust;
 
@@ -34,9 +35,11 @@ use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
 use self::local_agents::LocalAgentsState;
 use self::slash_palette::SlashPalette;
+use self::transcript_review::TranscriptReviewState;
 use self::transient::{
     TransientFocusPolicy, TransientHost, TransientSurface, TransientVisibilityChange,
 };
+use crate::options::FullscreenInteractionSettings;
 use agent_palette::AgentPalette;
 
 /// App-level session that layers VT Code features on top of the core session.
@@ -53,6 +56,7 @@ pub struct AppSession {
     pub(crate) show_task_panel: bool,
     pub(crate) task_panel_lines: Vec<String>,
     pub(crate) diff_preview_state: Option<DiffPreviewState>,
+    pub(crate) transcript_review_state: Option<TranscriptReviewState>,
     pub(crate) diff_overlay_queue: VecDeque<DiffOverlayRequest>,
     pub(crate) transient_host: TransientHost,
 }
@@ -91,6 +95,7 @@ impl AppSession {
             show_task_panel: false,
             task_panel_lines: Vec::new(),
             diff_preview_state: None,
+            transcript_review_state: None,
             diff_overlay_queue: VecDeque::new(),
             transient_host: TransientHost::default(),
         }
@@ -293,6 +298,23 @@ impl AppSession {
         self.diff_preview_state.as_mut()
     }
 
+    pub(crate) fn transcript_review_state(&self) -> Option<&TranscriptReviewState> {
+        self.transient_host
+            .is_visible(TransientSurface::TranscriptReview)
+            .then_some(())
+            .and(self.transcript_review_state.as_ref())
+    }
+
+    pub(crate) fn transcript_review_state_mut(&mut self) -> Option<&mut TranscriptReviewState> {
+        if !self
+            .transient_host
+            .is_visible(TransientSurface::TranscriptReview)
+        {
+            return None;
+        }
+        self.transcript_review_state.as_mut()
+    }
+
     pub(crate) fn show_diff_overlay(&mut self, request: DiffOverlayRequest) {
         if self.diff_preview_state.is_some() {
             self.diff_overlay_queue.push_back(request);
@@ -334,6 +356,21 @@ impl AppSession {
         self.close_transient_surface(TransientSurface::HistoryPicker);
         self.update_input_triggers();
         self.mark_dirty();
+    }
+
+    pub(crate) fn open_transcript_review(&mut self, width: u16, height: u16) {
+        self.transcript_review_state = Some(TranscriptReviewState::open(self, width, height));
+        self.show_transient_surface(TransientSurface::TranscriptReview);
+        self.core.mark_dirty();
+    }
+
+    pub(crate) fn close_transcript_review(&mut self) {
+        if self.transcript_review_state.is_none() {
+            return;
+        }
+        self.transcript_review_state = None;
+        self.close_transient_surface(TransientSurface::TranscriptReview);
+        self.core.mark_dirty();
     }
 
     pub(crate) fn show_transient(&mut self, request: TransientRequest) {
@@ -437,6 +474,7 @@ impl AppSession {
         match self.visible_transient_surface() {
             Some(TransientSurface::FloatingOverlay) => self.close_overlay(),
             Some(TransientSurface::DiffPreview) => self.close_diff_overlay(),
+            Some(TransientSurface::TranscriptReview) => self.close_transcript_review(),
             Some(TransientSurface::HistoryPicker) => self.close_history_picker(),
             Some(TransientSurface::AgentPalette) => self.close_agent_palette(),
             Some(TransientSurface::FilePalette) => self.close_file_palette(),
@@ -740,5 +778,13 @@ impl TuiSessionDriver for AppSession {
 
     fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::core_tui::log::LogEntry>) {
         self.core.set_log_receiver(receiver);
+    }
+
+    fn set_fullscreen_active(&mut self, active: bool) {
+        self.core.set_fullscreen_active(active);
+    }
+
+    fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings) {
+        self.core.set_fullscreen_interaction(config);
     }
 }

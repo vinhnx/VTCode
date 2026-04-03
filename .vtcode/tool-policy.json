@@ -190,7 +190,14 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [],
+    "allowed": [
+      "whoami '&&' echo --- '&&' git config user.name '2>/dev/null' '||' echo 'no git user'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "whoami echo --- git config user.name echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cat '~/.gitconfig' '2>/dev/null' '||' echo 'no gitconfig'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cat echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "unified_exec"
+    ],
     "prefixes": [],
     "regexes": []
   }

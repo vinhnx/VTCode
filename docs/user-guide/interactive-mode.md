@@ -14,8 +14,11 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+D` | Exit VT Code interactive mode. | Sends EOF to the shell integration. |
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
 | `Ctrl+T` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs without affecting the TODO panel. |
+| `Ctrl+O` | Open or close fullscreen transcript review. | Available when VT Code is using alternate-screen rendering. |
 | `Ctrl+A` | Move cursor to start of input line. | UNIX/readline-style editing. |
 | `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. Configure it with `/config tools.editor`. |
+| `Ctrl+Home` | Jump to the oldest visible transcript content. | Fullscreen rendering only. |
+| `Ctrl+End` | Jump back to the latest transcript content and resume follow mode. | Fullscreen rendering only. |
 | `Ctrl+W` | Delete the previous word. | UNIX/readline-style editing. |
 | `Ctrl+U` | Delete from cursor to line start. | UNIX/readline-style editing. |
 | `Ctrl+K` | Delete from cursor to line end. | UNIX/readline-style editing. |
@@ -52,6 +55,47 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 | `@agent-<name>` within input | Open subagent picker and insert an explicit agent mention. | Use `@agent-<plugin>:<name>` for plugin-provided agents. |
 | `Alt+P` / `Option+P` | Generate an inline prompt suggestion. | Shows a ghost-text completion in the composer; `Tab` accepts it. |
+
+## Fullscreen Rendering
+
+When VT Code is running in alternate-screen mode, the transcript and composer use a fixed fullscreen layout similar to terminal applications such as `vim` or `less`. The input stays pinned at the bottom, mouse handling is internal to VT Code, and transcript review/search happens inside the app instead of your terminal scrollback.
+
+### Fullscreen Navigation
+
+| Shortcut | Description |
+| :-- | :-- |
+| `PgUp` / `PgDn` | Scroll the live transcript by half a page. |
+| `Ctrl+Home` | Jump to the oldest transcript content. |
+| `Ctrl+End` | Jump to the latest transcript content and resume auto-follow. |
+| Mouse wheel | Scroll the live transcript when mouse capture is enabled. |
+
+### Transcript Review Surface
+
+Press `Ctrl+O` to open the fullscreen transcript review surface. It builds a plain-text view of the full conversation, including expanded collapsed tool payloads, so search and export operate on the complete transcript rather than only the visible viewport.
+
+| Shortcut | Description |
+| :-- | :-- |
+| `/` | Start a case-insensitive transcript search. |
+| `Enter` | Commit the current search and jump to the first match. |
+| `Esc` | Cancel the active search, or close transcript review when search is idle. |
+| `n` / `N` | Jump to the next or previous search match. |
+| `j` / `k` or `Up` / `Down` | Scroll one line. |
+| `Ctrl+U` / `Ctrl+D` | Scroll half a page. |
+| `Ctrl+B` / `b` | Scroll a full page up. |
+| `Ctrl+F` / `Space` | Scroll a full page down. |
+| `g` / `Home` | Jump to the top. |
+| `G` / `End` | Jump to the bottom. |
+| `[` | Hand the expanded transcript to the terminal's native scrollback until you return. |
+| `v` | Write the expanded transcript to a temporary file and open it in your configured editor. |
+| `q` or `Ctrl+O` | Close transcript review. |
+
+### Mouse Capture, Copy, and tmux
+
+- `ui.fullscreen.mouse_capture = false` keeps fullscreen rendering but returns click-and-drag selection to the terminal. This also disables in-app wheel scrolling, click-to-expand, click-to-position, and link activation.
+- `ui.fullscreen.copy_on_select = false` disables automatic clipboard copy after an in-app text selection. Manual copy shortcuts still work.
+- `ui.fullscreen.scroll_speed` multiplies mouse-wheel scrolling without affecting `PgUp`/`PgDn`.
+- Inside tmux, enable mouse support with `set -g mouse on` if you want wheel scrolling and other mouse actions to reach VT Code.
+- Avoid fullscreen rendering in `tmux -CC` sessions. iTerm2's control-mode integration does not handle alternate-screen mouse capture reliably.
 
 ### Session Context Commands
 

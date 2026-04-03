@@ -24,6 +24,7 @@ use super::{
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
+use crate::options::FullscreenInteractionSettings;
 
 impl Session {
     pub(crate) fn clear_inline_prompt_suggestion(&mut self) {
@@ -179,6 +180,26 @@ impl Session {
 
     pub(crate) fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_visible = visible;
+    }
+
+    pub(crate) fn current_transcript_revision(&self) -> u64 {
+        self.line_revision_counter
+    }
+
+    pub(crate) fn invalidate_transcript_viewport(&mut self) {
+        self.visible_lines_cache = None;
+    }
+
+    pub(crate) fn request_transcript_clear(&mut self) {
+        self.transcript_clear_required = true;
+    }
+
+    pub(crate) fn set_fullscreen_active(&mut self, active: bool) {
+        self.fullscreen.active = active;
+    }
+
+    pub(crate) fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings) {
+        self.fullscreen.interaction = config;
     }
 
     /// Advance animation state on tick and request redraw when a frame changes.
@@ -487,6 +508,7 @@ impl Session {
     /// "scroll down" (show newer content) decreases it.
     pub fn scroll_line_up(&mut self) {
         self.mark_scrolling();
+        self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
         if self.scroll_manager.offset() != previous_offset {
@@ -497,6 +519,7 @@ impl Session {
 
     pub fn scroll_line_down(&mut self) {
         self.mark_scrolling();
+        self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
         if self.scroll_manager.offset() != previous_offset {
@@ -507,6 +530,7 @@ impl Session {
 
     pub(crate) fn scroll_page_up(&mut self) {
         self.mark_scrolling();
+        self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager
             .scroll_down(self.viewport_height().max(1));
@@ -518,6 +542,7 @@ impl Session {
 
     pub(crate) fn scroll_page_down(&mut self) {
         self.mark_scrolling();
+        self.ensure_scroll_metrics();
         let page = self.viewport_height().max(1);
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(page);
@@ -563,26 +588,28 @@ impl Session {
 
         // Invalidate visible lines cache if offset actually changed
         if self.scroll_manager.offset() != previous_offset {
-            self.visible_lines_cache = None;
+            self.invalidate_transcript_viewport();
         }
     }
 
     /// Invalidate scroll metrics to force recalculation
     pub(crate) fn invalidate_scroll_metrics(&mut self) {
         self.scroll_manager.invalidate_metrics();
-        self.invalidate_transcript_cache();
+        self.invalidate_transcript_viewport();
     }
 
     /// Invalidate the transcript cache
     pub(crate) fn invalidate_transcript_cache(&mut self) {
-        if let Some(cache) = self.transcript_cache.as_mut() {
+        let had_cache = if let Some(cache) = self.transcript_cache.as_mut() {
             cache.invalidate_content();
-        }
-        self.visible_lines_cache = None;
-        self.transcript_content_changed = true;
+            true
+        } else {
+            false
+        };
+        self.invalidate_transcript_viewport();
+        self.request_transcript_clear();
 
-        // If no specific line was marked dirty, assume everything needs reflow
-        if self.first_dirty_line.is_none() {
+        if had_cache || self.first_dirty_line.is_none() {
             self.first_dirty_line = Some(0);
         }
     }
@@ -609,6 +636,8 @@ impl Session {
 
         let viewport_rows = self.viewport_height();
         if self.transcript_width == 0 || viewport_rows == 0 {
+            self.scroll_manager
+                .set_viewport_rows(viewport_rows.max(1) as u16);
             self.scroll_manager.set_total_rows(0);
             return;
         }
@@ -616,7 +645,9 @@ impl Session {
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
+        self.scroll_manager.set_viewport_rows(viewport_rows as u16);
         self.scroll_manager.set_total_rows(total_rows);
+        self.scroll_manager.clamp_offset();
     }
 
     /// Prepare transcript scroll parameters
@@ -627,8 +658,8 @@ impl Session {
     ) -> (usize, usize) {
         let viewport = viewport_rows.max(1);
         let clamped_total = total_rows.max(1);
-        self.scroll_manager.set_total_rows(clamped_total);
         self.scroll_manager.set_viewport_rows(viewport as u16);
+        self.scroll_manager.set_total_rows(clamped_total);
         let max_offset = self.scroll_manager.max_offset();
 
         if self.scroll_manager.offset() > max_offset {

@@ -407,3 +407,44 @@ fn has_input_status(session: &Session) -> bool {
         .as_ref()
         .is_some_and(|value| !value.trim().is_empty())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use std::sync::Arc;
+
+    fn segment(text: &str) -> InlineSegment {
+        InlineSegment {
+            text: text.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }
+    }
+
+    #[test]
+    fn auto_layout_resize_recomputes_transcript_area_and_keeps_content_visible() {
+        let wide_area = Rect::new(0, 0, 120, 24);
+        let standard_area = Rect::new(0, 0, 100, 24);
+        let mut wide_buf = Buffer::empty(wide_area);
+        let mut standard_buf = Buffer::empty(standard_area);
+        let mut session = Session::new(InlineTheme::default(), None, 24);
+
+        for index in 0..8 {
+            session.push_line(
+                InlineMessageKind::Agent,
+                vec![segment(&format!("line {index}"))],
+            );
+        }
+
+        let mut wide_widget = SessionWidget::new(&mut session);
+        (&mut wide_widget).render(wide_area, &mut wide_buf);
+        let wide_transcript = session.transcript_area().expect("wide transcript area");
+
+        let mut standard_widget = SessionWidget::new(&mut session);
+        (&mut standard_widget).render(standard_area, &mut standard_buf);
+        let standard_transcript = session.transcript_area().expect("standard transcript area");
+
+        assert!(wide_transcript.width < standard_transcript.width);
+        assert!(standard_transcript.height > 0);
+    }
+}

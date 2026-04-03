@@ -85,39 +85,45 @@ pub(super) fn handle_event(
         }
         CrosstermEvent::Mouse(MouseEvent {
             kind, column, row, ..
-        }) => match kind {
-            MouseEventKind::ScrollDown => {
-                session.mouse_selection.clear_click_history();
-                session.scroll_line_down();
-                session.mark_dirty();
+        }) => {
+            if !session.fullscreen.interaction.mouse_capture {
+                return;
             }
-            MouseEventKind::ScrollUp => {
-                session.mouse_selection.clear_click_history();
-                session.scroll_line_up();
-                session.mark_dirty();
-            }
-            MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                if session
-                    .mouse_selection
-                    .register_click(column, row, Instant::now())
-                {
-                    let _ = session.select_transcript_word_at(column, row);
+
+            match kind {
+                MouseEventKind::ScrollDown => {
                     session.mouse_selection.clear_click_history();
-                } else {
-                    session.mouse_selection.start_selection(column, row);
+                    session.scroll_line_down();
+                    session.mark_dirty();
                 }
-                session.mark_dirty();
+                MouseEventKind::ScrollUp => {
+                    session.mouse_selection.clear_click_history();
+                    session.scroll_line_up();
+                    session.mark_dirty();
+                }
+                MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                    if session
+                        .mouse_selection
+                        .register_click(column, row, Instant::now())
+                    {
+                        let _ = session.select_transcript_word_at(column, row);
+                        session.mouse_selection.clear_click_history();
+                    } else {
+                        session.mouse_selection.start_selection(column, row);
+                    }
+                    session.mark_dirty();
+                }
+                MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    session.mouse_selection.update_selection(column, row);
+                    session.mark_dirty();
+                }
+                MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
+                    session.mouse_selection.finish_selection(column, row);
+                    session.mark_dirty();
+                }
+                _ => {}
             }
-            MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                session.mouse_selection.update_selection(column, row);
-                session.mark_dirty();
-            }
-            MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
-                session.mouse_selection.finish_selection(column, row);
-                session.mark_dirty();
-            }
-            _ => {}
-        },
+        }
         CrosstermEvent::Paste(content) => {
             handle_paste(session, &content);
         }

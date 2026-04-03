@@ -3,7 +3,6 @@
 //! This module provides improved caching mechanisms for reflowing transcript content,
 //! with performance optimizations for large transcripts.
 
-use hashbrown::HashMap;
 use std::sync::Arc;
 
 use super::{Session, message::TranscriptLine};
@@ -12,22 +11,6 @@ use super::{Session, message::TranscriptLine};
 pub struct CachedMessage {
     pub revision: u64,
     pub lines: Vec<TranscriptLine>,
-    pub hash: u64, // Added hash for faster comparison
-}
-
-// Simple hash function to identify content changes faster than full comparison
-fn calculate_content_hash(content: &[TranscriptLine]) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    for line in content {
-        for span in &line.line.spans {
-            span.content.hash(&mut hasher);
-            span.style.hash(&mut hasher);
-        }
-    }
-    hasher.finish()
 }
 
 pub struct TranscriptReflowCache {
@@ -35,10 +18,6 @@ pub struct TranscriptReflowCache {
     pub total_rows: usize,
     pub row_offsets: Vec<usize>, // Precomputed row offsets for faster access
     pub messages: Vec<CachedMessage>,
-    pub width_specific_cache: HashMap<u16, Vec<Vec<TranscriptLine>>>, // Cache reflowed content by width
-    /// Maximum number of width variations to cache (limits memory growth)
-    #[allow(dead_code)]
-    max_cached_widths: usize,
 }
 
 impl TranscriptReflowCache {
@@ -48,8 +27,6 @@ impl TranscriptReflowCache {
             total_rows: 0,
             row_offsets: Vec::new(),
             messages: Vec::new(),
-            width_specific_cache: HashMap::new(),
-            max_cached_widths: 3, // Only cache last 3 widths to limit memory growth
         }
     }
 
@@ -63,7 +40,6 @@ impl TranscriptReflowCache {
 
     /// Invalidates the content cache when width changes
     pub fn invalidate_content(&mut self) {
-        self.width_specific_cache.clear();
         for message in &mut self.messages {
             message.lines.clear(); // Clear cached lines
             message.revision = 0; // Mark as invalid
@@ -87,11 +63,9 @@ impl TranscriptReflowCache {
             self.messages.push(CachedMessage::default());
         }
 
-        let hash = calculate_content_hash(&lines);
         let message = &mut self.messages[index];
         message.revision = revision;
         message.lines = lines;
-        message.hash = hash;
     }
 
     /// Precomputes row offsets starting from a specific index
@@ -182,24 +156,6 @@ impl TranscriptReflowCache {
     pub fn message_row_count(&self, index: usize) -> Option<usize> {
         self.messages.get(index).map(|m| m.lines.len())
     }
-
-    /// Enforces the maximum number of cached widths to prevent unbounded memory growth
-    fn enforce_width_cache_limit(&mut self) {
-        if self.width_specific_cache.len() > self.max_cached_widths {
-            // Remove the oldest entry (first inserted)
-            // Using .remove() directly since HashMap iteration order is undefined
-            // We'll remove the width with the smallest value to be deterministic
-            if let Some(&min_width) = self.width_specific_cache.keys().min() {
-                self.width_specific_cache.remove(&min_width);
-            }
-        }
-    }
-
-    /// Stores reflowed content for a width, enforcing cache limits
-    pub fn cache_width_content(&mut self, width: u16, content: Vec<Vec<TranscriptLine>>) {
-        self.width_specific_cache.insert(width, content);
-        self.enforce_width_cache_limit();
-    }
 }
 
 impl Session {
@@ -211,8 +167,10 @@ impl Session {
             .unwrap_or_else(|| TranscriptReflowCache::new(width));
 
         // Update width if needed and handle width changes
+        let mut width_changed = false;
         if cache.width != width {
             cache.set_width(width);
+            width_changed = true;
         }
 
         // Resize message cache to match current line count
@@ -225,7 +183,11 @@ impl Session {
 
         // Process any dirty messages (those that need reflow)
         // Use the hint from session if available to avoid O(N) scan
-        let mut first_dirty = self.first_dirty_line.unwrap_or(self.lines.len());
+        let mut first_dirty = if width_changed {
+            0
+        } else {
+            self.first_dirty_line.unwrap_or(self.lines.len())
+        };
 
         // Verify and find the actual first dirty message
         // We scan from the hint downwards to be safe, but usually it's accurate
@@ -288,9 +250,11 @@ impl Session {
         max_rows: usize,
     ) -> Arc<Vec<TranscriptLine>> {
         // Check if we have cached visible lines for this exact position and width
-        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache
+        if let Some((cached_offset, cached_width, cached_rows, cached_lines)) =
+            &self.visible_lines_cache
             && *cached_offset == start_row
             && *cached_width == width
+            && *cached_rows == max_rows
         {
             // Return Arc clone (cheap pointer copy, no Vec allocation)
             return Arc::clone(cached_lines);
@@ -299,20 +263,9 @@ impl Session {
         // Not in cache, fetch from transcript
         let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
 
-        // Cache the reflowed content for this width in the transcript cache
-        // This supports future reflows and width-specific optimizations
-        if !visible_lines.is_empty()
-            && let Some(mut cache) = self.transcript_cache.take()
-        {
-            // Convert the visible lines back to grouped by message for width-specific cache
-            // This enables efficient reflow when width changes
-            cache.cache_width_content(width, vec![visible_lines.clone()]);
-            self.transcript_cache = Some(cache);
-        }
-
         // Cache for next render (wrapped in Arc for cheap sharing)
         let arc_lines = Arc::new(visible_lines);
-        self.visible_lines_cache = Some((start_row, width, Arc::clone(&arc_lines)));
+        self.visible_lines_cache = Some((start_row, width, max_rows, Arc::clone(&arc_lines)));
 
         arc_lines
     }
@@ -328,11 +281,21 @@ impl Default for TranscriptReflowCache {
 mod tests {
     use super::*;
     use ratatui::text::Line;
+    use std::sync::Arc;
+
+    use crate::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
 
     fn line(text: impl Into<Line<'static>>) -> TranscriptLine {
         TranscriptLine {
             line: text.into(),
             explicit_links: Vec::new(),
+        }
+    }
+
+    fn segment(text: &str) -> InlineSegment {
+        InlineSegment {
+            text: text.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
         }
     }
 
@@ -477,5 +440,24 @@ mod tests {
 
         assert_eq!(cache.row_offsets, vec![0, 2, 4, 6]);
         assert_eq!(cache.total_rows(), 7);
+    }
+
+    #[test]
+    fn visible_window_cache_respects_viewport_rows() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        for index in 0..6 {
+            session.push_line(
+                InlineMessageKind::Agent,
+                vec![segment(&format!("line {index}"))],
+            );
+        }
+
+        let first = session.collect_transcript_window_cached(80, 0, 2);
+        let cached = session.collect_transcript_window_cached(80, 0, 2);
+        let resized = session.collect_transcript_window_cached(80, 0, 3);
+
+        assert!(Arc::ptr_eq(&first, &cached));
+        assert!(!Arc::ptr_eq(&first, &resized));
+        assert_eq!(resized.len(), 3);
     }
 }

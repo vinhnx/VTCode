@@ -49,6 +49,7 @@ pub fn spawn_session(
         active_pty_sessions,
         None,
         crate::config::KeyboardProtocolConfig::default(),
+        crate::FullscreenInteractionSettings::default(),
         workspace_root,
     )
 }
@@ -64,6 +65,7 @@ pub fn spawn_session_with_prompts(
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
+    fullscreen: crate::FullscreenInteractionSettings,
     workspace_root: Option<std::path::PathBuf>,
 ) -> Result<InlineSession> {
     spawn_session_with_prompts_and_options(
@@ -76,6 +78,7 @@ pub fn spawn_session_with_prompts(
         active_pty_sessions,
         input_activity_counter,
         keyboard_protocol,
+        fullscreen,
         workspace_root,
         None,
         "Agent TUI".to_string(),
@@ -95,6 +98,7 @@ pub fn spawn_session_with_prompts_and_options(
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
+    fullscreen: crate::FullscreenInteractionSettings,
     workspace_root: Option<std::path::PathBuf>,
     appearance: Option<session::config::AppearanceConfig>,
     app_name: String,
@@ -127,6 +131,7 @@ pub fn spawn_session_with_prompts_and_options(
                 active_pty_sessions,
                 input_activity_counter,
                 keyboard_protocol,
+                fullscreen,
                 workspace_root,
             },
             move |rows| {

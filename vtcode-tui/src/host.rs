@@ -1,5 +1,5 @@
 use crate::app::SlashCommandItem;
-use crate::{KeyboardProtocolSettings, SessionSurface};
+use crate::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 /// Provides high-level workspace metadata for header rendering.
 pub trait WorkspaceInfoProvider {
@@ -24,6 +24,7 @@ pub struct HostSessionDefaults {
     pub surface_preference: SessionSurface,
     pub inline_rows: u16,
     pub keyboard_protocol: KeyboardProtocolSettings,
+    pub fullscreen: FullscreenInteractionSettings,
 }
 
 impl Default for HostSessionDefaults {
@@ -32,6 +33,7 @@ impl Default for HostSessionDefaults {
             surface_preference: SessionSurface::default(),
             inline_rows: crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
             keyboard_protocol: KeyboardProtocolSettings::default(),
+            fullscreen: FullscreenInteractionSettings::default(),
         }
     }
 }

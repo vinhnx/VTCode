@@ -33,7 +33,7 @@ use vtcode_core::subagents::{SubagentStatusEntry, SubagentThreadSnapshot};
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
-    inline_theme_from_core_styles, is_tui_mode, set_tui_mode, to_tui_appearance,
+    inline_theme_from_core_styles, is_tui_mode, set_tui_mode, to_tui_appearance, to_tui_fullscreen,
     to_tui_keyboard_protocol, to_tui_slash_commands, to_tui_surface,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -170,6 +170,7 @@ pub(crate) async fn initialize_session_ui(
             keyboard_protocol: vt_cfg
                 .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
                 .unwrap_or_default(),
+            fullscreen: vt_cfg.map(to_tui_fullscreen).unwrap_or_default(),
             workspace_root: Some(config.workspace.clone()),
             slash_commands: slash_command_items,
             appearance: vt_cfg.map(to_tui_appearance),

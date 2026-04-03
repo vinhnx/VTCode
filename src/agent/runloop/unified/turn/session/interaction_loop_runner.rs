@@ -2,10 +2,13 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+use vtcode_core::config::EditorToolConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
@@ -13,6 +16,7 @@ use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
+use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
@@ -40,7 +44,8 @@ use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
     ReplyKind, generate_completion_reply_with_suggestions,
 };
 use crate::agent::runloop::unified::turn::session::{
-    mcp_lifecycle, memory_prompt, slash_command_handler, tool_dispatch,
+    mcp_lifecycle, memory_prompt, slash_command_handler,
+    slash_commands::run_with_event_loop_suspended, tool_dispatch,
 };
 use vtcode_config::loader::SimpleConfigWatcher;
 
@@ -51,6 +56,8 @@ const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or abo
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
 const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
 const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const REVIEW_SCROLLBACK_EXIT_HINT: &str =
+    "[Native scrollback view. Press Esc, q, or Ctrl+O to return to fullscreen.]";
 
 #[derive(Debug, Deserialize)]
 struct ToolErrorPayloadHint {
@@ -139,6 +146,137 @@ fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<(String, Va
     }
 
     None
+}
+
+fn review_editor_launch_config(editor_config: &EditorToolConfig) -> EditorLaunchConfig {
+    EditorLaunchConfig {
+        preferred_editor: (!editor_config.preferred_editor.trim().is_empty())
+            .then(|| editor_config.preferred_editor.clone()),
+        wait_for_editor: true,
+    }
+}
+
+async fn open_transcript_review_in_editor(
+    ctx: &mut InteractionLoopContext<'_>,
+    text: String,
+) -> Result<()> {
+    let editor_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|config| config.tools.editor.clone())
+        .unwrap_or_default();
+    if !editor_config.enabled {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            "External editor is disabled (`tools.editor.enabled = false`).",
+        )?;
+        return Ok(());
+    }
+
+    let mut temp = tempfile::NamedTempFile::new()?;
+    temp.write_all(text.as_bytes())?;
+    temp.flush()?;
+    let (_, path) = temp.keep()?;
+    let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
+    let launch_config = review_editor_launch_config(&editor_config);
+    let result = run_with_event_loop_suspended(ctx.handle, editor_config.suspend_tui, || {
+        launcher.launch_editor_with_config(Some(path.clone()), launch_config)
+    })
+    .await;
+    let cleanup = fs::remove_file(&path);
+    ctx.handle.force_redraw();
+
+    match result {
+        Ok(_) => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Transcript review opened in editor.")?;
+        }
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to open transcript review in editor: {err}"),
+            )?;
+        }
+    }
+
+    if let Err(err) = cleanup {
+        tracing::debug!(%err, path = %path.display(), "failed to remove transcript review temp file");
+    }
+
+    Ok(())
+}
+
+fn show_transcript_review_in_scrollback(text: &str, mouse_capture: bool) -> Result<()> {
+    use ratatui::crossterm::{
+        event::{
+            self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture,
+            EnableBracketedPaste, EnableFocusChange, EnableMouseCapture, Event, KeyCode,
+            KeyEventKind, KeyModifiers,
+        },
+        execute,
+        terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    };
+
+    let mut stderr = io::stderr();
+    execute!(stderr, LeaveAlternateScreen)?;
+    if mouse_capture {
+        let _ = execute!(stderr, DisableMouseCapture);
+    }
+    let _ = execute!(stderr, DisableFocusChange, DisableBracketedPaste);
+    write!(stderr, "{text}")?;
+    if !text.ends_with('\n') {
+        writeln!(stderr)?;
+    }
+    writeln!(stderr)?;
+    writeln!(stderr, "{REVIEW_SCROLLBACK_EXIT_HINT}")?;
+    stderr.flush()?;
+
+    loop {
+        match event::read()? {
+            Event::Key(key)
+                if matches!(key.kind, KeyEventKind::Press)
+                    && (matches!(
+                        key.code,
+                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q')
+                    ) || (key.modifiers.contains(KeyModifiers::CONTROL)
+                        && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')))) =>
+            {
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    execute!(stderr, EnterAlternateScreen, Clear(ClearType::All))?;
+    let _ = execute!(stderr, EnableBracketedPaste, EnableFocusChange);
+    if mouse_capture {
+        let _ = execute!(stderr, EnableMouseCapture);
+    }
+    stderr.flush()?;
+    Ok(())
+}
+
+async fn open_transcript_review_scrollback(
+    ctx: &mut InteractionLoopContext<'_>,
+    text: String,
+) -> Result<()> {
+    let mouse_capture = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|config| config.ui.fullscreen.mouse_capture)
+        .unwrap_or(true);
+    let result = run_with_event_loop_suspended(ctx.handle, true, || {
+        show_transcript_review_in_scrollback(&text, mouse_capture)
+    })
+    .await;
+    ctx.handle.force_redraw();
+    if let Err(err) = result {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to open transcript in native scrollback: {err}"),
+        )?;
+    }
+    Ok(())
 }
 
 fn fallback_args_preview(args: &Value) -> String {
@@ -772,6 +910,14 @@ pub(super) async fn run_interaction_loop_impl(
             InlineLoopAction::Submit(text) => text,
             InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
                 handle_inline_prompt_suggestion_request(ctx, state, &draft).await?;
+                continue;
+            }
+            InlineLoopAction::OpenTranscriptReviewInEditor(text) => {
+                open_transcript_review_in_editor(ctx, text).await?;
+                continue;
+            }
+            InlineLoopAction::OpenTranscriptReviewScrollback(text) => {
+                open_transcript_review_scrollback(ctx, text).await?;
                 continue;
             }
             InlineLoopAction::Exit(reason) => {

@@ -105,7 +105,7 @@ impl Session {
             cursor_visible: true,
             needs_redraw: true,
             needs_full_clear: false,
-            transcript_content_changed: true,
+            transcript_clear_required: true,
             should_exit: false,
             scroll_cursor_steady_until: None,
             last_shimmer_active: false,
@@ -174,6 +174,7 @@ impl Session {
             // --- Mouse Text Selection ---
             mouse_selection: MouseSelectionState::new(),
             mouse_drag_target: MouseDragTarget::None,
+            fullscreen: FullscreenSessionState::default(),
 
             skip_confirmations: false,
 

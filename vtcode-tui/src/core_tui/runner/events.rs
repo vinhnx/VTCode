@@ -82,24 +82,32 @@ impl EventListener {
 }
 
 /// Represents accumulated scroll events for coalescing
-#[derive(Default)]
 pub(super) struct ScrollAccumulator {
     line_delta: i32,
     page_delta: i32,
+    wheel_step: i32,
 }
 
 impl ScrollAccumulator {
+    pub(super) fn new(scroll_speed: u8) -> Self {
+        Self {
+            line_delta: 0,
+            page_delta: 0,
+            wheel_step: i32::from(scroll_speed.max(1)),
+        }
+    }
+
     /// Try to accumulate a scroll event. Returns true if the event was a scroll event.
     /// Handles mouse scroll wheel events and PageUp/PageDown keyboard events.
     pub(super) fn try_accumulate(&mut self, event: &CrosstermEvent) -> bool {
         match event {
             CrosstermEvent::Mouse(mouse) => match mouse.kind {
                 MouseEventKind::ScrollDown => {
-                    self.line_delta += 1;
+                    self.line_delta += self.wheel_step;
                     true
                 }
                 MouseEventKind::ScrollUp => {
-                    self.line_delta -= 1;
+                    self.line_delta -= self.wheel_step;
                     true
                 }
                 _ => false,

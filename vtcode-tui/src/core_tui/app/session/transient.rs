@@ -16,6 +16,7 @@ pub(crate) enum TransientFocusPolicy {
 pub(crate) enum TransientSurface {
     FloatingOverlay,
     DiffPreview,
+    TranscriptReview,
     SlashPalette,
     HistoryPicker,
     AgentPalette,
@@ -27,7 +28,9 @@ pub(crate) enum TransientSurface {
 impl TransientSurface {
     pub(crate) fn placement(self) -> TransientPlacement {
         match self {
-            Self::FloatingOverlay | Self::DiffPreview => TransientPlacement::FloatingModal,
+            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => {
+                TransientPlacement::FloatingModal
+            }
             Self::SlashPalette
             | Self::HistoryPicker
             | Self::AgentPalette
@@ -39,7 +42,9 @@ impl TransientSurface {
 
     pub(crate) fn focus_policy(self) -> TransientFocusPolicy {
         match self {
-            Self::FloatingOverlay | Self::DiffPreview => TransientFocusPolicy::Modal,
+            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => {
+                TransientFocusPolicy::Modal
+            }
             Self::HistoryPicker | Self::LocalAgents => TransientFocusPolicy::CapturedInput,
             Self::SlashPalette | Self::AgentPalette | Self::FilePalette => {
                 TransientFocusPolicy::SharedInput

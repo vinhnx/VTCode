@@ -59,6 +59,7 @@ mod update;
 #[path = "workspace.rs"]
 mod workspace;
 pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
+pub(crate) use apps::run_with_event_loop_suspended;
 pub(super) use apps::{
     handle_configure_editor, handle_launch_editor, handle_launch_git, handle_new_session,
     handle_open_docs,

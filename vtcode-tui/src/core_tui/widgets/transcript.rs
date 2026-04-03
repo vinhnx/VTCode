@@ -116,8 +116,6 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
         let needs_mutation = fill_count > 0 || !self.session.queued_inputs.is_empty();
 
-        // Build the lines Vec for Paragraph (which takes ownership)
-        // Note: Clone is unavoidable because the cache holds a reference to the Arc
         let visible_lines = if needs_mutation {
             // Need to mutate, so clone and modify
             let mut lines = cached_lines.to_vec();
@@ -126,25 +124,22 @@ impl<'a> Widget for TranscriptWidget<'a> {
                 lines.resize_with(target_len, TranscriptLine::default);
             }
             self.session.overlay_queue_lines(&mut lines, content_width);
-            lines
+            self.session
+                .decorate_visible_cached_transcript_links(lines, scroll_area)
         } else {
-            // No mutation needed, just clone for Paragraph
-            cached_lines.to_vec()
+            self.session
+                .decorate_borrowed_cached_transcript_links(cached_lines.as_slice(), scroll_area)
         };
-        let visible_lines = self
-            .session
-            .decorate_visible_transcript_links(visible_lines, scroll_area);
 
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls
-        if self.session.transcript_content_changed {
+        if self.session.transcript_clear_required {
             Clear.render(scroll_area, buf);
-            self.session.transcript_content_changed = false;
+            self.session.transcript_clear_required = false;
         }
-        let paragraph =
-            Paragraph::new(visible_lines.clone()).style(self.session.styles.default_style());
-        paragraph.render(scroll_area, buf);
         apply_full_width_line_backgrounds(buf, scroll_area, &visible_lines);
+        let paragraph = Paragraph::new(visible_lines).style(self.session.styles.default_style());
+        paragraph.render(scroll_area, buf);
     }
 }
 
@@ -167,5 +162,163 @@ fn apply_full_width_line_backgrounds(
             let row_rect = Rect::new(area.x, area.y + row as u16, area.width, 1);
             buf.set_style(row_rect, Style::default().bg(bg));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use std::sync::Arc;
+
+    fn segment(text: &str) -> InlineSegment {
+        InlineSegment {
+            text: text.to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }
+    }
+
+    fn row_text(buf: &Buffer, area: Rect, row: u16) -> String {
+        (area.left()..area.right())
+            .map(|x| buf[(x, row)].symbol())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn scroll_metric_invalidation_does_not_request_transcript_clear() {
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+        session.transcript_clear_required = false;
+
+        session.invalidate_scroll_metrics();
+
+        assert!(!session.transcript_clear_required);
+    }
+
+    #[test]
+    fn render_clears_stale_wrapped_rows_when_requested() {
+        let area = Rect::new(0, 0, 14, 6);
+        let inner = Rect::new(1, 1, 12, 4);
+        let mut buf = Buffer::empty(area);
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![segment("this line wraps across several rows")],
+        );
+
+        TranscriptWidget::new(&mut session).render(area, &mut buf);
+
+        let revision = session.next_revision();
+        session.lines[0].segments = vec![segment("short")];
+        session.lines[0].revision = revision;
+        session.mark_line_dirty(0);
+        session.invalidate_transcript_cache();
+        for row in inner.y + 1..inner.bottom() {
+            for x in inner.left()..inner.right() {
+                buf[(x, row)].set_symbol("X");
+            }
+        }
+
+        TranscriptWidget::new(&mut session).render(area, &mut buf);
+
+        assert!(
+            (inner.y + 1..inner.bottom()).all(|row| row_text(&buf, inner, row).trim().is_empty())
+        );
+    }
+
+    #[test]
+    fn render_preserves_queue_overlay_lines() {
+        let area = Rect::new(0, 0, 20, 6);
+        let inner = Rect::new(1, 1, 18, 4);
+        let mut buf = Buffer::empty(area);
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+        session.push_line(InlineMessageKind::Agent, vec![segment("alpha")]);
+        session.push_queued_input("queued follow-up".to_string());
+
+        TranscriptWidget::new(&mut session).render(area, &mut buf);
+
+        let bottom_row = row_text(&buf, inner, inner.bottom() - 1);
+        assert!(bottom_row.contains("queued"));
+    }
+
+    #[test]
+    fn render_clears_stale_queue_overlay_rows_when_queue_is_removed() {
+        let area = Rect::new(0, 0, 20, 6);
+        let inner = Rect::new(1, 1, 18, 4);
+        let mut buf = Buffer::empty(area);
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+        session.push_line(InlineMessageKind::Agent, vec![segment("alpha")]);
+        session.push_queued_input("queued follow-up".to_string());
+
+        TranscriptWidget::new(&mut session).render(area, &mut buf);
+        assert!(row_text(&buf, inner, inner.bottom() - 1).contains("queued"));
+
+        let _ = session.pop_latest_queued_input();
+
+        TranscriptWidget::new(&mut session).render(area, &mut buf);
+
+        assert!(row_text(&buf, inner, inner.bottom() - 1).trim().is_empty());
+    }
+
+    #[test]
+    fn resize_larger_keeps_existing_transcript_lines_visible() {
+        let small_area = Rect::new(0, 0, 20, 4);
+        let large_area = Rect::new(0, 0, 20, 10);
+        let small_inner = Rect::new(1, 1, 18, 2);
+        let large_inner = Rect::new(1, 1, 18, 8);
+        let mut small_buf = Buffer::empty(small_area);
+        let mut large_buf = Buffer::empty(large_area);
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+
+        for index in 0..6 {
+            session.push_line(
+                InlineMessageKind::Agent,
+                vec![segment(&format!("line {index}"))],
+            );
+        }
+
+        TranscriptWidget::new(&mut session).render(small_area, &mut small_buf);
+        let small_rendered: Vec<String> = (small_inner.y..small_inner.bottom())
+            .map(|row| row_text(&small_buf, small_inner, row).trim().to_string())
+            .filter(|row| !row.is_empty())
+            .collect();
+        TranscriptWidget::new(&mut session).render(large_area, &mut large_buf);
+
+        let rendered: Vec<String> = (large_inner.y..large_inner.bottom())
+            .map(|row| row_text(&large_buf, large_inner, row).trim().to_string())
+            .filter(|row| !row.is_empty())
+            .collect();
+
+        assert!(rendered.len() > small_rendered.len());
+        assert!(rendered.iter().any(|row| row == "line 1"));
+        assert!(rendered.iter().any(|row| row == "line 5"));
+    }
+
+    #[test]
+    fn width_resize_keeps_transcript_visible() {
+        let wide_area = Rect::new(0, 0, 28, 8);
+        let narrow_area = Rect::new(0, 0, 16, 8);
+        let narrow_inner = Rect::new(1, 1, 14, 6);
+        let mut wide_buf = Buffer::empty(wide_area);
+        let mut narrow_buf = Buffer::empty(narrow_area);
+        let mut session = Session::new(InlineTheme::default(), None, 12);
+
+        for index in 0..4 {
+            session.push_line(
+                InlineMessageKind::Agent,
+                vec![segment(&format!("line {index}"))],
+            );
+        }
+
+        TranscriptWidget::new(&mut session).render(wide_area, &mut wide_buf);
+        TranscriptWidget::new(&mut session).render(narrow_area, &mut narrow_buf);
+
+        let rendered: Vec<String> = (narrow_inner.y..narrow_inner.bottom())
+            .map(|row| row_text(&narrow_buf, narrow_inner, row).trim().to_string())
+            .filter(|row| !row.is_empty())
+            .collect();
+
+        assert!(!rendered.is_empty());
+        assert!(rendered.iter().any(|row| row == "line 1"));
+        assert!(rendered.iter().any(|row| row == "line 3"));
     }
 }

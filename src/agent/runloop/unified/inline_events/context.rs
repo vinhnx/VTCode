@@ -163,6 +163,14 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::RequestInlinePromptSuggestion(draft)
             }
+            InlineEvent::OpenTranscriptReviewInEditor(text) => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::OpenTranscriptReviewInEditor(text)
+            }
+            InlineEvent::OpenTranscriptReviewScrollback(text) => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::OpenTranscriptReviewScrollback(text)
+            }
             InlineEvent::OpenFileInEditor(path) => {
                 self.input_processor().submit(format!("/edit {}", path))
             }

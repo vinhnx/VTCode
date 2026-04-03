@@ -51,7 +51,7 @@ impl Session {
             InlineCommand::AppendLine { kind, segments } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.push_line(kind, segments);
-                self.transcript_content_changed = true;
+                self.request_transcript_clear();
             }
             InlineCommand::AppendPastedMessage {
                 kind,
@@ -60,12 +60,12 @@ impl Session {
             } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.append_pasted_message(kind, text, line_count);
-                self.transcript_content_changed = true;
+                self.request_transcript_clear();
             }
             InlineCommand::Inline { kind, segment } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.append_inline(kind, segment);
-                self.transcript_content_changed = true;
+                self.request_transcript_clear();
             }
             InlineCommand::ReplaceLast {
                 count,
@@ -75,7 +75,7 @@ impl Session {
             } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.replace_last(count, kind, lines, link_ranges);
-                self.transcript_content_changed = true;
+                self.request_transcript_clear();
             }
             InlineCommand::SetPrompt { prefix, style } => {
                 self.prompt_prefix = prefix;
@@ -89,6 +89,7 @@ impl Session {
             InlineCommand::SetMessageLabels { agent, user } => {
                 self.labels.agent = agent.filter(|label| !label.is_empty());
                 self.labels.user = user.filter(|label| !label.is_empty());
+                self.invalidate_transcript_cache();
                 self.invalidate_scroll_metrics();
             }
             InlineCommand::SetHeaderContext { context } => {

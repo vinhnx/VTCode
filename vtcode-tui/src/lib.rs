@@ -20,7 +20,7 @@ mod session_options;
 pub use config::SyntaxHighlightingConfig as TuiSyntaxHighlightingConfig;
 pub use config::{KeyboardProtocolConfig, ReasoningEffortLevel, UiSurfacePreference};
 pub use core_tui::{log, panic_hook};
-pub use options::{KeyboardProtocolSettings, SessionSurface};
+pub use options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 pub use ui::theme::{ThemeSuite, available_theme_suites, theme_suite_id, theme_suite_label};
 
 /// Commonly used TUI API items.

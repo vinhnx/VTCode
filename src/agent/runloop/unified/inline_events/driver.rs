@@ -210,6 +210,8 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
             InlineLoopAction::RequestInlinePromptSuggestion(_) => None,
+            InlineLoopAction::OpenTranscriptReviewInEditor(_) => None,
+            InlineLoopAction::OpenTranscriptReviewScrollback(_) => None,
             InlineLoopAction::ResumeSession(_) => None,
             InlineLoopAction::ForkSession { .. } => None,
             InlineLoopAction::PlanApproved { .. } => None,

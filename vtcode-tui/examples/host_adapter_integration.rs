@@ -37,6 +37,7 @@ impl HostAdapter for DemoHost {
             surface_preference: SessionSurface::Auto,
             inline_rows: 20,
             keyboard_protocol: Default::default(),
+            fullscreen: Default::default(),
         }
     }
 }

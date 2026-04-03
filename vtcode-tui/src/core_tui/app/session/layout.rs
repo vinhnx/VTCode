@@ -84,7 +84,12 @@ pub(super) fn resolve_bottom_panel_spec(
             BottomPanelKind::LocalAgents,
             render::split_inline_local_agents_area,
         ),
-        Some(TransientSurface::FloatingOverlay | TransientSurface::DiffPreview) | None => None,
+        Some(
+            TransientSurface::FloatingOverlay
+            | TransientSurface::DiffPreview
+            | TransientSurface::TranscriptReview,
+        )
+        | None => None,
     };
 
     if let Some(panel) = panel {
