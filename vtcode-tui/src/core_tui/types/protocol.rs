@@ -11,17 +11,7 @@ use super::style::{
 };
 use crate::core_tui::session::config::AppearanceConfig;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InlineMessageKind {
-    Agent,
-    Error,
-    Info,
-    Policy,
-    Pty,
-    Tool,
-    User,
-    Warning,
-}
+pub use vtcode_commons::ui_protocol::InlineMessageKind;
 
 pub enum InlineCommand {
     AppendLine {

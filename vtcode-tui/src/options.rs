@@ -1,13 +1,7 @@
 use crate::config::KeyboardProtocolConfig;
 
-/// Standalone surface preference for selecting inline vs alternate rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SessionSurface {
-    #[default]
-    Auto,
-    Alternate,
-    Inline,
-}
+// Re-export shared types from vtcode-commons.
+pub use vtcode_commons::ui_protocol::{KeyboardProtocolSettings, SessionSurface};
 
 impl From<SessionSurface> for crate::config::UiSurfacePreference {
     fn from(value: SessionSurface) -> Self {
@@ -26,23 +20,6 @@ impl From<crate::config::UiSurfacePreference> for SessionSurface {
             crate::config::UiSurfacePreference::Alternate => Self::Alternate,
             crate::config::UiSurfacePreference::Inline => Self::Inline,
         }
-    }
-}
-
-/// Standalone keyboard protocol settings for terminal key event enhancements.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyboardProtocolSettings {
-    pub enabled: bool,
-    pub mode: String,
-    pub disambiguate_escape_codes: bool,
-    pub report_event_types: bool,
-    pub report_alternate_keys: bool,
-    pub report_all_keys: bool,
-}
-
-impl Default for KeyboardProtocolSettings {
-    fn default() -> Self {
-        Self::from(KeyboardProtocolConfig::default())
     }
 }
 

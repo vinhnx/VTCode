@@ -145,6 +145,14 @@ pub struct InlineHeaderStatusBadge {
     pub tone: InlineHeaderStatusTone,
 }
 
+/// A compact pill badge rendered in the header.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct InlineHeaderBadge {
+    pub text: String,
+    pub style: InlineTextStyle,
+    pub full_background: bool,
+}
+
 /// A title + content highlight block in the header.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InlineHeaderHighlight {
@@ -161,6 +169,7 @@ pub struct InlineHeaderContext {
     pub context_window_size: Option<usize>,
     pub version: String,
     pub search_tools: Option<InlineHeaderStatusBadge>,
+    pub persistent_memory: Option<InlineHeaderStatusBadge>,
     pub pr_review: Option<InlineHeaderStatusBadge>,
     pub editor_context: Option<String>,
     pub git: String,
@@ -171,6 +180,7 @@ pub struct InlineHeaderContext {
     pub tools: String,
     pub mcp: String,
     pub highlights: Vec<InlineHeaderHighlight>,
+    pub subagent_badges: Vec<InlineHeaderBadge>,
     /// Current editing mode for display in header.
     pub editing_mode: EditingMode,
     /// Current autonomous mode status.
@@ -187,6 +197,7 @@ impl Default for InlineHeaderContext {
             context_window_size: None,
             version,
             search_tools: None,
+            persistent_memory: None,
             pr_review: None,
             editor_context: None,
             git: "git: unavailable".to_string(),
@@ -197,6 +208,7 @@ impl Default for InlineHeaderContext {
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),
             highlights: Vec::new(),
+            subagent_badges: Vec::new(),
             editing_mode: EditingMode::default(),
             autonomous_mode: false,
         }

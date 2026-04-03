@@ -26,46 +26,8 @@ pub struct SessionConfig {
     pub customization: CustomizationConfig,
 }
 
-/// UI mode variants for quick presets
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum UiMode {
-    /// Full UI with all features (sidebar, footer)
-    #[default]
-    Full,
-    /// Minimal UI - no sidebar, no footer
-    Minimal,
-    /// Focused mode - transcript only, maximum content space
-    Focused,
-}
-
-/// Layout mode override for responsive UI
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LayoutModeOverride {
-    /// Auto-detect based on terminal size
-    #[default]
-    Auto,
-    /// Force compact mode (no borders)
-    Compact,
-    /// Force standard mode (borders, no sidebar/footer)
-    Standard,
-    /// Force wide mode (sidebar + footer behavior)
-    Wide,
-}
-
-/// Reasoning visibility behavior in the transcript
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ReasoningDisplayMode {
-    /// Always show reasoning output
-    Always,
-    /// Allow reasoning visibility to be toggled (uses default below at startup)
-    #[default]
-    Toggle,
-    /// Never show reasoning output
-    Hidden,
-}
+// Re-export shared enums from vtcode-commons.
+pub use vtcode_commons::ui_protocol::{LayoutModeOverride, ReasoningDisplayMode, UiMode};
 
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

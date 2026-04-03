@@ -10,6 +10,13 @@ pub enum RewindAction {
     NeverMind,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpenAIServiceTierChoice {
+    ProjectDefault,
+    Flex,
+    Priority,
+}
+
 /// Selection value returned from a list or wizard overlay.
 ///
 /// The `Reasoning` variant carries a `String` reasoning-effort level rather
@@ -23,7 +30,7 @@ pub enum InlineListSelection {
     RefreshDynamicModels,
     Reasoning(String),
     DisableReasoning,
-    OpenAIServiceTier(bool),
+    OpenAIServiceTier(OpenAIServiceTierChoice),
     CustomModel,
     Theme(String),
     Session(String),
@@ -94,4 +101,5 @@ pub struct WizardStep {
     pub allow_freeform: bool,
     pub freeform_label: Option<String>,
     pub freeform_placeholder: Option<String>,
+    pub freeform_default: Option<String>,
 }
