@@ -735,6 +735,21 @@ pub(super) async fn run_interaction_loop_impl(
             {
                 tracing::warn!("Failed to refresh status line: {}", error);
             }
+            ctx.handle.set_terminal_title_items(
+                ctx.vt_cfg
+                    .as_ref()
+                    .and_then(|cfg| cfg.ui.terminal_title.items.clone()),
+            );
+            ctx.handle
+                .set_terminal_title_thread_label(state.input_status_state.thread_context.clone());
+            ctx.handle.set_terminal_title_git_branch(
+                state
+                    .input_status_state
+                    .git_summary
+                    .as_ref()
+                    .map(|summary| summary.branch.clone())
+                    .filter(|branch| !branch.trim().is_empty()),
+            );
 
             if let Some(mcp_manager) = ctx.async_mcp_manager {
                 mcp_lifecycle::handle_mcp_updates(

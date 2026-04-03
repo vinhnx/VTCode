@@ -158,6 +158,7 @@ pub(crate) enum SlashCommandOutcome {
     StartStatuslineSetup {
         instructions: Option<String>,
     },
+    StartTerminalTitleSetup,
     ClearScreen,
     ClearConversation,
     CompactConversation {
@@ -513,6 +514,13 @@ async fn execute_built_in_command_skill(
         "statusline" => Ok(SlashCommandOutcome::StartStatuslineSetup {
             instructions: (!args.trim().is_empty()).then(|| args.trim().to_string()),
         }),
+        "title" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /title")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::StartTerminalTitleSetup)
+        }
         "clear" => match args {
             "" => Ok(SlashCommandOutcome::ClearScreen),
             "new" | "--new" | "fresh" | "--fresh" => Ok(SlashCommandOutcome::ClearConversation),
@@ -1252,6 +1260,21 @@ mod tests {
             SlashCommandOutcome::StartStatuslineSetup {
                 instructions: Some(ref text)
             } if text == "show cwd and branch"
+        ));
+    }
+
+    #[tokio::test]
+    async fn title_command_is_interactive_only() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("title", &mut renderer, &workspace)
+            .await
+            .expect("title should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartTerminalTitleSetup
         ));
     }
 
