@@ -7,7 +7,9 @@ use tokio::task;
 use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListSelection, OpenAIServiceTierChoice, from_tui_reasoning};
+use vtcode_core::ui::{
+    InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineSession, TransientSubmission,
@@ -465,7 +467,7 @@ impl ModelPickerState {
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
-                    self.apply_reasoning_choice(renderer, from_tui_reasoning(level))
+                    self.apply_reasoning_choice(renderer, reasoning_from_selection_string(&level))
                 }
                 InlineListSelection::DisableReasoning => self.apply_reasoning_off_choice(renderer),
                 InlineListSelection::OpenAIServiceTier(_) => {
