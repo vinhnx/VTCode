@@ -26,6 +26,17 @@ pub(crate) fn render_hook_messages(
     Ok(())
 }
 
+pub(crate) fn append_additional_context(
+    history: &mut Vec<uni::Message>,
+    additional_context: Vec<String>,
+) {
+    for context in additional_context {
+        if !context.trim().is_empty() {
+            history.push(uni::Message::system(context));
+        }
+    }
+}
+
 pub(crate) fn truncate_message_content(content: &str) -> String {
     let mut result =
         String::with_capacity(content.len().min(output_limits::MAX_AGENT_MESSAGES_SIZE));
@@ -152,5 +163,25 @@ mod tests {
             history.first().map(|m| m.role.clone()),
             Some(uni::MessageRole::System)
         );
+    }
+
+    #[test]
+    fn append_additional_context_skips_empty_entries() {
+        let mut history = vec![uni::Message::user("prompt".to_string())];
+
+        append_additional_context(
+            &mut history,
+            vec![
+                "keep me".to_string(),
+                "   ".to_string(),
+                "also keep me".to_string(),
+            ],
+        );
+
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[1].role, uni::MessageRole::System);
+        assert_eq!(history[1].get_text_content().as_ref(), "keep me");
+        assert_eq!(history[2].role, uni::MessageRole::System);
+        assert_eq!(history[2].get_text_content().as_ref(), "also keep me");
     }
 }

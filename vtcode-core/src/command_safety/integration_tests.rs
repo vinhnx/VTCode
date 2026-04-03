@@ -182,6 +182,21 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_bash_lc_with_unsafe_git_global_option() {
+        let evaluator = UnifiedCommandEvaluator::new();
+        let cmd = vec![
+            "bash".to_string(),
+            "-lc".to_string(),
+            "git --git-dir=.evil-git diff HEAD~1..HEAD".to_string(),
+        ];
+        let result = evaluator.evaluate(&cmd).await.unwrap();
+        assert!(
+            !result.allowed,
+            "bash -lc with unsafe git global options should be blocked"
+        );
+    }
+
     // ========== Policy Layer Tests ==========
 
     #[tokio::test]

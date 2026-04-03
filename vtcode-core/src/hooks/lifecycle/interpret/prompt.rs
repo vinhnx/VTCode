@@ -19,25 +19,27 @@ pub(crate) fn interpret_user_prompt(
         return;
     }
 
+    let mut blocked_by_exit_code_two = false;
     if let Some(code) = result.exit_code {
         if code == 2 {
             if let Some(reason) = trimmed_non_empty(&result.stderr) {
                 outcome.allow_prompt = false;
                 outcome.block_reason = Some(reason.clone());
                 outcome.messages.push(HookMessage::error(reason));
+                blocked_by_exit_code_two = true;
             } else {
                 outcome.messages.push(HookMessage::error(format!(
                     "UserPromptSubmit hook `{}` exited with code 2 without stderr feedback",
                     command.command
                 )));
+                return;
             }
-            return;
         } else if code != 0 {
             handle_non_zero_exit(command, result, code, &mut outcome.messages, true);
         }
     }
 
-    if !result.stderr.trim().is_empty() {
+    if !result.stderr.trim().is_empty() && !blocked_by_exit_code_two {
         outcome.messages.push(HookMessage::warning(format!(
             "UserPromptSubmit hook `{}` stderr: {}",
             command.command,
@@ -104,6 +106,7 @@ pub(crate) fn interpret_user_prompt(
         }
 
         if !outcome.allow_prompt
+            && !blocked_by_exit_code_two
             && let Some(reason) = outcome.block_reason.clone()
         {
             outcome.messages.push(HookMessage::error(reason));

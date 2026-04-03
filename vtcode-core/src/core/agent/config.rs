@@ -9,6 +9,7 @@ use crate::config::loader::VTCodeConfig;
 use crate::config::models::Provider;
 use crate::config::types::{AgentConfig, ModelSelectionSource};
 use crate::llm::factory::infer_provider;
+use crate::utils::path::canonicalize_workspace;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeModelSelection {
@@ -51,6 +52,7 @@ pub fn build_runtime_agent_config(
     api_key: String,
     theme_selection: String,
 ) -> AgentConfig {
+    let workspace = canonicalize_workspace(&workspace);
     let cli_api_key_env = args.api_key_env.trim();
     let api_key_env_override = if cli_api_key_env.is_empty()
         || cli_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
@@ -285,5 +287,34 @@ mod tests {
         );
 
         assert_eq!(resolved, Some(PathBuf::from("/tmp/vtcode-checkpoints")));
+    }
+
+    #[test]
+    fn build_runtime_agent_config_canonicalizes_relative_workspace() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let original_dir = std::env::current_dir().expect("current dir");
+        std::env::set_current_dir(temp.path()).expect("set current dir");
+
+        let config = VTCodeConfig::default();
+        let args = Cli::parse_from(["vtcode"]);
+        let selection = RuntimeModelSelection {
+            model: crate::config::constants::models::openai::GPT_5.to_owned(),
+            provider: "openai".to_owned(),
+            model_source: ModelSelectionSource::CliOverride,
+        };
+
+        let agent_config = build_runtime_agent_config(
+            &args,
+            &config,
+            PathBuf::from("."),
+            selection,
+            "test-key".to_owned(),
+            "dark".to_owned(),
+        );
+
+        std::env::set_current_dir(original_dir).expect("restore current dir");
+        let expected_workspace = std::fs::canonicalize(temp.path()).expect("canonical workspace");
+
+        assert_eq!(agent_config.workspace, expected_workspace);
     }
 }

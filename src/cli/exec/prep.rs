@@ -21,7 +21,7 @@ use vtcode_core::utils::session_archive::{
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
 
-use crate::agent::agents::apply_runtime_overrides;
+use crate::agent::agents::{apply_persisted_resume_metadata, apply_runtime_overrides};
 use crate::startup::require_full_auto_workspace_trust;
 
 use super::super::exec::ExecCommandOptions;
@@ -112,6 +112,7 @@ pub(super) async fn prepare_exec_run(
 
     let mut run_config = config.clone();
     let run_workspace = if let Some(listing) = &resume_listing {
+        apply_persisted_resume_metadata(&mut run_config, Some(&listing.snapshot.metadata));
         resolve_resume_workspace(listing)?
     } else {
         config.workspace.clone()

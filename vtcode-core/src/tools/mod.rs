@@ -140,6 +140,7 @@ pub mod editing;
 pub mod error_context;
 pub mod error_helpers;
 pub mod exec_session;
+pub mod exec_session_id;
 pub mod execution_context;
 pub mod execution_tracker;
 pub mod file_ops;
@@ -217,6 +218,7 @@ pub use command_cache::PermissionCache;
 pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use error_context::ToolErrorContext;
+pub use exec_session_id::ExecSessionId;
 pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
 pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, ExecutionTracker};
 pub use file_search_rpc::{

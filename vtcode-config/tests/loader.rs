@@ -182,3 +182,36 @@ fn load_uses_current_directory_workspace() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn load_canonicalizes_relative_workspace_paths() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let workspace_root = workspace.path();
+    let config_dir = workspace_root.join(".vtcode");
+    fs::create_dir_all(&config_dir)?;
+
+    let root_config = workspace_root.join("vtcode.toml");
+    write_config(&root_config, "workspace-root")?;
+
+    let original_dir = std::env::current_dir()?;
+    std::env::set_current_dir(workspace_root)?;
+
+    let manager = with_test_defaults(workspace_root, config_dir, Vec::new(), || {
+        ConfigManager::load_from_workspace(PathBuf::from("."))
+    });
+
+    std::env::set_current_dir(original_dir)?;
+    let manager = manager?;
+    let expected_root_config = fs::canonicalize(&root_config)?;
+    let expected_workspace_root = fs::canonicalize(workspace_root)?;
+
+    assert_eq!(manager.config().agent.provider, "workspace-root");
+    assert_eq!(manager.config_path(), Some(expected_root_config.as_path()));
+    assert_eq!(
+        manager.workspace_root(),
+        Some(expected_workspace_root.as_path())
+    );
+
+    Ok(())
+}

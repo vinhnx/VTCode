@@ -10,6 +10,10 @@ use crate::loader::layers::{
     ConfigLayerEntry, ConfigLayerMetadata, ConfigLayerSource, ConfigLayerStack, LayerDisabledReason,
 };
 
+fn canonicalize_workspace_root(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
 pub struct ConfigManager {
@@ -43,7 +47,7 @@ impl ConfigManager {
         let workspace = workspace.as_ref();
         let defaults_provider = defaults::current_config_defaults();
         let workspace_paths = defaults_provider.workspace_paths_for(workspace);
-        let workspace_root = workspace_paths.workspace_root().to_path_buf();
+        let workspace_root = canonicalize_workspace_root(workspace_paths.workspace_root());
         let config_dir = workspace_paths.config_dir();
         let config_file_name = defaults_provider.config_file_name().to_string();
 
@@ -185,9 +189,26 @@ impl ConfigManager {
             return None;
         }
 
-        match Self::load_toml_from_file(file) {
-            Ok(toml) => Some(ConfigLayerEntry::new(source, toml)),
-            Err(error) => Some(Self::disabled_layer_from_error(source, error)),
+        let resolved_file = canonicalize_workspace_root(file);
+        let resolved_source = match source {
+            ConfigLayerSource::System { .. } => ConfigLayerSource::System {
+                file: resolved_file.clone(),
+            },
+            ConfigLayerSource::User { .. } => ConfigLayerSource::User {
+                file: resolved_file.clone(),
+            },
+            ConfigLayerSource::Project { .. } => ConfigLayerSource::Project {
+                file: resolved_file.clone(),
+            },
+            ConfigLayerSource::Workspace { .. } => ConfigLayerSource::Workspace {
+                file: resolved_file.clone(),
+            },
+            ConfigLayerSource::Runtime => unreachable!(),
+        };
+
+        match Self::load_toml_from_file(&resolved_file) {
+            Ok(toml) => Some(ConfigLayerEntry::new(resolved_source, toml)),
+            Err(error) => Some(Self::disabled_layer_from_error(resolved_source, error)),
         }
     }
 
@@ -277,8 +298,8 @@ impl ConfigManager {
 
         Ok(Self {
             config,
-            config_path: Some(path.to_path_buf()),
-            workspace_root: path.parent().map(Path::to_path_buf),
+            config_path: Some(canonicalize_workspace_root(path)),
+            workspace_root: path.parent().map(canonicalize_workspace_root),
             config_file_name,
             layer_stack,
         })

@@ -1,5 +1,6 @@
 //! Common types used across the tool system
 
+use crate::tools::ExecSessionId;
 use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -280,7 +281,7 @@ pub struct VTCodePtySession {
 /// Backend-neutral exec session metadata used by `unified_exec`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VTCodeExecSession {
-    pub id: String,
+    pub id: ExecSessionId,
     pub backend: String,
     pub command: String,
     pub args: Vec<String>,
@@ -302,7 +303,7 @@ pub struct VTCodeExecSession {
 impl From<VTCodePtySession> for VTCodeExecSession {
     fn from(session: VTCodePtySession) -> Self {
         Self {
-            id: session.id,
+            id: session.id.into(),
             backend: "pty".to_string(),
             command: session.command,
             args: session.args,

@@ -886,6 +886,55 @@ async fn inline_streams_reasoning_deltas_live() {
 }
 
 #[tokio::test]
+async fn inline_streaming_does_not_replay_reasoning_on_completion() {
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec![],
+        reasoning_chunks: vec!["thinking".to_string()],
+    };
+    let request = build_request();
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, _emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    let mut reasoning_occurrences = 0usize;
+    while let Ok(command) = rx.try_recv() {
+        let text = match command {
+            InlineCommand::AppendLine { segments, .. } => segments
+                .into_iter()
+                .map(|segment| segment.text)
+                .collect::<String>(),
+            InlineCommand::AppendPastedMessage { text, .. } => text,
+            InlineCommand::Inline { segment, .. } => segment.text,
+            InlineCommand::ReplaceLast { lines, .. } => lines
+                .into_iter()
+                .flat_map(|line| line.into_iter().map(|segment| segment.text))
+                .collect::<String>(),
+            _ => String::new(),
+        };
+        reasoning_occurrences += text.matches("thinking").count();
+    }
+
+    assert_eq!(
+        reasoning_occurrences, 1,
+        "expected live reasoning to render once, without replay at completion"
+    );
+}
+
+#[tokio::test]
 async fn inline_batches_many_token_deltas_for_performance() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec!["x".to_string(); 600],

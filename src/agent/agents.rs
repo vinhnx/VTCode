@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::path::PathBuf;
+use vtcode_core::config::ReasoningEffortLevel;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
@@ -9,6 +10,7 @@ use vtcode_core::core::threads::{
     messages_from_session_listing,
 };
 use vtcode_core::llm::provider::Message as ProviderMessage;
+use vtcode_core::utils::session_archive::SessionArchiveMetadata;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 
 #[derive(Clone, Debug)]
@@ -185,14 +187,7 @@ fn prepare_session_vt_config(
 }
 
 fn apply_resume_runtime_overrides(runtime_cfg: &mut CoreAgentConfig, resume: &SessionContinuation) {
-    let Some(vt_cfg) = resume.vt_cfg_override() else {
-        return;
-    };
-
-    runtime_cfg.provider = vt_cfg.agent.provider.clone();
-    runtime_cfg.model = vt_cfg.agent.default_model.clone();
-    runtime_cfg.reasoning_effort = vt_cfg.agent.reasoning_effort;
-    runtime_cfg.theme = vt_cfg.agent.theme.clone();
+    apply_persisted_resume_metadata(runtime_cfg, Some(&resume.snapshot().metadata));
 }
 
 pub(crate) fn apply_runtime_overrides(
@@ -208,6 +203,33 @@ pub(crate) fn apply_runtime_overrides(
             cfg.agent.default_model = runtime_cfg.model.clone();
         }
     }
+}
+
+pub(crate) fn apply_persisted_resume_metadata(
+    runtime_cfg: &mut CoreAgentConfig,
+    metadata: Option<&SessionArchiveMetadata>,
+) {
+    let Some(metadata) = metadata else {
+        return;
+    };
+
+    if matches!(runtime_cfg.model_source, ModelSelectionSource::CliOverride) {
+        return;
+    }
+
+    let persisted_model = metadata.model.trim();
+    if persisted_model.is_empty() {
+        return;
+    }
+
+    runtime_cfg.model = persisted_model.to_owned();
+    if !metadata.provider.trim().is_empty() {
+        runtime_cfg.provider = metadata.provider.clone();
+    }
+    if let Some(reasoning_effort) = ReasoningEffortLevel::parse(&metadata.reasoning_effort) {
+        runtime_cfg.reasoning_effort = reasoning_effort;
+    }
+    runtime_cfg.model_source = ModelSelectionSource::CliOverride;
 }
 
 #[cfg(test)]
@@ -330,5 +352,87 @@ mod tests {
 
         assert_eq!(prepared.agent.default_model, "startup-model");
         assert_eq!(prepared.agent.provider, "startup-provider");
+    }
+
+    #[test]
+    fn persisted_resume_metadata_reuses_model_and_reasoning_effort() {
+        let mut runtime_cfg = CoreAgentConfig {
+            model: "current-model".to_string(),
+            api_key: String::new(),
+            provider: "current-provider".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: std::env::current_dir().unwrap(),
+            verbose: false,
+            quiet: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::Low,
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        };
+        let metadata = SessionArchiveMetadata::new(
+            "workspace",
+            "/tmp/workspace",
+            "persisted-model",
+            "persisted-provider",
+            "theme",
+            "high",
+        );
+
+        apply_persisted_resume_metadata(&mut runtime_cfg, Some(&metadata));
+
+        assert_eq!(runtime_cfg.model, "persisted-model");
+        assert_eq!(runtime_cfg.provider, "persisted-provider");
+        assert_eq!(runtime_cfg.reasoning_effort, ReasoningEffortLevel::High);
+        assert_eq!(runtime_cfg.model_source, ModelSelectionSource::CliOverride);
+    }
+
+    #[test]
+    fn persisted_resume_metadata_does_not_override_explicit_model_selection() {
+        let mut runtime_cfg = CoreAgentConfig {
+            model: "explicit-model".to_string(),
+            api_key: String::new(),
+            provider: "explicit-provider".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: std::env::current_dir().unwrap(),
+            verbose: false,
+            quiet: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::Low,
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::CliOverride,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        };
+        let metadata = SessionArchiveMetadata::new(
+            "workspace",
+            "/tmp/workspace",
+            "persisted-model",
+            "persisted-provider",
+            "theme",
+            "high",
+        );
+
+        apply_persisted_resume_metadata(&mut runtime_cfg, Some(&metadata));
+
+        assert_eq!(runtime_cfg.model, "explicit-model");
+        assert_eq!(runtime_cfg.provider, "explicit-provider");
+        assert_eq!(runtime_cfg.reasoning_effort, ReasoningEffortLevel::Low);
+        assert_eq!(runtime_cfg.model_source, ModelSelectionSource::CliOverride);
     }
 }

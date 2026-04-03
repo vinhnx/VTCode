@@ -6,6 +6,7 @@ use vtcode_core::persistent_memory::{
     persist_remembered_memory_plan, persistent_memory_status, plan_forget_persistent_memory,
     plan_remember_persistent_memory,
 };
+use vtcode_core::session::SessionId;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
@@ -341,6 +342,7 @@ async fn handle_show_memory_intent(
         SlashCommandControl::SubmitPrompt(prompt) => Ok(Some(InteractionOutcome::Continue {
             input: prompt,
             prompt_message_index: None,
+            turn_id: SessionId::new().0,
         })),
         SlashCommandControl::ReplaceInput(content) => {
             ctx.handle.set_input(content);

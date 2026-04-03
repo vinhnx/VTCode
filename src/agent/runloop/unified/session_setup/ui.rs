@@ -8,7 +8,9 @@ use crate::agent::runloop::unified::session_setup::ide_context::{
     IdeContextBridge, status_line_editor_label, tui_header_summary,
 };
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
-use crate::agent::runloop::unified::turn::utils::render_hook_messages;
+use crate::agent::runloop::unified::turn::utils::{
+    append_additional_context, render_hook_messages,
+};
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
 use anyhow::{Context, Result};
@@ -302,13 +304,10 @@ pub(crate) async fn initialize_session_ui(
         match hooks.run_session_start().await {
             Ok(outcome) => {
                 render_hook_messages(&mut renderer, &outcome.messages)?;
-                for context in outcome.additional_context {
-                    if !context.trim().is_empty() {
-                        session_state
-                            .conversation_history
-                            .push(uni::Message::system(context));
-                    }
-                }
+                append_additional_context(
+                    &mut session_state.conversation_history,
+                    outcome.additional_context,
+                );
             }
             Err(err) => {
                 renderer.line(

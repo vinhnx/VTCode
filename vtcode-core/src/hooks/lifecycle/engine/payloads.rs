@@ -20,14 +20,16 @@ impl LifecycleHookEngine {
         }))
     }
 
-    pub(super) async fn build_session_end_payload(
+    pub(crate) async fn build_session_end_payload(
         &self,
+        turn_id: &str,
         reason: SessionEndReason,
     ) -> Result<Value> {
         let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
+            "turn_id": turn_id,
             "cwd": cwd,
             "hook_event_name": "SessionEnd",
             "reason": reason.as_str(),
@@ -85,11 +87,16 @@ impl LifecycleHookEngine {
         }))
     }
 
-    pub(super) async fn build_user_prompt_payload(&self, prompt: &str) -> Result<Value> {
+    pub(crate) async fn build_user_prompt_payload(
+        &self,
+        turn_id: &str,
+        prompt: &str,
+    ) -> Result<Value> {
         let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
+            "turn_id": turn_id,
             "cwd": cwd,
             "hook_event_name": "UserPromptSubmit",
             "prompt": prompt,

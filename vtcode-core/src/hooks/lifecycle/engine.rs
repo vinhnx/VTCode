@@ -108,14 +108,18 @@ impl LifecycleHookEngine {
         })
     }
 
-    pub async fn run_session_end(&self, reason: SessionEndReason) -> Result<Vec<HookMessage>> {
+    pub async fn run_session_end(
+        &self,
+        turn_id: &str,
+        reason: SessionEndReason,
+    ) -> Result<Vec<HookMessage>> {
         let mut messages = Vec::new();
 
         if self.inner.hooks.session_end.is_empty() {
             return Ok(messages);
         }
 
-        let payload = self.build_session_end_payload(reason).await?;
+        let payload = self.build_session_end_payload(turn_id, reason).await?;
         let reason_value = reason.as_str().to_owned();
 
         for group in &self.inner.hooks.session_end {
@@ -256,14 +260,18 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
-    pub async fn run_user_prompt_submit(&self, prompt: &str) -> Result<UserPromptHookOutcome> {
+    pub async fn run_user_prompt_submit(
+        &self,
+        turn_id: &str,
+        prompt: &str,
+    ) -> Result<UserPromptHookOutcome> {
         let mut outcome = UserPromptHookOutcome::default();
 
         if self.inner.hooks.user_prompt_submit.is_empty() {
             return Ok(outcome);
         }
 
-        let payload = self.build_user_prompt_payload(prompt).await?;
+        let payload = self.build_user_prompt_payload(turn_id, prompt).await?;
 
         for group in &self.inner.hooks.user_prompt_submit {
             if !group.matcher.matches(prompt) {

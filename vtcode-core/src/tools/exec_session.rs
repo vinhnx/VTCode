@@ -10,6 +10,7 @@ use tokio::sync::{Mutex, RwLock, watch};
 use tokio::task::JoinHandle;
 use vtcode_bash_runner::{PipeSpawnOptions, ProcessHandle, spawn_pipe_process_with_options};
 
+use crate::tools::ExecSessionId;
 use crate::tools::registry::{PtySessionGuard, PtySessionManager};
 use crate::tools::types::VTCodeExecSession;
 use crate::utils::path::{canonicalize_workspace, ensure_path_within_workspace};
@@ -49,7 +50,7 @@ impl PipeSessionRecord {
 #[derive(Clone)]
 struct PipeSessionManager {
     workspace_root: PathBuf,
-    sessions: Arc<RwLock<HashMap<String, Arc<PipeSessionRecord>>>>,
+    sessions: Arc<RwLock<HashMap<ExecSessionId, Arc<PipeSessionRecord>>>>,
 }
 
 impl PipeSessionManager {
@@ -62,7 +63,7 @@ impl PipeSessionManager {
 
     async fn create_session(
         &self,
-        session_id: String,
+        session_id: ExecSessionId,
         command: Vec<String>,
         working_dir: PathBuf,
         env: HashMap<String, String>,
@@ -75,8 +76,11 @@ impl PipeSessionManager {
 
         {
             let sessions = self.sessions.read().await;
-            if sessions.contains_key(&session_id) {
-                return Err(anyhow!("exec session '{}' already exists", session_id));
+            if sessions.contains_key(session_id.as_str()) {
+                return Err(anyhow!(
+                    "exec session '{}' already exists",
+                    session_id.as_str()
+                ));
             }
         }
 
@@ -300,7 +304,7 @@ impl ExecSessionRecord {
 pub struct ExecSessionManager {
     pipe_sessions: PipeSessionManager,
     pty_sessions: PtySessionManager,
-    sessions: Arc<RwLock<HashMap<String, Arc<ExecSessionRecord>>>>,
+    sessions: Arc<RwLock<HashMap<ExecSessionId, Arc<ExecSessionRecord>>>>,
 }
 
 impl ExecSessionManager {
@@ -315,7 +319,7 @@ impl ExecSessionManager {
 
     pub(crate) async fn create_pipe_session(
         &self,
-        session_id: String,
+        session_id: ExecSessionId,
         command: Vec<String>,
         working_dir: PathBuf,
         env: HashMap<String, String>,
@@ -332,7 +336,7 @@ impl ExecSessionManager {
 
     pub(crate) async fn create_pty_session(
         &self,
-        session_id: String,
+        session_id: ExecSessionId,
         command: Vec<String>,
         working_dir: PathBuf,
         size: PtySize,
@@ -342,7 +346,7 @@ impl ExecSessionManager {
         self.ensure_session_absent(&session_id).await?;
         let pty_guard = self.pty_sessions.start_session()?;
         let metadata = self.pty_sessions.manager().create_session_with_bridge(
-            session_id,
+            session_id.clone().into(),
             command,
             working_dir,
             size,
@@ -535,8 +539,11 @@ impl ExecSessionManager {
         pty_guard: Option<PtySessionGuard>,
     ) -> Result<()> {
         let mut sessions = self.sessions.write().await;
-        if sessions.contains_key(&metadata.id) {
-            return Err(anyhow!("exec session '{}' already exists", metadata.id));
+        if sessions.contains_key(metadata.id.as_str()) {
+            return Err(anyhow!(
+                "exec session '{}' already exists",
+                metadata.id.as_str()
+            ));
         }
         sessions.insert(
             metadata.id.clone(),
@@ -596,7 +603,7 @@ mod tests {
 
         manager
             .create_pty_session(
-                "run-1".to_string(),
+                "run-1".to_string().into(),
                 vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
@@ -611,7 +618,7 @@ mod tests {
 
         let second = manager
             .create_pty_session(
-                "run-2".to_string(),
+                "run-2".to_string().into(),
                 vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
@@ -634,7 +641,7 @@ mod tests {
         manager.close_session("run-1").await?;
         manager
             .create_pty_session(
-                "run-3".to_string(),
+                "run-3".to_string().into(),
                 vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
@@ -661,7 +668,7 @@ mod tests {
 
         manager
             .create_pipe_session(
-                "run-1".to_string(),
+                "run-1".to_string().into(),
                 vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),

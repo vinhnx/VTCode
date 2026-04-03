@@ -15,6 +15,7 @@ use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::scheduler::{DurableTaskStore, SchedulerDaemon};
+use vtcode_core::session::SessionId;
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::ui::theme;
@@ -1059,21 +1060,25 @@ pub(super) async fn run_interaction_loop_impl(
             slash_command_handler::CommandProcessingResult::NotHandled => {}
         }
 
+        let turn_id = SessionId::new().0;
+
         if let Some(hooks) = ctx.lifecycle_hooks {
-            match hooks.run_user_prompt_submit(input_owned.as_str()).await {
+            match hooks
+                .run_user_prompt_submit(&turn_id, input_owned.as_str())
+                .await
+            {
                 Ok(outcome) => {
                     crate::agent::runloop::unified::turn::utils::render_hook_messages(
                         ctx.renderer,
                         &outcome.messages,
                     )?;
+                    crate::agent::runloop::unified::turn::utils::append_additional_context(
+                        &mut ctx.conversation_history,
+                        outcome.additional_context,
+                    );
                     if !outcome.allow_prompt {
                         ctx.handle.clear_input();
                         continue;
-                    }
-                    for context in outcome.additional_context {
-                        if !context.trim().is_empty() {
-                            ctx.conversation_history.push(uni::Message::system(context));
-                        }
                     }
                 }
                 Err(err) => {
@@ -1348,6 +1353,7 @@ pub(super) async fn run_interaction_loop_impl(
         return Ok(InteractionOutcome::Continue {
             input: input.to_string(),
             prompt_message_index: Some(prompt_message_index),
+            turn_id,
         });
     }
 }

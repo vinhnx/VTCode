@@ -35,6 +35,7 @@ fn restore_terminal_on_exit() -> io::Result<()> {
 pub(super) async fn finalize_session(
     renderer: &mut AnsiRenderer,
     lifecycle_hooks: Option<&LifecycleHookEngine>,
+    turn_id: &str,
     session_end_reason: SessionEndReason,
     session_archive: &mut Option<SessionArchive>,
     session_stats: &SessionStats,
@@ -94,7 +95,7 @@ pub(super) async fn finalize_session(
     if let Some(hooks) = lifecycle_hooks {
         match tokio::time::timeout(
             std::time::Duration::from_secs(3),
-            hooks.run_session_end(session_end_reason),
+            hooks.run_session_end(turn_id, session_end_reason),
         )
         .await
         {

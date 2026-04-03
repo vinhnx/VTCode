@@ -971,7 +971,7 @@ fn attach_exec_response_context(
     command: &str,
     is_exited: bool,
 ) {
-    response["session_id"] = json!(session.id);
+    response["session_id"] = json!(session.id.as_str());
     response["command"] = json!(command);
     if let Some(value) = session.working_dir.as_deref() {
         response["working_directory"] = json!(value);
@@ -1398,7 +1398,7 @@ fn build_exec_response(
         response["truncated"] = json!(true);
     }
     if capture.exit_code.is_none() {
-        attach_pty_continuation(&mut response, &session.id);
+        attach_pty_continuation(&mut response, session.id.as_str());
     }
 
     attach_exec_recovery_guidance(&mut response, command, capture.exit_code);
@@ -2397,7 +2397,7 @@ impl ToolRegistry {
         session_env.extend(parse_exec_env_overrides(payload)?);
         self.exec_sessions
             .create_pty_session(
-                session_id.clone(),
+                session_id.clone().into(),
                 command,
                 working_dir_path,
                 portable_pty::PtySize {
@@ -2583,7 +2583,12 @@ impl ToolRegistry {
             self.build_pipe_session_env(&shell_program, parse_exec_env_overrides(payload)?);
         let session_metadata = self
             .exec_sessions
-            .create_pipe_session(session_id.clone(), command, working_dir_path, session_env)
+            .create_pipe_session(
+                session_id.clone().into(),
+                command,
+                working_dir_path,
+                session_env,
+            )
             .await?;
 
         let capture = self
@@ -4062,7 +4067,7 @@ mod pty_context_tests {
     #[test]
     fn build_exec_session_command_display_unwraps_shell_c_argument() {
         let session = VTCodeExecSession {
-            id: "run-123".to_string(),
+            id: "run-123".to_string().into(),
             backend: "pty".to_string(),
             command: "zsh".to_string(),
             args: vec![
@@ -4086,7 +4091,7 @@ mod pty_context_tests {
     fn attach_exec_response_context_sets_expected_keys() {
         let mut response = json!({ "output": "ok" });
         let session = VTCodeExecSession {
-            id: "run-123".to_string(),
+            id: "run-123".to_string().into(),
             backend: "pty".to_string(),
             command: "zsh".to_string(),
             args: vec![
@@ -4144,7 +4149,7 @@ mod pty_context_tests {
     #[test]
     fn build_exec_response_skips_continuation_after_exit() {
         let session = VTCodeExecSession {
-            id: "run-123".to_string(),
+            id: "run-123".to_string().into(),
             backend: "pipe".to_string(),
             command: "cargo".to_string(),
             args: vec!["check".to_string()],
@@ -4361,7 +4366,7 @@ mod unified_action_error_tests {
     #[test]
     fn exec_recovery_guidance_sets_command_not_found_metadata() {
         let session = VTCodeExecSession {
-            id: "run-123".to_string(),
+            id: "run-123".to_string().into(),
             backend: "pipe".to_string(),
             command: "zsh".to_string(),
             args: vec!["-c".to_string(), "pip install pymupdf".to_string()],
@@ -4487,7 +4492,7 @@ mod unified_action_error_tests {
     #[test]
     fn build_exec_response_attaches_cargo_failure_diagnostics() {
         let session = VTCodeExecSession {
-            id: "run-123".to_string(),
+            id: "run-123".to_string().into(),
             backend: "pipe".to_string(),
             command: "cargo".to_string(),
             args: vec![

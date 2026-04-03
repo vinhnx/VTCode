@@ -200,7 +200,7 @@ async fn test_session_end_hook_execution() {
     .unwrap();
 
     let messages = engine
-        .run_session_end(SessionEndReason::Completed)
+        .run_session_end("turn-1", SessionEndReason::Completed)
         .await
         .expect("Failed to run session end hook");
 
@@ -441,6 +441,78 @@ async fn test_subagent_stop_hook_execution_uses_agent_name_matcher() {
 }
 
 #[tokio::test]
+async fn test_user_prompt_submit_payload_includes_turn_id() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let config = HooksConfig {
+        lifecycle: LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None,
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo payload".into(),
+                    timeout_seconds: None,
+                }],
+            }],
+            ..Default::default()
+        },
+    };
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let payload = engine
+        .build_user_prompt_payload("turn-42", "Test prompt")
+        .await
+        .expect("payload");
+
+    assert_eq!(payload["turn_id"], "turn-42");
+    assert_eq!(payload["hook_event_name"], "UserPromptSubmit");
+    assert_eq!(payload["prompt"], "Test prompt");
+}
+
+#[tokio::test]
+async fn test_session_end_payload_includes_turn_id() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let config = HooksConfig {
+        lifecycle: LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None,
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo payload".into(),
+                    timeout_seconds: None,
+                }],
+            }],
+            ..Default::default()
+        },
+    };
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let payload = engine
+        .build_session_end_payload("turn-99", SessionEndReason::Completed)
+        .await
+        .expect("payload");
+
+    assert_eq!(payload["turn_id"], "turn-99");
+    assert_eq!(payload["hook_event_name"], "SessionEnd");
+    assert_eq!(payload["reason"], "completed");
+}
+
+#[tokio::test]
 #[cfg_attr(
     not(target_os = "macos"),
     ignore = "Lifecycle hooks are for local development only"
@@ -475,7 +547,7 @@ async fn test_user_prompt_submit_hook_allows_prompt_by_default() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Test prompt")
+        .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run user prompt submit hook");
 
@@ -517,7 +589,7 @@ async fn test_user_prompt_submit_hook_blocks_prompt_with_exit_code_2() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Test prompt")
+        .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run user prompt submit hook");
 
@@ -525,6 +597,49 @@ async fn test_user_prompt_submit_hook_blocks_prompt_with_exit_code_2() {
     assert!(!outcome.allow_prompt);
     assert!(outcome.block_reason.is_some());
     assert!(outcome.block_reason.unwrap().contains("Prompt blocked"));
+}
+
+#[tokio::test]
+async fn test_user_prompt_submit_hook_blocks_prompt_preserves_stdout_context() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        user_prompt_submit: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "printf 'Retry with a narrower scope.'; echo 'Prompt blocked' >&2; exit 2"
+                    .into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_user_prompt_submit("turn-1", "Test prompt")
+        .await
+        .expect("Failed to run user prompt submit hook");
+
+    assert!(!outcome.allow_prompt);
+    assert_eq!(outcome.block_reason.as_deref(), Some("Prompt blocked"));
+    assert_eq!(
+        outcome.additional_context,
+        vec!["Retry with a narrower scope."]
+    );
 }
 
 #[tokio::test]
@@ -600,7 +715,7 @@ async fn test_user_prompt_submit_block_requires_stderr_feedback() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Test prompt")
+        .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run user prompt submit hook");
 
@@ -643,7 +758,7 @@ async fn test_user_prompt_submit_json_block_requires_reason() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Test prompt")
+        .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run user prompt submit hook");
 

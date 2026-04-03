@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
-use super::file_search_bridge::{self, FileSearchConfig};
+use super::file_search_bridge::{self, FileMatchType, FileSearchConfig};
 
 /// JSON-RPC request for searching files
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +43,8 @@ pub struct ListFilesRequest {
 pub struct FileMatchRpc {
     /// Path relative to workspace root
     pub path: String,
+    /// Whether the match is a file or directory
+    pub match_type: FileMatchType,
     /// Fuzzy match score (higher = better match)
     pub score: u32,
     /// Character indices for match highlighting (optional)
@@ -228,6 +230,7 @@ impl FileSearchRpcHandler {
             .into_iter()
             .map(|m| FileMatchRpc {
                 path: m.path,
+                match_type: m.match_type,
                 score: m.score,
                 indices: m.indices,
             })
@@ -268,7 +271,10 @@ impl FileSearchRpcHandler {
         let results = file_search_bridge::search_files(config, None)?;
 
         // Extract file paths
-        let files: Vec<String> = results.matches.into_iter().map(|m| m.path).collect();
+        let files: Vec<String> = file_search_bridge::file_matches_only(results.matches)
+            .into_iter()
+            .map(|m| m.path)
+            .collect();
         let total = files.len();
 
         Ok(json!({
@@ -389,6 +395,7 @@ mod tests {
     fn test_file_match_rpc_serialization() {
         let file_match = FileMatchRpc {
             path: "src/main.rs".to_string(),
+            match_type: FileMatchType::File,
             score: 100,
             indices: Some(vec![4, 5]),
         };

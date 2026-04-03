@@ -6,6 +6,7 @@
 - Build with `cargo check` (preferred) or `cargo build --release`.
 - Format via `cargo fmt` and lint with `cargo clippy` before committing.
 - Run tests with `cargo nextest run` or `cargo test <name> -- --nocapture`.
+- When running Rust commands, be patient with them and do not kill them by PID; Cargo lock contention can make them slow, and that is expected.
 - Install JavaScript dependencies with `npm install`.
 
 ## Architecture & layout

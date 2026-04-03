@@ -271,6 +271,18 @@ impl SafeCommandRegistry {
             return SafetyDecision::Unknown;
         }
 
+        if command
+            .iter()
+            .skip(1)
+            .map(String::as_str)
+            .any(crate::command_safety::dangerous_commands::git_global_option_requires_prompt)
+        {
+            return SafetyDecision::Deny(
+                "git global options that redirect config, repository, or helper lookup are not allowed"
+                    .to_string(),
+            );
+        }
+
         // Use the shared git subcommand finder to skip global options
         let subcommands = &["status", "log", "diff", "show", "branch"];
         let Some((idx, subcommand)) =
@@ -447,6 +459,63 @@ mod tests {
         let registry = SafeCommandRegistry::new();
         let cmd = vec!["git".to_string(), "status".to_string()];
         assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
+    }
+
+    #[test]
+    fn git_global_options_require_approval() {
+        let registry = SafeCommandRegistry::new();
+
+        for cmd in [
+            vec![
+                "git".to_string(),
+                "-c".to_string(),
+                "core.pager=cat".to_string(),
+                "show".to_string(),
+                "HEAD:foo.rs".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--config-env".to_string(),
+                "core.pager=PAGER".to_string(),
+                "show".to_string(),
+                "HEAD".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--git-dir=.evil-git".to_string(),
+                "diff".to_string(),
+                "HEAD~1..HEAD".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--work-tree".to_string(),
+                ".".to_string(),
+                "status".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--exec-path=.git/helpers".to_string(),
+                "show".to_string(),
+                "HEAD".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--namespace=attacker".to_string(),
+                "show".to_string(),
+                "HEAD".to_string(),
+            ],
+            vec![
+                "git".to_string(),
+                "--super-prefix=attacker/".to_string(),
+                "show".to_string(),
+                "HEAD".to_string(),
+            ],
+        ] {
+            assert!(
+                matches!(registry.is_safe(&cmd), SafetyDecision::Deny(_)),
+                "expected {cmd:?} to require approval due to unsafe git global option",
+            );
+        }
     }
 
     #[test]

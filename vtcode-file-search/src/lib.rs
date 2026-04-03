@@ -30,7 +30,7 @@
 //! ```
 
 use parking_lot::Mutex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::num::NonZero;
@@ -41,12 +41,21 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 ///
 /// Fields:
 /// - `score`: Relevance score from fuzzy matching (higher is better)
-/// - `path`: File path relative to the search directory
+/// - `path`: Path relative to the search directory
+/// - `match_type`: Whether the match is a file or directory
 /// - `indices`: Optional character positions for highlighting matched characters
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchType {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileMatch {
     pub score: u32,
     pub path: String,
+    pub match_type: MatchType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indices: Option<Vec<u32>>,
 }
@@ -77,7 +86,7 @@ pub use vtcode_commons::paths::file_name_from_path;
 /// Each worker thread gets its own instance to avoid locking during
 /// directory traversal. Results are merged at the end.
 struct BestMatchesList {
-    matches: BinaryHeap<Reverse<(u32, String)>>,
+    matches: BinaryHeap<Reverse<(u32, String, MatchType)>>,
     limit: usize,
     matcher: nucleo_matcher::Matcher,
     haystack_buf: Vec<char>,
@@ -101,7 +110,7 @@ impl BestMatchesList {
     ///
     /// Returns true when the path matches the search pattern, even if it
     /// does not survive the top-K cutoff.
-    fn record_match(&mut self, path: &str) -> bool {
+    fn record_match(&mut self, path: &str, match_type: MatchType) -> bool {
         let haystack = nucleo_matcher::Utf32Str::new(path, &mut self.haystack_buf);
         let needle = nucleo_matcher::Utf32Str::new(&self.pattern_text, &mut self.pattern_buf);
         let Some(score) = self.matcher.fuzzy_match(haystack, needle) else {
@@ -113,19 +122,21 @@ impl BestMatchesList {
             self.limit,
             score as u32,
             path.to_string(),
+            match_type,
         );
         true
     }
 }
 
 fn push_top_match(
-    matches: &mut BinaryHeap<Reverse<(u32, String)>>,
+    matches: &mut BinaryHeap<Reverse<(u32, String, MatchType)>>,
     limit: usize,
     score: u32,
     path: String,
+    match_type: MatchType,
 ) -> bool {
     if matches.len() < limit {
-        matches.push(Reverse((score, path)));
+        matches.push(Reverse((score, path, match_type)));
         return true;
     }
 
@@ -138,7 +149,7 @@ fn push_top_match(
     }
 
     matches.pop();
-    matches.push(Reverse((score, path)));
+    matches.push(Reverse((score, path, match_type)));
     true
 }
 
@@ -224,20 +235,20 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            // Skip directories
-            if entry.metadata().map_or(true, |m| m.is_dir()) {
-                return ignore::WalkState::Continue;
-            }
-
             let path = match entry.path().to_str() {
                 Some(p) => p,
                 None => return ignore::WalkState::Continue,
+            };
+            let match_type = if entry.path().is_dir() {
+                MatchType::Directory
+            } else {
+                MatchType::File
             };
 
             // Try to add to results
             {
                 let mut list = best_list.lock();
-                if list.record_match(path) {
+                if list.record_match(path, match_type) {
                     total_match_count_clone.fetch_add(1, Ordering::Relaxed);
                 }
             }
@@ -250,8 +261,8 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     let mut merged_matches = BinaryHeap::with_capacity(limit);
     for arc in best_matchers_per_worker {
         let mut list = arc.lock();
-        for Reverse((score, path)) in std::mem::take(&mut list.matches).into_vec() {
-            push_top_match(&mut merged_matches, limit, score, path);
+        for Reverse((score, path, match_type)) in std::mem::take(&mut list.matches).into_vec() {
+            push_top_match(&mut merged_matches, limit, score, path, match_type);
         }
     }
 
@@ -259,9 +270,10 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     let matches = merged_matches
         .into_sorted_vec()
         .into_iter()
-        .map(|Reverse((score, path))| FileMatch {
+        .map(|Reverse((score, path, match_type))| FileMatch {
             score,
             path,
+            match_type,
             indices: if compute_indices {
                 Some(Vec::new())
             } else {
@@ -310,6 +322,7 @@ mod tests {
 
         assert_eq!(results.matches.len(), 1);
         assert!(results.matches[0].path.contains("hello"));
+        assert_eq!(results.matches[0].match_type, MatchType::File);
 
         Ok(())
     }
@@ -335,6 +348,12 @@ mod tests {
 
         assert_eq!(results.matches.len(), 3);
         assert!(results.matches.iter().all(|m| m.path.contains("test")));
+        assert!(
+            results
+                .matches
+                .iter()
+                .all(|m| matches!(m.match_type, MatchType::File))
+        );
 
         Ok(())
     }
@@ -388,6 +407,7 @@ mod tests {
 
         assert_eq!(results.matches.len(), 1);
         assert!(results.matches[0].path.contains("keep.rs"));
+        assert_eq!(results.matches[0].match_type, MatchType::File);
 
         Ok(())
     }
@@ -413,6 +433,31 @@ mod tests {
 
         // Should return early due to cancellation
         assert!(results.matches.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_directory_matches_are_returned() -> anyhow::Result<()> {
+        let temp = TempDir::new()?;
+        fs::create_dir_all(temp.path().join("docs/guides"))?;
+        fs::write(temp.path().join("docs/guides/intro.md"), "intro")?;
+        fs::write(temp.path().join("docs/readme.md"), "readme")?;
+
+        let results = run(FileSearchConfig {
+            pattern_text: "guides".to_string(),
+            limit: NonZero::new(10).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec![],
+            threads: NonZero::new(2).unwrap(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
+
+        assert!(results.matches.iter().any(
+            |m| m.path.ends_with("docs/guides") && matches!(m.match_type, MatchType::Directory)
+        ));
 
         Ok(())
     }

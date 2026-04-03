@@ -10,6 +10,7 @@ use crate::tools::command::CommandTool;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
+use crate::utils::path::canonicalize_workspace;
 
 /// Metrics for alias usage tracking
 #[derive(Debug, Default, Clone)]
@@ -50,6 +51,7 @@ pub(super) struct ToolInventory {
 
 impl ToolInventory {
     pub fn new(workspace_root: PathBuf, edited_file_monitor: Arc<EditedFileMonitor>) -> Self {
+        let workspace_root = canonicalize_workspace(&workspace_root);
         // Clone once for command_tool (needs ownership), share reference for others
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));

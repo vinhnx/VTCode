@@ -116,6 +116,7 @@ pub mod enhanced_validator;
 pub mod executor;
 pub mod file_references;
 pub mod injection;
+pub mod instructions;
 pub mod loader;
 pub mod locations;
 pub mod manager;
@@ -167,6 +168,7 @@ pub use document_processor::{
 pub use enhanced_validator::ComprehensiveSkillValidator;
 pub use executor::{execute_skill_with_sub_llm, filter_tools_for_skill};
 pub use file_references::FileReferenceValidator;
+pub use instructions::{SKILL_INSTRUCTIONS_PREFIX, SkillInstructions};
 pub use loader::{
     EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, SkillRoot, detect_skill_mentions,
     discover_skill_metadata_lightweight, load_skill_resources, load_skills,

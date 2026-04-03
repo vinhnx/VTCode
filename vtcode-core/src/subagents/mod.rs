@@ -1220,46 +1220,25 @@ impl SubagentController {
     }
 
     pub async fn resume(&self, target: &str) -> Result<SubagentStatusEntry> {
-        {
-            let mut state = self.state.write().await;
-            let record = state
-                .children
-                .get_mut(target)
-                .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
-            if record.status == SubagentStatus::Closed {
-                bail!("Subagent {} is closed", target);
+        let subtree_ids = self.collect_spawn_subtree_ids(target).await?;
+        let mut restart_ids = Vec::new();
+        for node_id in subtree_ids {
+            if self.reopen_single(node_id.as_str()).await? {
+                restart_ids.push(node_id);
             }
-            if matches!(
-                record.status,
-                SubagentStatus::Running | SubagentStatus::Queued
-            ) {
-                return Ok(record.status_entry());
-            }
-            let prompt = record.last_prompt.clone().unwrap_or_else(|| {
-                "Continue the delegated task from the existing context.".to_string()
-            });
-            record.status = SubagentStatus::Queued;
-            record.updated_at = Utc::now();
-            record.queued_prompts.push_back(prompt);
         }
-        self.restart_child(target).await?;
+        for restart_id in restart_ids {
+            self.restart_child(&restart_id).await?;
+        }
         self.status_for(target).await
     }
 
     pub async fn close(&self, target: &str) -> Result<SubagentStatusEntry> {
-        let mut state = self.state.write().await;
-        let record = state
-            .children
-            .get_mut(target)
-            .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
-        if let Some(handle) = record.handle.take() {
-            handle.abort();
+        let subtree_ids = self.collect_spawn_subtree_ids(target).await?;
+        for node_id in subtree_ids.into_iter().rev() {
+            self.close_single(node_id.as_str()).await?;
         }
-        record.status = SubagentStatus::Closed;
-        record.updated_at = Utc::now();
-        record.completed_at = Some(Utc::now());
-        record.notify.notify_waiters();
-        Ok(record.status_entry())
+        self.status_for(target).await
     }
 
     pub async fn wait(
@@ -1332,6 +1311,77 @@ impl SubagentController {
             .children
             .get(target)
             .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
+        Ok(record.status_entry())
+    }
+
+    async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
+        let state = self.state.read().await;
+        let mut child_ids = state
+            .children
+            .values()
+            .filter(|record| record.parent_thread_id == parent_thread_id)
+            .map(|record| record.id.clone())
+            .collect::<Vec<_>>();
+        child_ids.sort();
+        child_ids
+    }
+
+    async fn collect_spawn_subtree_ids(&self, root_thread_id: &str) -> Result<Vec<String>> {
+        let mut subtree_ids = Vec::new();
+        let mut stack = vec![root_thread_id.to_string()];
+
+        while let Some(thread_id) = stack.pop() {
+            subtree_ids.push(thread_id.clone());
+            let child_ids = self.spawn_child_ids_for_parent(&thread_id).await;
+            for child_id in child_ids.into_iter().rev() {
+                stack.push(child_id);
+            }
+        }
+
+        Ok(subtree_ids)
+    }
+
+    async fn reopen_single(&self, target: &str) -> Result<bool> {
+        let mut state = self.state.write().await;
+        let record = state
+            .children
+            .get_mut(target)
+            .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
+        if matches!(
+            record.status,
+            SubagentStatus::Running | SubagentStatus::Queued
+        ) {
+            return Ok(false);
+        }
+
+        let prompt = record.last_prompt.clone().unwrap_or_else(|| {
+            "Continue the delegated task from the existing context.".to_string()
+        });
+        record.status = SubagentStatus::Queued;
+        record.updated_at = Utc::now();
+        record.completed_at = None;
+        record.error = None;
+        record.summary = None;
+        record.queued_prompts.push_back(prompt);
+        Ok(true)
+    }
+
+    async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
+        let mut state = self.state.write().await;
+        let record = state
+            .children
+            .get_mut(target)
+            .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
+        if record.status == SubagentStatus::Closed {
+            return Ok(record.status_entry());
+        }
+        if let Some(handle) = record.handle.take() {
+            handle.abort();
+        }
+        record.status = SubagentStatus::Closed;
+        record.updated_at = Utc::now();
+        record.completed_at = Some(Utc::now());
+        record.notify.notify_waiters();
         Ok(record.status_entry())
     }
 
@@ -1446,7 +1496,7 @@ impl SubagentController {
             .config
             .exec_sessions
             .create_pty_session(
-                exec_session_id.clone(),
+                exec_session_id.clone().into(),
                 command,
                 self.config.workspace_root.clone(),
                 PtySize {
@@ -3074,6 +3124,40 @@ mod tests {
         }
     }
 
+    fn test_child_record(
+        id: &str,
+        parent_thread_id: &str,
+        spec: &SubagentSpec,
+        status: SubagentStatus,
+        depth: usize,
+    ) -> super::ChildRecord {
+        super::ChildRecord {
+            id: id.to_string(),
+            session_id: format!("session-{id}"),
+            parent_thread_id: parent_thread_id.to_string(),
+            spec: spec.clone(),
+            display_label: super::subagent_display_label(spec),
+            status,
+            background: false,
+            depth,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: status.is_terminal().then_some(Utc::now()),
+            summary: None,
+            error: None,
+            archive_metadata: None,
+            archive_path: None,
+            transcript_path: None,
+            effective_config: Some(VTCodeConfig::default()),
+            stored_messages: Vec::new(),
+            last_prompt: Some(format!("prompt-{id}")),
+            queued_prompts: VecDeque::new(),
+            thread_handle: None,
+            handle: None,
+            notify: Arc::new(Notify::new()),
+        }
+    }
+
     #[test]
     fn request_prompt_prefers_message() {
         let request = SpawnAgentRequest {
@@ -4007,6 +4091,135 @@ mod tests {
             .expect("spawn");
         let closed = controller.close(&spawned.id).await.expect("close");
         assert_eq!(closed.status, SubagentStatus::Closed);
+    }
+
+    #[tokio::test]
+    async fn close_is_idempotent_for_closed_agents() {
+        let temp = TempDir::new().expect("tempdir");
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+        controller
+            .set_turn_delegation_hints_from_input("delegate this task")
+            .await;
+        let spawned = controller
+            .spawn(SpawnAgentRequest {
+                agent_type: Some("default".to_string()),
+                message: Some("Summarize the repository.".to_string()),
+                ..SpawnAgentRequest::default()
+            })
+            .await
+            .expect("spawn");
+
+        let closed = controller.close(&spawned.id).await.expect("first close");
+        let closed_again = controller.close(&spawned.id).await.expect("second close");
+
+        assert_eq!(closed_again.status, SubagentStatus::Closed);
+        assert_eq!(closed_again.updated_at, closed.updated_at);
+        assert_eq!(closed_again.completed_at, closed.completed_at);
+    }
+
+    #[tokio::test]
+    async fn close_and_resume_cascade_through_spawn_tree() {
+        let temp = TempDir::new().expect("tempdir");
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "explorer")
+            .expect("explorer");
+
+        {
+            let mut state = controller.state.write().await;
+            state.children.insert(
+                "parent".to_string(),
+                test_child_record("parent", "session-root", &spec, SubagentStatus::Running, 1),
+            );
+            state.children.insert(
+                "child".to_string(),
+                test_child_record("child", "parent", &spec, SubagentStatus::Running, 2),
+            );
+            state.children.insert(
+                "grandchild".to_string(),
+                test_child_record("grandchild", "child", &spec, SubagentStatus::Running, 3),
+            );
+        }
+
+        let closed = controller.close("parent").await.expect("close");
+        assert_eq!(closed.status, SubagentStatus::Closed);
+        assert_eq!(
+            controller.status_for("child").await.expect("child").status,
+            SubagentStatus::Closed
+        );
+        assert_eq!(
+            controller
+                .status_for("grandchild")
+                .await
+                .expect("grandchild")
+                .status,
+            SubagentStatus::Closed
+        );
+
+        let subtree_ids = controller
+            .collect_spawn_subtree_ids("parent")
+            .await
+            .expect("collect subtree");
+        assert_eq!(
+            subtree_ids,
+            vec![
+                "parent".to_string(),
+                "child".to_string(),
+                "grandchild".to_string()
+            ]
+        );
+
+        let mut restart_ids = Vec::new();
+        for node_id in subtree_ids {
+            if controller
+                .reopen_single(node_id.as_str())
+                .await
+                .expect("reopen subtree node")
+            {
+                restart_ids.push(node_id);
+            }
+        }
+
+        assert_eq!(
+            restart_ids,
+            vec![
+                "parent".to_string(),
+                "child".to_string(),
+                "grandchild".to_string()
+            ]
+        );
+        assert_eq!(
+            controller
+                .status_for("parent")
+                .await
+                .expect("parent")
+                .status,
+            SubagentStatus::Queued
+        );
+        assert_eq!(
+            controller.status_for("child").await.expect("child").status,
+            SubagentStatus::Queued
+        );
+        assert_eq!(
+            controller
+                .status_for("grandchild")
+                .await
+                .expect("grandchild")
+                .status,
+            SubagentStatus::Queued
+        );
     }
 
     #[tokio::test]

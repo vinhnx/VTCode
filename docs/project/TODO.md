@@ -42,6 +42,8 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
+CRITICAL: currently github copilot auth doesn't show device login code -> can't login. check recent regerssions and fix
+
 ---
 
 Use hooks to deterministically run logic as part of the agent lifecycle
@@ -176,3 +178,7 @@ https://x.com/jpschroeder/status/2038960058499768427
 ===
 
 https://x.com/cryptodavidw/status/2039198363615457538
+
+---
+
+review system prompt to reduce tokens and optimize for better performance. Consider what information is essential for the model to perform well and remove any redundant or non-critical details. keep in mind that a more concise prompt can often lead to faster response times and improved performance, as the model can focus on the most relevant information without being overwhelmed by unnecessary context. goal: reduce system prompt tokens by at least 50% while maintaining or improving model performance. but first, tell me how many tokens the current system prompt is using and identify any areas where it can be streamlined or simplified.

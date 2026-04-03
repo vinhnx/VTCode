@@ -195,7 +195,9 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::resume_agent_executor,
         )
-        .with_description("Resume a previously completed child agent from its saved context.")
+        .with_description(
+            "Resume a previously completed or closed child agent subtree from its saved context.",
+        )
         .with_parameter_schema(resume_agent_parameters())
         .with_aliases(["resume_subagent"]),
         ToolRegistration::new(
@@ -205,7 +207,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::close_agent_executor,
         )
         .with_description(
-            "Close a child agent, cancelling any active work and marking the thread closed.",
+            "Close a child agent subtree, cancelling any active work and marking the thread closed.",
         )
         .with_parameter_schema(close_agent_parameters())
         .with_aliases(["close_subagent"]),

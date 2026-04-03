@@ -15,8 +15,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use vtcode_file_search::{
-    FileMatch, FileSearchResults, file_name_from_path, run as file_search_run,
+    FileMatch, FileSearchResults, MatchType, file_name_from_path, run as file_search_run,
 };
+
+pub use vtcode_file_search::MatchType as FileMatchType;
 
 /// Configuration for file search operations
 #[derive(Debug, Clone)]
@@ -120,6 +122,14 @@ pub fn match_filename(file_match: &FileMatch) -> String {
     file_name_from_path(&file_match.path)
 }
 
+/// Keep only file matches, dropping directory entries.
+pub fn file_matches_only(matches: Vec<FileMatch>) -> Vec<FileMatch> {
+    matches
+        .into_iter()
+        .filter(|m| matches!(m.match_type, MatchType::File))
+        .collect()
+}
+
 /// Filter file matches by file extension
 ///
 /// # Arguments
@@ -176,6 +186,7 @@ mod tests {
         let file_match = FileMatch {
             score: 100,
             path: "src/utils/helper.rs".to_string(),
+            match_type: MatchType::File,
             indices: None,
         };
 
@@ -188,16 +199,19 @@ mod tests {
             FileMatch {
                 score: 100,
                 path: "src/main.rs".to_string(),
+                match_type: MatchType::File,
                 indices: None,
             },
             FileMatch {
                 score: 90,
                 path: "src/config.toml".to_string(),
+                match_type: MatchType::File,
                 indices: None,
             },
             FileMatch {
                 score: 80,
                 path: "src/data.json".to_string(),
+                match_type: MatchType::File,
                 indices: None,
             },
         ];
@@ -209,5 +223,28 @@ mod tests {
                 .iter()
                 .all(|m| { m.path.ends_with(".rs") || m.path.ends_with(".toml") })
         );
+    }
+
+    #[test]
+    fn test_file_matches_only_filters_directories() {
+        let matches = vec![
+            FileMatch {
+                score: 100,
+                path: "src".to_string(),
+                match_type: MatchType::Directory,
+                indices: None,
+            },
+            FileMatch {
+                score: 90,
+                path: "src/main.rs".to_string(),
+                match_type: MatchType::File,
+                indices: None,
+            },
+        ];
+
+        let filtered = file_matches_only(matches);
+
+        assert_eq!(filtered.len(), 1);
+        assert!(matches!(filtered[0].match_type, MatchType::File));
     }
 }

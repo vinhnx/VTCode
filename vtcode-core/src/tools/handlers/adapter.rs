@@ -137,10 +137,7 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
 
                 Ok(SplitToolResult::new(self.name, &llm_content, &ui_content))
             }
-            Err(e) => {
-                let error_msg = e.to_string();
-                Ok(SplitToolResult::error(self.name, &error_msg))
-            }
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -290,6 +287,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     struct TestHandler;
+    struct ErrorHandler;
 
     #[async_trait]
     impl ToolHandler for TestHandler {
@@ -299,6 +297,17 @@ mod tests {
 
         async fn handle(&self, _invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
             Ok(ToolOutput::simple("Test output"))
+        }
+    }
+
+    #[async_trait]
+    impl ToolHandler for ErrorHandler {
+        fn kind(&self) -> ToolKind {
+            ToolKind::Function
+        }
+
+        async fn handle(&self, _invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
+            Err(ToolCallError::respond("boom"))
         }
     }
 
@@ -334,6 +343,35 @@ mod tests {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false)
         );
+    }
+
+    #[tokio::test]
+    async fn test_handler_to_tool_adapter_propagates_errors() {
+        let spec = ToolSpec::Function(ResponsesApiTool {
+            name: "test_tool".to_string(),
+            description: "A test tool".to_string(),
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::new(),
+                required: None,
+                additional_properties: None,
+                any_of: None,
+            },
+            strict: false,
+        });
+
+        let adapter = HandlerToToolAdapter::new(
+            ErrorHandler,
+            "test_tool",
+            "A test tool",
+            spec,
+            create_cwd_session,
+        );
+
+        let err = adapter
+            .execute_dual(serde_json::json!({}))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("boom"));
     }
 
     #[test]

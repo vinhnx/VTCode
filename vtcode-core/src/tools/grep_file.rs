@@ -829,7 +829,10 @@ impl GrepSearchManager {
 
         let results = file_search_bridge::search_files(config, cancel_flag)?;
 
-        Ok(results.matches.into_iter().map(|m| m.path).collect())
+        Ok(file_search_bridge::file_matches_only(results.matches)
+            .into_iter()
+            .map(|m| m.path)
+            .collect())
     }
 
     /// List all files in the search directory using the file search bridge
@@ -860,7 +863,10 @@ impl GrepSearchManager {
 
         let results = file_search_bridge::search_files(config, None)?;
 
-        Ok(results.matches.into_iter().map(|m| m.path).collect())
+        Ok(file_search_bridge::file_matches_only(results.matches)
+            .into_iter()
+            .map(|m| m.path)
+            .collect())
     }
 }
 

@@ -24,7 +24,6 @@
 //! - [`apply_patch_handler`]: Apply patch tool implementation
 //! - [`shell_handler`]: Shell command execution
 //! - [`read_file`]: File reading with line ranges
-//! - [`grep_files_handler`]: Pattern search across files
 //! - [`list_dir_handler`]: Directory listing
 //!
 //! ## Usage
@@ -59,7 +58,6 @@ pub mod tool_orchestrator;
 pub mod turn_diff_tracker;
 
 // Handler implementations
-pub mod grep_files_handler;
 pub mod list_dir_handler;
 pub mod plan_mode;
 pub mod plan_task_tracker;
@@ -82,9 +80,6 @@ pub use events::{
     ExecCommandInput, ExecCommandSource, ParsedCommand, ToolEmitter, ToolEventCtx,
     ToolEventFailureKind, ToolEventStage,
 };
-
-// Grep files handler
-pub use grep_files_handler::{GrepFilesArgs, GrepFilesHandler, GrepMatch, create_grep_files_tool};
 
 // Intercept apply patch
 pub use intercept_apply_patch::{

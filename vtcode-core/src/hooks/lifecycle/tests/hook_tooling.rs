@@ -388,7 +388,7 @@ async fn test_quiet_success_output_keeps_structured_context() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Test prompt")
+        .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run user prompt submit hook");
 
@@ -537,7 +537,7 @@ async fn test_regex_matcher_functionality() {
     .unwrap();
 
     let outcome = engine
-        .run_user_prompt_submit("Please add security validation")
+        .run_user_prompt_submit("turn-1", "Please add security validation")
         .await
         .expect("Failed to run user prompt submit hook");
 
@@ -549,7 +549,7 @@ async fn test_regex_matcher_functionality() {
     );
 
     let outcome = engine
-        .run_user_prompt_submit("Add a new feature")
+        .run_user_prompt_submit("turn-1", "Add a new feature")
         .await
         .expect("Failed to run user prompt submit hook");
 

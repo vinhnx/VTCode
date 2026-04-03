@@ -670,6 +670,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut follow_up_placeholder = ui_setup.follow_up_placeholder;
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
+        let mut turn_id = turn_run_id.0.clone();
         let _file_palette_task_guard = ui_setup.file_palette_task_guard;
         let _background_subprocess_task_guard = ui_setup.background_subprocess_task_guard;
         let _startup_update_task_guard = ui_setup.startup_update_task_guard;
@@ -842,9 +843,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 }
 
                 let interaction_outcome = if let Some(input) = runtime.run_until_idle() {
+                    let turn_id = SessionId::new().0;
                     InteractionOutcome::Continue {
                         input,
                         prompt_message_index: None,
+                        turn_id,
                     }
                 } else {
                     let mut interaction_turn_metadata_cache = None;
@@ -941,7 +944,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         InteractionOutcome::Continue {
                             input,
                             prompt_message_index,
-                        } => (input, prompt_message_index),
+                            turn_id: next_turn_id,
+                        } => {
+                            turn_id = next_turn_id;
+                            (input, prompt_message_index)
+                        }
                         InteractionOutcome::PlanApproved { auto_accept } => {
                             let plan_seed = load_active_plan_seed(&tool_registry).await;
                             crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
@@ -1038,7 +1045,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     );
                     let mut harness_state = HarnessTurnState::new(
                         TurnRunId(turn_run_id.0.clone()),
-                        TurnId(SessionId::new().0),
+                        TurnId(turn_id.clone()),
                         max_tool_calls_per_turn,
                         harness_config.max_tool_wall_clock_secs,
                         harness_config.max_tool_retries,
@@ -1456,6 +1463,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let finalization_output = match finalize_session(
             &mut renderer,
             lifecycle_hooks.as_ref(),
+            &turn_id,
             session_end_reason,
             &mut session_archive,
             &session_stats,
