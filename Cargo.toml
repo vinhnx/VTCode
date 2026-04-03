@@ -81,7 +81,7 @@ walkdir = "2.5"
 itertools = "0.14.0"
 memchr = "2.7"
 url = "2.5"
-agent-client-protocol = "0.10.4"
+agent-client-protocol = { version = "0.10.4", features = ["unstable_auth_methods"] }
 uuid = "1.23.0"
 ignore = "0.4"
 ring = "0.17"
