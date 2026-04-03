@@ -245,7 +245,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_exec_executor,
         )
         .with_description(
-            "Run commands and manage command sessions. Runs are pipe-first by default; set `tty=true` for PTY behavior. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.",
+            "Run commands, manage command sessions, or execute fresh Python/JavaScript snippets with `action=code`. Runs are pipe-first by default; set `tty=true` for PTY behavior. Use continue for one-call send+read, inspect for one-call output preview/filtering from session or spool file, and set `language` when `action=code` should use JavaScript instead of the default Python.",
         )
         .with_parameter_schema(unified_exec_parameters())
         .with_aliases([

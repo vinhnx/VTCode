@@ -35,6 +35,7 @@ use uuid::Uuid;
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, OpenAIChatGptSession};
 
 // Import from extracted modules
+use super::CustomProviderAuthHandle;
 use super::harmony;
 use super::request_builder;
 use super::response_parser;
@@ -77,6 +78,7 @@ pub struct OpenAIProvider {
     /// Override display name for custom providers.
     /// When `None`, defaults to `"OpenAI"`.
     provider_display_override: Option<Arc<str>>,
+    custom_provider_auth: Option<CustomProviderAuthHandle>,
     openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
     base_url: Arc<str>,
@@ -182,6 +184,7 @@ impl OpenAIProvider {
             api_key: Arc::from(api_key.as_str()),
             provider_key_override: None,
             provider_display_override: None,
+            custom_provider_auth: None,
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(base_url.as_str()),
@@ -239,6 +242,7 @@ impl OpenAIProvider {
         timeouts: Option<TimeoutsConfig>,
         openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
+        custom_provider_auth: Option<CustomProviderAuthHandle>,
     ) -> Self {
         let mut provider = Self::from_config(
             api_key,
@@ -253,6 +257,7 @@ impl OpenAIProvider {
         );
         provider.provider_key_override = Some(Arc::from(provider_key.as_str()));
         provider.provider_display_override = Some(Arc::from(display_name.as_str()));
+        provider.custom_provider_auth = custom_provider_auth;
         provider
     }
 
@@ -328,6 +333,7 @@ impl OpenAIProvider {
             api_key: Arc::from(api_key.as_str()),
             provider_key_override: None,
             provider_display_override: None,
+            custom_provider_auth: None,
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
@@ -450,6 +456,10 @@ impl OpenAIProvider {
         self.openai_chatgpt_auth.is_some()
     }
 
+    fn uses_refreshable_auth(&self) -> bool {
+        self.openai_chatgpt_auth.is_some() || self.custom_provider_auth.is_some()
+    }
+
     fn is_chatgpt_backend(&self) -> bool {
         self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com")
     }
@@ -492,6 +502,13 @@ impl OpenAIProvider {
     }
 
     async fn current_api_key(&self) -> Result<String, provider::LLMError> {
+        if let Some(handle) = &self.custom_provider_auth {
+            return handle
+                .current_token()
+                .await
+                .map_err(|e| self.format_auth_error(e));
+        }
+
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(self.api_key.to_string());
         };
@@ -520,6 +537,16 @@ impl OpenAIProvider {
     }
 
     async fn current_request_auth(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
+        if let Some(handle) = &self.custom_provider_auth {
+            return Ok(OpenAIRequestAuth {
+                bearer_token: handle
+                    .current_token()
+                    .await
+                    .map_err(|e| self.format_auth_error(e))?,
+                chatgpt_account_id: None,
+            });
+        }
+
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(OpenAIRequestAuth {
                 bearer_token: self.api_key.to_string(),
@@ -538,6 +565,16 @@ impl OpenAIProvider {
     async fn refresh_request_auth_for_retry(
         &self,
     ) -> Result<OpenAIRequestAuth, provider::LLMError> {
+        if let Some(handle) = &self.custom_provider_auth {
+            return Ok(OpenAIRequestAuth {
+                bearer_token: handle
+                    .force_refresh()
+                    .await
+                    .map_err(|e| self.format_auth_error(e))?,
+                chatgpt_account_id: None,
+            });
+        }
+
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(OpenAIRequestAuth {
                 bearer_token: self.api_key.to_string(),
@@ -554,6 +591,13 @@ impl OpenAIProvider {
     }
 
     async fn refresh_api_key_for_retry(&self) -> Result<String, provider::LLMError> {
+        if let Some(handle) = &self.custom_provider_auth {
+            return handle
+                .force_refresh()
+                .await
+                .map_err(|e| self.format_auth_error(e));
+        }
+
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(self.api_key.to_string());
         };
@@ -580,7 +624,7 @@ impl OpenAIProvider {
             .await
             .map_err(|e| self.format_network_error(e))?;
 
-        if self.uses_chatgpt_auth() && Self::auth_retryable_status(response.status()) {
+        if self.uses_refreshable_auth() && Self::auth_retryable_status(response.status()) {
             let retry_auth = self.refresh_request_auth_for_retry().await?;
             return build_request(&retry_auth)
                 .send()

@@ -1,6 +1,7 @@
 //! Command specification and execution environment types.
 
 use hashbrown::HashMap;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -61,7 +62,7 @@ impl ExecExpiration {
 #[derive(Debug, Clone)]
 pub struct CommandSpec {
     /// The program to execute.
-    pub program: String,
+    pub program: OsString,
 
     /// Arguments to pass to the program.
     pub args: Vec<String>,
@@ -85,7 +86,7 @@ pub struct CommandSpec {
 impl Default for CommandSpec {
     fn default() -> Self {
         Self {
-            program: String::new(),
+            program: OsString::new(),
             args: Vec::new(),
             cwd: PathBuf::new(),
             env: HashMap::new(),
@@ -98,7 +99,7 @@ impl Default for CommandSpec {
 
 impl CommandSpec {
     /// Create a new command specification.
-    pub fn new(program: impl Into<String>) -> Self {
+    pub fn new(program: impl Into<OsString>) -> Self {
         Self {
             program: program.into(),
             ..Default::default()
@@ -142,9 +143,9 @@ impl CommandSpec {
     }
 
     /// Get the full command as a vector.
-    pub fn full_command(&self) -> Vec<String> {
+    pub fn full_command(&self) -> Vec<OsString> {
         let mut cmd = vec![self.program.clone()];
-        cmd.extend(self.args.clone());
+        cmd.extend(self.args.iter().cloned().map(OsString::from));
         cmd
     }
 }
@@ -234,7 +235,7 @@ mod tests {
             .with_cwd("/tmp")
             .with_justification("testing");
 
-        assert_eq!(spec.program, "cat");
+        assert_eq!(spec.program, OsString::from("cat"));
         assert_eq!(spec.args, vec!["file.txt"]);
         assert_eq!(spec.cwd, PathBuf::from("/tmp"));
         assert_eq!(spec.justification, Some("testing".to_string()));
@@ -244,7 +245,22 @@ mod tests {
     fn test_full_command() {
         let spec = CommandSpec::new("echo").with_args(vec!["hello", "world"]);
 
-        assert_eq!(spec.full_command(), vec!["echo", "hello", "world"]);
+        assert_eq!(
+            spec.full_command(),
+            vec![
+                OsString::from("echo"),
+                OsString::from("hello"),
+                OsString::from("world")
+            ]
+        );
+    }
+
+    #[test]
+    fn test_command_spec_accepts_path_backed_program() {
+        let program = PathBuf::from("/tmp/example-program");
+        let spec = CommandSpec::new(program.clone());
+
+        assert_eq!(spec.program, program.into_os_string());
     }
 
     #[test]

@@ -314,6 +314,13 @@ async fn resolve_runtime_api_key(
             .and_then(|cfg| cfg.custom_provider(&selection.provider))
             .is_some()
     {
+        if vt_cfg
+            .and_then(|cfg| cfg.custom_provider(&selection.provider))
+            .is_some_and(|provider| provider.uses_command_auth())
+        {
+            return Ok((String::new(), None));
+        }
+
         let storage_mode = vt_cfg
             .map(|cfg| cfg.agent.credential_storage_mode)
             .unwrap_or_default();
@@ -382,6 +389,7 @@ mod tests {
     use super::{read_workspace_api_key, resolve_runtime_api_key};
     use crate::agent::runloop::model_picker::ModelSelectionResult;
     use tempfile::tempdir;
+    use vtcode_config::VTCodeConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::ReasoningEffortLevel;
 
@@ -466,5 +474,40 @@ mod tests {
             .expect_err("missing custom provider key should fail");
 
         assert!(err.to_string().contains("CUSTOM_API_KEY"));
+    }
+
+    #[test]
+    fn resolve_runtime_api_key_accepts_custom_provider_command_auth_without_key() {
+        let dir = tempdir().expect("temp dir");
+        let mut config = VTCodeConfig::default();
+        config
+            .custom_providers
+            .push(vtcode_config::core::CustomProviderConfig {
+                name: "mycorp".to_string(),
+                display_name: "MyCorp".to_string(),
+                base_url: "https://llm.example/v1".to_string(),
+                api_key_env: String::new(),
+                auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
+                    command: "print-token".to_string(),
+                    args: Vec::new(),
+                    cwd: None,
+                    timeout_ms: 1_000,
+                    refresh_interval_ms: 60_000,
+                }),
+                model: "gpt-5-mini".to_string(),
+            });
+        let selection = selection("mycorp", None, "", None, false);
+
+        let resolved = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(resolve_runtime_api_key(
+                dir.path(),
+                Some(&config),
+                &selection,
+            ))
+            .expect("command-auth custom provider should not require a static key");
+
+        assert!(resolved.0.is_empty());
+        assert!(resolved.1.is_none());
     }
 }

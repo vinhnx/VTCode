@@ -1,3 +1,4 @@
+use super::super::CustomProviderAuthHandle;
 use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
@@ -16,9 +17,11 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tempfile::TempDir;
 use vtcode_config::auth::{
     AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession,
 };
+use vtcode_config::core::CustomProviderCommandAuthConfig;
 use vtcode_config::{OpenAIAuthConfig, auth::OpenAIChatGptSessionRefresher};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -42,6 +45,70 @@ impl OpenAIChatGptSessionRefresher for ExternalSessionRefresher {
         refreshed.refreshed_at = current.refreshed_at.saturating_add(1);
         refreshed.expires_at = None;
         Ok(refreshed)
+    }
+}
+
+fn write_token_lines(dir: &std::path::Path, tokens: &[&str]) {
+    std::fs::write(dir.join("tokens.txt"), tokens.join("\n")).expect("write tokens");
+}
+
+#[cfg(unix)]
+fn custom_provider_auth_fixture(dir: &TempDir, tokens: &[&str]) -> CustomProviderCommandAuthConfig {
+    use std::os::unix::fs::PermissionsExt;
+
+    write_token_lines(dir.path(), tokens);
+    let script_path = dir.path().join("print-token.sh");
+    std::fs::write(
+        &script_path,
+        r#"#!/bin/sh
+first_line=$(sed -n '1p' tokens.txt)
+printf '%s\n' "$first_line"
+tail -n +2 tokens.txt > tokens.next
+mv tokens.next tokens.txt
+"#,
+    )
+    .expect("write script");
+    let mut permissions = std::fs::metadata(&script_path)
+        .expect("metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&script_path, permissions).expect("set permissions");
+
+    CustomProviderCommandAuthConfig {
+        command: "./print-token.sh".to_string(),
+        args: Vec::new(),
+        cwd: Some(dir.path().to_path_buf()),
+        timeout_ms: 1_000,
+        refresh_interval_ms: 60_000,
+    }
+}
+
+#[cfg(windows)]
+fn custom_provider_auth_fixture(dir: &TempDir, tokens: &[&str]) -> CustomProviderCommandAuthConfig {
+    write_token_lines(dir.path(), tokens);
+    let script_path = dir.path().join("print-token.ps1");
+    std::fs::write(
+        &script_path,
+        r#"$lines = Get-Content -Path tokens.txt
+if ($lines.Count -eq 0) { exit 1 }
+Write-Output $lines[0]
+$lines | Select-Object -Skip 1 | Set-Content -Path tokens.txt
+"#,
+    )
+    .expect("write script");
+
+    CustomProviderCommandAuthConfig {
+        command: "powershell".to_string(),
+        args: vec![
+            "-NoProfile".to_string(),
+            "-ExecutionPolicy".to_string(),
+            "Bypass".to_string(),
+            "-File".to_string(),
+            script_path.to_string_lossy().into_owned(),
+        ],
+        cwd: Some(dir.path().to_path_buf()),
+        timeout_ms: 1_000,
+        refresh_interval_ms: 60_000,
     }
 }
 
@@ -379,6 +446,82 @@ async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
         *refresh_calls.lock().expect("mutex should lock"),
         1,
         "401 should trigger exactly one external token refresh"
+    );
+}
+
+#[tokio::test]
+async fn custom_provider_auth_retries_with_refreshed_tokens_after_401() {
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let tempdir = TempDir::new().expect("tempdir");
+    let seen_bearer_tokens = Arc::new(Mutex::new(Vec::new()));
+    let seen_bearer_tokens_for_response = Arc::clone(&seen_bearer_tokens);
+
+    Mock::given(method("GET"))
+        .and(path("/custom-auth-retry"))
+        .respond_with(move |request: &wiremock::Request| {
+            let bearer_token = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .expect("request should include an authorization header")
+                .to_string();
+
+            let mut seen_tokens = seen_bearer_tokens_for_response
+                .lock()
+                .expect("tokens mutex should not be poisoned");
+            seen_tokens.push(bearer_token);
+
+            match seen_tokens.len() {
+                1 => ResponseTemplate::new(401),
+                2 => ResponseTemplate::new(200),
+                call_count => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected retry count: {call_count}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let provider = OpenAIProvider::from_custom_config(
+        "mycorp".to_string(),
+        "MyCorp".to_string(),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some(native_openai_mock_base_url(&server)),
+        None,
+        None,
+        None,
+        None,
+        Some(CustomProviderAuthHandle::new(
+            custom_provider_auth_fixture(&tempdir, &["first-token", "second-token"]),
+            None,
+        )),
+    );
+
+    let response = provider
+        .send_authorized(|auth| {
+            provider.authorize_with_api_key(
+                provider
+                    .http_client
+                    .get(format!("{}{}", server.uri(), "/custom-auth-retry")),
+                auth,
+            )
+        })
+        .await
+        .expect("request should succeed after command-auth refresh");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        seen_bearer_tokens
+            .lock()
+            .expect("tokens mutex should not be poisoned")
+            .as_slice(),
+        &[
+            "Bearer first-token".to_string(),
+            "Bearer second-token".to_string(),
+        ]
     );
 }
 
@@ -1030,6 +1173,7 @@ fn supports_manual_openai_compaction_is_native_only() {
         Some(String::new()),
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
+        None,
         None,
         None,
         None,

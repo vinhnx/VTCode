@@ -1,5 +1,6 @@
 //! Sandbox manager for transforming commands into sandboxed execution environments.
 
+use std::ffi::OsString;
 use std::path::Path;
 
 use super::exec_env::{CommandSpec, ExecEnv, SandboxType};
@@ -106,7 +107,11 @@ impl SandboxManager {
         // Build the seatbelt profile
         let profile = self.build_seatbelt_profile(policy, sandbox_cwd);
 
-        let mut args = vec!["-p".to_string(), profile, spec.program.clone()];
+        let mut args = vec![
+            "-p".to_string(),
+            profile,
+            os_string_to_arg(spec.program.clone()),
+        ];
         args.extend(spec.args);
 
         Ok(ExecEnv {
@@ -266,7 +271,7 @@ impl SandboxManager {
             "--resource-limits".to_string(),
             limits_json,
             "--".to_string(),
-            spec.program.clone(),
+            os_string_to_arg(spec.program.clone()),
         ];
         args.extend(spec.args);
 
@@ -300,6 +305,12 @@ impl SandboxManager {
             sandbox_type: SandboxType::WindowsRestrictedToken,
         })
     }
+}
+
+fn os_string_to_arg(value: OsString) -> String {
+    value
+        .into_string()
+        .unwrap_or_else(|value| value.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

@@ -269,6 +269,9 @@ async fn resolve_runtime_provider_auth(
     }
 
     if let Some(custom_provider) = config.custom_provider(&selection.provider) {
+        if custom_provider.uses_command_auth() {
+            return Ok((String::new(), None));
+        }
         let api_key_env = custom_provider.resolved_api_key_env();
         if let Ok(api_key) = std::env::var(&api_key_env)
             && !api_key.trim().is_empty()
@@ -438,6 +441,7 @@ mod validation_tests {
                 display_name: "MyCorporateName".to_string(),
                 base_url: "https://llm.example/v1".to_string(),
                 api_key_env: "MYCORP_API_KEY".to_string(),
+                auth: None,
                 model: "gpt-5-mini".to_string(),
             });
 

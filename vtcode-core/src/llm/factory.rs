@@ -5,6 +5,8 @@ use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCach
 use crate::config::models::Provider;
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
+use crate::llm::providers::OpenAIProvider;
+use crate::llm::providers::openai::CustomProviderAuthHandle;
 use hashbrown::HashMap;
 use std::path::PathBuf;
 use vtcode_config::auth::CopilotAuthConfig;
@@ -222,8 +224,6 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
         return;
     }
 
-    use crate::llm::providers::OpenAIProvider;
-
     let Ok(mut factory) = get_factory().lock() else {
         tracing::error!("Failed to lock LLM factory for custom provider registration");
         return;
@@ -248,27 +248,40 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
         let display_name = cp.display_name.clone();
         let default_base_url = cp.base_url.clone();
         let default_model = cp.model.clone();
+        let auth_config = cp.auth.clone();
         let api_key_env = cp.resolved_api_key_env();
         let reg_key = key.clone();
 
         factory.register_provider(&reg_key, move |config: ProviderConfig| {
-            // Resolve API key: explicit config > env var > empty
-            let api_key = config
-                .api_key
-                .clone()
-                .or_else(|| std::env::var(&api_key_env).ok());
+            let ProviderConfig {
+                api_key,
+                base_url,
+                model,
+                prompt_cache,
+                timeouts,
+                openai,
+                model_behavior,
+                workspace_root,
+                ..
+            } = config;
 
-            let model = config
-                .model
-                .clone()
+            let api_key = if auth_config.is_some() {
+                None
+            } else {
+                api_key.or_else(|| std::env::var(&api_key_env).ok())
+            };
+
+            let model = model
                 .filter(|m| !m.trim().is_empty())
                 .unwrap_or_else(|| default_model.clone());
 
-            let base_url = config
-                .base_url
+            let base_url = base_url
                 .clone()
                 .filter(|u| !u.trim().is_empty())
                 .unwrap_or_else(|| default_base_url.clone());
+            let custom_provider_auth = auth_config
+                .clone()
+                .map(|auth| CustomProviderAuthHandle::new(auth, workspace_root.clone()));
 
             Box::new(OpenAIProvider::from_custom_config(
                 key.clone(),
@@ -276,10 +289,11 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                 api_key,
                 Some(model),
                 Some(base_url),
-                config.prompt_cache,
-                config.timeouts,
-                config.openai,
-                config.model_behavior,
+                prompt_cache,
+                timeouts,
+                openai,
+                model_behavior,
+                custom_provider_auth,
             ))
         });
 
@@ -480,6 +494,7 @@ mod tests {
             display_name: "MyCorporateName".to_string(),
             base_url: "https://llm.corp.example/v1".to_string(),
             api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
             model: "gpt-5-mini".to_string(),
         }]);
 

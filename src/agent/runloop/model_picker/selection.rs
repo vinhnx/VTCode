@@ -105,14 +105,38 @@ pub(super) fn parse_model_selection(
         return Ok(selection_from_option(option));
     }
 
+    let uses_command_auth = custom_provider.is_some_and(|provider| provider.uses_command_auth());
     let provider_label = custom_provider
         .map(|provider| provider.display_name.clone())
         .or_else(|| provider_enum.map(|provider| provider.label().to_string()))
         .unwrap_or_else(|| title_case(&provider_lower));
     let env_key = custom_provider
-        .map(|provider| provider.resolved_api_key_env())
+        .map(|provider| {
+            if provider.uses_command_auth() {
+                String::new()
+            } else {
+                provider.resolved_api_key_env()
+            }
+        })
         .or_else(|| provider_enum.map(|provider| provider.default_api_key_env().to_string()))
         .unwrap_or_else(|| derive_env_key(&provider_lower));
+    if custom_provider.is_some() && provider_enum.is_none() {
+        return Ok(SelectionDetail {
+            provider_key: provider_lower,
+            provider_label,
+            provider_enum: None,
+            model_id: model_token.trim().to_string(),
+            model_display: model_token.trim().to_string(),
+            known_model: false,
+            reasoning_supported: Provider::OpenAI.supports_reasoning_effort(model_token.trim()),
+            reasoning_optional: true,
+            reasoning_off_model: None,
+            service_tier_supported: Provider::OpenAI.supports_service_tier(model_token.trim()),
+            requires_api_key: !uses_command_auth,
+            uses_chatgpt_auth: false,
+            env_key,
+        });
+    }
     if let Some(provider) = provider_enum {
         let resolved =
             ModelResolver::resolve(Some(provider.as_ref()), model_token.trim(), &[], None)
@@ -191,7 +215,11 @@ pub(super) fn selection_from_dynamic(
 
 pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) -> SelectionDetail {
     let model_id = provider.model.trim().to_string();
-    let env_key = provider.resolved_api_key_env();
+    let env_key = if provider.uses_command_auth() {
+        String::new()
+    } else {
+        provider.resolved_api_key_env()
+    };
     SelectionDetail {
         provider_key: provider.name.to_lowercase(),
         provider_label: provider.display_name.clone(),
@@ -203,7 +231,7 @@ pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) ->
         reasoning_optional: true,
         reasoning_off_model: None,
         service_tier_supported: Provider::OpenAI.supports_service_tier(&provider.model),
-        requires_api_key: true,
+        requires_api_key: !provider.uses_command_auth(),
         uses_chatgpt_auth: false,
         env_key,
     }

@@ -1943,16 +1943,7 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing code/command in execute_code"))?;
 
-        let language_str = args
-            .get("action")
-            .and_then(|v| v.as_str())
-            .unwrap_or("python3");
-
-        let language = match language_str {
-            "python3" | "python" => Language::Python3,
-            "javascript" | "js" => Language::JavaScript,
-            _ => Language::Python3,
-        };
+        let language = code_language_from_args(&args);
 
         let track_files = args
             .get("track_files")
@@ -3704,6 +3695,51 @@ fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str)
         raw.to_string()
     } else {
         format!("{} {}", raw, suffix)
+    }
+}
+
+fn code_language_from_args(args: &Value) -> Language {
+    let language_str = args
+        .get("language")
+        .or_else(|| args.get("lang"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("python3");
+
+    match language_str {
+        "python3" | "python" => Language::Python3,
+        "javascript" | "js" => Language::JavaScript,
+        _ => Language::Python3,
+    }
+}
+
+#[cfg(test)]
+mod execute_code_tests {
+    use super::code_language_from_args;
+    use crate::exec::code_executor::Language;
+    use serde_json::json;
+
+    #[test]
+    fn code_language_uses_language_field_instead_of_action() {
+        assert_eq!(
+            code_language_from_args(&json!({
+                "action": "code",
+                "language": "javascript",
+            })),
+            Language::JavaScript
+        );
+        assert_eq!(
+            code_language_from_args(&json!({
+                "action": "code",
+                "lang": "js",
+            })),
+            Language::JavaScript
+        );
+        assert_eq!(
+            code_language_from_args(&json!({
+                "action": "code",
+            })),
+            Language::Python3
+        );
     }
 }
 

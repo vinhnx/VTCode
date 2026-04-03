@@ -60,8 +60,8 @@ pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
     AuthConfig, AutoModeConfig, AutoModeEnvironmentConfig, AutomationConfig, BundledSkillsConfig,
-    CommandsConfig, CopilotAuthConfig, DockerSandboxConfig, EditorToolConfig,
-    ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
+    CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig, DockerSandboxConfig,
+    EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
     MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
     OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
     OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,

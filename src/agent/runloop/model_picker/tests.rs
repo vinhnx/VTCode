@@ -205,6 +205,7 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
         api_key_env: "MYCORP_API_KEY".to_string(),
+        auth: None,
         model: "gpt-5-mini".to_string(),
     });
 
@@ -215,6 +216,31 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
     assert_eq!(detail.provider_label, "MyCorporateName");
     assert_eq!(detail.env_key, "MYCORP_API_KEY");
     assert_eq!(detail.provider_enum, None);
+}
+
+#[test]
+fn parse_model_selection_marks_command_auth_custom_provider_as_keyless() {
+    let mut cfg = VTCodeConfig::default();
+    cfg.custom_providers.push(CustomProviderConfig {
+        name: "mycorp".to_string(),
+        display_name: "MyCorporateName".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_key_env: String::new(),
+        auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
+            command: "print-token".to_string(),
+            args: Vec::new(),
+            cwd: None,
+            timeout_ms: 1_000,
+            refresh_interval_ms: 60_000,
+        }),
+        model: "gpt-5-mini".to_string(),
+    });
+
+    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
+        .expect("custom provider should parse");
+
+    assert!(!detail.requires_api_key);
+    assert!(detail.env_key.is_empty());
 }
 
 #[test]
@@ -345,6 +371,7 @@ fn preferred_model_selection_matches_current_custom_provider() {
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
         api_key_env: "MYCORP_API_KEY".to_string(),
+        auth: None,
         model: "gpt-5-mini".to_string(),
     };
     picker.custom_providers = vec![selection::selection_from_custom_provider(&config)];

@@ -1,4 +1,62 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+
+fn default_auth_timeout_ms() -> u64 {
+    5_000
+}
+
+fn default_auth_refresh_interval_ms() -> u64 {
+    300_000
+}
+
+/// Command-backed bearer token configuration for a custom provider.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CustomProviderCommandAuthConfig {
+    /// Command to execute. Bare names are resolved via `PATH`.
+    pub command: String,
+
+    /// Optional command arguments.
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Optional working directory for the token command.
+    #[serde(default)]
+    pub cwd: Option<PathBuf>,
+
+    /// Maximum time to wait for the command to complete successfully.
+    #[serde(default = "default_auth_timeout_ms")]
+    pub timeout_ms: u64,
+
+    /// Maximum age for the cached token before rerunning the command.
+    #[serde(default = "default_auth_refresh_interval_ms")]
+    pub refresh_interval_ms: u64,
+}
+
+impl CustomProviderCommandAuthConfig {
+    fn validate(&self, provider_name: &str) -> Result<(), String> {
+        if self.command.trim().is_empty() {
+            return Err(format!(
+                "custom_providers[{provider_name}]: `auth.command` must not be empty"
+            ));
+        }
+
+        if self.timeout_ms == 0 {
+            return Err(format!(
+                "custom_providers[{provider_name}]: `auth.timeout_ms` must be greater than 0"
+            ));
+        }
+
+        if self.refresh_interval_ms == 0 {
+            return Err(format!(
+                "custom_providers[{provider_name}]: `auth.refresh_interval_ms` must be greater than 0"
+            ));
+        }
+
+        Ok(())
+    }
+}
 
 /// Configuration for a user-defined OpenAI-compatible provider endpoint.
 ///
@@ -24,6 +82,10 @@ pub struct CustomProviderConfig {
     /// (e.g., "MYCORP_API_KEY").
     #[serde(default)]
     pub api_key_env: String,
+
+    /// Optional command-backed bearer token configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<CustomProviderCommandAuthConfig>,
 
     /// Default model to use with this endpoint (e.g., "gpt-5-mini").
     #[serde(default)]
@@ -57,6 +119,10 @@ impl CustomProviderConfig {
         key
     }
 
+    pub fn uses_command_auth(&self) -> bool {
+        self.auth.is_some()
+    }
+
     /// Validate that required fields are present and the name doesn't collide
     /// with built-in provider keys.
     pub fn validate(&self) -> Result<(), String> {
@@ -83,6 +149,16 @@ impl CustomProviderConfig {
                 "custom_providers[{}]: `base_url` must not be empty",
                 self.name
             ));
+        }
+
+        if let Some(auth) = &self.auth {
+            auth.validate(&self.name)?;
+            if !self.api_key_env.trim().is_empty() {
+                return Err(format!(
+                    "custom_providers[{}]: `auth` cannot be combined with `api_key_env`",
+                    self.name
+                ));
+            }
         }
 
         let reserved = [
@@ -129,7 +205,12 @@ fn is_valid_provider_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::CustomProviderConfig;
+    use std::path::PathBuf;
+
+    use super::{
+        CustomProviderCommandAuthConfig, CustomProviderConfig, default_auth_refresh_interval_ms,
+        default_auth_timeout_ms,
+    };
 
     #[test]
     fn validate_accepts_lowercase_provider_name() {
@@ -138,6 +219,7 @@ mod tests {
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
             api_key_env: String::new(),
+            auth: None,
             model: "gpt-5-mini".to_string(),
         };
 
@@ -152,10 +234,53 @@ mod tests {
             display_name: "My Corp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
             api_key_env: String::new(),
+            auth: None,
             model: "gpt-5-mini".to_string(),
         };
 
         let err = config.validate().expect_err("invalid name should fail");
         assert!(err.contains("must use lowercase letters, digits, hyphens, or underscores"));
+    }
+
+    #[test]
+    fn validate_rejects_auth_and_api_key_env_together() {
+        let config = CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorp".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: Some(CustomProviderCommandAuthConfig {
+                command: "print-token".to_string(),
+                args: Vec::new(),
+                cwd: None,
+                timeout_ms: default_auth_timeout_ms(),
+                refresh_interval_ms: default_auth_refresh_interval_ms(),
+            }),
+            model: "gpt-5-mini".to_string(),
+        };
+
+        let err = config.validate().expect_err("conflicting auth should fail");
+        assert!(err.contains("`auth` cannot be combined with `api_key_env`"));
+    }
+
+    #[test]
+    fn validate_accepts_command_auth_without_static_env_key() {
+        let config = CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorp".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: String::new(),
+            auth: Some(CustomProviderCommandAuthConfig {
+                command: "print-token".to_string(),
+                args: vec!["--json".to_string()],
+                cwd: Some(PathBuf::from("/tmp")),
+                timeout_ms: 1_000,
+                refresh_interval_ms: 60_000,
+            }),
+            model: "gpt-5-mini".to_string(),
+        };
+
+        assert!(config.validate().is_ok());
+        assert!(config.uses_command_auth());
     }
 }

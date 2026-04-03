@@ -25,6 +25,7 @@
 //! let provider = OpenAIProvider::new("sk-...".to_string());
 //! ```
 
+mod custom_provider_auth;
 pub mod errors;
 mod harmony;
 pub mod headers;
@@ -38,4 +39,5 @@ pub mod types;
 
 // Main provider implementation
 mod provider;
+pub use custom_provider_auth::CustomProviderAuthHandle;
 pub use provider::OpenAIProvider;

@@ -308,6 +308,7 @@ fn custom_providers_fields_round_trip_through_toml() {
         display_name: "MyCorp".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
         api_key_env: "MYCORP_API_KEY".to_string(),
+        auth: None,
         model: "gpt-5-mini".to_string(),
     });
 

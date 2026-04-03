@@ -105,17 +105,17 @@ pub fn unified_exec_parameters() -> Value {
             "tail_lines": {"type": "integer", "description": "Tail preview lines."},
             "max_matches": {"type": "integer", "description": "Max filtered matches.", "default": 200},
             "literal": {"type": "boolean", "description": "Treat query as literal text.", "default": false},
-            "code": {"type": "string", "description": "Code for `action=code`."},
+            "code": {"type": "string", "description": "Raw Python or JavaScript source for `action=code`. Send the source directly, not JSON or markdown fences."},
             "language": {
                 "type": "string",
                 "enum": ["python3", "javascript"],
-                "description": "Language for `action=code`.",
+                "description": "Language for `action=code`. Defaults to `python3`; set `javascript` to run Node-based code execution instead.",
                 "default": "python3"
             },
             "action": {
                 "type": "string",
                 "enum": ["run", "write", "poll", "continue", "inspect", "list", "close", "code"],
-                "description": "Optional; inferred from command/code/input/session_id/spool_path."
+                "description": "Optional; inferred from command/code/input/session_id/spool_path. Use `code` to run a fresh Python or JavaScript snippet through the local code executor."
             },
             "workdir": {"type": "string", "description": "Working directory."},
             "cwd": {"type": "string", "description": "Alias for workdir."},
@@ -362,6 +362,18 @@ mod tests {
         assert_eq!(variants[1]["items"]["type"], "string");
         assert_eq!(params["properties"]["tty"]["type"], "boolean");
         assert_eq!(params["properties"]["tty"]["default"], false);
+        assert!(
+            params["properties"]["code"]["description"]
+                .as_str()
+                .expect("code description")
+                .contains("Raw Python or JavaScript source")
+        );
+        assert!(
+            params["properties"]["language"]["description"]
+                .as_str()
+                .expect("language description")
+                .contains("set `javascript`")
+        );
     }
 
     #[test]
