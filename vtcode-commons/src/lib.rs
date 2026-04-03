@@ -10,6 +10,7 @@
 pub mod ansi;
 pub mod ansi_capabilities;
 pub mod ansi_codes;
+#[cfg(feature = "tui")]
 pub mod anstyle_utils;
 pub mod async_utils;
 pub mod at_pattern;
@@ -42,6 +43,7 @@ pub mod telemetry;
 pub mod thread_safety;
 pub mod tokens;
 pub mod trace_flush;
+pub mod ui_protocol;
 pub mod unicode;
 pub mod utils;
 pub mod validation;
