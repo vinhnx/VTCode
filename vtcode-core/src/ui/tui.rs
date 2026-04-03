@@ -67,13 +67,11 @@ mod headless {
 
     /// No-op handle for headless builds. All methods silently discard.
     #[derive(Clone, Debug)]
-    pub struct InlineHandle {
-        pub(crate) sender: Option<UnboundedSender<()>>,
-    }
+    pub struct InlineHandle;
 
     impl InlineHandle {
         pub fn new_for_tests(_sender: UnboundedSender<()>) -> Self {
-            Self { sender: None }
+            Self
         }
 
         pub fn append_line(&self, _kind: InlineMessageKind, _segments: Vec<InlineSegment>) {}

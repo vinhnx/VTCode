@@ -50,12 +50,13 @@ mod headless_pty {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use anyhow::{Result, anyhow};
+    use anyhow::{Context, Result, anyhow};
     use hashbrown::HashMap;
 
     use crate::config::CommandsConfig;
     use crate::config::PtyConfig;
     use crate::tools::types::VTCodePtySession;
+    use crate::utils::path::ensure_path_within_workspace;
     use crate::zsh_exec_bridge::ZshExecBridgeSession;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,23 +118,45 @@ mod headless_pty {
     /// No-op PTY manager for headless builds.
     #[derive(Clone, Default)]
     pub struct PtyManager {
-        _workspace_root: PathBuf,
+        workspace_root: PathBuf,
         _config: PtyConfig,
     }
 
     impl PtyManager {
         pub fn new(workspace_root: PathBuf, config: PtyConfig) -> Self {
             Self {
-                _workspace_root: workspace_root,
+                workspace_root,
                 _config: config,
             }
         }
 
         pub async fn resolve_working_dir(&self, working_dir: Option<&str>) -> Result<PathBuf> {
-            match working_dir {
-                Some(path) => Ok(PathBuf::from(path)),
-                None => std::env::current_dir().map_err(|err| anyhow!(err)),
+            let requested = match working_dir {
+                Some(dir) if !dir.trim().is_empty() => dir.trim(),
+                _ => return Ok(self.workspace_root.clone()),
+            };
+
+            let candidate = self.workspace_root.join(requested);
+            let normalized = ensure_path_within_workspace(&candidate, &self.workspace_root)
+                .map_err(|_| {
+                    anyhow!(
+                        "Working directory '{}' escapes the workspace root",
+                        candidate.display()
+                    )
+                })?;
+            let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
+                format!(
+                    "Working directory '{}' does not exist",
+                    normalized.display()
+                )
+            })?;
+            if !metadata.is_dir() {
+                return Err(anyhow!(
+                    "Working directory '{}' is not a directory",
+                    normalized.display()
+                ));
             }
+            Ok(normalized)
         }
 
         pub fn apply_commands_config(&self, _commands_config: &CommandsConfig) {}

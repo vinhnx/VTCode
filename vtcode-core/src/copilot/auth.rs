@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
-#[cfg(feature = "tui")]
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use regex::Regex;
 use serde::Deserialize;
@@ -530,16 +529,6 @@ async fn run_interactive_logout_command(
     .context("failed to join interactive copilot logout task")?
 }
 
-#[cfg(not(feature = "tui"))]
-fn blocking_interactive_logout_command(
-    _resolved: &ResolvedCopilotCommand,
-    _workspace_root: &Path,
-    _host: &CopilotHost,
-) -> Result<()> {
-    Err(anyhow!("interactive copilot logout requires PTY support"))
-}
-
-#[cfg(feature = "tui")]
 fn blocking_interactive_logout_command(
     resolved: &ResolvedCopilotCommand,
     workspace_root: &Path,
@@ -730,7 +719,6 @@ fn blocking_interactive_logout_command(
     Err(anyhow!(failure))
 }
 
-#[cfg(feature = "tui")]
 fn format_portable_exit_status(status: portable_pty::ExitStatus) -> String {
     status
         .signal()

@@ -1,5 +1,3 @@
-use anstyle::Style;
-
 #[cfg(feature = "tui")]
 pub use vtcode_tui::ui::syntax_highlight::{
     available_themes, default_theme_name, find_syntax_by_extension, find_syntax_by_name,
