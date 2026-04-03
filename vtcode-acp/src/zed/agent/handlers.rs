@@ -40,9 +40,70 @@ impl acp::Agent for ZedAgent {
         capabilities.mcp_capabilities.sse = false;
         capabilities.load_session = true;
 
+        let auth_methods = vec![
+            // Agent Auth (OAuth)
+            acp::AuthMethod::Agent(
+                acp::AuthMethodAgent::new("oauth-openai", "OpenAI OAuth")
+                    .description("Authenticate with OpenAI via OAuth 2.0 with PKCE"),
+            ),
+            acp::AuthMethod::Agent(
+                acp::AuthMethodAgent::new("oauth-openrouter", "OpenRouter OAuth")
+                    .description("Authenticate with OpenRouter via OAuth 2.0 with PKCE"),
+            ),
+            // Terminal Auth (Interactive Login)
+            acp::AuthMethod::Terminal(
+                acp::AuthMethodTerminal::new("terminal-login", "Terminal Login")
+                    .description("Interactive terminal-based authentication via vtcode login command")
+                    .args(vec!["login".to_string()]),
+            ),
+            // Env Var Auth (API Keys)
+            acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new(
+                "env-api-keys",
+                "API Key",
+                vec![
+                    acp::AuthEnvVar::new("OPENAI_API_KEY").label("OpenAI"),
+                    acp::AuthEnvVar::new("ANTHROPIC_API_KEY").label("Anthropic"),
+                    acp::AuthEnvVar::new("GEMINI_API_KEY").label("Google Gemini"),
+                    acp::AuthEnvVar::new("OPENROUTER_API_KEY").label("OpenRouter"),
+                    acp::AuthEnvVar::new("DEEPSEEK_API_KEY").label("DeepSeek"),
+                    acp::AuthEnvVar::new("ZAI_API_KEY").label("Z.AI"),
+                    acp::AuthEnvVar::new("MOONSHOT_API_KEY").label("Moonshot"),
+                    acp::AuthEnvVar::new("MINIMAX_API_KEY").label("MiniMax"),
+                    acp::AuthEnvVar::new("GROQ_API_KEY").label("Groq"),
+                    acp::AuthEnvVar::new("XAI_API_KEY").label("xAI"),
+                    acp::AuthEnvVar::new("COHERE_API_KEY").label("Cohere"),
+                    acp::AuthEnvVar::new("HF_TOKEN").label("Hugging Face"),
+                    acp::AuthEnvVar::new("MISTRAL_API_KEY").label("Mistral"),
+                    acp::AuthEnvVar::new("GOOGLE_API_KEY").label("Google (alt)").optional(true),
+                    acp::AuthEnvVar::new("OLLAMA_API_KEY").label("Ollama").optional(true),
+                    acp::AuthEnvVar::new("LMSTUDIO_API_KEY").label("LM Studio").optional(true),
+                ],
+            )),
+            // Env Var Auth (Base URLs)
+            acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new(
+                "env-base-urls",
+                "API Base URL",
+                vec![
+                    acp::AuthEnvVar::new("OPENAI_BASE_URL").label("OpenAI").optional(true),
+                    acp::AuthEnvVar::new("ANTHROPIC_BASE_URL").label("Anthropic").optional(true),
+                    acp::AuthEnvVar::new("GEMINI_BASE_URL").label("Gemini").optional(true),
+                    acp::AuthEnvVar::new("OPENROUTER_BASE_URL").label("OpenRouter").optional(true),
+                    acp::AuthEnvVar::new("DEEPSEEK_BASE_URL").label("DeepSeek").optional(true),
+                    acp::AuthEnvVar::new("ZAI_BASE_URL").label("Z.AI").optional(true),
+                    acp::AuthEnvVar::new("MOONSHOT_BASE_URL").label("Moonshot").optional(true),
+                    acp::AuthEnvVar::new("MINIMAX_BASE_URL").label("MiniMax").optional(true),
+                    acp::AuthEnvVar::new("XAI_BASE_URL").label("xAI").optional(true),
+                    acp::AuthEnvVar::new("HUGGINGFACE_BASE_URL").label("Hugging Face").optional(true),
+                    acp::AuthEnvVar::new("OLLAMA_BASE_URL").label("Ollama").optional(true),
+                    acp::AuthEnvVar::new("LMSTUDIO_BASE_URL").label("LM Studio").optional(true),
+                ],
+            )),
+        ];
+
         Ok(acp::InitializeResponse::new(acp::ProtocolVersion::V1)
             .agent_capabilities(capabilities)
-            .agent_info(agent_implementation_info(self.title.clone())))
+            .agent_info(agent_implementation_info(self.title.clone()))
+            .auth_methods(auth_methods))
     }
 
     async fn authenticate(
