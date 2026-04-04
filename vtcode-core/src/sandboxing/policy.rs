@@ -225,9 +225,10 @@ pub fn default_sensitive_paths() -> Vec<SensitivePath> {
                 paths.push(SensitivePath::new(path));
             }
         }
-        return paths;
+        paths
     }
 
+    #[cfg(not(windows))]
     paths
 }
 

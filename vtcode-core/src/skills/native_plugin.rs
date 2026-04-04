@@ -51,10 +51,12 @@ use tracing::{debug, info, warn};
 /// Increment this when breaking changes are made to the plugin interface
 pub const PLUGIN_ABI_VERSION: u32 = 1;
 
+use std::os::raw::c_char;
+
 type PluginVersionFn = unsafe extern "C" fn() -> u32;
-type PluginMetadataFn = unsafe extern "C" fn() -> *const libc::c_char;
-type PluginExecuteFn = unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char;
-type PluginFreeStringFn = unsafe extern "C" fn(*const libc::c_char);
+type PluginMetadataFn = unsafe extern "C" fn() -> *const c_char;
+type PluginExecuteFn = unsafe extern "C" fn(*const c_char) -> *const c_char;
+type PluginFreeStringFn = unsafe extern "C" fn(*const c_char);
 
 /// Plugin execution context passed to plugin functions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,14 +112,14 @@ pub struct PluginMetadata {
 #[derive(Debug, Clone)]
 pub struct PluginMetadataFFI {
     /// Pointer to JSON metadata string
-    pub json_ptr: *const libc::c_char,
+    pub json_ptr: *const c_char,
 }
 
 /// C-compatible plugin result for FFI
 #[repr(C)]
 pub struct PluginResultFFI {
     /// Pointer to JSON result string
-    pub json_ptr: *const libc::c_char,
+    pub json_ptr: *const c_char,
 }
 
 /// Native plugin trait for type-erased plugin operations
@@ -151,18 +153,18 @@ pub struct NativePlugin {
 }
 
 fn ensure_non_null_c_string_ptr(
-    ptr: *const libc::c_char,
+    ptr: *const c_char,
     context: &'static str,
-) -> Result<NonNull<libc::c_char>> {
+) -> Result<NonNull<c_char>> {
     NonNull::new(ptr.cast_mut()).ok_or_else(|| anyhow!("{context} returned null pointer"))
 }
 
 fn decode_plugin_c_string(
-    ptr: NonNull<libc::c_char>,
+    ptr: NonNull<c_char>,
     free_string_fn: Option<PluginFreeStringFn>,
     utf8_error_context: &'static str,
 ) -> Result<String> {
-    let raw_ptr = ptr.as_ptr() as *const libc::c_char;
+    let raw_ptr = ptr.as_ptr() as *const c_char;
     // SAFETY:
     // 1. `raw_ptr` is guaranteed to be non-null (validated by `ensure_non_null_c_string_ptr`).
     // 2. We assume the plugin-returned pointer is a valid nul-terminated C string per the plugin ABI.
@@ -632,11 +634,11 @@ mod tests {
     static TEST_EXECUTE_ACTIVE_CALLS: AtomicUsize = AtomicUsize::new(0);
     static TEST_EXECUTE_MAX_CONCURRENCY: AtomicUsize = AtomicUsize::new(0);
 
-    unsafe extern "C" fn test_free_string(ptr: *const libc::c_char) {
+    unsafe extern "C" fn test_free_string(ptr: *const c_char) {
         TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(true));
         if !ptr.is_null() {
             // Safety: tests pass pointers produced by `CString::into_raw` in this module.
-            let _ = unsafe { CString::from_raw(ptr as *mut libc::c_char) };
+            let _ = unsafe { CString::from_raw(ptr as *mut c_char) };
         }
     }
 
@@ -691,8 +693,8 @@ mod tests {
     }
 
     unsafe extern "C" fn test_execute_with_delay(
-        _input: *const libc::c_char,
-    ) -> *const libc::c_char {
+        _input: *const c_char,
+    ) -> *const c_char {
         let active_calls = TEST_EXECUTE_ACTIVE_CALLS.fetch_add(1, Ordering::SeqCst) + 1;
         update_max_concurrency(active_calls);
         std::thread::sleep(Duration::from_millis(25));
@@ -765,9 +767,8 @@ mod tests {
 
     #[test]
     fn test_ensure_non_null_c_string_ptr_rejects_null() {
-        let err = ensure_non_null_c_string_ptr(std::ptr::null::<libc::c_char>(), "Test pointer")
+        let err = ensure_non_null_c_string_ptr(std::ptr::null::<c_char>(), "Test pointer")
             .expect_err("null pointer should be rejected");
-
         assert!(
             err.to_string()
                 .contains("Test pointer returned null pointer")

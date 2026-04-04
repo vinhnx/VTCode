@@ -203,7 +203,8 @@ pub fn filter_sensitive_env(env: &HashMap<String, String>) -> HashMap<String, St
 /// race condition where parent exits between fork and exec.
 #[cfg(target_os = "linux")]
 pub fn setup_parent_death_signal() -> std::io::Result<()> {
-    setup_parent_death_signal_with_check(unsafe { libc::getppid() })
+    use nix::unistd::getppid;
+    setup_parent_death_signal_with_check(getppid().as_raw())
 }
 
 /// Set up parent death signal with explicit parent PID check.
@@ -215,24 +216,25 @@ pub fn setup_parent_death_signal_with_check(
     expected_parent_pid: libc::pid_t,
 ) -> std::io::Result<()> {
     use std::io::{Error, ErrorKind};
+    use nix::sys::prctl::{prctl, PrctlArg};
+    use nix::sys::signal::{raise, Signal};
+    use nix::unistd::getppid;
 
     // Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
-    let result = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) };
-
-    if result == -1 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            format!(
-                "prctl(PR_SET_PDEATHSIG) failed: {}",
-                std::io::Error::last_os_error()
-            ),
-        ));
+    match prctl(PrctlArg::PrSetPdeathsig(Signal::SIGTERM)) {
+        Ok(_) => {},
+        Err(nix_err) => {
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("prctl(PR_SET_PDEATHSIG) failed: {}", nix_err),
+            ));
+        }
     }
 
     // Re-check parent PID to catch race condition where parent exited between
     // fork and this prctl call. If parent changed, self-terminate immediately.
-    if unsafe { libc::getppid() } != expected_parent_pid {
-        unsafe { libc::raise(libc::SIGTERM) };
+    if getppid().as_raw() != expected_parent_pid {
+        let _ = raise(Signal::SIGTERM);
     }
 
     Ok(())

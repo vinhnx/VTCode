@@ -8,6 +8,7 @@ use tracing::{debug, warn};
 use crate::config::GatekeeperConfig;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GatekeeperPolicy {
     warn_on_quarantine: bool,
     auto_clear_quarantine: bool,
@@ -16,6 +17,7 @@ pub struct GatekeeperPolicy {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct GatekeeperCacheEntry {
     quarantined: bool,
     warned: bool,
@@ -44,12 +46,14 @@ impl GatekeeperPolicy {
         }
     }
 
+    #[allow(dead_code)]
     fn should_auto_clear(&self, target: &Path) -> bool {
         self.auto_clear_paths
             .iter()
             .any(|base| target.starts_with(base))
     }
 
+    #[allow(dead_code)]
     fn cache_entry(&self, path: &Path) -> Option<GatekeeperCacheEntry> {
         self.cache
             .lock()
@@ -57,6 +61,7 @@ impl GatekeeperPolicy {
             .and_then(|cache| cache.get(path).cloned())
     }
 
+    #[allow(dead_code)]
     fn update_cache(&self, path: PathBuf, entry: GatekeeperCacheEntry) {
         if let Ok(mut cache) = self.cache.lock() {
             cache.insert(path, entry);
