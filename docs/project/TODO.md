@@ -197,23 +197,6 @@ https://x.com/tmeszar/status/2039650776654512623
 
 ---
 
-Fix TODO/tasks list last line ansi (it should be dimmed, not bright white)
-
-'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-04-04 at 11.36.24 AM.png'
-
 ---
 
 Fix duplicated tool call and display in transcript
-
----
-
-update wizard first launch to include new features and capabilities, such as:
-
-- Auto modes (besides auto-accept, plan mode, etc.) --> default.
-- Memory
-- Subagent
-- (Check for updates and changelog)
-
----
-
----

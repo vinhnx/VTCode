@@ -2,10 +2,11 @@ use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
 use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::config::PermissionMode;
 use vtcode_core::config::constants::{defaults, llm_generation};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
-use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::config::types::{EditingMode, ReasoningEffortLevel};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, update_workspace_trust};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -13,8 +14,10 @@ use vtcode_core::{initialize_dot_folder, update_model_preference};
 
 use super::dependency_advisories::render_optional_search_tools_notice;
 use super::first_run_prompts::{
-    default_model_for_provider, prompt_lightweight_model, prompt_model, prompt_provider,
-    prompt_reasoning_effort, prompt_trust, resolve_initial_provider,
+    StartupMode, default_model_for_provider, prompt_lightweight_model, prompt_model,
+    prompt_persistent_memory, prompt_provider, prompt_reasoning_effort, prompt_startup_mode,
+    prompt_trust, resolve_initial_persistent_memory_enabled, resolve_initial_provider,
+    resolve_initial_startup_mode,
 };
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
@@ -57,6 +60,12 @@ enum SetupMode {
     NonInteractive { full_auto: bool },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct StartupModeConfig {
+    editing_mode: EditingMode,
+    permission_mode: PermissionMode,
+}
+
 fn is_fresh_workspace(workspace: &Path) -> bool {
     let config_path = workspace.join("vtcode.toml");
     let dot_dir = workspace.join(".vtcode");
@@ -95,79 +104,120 @@ async fn run_first_run_setup(
         MessageStyle::Info,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
-    let (provider, model, lightweight_model, reasoning, trust) = match mode {
-        SetupMode::Interactive => {
-            renderer.line(
-                MessageStyle::Status,
-                "Let's configure your default provider, model, lightweight model route, reasoning effort, and workspace trust.",
-            )?;
-            renderer.line(
-                MessageStyle::Status,
-                "Press Enter to accept the suggested value in brackets.",
-            )?;
-            renderer.line(MessageStyle::Info, "")?;
+    let (provider, model, lightweight_model, reasoning, startup_mode, persistent_memory, trust) =
+        match mode {
+            SetupMode::Interactive => {
+                renderer.line(
+                    MessageStyle::Status,
+                    "Let's configure your default provider, model, lightweight model route, reasoning effort, startup mode, persistent memory, and workspace trust.",
+                )?;
+                renderer.line(
+                    MessageStyle::Status,
+                    "Press Enter to accept the suggested value in brackets.",
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let provider = resolve_initial_provider(config);
-            let provider = prompt_provider(&mut renderer, provider)?;
-            renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
-            renderer.line(MessageStyle::Info, "")?;
+                let provider = resolve_initial_provider(config);
+                let provider = prompt_provider(&mut renderer, provider)?;
+                renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let default_model = default_model_for_provider(provider);
-            let model = prompt_model(&mut renderer, provider, default_model)?;
-            renderer.line(MessageStyle::Info, "")?;
+                let default_model = default_model_for_provider(provider);
+                let model = prompt_model(&mut renderer, provider, default_model)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let lightweight_model = prompt_lightweight_model(&mut renderer, provider, &model)?;
-            renderer.line(MessageStyle::Info, "")?;
+                let lightweight_model = prompt_lightweight_model(&mut renderer, provider, &model)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
-            renderer.line(MessageStyle::Info, "")?;
+                let reasoning =
+                    prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
-            renderer.line(MessageStyle::Info, "")?;
+                let startup_mode =
+                    prompt_startup_mode(&mut renderer, resolve_initial_startup_mode(config))?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, lightweight_model, reasoning, trust)
-        }
-        SetupMode::NonInteractive { full_auto } => {
-            renderer.line(
-                MessageStyle::Status,
-                "Non-interactive setup flags detected. Applying defaults without prompts.",
-            )?;
-            renderer.line(MessageStyle::Info, "")?;
+                let persistent_memory = prompt_persistent_memory(
+                    &mut renderer,
+                    resolve_initial_persistent_memory_enabled(config),
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            let provider = resolve_initial_provider(config);
-            let default_model = default_model_for_provider(provider);
-            let model = default_model.to_owned();
-            let lightweight_model = String::new();
-            let reasoning = config.agent.reasoning_effort;
-            let trust = if full_auto {
-                WorkspaceTrustLevel::FullAuto
-            } else {
-                WorkspaceTrustLevel::ToolsPolicy
-            };
+                let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Provider: {}", provider.label()),
-            )?;
-            renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
-            renderer.line(
-                MessageStyle::Info,
-                "Lightweight model: Automatic (same-provider lightweight route)",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Reasoning effort: {}", reasoning.as_str()),
-            )?;
-            renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Workspace trust: {}", trust_label(trust)),
-            )?;
-            renderer.line(MessageStyle::Info, "")?;
+                (
+                    provider,
+                    model,
+                    lightweight_model,
+                    reasoning,
+                    startup_mode,
+                    persistent_memory,
+                    trust,
+                )
+            }
+            SetupMode::NonInteractive { full_auto } => {
+                renderer.line(
+                    MessageStyle::Status,
+                    "Non-interactive setup flags detected. Applying defaults without prompts.",
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, lightweight_model, reasoning, trust)
-        }
-    };
+                let provider = resolve_initial_provider(config);
+                let default_model = default_model_for_provider(provider);
+                let model = default_model.to_owned();
+                let lightweight_model = String::new();
+                let reasoning = config.agent.reasoning_effort;
+                let startup_mode = resolve_initial_startup_mode(config);
+                let persistent_memory = resolve_initial_persistent_memory_enabled(config);
+                let trust = if full_auto {
+                    WorkspaceTrustLevel::FullAuto
+                } else {
+                    WorkspaceTrustLevel::ToolsPolicy
+                };
+
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Provider: {}", provider.label()),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Lightweight model: Automatic (same-provider lightweight route)",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Reasoning effort: {}", reasoning.as_str()),
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Startup mode: {}", startup_mode.label()),
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Persistent memory: {}",
+                        persistent_memory_label(persistent_memory)
+                    ),
+                )?;
+                renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Workspace trust: {}", trust_label(trust)),
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
+
+                (
+                    provider,
+                    model,
+                    lightweight_model,
+                    reasoning,
+                    startup_mode,
+                    persistent_memory,
+                    trust,
+                )
+            }
+        };
 
     renderer.line(
         MessageStyle::Status,
@@ -178,7 +228,15 @@ async fn run_first_run_setup(
     let provider_key = provider.to_string();
     // Set API key environment name from provider defaults; do this once to avoid recomputing.
     config.agent.api_key_env = provider.default_api_key_env().to_owned();
-    apply_selection(config, &provider_key, &model, &lightweight_model, reasoning);
+    apply_selection(
+        config,
+        &provider_key,
+        &model,
+        &lightweight_model,
+        reasoning,
+        startup_mode,
+        persistent_memory,
+    );
 
     let config_path = workspace.join("vtcode.toml");
     ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
@@ -200,28 +258,16 @@ async fn run_first_run_setup(
         })?;
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(
-        MessageStyle::Status,
-        &format!(
-            "Setup complete. Provider: {} • Model: {} • Lightweight: {} • Reasoning: {} • Trust: {}",
-            provider.label(),
-            model,
-            if lightweight_model.trim().is_empty() {
-                "automatic".to_string()
-            } else if lightweight_model == model {
-                "main model".to_string()
-            } else {
-                lightweight_model.clone()
-            },
-            reasoning.as_str(),
-            trust_label(trust)
-        ),
+    render_setup_summary(
+        &mut renderer,
+        provider,
+        &model,
+        &lightweight_model,
+        reasoning,
+        startup_mode,
+        persistent_memory,
+        trust,
     )?;
-    renderer.line(
-        MessageStyle::Status,
-        &format!("Auth: {}", api_key_hint(provider)),
-    )?;
-    renderer.line(MessageStyle::Info, "")?;
     render_optional_search_tools_notice(&mut renderer).await?;
     renderer.line(
         MessageStyle::Status,
@@ -238,14 +284,137 @@ fn apply_selection(
     model: &str,
     lightweight_model: &str,
     reasoning: ReasoningEffortLevel,
+    startup_mode: StartupMode,
+    persistent_memory_enabled: bool,
 ) {
     config.agent.provider = provider_key.to_owned();
     config.agent.default_model = model.to_owned();
     config.agent.small_model.model = lightweight_model.to_owned();
     config.agent.reasoning_effort = reasoning;
+    let startup_mode_config = startup_mode_config(startup_mode);
+    config.agent.default_editing_mode = startup_mode_config.editing_mode;
+    config.permissions.default_mode = startup_mode_config.permission_mode;
+    // Keep the deprecated compatibility flag aligned so it cannot silently
+    // override Edit/Plan selections during later startup compatibility mapping.
+    config.agent.autonomous_mode = false;
+    config.agent.persistent_memory.enabled = persistent_memory_enabled;
     config.agent.theme = defaults::DEFAULT_THEME.to_owned();
     config.agent.max_conversation_turns = defaults::DEFAULT_MAX_CONVERSATION_TURNS;
     config.agent.temperature = llm_generation::DEFAULT_TEMPERATURE;
+}
+
+fn startup_mode_config(mode: StartupMode) -> StartupModeConfig {
+    match mode {
+        StartupMode::Edit => StartupModeConfig {
+            editing_mode: EditingMode::Edit,
+            permission_mode: PermissionMode::Default,
+        },
+        StartupMode::Auto => StartupModeConfig {
+            editing_mode: EditingMode::Edit,
+            permission_mode: PermissionMode::Auto,
+        },
+        StartupMode::Plan => StartupModeConfig {
+            editing_mode: EditingMode::Plan,
+            permission_mode: PermissionMode::Default,
+        },
+    }
+}
+
+fn render_setup_summary(
+    renderer: &mut AnsiRenderer,
+    provider: Provider,
+    model: &str,
+    lightweight_model: &str,
+    reasoning: ReasoningEffortLevel,
+    startup_mode: StartupMode,
+    persistent_memory_enabled: bool,
+    trust: WorkspaceTrustLevel,
+) -> Result<()> {
+    for (style, line) in setup_summary_lines(
+        provider,
+        model,
+        lightweight_model,
+        reasoning,
+        startup_mode,
+        persistent_memory_enabled,
+        trust,
+    ) {
+        renderer.line(style, &line)?;
+    }
+    renderer.line(MessageStyle::Info, "")?;
+    Ok(())
+}
+
+fn setup_summary_lines(
+    provider: Provider,
+    model: &str,
+    lightweight_model: &str,
+    reasoning: ReasoningEffortLevel,
+    startup_mode: StartupMode,
+    persistent_memory_enabled: bool,
+    trust: WorkspaceTrustLevel,
+) -> Vec<(MessageStyle, String)> {
+    let mut lines = Vec::with_capacity(12);
+    lines.push((
+        MessageStyle::Status,
+        format!(
+            "Setup complete. Provider: {} • Model: {} • Lightweight: {} • Reasoning: {}",
+            provider.label(),
+            model,
+            lightweight_model_label(lightweight_model, model),
+            reasoning.as_str()
+        ),
+    ));
+    lines.push((
+        MessageStyle::Info,
+        format!(
+            "Startup: {} • Persistent memory: {} • Trust: {}",
+            startup_mode.label(),
+            persistent_memory_label(persistent_memory_enabled),
+            trust_label(trust)
+        ),
+    ));
+    lines.push((
+        MessageStyle::Status,
+        format!("Auth: {}", api_key_hint(provider)),
+    ));
+    lines.push((MessageStyle::Status, "What's available now:".to_string()));
+    lines.extend(
+        capability_highlight_lines(persistent_memory_enabled)
+            .into_iter()
+            .map(|line| (MessageStyle::Info, line)),
+    );
+    lines
+}
+
+fn capability_highlight_lines(persistent_memory_enabled: bool) -> Vec<String> {
+    vec![
+        "- Switch modes anytime with `/mode` or `Shift+Tab` to move between Edit, Auto, and Plan.".to_string(),
+        "- Auto mode uses classifier-backed permission checks inside the normal session. `--full-auto` is separate and uses the explicit `[automation.full_auto]` allow-list.".to_string(),
+        format!(
+            "- Persistent repository memory is {} for this workspace. Change `agent.persistent_memory.enabled` later in `vtcode.toml` if you want a different default.",
+            persistent_memory_label(persistent_memory_enabled).to_ascii_lowercase()
+        ),
+        "- Subagents let you delegate bounded work; use `/agent`, `/agents`, or the Local Agents drawer.".to_string(),
+        "- Skills add reusable capabilities; browse them with `/skills` or the CLI skills commands.".to_string(),
+        "- Prompt suggestions and the lightweight model route help with faster suggestions, memory triage, and smaller delegated tasks.".to_string(),
+        "- Use `/loop` for recurring prompts in the current session and `/schedule` for durable scheduled tasks and automations.".to_string(),
+        "- Advanced config-only permission modes such as `accept_edits`, `dont_ask`, and `bypass_permissions` remain available in `vtcode.toml` if you need them later.".to_string(),
+    ]
+}
+
+fn lightweight_model_label(lightweight_model: &str, model: &str) -> String {
+    if lightweight_model.trim().is_empty() {
+        "automatic".to_string()
+    } else if lightweight_model == model {
+        "main model".to_string()
+    } else {
+        lightweight_model.to_string()
+    }
+}
+
+fn persistent_memory_label(enabled: bool) -> &'static str {
+    if enabled { "On" } else { "Off" }
 }
 
 fn api_key_hint(provider: Provider) -> String {
@@ -263,5 +432,133 @@ fn trust_label(level: WorkspaceTrustLevel) -> &'static str {
     match level {
         WorkspaceTrustLevel::ToolsPolicy => "Tools policy",
         WorkspaceTrustLevel::FullAuto => "Full auto",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::config::loader::VTCodeConfig;
+
+    fn base_config() -> VTCodeConfig {
+        VTCodeConfig::default()
+    }
+
+    #[test]
+    fn edit_startup_mode_writes_editing_and_permission_defaults() {
+        let mut config = base_config();
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Edit,
+            false,
+        );
+
+        assert_eq!(config.agent.default_editing_mode, EditingMode::Edit);
+        assert_eq!(config.permissions.default_mode, PermissionMode::Default);
+    }
+
+    #[test]
+    fn auto_startup_mode_writes_auto_permission_mode() {
+        let mut config = base_config();
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Auto,
+            false,
+        );
+
+        assert_eq!(config.agent.default_editing_mode, EditingMode::Edit);
+        assert_eq!(config.permissions.default_mode, PermissionMode::Auto);
+    }
+
+    #[test]
+    fn plan_startup_mode_writes_plan_editing_mode_without_plan_permission_mode() {
+        let mut config = base_config();
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Plan,
+            false,
+        );
+
+        assert_eq!(config.agent.default_editing_mode, EditingMode::Plan);
+        assert_eq!(config.permissions.default_mode, PermissionMode::Default);
+        assert_ne!(config.permissions.default_mode, PermissionMode::Plan);
+    }
+
+    #[test]
+    fn persistent_memory_selection_persists_opt_in() {
+        let mut config = base_config();
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Edit,
+            true,
+        );
+
+        assert!(config.agent.persistent_memory.enabled);
+    }
+
+    #[test]
+    fn persistent_memory_selection_persists_opt_out() {
+        let mut config = base_config();
+        config.agent.persistent_memory.enabled = true;
+        config.agent.autonomous_mode = true;
+
+        apply_selection(
+            &mut config,
+            "openai",
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Edit,
+            false,
+        );
+
+        assert!(!config.agent.persistent_memory.enabled);
+        assert!(!config.agent.autonomous_mode);
+    }
+
+    #[test]
+    fn setup_summary_mentions_new_capabilities() {
+        let lines = setup_summary_lines(
+            Provider::OpenAI,
+            "gpt-5.4",
+            "",
+            ReasoningEffortLevel::None,
+            StartupMode::Auto,
+            false,
+            WorkspaceTrustLevel::ToolsPolicy,
+        );
+        let rendered = lines
+            .into_iter()
+            .map(|(_style, line)| line)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("`--full-auto` is separate"));
+        assert!(rendered.contains("Persistent repository memory"));
+        assert!(rendered.contains("Subagents"));
+        assert!(rendered.contains("Skills"));
+        assert!(rendered.contains("lightweight model route"));
+        assert!(rendered.contains("/loop"));
+        assert!(rendered.contains("/schedule"));
     }
 }
