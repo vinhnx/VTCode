@@ -8,7 +8,7 @@
 
 use std::marker::PhantomData;
 
-use crate::components::HasComponent;
+use crate::components::{ComponentProvider, HasComponent};
 use crate::config::TimeoutsConfig;
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
@@ -57,27 +57,28 @@ pub trait CanDescribeProvider {
 impl<Ctx> CanDescribeProvider for Ctx
 where
     Ctx: HasComponent<ProviderMetadataComponent>,
-    <Ctx as HasComponent<ProviderMetadataComponent>>::Provider: ProviderMetadataProvider<Ctx>,
+    ComponentProvider<Ctx, ProviderMetadataComponent>: ProviderMetadataProvider<Ctx>,
 {
     const PROVIDER_KEY: &'static str =
-        <<Ctx as HasComponent<ProviderMetadataComponent>>::Provider as ProviderMetadataProvider<
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
             Ctx,
         >>::PROVIDER_KEY;
     const DISPLAY_NAME: &'static str =
-        <<Ctx as HasComponent<ProviderMetadataComponent>>::Provider as ProviderMetadataProvider<
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
             Ctx,
         >>::DISPLAY_NAME;
     const DEFAULT_MODEL: &'static str =
-        <<Ctx as HasComponent<ProviderMetadataComponent>>::Provider as ProviderMetadataProvider<
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
             Ctx,
         >>::DEFAULT_MODEL;
     const API_BASE_URL: &'static str =
-        <<Ctx as HasComponent<ProviderMetadataComponent>>::Provider as ProviderMetadataProvider<
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
             Ctx,
         >>::API_BASE_URL;
-    const BASE_URL_ENV_VAR: Option<&'static str> = <<Ctx as HasComponent<
+    const BASE_URL_ENV_VAR: Option<&'static str> = <ComponentProvider<
+        Ctx,
         ProviderMetadataComponent,
-    >>::Provider as ProviderMetadataProvider<Ctx>>::BASE_URL_ENV_VAR;
+    > as ProviderMetadataProvider<Ctx>>::BASE_URL_ENV_VAR;
 }
 
 /// Ergonomic blanket consumer over the provider build component.
@@ -88,10 +89,12 @@ pub trait CanBuildProvider {
 impl<Ctx> CanBuildProvider for Ctx
 where
     Ctx: HasComponent<ProviderBuildComponent>,
-    <Ctx as HasComponent<ProviderBuildComponent>>::Provider: ProviderBuildProvider<Ctx>,
+    ComponentProvider<Ctx, ProviderBuildComponent>: ProviderBuildProvider<Ctx>,
 {
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
-        <<Ctx as HasComponent<ProviderBuildComponent>>::Provider as ProviderBuildProvider<Ctx>>::build_provider(config)
+        <ComponentProvider<Ctx, ProviderBuildComponent> as ProviderBuildProvider<Ctx>>::build_provider(
+            config,
+        )
     }
 }
 

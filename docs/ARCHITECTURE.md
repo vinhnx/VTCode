@@ -11,6 +11,13 @@ impls in the core workspace. This is deliberate: Rust coherence and orphan-rule
 constraints make public trait APIs a poor default extension boundary for an
 ecosystem-style project.
 
+For internal composition, prefer explicit provider selection over "clever"
+trait resolution when a boundary starts depending on many overlapping impls,
+associated types, or context-specific behavior. In practice, VT Code treats
+`HasComponent<Name>::Provider` as an elaborated dictionary: the context chooses
+the provider once, and blanket consumer traits delegate through that explicit
+selection. See `vtcode-core/src/components.rs` and `vtcode-core/src/llm/cgp.rs`.
+
 ## Model + Harness
 
 VT Code treats the model as the reasoning engine and the harness as the runtime that makes that reasoning useful. Phase 1 of the
@@ -173,12 +180,13 @@ pub trait CacheableTool: Tool {
 ## Design Principles
 
 1. **Internal Traits, External Protocols** - Keep Rust traits as internal composition seams; prefer config, manifests, and protocols for third-party extension points so external integrations do not depend on compile-time impl slots in VT Code
-2. **Mode-based Execution** - Single tools support multiple execution modes
-3. **Simplicity First** - Prefer simple algorithms and control flow until real workload data justifies more complexity
-4. **Data-Oriented Design** - Choose data structures and boundaries so the right algorithm is obvious
-5. **Backward Compatibility** - All existing APIs remain functional
-6. **Measured Optimization** - Profile and benchmark before keeping performance-motivated complexity
-7. **Clear Separation** - Each module has single responsibility
+2. **Prefer Explicit Provider Dictionaries** - When internal Rust abstractions become coherence-sensitive, move behavior behind context-selected providers instead of adding more blanket impl magic
+3. **Mode-based Execution** - Single tools support multiple execution modes
+4. **Simplicity First** - Prefer simple algorithms and control flow until real workload data justifies more complexity
+5. **Data-Oriented Design** - Choose data structures and boundaries so the right algorithm is obvious
+6. **Backward Compatibility** - All existing APIs remain functional
+7. **Measured Optimization** - Profile and benchmark before keeping performance-motivated complexity
+8. **Clear Separation** - Each module has single responsibility
 
 ## Adding New Tools
 

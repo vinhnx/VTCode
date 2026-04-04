@@ -53,7 +53,9 @@ impl acp::Agent for ZedAgent {
             // Terminal Auth (Interactive Login)
             acp::AuthMethod::Terminal(
                 acp::AuthMethodTerminal::new("terminal-login", "Terminal Login")
-                    .description("Interactive terminal-based authentication via vtcode login command")
+                    .description(
+                        "Interactive terminal-based authentication via vtcode login command",
+                    )
                     .args(vec!["login".to_string()]),
             ),
             // Env Var Auth (API Keys)
@@ -74,9 +76,15 @@ impl acp::Agent for ZedAgent {
                     acp::AuthEnvVar::new("COHERE_API_KEY").label("Cohere"),
                     acp::AuthEnvVar::new("HF_TOKEN").label("Hugging Face"),
                     acp::AuthEnvVar::new("MISTRAL_API_KEY").label("Mistral"),
-                    acp::AuthEnvVar::new("GOOGLE_API_KEY").label("Google (alt)").optional(true),
-                    acp::AuthEnvVar::new("OLLAMA_API_KEY").label("Ollama").optional(true),
-                    acp::AuthEnvVar::new("LMSTUDIO_API_KEY").label("LM Studio").optional(true),
+                    acp::AuthEnvVar::new("GOOGLE_API_KEY")
+                        .label("Google (alt)")
+                        .optional(true),
+                    acp::AuthEnvVar::new("OLLAMA_API_KEY")
+                        .label("Ollama")
+                        .optional(true),
+                    acp::AuthEnvVar::new("LMSTUDIO_API_KEY")
+                        .label("LM Studio")
+                        .optional(true),
                 ],
             )),
             // Env Var Auth (Base URLs)
@@ -84,18 +92,42 @@ impl acp::Agent for ZedAgent {
                 "env-base-urls",
                 "API Base URL",
                 vec![
-                    acp::AuthEnvVar::new("OPENAI_BASE_URL").label("OpenAI").optional(true),
-                    acp::AuthEnvVar::new("ANTHROPIC_BASE_URL").label("Anthropic").optional(true),
-                    acp::AuthEnvVar::new("GEMINI_BASE_URL").label("Gemini").optional(true),
-                    acp::AuthEnvVar::new("OPENROUTER_BASE_URL").label("OpenRouter").optional(true),
-                    acp::AuthEnvVar::new("DEEPSEEK_BASE_URL").label("DeepSeek").optional(true),
-                    acp::AuthEnvVar::new("ZAI_BASE_URL").label("Z.AI").optional(true),
-                    acp::AuthEnvVar::new("MOONSHOT_BASE_URL").label("Moonshot").optional(true),
-                    acp::AuthEnvVar::new("MINIMAX_BASE_URL").label("MiniMax").optional(true),
-                    acp::AuthEnvVar::new("XAI_BASE_URL").label("xAI").optional(true),
-                    acp::AuthEnvVar::new("HUGGINGFACE_BASE_URL").label("Hugging Face").optional(true),
-                    acp::AuthEnvVar::new("OLLAMA_BASE_URL").label("Ollama").optional(true),
-                    acp::AuthEnvVar::new("LMSTUDIO_BASE_URL").label("LM Studio").optional(true),
+                    acp::AuthEnvVar::new("OPENAI_BASE_URL")
+                        .label("OpenAI")
+                        .optional(true),
+                    acp::AuthEnvVar::new("ANTHROPIC_BASE_URL")
+                        .label("Anthropic")
+                        .optional(true),
+                    acp::AuthEnvVar::new("GEMINI_BASE_URL")
+                        .label("Gemini")
+                        .optional(true),
+                    acp::AuthEnvVar::new("OPENROUTER_BASE_URL")
+                        .label("OpenRouter")
+                        .optional(true),
+                    acp::AuthEnvVar::new("DEEPSEEK_BASE_URL")
+                        .label("DeepSeek")
+                        .optional(true),
+                    acp::AuthEnvVar::new("ZAI_BASE_URL")
+                        .label("Z.AI")
+                        .optional(true),
+                    acp::AuthEnvVar::new("MOONSHOT_BASE_URL")
+                        .label("Moonshot")
+                        .optional(true),
+                    acp::AuthEnvVar::new("MINIMAX_BASE_URL")
+                        .label("MiniMax")
+                        .optional(true),
+                    acp::AuthEnvVar::new("XAI_BASE_URL")
+                        .label("xAI")
+                        .optional(true),
+                    acp::AuthEnvVar::new("HUGGINGFACE_BASE_URL")
+                        .label("Hugging Face")
+                        .optional(true),
+                    acp::AuthEnvVar::new("OLLAMA_BASE_URL")
+                        .label("Ollama")
+                        .optional(true),
+                    acp::AuthEnvVar::new("LMSTUDIO_BASE_URL")
+                        .label("LM Studio")
+                        .optional(true),
                 ],
             )),
         ];

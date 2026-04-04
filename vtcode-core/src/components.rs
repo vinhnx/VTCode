@@ -19,6 +19,16 @@
 //!    provider, enabling the same tool/request to run under different
 //!    policies by simply switching the context.
 //!
+//! ## Dictionary-passing interpretation
+//!
+//! This module intentionally mirrors dictionary-passing style for Rust traits.
+//! `HasComponent<Name>::Provider` is the elaborated "dictionary" selected for a
+//! capability, while the blanket consumer impls (`CanApproveTool`,
+//! `CanExecuteTool`, etc.) are the point where the compiler proves that the
+//! selected provider implements the required provider trait for the current
+//! context. That keeps the capability wiring explicit and avoids depending on
+//! deeper associated-type reasoning at call sites.
+//!
 //! # Example
 //!
 //! ```rust,ignore
@@ -76,6 +86,9 @@ pub trait HasComponent<Name> {
     /// The concrete provider type wired to `Name` for this context.
     type Provider;
 }
+
+/// The elaborated provider/dictionary selected by `Ctx` for component `Name`.
+pub type ComponentProvider<Ctx, Name> = <Ctx as HasComponent<Name>>::Provider;
 
 /// Wire multiple component names to provider types for a context.
 ///
@@ -597,10 +610,10 @@ pub trait CanApproveTool: Send + Sync {
 impl<Ctx> CanApproveTool for Ctx
 where
     Ctx: HasComponent<ApprovalComponent> + Send + Sync,
-    <Ctx as HasComponent<ApprovalComponent>>::Provider: ApprovalProvider<Ctx>,
+    ComponentProvider<Ctx, ApprovalComponent>: ApprovalProvider<Ctx>,
 {
     async fn approve_tool(&self, tool_name: &str, description: &str) -> Result<()> {
-        <<Ctx as HasComponent<ApprovalComponent>>::Provider as ApprovalProvider<Ctx>>::check_approval(
+        <ComponentProvider<Ctx, ApprovalComponent> as ApprovalProvider<Ctx>>::check_approval(
             self,
             tool_name,
             description,
@@ -618,18 +631,14 @@ pub trait CanResolveSandbox: Send + Sync {
 impl<Ctx> CanResolveSandbox for Ctx
 where
     Ctx: HasComponent<SandboxComponent> + Send + Sync,
-    <Ctx as HasComponent<SandboxComponent>>::Provider: SandboxProvider<Ctx>,
+    ComponentProvider<Ctx, SandboxComponent>: SandboxProvider<Ctx>,
 {
     fn sandbox_enabled(&self) -> bool {
-        <<Ctx as HasComponent<SandboxComponent>>::Provider as SandboxProvider<Ctx>>::sandbox_enabled(
-            self,
-        )
+        <ComponentProvider<Ctx, SandboxComponent> as SandboxProvider<Ctx>>::sandbox_enabled(self)
     }
 
     fn workspace_root(&self) -> Option<&PathBuf> {
-        <<Ctx as HasComponent<SandboxComponent>>::Provider as SandboxProvider<Ctx>>::workspace_root(
-            self,
-        )
+        <ComponentProvider<Ctx, SandboxComponent> as SandboxProvider<Ctx>>::workspace_root(self)
     }
 }
 
@@ -666,91 +675,66 @@ pub trait CanProvideToolMetadata: Send + Sync {
 impl<Ctx> CanProvideToolMetadata for Ctx
 where
     Ctx: HasComponent<MetadataComponent> + Send + Sync,
-    <Ctx as HasComponent<MetadataComponent>>::Provider: MetadataProvider<Ctx>,
+    ComponentProvider<Ctx, MetadataComponent>: MetadataProvider<Ctx>,
 {
     fn tool_name(&self) -> &'static str {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::tool_name(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::tool_name(self)
     }
 
     fn tool_description(&self) -> &'static str {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::tool_description(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::tool_description(self)
     }
 
     fn parameter_schema(&self) -> Option<Value> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::parameter_schema(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::parameter_schema(self)
     }
 
     fn config_schema(&self) -> Option<Value> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::config_schema(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::config_schema(self)
     }
 
     fn state_schema(&self) -> Option<Value> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::state_schema(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::state_schema(self)
     }
 
     fn prompt_path(&self) -> Option<Cow<'static, str>> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::prompt_path(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::prompt_path(self)
     }
 
     fn default_permission(&self) -> ToolPolicy {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::default_permission(
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::default_permission(
             self,
         )
     }
 
     fn allow_patterns(&self) -> Option<&'static [&'static str]> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::allow_patterns(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::allow_patterns(self)
     }
 
     fn deny_patterns(&self) -> Option<&'static [&'static str]> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::deny_patterns(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::deny_patterns(self)
     }
 
     fn is_mutating(&self) -> bool {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::is_mutating(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::is_mutating(self)
     }
 
     fn is_parallel_safe(&self) -> bool {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::is_parallel_safe(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::is_parallel_safe(self)
     }
 
     fn tool_kind(&self) -> &'static str {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::tool_kind(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::tool_kind(self)
     }
 
     fn resource_hints(&self, args: &Value) -> Vec<String> {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::resource_hints(
-            self,
-            args,
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::resource_hints(
+            self, args,
         )
     }
 
     fn execution_cost(&self) -> u8 {
-        <<Ctx as HasComponent<MetadataComponent>>::Provider as MetadataProvider<Ctx>>::execution_cost(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::execution_cost(self)
     }
 }
 
@@ -770,24 +754,25 @@ where
         + HasComponent<RetryComponent>
         + Send
         + Sync,
-    <Ctx as HasComponent<ExecuteComponent>>::Provider: ExecuteProvider<Ctx>,
-    <Ctx as HasComponent<LoggingComponent>>::Provider: LoggingProvider<Ctx>,
-    <Ctx as HasComponent<CacheComponent>>::Provider: CacheProvider<Ctx>,
-    <Ctx as HasComponent<RetryComponent>>::Provider: RetryProvider<Ctx>,
+    ComponentProvider<Ctx, ExecuteComponent>: ExecuteProvider<Ctx>,
+    ComponentProvider<Ctx, LoggingComponent>: LoggingProvider<Ctx>,
+    ComponentProvider<Ctx, CacheComponent>: CacheProvider<Ctx>,
+    ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
 {
     async fn execute_tool_json(&self, tool_name: &str, args: Value) -> Result<Value> {
-        <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_start(
+        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
             self, tool_name, &args,
         );
 
-        if let Some(result) = <<Ctx as HasComponent<CacheComponent>>::Provider as CacheProvider<
-            Ctx,
-        >>::get_json(self, tool_name, &args)
+        if let Some(result) =
+            <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_json(
+                self, tool_name, &args,
+            )
         {
-            <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_cache_hit(
+            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
                 self, tool_name, &args,
             );
-            <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_success(
+            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
                 self,
                 tool_name,
                 Duration::ZERO,
@@ -798,23 +783,25 @@ where
         }
 
         let started = Instant::now();
-        let max_attempts = <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<
-            Ctx,
-        >>::max_attempts(self, tool_name, &args)
-        .max(1);
+        let max_attempts =
+            <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
+                self, tool_name, &args,
+            )
+            .max(1);
 
         for attempt_index in 0..max_attempts {
             let attempt = attempt_index + 1;
-            match <<Ctx as HasComponent<ExecuteComponent>>::Provider as ExecuteProvider<
-                Ctx,
-            >>::execute(self, args.clone())
+            match <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute(
+                self,
+                args.clone(),
+            )
             .await
             {
                 Ok(result) => {
-                    <<Ctx as HasComponent<CacheComponent>>::Provider as CacheProvider<Ctx>>::put_json(
+                    <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_json(
                         self, tool_name, &args, &result,
                     );
-                    <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_success(
+                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
                         self,
                         tool_name,
                         started.elapsed(),
@@ -825,15 +812,16 @@ where
                 }
                 Err(error) => {
                     let should_retry = attempt < max_attempts
-                        && <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<
-                            Ctx,
-                        >>::should_retry(self, tool_name, attempt, &error);
+                        && <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::should_retry(
+                            self, tool_name, attempt, &error,
+                        );
                     if should_retry {
-                        let backoff =
-                            <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<Ctx>>::backoff_duration(
-                                self, tool_name, attempt,
-                            );
-                        <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_retry(
+                        let backoff = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<
+                            Ctx,
+                        >>::backoff_duration(
+                            self, tool_name, attempt
+                        );
+                        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_retry(
                             self,
                             tool_name,
                             attempt + 1,
@@ -846,7 +834,7 @@ where
                         continue;
                     }
 
-                    <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_failure(
+                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_failure(
                         self,
                         tool_name,
                         started.elapsed(),
@@ -862,18 +850,19 @@ where
     }
 
     async fn execute_tool_dual(&self, tool_name: &str, args: Value) -> Result<SplitToolResult> {
-        <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_start(
+        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
             self, tool_name, &args,
         );
 
-        if let Some(result) = <<Ctx as HasComponent<CacheComponent>>::Provider as CacheProvider<
-            Ctx,
-        >>::get_dual(self, tool_name, &args)
+        if let Some(result) =
+            <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_dual(
+                self, tool_name, &args,
+            )
         {
-            <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_cache_hit(
+            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
                 self, tool_name, &args,
             );
-            <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_success(
+            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
                 self,
                 tool_name,
                 Duration::ZERO,
@@ -884,23 +873,25 @@ where
         }
 
         let started = Instant::now();
-        let max_attempts = <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<
-            Ctx,
-        >>::max_attempts(self, tool_name, &args)
-        .max(1);
+        let max_attempts =
+            <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
+                self, tool_name, &args,
+            )
+            .max(1);
 
         for attempt_index in 0..max_attempts {
             let attempt = attempt_index + 1;
-            match <<Ctx as HasComponent<ExecuteComponent>>::Provider as ExecuteProvider<
-                Ctx,
-            >>::execute_dual(self, args.clone())
+            match <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute_dual(
+                self,
+                args.clone(),
+            )
             .await
             {
                 Ok(result) => {
-                    <<Ctx as HasComponent<CacheComponent>>::Provider as CacheProvider<Ctx>>::put_dual(
+                    <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_dual(
                         self, tool_name, &args, &result,
                     );
-                    <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_success(
+                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
                         self,
                         tool_name,
                         started.elapsed(),
@@ -911,15 +902,16 @@ where
                 }
                 Err(error) => {
                     let should_retry = attempt < max_attempts
-                        && <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<Ctx>>::should_retry(
+                        && <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::should_retry(
                             self, tool_name, attempt, &error,
                         );
                     if should_retry {
-                        let backoff =
-                            <<Ctx as HasComponent<RetryComponent>>::Provider as RetryProvider<Ctx>>::backoff_duration(
-                                self, tool_name, attempt,
-                            );
-                        <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_retry(
+                        let backoff = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<
+                            Ctx,
+                        >>::backoff_duration(
+                            self, tool_name, attempt
+                        );
+                        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_retry(
                             self,
                             tool_name,
                             attempt + 1,
@@ -932,7 +924,7 @@ where
                         continue;
                     }
 
-                    <<Ctx as HasComponent<LoggingComponent>>::Provider as LoggingProvider<Ctx>>::on_failure(
+                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_failure(
                         self,
                         tool_name,
                         started.elapsed(),
@@ -1350,7 +1342,7 @@ impl<Name, Runtime> HasComponent<Name> for ToolBridgeCtx<Runtime>
 where
     Runtime: HasComponent<Name>,
 {
-    type Provider = <Runtime as HasComponent<Name>>::Provider;
+    type Provider = ComponentProvider<Runtime, Name>;
 }
 
 /// Trait for contexts that carry a concrete tool instance.
@@ -1471,49 +1463,49 @@ impl<Runtime, T> HasComponent<ApprovalComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<ApprovalComponent>,
 {
-    type Provider = <Runtime as HasComponent<ApprovalComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, ApprovalComponent>;
 }
 
 impl<Runtime, T> HasComponent<SandboxComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<SandboxComponent>,
 {
-    type Provider = <Runtime as HasComponent<SandboxComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, SandboxComponent>;
 }
 
 impl<Runtime, T> HasComponent<SessionComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<SessionComponent>,
 {
-    type Provider = <Runtime as HasComponent<SessionComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, SessionComponent>;
 }
 
 impl<Runtime, T> HasComponent<OutputMapComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<OutputMapComponent>,
 {
-    type Provider = <Runtime as HasComponent<OutputMapComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, OutputMapComponent>;
 }
 
 impl<Runtime, T> HasComponent<LoggingComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<LoggingComponent>,
 {
-    type Provider = <Runtime as HasComponent<LoggingComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, LoggingComponent>;
 }
 
 impl<Runtime, T> HasComponent<CacheComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<CacheComponent>,
 {
-    type Provider = <Runtime as HasComponent<CacheComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, CacheComponent>;
 }
 
 impl<Runtime, T> HasComponent<RetryComponent> for TypedToolCtx<Runtime, T>
 where
     Runtime: HasComponent<RetryComponent>,
 {
-    type Provider = <Runtime as HasComponent<RetryComponent>>::Provider;
+    type Provider = ComponentProvider<Runtime, RetryComponent>;
 }
 
 impl<Runtime, T> HasComponent<ExecuteComponent> for TypedToolCtx<Runtime, T>
