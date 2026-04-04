@@ -45,7 +45,7 @@ num_cpus = "1.16"
 clap = { version = "4.6", features = ["derive"] }
 pretty_assertions = "1.4"
 libc = "0.2"
-rand = "0.9"
+rand = "0.10"
 semver = "1.0"
 fs2 = "0.4"
 mimalloc = { version = "0.1", default-features = false }

@@ -8,7 +8,6 @@ use crate::config::GatekeeperConfig;
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct GatekeeperPolicy {
     warn_on_quarantine: bool,
     auto_clear_quarantine: bool,
@@ -18,7 +17,6 @@ pub struct GatekeeperPolicy {
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct GatekeeperCacheEntry {
     quarantined: bool,
     warned: bool,
