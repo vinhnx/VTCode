@@ -103,6 +103,36 @@ pub struct PersistentMemoryCleanupReport {
     pub removed_rollout_files: usize,
 }
 
+pub fn extract_memory_highlights(contents: &str, limit: usize) -> Vec<String> {
+    if limit == 0 {
+        return Vec::new();
+    }
+
+    let mut highlights = Vec::with_capacity(limit);
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let normalized = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+            .unwrap_or(trimmed);
+        if normalized.is_empty() || highlights.iter().any(|existing| existing == normalized) {
+            continue;
+        }
+
+        highlights.push(normalized.to_string());
+        if highlights.len() == limit {
+            break;
+        }
+    }
+
+    highlights
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryOpKind {

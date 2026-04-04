@@ -615,7 +615,10 @@ refresh_interval_ms = 1000
 command_timeout_ms = 200
 
 [ui.terminal_title]
-items = ["spinner", "project"]
+items = [
+    "spinner",
+    "project",
+]
 
 [ui.keyboard_protocol]
 enabled = true

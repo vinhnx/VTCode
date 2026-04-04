@@ -10,7 +10,7 @@ The `/init` command prepares a repository for VT Code guidance and memory. It ge
 - **Repository analysis** – inspects manifests, scripts, docs, CI workflows, and recent git history to tailor instructions.
 - **Targeted questions** – asks up to three high-value questions only when verification commands, orientation docs, or one critical repo rule are not obvious from the codebase.
 - **Focused guidance** – surfaces the most relevant commands and conventions within the recommended 200–400 word budget.
-- **Workspace scaffolding** – creates `.vtcode/rules/README.md` and initializes the per-repository memory directory layout used by VT Code.
+- **Workspace scaffolding** – creates `.vtcode/README.md` and initializes the per-repository memory directory layout used by VT Code.
 - **Portable output** – works for any project layout; update the file as conventions evolve and regenerate when new components are added.
 
 ## Usage
@@ -33,7 +33,7 @@ The `/init` command prepares a repository for VT Code guidance and memory. It ge
    /init
    ```
 
-The assistant will analyze the repository, synthesize the relevant guidance, ask targeted questions when needed, and scaffold the workspace instruction layout. By default that includes `AGENTS.md` at the workspace root, `.vtcode/rules/README.md`, and the repository memory directory layout.
+The assistant will analyze the repository, synthesize the relevant guidance, ask targeted questions when needed, and scaffold the workspace instruction layout. By default that includes `AGENTS.md` at the workspace root, `.vtcode/README.md`, and the repository memory directory layout.
 
 You can run the same flow from the CLI with:
 
@@ -48,7 +48,7 @@ Use `vtcode init --force` or `/init --force` to overwrite an existing `AGENTS.md
 The resulting workspace scaffold includes:
 
 - `AGENTS.md` – root project guidance file generated from repository analysis.
-- `.vtcode/rules/README.md` – starter documentation for modular workspace rules.
+- `.vtcode/README.md` – starter documentation for workspace prompt files and rule placement.
 - Persistent memory files under the repository memory directory:
   - `memory_summary.md`
   - `MEMORY.md`

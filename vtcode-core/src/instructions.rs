@@ -244,6 +244,7 @@ pub fn extract_instruction_highlights(
 
     let mut highlights = Vec::with_capacity(limit);
     for segment in segments {
+        let mut found_bullet = false;
         for line in segment.contents.lines() {
             if highlights.len() >= limit {
                 break;
@@ -254,7 +255,33 @@ pub fn extract_instruction_highlights(
                 let highlight = trimmed.trim_start_matches('-').trim();
                 if !highlight.is_empty() {
                     highlights.push(highlight.to_string());
+                    found_bullet = true;
                 }
+            }
+        }
+
+        if highlights.len() >= limit {
+            break;
+        }
+
+        if found_bullet {
+            continue;
+        }
+
+        for line in segment.contents.lines() {
+            if highlights.len() >= limit {
+                break;
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let fallback = trimmed.trim_start_matches('#').trim();
+            if !fallback.is_empty() {
+                highlights.push(fallback.to_string());
+                break;
             }
         }
 
@@ -709,6 +736,14 @@ async fn discover_rule_sources(
             }
 
             if entry.path().extension().and_then(|value| value.to_str()) != Some("md") {
+                continue;
+            }
+
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.eq_ignore_ascii_case("README.md"))
+            {
                 continue;
             }
 
@@ -1495,5 +1530,53 @@ mod tests {
         assert!(rendered.contains("workspace AGENTS"));
         assert!(rendered.contains("first"));
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn ignores_rules_readme_files() -> Result<()> {
+        let workspace = tempdir()?;
+        let project_root = workspace.path();
+        std::fs::create_dir_all(project_root.join(".vtcode/rules"))?;
+        write_rule(
+            &project_root.join(".vtcode/rules"),
+            "README.md",
+            "# Rules\n- should stay out of prompt memory\n",
+        )?;
+        write_rule(
+            &project_root.join(".vtcode/rules"),
+            "rust.md",
+            "# Rust\n- keep changes surgical\n",
+        )?;
+
+        let sources =
+            discover_instruction_sources(&default_options(project_root, project_root, None, &[]))
+                .await?;
+
+        assert_eq!(sources.len(), 1);
+        assert!(
+            sources[0].path.ends_with("rust.md"),
+            "sources: {:?}",
+            sources
+                .iter()
+                .map(|source| source.path.display().to_string())
+                .collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn highlight_fallback_uses_non_bullet_content() {
+        let segments = vec![InstructionSegment {
+            source: InstructionSource {
+                path: PathBuf::from("AGENTS.md"),
+                scope: InstructionScope::Workspace,
+                kind: InstructionSourceKind::Agents,
+                matched: false,
+            },
+            contents: "Root summary\n".to_owned(),
+        }];
+
+        let highlights = extract_instruction_highlights(&segments, 1);
+        assert_eq!(highlights, vec!["Root summary".to_owned()]);
     }
 }

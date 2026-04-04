@@ -32,15 +32,15 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
     let mut lines = Vec::new();
     lines.push("## Skills".to_string());
     lines.push(
-        "Indexed for routing. Open only the relevant `SKILL.md` when the task or user request calls for it."
+        "Use a skill only when the user names it or the task clearly matches. Load details on demand."
             .to_string(),
     );
 
     let mut sorted_skills = visible_skills;
     sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
-    let overflow = sorted_skills.len().saturating_sub(10);
+    let overflow = sorted_skills.len().saturating_sub(5);
     if overflow > 0 {
-        sorted_skills.truncate(10);
+        sorted_skills.truncate(5);
     }
 
     for skill in sorted_skills {
@@ -50,8 +50,6 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
     if overflow > 0 {
         lines.push(format!("(+{} more skills available)", overflow));
     }
-
-    lines.push("- Routing: Use a skill when the user names it or the task clearly matches the description. Load only the relevant `SKILL.md` on demand.".to_string());
 
     Some(lines.join("\n"))
 }
@@ -111,11 +109,27 @@ fn render_skill_line(skill: &SkillMetadata) -> String {
 }
 
 fn render_prompt_skill_line(skill: &SkillMetadata) -> String {
-    let path_str = skill.path.to_string_lossy().replace('\\', "/");
     format!(
-        "- {}: {} (file: {})",
-        skill.name, skill.description, path_str
+        "- {}: {}",
+        skill.name,
+        prompt_skill_summary(skill).trim_end_matches('.')
     )
+}
+
+fn prompt_skill_summary(skill: &SkillMetadata) -> String {
+    let summary = skill
+        .short_description
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+        .unwrap_or(skill.description.as_str())
+        .trim();
+
+    if summary.chars().count() <= 32 {
+        return summary.to_string();
+    }
+
+    let truncated = summary.chars().take(32).collect::<String>();
+    format!("{}...", truncated.trim_end())
 }
 
 #[cfg(test)]
@@ -185,7 +199,7 @@ mod tests {
     fn test_render_prompt_skills_section_stays_lean() {
         let skill = SkillMetadata {
             name: "test-skill".to_string(),
-            description: "A test skill".to_string(),
+            description: "A test skill with a longer description".to_string(),
             short_description: None,
             path: PathBuf::from("/path/to/skill"),
             scope: crate::skills::model::SkillScope::User,
@@ -194,13 +208,13 @@ mod tests {
         let output = render_prompt_skills_section(&[skill]).expect("prompt skills section");
 
         assert!(output.contains("## Skills"));
-        assert!(output.contains("Indexed for routing"));
-        assert!(output.contains("- test-skill: A test skill (file: /path/to/skill)"));
-        assert!(output.contains("- Routing: Use a skill"));
+        assert!(output.contains("Use a skill only when the user names it"));
+        assert!(output.contains("- test-skill:"));
+        assert!(output.contains("A test skill with a longer"));
         assert!(!output.contains("Discovery: Available skills are listed"));
         assert!(!output.contains("Description as trigger"));
         assert!(!output.contains("scope:"));
-        assert!(!output.contains("; use:"));
+        assert!(!output.contains("/path/to/skill"));
     }
 
     #[test]
@@ -232,6 +246,44 @@ mod tests {
 
         assert!(output.contains("repo-skill"));
         assert!(!output.contains("hidden-skill"));
+    }
+
+    #[test]
+    fn test_render_prompt_skills_section_prefers_short_description() {
+        let skill = SkillMetadata {
+            name: "codemod".to_string(),
+            description: "Long description that should not be emitted in the prompt".to_string(),
+            short_description: Some("Codemods and migrations".to_string()),
+            path: PathBuf::from("/path/to/codemod"),
+            scope: crate::skills::model::SkillScope::Repo,
+            manifest: None,
+        };
+
+        let output = render_prompt_skills_section(&[skill]).expect("prompt skills section");
+
+        assert!(output.contains("- codemod: Codemods and migrations"));
+        assert!(!output.contains("Long description"));
+    }
+
+    #[test]
+    fn test_render_prompt_skills_section_stays_within_budget() {
+        let skills = (0..8)
+            .map(|index| SkillMetadata {
+                name: format!("skill-{index}"),
+                description: format!("Long description {index} that should be truncated in prompt"),
+                short_description: Some(format!("Short skill {index}")),
+                path: PathBuf::from(format!("/path/to/skill-{index}")),
+                scope: crate::skills::model::SkillScope::Repo,
+                manifest: None,
+            })
+            .collect::<Vec<_>>();
+
+        let output = render_prompt_skills_section(&skills).expect("prompt skills section");
+        let approx_tokens = output.len() / 4;
+
+        assert!(approx_tokens < 110, "got ~{} tokens", approx_tokens);
+        assert!(!output.contains("/path/to/skill"));
+        assert!(output.contains("(+3 more skills available)"));
     }
 
     #[test]

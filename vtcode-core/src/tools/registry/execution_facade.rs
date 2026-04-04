@@ -326,9 +326,14 @@ impl ToolRegistry {
             .resolve_public_tool(name)
             .map(|resolution| resolution.registration_name().to_string())
             .map_err(|error| anyhow!(error.to_string()))?;
-        self.execute_tool_ref_internal(
+        let effective_args = execution_kernel::remap_public_unified_file_alias_args(
+            name,
             routed_name.as_str(),
             args,
+        );
+        self.execute_tool_ref_internal(
+            routed_name.as_str(),
+            effective_args.as_ref().unwrap_or(args),
             prevalidated,
             settle_noninteractive_exec,
         )

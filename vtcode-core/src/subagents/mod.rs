@@ -26,6 +26,7 @@ use crate::hooks::LifecycleHookEngine;
 use crate::llm::auto_lightweight_model;
 use crate::llm::factory::{infer_provider, infer_provider_from_model};
 use crate::llm::provider::{Message, ToolDefinition};
+use crate::persistent_memory::extract_memory_highlights;
 use crate::plugins::components::AgentsHandler;
 use crate::plugins::manifest::PluginManifest;
 use crate::tools::exec_session::ExecSessionManager;
@@ -44,6 +45,7 @@ use vtcode_config::{
 const SUBAGENT_TRANSCRIPT_LINE_LIMIT: usize = 200;
 const SUBAGENT_MEMORY_BYTES_LIMIT: usize = 25 * 1024;
 const SUBAGENT_MEMORY_LINE_LIMIT: usize = 200;
+const SUBAGENT_MEMORY_HIGHLIGHT_LIMIT: usize = 4;
 const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 3;
 const SUBAGENT_MIN_MAX_TURNS: usize = 2;
 const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
@@ -2879,28 +2881,50 @@ fn load_memory_appendix(
     let memory_file = memory_dir.join("MEMORY.md");
     if !memory_file.exists() {
         return Ok(Some(format!(
-            "Persistent memory directory: {}. Update MEMORY.md with concise reusable notes when you discover stable repository conventions.",
-            memory_dir.display()
+            "Persistent memory file: {}. Create or update `MEMORY.md` with concise reusable notes when you discover stable repository conventions.",
+            memory_file.display()
         )));
     }
 
     let content = std::fs::read_to_string(&memory_file)
         .with_context(|| format!("Failed to read {}", memory_file.display()))?;
+    let total_lines = content.lines().count();
     let mut bytes = 0usize;
-    let excerpt = content
-        .lines()
-        .take(SUBAGENT_MEMORY_LINE_LIMIT)
-        .take_while(|line| {
-            bytes = bytes.saturating_add(line.len() + 1);
-            bytes <= SUBAGENT_MEMORY_BYTES_LIMIT
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    Ok(Some(format!(
-        "Persistent memory directory: {}.\nRead and maintain MEMORY.md for durable learnings.\n\nCurrent MEMORY.md excerpt:\n{}",
-        memory_dir.display(),
-        excerpt
-    )))
+    let mut excerpt_lines = Vec::new();
+    for line in content.lines().take(SUBAGENT_MEMORY_LINE_LIMIT) {
+        let next_bytes = bytes.saturating_add(line.len() + 1);
+        if next_bytes > SUBAGENT_MEMORY_BYTES_LIMIT {
+            break;
+        }
+
+        bytes = next_bytes;
+        excerpt_lines.push(line);
+    }
+
+    let excerpt = excerpt_lines.join("\n");
+    let truncated = excerpt_lines.len() < total_lines;
+    let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
+    let mut appendix = String::new();
+    appendix.push_str(&format!(
+        "Persistent memory file: {}.\nRead and maintain `MEMORY.md` for durable learnings.",
+        memory_file.display()
+    ));
+
+    if !highlights.is_empty() {
+        appendix.push_str("\n\nKey points:\n");
+        for highlight in highlights {
+            appendix.push_str("- ");
+            appendix.push_str(&highlight);
+            appendix.push('\n');
+        }
+    }
+
+    appendix.push_str("\nOpen `MEMORY.md` when exact wording or more detail matters.");
+    if truncated {
+        appendix.push_str("\nMemory indexing stopped after the configured startup budget.");
+    }
+
+    Ok(Some(appendix))
 }
 
 async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(String, PathBuf)>> {
@@ -3081,8 +3105,8 @@ mod tests {
         background_record_id, build_background_subagent_command, build_child_config,
         contains_explicit_delegation_request, contains_explicit_model_request,
         delegated_task_requires_clarification, extract_explicit_agent_mentions, filter_child_tools,
-        normalize_requested_model_override, request_prompt, resolve_effective_subagent_model,
-        resolve_subagent_model, sanitize_subagent_input_items,
+        load_memory_appendix, normalize_requested_model_override, request_prompt,
+        resolve_effective_subagent_model, resolve_subagent_model, sanitize_subagent_input_items,
     };
     use crate::config::PermissionMode;
     use crate::config::VTCodeConfig;
@@ -3101,7 +3125,7 @@ mod tests {
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::Notify;
-    use vtcode_config::{SubagentMcpServer, SubagentSource, SubagentSpec};
+    use vtcode_config::{SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec};
 
     fn test_controller_config(
         workspace_root: std::path::PathBuf,
@@ -3895,6 +3919,30 @@ mod tests {
             err.to_string()
                 .contains("cannot proactively launch read-only agent 'explorer'")
         );
+    }
+
+    #[test]
+    fn load_memory_appendix_renders_compact_summary() {
+        let temp = TempDir::new().expect("tempdir");
+        let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
+        std::fs::create_dir_all(&memory_dir).expect("memory dir");
+        std::fs::write(
+            memory_dir.join("MEMORY.md"),
+            "# Reviewer Memory\n\n## Preferences\n- Keep diffs surgical.\n- Run focused tests before broad checks.\n- Prefer repo docs for orientation.\n- Ask only when a decision is materially blocked.\n- Additional long-form notes that should stay out of the prompt body.\n",
+        )
+        .expect("write memory");
+
+        let appendix =
+            load_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
+                .expect("appendix")
+                .expect("memory appendix");
+
+        assert!(appendix.contains("Persistent memory file:"));
+        assert!(appendix.contains("Key points:"));
+        assert!(appendix.contains("Keep diffs surgical."));
+        assert!(appendix.contains("Open `MEMORY.md` when exact wording or more detail matters."));
+        assert!(!appendix.contains("Current MEMORY.md excerpt"));
+        assert!(!appendix.contains("## Preferences"));
     }
 
     #[tokio::test]

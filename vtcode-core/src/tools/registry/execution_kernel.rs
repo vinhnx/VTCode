@@ -221,6 +221,38 @@ fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<Value
     Some(Value::Object(mapped))
 }
 
+pub(super) fn remap_public_unified_file_alias_args(
+    requested_name: &str,
+    normalized_tool_name: &str,
+    args: &Value,
+) -> Option<Value> {
+    if normalized_tool_name != tool_names::UNIFIED_FILE {
+        return None;
+    }
+
+    let obj = args.as_object()?;
+    if obj.contains_key("action") {
+        return None;
+    }
+
+    let action = super::assembly::public_tool_name_candidates(requested_name)
+        .into_iter()
+        .find_map(|candidate| match candidate.as_str() {
+            tool_names::READ_FILE => Some("read"),
+            tool_names::WRITE_FILE => Some("write"),
+            tool_names::EDIT_FILE => Some("edit"),
+            tool_names::DELETE_FILE => Some("delete"),
+            tool_names::MOVE_FILE => Some("move"),
+            tool_names::COPY_FILE => Some("copy"),
+            tool_names::CREATE_FILE => Some("write"),
+            _ => None,
+        })?;
+
+    let mut mapped = obj.clone();
+    mapped.insert("action".to_string(), Value::String(action.to_string()));
+    Some(Value::Object(mapped))
+}
+
 fn enforce_unified_file_payload_limit(
     normalized_tool_name: &str,
     args: &Value,
@@ -310,7 +342,13 @@ pub(super) fn preflight_validate_call(
         .map(|resolution| resolution.registration_name().to_string())
         .map_err(|_| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
 
-    preflight_validate_resolved_call(registry, &normalized_tool_name, args)
+    if let Some(remapped_args) =
+        remap_public_unified_file_alias_args(name, &normalized_tool_name, args)
+    {
+        preflight_validate_resolved_call(registry, &normalized_tool_name, &remapped_args)
+    } else {
+        preflight_validate_resolved_call(registry, &normalized_tool_name, args)
+    }
 }
 
 pub(super) fn preflight_validate_resolved_call(

@@ -215,8 +215,9 @@ async fn test_instruction_appendix_uses_explicit_directory_and_precedes_runtime_
     let runtime_pos = prompt.find("[Runtime Context]").expect("runtime context");
     assert!(instructions_pos < runtime_pos);
     assert!(prompt.contains("be brief"));
-    assert!(prompt.contains("[AGENTS.md]"));
-    assert!(prompt.contains("[nested/sub/AGENTS.md]"));
+    assert!(prompt.contains("### Instruction map"));
+    assert!(prompt.contains("AGENTS.md (workspace AGENTS)"));
+    assert!(prompt.contains("nested/sub/AGENTS.md (workspace AGENTS)"));
     assert!(prompt.contains("root rule"));
     assert!(prompt.contains("nested rule"));
 }

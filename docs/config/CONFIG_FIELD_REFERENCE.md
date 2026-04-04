@@ -84,8 +84,8 @@ python3 scripts/generate_config_field_reference.py
 | `agent.persistent_memory.auto_write` | `boolean` | no | `true` | Write durable memory after completed turns and session finalization |
 | `agent.persistent_memory.directory_override` | `null \| string` | no | `null` | Optional user-local directory override for persistent memory storage |
 | `agent.persistent_memory.enabled` | `boolean` | no | `false` | Toggle main-session persistent memory for this repository |
-| `agent.persistent_memory.startup_byte_limit` | `integer` | no | `25600` | Startup byte budget loaded from memory_summary.md |
-| `agent.persistent_memory.startup_line_limit` | `integer` | no | `200` | Startup line budget loaded from memory_summary.md |
+| `agent.persistent_memory.startup_byte_limit` | `integer` | no | `25600` | Startup byte budget scanned from `memory_summary.md` before VT Code renders the compact memory summary |
+| `agent.persistent_memory.startup_line_limit` | `integer` | no | `200` | Startup line budget scanned from `memory_summary.md` before VT Code renders the compact memory summary |
 | `agent.project_doc_fallback_filenames` | `array` | no | `[]` | Additional filenames to check when AGENTS.md is absent at a directory level. |
 | `agent.project_doc_fallback_filenames[]` | `string` | no | `-` | - |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |

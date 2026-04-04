@@ -57,7 +57,7 @@ Authored guidance files can import other files inline with `@path/to/file.md`.
 
 ## Persistent Memory
 
-Persistent memory is VT Code's learned, per-repository memory store. It is separate from authored guidance and is injected after authored instructions during startup.
+Persistent memory is VT Code's learned, per-repository memory store. It is separate from authored guidance, and VT Code injects only a compact startup summary after authored instructions.
 
 ### Storage layout
 
@@ -80,7 +80,7 @@ memory/
 └── rollout_summaries/
 ```
 
-- `memory_summary.md` is the startup-injected summary.
+- `memory_summary.md` is the source file for the compact startup summary.
 - `MEMORY.md` is the durable registry and index.
 - `preferences.md` stores stable user and workflow preferences.
 - `repository-facts.md` stores grounded repository and tooling facts.
@@ -94,9 +94,9 @@ When `agent.persistent_memory.enabled = true`, VT Code injects:
 
 1. explicit user instructions
 2. authored guidance
-3. the first configured excerpt of `memory_summary.md`
+3. a compact prompt summary derived from the configured scan of `memory_summary.md`
 
-The startup excerpt is controlled by:
+The startup scan is controlled by:
 
 - `agent.persistent_memory.startup_line_limit`
 - `agent.persistent_memory.startup_byte_limit`
@@ -162,7 +162,7 @@ For current-value fields such as startup line limits, byte limits, and import de
 
 `/init` still generates the root `AGENTS.md`, and now also scaffolds:
 
-- `.vtcode/rules/README.md`
+- `.vtcode/README.md`
 - the per-repository memory directory layout
 
 Use `/init --force` when you want to regenerate the root guidance file and refresh workspace scaffolding in one pass.

@@ -723,6 +723,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Executive Summary, Architecture Overview, Codebase Health Snapshot, Maintainability Hotspots, Targeted Improvements
   - **User Questions**: "What can you tell me about VT Code Project Analysis?", "How does Executive Summary work?", "How does Architecture Overview work?"
 
+- **File**: `docs/project/vtcode-project-info.md`
+  - **Content**: VT Code Project Info
+  - **Topics**: What is VT Code?, Architecture
+  - **User Questions**: "What can you tell me about VT Code Project Info?", "How does What is VT Code? work?", "How does Architecture work?"
+
 - **File**: `docs/sandbox/SANDBOX_DEEP_DIVE.md`
   - **Content**: VT Code Sandbox Deep Dive
   - **Topics**: Design Philosophy, Sandbox Policies, Platform-Specific Implementations, Security Features, Debug Tooling

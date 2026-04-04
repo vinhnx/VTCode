@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -5,10 +6,12 @@ use serde::Serialize;
 
 use crate::instructions::{
     InstructionBundle, InstructionDiscoveryOptions, InstructionSegment,
-    extract_instruction_highlights, format_instruction_path, read_instruction_bundle,
-    render_instruction_summary_markdown,
+    extract_instruction_highlights, read_instruction_bundle, render_instruction_summary_markdown,
 };
-use crate::persistent_memory::{PersistentMemoryExcerpt, read_persistent_memory_excerpt};
+use crate::persistent_memory::{
+    MEMORY_FILENAME, MEMORY_SUMMARY_FILENAME, PersistentMemoryExcerpt, extract_memory_highlights,
+    read_persistent_memory_excerpt,
+};
 use crate::skills::model::SkillMetadata;
 use crate::utils::file_utils::canonicalize_with_context;
 use vtcode_config::core::AgentConfig;
@@ -19,6 +22,7 @@ const PROJECT_DOC_SUMMARY_TITLE: &str = "PROJECT DOCUMENTATION";
 const PROJECT_DOC_TRUNCATION_NOTE: &str = "Some instruction files exceeded the configured prompt budget and were indexed instead of fully inlined.";
 const PERSISTENT_MEMORY_TRUNCATION_NOTE: &str =
     "Persistent memory was truncated to the configured startup excerpt budget.";
+const PERSISTENT_MEMORY_HIGHLIGHT_LIMIT: usize = 3;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectDocBundle {
@@ -194,55 +198,28 @@ pub fn render_instruction_appendix(
             section.push_str(PROJECT_DOC_SEPARATOR);
         }
 
-        if bundle.truncated {
-            section.push_str(
-                render_instruction_summary_markdown(
-                    PROJECT_DOC_SUMMARY_TITLE,
-                    &bundle.segments,
-                    true,
-                    project_root,
-                    home_dir,
-                    12,
-                    PROJECT_DOC_TRUNCATION_NOTE,
-                )
-                .trim_end(),
-            );
-        } else {
-            let multiple_sources = bundle.segments.len() > 1;
-            for (index, segment) in bundle.segments.iter().enumerate() {
-                if index > 0 {
-                    section.push_str("\n\n---\n\n");
-                }
-
-                if multiple_sources {
-                    section.push('[');
-                    section.push_str(&format_instruction_path(
-                        &segment.source.path,
-                        project_root,
-                        home_dir,
-                    ));
-                    section.push_str("]\n");
-                }
-
-                section.push_str(segment.contents.trim());
-            }
-        }
+        section.push_str(
+            render_instruction_summary_markdown(
+                PROJECT_DOC_SUMMARY_TITLE,
+                &bundle.segments,
+                bundle.truncated,
+                project_root,
+                home_dir,
+                6,
+                PROJECT_DOC_TRUNCATION_NOTE,
+            )
+            .trim_end(),
+        );
     }
 
-    if let Some(memory) = persistent_memory
-        && !memory.contents.trim().is_empty()
+    if let Some(memory_section) =
+        persistent_memory.and_then(render_persistent_memory_summary_markdown)
     {
         if !section.is_empty() {
             section.push_str(PERSISTENT_MEMORY_SEPARATOR);
         }
 
-        section.push_str("## PERSISTENT MEMORY\n\n");
-        section.push_str(memory.contents.trim());
-        if memory.truncated {
-            section.push_str("\n\n_");
-            section.push_str(PERSISTENT_MEMORY_TRUNCATION_NOTE);
-            section.push('_');
-        }
+        section.push_str(memory_section.trim_end());
     }
 
     if section.is_empty() {
@@ -250,6 +227,37 @@ pub fn render_instruction_appendix(
     } else {
         Some(section)
     }
+}
+
+fn render_persistent_memory_summary_markdown(memory: &PersistentMemoryExcerpt) -> Option<String> {
+    let highlights = extract_memory_highlights(&memory.contents, PERSISTENT_MEMORY_HIGHLIGHT_LIMIT);
+    if highlights.is_empty() && memory.contents.trim().is_empty() {
+        return None;
+    }
+
+    let mut section = String::with_capacity(512);
+    section.push_str("## PERSISTENT MEMORY\n\n");
+    section.push_str("### Files\n");
+    let _ = writeln!(section, "- `{MEMORY_SUMMARY_FILENAME}`: startup summary");
+    let _ = writeln!(section, "- `{MEMORY_FILENAME}`: durable registry");
+
+    if !highlights.is_empty() {
+        section.push_str("\n### Key points\n");
+        for highlight in highlights {
+            let _ = writeln!(section, "- {highlight}");
+        }
+    }
+
+    section.push_str(
+        "\n### On-demand loading\n- Open `memory_summary.md` or `MEMORY.md` when exact wording matters.\n",
+    );
+
+    if memory.truncated {
+        let _ = writeln!(section, "\n_{PERSISTENT_MEMORY_TRUNCATION_NOTE}_");
+    }
+
+    section.push('\n');
+    Some(section)
 }
 
 pub fn merge_project_docs_with_skills(
@@ -416,9 +424,10 @@ mod tests {
 
         assert!(appendix.starts_with("user note"));
         assert!(appendix.contains("--- project-doc ---"));
-        assert!(appendix.contains("[AGENTS.md]"));
-        assert!(appendix.contains("[docs/guidelines.md]"));
-        assert!(appendix.contains("[nested/sub/AGENTS.md]"));
+        assert!(appendix.contains("### Instruction map"));
+        assert!(appendix.contains("AGENTS.md (workspace AGENTS)"));
+        assert!(appendix.contains("docs/guidelines.md (custom extra instructions)"));
+        assert!(appendix.contains("nested/sub/AGENTS.md (workspace AGENTS)"));
         assert!(appendix.contains("root doc"));
         assert!(appendix.contains("extra doc"));
         assert!(appendix.contains("nested doc"));
@@ -528,13 +537,13 @@ mod tests {
             .await
             .expect("expected instructions");
 
-        assert!(instructions.contains("[AGENTS.md]"));
-        assert!(instructions.contains("[nested/sub/AGENTS.md]"));
+        assert!(instructions.contains("### Instruction map"));
+        assert!(instructions.contains("AGENTS.md (workspace AGENTS)"));
+        assert!(instructions.contains("nested/sub/AGENTS.md (workspace AGENTS)"));
         assert!(instructions.contains("Root summary"));
         assert!(instructions.contains("Nested summary"));
-        assert!(!instructions.contains("### Instruction map"));
-        assert!(!instructions.contains("### Key points"));
-        assert!(!instructions.contains("--- project-doc ---"));
+        assert!(instructions.contains("### Key points"));
+        assert!(instructions.contains("### On-demand loading"));
     }
 
     #[tokio::test]
@@ -570,5 +579,65 @@ mod tests {
         let memory_idx = appendix.find("remembered detail").expect("memory detail");
         assert!(project_doc_idx < memory_idx);
         assert!(appendix.contains("--- persistent-memory ---"));
+        assert!(appendix.contains("### Files"));
+        assert!(appendix.contains("### On-demand loading"));
+        assert!(appendix.contains("memory_summary.md"));
+        assert!(appendix.contains("MEMORY.md"));
+        assert!(!appendix.contains("# VT Code Memory Summary"));
+    }
+
+    #[tokio::test]
+    async fn instruction_appendix_keeps_persistent_memory_compact() {
+        let repo = tempdir().expect("repo");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+        std::fs::write(repo.path().join(".vtcode-project"), "repo").expect("project name");
+
+        let memory_dir = repo.path().join(".memory-root");
+        let config = AgentConfig {
+            persistent_memory: vtcode_config::core::PersistentMemoryConfig {
+                enabled: true,
+                directory_override: Some(memory_dir.display().to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let project_memory_dir = memory_dir.join("projects").join("repo").join("memory");
+        std::fs::create_dir_all(&project_memory_dir).expect("memory dir");
+        std::fs::write(
+            project_memory_dir.join("memory_summary.md"),
+            "# VT Code Memory Summary\n\n- keep changes surgical\n- run ./scripts/check.sh\n- use cargo nextest for targeted tests\n- prefer docs/ARCHITECTURE.md for orientation\n- extra detail that should stay out of the prompt body\n",
+        )
+        .expect("write memory summary");
+
+        let appendix = build_instruction_appendix(&config, repo.path())
+            .await
+            .expect("instruction appendix");
+        let approx_tokens = appendix.len() / 4;
+
+        assert!(appendix.contains("### Key points"));
+        assert!(appendix.contains("Open `memory_summary.md` or `MEMORY.md`"));
+        assert!(approx_tokens < 120, "got ~{} tokens", approx_tokens);
+    }
+
+    #[tokio::test]
+    async fn instruction_appendix_stays_summary_sized() {
+        let repo = tempdir().expect("repo");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+        write_doc(
+            repo.path(),
+            "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/ARCHITECTURE.md\n",
+        )
+        .expect("write root doc");
+
+        let appendix = build_instruction_appendix(&AgentConfig::default(), repo.path())
+            .await
+            .expect("instruction appendix");
+        let approx_tokens = appendix.len() / 4;
+
+        assert!(appendix.contains("### Instruction map"));
+        assert!(appendix.contains("### Key points"));
+        assert!(appendix.contains("### On-demand loading"));
+        assert!(approx_tokens < 140, "got ~{} tokens", approx_tokens);
     }
 }

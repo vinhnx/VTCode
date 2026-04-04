@@ -151,7 +151,7 @@ top_p = 0.9                # Top-P sampling parameter
 VT Code separates authored guidance from learned persistent memory.
 
 - Authored guidance comes from `AGENTS.md`, `.vtcode/rules/`, and any extra instruction files you configure.
-- Persistent memory is a per-repository memory store injected after authored guidance at startup.
+- Persistent memory is a per-repository memory store summarized into a compact startup section after authored guidance.
 
 ### Instruction discovery controls
 
@@ -172,7 +172,7 @@ Workspace rules live under `.vtcode/rules/`. Rules without frontmatter are alway
 
 ### Persistent memory controls
 
-Persistent memory uses `memory_summary.md` for startup injection and stores the durable registry under the repository memory directory.
+Persistent memory uses `memory_summary.md` as the source for a compact startup summary and stores the durable registry under the repository memory directory.
 
 By default, that directory is `~/.vtcode/projects/<project>/memory/`. VT Code also migrates older per-repository memory directories from the legacy config root into `~/.vtcode` when it resolves repository memory.
 
@@ -189,7 +189,7 @@ use_for_memory = true
 
 - `agent.persistent_memory.enabled` turns per-repository persistent memory on or off. It defaults to `false`.
 - `agent.persistent_memory.auto_write` controls whether VT Code stages and consolidates rollout summaries at session finalization.
-- `startup_line_limit` and `startup_byte_limit` cap the excerpt loaded from `memory_summary.md`.
+- `startup_line_limit` and `startup_byte_limit` cap the scan VT Code uses to build the compact startup summary from `memory_summary.md`.
 - `agent.small_model.use_for_memory` enables lightweight-model routing for memory planning, classification, cleanup, and summary refresh.
 
 Memory mutation is LLM-assisted only:

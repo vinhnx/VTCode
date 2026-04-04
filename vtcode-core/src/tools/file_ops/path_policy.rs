@@ -116,16 +116,15 @@ impl FileOpsTool {
         let absolute = self.absolute_candidate(path);
         let normalized = normalize_path(&absolute);
         let normalized_root = normalize_path(&self.workspace_root);
-
-        if !normalized.starts_with(&normalized_root) {
-            return Err(anyhow!(
-                "Error: Path '{}' resolves outside the workspace.",
-                original_display
-            ));
-        }
-
         let canonical = self.canonicalize_allow_missing(&normalized).await?;
-        if !canonical.starts_with(self.canonical_workspace_root()) {
+        let canonical_root = normalize_path(self.canonical_workspace_root());
+
+        let within_workspace = normalized.starts_with(&normalized_root)
+            || normalized.starts_with(&canonical_root)
+            || canonical.starts_with(&normalized_root)
+            || canonical.starts_with(self.canonical_workspace_root());
+
+        if !within_workspace {
             return Err(anyhow!(
                 "Error: Path '{}' resolves outside the workspace.",
                 original_display
@@ -141,6 +140,12 @@ impl FileOpsTool {
 
     pub(super) fn resolve_file_path(&self, path: &str) -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
+        let requested = PathBuf::from(path);
+
+        if requested.is_absolute() {
+            paths.push(requested);
+            return Ok(paths);
+        }
 
         // Try exact path first
         paths.push(self.workspace_root.join(path));

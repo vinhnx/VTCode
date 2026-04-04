@@ -30,9 +30,9 @@ pub struct AgentConfig {
     #[serde(default = "default_theme")]
     pub theme: String,
 
-    /// System prompt mode controlling verbosity and token overhead
-    /// Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k)
-    /// Inspired by pi-coding-agent: modern models often perform well with minimal prompts
+    /// System prompt mode controlling prompt verbosity and token overhead.
+    /// Options target lean base prompts: minimal (~150-250 tokens), lightweight/default
+    /// (~250-350 tokens), specialized (~350-500 tokens) before dynamic runtime addenda.
     #[serde(default)]
     pub system_prompt_mode: SystemPromptMode,
 
@@ -597,7 +597,7 @@ impl AgentConfig {
     pub fn should_include_structured_reasoning_tags(&self) -> bool {
         self.include_structured_reasoning_tags.unwrap_or(matches!(
             self.system_prompt_mode,
-            SystemPromptMode::Default | SystemPromptMode::Specialized
+            SystemPromptMode::Specialized
         ))
     }
 
@@ -855,11 +855,11 @@ pub struct PersistentMemoryConfig {
     #[serde(default)]
     pub directory_override: Option<String>,
 
-    /// Startup line budget loaded from memory_summary.md
+    /// Startup line budget scanned from memory_summary.md before VT Code renders a compact startup summary
     #[serde(default = "default_persistent_memory_startup_line_limit")]
     pub startup_line_limit: usize,
 
-    /// Startup byte budget loaded from memory_summary.md
+    /// Startup byte budget scanned from memory_summary.md before VT Code renders a compact startup summary
     #[serde(default = "default_persistent_memory_startup_byte_limit")]
     pub startup_byte_limit: usize,
 }
@@ -1455,7 +1455,7 @@ mod tests {
             system_prompt_mode: SystemPromptMode::Default,
             ..Default::default()
         };
-        assert!(default_mode.should_include_structured_reasoning_tags());
+        assert!(!default_mode.should_include_structured_reasoning_tags());
 
         let specialized_mode = AgentConfig {
             system_prompt_mode: SystemPromptMode::Specialized,

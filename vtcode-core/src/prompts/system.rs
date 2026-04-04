@@ -43,91 +43,52 @@ const CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
 You are VT Code. Be concise, direct, and safe.
 
-## Core Contract
+## Contract
 
-- Start with `AGENTS.md`; inspect code and match local patterns.
-- Open indexed instruction or skill files when wording matters.
-- Act on safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.
+- Start with `AGENTS.md`; inspect code and match local patterns. Use `@file` when helpful.
 - If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
-- Keep control on the main thread; make delegation or parallel work explicit instead of implicit.
-- Delegate only bounded, independent work that will not block the very next local step; keep urgent blocking work local.
-- Prefer simple changes; measure before optimizing performance.
-- Preserve task goal, acceptance criteria, touched files, test or error outcomes, and decisions with rationale across compaction.
-- Use `@file` to focus the right code.
+- Take safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.
+- Keep control on the main thread. Delegate only bounded, independent work that will not block the next local step.
+- Prefer simple changes. Measure before optimizing.
 - Verify changes yourself; never claim a check passed unless you ran it.
-- Respect approval gates and keep destructive or external actions explicit.
-- For research or citation-sensitive work, use retrieved evidence and label inference clearly.
-
-## Execution Contract
-
-- Return exactly the requested sections or format; keep outputs concise.
-- User instructions override default tone, format, and initiative unless they conflict with safety or honesty.
-- Use tools when they improve correctness, completeness, or grounding; do not skip lookup, discovery, or verification.
-- Treat the task as incomplete until every requested deliverable is done or explicitly blocked.
-- Retry empty, partial, or narrow lookups with a different query or source before concluding nothing exists.
-- Before finalizing, check requirements, grounding, format, and permissions.
-
-## Interaction
-
-- Keep user updates brief and high-signal.
-
-## Output
-
-- Keep responses outcome-first. Use file refs when helpful.
-- No emoji, filler, or code dumps unless requested. Use ASCII markers only."#;
+- Keep outputs concise and in the requested format. Keep user updates brief and high-signal.
+- Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction."#;
 
 const MINIMAL_CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
 You are VT Code. Be concise, direct, and safe.
 
-## Core Contract
+## Contract
 
 - Start with `AGENTS.md`; inspect code first.
 - If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
-- Keep control on the main thread; use delegation only for bounded independent work.
-- Preserve task goal, touched files, test or error outcomes, and decision rationale when compacting history.
-- Take only safe, reversible steps without asking.
-- Verify changes yourself and use retrieved evidence for citation-sensitive work.
-
-## Execution Contract
-
-- Return exactly the requested sections or format; keep outputs concise.
-- Use tools for lookup, discovery, and verification before concluding.
-- Treat the task as incomplete until every requested deliverable is done or blocked.
-- Before finalizing, check requirements, grounding, format, and permissions.
-- Keep user updates brief and high-signal."#;
-
-const ACCURACY_OPTIMIZATION_ADDENDUM: &str = r#"## Accuracy Optimization
-
-- Start simple with success criteria or eval examples when accuracy matters.
-- Missing, stale, or proprietary knowledge means optimize context; inconsistent format, style, or reasoning means optimize instructions or training.
-- Treat prompting, retrieval, and fine-tuning as additive levers; avoid noisy long context.
-- For high-stakes tasks, prefer clarification or human review over guessing."#;
+- Take safe, reversible steps without asking and verify changes yourself.
+- Keep delegation bounded and explicit.
+- Preserve task goal, touched files, and outcomes across compaction.
+- Use retrieved evidence for citation-sensitive work.
+- Keep outputs concise and in the requested format."#;
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
 - Use `task_tracker` for non-trivial work.
-- Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit.
-- For repo-level changes, use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md`."#;
+- Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit."#;
 
 const MINIMAL_MODE_DELTA: &str = r#"## Mode
 
 - Stay lightweight and precise; use `task_tracker` once the task stops being trivial.
-- Say so early when uncertain; hidden capabilities route through `list_skills` and `load_skill`.
-- Use `AGENTS.md` as the map and `docs/harness/` when structural rules matter."#;
+- Use `AGENTS.md` as the map and open repo docs only when structural rules matter."#;
 
 const LIGHTWEIGHT_MODE_DELTA: &str = r#"## Mode
 
 - Act and verify in one thread.
-- Use `task_tracker` for multi-step work and Plan Mode for research/spec work.
-- Investigate before edits; match nearby patterns."#;
+- Use `task_tracker` for non-trivial work."#;
 
 const SPECIALIZED_MODE_DELTA: &str = r#"## Mode
 
 - Explore, plan, then execute.
-- Use `task_tracker` for multi-step work, keep one active slice, and use Plan Mode when you need scope closure.
-- End plan work with one `<proposed_plan>`; if a path stalls, re-plan into smaller verified slices.
-- For repo-level changes, use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md`."#;
+- Use `task_tracker` for multi-step work and Plan Mode when scope or verification is still open.
+- End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
+- Use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
 
 static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
 static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
@@ -169,26 +130,8 @@ Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty
 "#;
 
 /// System instruction configuration
-#[derive(Debug, Clone)]
-pub struct SystemPromptConfig {
-    pub include_examples: bool,
-    pub include_debugging_guides: bool,
-    pub include_error_handling: bool,
-    pub max_response_length: Option<usize>,
-    pub enable_thorough_reasoning: bool,
-}
-
-impl Default for SystemPromptConfig {
-    fn default() -> Self {
-        Self {
-            include_examples: true,
-            include_debugging_guides: true,
-            include_error_handling: true,
-            max_response_length: None,
-            enable_thorough_reasoning: true,
-        }
-    }
-}
+#[derive(Debug, Clone, Default)]
+pub struct SystemPromptConfig;
 
 /// Generate system instruction
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
@@ -243,9 +186,6 @@ pub async fn compose_system_instruction_text(
     instruction.push_str(&base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
-    }
-    if should_include_accuracy_optimization(prompt_mode) {
-        append_prompt_section(&mut instruction, ACCURACY_OPTIMIZATION_ADDENDUM);
     }
 
     if let Some(ctx) = prompt_context {
@@ -363,14 +303,7 @@ fn should_include_structured_reasoning(
     }
 
     // Backward-compatible fallback when no config is available.
-    matches!(
-        mode,
-        SystemPromptMode::Default | SystemPromptMode::Specialized
-    )
-}
-
-fn should_include_accuracy_optimization(mode: SystemPromptMode) -> bool {
-    matches!(mode, SystemPromptMode::Default)
+    matches!(mode, SystemPromptMode::Specialized)
 }
 
 /// Generate the stable base system instruction with configuration-aware sections.
@@ -527,8 +460,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 2600,
-            "Default mode should stay sparse (<=2.6K chars, was {} chars)",
+            result.len() <= 1400,
+            "Default mode should stay sparse (<=1.4K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -548,16 +481,15 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        // Lightweight is optimized for simple operations (v4.2)
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 2100,
-            "Lightweight should be compact (<2.1K chars, was {} chars)",
+            result.len() < 1200,
+            "Lightweight should be compact (<1.2K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
         assert!(result.contains("@file"));
-        assert!(result.contains("Plan Mode"));
+        assert!(result.contains("Act and verify in one thread"));
     }
 
     #[tokio::test]
@@ -597,7 +529,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_default_mode_includes_structured_reasoning_by_default() {
+    async fn test_default_mode_omits_structured_reasoning_by_default() {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Default;
         config.agent.include_temporal_context = false;
@@ -609,8 +541,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.contains("## Structured Reasoning"),
-            "Default mode should include structured reasoning by default"
+            !result.contains("## Structured Reasoning"),
+            "Default mode should omit structured reasoning by default"
         );
     }
 
@@ -627,13 +559,13 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 2500,
-            "Specialized should stay sparse (<=2.5K chars, was {} chars)",
+            result.len() <= 1700,
+            "Specialized should stay sparse (<=1.7K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
         assert!(result.contains("<proposed_plan>"));
-        assert!(result.contains("Use `@file` to focus the right code."));
+        assert!(result.contains("ARCHITECTURAL_INVARIANTS"));
     }
 
     #[test]
@@ -662,7 +594,7 @@ mod tests {
         // Rough estimate: 1 token ≈ 4 characters
         let approx_tokens = minimal_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 380,
+            approx_tokens < 220,
             "Minimal prompt should stay compact, got ~{}",
             approx_tokens
         );
@@ -672,10 +604,47 @@ mod tests {
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 500,
+            approx_tokens < 350,
             "Default prompt should stay compact, got ~{}",
             approx_tokens
         );
+    }
+
+    #[tokio::test]
+    async fn test_default_live_prompt_budget_with_instruction_summary() {
+        use crate::project_doc::build_instruction_appendix_with_context;
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+        std::fs::write(
+            workspace.path().join("AGENTS.md"),
+            "- run ./scripts/check.sh\n- avoid adding to vtcode-core\n- use Conventional Commits\n- start with docs/ARCHITECTURE.md\n",
+        )
+        .expect("write agents");
+        std::fs::create_dir_all(workspace.path().join(".vtcode/rules")).expect("rules dir");
+        std::fs::write(
+            workspace.path().join(".vtcode/rules/rust.md"),
+            "---\npaths:\n  - \"**/*.rs\"\n---\n# Rust\n- keep changes surgical\n",
+        )
+        .expect("write rust rule");
+
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        let base = compose_system_instruction_text(workspace.path(), Some(&config), None).await;
+        let appendix = build_instruction_appendix_with_context(
+            &config.agent,
+            workspace.path(),
+            &[workspace.path().join("src/lib.rs")],
+        )
+        .await
+        .expect("instruction appendix");
+        let prompt = format!("{base}\n\n# INSTRUCTIONS\n{appendix}");
+        let approx_tokens = prompt.len() / 4;
+
+        assert!(prompt.contains("### Instruction map"));
+        assert!(prompt.contains("### On-demand loading"));
+        assert!(approx_tokens <= 1100, "got ~{} tokens", approx_tokens);
     }
 
     #[tokio::test]
@@ -807,16 +776,12 @@ mod tests {
             "Default prompt should reference AGENTS.md as map"
         );
         assert!(
-            default_system_prompt().contains("ARCHITECTURAL_INVARIANTS"),
-            "Default prompt should reference architectural invariants"
-        );
-        assert!(
             specialized_instruction_text().contains("ARCHITECTURAL_INVARIANTS"),
             "Specialized prompt should reference architectural invariants"
         );
         assert!(
-            minimal_system_prompt().contains("docs/harness/"),
-            "Minimal prompt should reference harness knowledge base"
+            minimal_system_prompt().contains("AGENTS.md"),
+            "Minimal prompt should still reference AGENTS.md"
         );
     }
 
@@ -831,19 +796,19 @@ mod tests {
             "Specialized prompt should reject guessing"
         );
         assert!(
-            minimal_system_prompt().contains("uncertain"),
-            "Minimal prompt should still mention uncertainty"
+            minimal_system_prompt().contains("do not guess"),
+            "Minimal prompt should still reject guessing"
         );
     }
 
     #[test]
     fn test_prompts_include_compaction_preservation_contract() {
         assert!(
-            default_system_prompt().contains("acceptance criteria"),
-            "Default prompt should preserve acceptance criteria across compaction"
+            default_system_prompt().contains("touched files"),
+            "Default prompt should preserve touched files across compaction"
         );
         assert!(
-            default_system_prompt().contains("decisions with rationale"),
+            default_system_prompt().contains("decisions across compaction"),
             "Default prompt should preserve decision rationale across compaction"
         );
         assert!(
@@ -853,24 +818,19 @@ mod tests {
     }
 
     #[test]
-    fn test_prompts_include_gpt54_execution_contract_defaults() {
+    fn test_default_prompt_stays_lean_but_complete() {
         let prompt = default_system_prompt();
 
         assert!(
-            prompt.contains("## Execution Contract"),
-            "Default prompt should include the execution contract section"
+            prompt.contains("## Contract"),
+            "Default prompt should include the lean contract section"
         );
         assert!(
-            prompt.contains("Return exactly the requested sections or format"),
+            prompt.contains("Keep outputs concise and in the requested format"),
             "Default prompt should clamp output shape"
         );
         assert!(
-            prompt
-                .contains("Treat the task as incomplete until every requested deliverable is done"),
-            "Default prompt should require completeness"
-        );
-        assert!(
-            prompt.contains("Before finalizing, check requirements, grounding, format"),
+            prompt.contains("Verify changes yourself"),
             "Default prompt should require verification before finalizing"
         );
         assert!(
@@ -892,13 +852,13 @@ mod tests {
             "Default prompt should restrict delegation to bounded independent work"
         );
         assert!(
-            minimal_system_prompt().contains("delegation only for bounded independent work"),
+            minimal_system_prompt().contains("Keep delegation bounded and explicit"),
             "Minimal prompt should preserve the delegation contract"
         );
     }
 
     #[test]
-    fn test_prompts_include_accuracy_optimization_contract() {
+    fn test_default_prompt_omits_accuracy_addendum() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let config = VTCodeConfig::default();
         let prompt = runtime.block_on(compose_system_instruction_text(
@@ -908,24 +868,12 @@ mod tests {
         ));
 
         assert!(
-            prompt.contains("## Accuracy Optimization"),
-            "Runtime prompt should include the accuracy optimization section"
+            !prompt.contains("## Accuracy Optimization"),
+            "Runtime prompt should omit the accuracy optimization section"
         );
         assert!(
-            prompt.contains("Missing, stale, or proprietary knowledge means optimize context"),
-            "Prompt should distinguish context failures from behavior failures"
-        );
-        assert!(
-            prompt.contains("Treat prompting, retrieval, and fine-tuning as additive levers"),
-            "Prompt should treat optimization levers as additive"
-        );
-        assert!(
-            prompt.contains("avoid noisy long context"),
-            "Prompt should warn against noisy retrieval/context"
-        );
-        assert!(
-            prompt.contains("clarification or human review"),
-            "Prompt should prefer safer fallbacks for high-stakes tasks"
+            prompt.contains("do not guess"),
+            "Prompt should still preserve the uncertainty guardrail"
         );
     }
 
@@ -948,7 +896,7 @@ mod tests {
             let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
             assert!(
-                result.contains("## Core Contract"),
+                result.contains("## Contract"),
                 "{mode_name} prompt should reuse the canonical base prompt"
             );
             assert!(
@@ -965,12 +913,8 @@ mod tests {
             None,
         );
         assert!(
-            guidelines.contains("`action='structural'`"),
-            "Tool guidance should prefer structural search for code"
-        );
-        assert!(
-            guidelines.contains("prefer `rg` over shell `grep`"),
-            "Tool guidance should prefer ripgrep in shell"
+            guidelines.contains("Prefer search over shell"),
+            "Tool guidance should prefer search over shell exploration"
         );
         assert!(
             guidelines.contains("git diff -- <path>"),
@@ -1365,7 +1309,7 @@ mod tests {
 
         // Verify specific guideline for this tool set
         assert!(
-            result.contains("`unified_file`") && result.contains("Read before `edit`"),
+            result.contains("Read before edit"),
             "Should have read-before-edit guideline"
         );
     }
@@ -1431,10 +1375,9 @@ mod tests {
 
         assert!(result.contains("## Skills"));
         assert!(result.contains("skill-creator: Create or update skills"));
-        assert!(result.contains("(file: /tmp/skill-creator/SKILL.md)"));
-        assert!(result.contains("- Routing: Use a skill"));
+        assert!(result.contains("Use a skill only when the user names it"));
         assert!(!result.contains("Discovery: Available skills are listed"));
-        assert!(!result.contains("scope: system"));
+        assert!(!result.contains("/tmp/skill-creator/SKILL.md"));
         assert!(!result.contains("use: Use when creating or updating a skill."));
         assert!(!result.contains("avoid: Avoid for unrelated implementation work."));
     }

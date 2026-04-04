@@ -299,7 +299,7 @@ impl VTCodeConfig {
             &config_file_name,
             defaults_provider,
         )?;
-        let rules_readme_path = workspace.join(".vtcode").join("rules").join("README.md");
+        let vtcode_readme_path = workspace.join(".vtcode").join("README.md");
         let ast_grep_config_path = workspace.join("sgconfig.yml");
         let ast_grep_rule_path = workspace
             .join("rules")
@@ -312,7 +312,7 @@ impl VTCodeConfig {
 
         crate::loader::bootstrap::ensure_parent_dir(&config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&gitignore_path)?;
-        crate::loader::bootstrap::ensure_parent_dir(&rules_readme_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&vtcode_readme_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_rule_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_test_path)?;
@@ -345,15 +345,15 @@ impl VTCodeConfig {
             }
         }
 
-        if !rules_readme_path.exists() || force {
-            let rules_readme = Self::default_rules_readme_template();
-            fs::write(&rules_readme_path, rules_readme).with_context(|| {
+        if !vtcode_readme_path.exists() || force {
+            let vtcode_readme = Self::default_vtcode_readme_template();
+            fs::write(&vtcode_readme_path, vtcode_readme).with_context(|| {
                 format!(
-                    "Failed to write rules README: {}",
-                    rules_readme_path.display()
+                    "Failed to write VT Code README: {}",
+                    vtcode_readme_path.display()
                 )
             })?;
-            created_files.push(".vtcode/rules/README.md".to_string());
+            created_files.push(".vtcode/README.md".to_string());
         }
 
         let ast_grep_files = [
@@ -501,6 +501,7 @@ instruction_import_max_depth = 5
 enabled = false
 auto_write = true
 # directory_override = "/absolute/user-local/path"
+# Startup scan budget for the compact memory summary
 startup_line_limit = 200
 startup_byte_limit = 25600
 
@@ -1037,8 +1038,8 @@ target/, build/, dist/, node_modules/, vendor/
     }
 
     #[cfg(feature = "bootstrap")]
-    fn default_rules_readme_template() -> &'static str {
-        "# VT Code Rules\n\nPlace shared VT Code instruction files here.\n\n- Add always-on rules as `*.md` files anywhere under `.vtcode/rules/`.\n- Add path-scoped rules with YAML frontmatter, for example:\n\n```md\n---\npaths:\n  - \"src/**/*.rs\"\n---\n\n# Rust Rules\n- Keep changes surgical.\n```\n"
+    fn default_vtcode_readme_template() -> &'static str {
+        "# VT Code Workspace Files\n\n- Put always-on repository guidance in `AGENTS.md`.\n- Put path-scoped prompt rules in `.vtcode/rules/*.md` using YAML frontmatter.\n- Keep authoring notes and other workspace docs outside `.vtcode/rules/` so they are not loaded into prompt memory.\n"
     }
 
     #[cfg(feature = "bootstrap")]
@@ -1076,19 +1077,17 @@ mod tests {
 
     #[cfg(feature = "bootstrap")]
     #[test]
-    fn bootstrap_project_creates_rules_readme() {
+    fn bootstrap_project_creates_vtcode_readme() {
         let workspace = tempdir().expect("workspace");
         let created = VTCodeConfig::bootstrap_project(workspace.path(), false)
             .expect("bootstrap project should succeed");
 
         assert!(
-            created
-                .iter()
-                .any(|entry| entry == ".vtcode/rules/README.md"),
+            created.iter().any(|entry| entry == ".vtcode/README.md"),
             "created files: {:?}",
             created
         );
-        assert!(workspace.path().join(".vtcode/rules/README.md").exists());
+        assert!(workspace.path().join(".vtcode/README.md").exists());
     }
 
     #[cfg(feature = "bootstrap")]
