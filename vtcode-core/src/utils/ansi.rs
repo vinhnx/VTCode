@@ -10,10 +10,12 @@ use crate::ui::tui::{
 use crate::utils::ansi_capabilities::AnsiCapabilities;
 pub use crate::utils::message_style::MessageStyle;
 use crate::utils::transcript;
+#[cfg(feature = "tui")]
 use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, RgbColor, Style};
 use anyhow::{Result, anyhow};
+#[cfg(feature = "tui")]
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -936,6 +938,7 @@ impl InlineSink {
         }
         Ok(())
     }
+    #[cfg(feature = "tui")]
     fn ansi_from_ratatui_color(color: RatColor) -> Option<AnsiColorEnum> {
         match color {
             RatColor::Reset => None,
@@ -960,6 +963,7 @@ impl InlineSink {
         }
     }
 
+    #[cfg(feature = "tui")]
     fn inline_style_from_ratatui(
         &self,
         style: RatatuiStyle,
@@ -1214,9 +1218,7 @@ impl InlineSink {
         let had_trailing_newline = text.ends_with('\n');
         let line_count_estimate = text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
 
-        // Attempt to parse ANSI codes, with fallback to plain text
-        // Note: ansi-to-tui may have issues with UTF-8 multi-byte chars mixed with ANSI codes,
-        // so we validate UTF-8 integrity after parsing
+        #[cfg(feature = "tui")]
         if let Ok(parsed) = text.as_bytes().into_text() {
             let mut converted_lines =
                 Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
