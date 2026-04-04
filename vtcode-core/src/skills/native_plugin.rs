@@ -692,9 +692,7 @@ mod tests {
         }
     }
 
-    unsafe extern "C" fn test_execute_with_delay(
-        _input: *const c_char,
-    ) -> *const c_char {
+    unsafe extern "C" fn test_execute_with_delay(_input: *const c_char) -> *const c_char {
         let active_calls = TEST_EXECUTE_ACTIVE_CALLS.fetch_add(1, Ordering::SeqCst) + 1;
         update_max_concurrency(active_calls);
         std::thread::sleep(Duration::from_millis(25));

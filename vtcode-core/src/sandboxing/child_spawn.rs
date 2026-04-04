@@ -215,14 +215,14 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
 pub fn setup_parent_death_signal_with_check(
     expected_parent_pid: libc::pid_t,
 ) -> std::io::Result<()> {
-    use std::io::{Error, ErrorKind};
-    use nix::sys::prctl::{prctl, PrctlArg};
-    use nix::sys::signal::{raise, Signal};
+    use nix::sys::prctl::{PrctlArg, prctl};
+    use nix::sys::signal::{Signal, raise};
     use nix::unistd::getppid;
+    use std::io::{Error, ErrorKind};
 
     // Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
     match prctl(PrctlArg::PrSetPdeathsig(Signal::SIGTERM)) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(nix_err) => {
             return Err(Error::new(
                 ErrorKind::Other,
