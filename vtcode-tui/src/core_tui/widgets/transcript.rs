@@ -2,12 +2,13 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
+    text::{Line, Span},
     widgets::{Block, Clear, Paragraph, Widget},
 };
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::terminal_capabilities;
-use crate::ui::tui::session::{Session, TranscriptLine};
+use crate::ui::tui::session::{Session, TranscriptLine, spinner_frame_for_phase};
 
 /// Widget for rendering the transcript area with conversation history
 ///
@@ -116,7 +117,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
         let needs_mutation = fill_count > 0 || !self.session.queued_inputs.is_empty();
 
-        let visible_lines = if needs_mutation {
+        let mut visible_lines = if needs_mutation {
             // Need to mutate, so clone and modify
             let mut lines = cached_lines.to_vec();
             if fill_count > 0 {
@@ -130,6 +131,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
             self.session
                 .decorate_borrowed_cached_transcript_links(cached_lines.as_slice(), scroll_area)
         };
+        apply_active_file_operation_spinner(self.session, &mut visible_lines);
 
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls
@@ -143,15 +145,98 @@ impl<'a> Widget for TranscriptWidget<'a> {
     }
 }
 
-fn line_background(line: &ratatui::text::Line<'_>) -> Option<Color> {
+const FILE_OPERATION_STATUS_TOOLS: &[&str] = &[
+    "write_file",
+    "create_file",
+    "edit_file",
+    "apply_patch",
+    "search_replace",
+    "delete_file",
+    "unified_file",
+];
+
+const FILE_OPERATION_INDICATORS: &[&str] = &[
+    "❋ Writing ",
+    "❋ Editing ",
+    "❋ Applying patch to ",
+    "❋ Search/replace in ",
+    "❋ Deleting ",
+];
+
+fn apply_active_file_operation_spinner(session: &Session, lines: &mut [Line<'static>]) {
+    let Some(frame) = active_file_operation_spinner_frame(session) else {
+        return;
+    };
+
+    for line in lines.iter_mut().rev() {
+        if is_file_operation_indicator_line(line) && replace_indicator_icon(line, frame) {
+            break;
+        }
+    }
+}
+
+fn active_file_operation_spinner_frame(session: &Session) -> Option<&'static str> {
+    if !session.appearance.should_animate_progress_status() {
+        return None;
+    }
+
+    let left = session.input_status_left.as_deref()?.to_ascii_lowercase();
+    let is_active_file_tool = FILE_OPERATION_STATUS_TOOLS
+        .iter()
+        .any(|tool_name| left.contains(&format!("running tool: {tool_name}")));
+
+    is_active_file_tool.then(|| spinner_frame_for_phase(session.shimmer_state.phase()))
+}
+
+fn is_file_operation_indicator_line(line: &Line<'_>) -> bool {
+    let text = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    FILE_OPERATION_INDICATORS
+        .iter()
+        .any(|pattern| text.contains(pattern))
+}
+
+fn replace_indicator_icon(line: &mut Line<'static>, frame: &str) -> bool {
+    let mut replaced = false;
+    let mut new_spans = Vec::with_capacity(line.spans.len() + 2);
+
+    for span in std::mem::take(&mut line.spans) {
+        if replaced {
+            new_spans.push(span);
+            continue;
+        }
+
+        let style = span.style;
+        let text = span.content.into_owned();
+        let Some(icon_index) = text.find('❋') else {
+            new_spans.push(Span::styled(text, style));
+            continue;
+        };
+
+        let icon_end = icon_index + '❋'.len_utf8();
+        if icon_index > 0 {
+            new_spans.push(Span::styled(text[..icon_index].to_string(), style));
+        }
+        new_spans.push(Span::styled(frame.to_string(), style));
+        if icon_end < text.len() {
+            new_spans.push(Span::styled(text[icon_end..].to_string(), style));
+        }
+        replaced = true;
+    }
+
+    line.spans = new_spans;
+    replaced
+}
+
+fn line_background(line: &Line<'_>) -> Option<Color> {
     line.spans.iter().find_map(|span| span.style.bg)
 }
 
-fn apply_full_width_line_backgrounds(
-    buf: &mut Buffer,
-    area: Rect,
-    lines: &[ratatui::text::Line<'_>],
-) {
+fn apply_full_width_line_backgrounds(buf: &mut Buffer, area: Rect, lines: &[Line<'_>]) {
     if area.width == 0 || area.height == 0 {
         return;
     }

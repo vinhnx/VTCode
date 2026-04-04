@@ -87,6 +87,7 @@ pub(crate) use self::input::status_requires_shimmer;
 use self::mouse_selection::MouseSelectionState;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
+pub(crate) use self::spinner::spinner_frame_for_phase;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
