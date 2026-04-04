@@ -2407,7 +2407,7 @@ impl ToolRegistry {
                 session_id.clone().into(),
                 command,
                 working_dir_path,
-                portable_pty::PtySize {
+                crate::tools::pty::PtySize {
                     rows,
                     cols,
                     pixel_width: 0,

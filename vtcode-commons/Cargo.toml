@@ -19,7 +19,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 
 [features]
-default = []
+tui = ["dep:ratatui"]
+default = ["tui"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -40,7 +41,7 @@ once_cell = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 regex = { workspace = true }
-ratatui = { workspace = true }
+ratatui = { workspace = true, optional = true }
 left-right = "0.11.7"
 memchr = { workspace = true }
 send_wrapper = "0.6.0"

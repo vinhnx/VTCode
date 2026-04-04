@@ -81,7 +81,8 @@ pub use vtcode_config::{
 };
 pub use vtcode_config::{TimeoutsConfig, resolve_timeout};
 
-/// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags
+/// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags.
+#[cfg(feature = "tui")]
 pub fn keyboard_protocol_to_flags(
     config: &KeyboardProtocolConfig,
 ) -> crossterm::event::KeyboardEnhancementFlags {
@@ -93,6 +94,7 @@ pub fn keyboard_protocol_to_flags(
     )
 }
 
+#[cfg(feature = "tui")]
 fn keyboard_protocol_to_flags_for_terminal(
     config: &KeyboardProtocolConfig,
     is_macos: bool,
@@ -152,6 +154,7 @@ fn keyboard_protocol_to_flags_for_terminal(
     flags
 }
 
+#[cfg(feature = "tui")]
 fn should_force_report_all_keys(
     mode: &str,
     is_macos: bool,
@@ -167,7 +170,7 @@ fn should_force_report_all_keys(
     is_ghostty_terminal(term_program, term)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tui"))]
 mod keyboard_protocol_tests {
     use super::*;
     use ratatui::crossterm::event::KeyboardEnhancementFlags;
