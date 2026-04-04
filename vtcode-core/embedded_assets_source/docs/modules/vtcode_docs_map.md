@@ -223,6 +223,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Integrations & Tooling
 
+- **File**: `docs/guides/acp-registry-release-checklist.md`
+  - **Content**: ACP Registry Release Checklist
+  - **Topics**: Preconditions, 1) Build and publish a macOS asset (local), 2) Build Linux assets (GitHub Actions), 3) (Optional) Build Windows asset, 4) Update ACP registry entry
+  - **User Questions**: "What can you tell me about ACP Registry Release Checklist?", "How does Preconditions work?", "How does 1) Build and publish a macOS asset (local) work?"
+
 - **File**: `docs/guides/INIT_COMMAND_GUIDE.md`
   - **Content**: Agent Initialization Guide
   - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Relationship to Rules and Memory
