@@ -44,8 +44,7 @@ pub(super) fn block_chars(border_type: ratatui::widgets::BorderType) -> BlockCha
 /// duplicating the prefix list (DRY).
 pub(super) fn has_summary_prefix(text: &str) -> bool {
     let stripped = super::super::text_utils::strip_ansi_codes(text);
-    let trimmed = stripped.trim_start();
-    trimmed.starts_with("• ") || trimmed.starts_with("└ ") || trimmed.starts_with("│ ")
+    stripped.starts_with("• ") || stripped.starts_with("  └ ") || stripped.starts_with("  │ ")
 }
 
 pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {

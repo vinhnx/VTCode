@@ -14,8 +14,8 @@ use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
-    MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, ModifierKeyCode, MouseButton,
+    MouseEvent, MouseEventKind,
 };
 use ratatui::{
     Terminal,
@@ -6642,6 +6642,36 @@ fn tool_detail_renders_with_border_and_body_style() {
     let body_span = &spans[0];
     assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
     assert_eq!(body_span.content.clone().into_owned(), "    result line");
+}
+
+#[test]
+fn top_level_task_tree_tail_line_is_dimmed_in_tool_blocks() {
+    let theme = themed_inline_colors();
+    let mut session = Session::new(theme, None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Tool,
+        vec![InlineSegment {
+            text: "└ Report actions taken, blockers, and required user input".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let index = session
+        .lines
+        .len()
+        .checked_sub(1)
+        .expect("tool detail line should exist");
+    let transcript_lines = session.reflow_message_lines(index, 100);
+    let task_span = transcript_lines
+        .iter()
+        .flat_map(|line| line.line.spans.iter())
+        .find(|span| span.content.contains("Report actions taken"))
+        .expect("expected task span");
+
+    assert!(
+        task_span.style.add_modifier.contains(Modifier::DIM),
+        "top-level task rows should render dimmed"
+    );
 }
 
 // Tests for streaming input queuing behavior (GitHub #12569)
