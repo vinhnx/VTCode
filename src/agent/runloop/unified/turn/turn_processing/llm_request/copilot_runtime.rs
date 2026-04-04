@@ -2375,7 +2375,7 @@ mod tests {
             .handle_terminal_create(CopilotTerminalCreateRequest {
                 session_id: "session-terminal".to_string(),
                 command: "/bin/sh".to_string(),
-                args: vec!["-lc".to_string(), "printf \"$ACP_TEST_TOKEN\"".to_string()],
+                args: vec!["-c".to_string(), "printf \"$ACP_TEST_TOKEN\"".to_string()],
                 env: vec![CopilotTerminalEnvVar {
                     name: "ACP_TEST_TOKEN".to_string(),
                     value: "vtcode-terminal".to_string(),

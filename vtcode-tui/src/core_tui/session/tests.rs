@@ -13,8 +13,8 @@ use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode,
-    MouseButton, MouseEvent, MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 use ratatui::{
     Terminal,

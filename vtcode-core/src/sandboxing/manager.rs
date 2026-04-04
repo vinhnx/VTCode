@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use super::exec_env::{CommandSpec, ExecEnv, SandboxType};
-use super::policy::{NetworkAllowlistEntry, SandboxPolicy};
+use super::policy::SandboxPolicy;
 
 /// Error type for sandbox transformation failures.
 #[derive(Debug, thiserror::Error)]

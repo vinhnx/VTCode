@@ -138,7 +138,7 @@ impl SkillAuthor {
         }
 
         // Parse YAML
-        let frontmatter: SkillFrontmatter = match serde_yaml::from_str(parts[1].trim()) {
+        let frontmatter: SkillFrontmatter = match serde_saphyr::from_str(parts[1].trim()) {
             Ok(frontmatter) => frontmatter,
             Err(error) => {
                 report
@@ -149,17 +149,14 @@ impl SkillAuthor {
         };
 
         // Validate frontmatter properties (only allowed: skill metadata fields)
-        let raw_frontmatter: serde_yaml::Value =
-            serde_yaml::from_str(parts[1].trim()).map_err(|e| anyhow!("Invalid YAML: {}", e))?;
-        if let serde_yaml::Value::Mapping(map) = raw_frontmatter {
+        let raw_frontmatter: serde_json::Value =
+            serde_saphyr::from_str(parts[1].trim()).map_err(|e| anyhow!("Invalid YAML: {}", e))?;
+        if let serde_json::Value::Object(map) = raw_frontmatter {
             for key in map.keys() {
-                if let Some(key_str) = key
-                    .as_str()
-                    .filter(|s| !crate::skills::manifest::SUPPORTED_FRONTMATTER_KEYS.contains(s))
-                {
+                if !crate::skills::manifest::SUPPORTED_FRONTMATTER_KEYS.contains(&key.as_str()) {
                     report.errors.push(format!(
                         "Unexpected property '{}' in frontmatter. Allowed: {}",
-                        key_str,
+                        key,
                         crate::skills::manifest::SUPPORTED_FRONTMATTER_KEYS.join(", ")
                     ));
                 }

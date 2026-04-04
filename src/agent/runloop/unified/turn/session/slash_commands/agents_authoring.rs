@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow, bail};
-use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
+use serde_json::Value as YamlValue;
+type YamlMapping = serde_json::Map<String, YamlValue>;
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -204,8 +205,8 @@ impl NativeAgentDraft {
     fn from_spec(workspace_root: PathBuf, spec: &SubagentSpec, content: &str) -> Result<Self> {
         let scope = scope_from_source(&spec.source)?;
         let (frontmatter, prompt_body) = split_markdown_frontmatter(content)?;
-        let mut extra_frontmatter = match serde_yaml::from_str::<YamlValue>(frontmatter)? {
-            YamlValue::Mapping(mapping) => mapping,
+        let mut extra_frontmatter = match serde_saphyr::from_str::<YamlValue>(frontmatter)? {
+            YamlValue::Object(mapping) => mapping,
             _ => bail!("native agent frontmatter must be a YAML mapping"),
         };
         strip_editable_keys(&mut extra_frontmatter);
@@ -294,7 +295,7 @@ impl NativeAgentDraft {
             }
         }
 
-        let mut yaml = serde_yaml::to_string(&frontmatter)?;
+        let mut yaml = serde_saphyr::to_string(&frontmatter)?;
         if !yaml.ends_with('\n') {
             yaml.push('\n');
         }
@@ -1298,7 +1299,7 @@ fn scope_from_source(source: &SubagentSource) -> Result<AgentDefinitionScope> {
 
 fn strip_editable_keys(mapping: &mut YamlMapping) {
     for key in EDITABLE_FRONTMATTER_KEYS {
-        mapping.remove(YamlValue::String((*key).to_string()));
+        mapping.remove(*key);
     }
 }
 
@@ -1381,27 +1382,24 @@ fn user_agent_path(name: &str) -> Result<PathBuf> {
 }
 
 fn insert_yaml_string(mapping: &mut YamlMapping, key: &str, value: &str) {
-    mapping.insert(
-        YamlValue::String(key.to_string()),
-        YamlValue::String(value.to_string()),
-    );
+    mapping.insert(key.to_string(), YamlValue::String(value.to_string()));
 }
 
 fn insert_yaml_bool(mapping: &mut YamlMapping, key: &str, value: bool) {
-    mapping.insert(YamlValue::String(key.to_string()), YamlValue::Bool(value));
+    mapping.insert(key.to_string(), YamlValue::Bool(value));
 }
 
 fn insert_yaml_u64(mapping: &mut YamlMapping, key: &str, value: u64) {
     mapping.insert(
-        YamlValue::String(key.to_string()),
-        YamlValue::Number(value.into()),
+        key.to_string(),
+        YamlValue::Number(serde_json::Number::from(value)),
     );
 }
 
 fn insert_yaml_string_list(mapping: &mut YamlMapping, key: &str, values: &[String]) {
     mapping.insert(
-        YamlValue::String(key.to_string()),
-        YamlValue::Sequence(
+        key.to_string(),
+        YamlValue::Array(
             values
                 .iter()
                 .map(|value| YamlValue::String(value.clone()))
@@ -1698,8 +1696,8 @@ Review the target changes."#,
         draft.memory = Some(SubagentMemoryScope::Project);
         draft.prompt_body = "\nPrompt body\n  with indentation\n".to_string();
         draft.extra_frontmatter.insert(
-            YamlValue::String("skills".to_string()),
-            YamlValue::Sequence(vec![YamlValue::String("rust-skills".to_string())]),
+            "skills".to_string(),
+            YamlValue::Array(vec![YamlValue::String("rust-skills".to_string())]),
         );
 
         let rendered = draft.render_markdown().expect("render");

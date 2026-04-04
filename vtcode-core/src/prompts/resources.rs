@@ -354,7 +354,7 @@ fn parse_frontmatter(content: &str) -> (PromptTemplateFrontmatter, String) {
         String::new()
     };
 
-    let metadata = match serde_yaml::from_str::<PromptTemplateFrontmatter>(yaml.trim()) {
+    let metadata = match serde_saphyr::from_str::<PromptTemplateFrontmatter>(yaml.trim()) {
         Ok(value) => value,
         Err(err) => {
             warn!("failed to parse prompt template frontmatter: {}", err);
