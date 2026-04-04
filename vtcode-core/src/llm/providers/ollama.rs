@@ -513,7 +513,14 @@ impl OllamaProvider {
                                         .or_insert_with(|| func.name.clone());
                                 }
 
-                                let arguments = Self::parse_tool_arguments(&func.arguments)?;
+                                let arguments = tool_call.execution_arguments().map_err(|err| {
+                                    LLMError::InvalidRequest {
+                                        message: format!(
+                                            "Failed to parse tool arguments for Ollama: {err}"
+                                        ),
+                                        metadata: None,
+                                    }
+                                })?;
                                 converted.push(OllamaToolCall {
                                     call_type: tool_call.call_type.clone(),
                                     function: OllamaToolFunctionCall {
@@ -594,17 +601,6 @@ impl OllamaProvider {
             Some(images)
         };
         (text, images)
-    }
-
-    fn parse_tool_arguments(arguments: &str) -> Result<Value, LLMError> {
-        if arguments.trim().is_empty() {
-            return Ok(Value::Object(Map::new()));
-        }
-
-        serde_json::from_str(arguments).map_err(|err| LLMError::InvalidRequest {
-            message: format!("Failed to parse tool arguments for Ollama: {err}"),
-            metadata: None,
-        })
     }
 
     fn think_value(request: &LLMRequest) -> Option<Value> {
@@ -1474,6 +1470,43 @@ mod tests {
                 .contains("Repeated read-only exploration hit the per-turn family cap")
         );
         assert_eq!(payload.messages[1].role, "user");
+    }
+
+    #[test]
+    fn build_payload_recovers_balanced_prefix_from_malformed_history_tool_arguments() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::assistant_with_tools(
+                String::new(),
+                vec![ToolCall::function(
+                    "tool_call_0".to_string(),
+                    "unified_file".to_string(),
+                    "{\"action\":\"read\",\"path\":\"docs/ARCHITECTURE.md\",\"offset\":1,\"limit\":100}{\"action\":\"read\",\"path\":\"README.md\"}"
+                        .to_string(),
+                )],
+            )],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_payload(&request, false)
+            .expect("payload should recover malformed history tool arguments");
+
+        let tool_calls = payload.messages[0]
+            .tool_calls
+            .as_ref()
+            .expect("tool calls should be present");
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(
+            tool_calls[0].function.arguments,
+            Some(json!({
+                "action": "read",
+                "path": "docs/ARCHITECTURE.md",
+                "offset": 1,
+                "limit": 100
+            }))
+        );
     }
 
     #[test]

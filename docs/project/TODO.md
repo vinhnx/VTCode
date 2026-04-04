@@ -73,12 +73,6 @@ https://www.mintlify.com/VineeTagarwaL-code/claude-code/concepts/how-it-works
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/claude-code-main
 
----
-
-https://github.com/openai/codex/pull/12334
-
-https://github.com/openai/codex/pull/15860
-
 --
 
 Claude Code's Real Secret Sauce (Probably) Isn't the Model
@@ -179,22 +173,4 @@ https://x.com/jpschroeder/status/2038960058499768427
 
 https://x.com/cryptodavidw/status/2039198363615457538
 
----
-
 --
-
-idea
-
-https://x.com/tmeszar/status/2039650776654512623
-
----
-
----
-
-Fix duplicated tool call and display in transcript
-
---
-
-fix action
-
-https://github.com/vinhnx/VTCode/actions/runs/23974315937

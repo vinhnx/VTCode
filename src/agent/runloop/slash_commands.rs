@@ -62,8 +62,10 @@ pub(crate) enum OAuthProviderAction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SessionLogExportFormat {
+    Both,
     Json,
     Markdown,
+    Html,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -246,7 +248,7 @@ pub(crate) enum SlashCommandOutcome {
     ShowAuthStatus {
         provider: Option<String>,
     },
-    /// /share-log command - Export current session log for debugging
+    /// /share command - Export current session log for debugging
     ShareLog {
         format: SessionLogExportFormat,
     },
@@ -402,7 +404,6 @@ fn normalize_command_key(command_key: &str) -> &str {
     match command_key {
         "settings" | "setttings" => "config",
         "comman" => "command",
-        "sharelog" | "export-log" => "share-log",
         "subprocesses" => "subprocess",
         "context" => "compact",
         other => other,
@@ -635,7 +636,7 @@ async fn execute_built_in_command_skill(
         }
         "loop" => handle_loop_command(args, renderer),
         "schedule" => handle_schedule_command(args, renderer),
-        "share-log" | "sharelog" | "export-log" => match parse_session_log_export_format(args) {
+        "share" => match parse_session_log_export_format(args) {
             Ok(format) => Ok(SlashCommandOutcome::ShareLog { format }),
             Err(message) => {
                 renderer.line(MessageStyle::Error, &message)?;
@@ -888,8 +889,8 @@ fn parse_doctor_args(
 mod tests {
     use super::{
         AgentManagerAction, CompactConversationCommand, DoctorCommand, ScheduleCommandAction,
-        SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
-        parse_doctor_args, parse_update_args,
+        SessionLogExportFormat, SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction,
+        handle_slash_command, parse_doctor_args, parse_update_args,
     };
     use vtcode_core::llm::provider::ResponsesCompactionOptions;
     use vtcode_core::skills::command_skill_specs;
@@ -959,6 +960,55 @@ mod tests {
             .expect("pause command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[tokio::test]
+    async fn share_defaults_to_json_and_html_export() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("share", &mut renderer, &workspace)
+            .await
+            .expect("share command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ShareLog {
+                format: SessionLogExportFormat::Both
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn share_alias_routes_html_export() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("share html", &mut renderer, &workspace)
+            .await
+            .expect("share alias should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ShareLog {
+                format: SessionLogExportFormat::Html
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn removed_share_log_command_no_longer_resolves() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("share-log html", &mut renderer, &workspace)
+            .await
+            .expect("removed command should fall through");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/share-log html"
+        ));
     }
 
     #[tokio::test]

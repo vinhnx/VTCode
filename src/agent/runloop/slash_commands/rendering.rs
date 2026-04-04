@@ -283,13 +283,16 @@ mod tests {
             Some("config")
         );
         assert_eq!(
-            resolve_help_command("sharelog").map(|command| command.name),
-            Some("share-log")
-        );
-        assert_eq!(
             resolve_help_command("comman").map(|command| command.name),
             Some("command")
         );
+    }
+
+    #[test]
+    fn help_resolution_does_not_keep_removed_share_log_alias() {
+        assert!(resolve_help_command("share-log").is_none());
+        assert!(resolve_help_command("sharelog").is_none());
+        assert!(resolve_help_command("export-log").is_none());
     }
 
     #[test]

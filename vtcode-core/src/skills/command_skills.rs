@@ -354,9 +354,9 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     ),
     built_in_command_spec!("new", "Start a new session", "/new", "session"),
     built_in_command_spec!(
-        "share-log",
-        "Export current session log as JSON or Markdown (usage: /share-log [json|markdown], alias: /export-log)",
-        "/share-log [json|markdown]",
+        "share",
+        "Export the current session as JSON, Markdown, or self-contained HTML timeline (usage: /share [json|markdown|html])",
+        "/share [json|markdown|html]",
         "session"
     ),
     built_in_command_spec!(

@@ -734,10 +734,17 @@ mod tests {
         let checkpoint_manager = None;
         let lifecycle_hooks = None;
         let harness_emitter = None;
+        let thread_handle = Box::leak(Box::new(
+            vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(
+                "test-thread",
+                vtcode_core::core::threads::ThreadBootstrap::new(None),
+            ),
+        ));
 
         let ctx = SlashCommandContext {
             thread_id: "test-thread",
             active_thread_label: "main",
+            thread_handle,
             renderer: turn.renderer,
             handle: turn.handle,
             session: turn.session,

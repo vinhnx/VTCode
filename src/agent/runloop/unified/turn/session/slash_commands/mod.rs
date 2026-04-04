@@ -38,6 +38,7 @@ pub(crate) enum SlashCommandControl {
 pub(crate) struct SlashCommandContext<'a> {
     pub(crate) thread_id: &'a str,
     pub(crate) active_thread_label: &'a str,
+    pub(crate) thread_handle: &'a vtcode_core::core::threads::ThreadRuntimeHandle,
     pub(crate) renderer: &'a mut AnsiRenderer,
     pub(crate) handle: &'a InlineHandle,
     pub(crate) session: &'a mut InlineSession,
@@ -75,6 +76,7 @@ impl<'a> SlashCommandContext<'a> {
         SlashCommandContext {
             thread_id: self.thread_id,
             active_thread_label: self.active_thread_label,
+            thread_handle: self.thread_handle,
             renderer: self.renderer,
             handle: self.handle,
             session: self.session,

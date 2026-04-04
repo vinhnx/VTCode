@@ -64,6 +64,7 @@ pub(crate) async fn handle_input_commands(
                     SlashCommandContext {
                         thread_id: ctx.thread_id,
                         active_thread_label: ctx.active_thread_label,
+                        thread_handle: ctx.thread_handle,
                         renderer: ctx.renderer,
                         handle: ctx.handle,
                         session: ctx.session,

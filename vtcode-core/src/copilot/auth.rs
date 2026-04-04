@@ -50,23 +50,6 @@ where
     }
 
     let host = resolve_copilot_host(config)?;
-    if stored_auth_source(&host)?.is_none() {
-        if let Some(source) = env_auth_source_with(|name| std::env::var(name).ok()) {
-            let message = match source {
-                CopilotAuthSource::Environment(name) => {
-                    format!("Copilot auth is set via {name}; nothing to clear in the Copilot CLI.")
-                }
-                _ => "No Copilot CLI session found; already logged out.".to_string(),
-            };
-            on_event(CopilotAuthEvent::Progress { message })?;
-        } else {
-            on_event(CopilotAuthEvent::Progress {
-                message: "No Copilot CLI session found; already logged out.".to_string(),
-            })?;
-        }
-        on_event(CopilotAuthEvent::Success { account: None })?;
-        return Ok(());
-    }
     let args = login_command_args(&host);
 
     run_captured_command(

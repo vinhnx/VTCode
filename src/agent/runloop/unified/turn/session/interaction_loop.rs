@@ -30,6 +30,7 @@ use std::path::PathBuf;
 pub(crate) struct InteractionLoopContext<'a> {
     pub thread_id: &'a str,
     pub active_thread_label: &'a str,
+    pub thread_handle: &'a vtcode_core::core::threads::ThreadRuntimeHandle,
     pub renderer: &'a mut AnsiRenderer,
     pub session: &'a mut vtcode_tui::app::InlineSession,
     pub handle: &'a InlineHandle,

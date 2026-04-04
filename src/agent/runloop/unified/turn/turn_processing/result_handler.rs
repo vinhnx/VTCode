@@ -130,6 +130,84 @@ fn empty_response_notice(mode: RecoveryMode) -> &'static str {
     }
 }
 
+fn recovery_empty_response_fallback_intro(mode: RecoveryMode) -> &'static str {
+    match mode {
+        RecoveryMode::ToolEnabledRetry => {
+            "I couldn't continue because the model returned no answer twice in a row."
+        }
+        RecoveryMode::ToolFreeSynthesis => {
+            "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
+        }
+    }
+}
+
+fn recovery_empty_response_fallback_guidance(mode: RecoveryMode) -> &'static str {
+    match mode {
+        RecoveryMode::ToolEnabledRetry => "Retry the turn from the current context.",
+        RecoveryMode::ToolFreeSynthesis => {
+            "Reuse the latest tool outputs already collected in this turn before retrying."
+        }
+    }
+}
+
+fn truncate_recovery_preview(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+
+    let end = text
+        .char_indices()
+        .nth(max_chars)
+        .map_or(text.len(), |(idx, _)| idx);
+    let mut truncated = text[..end].trim_end().to_string();
+    truncated.push_str("...");
+    truncated
+}
+
+fn collapse_recovery_preview_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn latest_recovery_context_preview(history: &[uni::Message]) -> Option<String> {
+    const MAX_PREVIEW_CHARS: usize = 220;
+
+    let preview_for_role = |role: uni::MessageRole, label: &str| {
+        history.iter().rev().find_map(|message| {
+            if message.role != role {
+                return None;
+            }
+
+            let text = collapse_recovery_preview_whitespace(message.content.as_text().trim());
+            if text.is_empty() {
+                return None;
+            }
+
+            Some(format!(
+                "{label}: {}",
+                truncate_recovery_preview(&text, MAX_PREVIEW_CHARS)
+            ))
+        })
+    };
+
+    preview_for_role(uni::MessageRole::Tool, "Latest tool output")
+        .or_else(|| preview_for_role(uni::MessageRole::Assistant, "Latest assistant text"))
+        .or_else(|| preview_for_role(uni::MessageRole::User, "Latest user request"))
+}
+
+fn recovery_empty_response_fallback_message(
+    history: &[uni::Message],
+    mode: RecoveryMode,
+) -> String {
+    let intro = recovery_empty_response_fallback_intro(mode);
+    let guidance = recovery_empty_response_fallback_guidance(mode);
+
+    if let Some(preview) = latest_recovery_context_preview(history) {
+        format!("{intro}\n\n{preview}\n\n{guidance}")
+    } else {
+        format!("{intro}\n\n{guidance}")
+    }
+}
+
 /// Dispatch the appropriate response handler based on the processing result.
 pub(crate) async fn handle_turn_processing_result<'a>(
     params: HandleTurnProcessingResultParams<'a>,
@@ -267,11 +345,28 @@ pub(crate) async fn handle_turn_processing_result<'a>(
         }
         TurnProcessingResult::Empty => {
             if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
+                let recovery_mode = if params.ctx.recovery_is_tool_free() {
+                    RecoveryMode::ToolFreeSynthesis
+                } else {
+                    RecoveryMode::ToolEnabledRetry
+                };
                 let recovery_reason = if params.ctx.recovery_is_tool_free() {
                     "Recovery mode requested a final synthesis pass, but the model returned no answer."
                 } else {
                     "Recovery retry requested another autonomous pass, but the model still returned no answer."
                 };
+                let fallback_message = recovery_empty_response_fallback_message(
+                    params.ctx.working_history,
+                    recovery_mode,
+                );
+                params.ctx.handle_assistant_response(
+                    fallback_message,
+                    Vec::new(),
+                    None,
+                    params.response_streamed,
+                    Some(uni::AssistantPhase::FinalAnswer),
+                )?;
+                params.ctx.finish_recovery_pass();
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(recovery_reason.to_string()),
                 }));
@@ -305,6 +400,7 @@ mod tests {
         HandleTurnProcessingResultParams, handle_turn_processing_result,
         record_assistant_tool_calls, should_suppress_pre_tool_result_claim,
     };
+    use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
     use crate::agent::runloop::unified::turn::context::{
         PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingResult,
     };
@@ -460,6 +556,43 @@ mod tests {
             outcome,
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
             if reason.contains("returned no answer")
+        ));
+        assert!(backing.last_history_message_contains(
+            "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
+        ));
+    }
+
+    #[tokio::test]
+    async fn recovery_retry_empty_response_emits_fallback_message_before_blocking() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.push_system_message("prior context");
+        ctx.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::Empty,
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery retry empty response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
+            if reason.contains("still returned no answer")
+        ));
+        assert!(backing.last_history_message_contains(
+            "I couldn't continue because the model returned no answer twice in a row."
         ));
     }
 

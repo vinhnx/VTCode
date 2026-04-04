@@ -23,9 +23,9 @@
     "exit_plan_mode": "prompt",
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
-    "task_tracker": "allow",
-    "unified_exec": "allow",
-    "unified_file": "allow",
+    "task_tracker": "prompt",
+    "unified_exec": "prompt",
+    "unified_file": "prompt",
     "unified_search": "allow",
     "list_files": "allow",
     "read_file": "allow"
@@ -174,16 +174,7 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [
-      "whoami '&&' echo --- '&&' git config user.name '2>/dev/null' '||' echo 'no git user'|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "whoami echo --- git config user.name echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cat '~/.gitconfig' '2>/dev/null' '||' echo 'no gitconfig'|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cat echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "unified_exec",
-      "task_tracker",
-      "unified_search"
-    ],
+    "allowed": [],
     "prefixes": [],
     "regexes": []
   }

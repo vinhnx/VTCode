@@ -169,14 +169,14 @@ pub(super) fn parse_session_log_export_format(
 ) -> std::result::Result<SessionLogExportFormat, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
-        return Ok(SessionLogExportFormat::Json);
+        return Ok(SessionLogExportFormat::Both);
     }
 
     let tokens =
         shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {}", err))?;
 
     if tokens.is_empty() {
-        return Ok(SessionLogExportFormat::Json);
+        return Ok(SessionLogExportFormat::Both);
     }
 
     let format_token = if tokens.len() == 1 {
@@ -188,16 +188,14 @@ pub(super) fn parse_session_log_export_format(
     } else if tokens.len() == 2 && tokens[0].eq_ignore_ascii_case("--format") {
         tokens[1].as_str()
     } else {
-        return Err(
-            "Usage: /share-log [json|markdown|md] (or /share-log --format <json|markdown|md>)"
-                .to_string(),
-        );
+        return Err("Usage: /share [json|markdown|md|html]".to_string());
     };
 
     match format_token.to_ascii_lowercase().as_str() {
         "json" => Ok(SessionLogExportFormat::Json),
         "markdown" | "md" => Ok(SessionLogExportFormat::Markdown),
-        _ => Err("Unknown format. Use one of: json, markdown, md.".to_string()),
+        "html" => Ok(SessionLogExportFormat::Html),
+        _ => Err("Unknown format. Use one of: json, markdown, md, html.".to_string()),
     }
 }
 
@@ -364,10 +362,10 @@ mod tests {
     }
 
     #[test]
-    fn share_log_defaults_to_json() {
+    fn share_log_defaults_to_json_and_html() {
         assert_eq!(
             parse_session_log_export_format("").expect("format"),
-            SessionLogExportFormat::Json
+            SessionLogExportFormat::Both
         );
     }
 
@@ -388,6 +386,18 @@ mod tests {
         assert_eq!(
             parse_session_log_export_format("--format markdown").expect("format"),
             SessionLogExportFormat::Markdown
+        );
+    }
+
+    #[test]
+    fn share_log_supports_html() {
+        assert_eq!(
+            parse_session_log_export_format("html").expect("format"),
+            SessionLogExportFormat::Html
+        );
+        assert_eq!(
+            parse_session_log_export_format("--format=html").expect("format"),
+            SessionLogExportFormat::Html
         );
     }
 

@@ -855,6 +855,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     thread_id: &turn_run_id.0,
                     active_thread_label,
+                    thread_handle: &thread_handle,
                     renderer: &mut renderer,
                     session: &mut session,
                     handle: &handle,
