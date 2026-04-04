@@ -783,6 +783,7 @@ fn preview_status_label(status_left: Option<&str>) -> &'static str {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use std::path::Path;
 
