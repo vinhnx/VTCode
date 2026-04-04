@@ -20,6 +20,8 @@ out_path = Path(os.environ["OUT_MD"])
 
 baseline = json.loads(baseline_path.read_text())
 current = json.loads(current_path.read_text())
+baseline_startup_source = baseline.get("startup_source", "unknown")
+current_startup_source = current.get("startup_source", "unknown")
 
 keys = ["cargo_check_ms", "core_bench_ms", "tools_bench_ms", "startup_ms"]
 rows = []
@@ -40,12 +42,22 @@ lines = [
     "",
     f"Baseline: `{baseline_path}`",
     f"Current: `{current_path}`",
+    f"Baseline startup source: `{baseline_startup_source}`",
+    f"Current startup source: `{current_startup_source}`",
     "",
     "| Metric | Baseline | Current | Delta | Interpretation |",
     "|---|---:|---:|---:|---|",
 ]
 for key, b, c, pct, direction in rows:
     lines.append(f"| `{key}` | {b} | {c} | {pct:+.2f}% | {direction} |")
+
+if baseline_startup_source != current_startup_source:
+    lines.extend(
+        [
+            "",
+            "> Warning: startup sources differ, so `startup_ms` is not directly comparable.",
+        ]
+    )
 
 out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print("\n".join(lines))

@@ -32,3 +32,10 @@ All artifacts are written to `.vtcode/perf/`:
 - `*-bench_tools.log`: `vtcode-tools` bench output
 - `*-startup.json` (if `hyperfine` installed)
 - `diff.md`: markdown comparison report
+
+## Notes
+
+- Cargo steps clear `RUSTC_WRAPPER` and `CARGO_BUILD_RUSTC_WRAPPER` by default so the scripts still work when the environment or `.cargo/config.toml` points at a blocked `sccache`.
+- Set `PERF_KEEP_RUSTC_WRAPPER=1` if you explicitly want the perf run to keep the configured wrapper.
+- `startup_ms` measures the built `target/debug/vtcode` binary, not `cargo run`, so it tracks process startup instead of compile time.
+- When `hyperfine` is unavailable, startup falls back to a 10-run Python mean and writes the raw sample summary to `*-startup.log`.

@@ -204,3 +204,18 @@ Fix TODO/tasks list last line ansi (it should be dimmed, not bright white)
 ---
 
 Fix duplicated tool call and display in transcript
+
+---
+
+update wizard first launch to include new features and capabilities, such as:
+
+- Auto modes (besides auto-accept, plan mode, etc.) --> default.
+- Memory
+- Subagent
+- (Check for updates and changelog)
+
+---
+
+FIx The harness is rejecting some command forms as “command injection”
+
+---
