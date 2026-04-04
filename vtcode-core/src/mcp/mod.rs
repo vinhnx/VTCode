@@ -375,6 +375,9 @@ mod tests {
 
         let env = create_env_for_mcp_server(None);
 
+        // SAFETY: These unsafe calls are used only in test code to restore original
+        // environment state after testing. We are modifying process environment variables,
+        // which requires unsafe in Rust's std::env API.
         match original_path {
             Some(value) => unsafe {
                 std::env::set_var("PATH", value);

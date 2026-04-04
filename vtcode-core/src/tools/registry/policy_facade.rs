@@ -310,13 +310,7 @@ impl ToolRegistry {
                     Ok(ToolPermissionDecision::Allow)
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
-                ToolPolicy::Prompt => {
-                    if gateway.has_full_auto_allowlist() {
-                        Ok(ToolPermissionDecision::Prompt)
-                    } else {
-                        Ok(ToolPermissionDecision::Prompt)
-                    }
-                }
+                ToolPolicy::Prompt => Ok(ToolPermissionDecision::Prompt),
             }
         } else {
             Ok(ToolPermissionDecision::Prompt)
