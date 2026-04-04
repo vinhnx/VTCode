@@ -1,8 +1,11 @@
 use std::fmt::Write as _;
+use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
+use regex::Regex;
 use serde::Serialize;
 use serde_json::{Value, json};
+use vtcode_commons::sanitizer::redact_secrets;
 use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{
     CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus, PatchChangeKind,
@@ -19,6 +22,14 @@ use super::{SlashCommandContext, SlashCommandControl};
 const TIMELINE_SOURCE_THREAD_EVENTS: &str = "thread_events";
 const TIMELINE_SOURCE_CONVERSATION_FALLBACK: &str = "conversation_fallback";
 const SUMMARY_PREVIEW_LIMIT: usize = 120;
+const REDACTION_NOTICE: &str = "Sensitive values are redacted by default in exported logs.";
+
+static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b").expect("valid email regex")
+});
+static USER_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?P<prefix>/(?:Users|home)/)[^/\s]+").expect("valid user path regex")
+});
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 struct TimelineExport {
@@ -29,6 +40,7 @@ struct TimelineExport {
     thread_id: String,
     source: String,
     total_rows: usize,
+    redaction_enabled: bool,
     overview: SessionOverview,
     rows: Vec<TimelineRow>,
 }
@@ -61,6 +73,8 @@ struct TimelineRow {
     event_type: String,
     item_type: Option<String>,
     category: String,
+    role: String,
+    transcript_kind: String,
     status: Option<String>,
     turn_id: Option<String>,
     submission_id: Option<String>,
@@ -112,7 +126,10 @@ fn render_session_log_markdown(
     markdown.push_str("# VT Code Session Log\n\n");
     markdown.push_str(&format!("- Exported at: {}\n", exported_at));
     markdown.push_str(&format!("- Model: `{}`\n", model));
-    markdown.push_str(&format!("- Workspace: `{}`\n", workspace.display()));
+    markdown.push_str(&format!(
+        "- Workspace: `{}`\n",
+        redact_sensitive_text(&workspace.display().to_string())
+    ));
     markdown.push_str(&format!("- Total messages: {}\n\n", messages.len()));
     markdown.push_str("## Messages\n\n");
 
@@ -198,6 +215,7 @@ fn build_timeline_export(
         thread_id: thread_id.to_string(),
         source,
         total_rows: rows.len(),
+        redaction_enabled: true,
         overview,
         rows,
     }
@@ -808,8 +826,13 @@ fn timeline_rows_from_messages(messages: &[Value]) -> Vec<TimelineRow> {
     rows
 }
 
-fn render_session_timeline_html(export: &TimelineExport) -> Result<String> {
+fn render_session_timeline_html(
+    export: &TimelineExport,
+    session_log_json: &Value,
+) -> Result<String> {
     let export_json = serde_json::to_string(export).context("Failed to serialize timeline data")?;
+    let session_log_json = serde_json::to_string_pretty(session_log_json)
+        .context("Failed to serialize session log")?;
     let mut html = String::new();
     let escaped_workspace = escape_html(&export.workspace);
     let escaped_model = escape_html(&export.model);
@@ -821,29 +844,32 @@ fn render_session_timeline_html(export: &TimelineExport) -> Result<String> {
         &serde_json::to_string_pretty(&export.overview)
             .context("Failed to serialize session overview")?,
     );
-
     html.push_str(
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>VT Code Thread Share</title>\n<style>\n:root{color-scheme:dark;--bg:#0b0d0b;--panel:#101311;--panel-soft:#141917;--panel-muted:#181d1b;--surface:#111513;--line:#232a26;--line-soft:#1a201d;--text:#f3f5f2;--muted:#a1aba4;--accent:#d0d7d1;--success:#8fd3a6;--danger:#f39aa2;--warning:#f0c27a;}*{box-sizing:border-box}html,body{background:var(--bg)}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:var(--text);line-height:1.55}a{color:inherit}main{max-width:980px;margin:0 auto;padding:28px 18px 80px}.masthead{max-width:760px;margin:0 auto}.eyebrow{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.masthead h1{margin:10px 0 14px;font-size:clamp(2rem,4vw,3.2rem);line-height:1.05;font-weight:800}.byline{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:.96rem}.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--panel-soft);border:1px solid var(--line-soft)}.lede{margin:22px auto 0;max-width:760px;padding:18px 20px;background:var(--panel);border:1px solid var(--line);border-radius:18px;color:#d9dfdb}.lede pre,.overview pre,.body,.raw-json{margin:0;white-space:pre-wrap;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92rem;line-height:1.6}.facts{max-width:760px;margin:18px auto 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.fact{padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:18px}.fact-label{display:block;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.fact-value{display:block;margin-top:8px;font-size:1.05rem;font-weight:700}.overview,.controls-wrap,.timeline-wrap{max-width:760px;margin:18px auto 0}.overview,.controls,.row{background:var(--panel);border:1px solid var(--line);border-radius:18px}.overview{padding:18px}.overview h2,.section-title{margin:0 0 8px;font-size:1rem;font-weight:700}.overview-copy{margin:0 0 14px;color:var(--muted)}.stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}.stat{padding:12px 14px;background:var(--panel-soft);border-radius:14px}.stat-label{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.stat-value{display:block;margin-top:6px;font-weight:700}.controls{padding:16px}.control-grid{display:grid;grid-template-columns:2fr repeat(2,minmax(120px,1fr));gap:10px}.control{display:grid;gap:6px}.control label{font-size:.8rem;color:var(--muted);font-weight:600}.control input,.control select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-muted);color:var(--text);font:inherit}.control input:focus,.control select:focus{outline:none;border-color:#3d4d45}.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px}.toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600}.button{padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel-soft);color:var(--text);font:inherit;cursor:pointer}.button:hover{background:var(--panel-muted)}.results{color:var(--muted);font-weight:600}.section-title{margin:24px 0 10px;color:#e7ebe8}.timeline{display:grid;gap:12px}.row{padding:16px 18px}.row-head{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between}.row-title{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.seq{display:inline-flex;align-items:center;justify-content:center;min-width:3rem;padding:4px 10px;border-radius:999px;background:var(--panel-muted);color:var(--muted);font-size:.8rem;font-weight:700}.row h2{margin:0;font-size:1.02rem}.summary{margin:12px 0 0;color:#d6ddd8;white-space:pre-wrap}.body,.raw-json{margin:12px 0 0;padding:14px;background:var(--panel-soft);border:1px solid var(--line-soft);border-radius:14px}.badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.badge{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:var(--panel-soft);border:1px solid var(--line-soft);font-size:.76rem;color:var(--muted);font-weight:700}.badge.status-completed{color:var(--success)}.badge.status-in_progress{color:#a9c9ff}.badge.status-failed,.badge.status-cancelled{color:var(--danger)}.badge.low-signal{color:var(--warning)}details{margin-top:12px}details summary{cursor:pointer;color:var(--muted);font-weight:700}.empty{padding:28px;text-align:center;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:18px}.footer-note{max-width:760px;margin:26px auto 0;color:var(--muted);font-size:.9rem}@media (max-width:760px){main{padding:20px 12px 48px}.facts,.stats-grid,.control-grid{grid-template-columns:1fr}.row{padding:14px}}\n</style>\n</head>\n<body>\n<main>\n<header class=\"masthead\">\n<div class=\"eyebrow\">Shared Thread</div>\n<h1>VT Code Session Timeline</h1>\n<div class=\"byline\">\n<span class=\"pill\">Provider: ");
+        "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>VT Code Thread Share</title>\n<style>\n:root{--success:#7ea36d;--danger:#BF4545;--warning:#D99A4E}[data-theme=\"dark\"]{color-scheme:dark;--bg:#262626;--panel:#2f2b28;--panel-soft:#38322d;--panel-muted:#433a32;--surface:#312c29;--line:#5b4c45;--line-soft:#4a3f39;--text:#BFB38F;--muted:#d1c59f;--accent:#D9487D;--summary:#e4d8b3;--user:#D99A4E;--assistant:#BFB38F;--system:#D9487D}[data-theme=\"light\"]{color-scheme:light;--bg:#F6F1E5;--panel:#FFFDF8;--panel-soft:#F5EFE5;--panel-muted:#EFE7DB;--surface:#FAF5ED;--line:#DDD1C2;--line-soft:#EBE1D3;--text:#393A34;--muted:#6A695F;--accent:#1C6B48;--summary:#4A463E;--user:#B07000;--assistant:#393A34;--system:#1C6B48}*{box-sizing:border-box}html,body{background:var(--bg)}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:var(--text);line-height:1.55;transition:background-color .18s ease,color .18s ease}a{color:inherit}button,input,select{font:inherit}main{max-width:1240px;margin:0 auto;padding:28px 18px 80px}.masthead{margin:0 auto 20px}.masthead-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.eyebrow{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.theme-toggle,.button{padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel-soft);color:var(--text);cursor:pointer}.theme-toggle:hover,.button:hover{background:var(--panel-muted)}.masthead h1{margin:10px 0 14px;font-size:clamp(2rem,4vw,3.2rem);line-height:1.05;font-weight:800}.byline{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:.96rem}.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--panel-soft);border:1px solid var(--line-soft)}.pill.notice{color:var(--accent)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}.transcript-column{min-width:0}.sidebar{position:sticky;top:18px;display:grid;gap:14px}.panel,.lede,.entry,.empty{background:var(--panel);border:1px solid var(--line);border-radius:18px}.panel{padding:14px 16px}.panel details{margin:0}.panel details>summary,.summary-toggle{cursor:pointer;list-style:none;color:var(--muted);font-weight:700}.panel details>summary::-webkit-details-marker{display:none}.panel-body{margin-top:14px}.lede{padding:16px 18px;color:var(--summary)}.lede pre,.raw-json,.log-stream pre,.inline-json-preview{margin:0;white-space:pre-wrap;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92rem;line-height:1.6}.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.fact{padding:14px;border-radius:14px;background:var(--panel-soft)}.fact-label{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.fact-value{display:block;margin-top:6px;font-weight:700}.kv-list{list-style:none;margin:0;padding:0}.kv-list li{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-soft)}.kv-list li:first-child{border-top:0;padding-top:0}.kv-key{color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.kv-value{color:var(--text);min-width:0;white-space:pre-wrap;word-break:break-word}.control-grid{display:grid;gap:10px}.control{display:grid;gap:6px}.control label{font-size:.8rem;color:var(--muted);font-weight:600}.control input,.control select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-muted);color:var(--text)}.control input:focus,.control select:focus{outline:none;border-color:var(--accent)}.toolbar{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600}.results{color:var(--muted);font-weight:600}.sidebar-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.inline-json-preview{margin-top:12px;padding:12px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}.timeline{display:grid;gap:14px}.entry{padding:16px 18px}.entry-head{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between}.entry-meta{display:grid;gap:8px;min-width:0}.entry-identity{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.role-badge,.seq,.kind-badge,.status-badge{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid var(--line-soft);background:var(--panel-soft);font-size:.76rem;font-weight:700}.role-user{color:var(--user)}.role-assistant{color:var(--assistant)}.role-system{color:var(--system)}.seq{color:var(--muted)}.entry-title{font-size:1.02rem;font-weight:700}.entry-subtitle{color:var(--muted);font-size:.92rem}.entry-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.kind-badge{color:var(--muted)}.status-badge.status-completed{color:var(--success)}.status-badge.status-in_progress{color:var(--accent)}.status-badge.status-failed,.status-badge.status-cancelled{color:var(--danger)}.status-badge.low-signal{color:var(--warning)}.entry-body{margin-top:14px;display:grid;gap:12px}.message-block,.system-block,.log-stream,.detail-shell{padding:14px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}.message-text p,.system-copy p{margin:0 0 10px}.message-text p:last-child,.system-copy p:last-child{margin-bottom:0}.message-text ul,.system-copy ul{margin:0;padding-left:18px}.message-text li,.system-copy li{margin:0 0 6px}.message-section-title,.system-label{display:block;margin-bottom:8px;color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.message-text code,.system-copy code{padding:1px 5px;border-radius:6px;background:var(--panel-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}.message-text strong,.system-copy strong{font-weight:800}.log-stream-title{display:block;margin-bottom:8px;color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.raw-json{padding:14px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}details{margin-top:12px}details summary{cursor:pointer;color:var(--muted);font-weight:700}.empty{padding:28px;text-align:center;color:var(--muted)}.footer-note{margin-top:20px;color:var(--muted);font-size:.9rem}@media (max-width:980px){.layout{grid-template-columns:1fr}.sidebar{position:static}}@media (max-width:760px){main{padding:20px 12px 48px}.masthead-top{flex-direction:column;align-items:stretch}.facts{grid-template-columns:1fr}.kv-list li{grid-template-columns:1fr;gap:4px}.entry{padding:14px}}\n</style>\n</head>\n<body>\n<main>\n<header class=\"masthead\">\n<div class=\"masthead-top\">\n<div class=\"eyebrow\">Shared Thread</div>\n<button id=\"theme-toggle\" class=\"theme-toggle\" type=\"button\">Switch to light</button>\n</div>\n<h1>VT Code Session Transcript</h1>\n<div class=\"byline\">\n<span class=\"pill\">Provider: ");
     html.push_str(&escaped_provider);
     html.push_str("</span>\n<span class=\"pill\">Model: ");
     html.push_str(&escaped_model);
-    html.push_str("</span>\n<span class=\"pill\">Exported: ");
+    html.push_str("</span>\n<span class=\"pill\">Exported: <time id=\"exported-at\" datetime=\"");
     html.push_str(&escaped_exported_at);
-    html.push_str("</span>\n</div>\n</header>\n<section class=\"lede\"><pre>");
+    html.push_str("\">");
+    html.push_str(&escaped_exported_at);
+    html.push_str("</time></span>\n<span class=\"pill notice\">");
+    html.push_str(&escape_html(REDACTION_NOTICE));
+    html.push_str("</span>\n</div>\n</header>\n<div class=\"layout\">\n<section class=\"transcript-column\">\n<section class=\"lede\"><pre>");
     html.push_str(&escaped_workspace);
     html.push_str("\nThread: ");
     html.push_str(&escaped_thread_id);
     html.push_str("\nSource: ");
     html.push_str(&escaped_source);
-    html.push_str("</pre></section>\n<section class=\"facts\">\n<div class=\"fact\"><span class=\"fact-label\">API Calls</span><span class=\"fact-value\" id=\"overview-api-calls\"></span></div>\n<div class=\"fact\"><span class=\"fact-label\">Tokens</span><span class=\"fact-value\" id=\"overview-tokens\"></span></div>\n<div class=\"fact\"><span class=\"fact-label\">Diff</span><span class=\"fact-value\" id=\"overview-diff\"></span></div>\n</section>\n<section class=\"overview\">\n<h2>Session Overview</h2>\n<p class=\"overview-copy\">Session, provider, token usage, diff totals, and API call counts in a thread-style export view.</p>\n<div class=\"stats-grid\">\n<div class=\"stat\"><span class=\"stat-label\">Rows</span><span class=\"stat-value\">");
-    let _ = write!(&mut html, "{}", export.total_rows);
-    html.push_str("</span></div>\n<div class=\"stat\"><span class=\"stat-label\">Thread Source</span><span class=\"stat-value\">");
-    html.push_str(&escaped_source);
-    html.push_str("</span></div>\n</div>\n<pre>");
+    html.push_str("</pre>\n<div class=\"facts\">\n<div class=\"fact\"><span class=\"fact-label\">API Calls</span><span class=\"fact-value\" id=\"overview-api-calls\"></span></div>\n<div class=\"fact\"><span class=\"fact-label\">Tokens</span><span class=\"fact-value\" id=\"overview-tokens\"></span></div>\n<div class=\"fact\"><span class=\"fact-label\">Diff</span><span class=\"fact-value\" id=\"overview-diff\"></span></div>\n</div>\n</section>\n<section class=\"panel\"><details id=\"overview-panel\"><summary>Session Overview</summary><div class=\"panel-body\"><ul id=\"overview-list\" class=\"kv-list\"></ul><details><summary>Overview JSON</summary><pre class=\"raw-json\">");
     html.push_str(&escaped_overview_json);
-    html.push_str("</pre>\n</section>\n<section class=\"controls-wrap\"><div class=\"controls\">\n<div class=\"control-grid\">\n<div class=\"control\"><label for=\"search-input\">Search</label><input id=\"search-input\" type=\"search\" placeholder=\"Search messages, tools, commands, output\"></div>\n<div class=\"control\"><label for=\"category-filter\">Category</label><select id=\"category-filter\"></select></div>\n<div class=\"control\"><label for=\"status-filter\">Status</label><select id=\"status-filter\"></select></div>\n</div>\n<div class=\"toolbar\">\n<label class=\"toggle\" for=\"hide-low-signal\"><input id=\"hide-low-signal\" type=\"checkbox\">Hide low-signal rows</label>\n<button id=\"clear-filters\" class=\"button\" type=\"button\">Clear filters</button>\n<div id=\"results-count\" class=\"results\"></div>\n</div>\n</div></section>\n<section class=\"timeline-wrap\">\n<h2 class=\"section-title\">Thread</h2>\n<section id=\"timeline\" class=\"timeline\"></section>\n</section>\n<p class=\"footer-note\">This HTML file is self-contained and can be shared offline.</p>\n</main>\n<script id=\"vtcode-session-data\" type=\"application/json\">");
+    html.push_str("</pre></details></div></details></section>\n<section id=\"timeline\" class=\"timeline\"></section>\n<p class=\"footer-note\">This HTML file is self-contained, shareable offline, and exported with redaction enabled.</p>\n</section>\n<aside class=\"sidebar\">\n<section class=\"panel\"><details id=\"filters-panel\"><summary>Search &amp; Filters</summary><div class=\"panel-body\"><div class=\"control-grid\">\n<div class=\"control\"><label for=\"search-input\">Search</label><input id=\"search-input\" type=\"search\" placeholder=\"Search transcript, tool output, commands\"></div>\n<div class=\"control\"><label for=\"category-filter\">Category</label><select id=\"category-filter\"></select></div>\n<div class=\"control\"><label for=\"status-filter\">Status</label><select id=\"status-filter\"></select></div>\n</div>\n<div class=\"toolbar\">\n<label class=\"toggle\" for=\"hide-low-signal\"><input id=\"hide-low-signal\" type=\"checkbox\">Hide low-signal rows</label>\n<button id=\"clear-filters\" class=\"button\" type=\"button\">Clear filters</button>\n<div id=\"results-count\" class=\"results\"></div>\n</div></div></details></section>\n<section class=\"panel\"><details id=\"raw-log-panel\"><summary>Raw JSON Log</summary><div class=\"panel-body\"><div class=\"system-copy\"><p>");
+    html.push_str(&escape_html(REDACTION_NOTICE));
+    html.push_str("</p></div><div class=\"sidebar-actions\"><button id=\"open-json\" class=\"button\" type=\"button\">Open redacted JSON log</button><button id=\"toggle-json-preview\" class=\"button\" type=\"button\">Toggle inline preview</button></div><pre id=\"raw-log-preview\" class=\"inline-json-preview\" hidden></pre></div></details></section>\n</aside>\n</div>\n</main>\n<script id=\"vtcode-session-data\" type=\"application/json\">");
     html.push_str(&sanitize_json_for_script_tag(&export_json));
-    html.push_str("</script>\n<script>\nconst exportData = JSON.parse(document.getElementById('vtcode-session-data').textContent);\nconst rows = exportData.rows || [];\nconst overview = exportData.overview || {};\nconst timelineEl = document.getElementById('timeline');\nconst searchInput = document.getElementById('search-input');\nconst categoryFilter = document.getElementById('category-filter');\nconst statusFilter = document.getElementById('status-filter');\nconst hideLowSignal = document.getElementById('hide-low-signal');\nconst clearFilters = document.getElementById('clear-filters');\nconst resultsCount = document.getElementById('results-count');\nfunction escapeHtml(text){return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll(\"'\",'&#39;');}\nfunction formatNumber(value){return Number(value || 0).toLocaleString('en-US');}\nfunction fillOverview(){const apiCalls = document.getElementById('overview-api-calls'); const tokens = document.getElementById('overview-tokens'); const diff = document.getElementById('overview-diff'); if(apiCalls){apiCalls.textContent = `${formatNumber(overview.api_calls)} call(s) / ${formatNumber(overview.turns)} turn(s)`;} if(tokens){tokens.textContent = `${formatNumber(overview.input_tokens)} in / ${formatNumber(overview.output_tokens)} out`; } if(diff){diff.textContent = `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`;}}\nfunction fillSelect(select, values, label){select.innerHTML = `<option value=\"\">${escapeHtml(label)}</option>` + values.map(value => `<option value=\"${escapeHtml(value)}\">${escapeHtml(value)}</option>`).join('');}\nfunction uniqueValues(key){return [...new Set(rows.map(row => row[key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));}\nfunction rowSearchText(row){return [row.event_type,row.item_type,row.category,row.status,row.title,row.summary,row.body,row.detail_json].filter(Boolean).join('\\n').toLowerCase();}\nfunction statusClass(status){return status ? ` status-${status}` : '';}\nfunction renderRow(row){const badges = [row.category,row.event_type,row.item_type,row.status].filter(Boolean).map(value => `<span class=\"badge${value === row.status ? statusClass(value) : ''}\">${escapeHtml(value)}</span>`); if(row.is_low_signal){badges.push('<span class=\"badge low-signal\">low-signal</span>');} const summary = row.summary ? `<p class=\"summary\">${escapeHtml(row.summary)}</p>` : ''; const body = row.body ? `<pre class=\"body\">${escapeHtml(row.body)}</pre>` : ''; const raw = row.detail_json ? `<details><summary>Raw event JSON</summary><pre class=\"raw-json\">${escapeHtml(row.detail_json)}</pre></details>` : ''; return `<article class=\"row\"><div class=\"row-head\"><div class=\"row-title\"><span class=\"seq\">#${row.sequence}</span><h2>${escapeHtml(row.title)}</h2></div><div class=\"badges\">${badges.join('')}</div></div>${summary}${body}${raw}</article>`;}\nfunction render(){const query = searchInput.value.trim().toLowerCase(); const category = categoryFilter.value; const status = statusFilter.value; const hideLow = hideLowSignal.checked; const filtered = rows.filter(row => { if (hideLow && row.is_low_signal) return false; if (category && row.category !== category) return false; if (status && row.status !== status) return false; if (query && !rowSearchText(row).includes(query)) return false; return true; }); resultsCount.textContent = `${filtered.length} of ${rows.length} rows`; if (!filtered.length){timelineEl.innerHTML = '<div class=\"empty\">No timeline rows match the current filters.</div>'; return;} timelineEl.innerHTML = filtered.map(renderRow).join('');}\nfillSelect(categoryFilter, uniqueValues('category'), 'All categories');\nfillSelect(statusFilter, uniqueValues('status'), 'All statuses');\nfillOverview();\nsearchInput.addEventListener('input', render);\ncategoryFilter.addEventListener('change', render);\nstatusFilter.addEventListener('change', render);\nhideLowSignal.addEventListener('change', render);\nclearFilters.addEventListener('click', () => { searchInput.value = ''; categoryFilter.value = ''; statusFilter.value = ''; hideLowSignal.checked = false; render(); });\nrender();\n</script>\n</body>\n</html>\n");
+    html.push_str("</script>\n<script id=\"vtcode-session-log-data\" type=\"application/json\">");
+    html.push_str(&sanitize_json_for_script_tag(&session_log_json));
+    html.push_str("</script>\n<script>\nconst exportData = JSON.parse(document.getElementById('vtcode-session-data').textContent);\nconst sessionLog = JSON.parse(document.getElementById('vtcode-session-log-data').textContent);\nconst rows = exportData.rows || [];\nconst overview = exportData.overview || {};\nconst timelineEl = document.getElementById('timeline');\nconst overviewList = document.getElementById('overview-list');\nconst searchInput = document.getElementById('search-input');\nconst categoryFilter = document.getElementById('category-filter');\nconst statusFilter = document.getElementById('status-filter');\nconst hideLowSignal = document.getElementById('hide-low-signal');\nconst clearFilters = document.getElementById('clear-filters');\nconst resultsCount = document.getElementById('results-count');\nconst themeToggle = document.getElementById('theme-toggle');\nconst openJson = document.getElementById('open-json');\nconst toggleJsonPreview = document.getElementById('toggle-json-preview');\nconst rawLogPreview = document.getElementById('raw-log-preview');\nconst exportedAt = document.getElementById('exported-at');\nconst root = document.documentElement;\nfunction escapeHtml(text){return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll(\"'\",'&#39;');}\nfunction formatNumber(value){return Number(value || 0).toLocaleString(undefined);}\nfunction normalizeText(text){return String(text || '').replace(/\\s+/g,' ').trim();}\nfunction setTheme(theme){root.dataset.theme = theme; if(themeToggle){themeToggle.textContent = theme === 'dark' ? 'Switch to light' : 'Switch to dark';}}\nfunction toggleTheme(){setTheme(root.dataset.theme === 'light' ? 'dark' : 'light');}\nfunction fillSelect(select, values, label){select.innerHTML = `<option value=\"\">${escapeHtml(label)}</option>` + values.map(value => `<option value=\"${escapeHtml(value)}\">${escapeHtml(value)}</option>`).join('');}\nfunction uniqueValues(key){return [...new Set(rows.map(row => row[key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));}\nfunction rowSearchText(row){return [row.role,row.transcript_kind,row.event_type,row.item_type,row.category,row.status,row.title,row.summary,row.body,row.detail_json].filter(Boolean).join('\\n').toLowerCase();}\nfunction statusClass(status){return status ? ` status-${status}` : '';}\nfunction roleClass(role){return role ? ` role-${role}` : ' role-system';}\nfunction inlineMarkdown(text){return escapeHtml(text).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>');}\nfunction splitBlocks(text){return String(text || '').split(/\\n\\s*\\n/).map(block => block.trim()).filter(Boolean);}\nfunction formatLocaleTimestamp(){if(!exportedAt){return;} const raw = exportedAt.getAttribute('datetime') || exportedAt.textContent || ''; const date = new Date(raw); if(Number.isNaN(date.getTime())){return;} exportedAt.textContent = new Intl.DateTimeFormat(undefined,{dateStyle:'full',timeStyle:'long'}).format(date);}\nfunction messageBody(row){const summary = String(row.summary || '').trim(); const body = String(row.body || '').trim(); if(!body){return summary;} if(normalizeText(body) === normalizeText(summary)){return body;} return body;}\nfunction renderBulletList(lines){return `<ul>` + lines.map(line => `<li>${inlineMarkdown(line.replace(/^[-*]\\s+/, '').trim())}</li>`).join('') + `</ul>`;}\nfunction renderMessageBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '<div class=\"message-block\"><div class=\"message-text\"><p>No transcript content.</p></div></div>';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trim()).filter(Boolean); if(!lines.length){return '';} const heading = lines[0].match(/^([A-Za-z][A-Za-z0-9 &/()_-]{0,60}):$/); if(heading && lines.slice(1).every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><span class=\"message-section-title\">${escapeHtml(heading[1])}</span><div class=\"message-text\">${renderBulletList(lines.slice(1))}</div></section>`; } if(lines.every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><div class=\"message-text\">${renderBulletList(lines)}</div></section>`; } return `<section class=\"message-block\"><div class=\"message-text\">` + lines.map(line => `<p>${inlineMarkdown(line)}</p>`).join('') + `</div></section>`; }).join('');}\nfunction renderStreams(text){const normalized = String(text || '').trim(); if(!normalized){return '';} const streamRegex = /(stdout|stderr)\\s+─+\\n([\\s\\S]*?)(?=(?:\\n(?:stdout|stderr)\\s+─+\\n)|$)/gi; const streams = [...normalized.matchAll(streamRegex)]; if(!streams.length){return `<section class=\"log-stream\"><span class=\"log-stream-title\">Output</span><pre>${escapeHtml(normalized)}</pre></section>`;} return streams.map(match => `<section class=\"log-stream\"><span class=\"log-stream-title\">${escapeHtml(match[1])}</span><pre>${escapeHtml((match[2] || '').trim())}</pre></section>`).join('');}\nfunction renderSystemBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trimEnd()).filter(line => line.trim().length > 0); if(!lines.length){return '';} const first = lines[0].trim(); const headingMatch = first.match(/^([A-Za-z][A-Za-z0-9 ()_./-]{0,60}):(.*)$/); if(headingMatch){ const label = headingMatch[1]; const inlineValue = headingMatch[2].trim(); const rest = [inlineValue, ...lines.slice(1).map(line => line.trim())].filter(Boolean).join('\\n').trim(); if(label === 'Output' || label === 'Result' || label === 'Arguments' || label === 'Top results'){ return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span>${renderStreams(rest)}</section>`; } return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span><div class=\"system-copy\"><p>${inlineMarkdown(rest || '')}</p></div></section>`; } return `<section class=\"detail-shell\"><pre>${escapeHtml(lines.join('\\n'))}</pre></section>`; }).join('');}\nfunction renderEntryBody(row){if(row.transcript_kind === 'message'){return renderMessageBlocks(messageBody(row));} if(row.transcript_kind === 'plan' || row.transcript_kind === 'reasoning'){return renderMessageBlocks(row.body || row.summary);} return renderSystemBlocks(row.body || row.summary || '');}\nfunction renderRawEvent(row){if(!row.detail_json){return '';} return `<details><summary>Raw event JSON</summary><pre class=\"raw-json\">${escapeHtml(row.detail_json)}</pre></details>`;}\nfunction renderRow(row){const subtitle = row.summary && normalizeText(row.summary) !== normalizeText(row.body || '') ? `<div class=\"entry-subtitle\">${inlineMarkdown(row.summary)}</div>` : ''; const tags = [`<span class=\"kind-badge\">${escapeHtml(row.transcript_kind || row.category || 'status')}</span>`, row.category ? `<span class=\"kind-badge\">${escapeHtml(row.category)}</span>` : '', row.status ? `<span class=\"status-badge${statusClass(row.status)}\">${escapeHtml(row.status)}</span>` : '', row.is_low_signal ? '<span class=\"status-badge low-signal\">low-signal</span>' : ''].filter(Boolean).join(''); return `<article class=\"entry\"><div class=\"entry-head\"><div class=\"entry-meta\"><div class=\"entry-identity\"><span class=\"role-badge${roleClass(row.role)}\">${escapeHtml(row.role || 'system')}</span><span class=\"seq\">#${row.sequence}</span><span class=\"entry-title\">${escapeHtml(row.title)}</span></div>${subtitle}</div><div class=\"entry-tags\">${tags}</div></div><div class=\"entry-body\">${renderEntryBody(row)}${renderRawEvent(row)}</div></article>`;}\nfunction fillOverview(){const apiCalls = document.getElementById('overview-api-calls'); const tokens = document.getElementById('overview-tokens'); const diff = document.getElementById('overview-diff'); if(apiCalls){apiCalls.textContent = `${formatNumber(overview.api_calls)} call(s) / ${formatNumber(overview.turns)} turn(s)`;} if(tokens){tokens.textContent = `${formatNumber(overview.input_tokens)} in / ${formatNumber(overview.output_tokens)} out`; } if(diff){diff.textContent = `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`;} if(overviewList){const items = [['Provider', overview.provider || ''], ['Model', overview.model || ''], ['Source', overview.source || ''], ['Rows', formatNumber(overview.total_rows)], ['API calls', `${formatNumber(overview.api_calls)} call(s)`], ['Turns', formatNumber(overview.turns)], ['Input tokens', formatNumber(overview.input_tokens)], ['Output tokens', formatNumber(overview.output_tokens)], ['Cached input', formatNumber(overview.cached_input_tokens)], ['Cache creation', formatNumber(overview.cache_creation_tokens)], ['Total tokens', formatNumber(overview.total_tokens)], ['Diff', `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`], ['Outcome', overview.outcome_code || 'n/a'], ['Cost', overview.total_cost_usd || 'n/a'], ['Redaction', exportData.redaction_enabled ? 'enabled' : 'disabled']]; overviewList.innerHTML = items.map(([key, value]) => `<li><span class=\"kv-key\">${escapeHtml(key)}</span><span class=\"kv-value\">${escapeHtml(value)}</span></li>`).join(''); }}\nfunction openRawJsonWindow(){const popup = window.open('', '_blank', 'noopener,noreferrer'); if(!popup){return;} const pretty = JSON.stringify(sessionLog, null, 2); popup.document.write(`<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>VT Code Redacted JSON Log</title><style>body{margin:0;padding:18px;background:#111;color:#f5f5f5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}pre{white-space:pre-wrap;word-break:break-word}</style></head><body><pre>${escapeHtml(pretty)}</pre></body></html>`); popup.document.close();}\nfunction render(){const query = searchInput.value.trim().toLowerCase(); const category = categoryFilter.value; const status = statusFilter.value; const hideLow = hideLowSignal.checked; const filtered = rows.filter(row => { if (hideLow && row.is_low_signal) return false; if (category && row.category !== category) return false; if (status && row.status !== status) return false; if (query && !rowSearchText(row).includes(query)) return false; return true; }); resultsCount.textContent = `${filtered.length} of ${rows.length} rows`; if (!filtered.length){timelineEl.innerHTML = '<div class=\"empty\">No transcript rows match the current filters.</div>'; return;} timelineEl.innerHTML = filtered.map(renderRow).join('');}\nfillSelect(categoryFilter, uniqueValues('category'), 'All categories');\nfillSelect(statusFilter, uniqueValues('status'), 'All statuses');\nfillOverview();\nformatLocaleTimestamp();\nsetTheme(root.dataset.theme || 'dark');\nif(themeToggle){themeToggle.addEventListener('click', toggleTheme);}\nif(openJson){openJson.addEventListener('click', openRawJsonWindow);}\nif(toggleJsonPreview && rawLogPreview){toggleJsonPreview.addEventListener('click', () => { rawLogPreview.hidden = !rawLogPreview.hidden; if(!rawLogPreview.hidden && !rawLogPreview.textContent){ rawLogPreview.textContent = JSON.stringify(sessionLog, null, 2); } });}\nsearchInput.addEventListener('input', render);\ncategoryFilter.addEventListener('change', render);\nstatusFilter.addEventListener('change', render);\nhideLowSignal.addEventListener('change', render);\nclearFilters.addEventListener('click', () => { searchInput.value = ''; categoryFilter.value = ''; statusFilter.value = ''; hideLowSignal.checked = false; render(); });\nrender();\n</script>\n</body>\n</html>\n");
 
     Ok(html)
 }
@@ -864,12 +890,16 @@ fn timeline_row(
     detail_json: Option<String>,
     is_low_signal: bool,
 ) -> TimelineRow {
+    let role = infer_row_role(category, item_type, &title);
+    let transcript_kind = infer_transcript_kind(category, item_type, &title);
     TimelineRow {
         sequence,
         source: source.to_string(),
         event_type: event_type.to_string(),
         item_type: item_type.map(str::to_string),
         category: category.to_string(),
+        role,
+        transcript_kind,
         status: status.map(str::to_string),
         turn_id: turn_id.map(str::to_string),
         submission_id: submission_id.map(str::to_string),
@@ -878,6 +908,53 @@ fn timeline_row(
         body,
         detail_json,
         is_low_signal,
+    }
+}
+
+fn infer_row_role(category: &str, item_type: Option<&str>, title: &str) -> String {
+    let normalized_title = title.to_ascii_lowercase();
+    if normalized_title.starts_with("user ") {
+        return "user".to_string();
+    }
+    if normalized_title.starts_with("assistant ")
+        || matches!(
+            item_type,
+            Some("agent_message" | "plan" | "reasoning" | "plan_delta")
+        )
+    {
+        return "assistant".to_string();
+    }
+    if category == "message" && normalized_title.contains("assistant") {
+        return "assistant".to_string();
+    }
+    "system".to_string()
+}
+
+fn infer_transcript_kind(category: &str, item_type: Option<&str>, title: &str) -> String {
+    let normalized_title = title.to_ascii_lowercase();
+    if normalized_title.contains("pty") {
+        return "pty".to_string();
+    }
+    match item_type {
+        Some("agent_message" | "message") => "message".to_string(),
+        Some("plan" | "plan_delta") => "plan".to_string(),
+        Some("reasoning") => "reasoning".to_string(),
+        Some("tool_invocation" | "tool_output" | "mcp_tool_call" | "web_search") => {
+            if normalized_title.contains("pty") {
+                "pty".to_string()
+            } else {
+                "tool".to_string()
+            }
+        }
+        Some("command_execution") => "command".to_string(),
+        Some("file_change") => "diff".to_string(),
+        _ => match category {
+            "message" => "message".to_string(),
+            "tool" | "mcp" | "web_search" => "tool".to_string(),
+            "command" => "command".to_string(),
+            "file_change" => "diff".to_string(),
+            _ => "status".to_string(),
+        },
     }
 }
 
@@ -940,6 +1017,64 @@ fn pretty_json_string<T: Serialize>(value: &T) -> Option<String> {
 
 fn pretty_json_value(value: &Value) -> Option<String> {
     serde_json::to_string_pretty(value).ok()
+}
+
+fn redact_sensitive_text(input: &str) -> String {
+    let mut redacted = redact_secrets(input.to_string());
+
+    if let Some(home_dir) = std::env::var_os("HOME")
+        .and_then(|value| value.into_string().ok())
+        .filter(|value| !value.is_empty())
+    {
+        redacted = redacted.replace(&home_dir, "~");
+    }
+
+    redacted = USER_PATH_REGEX
+        .replace_all(&redacted, "${prefix}[REDACTED]")
+        .into_owned();
+    EMAIL_REGEX
+        .replace_all(&redacted, "[REDACTED_EMAIL]")
+        .into_owned()
+}
+
+fn redact_json_value(value: &Value) -> Value {
+    match value {
+        Value::String(text) => Value::String(redact_sensitive_text(text)),
+        Value::Array(items) => Value::Array(items.iter().map(redact_json_value).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), redact_json_value(value)))
+                .collect(),
+        ),
+        _ => value.clone(),
+    }
+}
+
+fn redact_timeline_export(export: &TimelineExport) -> TimelineExport {
+    let mut redacted = export.clone();
+    redacted.workspace = redact_sensitive_text(&redacted.workspace);
+    redacted.thread_id = redact_sensitive_text(&redacted.thread_id);
+    if let Some(outcome_code) = &redacted.overview.outcome_code {
+        redacted.overview.outcome_code = Some(redact_sensitive_text(outcome_code));
+    }
+    for row in &mut redacted.rows {
+        row.title = redact_sensitive_text(&row.title);
+        row.summary = redact_sensitive_text(&row.summary);
+        row.body = redact_sensitive_text(&row.body);
+        row.turn_id = row
+            .turn_id
+            .as_ref()
+            .map(|value| redact_sensitive_text(value));
+        row.submission_id = row
+            .submission_id
+            .as_ref()
+            .map(|value| redact_sensitive_text(value));
+        row.detail_json = row
+            .detail_json
+            .as_ref()
+            .map(|value| redact_sensitive_text(value));
+    }
+    redacted
 }
 
 fn canonical_tool_name(name: &str) -> String {
@@ -1095,7 +1230,17 @@ pub(crate) async fn handle_share_log(
     let exported_at = Local::now().to_rfc3339();
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let log_messages = build_session_log_messages(ctx.conversation_history);
+    let redacted_log_messages: Vec<Value> = log_messages.iter().map(redact_json_value).collect();
     let thread_events = ctx.thread_handle.replay_recent();
+    let redacted_session_log_export = json!({
+        "exported_at": exported_at,
+        "provider": ctx.provider_client.name(),
+        "model": &ctx.config.model,
+        "workspace": redact_sensitive_text(&ctx.config.workspace.display().to_string()),
+        "redaction_enabled": true,
+        "total_messages": redacted_log_messages.len(),
+        "messages": redacted_log_messages,
+    });
     let json_output_path = ctx
         .config
         .workspace
@@ -1113,16 +1258,8 @@ pub(crate) async fn handle_share_log(
         format,
         SessionLogExportFormat::Both | SessionLogExportFormat::Json
     ) {
-        let export = json!({
-            "exported_at": exported_at,
-            "model": &ctx.config.model,
-            "workspace": ctx.config.workspace.display().to_string(),
-            "total_messages": log_messages.len(),
-            "messages": log_messages,
-        });
-
-        let json =
-            serde_json::to_string_pretty(&export).context("Failed to serialize session log")?;
+        let json = serde_json::to_string_pretty(&redacted_session_log_export)
+            .context("Failed to serialize session log")?;
         write_file_with_context_sync(&json_output_path, &json, "session log")?;
     }
 
@@ -1131,7 +1268,11 @@ pub(crate) async fn handle_share_log(
             &exported_at,
             &ctx.config.model,
             &ctx.config.workspace,
-            &log_messages,
+            redacted_session_log_export
+                .get("messages")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
         );
         write_file_with_context_sync(&markdown_output_path, &markdown, "session log")?;
     }
@@ -1140,7 +1281,7 @@ pub(crate) async fn handle_share_log(
         format,
         SessionLogExportFormat::Both | SessionLogExportFormat::Html
     ) {
-        let timeline_export = build_timeline_export(
+        let timeline_export = redact_timeline_export(&build_timeline_export(
             &exported_at,
             ctx.provider_client.name(),
             &ctx.config.model,
@@ -1148,8 +1289,8 @@ pub(crate) async fn handle_share_log(
             ctx.thread_id,
             &thread_events,
             ctx.conversation_history,
-        );
-        let html = render_session_timeline_html(&timeline_export)?;
+        ));
+        let html = render_session_timeline_html(&timeline_export, &redacted_session_log_export)?;
         write_file_with_context_sync(&html_output_path, &html, "session timeline")?;
     }
 
@@ -1339,13 +1480,14 @@ mod tests {
             &records,
             &[],
         );
-        let html = render_session_timeline_html(&export).expect("html");
+        let html = render_session_timeline_html(&export, &json!({"messages": []})).expect("html");
 
         assert!(html.contains("id=\"search-input\""));
         assert!(html.contains("id=\"category-filter\""));
         assert!(html.contains("id=\"status-filter\""));
         assert!(html.contains("id=\"hide-low-signal\""));
         assert!(html.contains("vtcode-session-data"));
+        assert!(html.contains("vtcode-session-log-data"));
         assert!(!html.contains("http://"));
         assert!(!html.contains("https://"));
         assert!(!html.contains("<script>alert('xss')</script>"));
@@ -1362,6 +1504,7 @@ mod tests {
             thread_id: "thread-1".to_string(),
             source: TIMELINE_SOURCE_THREAD_EVENTS.to_string(),
             total_rows: 0,
+            redaction_enabled: true,
             overview: SessionOverview {
                 provider: "openai".to_string(),
                 model: "gpt-test".to_string(),
@@ -1384,7 +1527,7 @@ mod tests {
             rows: Vec::new(),
         };
 
-        let html = render_session_timeline_html(&export).expect("html");
+        let html = render_session_timeline_html(&export, &json!({"messages": []})).expect("html");
 
         assert!(!html.contains("--shadow"));
         assert!(!html.contains("box-shadow"));
@@ -1392,6 +1535,67 @@ mod tests {
         assert!(html.contains("Session Overview"));
         assert!(html.contains("Shared Thread"));
         assert!(html.contains("VT Code Thread Share"));
+        assert!(html.contains("Search &amp; Filters"));
+        assert!(html.contains("Open redacted JSON log"));
+    }
+
+    #[test]
+    fn html_timeline_avoids_duplicate_summary_rows_for_fallback_messages() {
+        let export = TimelineExport {
+            exported_at: "2026-04-04T00:00:00Z".to_string(),
+            provider: "copilot".to_string(),
+            model: "claude-haiku-4.5".to_string(),
+            workspace: "/tmp/workspace".to_string(),
+            thread_id: "thread-1".to_string(),
+            source: TIMELINE_SOURCE_CONVERSATION_FALLBACK.to_string(),
+            total_rows: 1,
+            redaction_enabled: true,
+            overview: SessionOverview {
+                provider: "copilot".to_string(),
+                model: "claude-haiku-4.5".to_string(),
+                api_calls: 0,
+                turns: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+                total_tokens: 0,
+                added_files: 0,
+                updated_files: 0,
+                deleted_files: 0,
+                total_file_changes: 0,
+                source: TIMELINE_SOURCE_CONVERSATION_FALLBACK.to_string(),
+                total_rows: 1,
+                outcome_code: None,
+                total_cost_usd: None,
+            },
+            rows: vec![TimelineRow {
+                sequence: 1,
+                source: TIMELINE_SOURCE_CONVERSATION_FALLBACK.to_string(),
+                event_type: "conversation.message".to_string(),
+                item_type: Some("message".to_string()),
+                category: "message".to_string(),
+                role: "assistant".to_string(),
+                transcript_kind: "message".to_string(),
+                status: Some("completed".to_string()),
+                turn_id: None,
+                submission_id: None,
+                title: "Assistant message".to_string(),
+                summary: "This is VT Code.".to_string(),
+                body: "This is VT Code.\n\nKey features:\n- Safe shell execution\n- Thread timeline exports".to_string(),
+                detail_json: Some("{\"role\":\"Assistant\"}".to_string()),
+                is_low_signal: false,
+            }],
+        };
+
+        let html = render_session_timeline_html(&export, &json!({"messages": []})).expect("html");
+
+        assert!(html.contains("messageBody(row)"));
+        assert!(html.contains("renderMessageBlocks"));
+        assert!(html.contains("normalizeText(body) === normalizeText(summary)"));
+        assert!(html.contains("Key features"));
+        assert!(html.contains("Safe shell execution"));
+        assert!(html.contains("Thread timeline exports"));
     }
 
     #[test]

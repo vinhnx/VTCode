@@ -11,7 +11,7 @@ persistence = "file"
 [agent]
 provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
-default_model = "minimax-m2.7:cloud"
+default_model = "gpt-oss:20b-cloud"
 theme = "ciapre"
 system_prompt_mode = "default"
 tool_documentation_mode = "progressive"
@@ -19,7 +19,7 @@ enable_split_tool_results = true
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "low"
+reasoning_effort = "high"
 verbosity = "medium"
 temperature = 0.7
 refine_temperature = 0.3
