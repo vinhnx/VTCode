@@ -23,6 +23,7 @@ pub struct ProviderCapabilities {
     pub structured_output: bool,
     pub context_caching: bool,
     pub responses_compaction: bool,
+    pub context_edits: bool,
     pub context_awareness: bool,
     pub vision: bool,
     pub context_size: usize,
@@ -41,6 +42,7 @@ impl ProviderCapabilities {
             structured_output: provider.supports_structured_output(model),
             context_caching: provider.supports_context_caching(model),
             responses_compaction: provider.supports_responses_compaction(model),
+            context_edits: provider.supports_context_edits(model),
             context_awareness: provider.supports_context_awareness(model),
             vision: provider.supports_vision(model),
             context_size: provider.effective_context_size(model),
@@ -74,6 +76,9 @@ impl ProviderCapabilities {
         }
         if self.responses_compaction {
             features.push("responses-compaction");
+        }
+        if self.context_edits {
+            features.push("context-edits");
         }
 
         let features_str = if features.is_empty() {
@@ -168,6 +173,12 @@ pub trait LLMProvider: Send + Sync {
 
     /// Whether the provider supports Responses API server-side compaction.
     fn supports_responses_compaction(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Whether the provider supports provider-native context editing such as
+    /// tool-result clearing.
+    fn supports_context_edits(&self, _model: &str) -> bool {
         false
     }
 

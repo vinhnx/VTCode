@@ -220,6 +220,15 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
                     .supports_responses_compaction(&runner.model),
                 Some(runner.config()),
             ),
+            anthropic_native_memory_enabled:
+                crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+                    crate::llm::factory::infer_provider(
+                        Some(&runner.config().agent.provider),
+                        &runner.model,
+                    ),
+                    &runner.model,
+                    Some(runner.config()),
+                ),
         })
         .await;
     let mut expected = Vec::new();

@@ -133,6 +133,7 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             true,
         )),
         tools::REQUEST_USER_INPUT
+        | tools::MEMORY
         | tools::ENTER_PLAN_MODE
         | tools::EXIT_PLAN_MODE
         | tools::LIST_SKILLS
@@ -143,7 +144,11 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         | tools::GET_ERRORS
         | tools::SEARCH_TOOLS
         | tools::THINK => Some(ToolBehavior::function(
-            ToolMutationModel::ReadOnly,
+            if tool == tools::MEMORY {
+                ToolMutationModel::ByArgs(memory_tool_intent)
+            } else {
+                ToolMutationModel::ReadOnly
+            },
             false,
             false,
         )),
@@ -310,6 +315,19 @@ fn unified_exec_intent(args: &Value) -> ToolIntent {
 
     if readonly_unified_action {
         ToolIntent::read_only_unified_action()
+    } else {
+        ToolIntent::mutating()
+    }
+}
+
+fn memory_tool_intent(args: &Value) -> ToolIntent {
+    let command = args
+        .get("command")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if command.eq_ignore_ascii_case("view") {
+        ToolIntent::read_only()
     } else {
         ToolIntent::mutating()
     }

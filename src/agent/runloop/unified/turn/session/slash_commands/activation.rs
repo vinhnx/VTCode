@@ -69,6 +69,7 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
                         ctx.tools,
                         ctx.tool_catalog,
                         ctx.config,
+                        ctx.vt_cfg.as_ref(),
                         tool_documentation_mode,
                         &deferred_tool_policy,
                     )

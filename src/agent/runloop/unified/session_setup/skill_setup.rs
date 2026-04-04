@@ -51,6 +51,7 @@ pub(crate) async fn register_skill_tools(
     vt_cfg: Option<&VTCodeConfig>,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
     deferred_tool_policy: DeferredToolPolicy,
+    anthropic_native_memory_enabled: bool,
     skill_setup: &SkillSetupState,
 ) -> Result<()> {
     let runtime = vtcode_core::tools::skills::SkillToolSessionRuntime::new(
@@ -73,6 +74,7 @@ pub(crate) async fn register_skill_tools(
         ),
     ))
     .with_deferred_tool_policy(deferred_tool_policy.clone());
+    let runtime = runtime.with_anthropic_native_memory_enabled(anthropic_native_memory_enabled);
 
     register_list_skills_tool(
         tool_registry,
@@ -95,6 +97,7 @@ pub(crate) async fn register_skill_tools(
         tools,
         tool_catalog,
         config,
+        vt_cfg,
         tool_documentation_mode,
         &deferred_tool_policy,
     )

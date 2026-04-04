@@ -53,6 +53,7 @@ pub struct SkillToolSessionRuntime {
     tool_documentation_mode: ToolDocumentationMode,
     model_capabilities: ToolModelCapabilities,
     deferred_tool_policy: DeferredToolPolicy,
+    anthropic_native_memory_enabled: bool,
     on_tools_changed: Option<ToolChangeNotifier>,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
 }
@@ -71,6 +72,7 @@ impl SkillToolSessionRuntime {
             tool_documentation_mode,
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
+            anthropic_native_memory_enabled: false,
             on_tools_changed,
             fork_executor: None,
         }
@@ -83,6 +85,11 @@ impl SkillToolSessionRuntime {
 
     pub fn with_deferred_tool_policy(mut self, deferred_tool_policy: DeferredToolPolicy) -> Self {
         self.deferred_tool_policy = deferred_tool_policy;
+        self
+    }
+
+    pub fn with_anthropic_native_memory_enabled(mut self, enabled: bool) -> Self {
+        self.anthropic_native_memory_enabled = enabled;
         self
     }
 
@@ -135,7 +142,8 @@ impl SkillToolSessionRuntime {
                         self.tool_documentation_mode,
                         self.model_capabilities,
                     )
-                    .with_deferred_tool_policy(self.deferred_tool_policy.clone()),
+                    .with_deferred_tool_policy(self.deferred_tool_policy.clone())
+                    .with_anthropic_native_memory_enabled(self.anthropic_native_memory_enabled),
                 )
                 .await;
             *active_tools.write().await = refreshed;

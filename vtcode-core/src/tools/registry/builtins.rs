@@ -6,6 +6,7 @@ use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
 };
+use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 use vtcode_collaboration_tool_specs::{
@@ -55,6 +56,17 @@ pub(super) fn builtin_tool_registrations(
             RequestUserInputTool,
         )
         .with_native_cgp_factory(request_user_input_factory),
+        ToolRegistration::new(
+            tools::MEMORY,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::memory_executor,
+        )
+        .with_description(
+            "Access VT Code persistent memory files under /memories. Use view before reading or updating notes; writes are limited to preferences.md, repository-facts.md, and notes/**.",
+        )
+        .with_parameter_schema(native_memory::parameter_schema())
+        .with_permission(ToolPolicy::Allow),
         ToolRegistration::new(
             tools::CRON_CREATE,
             CapabilityLevel::Basic,

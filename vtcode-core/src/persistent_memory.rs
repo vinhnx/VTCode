@@ -20,6 +20,7 @@ use crate::llm::{
 pub const MEMORY_FILENAME: &str = "MEMORY.md";
 pub const MEMORY_SUMMARY_FILENAME: &str = "memory_summary.md";
 pub const ROLLOUT_SUMMARIES_DIRNAME: &str = "rollout_summaries";
+pub const NOTES_DIRNAME: &str = "notes";
 
 const MEMORY_LOCK_FILENAME: &str = ".memory.lock";
 const PREFERENCES_FILENAME: &str = "preferences.md";
@@ -45,6 +46,7 @@ pub struct PersistentMemoryStatus {
     pub memory_file: PathBuf,
     pub preferences_file: PathBuf,
     pub repository_facts_file: PathBuf,
+    pub notes_dir: PathBuf,
     pub rollout_summaries_dir: PathBuf,
     pub summary_exists: bool,
     pub registry_exists: bool,
@@ -227,6 +229,7 @@ struct PersistentMemoryFiles {
     memory_file: PathBuf,
     preferences_file: PathBuf,
     repository_facts_file: PathBuf,
+    notes_dir: PathBuf,
     rollout_summaries_dir: PathBuf,
     lock_file: PathBuf,
 }
@@ -238,6 +241,7 @@ impl PersistentMemoryFiles {
             memory_file: directory.join(MEMORY_FILENAME),
             preferences_file: directory.join(PREFERENCES_FILENAME),
             repository_facts_file: directory.join(REPOSITORY_FACTS_FILENAME),
+            notes_dir: directory.join(NOTES_DIRNAME),
             rollout_summaries_dir: directory.join(ROLLOUT_SUMMARIES_DIRNAME),
             lock_file: directory.join(MEMORY_LOCK_FILENAME),
             directory,
@@ -559,6 +563,7 @@ pub fn persistent_memory_status(
         memory_file: files.memory_file,
         preferences_file: files.preferences_file,
         repository_facts_file: files.repository_facts_file,
+        notes_dir: files.notes_dir,
         rollout_summaries_dir: files.rollout_summaries_dir,
     })
 }
@@ -657,6 +662,20 @@ pub async fn rebuild_persistent_memory_summary(
     .await
 }
 
+pub async fn rebuild_generated_memory_files(
+    config: &PersistentMemoryConfig,
+    workspace_root: &Path,
+) -> Result<()> {
+    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+        .expect("persistent memory directory should resolve");
+    let files = PersistentMemoryFiles::new(directory);
+    let mut created_files = Vec::new();
+    ensure_memory_layout(&files, &mut created_files).await?;
+    let _lock = MemoryLock::acquire(&files.lock_file).await?;
+    let _ = consolidate_memory_files(None, None, workspace_root, &files).await?;
+    Ok(())
+}
+
 pub async fn scaffold_persistent_memory(
     config: &PersistentMemoryConfig,
     workspace_root: &Path,
@@ -715,6 +734,7 @@ pub async fn cleanup_persistent_memory(
     };
 
     let removed_rollout_files = remove_rollout_markdown_files(&files.rollout_summaries_dir).await?;
+    let notes = read_note_summaries(&files.notes_dir).await?;
     let mut created_files = Vec::new();
     write_topic_file(
         &files.preferences_file,
@@ -734,6 +754,7 @@ pub async fn cleanup_persistent_memory(
         &files.memory_file,
         &classified.preferences,
         &classified.repository_facts,
+        &notes,
         0,
         &mut created_files,
     )
@@ -745,6 +766,7 @@ pub async fn cleanup_persistent_memory(
         runtime_config.workspace.as_path(),
         &classified.preferences,
         &classified.repository_facts,
+        &notes,
         &mut created_files,
     )
     .await?;
@@ -1136,6 +1158,14 @@ async fn ensure_memory_layout(
                 files.rollout_summaries_dir.display()
             )
         })?;
+    tokio::fs::create_dir_all(&files.notes_dir)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to create notes directory {}",
+                files.notes_dir.display()
+            )
+        })?;
 
     ensure_file(
         &files.preferences_file,
@@ -1151,13 +1181,13 @@ async fn ensure_memory_layout(
     .await?;
     ensure_file(
         &files.memory_file,
-        render_memory_index(&[], &[], 0),
+        render_memory_index(&[], &[], &[], 0),
         created_files,
     )
     .await?;
     ensure_file(
         &files.summary_file,
-        render_memory_summary(&[], &[]),
+        render_memory_summary(&[], &[], &[]),
         created_files,
     )
     .await?;
@@ -1585,6 +1615,7 @@ async fn collect_all_memory_matches(
     let repository_facts =
         read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout_records = read_rollout_records(&files.rollout_summaries_dir).await?;
+    let notes = read_note_summaries(&files.notes_dir).await?;
 
     let mut matches = Vec::new();
     for record in preferences
@@ -1598,6 +1629,14 @@ async fn collect_all_memory_matches(
             source,
             fact: record.fact,
         });
+    }
+    for note in notes {
+        for highlight in note.highlights {
+            matches.push(PersistentMemoryMatch {
+                source: note.relative_path.clone(),
+                fact: highlight,
+            });
+        }
     }
 
     let mut deduped = Vec::new();
@@ -1717,9 +1756,61 @@ fn count_pending_rollout_summaries(rollout_dir: &Path) -> Result<usize> {
     Ok(count)
 }
 
+fn list_note_markdown_files(notes_dir: &Path) -> Result<Vec<PathBuf>> {
+    fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        for entry in
+            std::fs::read_dir(dir).with_context(|| format!("Failed to list {}", dir.display()))?
+        {
+            let path = entry?.path();
+            if path.is_dir() {
+                walk(&path, files)?;
+            } else if path.extension().and_then(|value| value.to_str()) == Some("md") {
+                files.push(path);
+            }
+        }
+
+        Ok(())
+    }
+
+    let mut files = Vec::new();
+    walk(notes_dir, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+async fn read_note_summaries(notes_dir: &Path) -> Result<Vec<MemoryNoteSummary>> {
+    let note_files = list_note_markdown_files(notes_dir)?;
+    let mut notes = Vec::with_capacity(note_files.len());
+    for path in note_files {
+        let content = tokio::fs::read_to_string(&path)
+            .await
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let relative = path
+            .strip_prefix(notes_dir)
+            .with_context(|| format!("Failed to relativize {}", path.display()))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        notes.push(MemoryNoteSummary {
+            relative_path: format!("{NOTES_DIRNAME}/{relative}"),
+            highlights: extract_memory_highlights(&content, 3),
+        });
+    }
+    Ok(notes)
+}
+
 struct ConsolidationResult {
     created_files: Vec<PathBuf>,
     added_facts: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MemoryNoteSummary {
+    relative_path: String,
+    highlights: Vec<String>,
 }
 
 async fn consolidate_memory_files(
@@ -1734,6 +1825,7 @@ async fn consolidate_memory_files(
     let repository_existing =
         read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout_records = read_rollout_records(&files.rollout_summaries_dir).await?;
+    let notes = read_note_summaries(&files.notes_dir).await?;
 
     let preferences = merge_topic_facts(
         preferences_existing
@@ -1768,6 +1860,7 @@ async fn consolidate_memory_files(
         &files.memory_file,
         &preferences,
         &repository_facts,
+        &notes,
         0,
         &mut created_files,
     )
@@ -1779,6 +1872,7 @@ async fn consolidate_memory_files(
         workspace_root,
         &preferences,
         &repository_facts,
+        &notes,
         &mut created_files,
     )
     .await?;
@@ -1997,13 +2091,14 @@ async fn write_memory_index(
     path: &Path,
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
     pending_rollouts: usize,
     created_files: &mut Vec<PathBuf>,
 ) -> Result<()> {
     if !path.exists() {
         created_files.push(path.to_path_buf());
     }
-    let contents = render_memory_index(preferences, repository_facts, pending_rollouts);
+    let contents = render_memory_index(preferences, repository_facts, notes, pending_rollouts);
     tokio::fs::write(path, contents)
         .await
         .with_context(|| format!("Failed to write {}", path.display()))?;
@@ -2017,6 +2112,7 @@ async fn write_memory_summary(
     workspace_root: &Path,
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
     created_files: &mut Vec<PathBuf>,
 ) -> Result<()> {
     let contents = summarize_memory(
@@ -2025,9 +2121,10 @@ async fn write_memory_summary(
         workspace_root,
         preferences,
         repository_facts,
+        notes,
     )
     .await
-    .unwrap_or_else(|| render_memory_summary(preferences, repository_facts));
+    .unwrap_or_else(|| render_memory_summary(preferences, repository_facts, notes));
     if !path.exists() {
         created_files.push(path.to_path_buf());
     }
@@ -2240,6 +2337,7 @@ async fn summarize_memory(
     workspace_root: &Path,
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
 ) -> Option<String> {
     let runtime_config = runtime_config?;
     let routes = resolve_memory_model_routes(runtime_config, vt_cfg);
@@ -2252,6 +2350,7 @@ async fn summarize_memory(
         workspace_root,
         preferences,
         repository_facts,
+        notes,
     )
     .await
     {
@@ -2271,6 +2370,7 @@ async fn summarize_memory(
                 workspace_root,
                 preferences,
                 repository_facts,
+                notes,
             )
             .await
             .ok()
@@ -2284,6 +2384,7 @@ async fn summarize_memory_with_provider(
     workspace_root: &Path,
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
 ) -> Result<String> {
     let schema = json!({
         "type": "object",
@@ -2300,10 +2401,11 @@ async fn summarize_memory_with_provider(
         provider,
         route,
         format!(
-            "Write a concise VT Code persistent memory summary for startup injection. Return 4-10 short bullets only. Focus on stable preferences and repository facts.\n\nWorkspace: {}\nPreferences:\n{}\n\nRepository facts:\n{}",
+            "Write a concise VT Code persistent memory summary for startup injection. Return 4-10 short bullets only. Focus on stable preferences, repository facts, and durable user-authored notes.\n\nWorkspace: {}\nPreferences:\n{}\n\nRepository facts:\n{}\n\nNotes:\n{}",
             workspace_root.display(),
             facts_for_prompt(preferences),
             facts_for_prompt(repository_facts),
+            notes_for_prompt(notes),
         ),
         "memory_summary",
         &schema,
@@ -2584,6 +2686,25 @@ fn facts_for_prompt(facts: &[GroundedFactRecord]) -> String {
         .join("\n")
 }
 
+fn notes_for_prompt(notes: &[MemoryNoteSummary]) -> String {
+    if notes.is_empty() {
+        return "- none".to_string();
+    }
+
+    notes
+        .iter()
+        .map(|note| {
+            let preview = if note.highlights.is_empty() {
+                "no extracted highlights".to_string()
+            } else {
+                note.highlights.join("; ")
+            };
+            format!("- [{}] {}", note.relative_path, preview)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn resolve_memory_model_routes(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -2688,6 +2809,7 @@ fn render_topic_file(topic: MemoryTopic, facts: &[GroundedFactRecord]) -> String
 fn render_memory_index(
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
     pending_rollouts: usize,
 ) -> String {
     let mut highlights = preferences
@@ -2706,6 +2828,8 @@ fn render_memory_index(
     output.push_str(
         "- `repository-facts.md`: Grounded repository facts and recurring tooling notes.\n",
     );
+    output
+        .push_str("- `notes/`: User-authored durable notes available to the native memory tool.\n");
     output.push_str("- `rollout_summaries/`: Per-session evidence summaries.\n");
     output.push_str(&format!(
         "\n## Rollout Status\n- Pending rollout summaries: {}\n",
@@ -2715,16 +2839,30 @@ fn render_memory_index(
     output.push_str("\n## Highlights\n");
     if highlights.is_empty() {
         output.push_str("- No persistent notes yet.\n");
-        return output;
+    } else {
+        for fact in highlights {
+            let (_topic, display_source) = decode_topic_source(&fact.source);
+            output.push_str("- [");
+            output.push_str(display_source.trim());
+            output.push_str("] ");
+            output.push_str(&fact.fact);
+            output.push('\n');
+        }
     }
 
-    for fact in highlights {
-        let (_topic, display_source) = decode_topic_source(&fact.source);
-        output.push_str("- [");
-        output.push_str(display_source.trim());
-        output.push_str("] ");
-        output.push_str(&fact.fact);
-        output.push('\n');
+    if !notes.is_empty() {
+        output.push_str("\n## Note Files\n");
+        for note in notes {
+            output.push_str("- ");
+            output.push('`');
+            output.push_str(&note.relative_path);
+            output.push('`');
+            if let Some(first) = note.highlights.first() {
+                output.push_str(": ");
+                output.push_str(first);
+            }
+            output.push('\n');
+        }
     }
 
     output
@@ -2733,12 +2871,18 @@ fn render_memory_index(
 fn render_memory_summary(
     preferences: &[GroundedFactRecord],
     repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
 ) -> String {
     let mut bullets = preferences
         .iter()
         .chain(repository_facts.iter())
         .map(|fact| fact.fact.clone())
         .collect::<Vec<_>>();
+    bullets.extend(notes.iter().filter_map(|note| {
+        note.highlights
+            .first()
+            .map(|highlight| format!("Note ({}): {}", note.relative_path, highlight))
+    }));
     let keep_from = bullets.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     bullets = bullets.into_iter().skip(keep_from).collect();
     if bullets.is_empty() {
@@ -3265,6 +3409,7 @@ mod tests {
                 fact: "Tests live under vtcode-core/tests".to_string(),
                 source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:unified_search"),
             }],
+            &[],
         )
         .await
         .expect("summary");
@@ -3340,7 +3485,48 @@ mod tests {
         assert!(status.memory_file.exists());
         assert!(status.preferences_file.exists());
         assert!(status.repository_facts_file.exists());
+        assert!(status.notes_dir.exists());
         assert!(status.rollout_summaries_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn rebuild_generated_files_include_notes_as_canonical_inputs() {
+        let workspace = tempdir().expect("workspace");
+        let config = PersistentMemoryConfig {
+            enabled: true,
+            directory_override: Some(workspace.path().join(".memory").display().to_string()),
+            ..PersistentMemoryConfig::default()
+        };
+
+        scaffold_persistent_memory(&config, workspace.path())
+            .await
+            .expect("scaffold")
+            .expect("status");
+        let memory_dir = resolve_persistent_memory_dir(&config, workspace.path())
+            .expect("memory dir")
+            .expect("resolved dir");
+        let files = PersistentMemoryFiles::new(memory_dir);
+        tokio::fs::write(
+            files.notes_dir.join("project.md"),
+            "# Project Notes\n\n- Keep Anthropic memory backed by shared storage.\n",
+        )
+        .await
+        .expect("write note");
+
+        rebuild_generated_memory_files(&config, workspace.path())
+            .await
+            .expect("rebuild");
+
+        let summary = tokio::fs::read_to_string(&files.summary_file)
+            .await
+            .expect("summary");
+        let index = tokio::fs::read_to_string(&files.memory_file)
+            .await
+            .expect("index");
+
+        assert!(summary.contains("Keep Anthropic memory backed by shared storage"));
+        assert!(index.contains("## Note Files"), "{index}");
+        assert!(index.contains("Keep Anthropic memory backed by shared storage"));
     }
 
     #[tokio::test]
@@ -3636,12 +3822,12 @@ mod tests {
         .expect("target facts");
         std::fs::write(
             target_dir.join(MEMORY_FILENAME),
-            render_memory_index(&[], &[], 0),
+            render_memory_index(&[], &[], &[], 0),
         )
         .expect("target memory");
         std::fs::write(
             target_dir.join(MEMORY_SUMMARY_FILENAME),
-            render_memory_summary(&[], &[]),
+            render_memory_summary(&[], &[], &[]),
         )
         .expect("target summary");
 

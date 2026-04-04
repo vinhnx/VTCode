@@ -186,4 +186,5 @@ fn anthropic_memory_tool_definition_is_supported() {
 
     assert!(tool.validate().is_ok());
     assert!(tool.is_anthropic_memory_tool());
+    assert_eq!(tool.function_name(), "memory");
 }

@@ -454,6 +454,10 @@ pub struct AnthropicConfig {
     #[serde(default)]
     pub tool_search: ToolSearchConfig,
 
+    /// Native Anthropic memory tool configuration.
+    #[serde(default)]
+    pub memory: AnthropicMemoryConfig,
+
     /// Effort level for token usage (high, medium, low)
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
@@ -478,10 +482,18 @@ impl Default for AnthropicConfig {
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
             interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
             tool_search: ToolSearchConfig::default(),
+            memory: AnthropicMemoryConfig::default(),
             effort: default_effort(),
             count_tokens_enabled: default_count_tokens_enabled(),
         }
     }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AnthropicMemoryConfig {
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[inline]
@@ -596,6 +608,19 @@ mod tests {
         assert!(config.tool_search.enabled);
         assert!(config.tool_search.defer_by_default);
         assert!(config.tool_search.always_available_tools.is_empty());
+    }
+
+    #[test]
+    fn anthropic_config_defaults_native_memory_to_disabled() {
+        let config = AnthropicConfig::default();
+        assert!(!config.memory.enabled);
+    }
+
+    #[test]
+    fn anthropic_config_parses_native_memory_opt_in() {
+        let parsed: AnthropicConfig =
+            toml::from_str("[memory]\nenabled = true").expect("config should parse");
+        assert!(parsed.memory.enabled);
     }
 
     #[test]

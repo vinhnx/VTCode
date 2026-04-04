@@ -141,6 +141,7 @@ async fn apply_manual_mcp_refresh(ctx: &mut SlashCommandContext<'_>, reason: &'s
         ctx.tools,
         ctx.tool_catalog,
         ctx.config,
+        ctx.vt_cfg.as_ref(),
         tool_documentation_mode,
         &deferred_tool_policy,
     )

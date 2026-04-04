@@ -164,6 +164,20 @@ pub fn deferred_tool_policy_for_runtime(
     }
 }
 
+#[must_use]
+pub fn anthropic_native_memory_enabled_for_runtime(
+    provider: Option<Provider>,
+    model: &str,
+    vtcode_config: Option<&VTCodeConfig>,
+) -> bool {
+    matches!(provider, Some(Provider::Anthropic))
+        && !matches!(
+            crate::llm::factory::infer_provider(None, model),
+            Some(resolved) if resolved != Provider::Anthropic
+        )
+        && vtcode_config.is_some_and(|cfg| cfg.provider.anthropic.memory.enabled)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionToolsConfig {
     pub surface: SessionSurface,
@@ -173,6 +187,7 @@ pub struct SessionToolsConfig {
     pub request_user_input_enabled: bool,
     pub model_capabilities: ToolModelCapabilities,
     pub deferred_tool_policy: DeferredToolPolicy,
+    pub anthropic_native_memory_enabled: bool,
 }
 
 impl SessionToolsConfig {
@@ -190,12 +205,19 @@ impl SessionToolsConfig {
             request_user_input_enabled: true,
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
+            anthropic_native_memory_enabled: false,
         }
     }
 
     #[must_use]
     pub fn with_deferred_tool_policy(mut self, deferred_tool_policy: DeferredToolPolicy) -> Self {
         self.deferred_tool_policy = deferred_tool_policy;
+        self
+    }
+
+    #[must_use]
+    pub fn with_anthropic_native_memory_enabled(mut self, enabled: bool) -> Self {
+        self.anthropic_native_memory_enabled = enabled;
         self
     }
 }
@@ -312,14 +334,18 @@ impl SessionToolCatalog {
                     tools.push(tool);
                 }
                 _ => {
-                    let mut tool = ToolDefinition::function(
-                        entry.public_name.clone(),
-                        compact_tool_description(
-                            entry.description.as_str(),
-                            config.documentation_mode,
-                        ),
-                        compact_parameters(entry.parameters.clone(), config.documentation_mode),
-                    );
+                    let mut tool = if entry.public_name == tools::MEMORY {
+                        ToolDefinition::anthropic_memory()
+                    } else {
+                        ToolDefinition::function(
+                            entry.public_name.clone(),
+                            compact_tool_description(
+                                entry.description.as_str(),
+                                config.documentation_mode,
+                            ),
+                            compact_parameters(entry.parameters.clone(), config.documentation_mode),
+                        )
+                    };
                     if defer_loading && !expose_tools_directly {
                         tool = tool.with_defer_loading(true);
                         has_deferred_tools = true;
@@ -510,6 +536,7 @@ impl ToolCatalogEntry {
         }
 
         match self.public_name.as_str() {
+            tools::MEMORY => config.anthropic_native_memory_enabled,
             tools::REQUEST_USER_INPUT => config.request_user_input_enabled,
             _ => true,
         }
@@ -564,6 +591,7 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE => true,
+        tools::MEMORY => config.anthropic_native_memory_enabled,
         tools::READ_FILE | tools::LIST_FILES if config.surface == SessionSurface::AgentRunner => {
             true
         }
@@ -732,6 +760,7 @@ mod tests {
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
+            anthropic_native_memory_enabled: false,
         });
 
         assert!(names.is_empty());
@@ -752,9 +781,59 @@ mod tests {
             request_user_input_enabled: true,
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
+            anthropic_native_memory_enabled: false,
         });
 
         assert_eq!(names, vec![tools::PLAN_TASK_TRACKER.to_string()]);
+    }
+
+    #[test]
+    fn memory_tool_is_hidden_unless_anthropic_native_memory_is_enabled() {
+        let registration = registration(tools::MEMORY)
+            .with_description("Native memory")
+            .with_parameter_schema(json!({"type":"object"}));
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+
+        let hidden = catalog.public_tool_names(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+        assert!(hidden.is_empty());
+
+        let visible = catalog.public_tool_names(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_anthropic_native_memory_enabled(true),
+        );
+        assert_eq!(visible, vec![tools::MEMORY.to_string()]);
+    }
+
+    #[test]
+    fn memory_tool_uses_anthropic_native_definition_when_visible() {
+        let registration = registration(tools::MEMORY)
+            .with_description("Native memory")
+            .with_parameter_schema(json!({"type":"object"}));
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_anthropic_native_memory_enabled(true),
+        );
+
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(definitions[0].tool_type, "memory_20250818");
+        assert_eq!(definitions[0].function_name(), tools::MEMORY);
     }
 
     #[test]
@@ -1186,5 +1265,32 @@ mod tests {
         let unsupported =
             deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
         assert!(!unsupported.is_enabled());
+    }
+
+    #[test]
+    fn anthropic_native_memory_runtime_flag_tracks_provider_and_config() {
+        let mut config = VTCodeConfig::default();
+        config.provider.anthropic.memory.enabled = true;
+
+        assert!(anthropic_native_memory_enabled_for_runtime(
+            Some(Provider::Anthropic),
+            "claude-sonnet-4-6",
+            Some(&config),
+        ));
+        assert!(!anthropic_native_memory_enabled_for_runtime(
+            Some(Provider::OpenAI),
+            "claude-sonnet-4-6",
+            Some(&config),
+        ));
+        assert!(!anthropic_native_memory_enabled_for_runtime(
+            Some(Provider::Anthropic),
+            "gpt-5",
+            Some(&config),
+        ));
+        assert!(anthropic_native_memory_enabled_for_runtime(
+            Some(Provider::Anthropic),
+            "my-private-claude-build",
+            Some(&config),
+        ));
     }
 }

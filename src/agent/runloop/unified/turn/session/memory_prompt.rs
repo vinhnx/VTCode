@@ -1027,6 +1027,7 @@ mod tests {
             memory_file: std::path::PathBuf::from("/tmp/memory/MEMORY.md"),
             preferences_file: std::path::PathBuf::from("/tmp/memory/preferences.md"),
             repository_facts_file: std::path::PathBuf::from("/tmp/memory/repository-facts.md"),
+            notes_dir: std::path::PathBuf::from("/tmp/memory/notes"),
             rollout_summaries_dir: std::path::PathBuf::from("/tmp/memory/rollout_summaries"),
             summary_exists: true,
             registry_exists: true,

@@ -1342,6 +1342,7 @@ mod tests {
             memory_file: PathBuf::from("/tmp/memory/MEMORY.md"),
             preferences_file: PathBuf::from("/tmp/memory/preferences.md"),
             repository_facts_file: PathBuf::from("/tmp/memory/repository-facts.md"),
+            notes_dir: PathBuf::from("/tmp/memory/notes"),
             rollout_summaries_dir: PathBuf::from("/tmp/memory/rollout_summaries"),
             summary_exists: true,
             registry_exists: true,

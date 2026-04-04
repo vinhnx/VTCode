@@ -71,6 +71,8 @@ pub const GET_ERRORS: &str = "get_errors";
 // ============================================================
 /// Canonical HITL tool name for structured user input.
 pub const REQUEST_USER_INPUT: &str = "request_user_input";
+/// Canonical memory tool name for Anthropic native memory sessions.
+pub const MEMORY: &str = "memory";
 /// Legacy alias routed to `request_user_input`.
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).

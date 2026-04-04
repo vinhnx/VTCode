@@ -117,6 +117,13 @@ event_log_path = ""
 orchestration_mode = "single"
 max_revision_rounds = 2
 
+[agent.harness.tool_result_clearing]
+enabled = false
+trigger_tokens = 100000
+keep_tool_uses = 3
+clear_at_least_tokens = 30000
+clear_tool_inputs = false
+
 [agent.codex_app_server]
 command = "codex"
 args = ["app-server"]
@@ -244,6 +251,7 @@ vtcode-clippy = "prompt"
 wait_agent = "allow"
 web_fetch = "allow"
 write_file = "allow"
+memory = "allow"
 
 [tools.web_fetch]
 mode = "restricted"
@@ -1038,6 +1046,9 @@ max-skills-in-prompt = 10
 enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
+
+[provider.anthropic.memory]
+enabled = false
 
 [skills.bundled]
 enabled = true

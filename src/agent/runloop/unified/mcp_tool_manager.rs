@@ -17,6 +17,7 @@ impl McpToolManager {
         tools: &std::sync::Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
         tool_catalog: &ToolCatalogState,
         config: &CoreAgentConfig,
+        vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
         tool_documentation_mode: ToolDocumentationMode,
         deferred_tool_policy: &DeferredToolPolicy,
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
@@ -28,6 +29,7 @@ impl McpToolManager {
                     tools,
                     tool_catalog,
                     config,
+                    vt_cfg,
                     tool_documentation_mode,
                     deferred_tool_policy,
                 )
@@ -58,6 +60,7 @@ impl McpToolManager {
         tools: &std::sync::Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
         tool_catalog: &ToolCatalogState,
         config: &CoreAgentConfig,
+        vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
         tool_documentation_mode: ToolDocumentationMode,
         deferred_tool_policy: &DeferredToolPolicy,
         mcp_tools: Vec<McpToolInfo>, // Passed in from initial setup
@@ -68,6 +71,7 @@ impl McpToolManager {
             tools,
             tool_catalog,
             config,
+            vt_cfg,
             tool_documentation_mode,
             deferred_tool_policy,
         )

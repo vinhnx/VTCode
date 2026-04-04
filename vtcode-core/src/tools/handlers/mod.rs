@@ -112,7 +112,8 @@ pub use turn_diff_tracker::{
 pub use session_tool_catalog::{
     CatalogToolKind, DeferredToolPolicy, DeferredToolSearchKind, SessionSurface,
     SessionToolCatalog, SessionToolsConfig, ToolCatalogEntry, ToolCatalogSource,
-    ToolModelCapabilities, ToolSchemaEntry, deferred_tool_policy_for_runtime,
+    ToolModelCapabilities, ToolSchemaEntry, anthropic_native_memory_enabled_for_runtime,
+    deferred_tool_policy_for_runtime,
 };
 pub use shell_handler::{ShellHandler, create_shell_tool};
 

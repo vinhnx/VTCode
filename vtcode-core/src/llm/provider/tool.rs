@@ -258,6 +258,11 @@ impl ToolDefinition {
         Self::empty("tool_search")
     }
 
+    /// Create an Anthropic native memory tool definition.
+    pub fn anthropic_memory() -> Self {
+        Self::empty("memory_20250818")
+    }
+
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
     /// The apply_patch tool lets models create, update, and delete files using VT Code structured diffs
     pub fn apply_patch(description: String) -> Self {
@@ -338,7 +343,9 @@ impl ToolDefinition {
 
     /// Get the function name for easy access
     pub fn function_name(&self) -> &str {
-        if let Some(func) = &self.function {
+        if self.is_anthropic_memory_tool() {
+            "memory"
+        } else if let Some(func) = &self.function {
             &func.name
         } else {
             &self.tool_type

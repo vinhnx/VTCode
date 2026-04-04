@@ -28,6 +28,7 @@
     "unified_file": "allow",
     "unified_search": "allow",
     "list_files": "allow",
+    "memory": "allow",
     "read_file": "allow"
   },
   "constraints": {},

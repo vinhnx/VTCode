@@ -1,3 +1,4 @@
+use crate::config::ConfigManager;
 use crate::exec::code_executor::Language;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::mcp::{DetailLevel, ToolDiscovery};
@@ -9,6 +10,7 @@ use crate::sandboxing::{
 use crate::tools::continuation::PtyContinuationArgs;
 use crate::tools::edited_file_monitor::{MutationLease, conflict_override_snapshot};
 use crate::tools::file_tracker::FileTracker;
+use crate::tools::native_memory;
 use crate::tools::registry::unified_actions::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
@@ -1602,6 +1604,16 @@ impl ToolRegistry {
                 "deleted": deleted.is_some(),
                 "task": deleted,
             }))
+        })
+    }
+
+    pub(super) fn memory_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let workspace_root = self.workspace_root_owned();
+            let config = ConfigManager::load_from_workspace(&workspace_root)
+                .map(|manager| manager.config().clone())
+                .unwrap_or_default();
+            native_memory::execute(&workspace_root, &config.agent.persistent_memory, args).await
         })
     }
 

@@ -361,6 +361,9 @@ pub struct AgentHarnessConfig {
     /// When unset, VT Code derives a threshold from the provider context window.
     #[serde(default)]
     pub auto_compaction_threshold_tokens: Option<u64>,
+    /// Provider-native tool-result clearing policy.
+    #[serde(default)]
+    pub tool_result_clearing: ToolResultClearingConfig,
     /// Optional maximum estimated API cost in USD before VT Code stops the session.
     #[serde(default)]
     pub max_budget_usd: Option<f64>,
@@ -387,12 +390,57 @@ impl Default for AgentHarnessConfig {
             max_tool_retries: default_harness_max_tool_retries(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             auto_compaction_threshold_tokens: None,
+            tool_result_clearing: ToolResultClearingConfig::default(),
             max_budget_usd: None,
             continuation_policy: ContinuationPolicy::default(),
             event_log_path: None,
             orchestration_mode: HarnessOrchestrationMode::default(),
             max_revision_rounds: default_harness_max_revision_rounds(),
         }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ToolResultClearingConfig {
+    #[serde(default = "default_tool_result_clearing_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tool_result_clearing_trigger_tokens")]
+    pub trigger_tokens: u64,
+    #[serde(default = "default_tool_result_clearing_keep_tool_uses")]
+    pub keep_tool_uses: u32,
+    #[serde(default = "default_tool_result_clearing_clear_at_least_tokens")]
+    pub clear_at_least_tokens: u64,
+    #[serde(default)]
+    pub clear_tool_inputs: bool,
+}
+
+impl Default for ToolResultClearingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_tool_result_clearing_enabled(),
+            trigger_tokens: default_tool_result_clearing_trigger_tokens(),
+            keep_tool_uses: default_tool_result_clearing_keep_tool_uses(),
+            clear_at_least_tokens: default_tool_result_clearing_clear_at_least_tokens(),
+            clear_tool_inputs: false,
+        }
+    }
+}
+
+impl ToolResultClearingConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.trigger_tokens == 0 {
+            return Err("tool_result_clearing.trigger_tokens must be greater than 0".to_string());
+        }
+        if self.keep_tool_uses == 0 {
+            return Err("tool_result_clearing.keep_tool_uses must be greater than 0".to_string());
+        }
+        if self.clear_at_least_tokens == 0 {
+            return Err(
+                "tool_result_clearing.clear_at_least_tokens must be greater than 0".to_string(),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -623,6 +671,7 @@ impl AgentConfig {
         }
 
         self.persistent_memory.validate()?;
+        self.harness.tool_result_clearing.validate()?;
 
         Ok(())
     }
@@ -742,6 +791,26 @@ const fn default_harness_max_tool_retries() -> u32 {
 #[inline]
 const fn default_harness_auto_compaction_enabled() -> bool {
     false
+}
+
+#[inline]
+const fn default_tool_result_clearing_enabled() -> bool {
+    false
+}
+
+#[inline]
+const fn default_tool_result_clearing_trigger_tokens() -> u64 {
+    100_000
+}
+
+#[inline]
+const fn default_tool_result_clearing_keep_tool_uses() -> u32 {
+    3
+}
+
+#[inline]
+const fn default_tool_result_clearing_clear_at_least_tokens() -> u64 {
+    30_000
 }
 
 #[inline]
@@ -1447,6 +1516,61 @@ mod tests {
         let config = AgentConfig::default();
         assert!(!config.persistent_memory.enabled);
         assert!(config.persistent_memory.auto_write);
+    }
+
+    #[test]
+    fn test_tool_result_clearing_defaults() {
+        let config = AgentConfig::default();
+        let clearing = config.harness.tool_result_clearing;
+
+        assert!(!clearing.enabled);
+        assert_eq!(clearing.trigger_tokens, 100_000);
+        assert_eq!(clearing.keep_tool_uses, 3);
+        assert_eq!(clearing.clear_at_least_tokens, 30_000);
+        assert!(!clearing.clear_tool_inputs);
+    }
+
+    #[test]
+    fn test_tool_result_clearing_parses_and_validates() {
+        let parsed: AgentHarnessConfig = toml::from_str(
+            r#"
+                [tool_result_clearing]
+                enabled = true
+                trigger_tokens = 123456
+                keep_tool_uses = 6
+                clear_at_least_tokens = 4096
+                clear_tool_inputs = true
+            "#,
+        )
+        .expect("valid harness config");
+
+        assert!(parsed.tool_result_clearing.enabled);
+        assert_eq!(parsed.tool_result_clearing.trigger_tokens, 123_456);
+        assert_eq!(parsed.tool_result_clearing.keep_tool_uses, 6);
+        assert_eq!(parsed.tool_result_clearing.clear_at_least_tokens, 4_096);
+        assert!(parsed.tool_result_clearing.clear_tool_inputs);
+        assert!(parsed.tool_result_clearing.validate().is_ok());
+    }
+
+    #[test]
+    fn test_tool_result_clearing_rejects_zero_values() {
+        let clearing = ToolResultClearingConfig {
+            trigger_tokens: 0,
+            ..ToolResultClearingConfig::default()
+        };
+        assert!(clearing.validate().is_err());
+
+        let clearing = ToolResultClearingConfig {
+            keep_tool_uses: 0,
+            ..ToolResultClearingConfig::default()
+        };
+        assert!(clearing.validate().is_err());
+
+        let clearing = ToolResultClearingConfig {
+            clear_at_least_tokens: 0,
+            ..ToolResultClearingConfig::default()
+        };
+        assert!(clearing.validate().is_err());
     }
 
     #[test]

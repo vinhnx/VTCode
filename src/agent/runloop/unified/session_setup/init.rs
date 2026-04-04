@@ -17,6 +17,7 @@ use crate::agent::runloop::welcome::prepare_session_bootstrap;
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
@@ -36,7 +37,7 @@ use vtcode_core::models::ModelId;
 use vtcode_core::subagents::{SubagentController, SubagentControllerConfig};
 use vtcode_core::tools::handlers::{
     DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities,
-    deferred_tool_policy_for_runtime,
+    anthropic_native_memory_enabled_for_runtime, deferred_tool_policy_for_runtime,
 };
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
@@ -274,6 +275,8 @@ pub(crate) async fn initialize_session(
     tool_registry.enable_cgp_pipeline(cgp_mode).await;
 
     let tool_catalog = tool_registry.tool_catalog_state();
+    let anthropic_native_memory_enabled =
+        active_anthropic_native_memory(config, vt_cfg, provider_client.as_ref());
 
     let tools = Arc::new(RwLock::new(
         tool_registry
@@ -284,7 +287,8 @@ pub(crate) async fn initialize_session(
                     tool_documentation_mode,
                     ToolModelCapabilities::for_model_name(&config.model),
                 )
-                .with_deferred_tool_policy(deferred_tool_policy.clone()),
+                .with_deferred_tool_policy(deferred_tool_policy.clone())
+                .with_anthropic_native_memory_enabled(anthropic_native_memory_enabled),
             )
             .await,
     ));
@@ -296,6 +300,7 @@ pub(crate) async fn initialize_session(
         vt_cfg,
         tool_documentation_mode,
         deferred_tool_policy.clone(),
+        anthropic_native_memory_enabled,
         &skill_setup,
     )
     .await?;
@@ -304,6 +309,7 @@ pub(crate) async fn initialize_session(
         &tools,
         &tool_catalog,
         config,
+        vt_cfg,
         tool_documentation_mode,
         &deferred_tool_policy,
     )
@@ -512,14 +518,32 @@ pub(crate) fn active_deferred_tool_policy(
     )
 }
 
+pub(crate) fn active_anthropic_native_memory(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    provider_client: &dyn uni::LLMProvider,
+) -> bool {
+    anthropic_native_memory_enabled_for_runtime(
+        vtcode_core::config::models::Provider::from_str(provider_client.name()).ok(),
+        &config.model,
+        vt_cfg,
+    )
+}
+
 pub(crate) async fn refresh_tool_snapshot(
     tool_registry: &ToolRegistry,
     tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
     _tool_catalog: &ToolCatalogState,
     config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
     deferred_tool_policy: &DeferredToolPolicy,
 ) {
+    let anthropic_native_memory_enabled = anthropic_native_memory_enabled_for_runtime(
+        infer_provider(Some(&config.provider), &config.model),
+        &config.model,
+        vt_cfg,
+    );
     let next = tool_registry
         .model_tools(
             SessionToolsConfig::full_public(
@@ -528,7 +552,8 @@ pub(crate) async fn refresh_tool_snapshot(
                 tool_documentation_mode,
                 ToolModelCapabilities::for_model_name(&config.model),
             )
-            .with_deferred_tool_policy(deferred_tool_policy.clone()),
+            .with_deferred_tool_policy(deferred_tool_policy.clone())
+            .with_anthropic_native_memory_enabled(anthropic_native_memory_enabled),
         )
         .await;
     *tools.write().await = next;

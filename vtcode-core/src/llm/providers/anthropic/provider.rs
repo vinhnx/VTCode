@@ -518,6 +518,10 @@ impl LLMProvider for AnthropicProvider {
         capabilities::supports_parallel_tool_config(model)
     }
 
+    fn supports_context_edits(&self, _model: &str) -> bool {
+        true
+    }
+
     fn supports_context_awareness(&self, model: &str) -> bool {
         capabilities::supports_context_awareness(model, &self.model)
     }

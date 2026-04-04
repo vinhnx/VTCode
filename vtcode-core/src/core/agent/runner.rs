@@ -2,7 +2,7 @@
 
 use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
-use crate::config::models::ModelId;
+use crate::config::models::{ModelId, Provider};
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
 use crate::core::agent::features::FeatureSet;
@@ -34,6 +34,7 @@ use crate::tools::ToolRegistry;
 use anyhow::{Result, anyhow};
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
@@ -359,6 +360,12 @@ impl AgentRunner {
             provider_client.supports_responses_compaction(model.as_str()),
             Some(session_config.effective()),
         );
+        let anthropic_native_memory_enabled =
+            crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+                Provider::from_str(provider_client.name()).ok(),
+                model.as_str(),
+                Some(session_config.effective()),
+            );
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
@@ -401,6 +408,7 @@ impl AgentRunner {
                     model.as_str(),
                 ),
                 deferred_tool_policy,
+                anthropic_native_memory_enabled,
             })
             .await
             .into_iter()

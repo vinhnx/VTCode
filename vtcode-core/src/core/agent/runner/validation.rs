@@ -24,6 +24,15 @@ impl AgentRunner {
                     .supports_responses_compaction(&self.model),
                 Some(self.config()),
             ),
+            anthropic_native_memory_enabled:
+                crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+                    crate::llm::factory::infer_provider(
+                        Some(&self.config().agent.provider),
+                        &self.model,
+                    ),
+                    &self.model,
+                    Some(self.config()),
+                ),
         };
 
         let definitions = self.tool_registry.model_tools(config).await;

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::fmt::Write as _;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use vtcode_core::config::{
@@ -14,6 +15,7 @@ use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_openai_responses_request,
 };
 use vtcode_core::prompts::upsert_harness_limits_section;
+use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
@@ -232,23 +234,98 @@ async fn assemble_prompt(
 
 fn resolve_context_management(
     ctx: &TurnProcessingContext<'_>,
+    turn: &TurnRequestSnapshot,
     active_model: &str,
 ) -> Option<serde_json::Value> {
-    let harness_config = ctx.vt_cfg.map(|cfg| &cfg.agent.harness);
-    let supports_server_compaction = ctx
-        .provider_client
-        .supports_responses_compaction(active_model);
-    let features = FeatureSet::from_config(ctx.vt_cfg);
-    let configured_threshold = harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
+    let Some(vt_cfg) = ctx.vt_cfg else {
+        return resolve_server_compaction_context_management(turn, None, None, active_model);
+    };
 
-    if !features.auto_compaction_enabled(supports_server_compaction) {
+    if turn.provider_name.eq_ignore_ascii_case("anthropic") {
+        return build_anthropic_context_management(vt_cfg, turn, active_model);
+    }
+
+    resolve_server_compaction_context_management(
+        turn,
+        Some(vt_cfg),
+        Some(vt_cfg.agent.harness.auto_compaction_threshold_tokens),
+        active_model,
+    )
+}
+
+fn resolve_server_compaction_context_management(
+    turn: &TurnRequestSnapshot,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
+    configured_threshold: Option<Option<u64>>,
+    _active_model: &str,
+) -> Option<serde_json::Value> {
+    let features = FeatureSet::from_config(vt_cfg);
+    if !features.auto_compaction_enabled(turn.capabilities.responses_compaction) {
         return None;
     }
 
     build_server_compaction_context_management(
-        configured_threshold,
-        ctx.provider_client.effective_context_size(active_model),
+        configured_threshold.flatten(),
+        turn.context_window_size,
     )
+}
+
+fn build_anthropic_context_management(
+    vt_cfg: &vtcode_core::config::loader::VTCodeConfig,
+    turn: &TurnRequestSnapshot,
+    active_model: &str,
+) -> Option<serde_json::Value> {
+    if !turn.capabilities.context_edits || !vt_cfg.agent.harness.tool_result_clearing.enabled {
+        return None;
+    }
+
+    let clearing = &vt_cfg.agent.harness.tool_result_clearing;
+    let mut edit = serde_json::Map::from_iter([
+        (
+            "type".to_string(),
+            serde_json::Value::String("clear_tool_uses_20250919".to_string()),
+        ),
+        (
+            "trigger".to_string(),
+            serde_json::json!({
+                "type": "input_tokens",
+                "value": clearing.trigger_tokens,
+            }),
+        ),
+        (
+            "keep".to_string(),
+            serde_json::json!({
+                "type": "tool_uses",
+                "value": clearing.keep_tool_uses,
+            }),
+        ),
+        (
+            "clear_at_least".to_string(),
+            serde_json::json!({
+                "type": "input_tokens",
+                "value": clearing.clear_at_least_tokens,
+            }),
+        ),
+        (
+            "clear_tool_inputs".to_string(),
+            serde_json::Value::Bool(clearing.clear_tool_inputs),
+        ),
+    ]);
+
+    if anthropic_native_memory_enabled_for_runtime(
+        vtcode_core::config::models::Provider::from_str(&turn.provider_name).ok(),
+        active_model,
+        Some(vt_cfg),
+    ) {
+        edit.insert(
+            "exclude_tools".to_string(),
+            serde_json::json!([vtcode_core::config::constants::tools::MEMORY]),
+        );
+    }
+
+    Some(serde_json::json!({
+        "edits": [serde_json::Value::Object(edit)],
+    }))
 }
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
@@ -400,7 +477,7 @@ pub(super) async fn build_turn_request(
             prefix_change_reason,
         },
     );
-    let context_management = resolve_context_management(ctx, active_model);
+    let context_management = resolve_context_management(ctx, turn_snapshot, active_model);
     let normalized_messages = ctx
         .context_manager
         .normalize_history_for_request(ctx.working_history);
@@ -697,6 +774,93 @@ mod tests {
 
         assert_eq!(
             payload,
+            Some(json!([{
+                "type": "compaction",
+                "compact_threshold": 512,
+            }]))
+        );
+    }
+
+    #[tokio::test]
+    async fn anthropic_request_build_emits_tool_result_clearing_only_when_enabled() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.provider = "anthropic".to_string();
+        cfg.agent.harness.tool_result_clearing.enabled = true;
+        cfg.agent.harness.tool_result_clearing.trigger_tokens = 120_000;
+        cfg.agent.harness.tool_result_clearing.keep_tool_uses = 5;
+        cfg.agent.harness.tool_result_clearing.clear_at_least_tokens = 40_000;
+        cfg.provider.anthropic.memory.enabled = true;
+        let cfg = Box::leak(Box::new(cfg));
+
+        let mut ctx = backing.turn_processing_context();
+        ctx.vt_cfg = Some(cfg);
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "claude-sonnet-4-6", false);
+        snapshot.provider_name = "anthropic".to_string();
+        snapshot.capabilities.context_edits = true;
+
+        let built = build_turn_request(
+            &mut ctx,
+            1,
+            "claude-sonnet-4-6",
+            &snapshot,
+            Some(320),
+            None,
+            false,
+        )
+        .await
+        .expect("anthropic request should build");
+
+        assert_eq!(
+            built.request.context_management,
+            Some(json!({
+                "edits": [{
+                    "type": "clear_tool_uses_20250919",
+                    "trigger": { "type": "input_tokens", "value": 120000 },
+                    "keep": { "type": "tool_uses", "value": 5 },
+                    "clear_at_least": { "type": "input_tokens", "value": 40000 },
+                    "clear_tool_inputs": false,
+                    "exclude_tools": ["memory"],
+                }]
+            }))
+        );
+
+        ctx.vt_cfg = Some(Box::leak(Box::new(VTCodeConfig::default())));
+        let mut disabled_snapshot = snapshot;
+        disabled_snapshot.capabilities.context_edits = true;
+        let built = build_turn_request(
+            &mut ctx,
+            1,
+            "claude-sonnet-4-6",
+            &disabled_snapshot,
+            Some(320),
+            None,
+            false,
+        )
+        .await
+        .expect("disabled anthropic request should build");
+        assert!(built.request.context_management.is_none());
+    }
+
+    #[tokio::test]
+    async fn openai_request_build_keeps_existing_compaction_payload() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.harness.auto_compaction_enabled = true;
+        cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);
+        let cfg = Box::leak(Box::new(cfg));
+
+        let mut ctx = backing.turn_processing_context();
+        ctx.vt_cfg = Some(cfg);
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "gpt-5", false);
+        snapshot.capabilities.responses_compaction = true;
+
+        let built = build_turn_request(&mut ctx, 1, "gpt-5", &snapshot, Some(320), None, false)
+            .await
+            .expect("openai request should build");
+
+        assert_eq!(
+            built.request.context_management,
             Some(json!([{
                 "type": "compaction",
                 "compact_threshold": 512,

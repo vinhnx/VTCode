@@ -154,6 +154,7 @@ pub mod handlers;
 pub mod invocation;
 pub mod mcp;
 pub mod names;
+pub mod native_memory;
 pub mod path_env;
 pub mod plugins;
 pub mod pty;
