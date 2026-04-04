@@ -11,13 +11,24 @@ const EMBEDDED_ASSETS: &[(&str, &str)] =
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_docsrs = env::var_os("DOCS_RS").is_some();
+    let is_nix_build = env::var_os("NIX_BUILD_TOP").is_some();
 
-    if is_docsrs {
+    if is_docsrs || is_nix_build {
         // When building on docs.rs, generate empty placeholder files to prevent compilation errors
-        println!("cargo:warning=docs.rs build detected, generating placeholder files");
+        println!(
+            "cargo:warning={} build detected, generating placeholder files",
+            if is_docsrs { "docs.rs" } else { "nix" }
+        );
         let out_dir = PathBuf::from(env::var("OUT_DIR")?);
         let assets_out_dir = out_dir.join("embedded_assets");
         fs::create_dir_all(&assets_out_dir)?;
+        for (_, dest_relative) in EMBEDDED_ASSETS {
+            let destination = assets_out_dir.join(dest_relative);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(destination, b"")?;
+        }
 
         // Generate a minimal metadata file for docs.rs builds
         let placeholder_metadata = r#"#[derive(Clone, Copy)]
