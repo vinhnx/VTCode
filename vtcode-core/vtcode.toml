@@ -631,6 +631,7 @@ report_all_keys = false
 [ui.notifications]
 enabled = true
 delivery_mode = "hybrid"
+backend = "auto"
 suppress_when_focused = true
 command_failure = false
 tool_failure = false

@@ -660,6 +660,7 @@ report_all_keys = false
 [ui.notifications]
 enabled = true
 delivery_mode = "hybrid"
+backend = "auto"
 suppress_when_focused = true
 command_failure = false
 tool_failure = false
@@ -977,20 +978,19 @@ enabled = true
 
 [hooks.lifecycle]
 quiet_success_output = false
-
+session_start = []
 session_end = []
 subagent_start = []
 subagent_stop = []
 user_prompt_submit = []
 pre_tool_use = []
 post_tool_use = []
+permission_request = []
 pre_compact = []
+stop = []
 task_completion = []
 task_completed = []
 notification = []
-permission_request = []
-stop = []
-session_start= []
 
 [model]
 skip_loop_detection = false

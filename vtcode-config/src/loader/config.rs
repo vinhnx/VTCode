@@ -714,6 +714,9 @@ enabled = true
 # Delivery mode: "terminal", "hybrid", or "desktop"
 delivery_mode = "hybrid"
 
+# Preferred desktop backend: "auto", "osascript", "notify_rust", or "terminal"
+backend = "auto"
+
 # Suppress notifications while terminal is focused
 suppress_when_focused = true
 

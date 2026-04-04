@@ -69,6 +69,22 @@ pub enum NotificationDeliveryMode {
     Desktop,
 }
 
+/// Preferred notification backend for desktop delivery.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationBackend {
+    /// Choose the best available backend for the current platform.
+    #[default]
+    Auto,
+    /// Use macOS `osascript` notifications directly.
+    Osascript,
+    /// Use the `notify-rust` desktop notification backend.
+    NotifyRust,
+    /// Skip desktop notifications and use terminal attention only.
+    Terminal,
+}
+
 /// Notification preferences for terminal and desktop alerts.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -80,6 +96,10 @@ pub struct UiNotificationsConfig {
     /// Notification transport strategy.
     #[serde(default)]
     pub delivery_mode: NotificationDeliveryMode,
+
+    /// Preferred backend for desktop notification delivery.
+    #[serde(default)]
+    pub backend: NotificationBackend,
 
     /// Suppress notifications while terminal focus is active.
     #[serde(default = "default_notifications_suppress_when_focused")]
@@ -145,6 +165,7 @@ impl Default for UiNotificationsConfig {
         Self {
             enabled: default_notifications_enabled(),
             delivery_mode: NotificationDeliveryMode::default(),
+            backend: NotificationBackend::default(),
             suppress_when_focused: default_notifications_suppress_when_focused(),
             command_failure: Some(default_notifications_command_failure()),
             tool_failure: default_notifications_tool_failure(),

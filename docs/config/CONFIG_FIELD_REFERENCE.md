@@ -696,6 +696,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.completion` | `boolean` | no | `true` | Legacy master toggle for completion notifications. New installs should prefer `completion_success` and `completion_failure`. |
 | `ui.notifications.completion_failure` | `boolean \| null` | no | `null` | Notify when a turn/session is partial, failed, or cancelled. If omitted, falls back to `completion`. |
 | `ui.notifications.completion_success` | `boolean \| null` | no | `null` | Notify when a turn/session completes successfully. If omitted, falls back to `completion`. |
+| `ui.notifications.backend` | `string` | no | `"auto"` | Preferred desktop notification backend. Supported values: `"auto"`, `"osascript"`, `"notify_rust"`, and `"terminal"`. |
 | `ui.notifications.delivery_mode` | `string` | no | `"hybrid"` | Notification transport strategy. |
 | `ui.notifications.enabled` | `boolean` | no | `true` | Master toggle for all runtime notifications. |
 | `ui.notifications.error` | `boolean` | no | `true` | Notify on runtime/system errors. |
