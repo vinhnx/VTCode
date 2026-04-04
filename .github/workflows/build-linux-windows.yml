@@ -4,22 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (e.g., 0.81.2)'
+        description: "Tag to build (e.g., 0.81.2)"
         required: true
         type: string
       build_windows:
-        description: 'Also build Windows x86_64 binary (higher runner cost)'
+        description: "Also build Windows x86_64 binary (higher runner cost)"
         required: false
         type: boolean
         default: false
   workflow_call:
     inputs:
       tag:
-        description: 'Tag to build (e.g., 0.81.2)'
+        description: "Tag to build (e.g., 0.81.2)"
         required: true
         type: string
       build_windows:
-        description: 'Also build Windows x86_64 binary (higher runner cost)'
+        description: "Also build Windows x86_64 binary (higher runner cost)"
         required: false
         type: boolean
         default: false
