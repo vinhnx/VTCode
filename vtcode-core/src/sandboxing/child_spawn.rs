@@ -218,7 +218,7 @@ pub fn setup_parent_death_signal_with_check(
 ) -> std::io::Result<()> {
     use nix::sys::signal::{Signal, raise};
     use nix::unistd::getppid;
-    use std::io::Error;
+    use std::io::{Error, ErrorKind};
 
     // Use SIGTERM for graceful shutdown (allows cleanup handlers to run).
     // SAFETY: prctl is a well-defined Linux syscall; this code is linux-only.

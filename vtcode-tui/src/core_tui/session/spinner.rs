@@ -54,6 +54,16 @@ impl ThinkingSpinner {
     }
 }
 
+pub(crate) fn spinner_frame_for_phase(phase: f32) -> &'static str {
+    if SPINNER_FRAMES.is_empty() {
+        return "";
+    }
+
+    let clamped = phase.clamp(0.0, 0.999_999);
+    let index = (clamped * SPINNER_FRAMES.len() as f32) as usize;
+    SPINNER_FRAMES[index.min(SPINNER_FRAMES.len() - 1)]
+}
+
 /// Spinner animation frames (Braille pattern for smooth animation)
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 

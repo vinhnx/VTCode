@@ -9,6 +9,7 @@ use crate::core_tui::types::{
     OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, WizardModalMode,
     WizardOverlayRequest, WizardStep,
 };
+use crate::core_tui::widgets::TranscriptWidget;
 use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
@@ -20,6 +21,7 @@ use ratatui::{
     Terminal,
     backend::TestBackend,
     buffer::Buffer,
+    layout::Rect,
     style::{Color, Modifier},
     text::{Line, Span},
 };
@@ -426,6 +428,22 @@ fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
         .map(|y| {
             (0..buffer.area.width)
                 .filter_map(|x| buffer.cell((x, y)).map(|cell| cell.symbol().to_string()))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect()
+}
+
+fn rendered_transcript_widget_lines(session: &mut Session, width: u16, height: u16) -> Vec<String> {
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    TranscriptWidget::new(session).render(area, &mut buf);
+
+    (0..area.height)
+        .map(|y| {
+            (0..area.width)
+                .map(|x| buf[(x, y)].symbol())
                 .collect::<String>()
                 .trim_end()
                 .to_string()
@@ -6391,6 +6409,56 @@ fn running_activity_not_overlaid_without_queue() {
             .iter()
             .any(|line| line.contains("Running tool: grep")),
         "running status should render only in bottom input status row"
+    );
+}
+
+#[test]
+fn active_file_operation_indicator_renders_spinner_frame() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Info,
+        vec![make_segment("❋ Editing vtcode.toml...")],
+    );
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: edit_file".to_string()),
+        right: None,
+    });
+
+    let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
+
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("⠋ Editing vtcode.toml...")),
+        "active file operation indicator should show a spinner frame"
+    );
+    assert!(
+        !rendered
+            .iter()
+            .any(|line| line.contains("❋ Editing vtcode.toml...")),
+        "spinner should replace the static file operation marker while active"
+    );
+}
+
+#[test]
+fn non_file_tool_status_keeps_static_file_operation_indicator() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Info,
+        vec![make_segment("❋ Editing vtcode.toml...")],
+    );
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+
+    let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
+
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("❋ Editing vtcode.toml...")),
+        "non-file tool activity should not animate stale file operation indicators"
     );
 }
 

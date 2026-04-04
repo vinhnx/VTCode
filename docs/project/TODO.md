@@ -216,6 +216,4 @@ update wizard first launch to include new features and capabilities, such as:
 
 ---
 
-FIx The harness is rejecting some command forms as “command injection”
-
 ---
