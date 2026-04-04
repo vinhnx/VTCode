@@ -188,3 +188,19 @@ Node.js 20 actions are deprecated. The following actions are running on Node.js 
 
 Build (x86_64-unknown-linux-gnu)
 Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: mlugg/setup-zig@v2. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
+--
+
+idea
+
+https://x.com/tmeszar/status/2039650776654512623
+
+---
+
+Fix TODO/tasks list last line ansi (it should be dimmed, not bright white)
+
+'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-04-04 at 11.36.24 AM.png'
+
+---
+
+Fix duplicated tool call and display in transcript

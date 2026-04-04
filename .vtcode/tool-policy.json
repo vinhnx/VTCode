@@ -31,7 +31,7 @@
     "exit_plan_mode": "prompt",
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
-    "task_tracker": "prompt",
+    "task_tracker": "allow",
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
@@ -196,7 +196,9 @@
       "cat '~/.gitconfig' '2>/dev/null' '||' echo 'no gitconfig'|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "cat echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "unified_exec"
+      "unified_exec",
+      "task_tracker",
+      "unified_search"
     ],
     "prefixes": [],
     "regexes": []
