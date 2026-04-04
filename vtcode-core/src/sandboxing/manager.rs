@@ -4,6 +4,8 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use super::exec_env::{CommandSpec, ExecEnv, SandboxType};
+#[cfg(target_os = "macos")]
+use super::policy::NetworkAllowlistEntry;
 use super::policy::SandboxPolicy;
 
 /// Error type for sandbox transformation failures.

@@ -1184,10 +1184,10 @@ fn session_retention_limits() -> SessionRetentionLimits {
 
 fn apply_session_retention_best_effort(sessions_dir: &Path) {
     if let Err(err) = apply_session_retention(sessions_dir) {
-        eprintln!(
-            "Warning: failed to prune session archives in {}: {}",
-            sessions_dir.display(),
-            err
+        tracing::warn!(
+            sessions_dir = %sessions_dir.display(),
+            error = %err,
+            "Failed to prune session archives"
         );
     }
 }
@@ -1266,10 +1266,10 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
         let entry = match entry {
             Ok(value) => value,
             Err(err) => {
-                eprintln!(
-                    "Warning: failed to read a session archive entry in {}: {}",
-                    sessions_dir.display(),
-                    err
+                tracing::warn!(
+                    sessions_dir = %sessions_dir.display(),
+                    error = %err,
+                    "Failed to read a session archive entry"
                 );
                 continue;
             }
@@ -1281,10 +1281,10 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
         let metadata = match entry.metadata() {
             Ok(value) => value,
             Err(err) => {
-                eprintln!(
-                    "Warning: failed to read metadata for session archive {}: {}",
-                    path.display(),
-                    err
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "Failed to read session archive metadata"
                 );
                 continue;
             }
@@ -1306,10 +1306,10 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
 fn remove_session_files(entries: Vec<SessionFileEntry>) {
     for entry in entries {
         if let Err(err) = fs::remove_file(&entry.path) {
-            eprintln!(
-                "Warning: failed to remove session archive {}: {}",
-                entry.path.display(),
-                err
+            tracing::warn!(
+                path = %entry.path.display(),
+                error = %err,
+                "Failed to remove session archive"
             );
         }
     }

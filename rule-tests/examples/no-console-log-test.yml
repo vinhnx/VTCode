@@ -1,0 +1,13 @@
+id: no-console-log
+valid:
+  - |
+    const logger = {
+      info(message) {
+        return message;
+      },
+    };
+invalid:
+  - |
+    function greet(name) {
+      console.log(name);
+    }

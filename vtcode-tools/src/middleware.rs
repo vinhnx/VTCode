@@ -124,22 +124,34 @@ impl LoggingMiddleware {
 #[async_trait]
 impl Middleware for LoggingMiddleware {
     async fn before_execute(&self, req: &ToolRequest) -> MiddlewareResult<()> {
-        eprintln!("[{}] Executing: {}", self.name, req.tool_name);
+        tracing::info!(
+            middleware = %self.name,
+            tool = %req.tool_name,
+            "Executing tool"
+        );
         Ok(())
     }
 
     async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> MiddlewareResult<()> {
         let duration_ms = res.duration_ms.unwrap_or(0);
         let cache_hit = res.cache_hit.unwrap_or(false);
-        eprintln!(
-            "[{}] Completed: {} ({}ms, cache_hit={})",
-            self.name, req.tool_name, duration_ms, cache_hit
+        tracing::info!(
+            middleware = %self.name,
+            tool = %req.tool_name,
+            duration_ms,
+            cache_hit,
+            "Completed tool"
         );
         Ok(())
     }
 
     async fn on_error(&self, req: &ToolRequest, err: &UnifiedToolError) -> MiddlewareResult<()> {
-        eprintln!("[{}] Error in {}: {}", self.name, req.tool_name, err);
+        tracing::error!(
+            middleware = %self.name,
+            tool = %req.tool_name,
+            error = %err,
+            "Tool execution failed"
+        );
         Ok(())
     }
 }

@@ -6865,6 +6865,7 @@ dependencies = [
  "parking_lot",
  "serde_json",
  "tokio",
+ "tracing",
  "vtcode-acp",
  "vtcode-collaboration-tool-specs",
  "vtcode-commons",

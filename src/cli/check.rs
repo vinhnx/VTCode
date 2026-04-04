@@ -55,8 +55,6 @@ async fn run_ast_grep_subcommand(
         .arg(subcommand)
         .arg("--config")
         .arg(AST_GREP_CONFIG_PATH)
-        .arg("--color")
-        .arg("never")
         .env("NO_COLOR", "1")
         .env("CLICOLOR", "0")
         .status()
@@ -176,16 +174,10 @@ exit 0\n"
             .expect("ast-grep check should pass");
 
         let test_args = read_lines(&workspace.path().join("test-args.log"));
-        assert_eq!(
-            test_args,
-            ["test", "--config", AST_GREP_CONFIG_PATH, "--color", "never"]
-        );
+        assert_eq!(test_args, ["test", "--config", AST_GREP_CONFIG_PATH]);
 
         let scan_args = read_lines(&workspace.path().join("scan-args.log"));
-        assert_eq!(
-            scan_args,
-            ["scan", "--config", AST_GREP_CONFIG_PATH, "--color", "never"]
-        );
+        assert_eq!(scan_args, ["scan", "--config", AST_GREP_CONFIG_PATH]);
 
         let expected_workspace = fs::canonicalize(workspace.path()).expect("canonical workspace");
 

@@ -37,13 +37,10 @@ fn check_script_delegates_ast_grep_to_vtcode_command() {
         .current_dir(&workspace)
         .arg("scripts/check.sh")
         .arg("ast-grep")
+        .env("PATH", current_path)
         .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                fake_bin.path().display(),
-                current_path.to_string_lossy()
-            ),
+            "VTCODE_CHECK_SCRIPT_VTCODE_BIN",
+            fake_bin.path().join("vtcode"),
         );
 
     command.assert().success();

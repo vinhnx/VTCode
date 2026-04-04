@@ -93,7 +93,11 @@ pub fn check_quarantine(path: &Path) {
         let canonical = match path.canonicalize() {
             Ok(canonical) => canonical,
             Err(err) => {
-                warn!(path = %path.display(), error = %err, "Failed to canonicalize path");
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "Failed to canonicalize path"
+                );
                 return;
             }
         };
@@ -113,7 +117,7 @@ pub fn check_quarantine(path: &Path) {
                     policy.auto_clear_quarantine && policy.should_auto_clear(&canonical);
 
                 if policy.warn_on_quarantine {
-                    warn!(
+                    tracing::warn!(
                         path = %canonical.display(),
                         auto_clear = should_auto_clear,
                         "Gatekeeper quarantine detected for executable"
@@ -125,7 +129,7 @@ pub fn check_quarantine(path: &Path) {
                 if should_auto_clear {
                     match clear_quarantine_xattr(&canonical) {
                         Ok(()) => {
-                            debug!(
+                            tracing::debug!(
                                 path = %canonical.display(),
                                 "Cleared Gatekeeper quarantine attribute"
                             );
@@ -139,7 +143,7 @@ pub fn check_quarantine(path: &Path) {
                             return;
                         }
                         Err(err) => {
-                            warn!(
+                            tracing::warn!(
                                 path = %canonical.display(),
                                 error = %err,
                                 "Failed to clear Gatekeeper quarantine"
@@ -166,7 +170,7 @@ pub fn check_quarantine(path: &Path) {
                 );
             }
             Err(err) => {
-                debug!(
+                tracing::debug!(
                     path = %canonical.display(),
                     error = %err,
                     "Gatekeeper check failed"

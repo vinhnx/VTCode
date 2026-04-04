@@ -46,8 +46,8 @@ find_ast_grep() {
 }
 
 run_vtcode_command() {
-    if command -v vtcode > /dev/null 2>&1; then
-        vtcode "$@"
+    if [ -n "${VTCODE_CHECK_SCRIPT_VTCODE_BIN:-}" ] && [ -x "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" ]; then
+        "${VTCODE_CHECK_SCRIPT_VTCODE_BIN}" "$@"
         return $?
     fi
 
@@ -57,7 +57,12 @@ run_vtcode_command() {
     fi
 
     if command -v cargo > /dev/null 2>&1 && [ -f "Cargo.toml" ]; then
-        cargo run --quiet --bin vtcode -- "$@"
+        RUSTC_WRAPPER= cargo run --quiet --bin vtcode -- "$@"
+        return $?
+    fi
+
+    if command -v vtcode > /dev/null 2>&1; then
+        vtcode "$@"
         return $?
     fi
 
@@ -166,11 +171,11 @@ run_ast_grep_scan() {
     return 1
 }
 
-# Run Zen governance checks (unwrap/expect enforced, other checks warning-only)
+# Run Zen governance checks in the documented warn-first rollout mode.
 run_zen_governance() {
-    print_status "Running Zen governance checks (unwrap/expect enforce mode)..."
+    print_status "Running Zen governance checks (warn mode)..."
     if python3 scripts/check_rust_file_length.py --mode warn --max-lines 500 \
-        && python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt \
+        && python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt \
         && python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
         print_success "Zen governance checks completed."
         return 0

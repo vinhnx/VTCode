@@ -506,10 +506,10 @@ impl SnapshotManager {
                 let data = match tokio::fs::read(&path).await {
                     Ok(data) => data,
                     Err(err) => {
-                        eprintln!(
-                            "Warning: failed to read checkpoint {}: {}",
-                            path.display(),
-                            err
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %err,
+                            "Failed to read checkpoint"
                         );
                         continue;
                     }
@@ -517,10 +517,10 @@ impl SnapshotManager {
                 let stored: StoredSnapshot = match serde_json::from_slice(&data) {
                     Ok(value) => value,
                     Err(err) => {
-                        eprintln!(
-                            "Warning: failed to parse checkpoint {}: {}",
-                            path.display(),
-                            err
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %err,
+                            "Failed to parse checkpoint"
                         );
                         continue;
                     }
@@ -528,10 +528,10 @@ impl SnapshotManager {
                 if stored.metadata.created_at <= cutoff
                     && let Err(err) = tokio::fs::remove_file(&path).await
                 {
-                    eprintln!(
-                        "Warning: failed to remove expired checkpoint {}: {}",
-                        path.display(),
-                        err
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %err,
+                        "Failed to remove expired checkpoint"
                     );
                 }
             }
@@ -545,10 +545,10 @@ impl SnapshotManager {
         let excess = entries.len() - self.max_snapshots;
         for (_, path) in entries.into_iter().take(excess) {
             if let Err(err) = tokio::fs::remove_file(&path).await {
-                eprintln!(
-                    "Warning: failed to remove old checkpoint {}: {}",
-                    path.display(),
-                    err
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "Failed to remove old checkpoint"
                 );
             }
         }
