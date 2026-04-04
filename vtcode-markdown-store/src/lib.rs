@@ -100,7 +100,7 @@ impl MarkdownStorage {
 
     fn serialize_to_markdown<T: Serialize>(&self, data: &T, title: &str) -> Result<String> {
         let json = serde_json::to_string_pretty(data)?;
-        let yaml = serde_yaml::to_string(data)?;
+        let yaml = serde_saphyr::to_string(data)?;
 
         let markdown = format!(
             "# {}\n\n\
@@ -129,7 +129,8 @@ impl MarkdownStorage {
         }
 
         if let Some(yaml_block) = self.extract_code_block(content, "yaml") {
-            return serde_yaml::from_str(yaml_block).context("Failed to parse YAML from markdown");
+            return serde_saphyr::from_str(yaml_block)
+                .context("Failed to parse YAML from markdown");
         }
 
         Err(anyhow::anyhow!("No valid JSON or YAML found in markdown"))

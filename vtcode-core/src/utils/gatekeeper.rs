@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use once_cell::sync::OnceCell;
-use tracing::{debug, warn};
 
 use crate::config::GatekeeperConfig;
 
@@ -83,7 +82,6 @@ pub fn check_quarantine(path: &Path) {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (policy, path);
-        return;
     }
 
     #[cfg(target_os = "macos")]

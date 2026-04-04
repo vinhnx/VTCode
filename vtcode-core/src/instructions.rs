@@ -1010,7 +1010,7 @@ fn parse_rule_frontmatter(contents: &str, path: &Path) -> Result<RuleFrontmatter
         return Ok(RuleFrontmatter::default());
     };
 
-    serde_yaml::from_str(frontmatter).with_context(|| {
+    serde_saphyr::from_str(frontmatter).with_context(|| {
         format!(
             "Failed to parse YAML frontmatter for instruction rule {}",
             path.display()
