@@ -212,23 +212,22 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
 /// This variant should be used in pre_exec hooks where the parent PID
 /// is captured before spawn to avoid race conditions.
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
 pub fn setup_parent_death_signal_with_check(
     expected_parent_pid: libc::pid_t,
 ) -> std::io::Result<()> {
-    use nix::sys::prctl::{PrctlArg, prctl};
+    use std::io::{Error, ErrorKind};
     use nix::sys::signal::{Signal, raise};
     use nix::unistd::getppid;
-    use std::io::{Error, ErrorKind};
 
-    // Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
-    match prctl(PrctlArg::PrSetPdeathsig(Signal::SIGTERM)) {
-        Ok(_) => {}
-        Err(nix_err) => {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("prctl(PR_SET_PDEATHSIG) failed: {}", nix_err),
-            ));
-        }
+    // Use SIGTERM for graceful shutdown (allows cleanup handlers to run).
+    // SAFETY: prctl is a well-defined Linux syscall; this code is linux-only.
+    let result = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) };
+    if result == -1 {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!("prctl(PR_SET_PDEATHSIG) failed: {}", Error::last_os_error()),
+        ));
     }
 
     // Re-check parent PID to catch race condition where parent exited between
