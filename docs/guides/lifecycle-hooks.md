@@ -61,6 +61,10 @@ expressions to detect policies or keywords.
 * **PreToolUse / PostToolUse** – compared against the tool name. Match builtin
 names like `Write`, `Edit`, `Task`, `Bash`, or Model Context Protocol tools such
 as `mcp__filesystem__read_file`.
+* **PermissionRequest** – compared against the tool name only when VT Code is
+about to show a human approval prompt.
+* **Stop** – compared against the configured matcher string before VT Code
+finalizes a turn.
 * **Notification** – compared against the notification type (`permission_prompt`
 or `idle_prompt`).
 
@@ -156,8 +160,8 @@ Hooks can inject extra context for the model or block prompt handling entirely.
 
 Triggered after the agent prepares tool parameters but before the tool executes.
 Payload fields include `tool_name`, serialized `tool_input`, and
-`transcript_path`. Use this hook to approve, deny, or ask for confirmation
-before running a tool.
+`transcript_path`. Use this hook to allow, deny, or ask for confirmation before
+running a tool.
 
 ### PostToolUse
 
@@ -165,23 +169,53 @@ Runs immediately after a tool completes successfully. The payload includes the
 original tool input and the tool response (`tool_response`). Use this hook to
 inspect outputs, enforce policy, or append extra context for the model.
 
-### TaskCompletion / TaskCompleted
+### PermissionRequest
 
-Runs when a task is marked completed or failed.
-Configure either `task_completion` or `task_completed` in `vtcode.toml` (both are
-supported). Payload:
+Runs only when VT Code is about to show a human approval prompt. Payload:
 
 ```json
 {
   "session_id": "...",
   "cwd": "/path/to/project",
-  "hook_event_name": "TaskCompletion",
-  "task_name": "task_name",
-  "status": "completed" | "failed",
-  "details": { "task_id": 1, "summary": "..." } | null,
+  "hook_event_name": "PermissionRequest",
+  "permission_mode": "default",
+  "tool_name": "unified_exec",
+  "tool_input": { "command": "git push --force" },
+  "permission_request": { "...": "normalized permission summary" },
+  "permission_suggestions": [
+    { "id": "allow_once", "behavior": "allow", "scope": "once" }
+  ],
   "transcript_path": "..." | null
 }
 ```
+
+Use this hook to resolve approvals remotely, update tool input, or persist
+session/project permission rules before the local prompt appears.
+
+### Stop
+
+Runs after VT Code drafts the assistant response but before the turn is marked
+complete. Payload:
+
+```json
+{
+  "session_id": "...",
+  "cwd": "/path/to/project",
+  "hook_event_name": "Stop",
+  "permission_mode": "default",
+  "last_assistant_message": "draft response text",
+  "stop_hook_active": false,
+  "transcript_path": "..." | null
+}
+```
+
+Return `{"decision":"block","reason":"..."}` or
+`{"continue":false,"stopReason":"..."}` to keep the same turn running.
+
+### Deprecated aliases
+
+`task_completion` and `task_completed` are accepted for compatibility, but VT
+Code normalizes both into `stop`. New configurations should use `stop`.
 
 ### Notification
 
@@ -236,11 +270,12 @@ hooks:
 | `decision` / `reason` | Event-specific decisions (block prompt, block stop, etc.). |
 | `hookSpecificOutput` | Structured data keyed by `hookEventName` with additional context. |
 
-Pre- and post-tool hooks also support `permissionDecision` /
-`permissionDecisionReason` inside `hookSpecificOutput` to allow, deny, or prompt
-for confirmation. User prompt hooks can block prompt processing and include a
-custom reason, while post-tool hooks can block agent continuation and provide
-remedial guidance.
+`PermissionRequest` hooks support Claude-style
+`hookSpecificOutput.decision.behavior`, `updatedInput`, `updatedPermissions`,
+`message`, and `interrupt`. `Stop` hooks support either
+`{"decision":"block","reason":"..."}` or
+`{"continue":false,"stopReason":"..."}`. User prompt hooks can block prompt
+processing and include a custom reason.
 
 ### Additional Context
 

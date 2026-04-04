@@ -1,4 +1,5 @@
 use super::*;
+use crate::permissions;
 use serde_json::json;
 
 #[tokio::test]
@@ -587,7 +588,7 @@ async fn test_permission_request_hook_parses_decision_and_updates() {
     .expect("Failed to create hook engine")
     .unwrap();
 
-    let permission_request = vtcode_core::permissions::build_permission_request(
+    let permission_request = permissions::build_permission_request(
         workspace,
         workspace,
         "unified_exec",
@@ -610,7 +611,10 @@ async fn test_permission_request_hook_parses_decision_and_updates() {
         PermissionDecisionBehavior::Allow
     ));
     assert!(matches!(decision.scope, PermissionDecisionScope::Session));
-    assert_eq!(decision.updated_input, Some(json!({"command": "echo approved"})));
+    assert_eq!(
+        decision.updated_input,
+        Some(json!({"command": "echo approved"}))
+    );
     assert_eq!(decision.permission_updates.len(), 1);
 }
 
@@ -684,7 +688,9 @@ async fn test_hook_env_exposes_claude_aliases() {
     )
     .expect("Failed to create hook engine")
     .unwrap();
-    engine.update_transcript_path(Some(transcript_path.clone())).await;
+    engine
+        .update_transcript_path(Some(transcript_path.clone()))
+        .await;
 
     let outcome = engine
         .run_session_start()

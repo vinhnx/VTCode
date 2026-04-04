@@ -6,6 +6,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Notify;
+use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
@@ -58,6 +59,7 @@ struct TestContext {
     session: vtcode_tui::app::InlineSession,
     handle: vtcode_tui::app::InlineHandle,
     approval_recorder: vtcode_core::tools::ApprovalRecorder,
+    permissions_state: Arc<tokio::sync::RwLock<PermissionsConfig>>,
     workspace: std::path::PathBuf,
 }
 
@@ -88,6 +90,7 @@ impl TestContext {
         let handle = session.clone_inline_handle();
         let renderer = create_test_renderer(&handle);
         let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
+        let permissions_state = Arc::new(tokio::sync::RwLock::new(PermissionsConfig::default()));
 
         Self {
             registry,
@@ -95,6 +98,7 @@ impl TestContext {
             session,
             handle,
             approval_recorder,
+            permissions_state,
             workspace,
         }
     }

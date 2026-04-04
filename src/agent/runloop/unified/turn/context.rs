@@ -182,8 +182,7 @@ pub(crate) struct ToolContext<'a> {
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub permissions_state:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
+    pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
@@ -266,8 +265,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub permissions_state:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
+    pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,

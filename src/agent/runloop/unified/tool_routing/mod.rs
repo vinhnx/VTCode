@@ -15,13 +15,13 @@ use tokio::sync::{Notify, RwLock};
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::command_safety::parse_bash_lc_commands;
-use vtcode_core::config::{PermissionMode, PermissionsConfig};
 use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::{PermissionMode, PermissionsConfig};
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::hooks::{
-    LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope,
-    PermissionUpdateKind, PreToolHookDecision,
+    LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope, PermissionUpdateKind,
+    PreToolHookDecision,
 };
 use vtcode_core::permissions::{
     PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
@@ -246,7 +246,8 @@ async fn apply_permission_hook_updates(
             (destination, PermissionUpdateKind::SetMode(mode)) => {
                 next_permissions.default_mode = *mode;
                 changed = true;
-                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+                persist_project |=
+                    matches!(destination, PermissionUpdateDestination::ProjectSettings);
             }
             (destination, PermissionUpdateKind::AddRules(rules)) => {
                 let target = match behavior {
@@ -260,7 +261,8 @@ async fn apply_permission_hook_updates(
                         changed = true;
                     }
                 }
-                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+                persist_project |=
+                    matches!(destination, PermissionUpdateDestination::ProjectSettings);
             }
             (destination, PermissionUpdateKind::ReplaceRules(rules)) => {
                 let target = match behavior {
@@ -271,7 +273,8 @@ async fn apply_permission_hook_updates(
                     *target = rules.clone();
                     changed = true;
                 }
-                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+                persist_project |=
+                    matches!(destination, PermissionUpdateDestination::ProjectSettings);
             }
             (destination, PermissionUpdateKind::RemoveRules(rules)) => {
                 let target = match behavior {
@@ -281,7 +284,8 @@ async fn apply_permission_hook_updates(
                 let initial_len = target.len();
                 target.retain(|rule| !rules.iter().any(|candidate| candidate == rule));
                 changed |= target.len() != initial_len;
-                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+                persist_project |=
+                    matches!(destination, PermissionUpdateDestination::ProjectSettings);
             }
         }
     }
@@ -428,7 +432,10 @@ async fn finalize_permission_decision(
                     perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
                 }
 
-                if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Deny).await {
+                if let Err(err) = tool_registry
+                    .set_tool_policy(tool_name, ToolPolicy::Deny)
+                    .await
+                {
                     tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
                 }
 
@@ -785,7 +792,8 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         permissions_config.cloned().unwrap_or_default()
     };
     let permission_mode = current_permission_mode(&permissions_snapshot);
-    let effective_permissions = effective_permissions_config(&permissions_snapshot, permission_mode);
+    let effective_permissions =
+        effective_permissions_config(&permissions_snapshot, permission_mode);
     let permission_request = build_permission_request(
         tool_registry.workspace_root(),
         &current_dir,
@@ -1027,7 +1035,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                         )]
                     } else {
                         Vec::new()
-                    }
+                    };
                     render_hook_messages(renderer, &update_messages)?;
 
                     let mapped = match (decision.behavior, decision.scope, decision.interrupt) {
@@ -1045,9 +1053,11 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                             _,
                         ) => HitlDecision::ApprovedPermanent,
                         (PermissionDecisionBehavior::Deny, _, true) => HitlDecision::Interrupt,
-                        (PermissionDecisionBehavior::Deny, PermissionDecisionScope::Permanent, _) => {
-                            HitlDecision::Denied
-                        }
+                        (
+                            PermissionDecisionBehavior::Deny,
+                            PermissionDecisionScope::Permanent,
+                            _,
+                        ) => HitlDecision::Denied,
                         (PermissionDecisionBehavior::Deny, _, false) => HitlDecision::DeniedOnce,
                     };
 
@@ -1592,6 +1602,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: Some(&permission_cache),
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: true,
@@ -1643,6 +1654,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: Some(&permission_cache),
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
@@ -1688,6 +1700,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
@@ -1734,6 +1747,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
@@ -1748,7 +1762,7 @@ mod tests {
         .await
         .expect("permission flow");
 
-        assert_eq!(flow, ToolPermissionFlow::Approved);
+        assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
     }
 
     #[tokio::test]
@@ -1779,6 +1793,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
@@ -1798,7 +1813,7 @@ mod tests {
         .await
         .expect("permission flow");
 
-        assert_eq!(flow, ToolPermissionFlow::Approved);
+        assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
     }
 
     #[tokio::test]
@@ -1829,6 +1844,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
@@ -1879,6 +1895,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
@@ -1930,6 +1947,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
@@ -1981,6 +1999,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
@@ -2069,6 +2088,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
@@ -2141,6 +2161,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
@@ -2188,6 +2209,7 @@ mod tests {
                 approval_recorder: None,
                 decision_ledger: None,
                 tool_permission_cache: None,
+                permissions_state: None,
                 hitl_notification_bell: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,

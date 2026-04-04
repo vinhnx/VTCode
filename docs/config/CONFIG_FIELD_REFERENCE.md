@@ -236,6 +236,12 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.post_tool_use[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.post_tool_use[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.post_tool_use[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.permission_request` | `array` | no | `[]` | Commands to run only when VT Code is about to show a human approval prompt |
+| `hooks.lifecycle.permission_request[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
+| `hooks.lifecycle.permission_request[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
+| `hooks.lifecycle.permission_request[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
+| `hooks.lifecycle.permission_request[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
+| `hooks.lifecycle.permission_request[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against tool names. |
 | `hooks.lifecycle.pre_compact` | `array` | no | `[]` | Commands to run immediately before VT Code compacts conversation history |
 | `hooks.lifecycle.pre_compact[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.pre_compact[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
@@ -273,18 +279,24 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.subagent_stop[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.subagent_stop[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.subagent_stop[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
-| `hooks.lifecycle.task_completed` | `array` | no | `[]` | Commands to run after a task is finalized and session is closed |
+| `hooks.lifecycle.stop` | `array` | no | `[]` | Commands to run after VT Code drafts a reply but before the turn is finalized |
+| `hooks.lifecycle.stop[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
+| `hooks.lifecycle.stop[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
+| `hooks.lifecycle.stop[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
+| `hooks.lifecycle.stop[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
+| `hooks.lifecycle.stop[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against the configured stop matcher string. |
+| `hooks.lifecycle.task_completed` | `array` | no | `[]` | Deprecated alias for `hooks.lifecycle.stop` |
 | `hooks.lifecycle.task_completed[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.task_completed[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
 | `hooks.lifecycle.task_completed[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.task_completed[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.task_completed[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
-| `hooks.lifecycle.task_completion` | `array` | no | `[]` | Commands to run when the agent indicates task completion (pre-exit) |
+| `hooks.lifecycle.task_completed[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Deprecated alias matcher for `hooks.lifecycle.stop`. |
+| `hooks.lifecycle.task_completion` | `array` | no | `[]` | Deprecated alias for `hooks.lifecycle.stop` |
 | `hooks.lifecycle.task_completion[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.task_completion[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
 | `hooks.lifecycle.task_completion[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.task_completion[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.task_completion[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.task_completion[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Deprecated alias matcher for `hooks.lifecycle.stop`. |
 | `hooks.lifecycle.user_prompt_submit` | `array` | no | `[]` | Commands to run when the user submits a prompt (pre-processing) |
 | `hooks.lifecycle.user_prompt_submit[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.user_prompt_submit[].hooks[].command` | `string` | no | `""` | The shell command string to execute |

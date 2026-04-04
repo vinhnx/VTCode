@@ -1061,6 +1061,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hooks_command_returns_hooks_outcome() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("hooks", &mut renderer, &workspace)
+            .await
+            .expect("hooks command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::ShowHooks));
+    }
+
+    #[tokio::test]
     async fn config_memory_opens_memory_controls() {
         let workspace = std::env::current_dir().expect("workspace");
         let mut renderer = renderer_for_tests();

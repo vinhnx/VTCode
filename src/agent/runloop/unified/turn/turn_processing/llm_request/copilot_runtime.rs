@@ -2155,6 +2155,9 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
@@ -2183,6 +2186,7 @@ mod tests {
             &approval_recorder,
             &decision_ledger,
             &tool_permission_cache,
+            &permissions_state,
             &safety_validator,
             None,
             None,
@@ -2250,6 +2254,9 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
@@ -2277,6 +2284,7 @@ mod tests {
             &approval_recorder,
             &decision_ledger,
             &tool_permission_cache,
+            &permissions_state,
             &safety_validator,
             None,
             None,
@@ -2337,6 +2345,9 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
@@ -2365,6 +2376,7 @@ mod tests {
             &approval_recorder,
             &decision_ledger,
             &tool_permission_cache,
+            &permissions_state,
             &safety_validator,
             None,
             None,
@@ -2468,6 +2480,9 @@ mod tests {
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
         safety_validator.start_turn();
         let traj = TrajectoryLogger::new(&workspace);
@@ -2498,6 +2513,7 @@ mod tests {
             &approval_recorder,
             &decision_ledger,
             &tool_permission_cache,
+            &permissions_state,
             &safety_validator,
             None,
             None,

@@ -1,6 +1,8 @@
 # VT Code Hooks System Documentation
 
-This document describes the hooks system in VT Code, which is inspired by and compatible with the Claude Code hooks system. Hooks allow you to execute custom scripts in response to various events in the VT Code agent lifecycle.
+This document describes VT Code's command-based lifecycle hooks. The system is
+inspired by Claude Code hooks, but this phase supports shell-command hooks in
+`vtcode.toml` only.
 
 ## Overview
 
@@ -44,10 +46,17 @@ hooks = [
   { command = "$VT_PROJECT_DIR/.vtcode/hooks/session-cleanup.sh" }
 ]
 
-# Task completion hooks - Run when a task completes or fails
-[[hooks.lifecycle.task_completed]]
+# Permission request hooks - Run only when VT Code is about to ask for approval
+[[hooks.lifecycle.permission_request]]
+matcher = "unified_exec"
 hooks = [
-  { command = "$VT_PROJECT_DIR/.vtcode/hooks/task-complete.sh" }
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/approve-shell.sh" }
+]
+
+# Stop hooks - Run when the agent is about to finish a turn
+[[hooks.lifecycle.stop]]
+hooks = [
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/keep-going.sh" }
 ]
 ```
 
@@ -56,8 +65,8 @@ hooks = [
 ### PreToolUse
 
 -   Runs after VT Code creates tool parameters and before processing the tool call
--   Can block, allow, or modify tool execution
--   Common matchers: `Write`, `Edit`, `Bash`, `Read`, etc.
+-   Can allow, deny, or force a human approval prompt
+-   Common matchers: builtin tool names like `unified_exec`, `unified_file`, `read_file`, or MCP tool names
 
 ### PostToolUse
 
@@ -80,11 +89,21 @@ hooks = [
 -   Runs when a VT Code session ends
 -   Useful for cleanup tasks, logging session statistics, or saving session state
 
-### TaskCompletion / TaskCompleted
+### PermissionRequest
 
--   Runs when a task is marked completed or failed
--   Configure `task_completion` or `task_completed` (both are supported)
--   Matchers apply to `task_name`
+-   Runs only when VT Code is about to show a human approval prompt
+-   Receives `tool_name`, `tool_input`, the normalized permission summary, and `permission_suggestions`
+-   Can allow, deny, update tool input, or persist session/project permission rules
+
+### Stop
+
+-   Runs after VT Code drafts the assistant reply but before the turn is finalized
+-   Can block stop and feed a reason back into the same turn so the agent keeps going
+
+### Deprecated aliases
+
+-   `task_completion` and `task_completed` still parse, but VT Code normalizes them into `stop`
+-   New configurations should use `stop`
 
 ## Hook Matching
 
@@ -105,6 +124,7 @@ Hook scripts receive JSON data via stdin containing session information and even
     "transcript_path": "/path/to/transcript.jsonl",
     "cwd": "/current/working/directory",
     "hook_event_name": "PreToolUse",
+    "permission_mode": "default",
     "tool_name": "Write",
     "tool_input": {
         "file_path": "/path/to/file.txt",
@@ -129,6 +149,7 @@ Hook scripts have access to these environment variables:
 -   `CLAUDE_SESSION_ID`: Same as VT_SESSION_ID (for compatibility)
 -   `VT_HOOK_EVENT`: Name of the hook event being executed
 -   `VT_TRANSCRIPT_PATH`: Path to the current transcript file
+-   `CLAUDE_TRANSCRIPT_PATH`: Same as VT_TRANSCRIPT_PATH (for compatibility)
 
 ## JSON Output Format
 
@@ -141,9 +162,13 @@ Hooks can return structured JSON in stdout for advanced control:
     "suppressOutput": true,
     "systemMessage": "string",
     "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "allow",
-        "permissionDecisionReason": "My reason here",
+        "hookEventName": "PermissionRequest",
+        "decision": {
+            "behavior": "allow"
+        },
+        "updatedInput": {
+            "command": "echo approved"
+        },
         "additionalContext": "Additional information for VT Code"
     }
 }

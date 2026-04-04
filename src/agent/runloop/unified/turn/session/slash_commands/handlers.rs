@@ -20,12 +20,12 @@ use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::hooks_browser::{
+    create_hooks_palette_state, render_hooks_summary, show_hooks_palette,
+};
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
-};
-use crate::agent::runloop::unified::hooks_browser::{
-    create_hooks_palette_state, render_hooks_summary, show_hooks_palette,
 };
 use crate::agent::runloop::unified::state::CtrlCSignal;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
@@ -197,7 +197,6 @@ pub(super) async fn handle_show_permissions(
 }
 
 pub(super) async fn handle_show_hooks(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let ctx = ctx;
     if !ctx.renderer.supports_inline_ui() {
         let lifecycle = ctx
             .vt_cfg

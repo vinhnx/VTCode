@@ -28,8 +28,13 @@ pub(crate) struct HooksPaletteState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum HooksPaletteView {
     Events,
-    Groups { event_key: String },
-    Handlers { event_key: String, group_index: usize },
+    Groups {
+        event_key: String,
+    },
+    Handlers {
+        event_key: String,
+        group_index: usize,
+    },
     Detail {
         event_key: String,
         group_index: usize,
@@ -228,7 +233,10 @@ fn build_items(state: &HooksPaletteState) -> Result<Vec<InlineListItem>> {
                     ))),
                     search_value: Some(format!(
                         "{} {} {} {}",
-                        event.label, event.key, groups.len(), handler_count
+                        event.label,
+                        event.key,
+                        groups.len(),
+                        handler_count
                     )),
                 }
             })
@@ -276,7 +284,11 @@ fn build_items(state: &HooksPaletteState) -> Result<Vec<InlineListItem>> {
                     selection: Some(InlineListSelection::ConfigAction(format!(
                         "{ACTION_HANDLER_PREFIX}{event_key}:{group_index}:{index}"
                     ))),
-                    search_value: Some(format!("{} {}", hook.command, render_handler_summary(hook))),
+                    search_value: Some(format!(
+                        "{} {}",
+                        hook.command,
+                        render_handler_summary(hook)
+                    )),
                 })
                 .collect())
         }
@@ -321,11 +333,9 @@ fn build_items(state: &HooksPaletteState) -> Result<Vec<InlineListItem>> {
 fn view_lines(state: &HooksPaletteState) -> Vec<String> {
     match &state.view {
         HooksPaletteView::Events => vec!["Choose a lifecycle event.".to_string()],
-        HooksPaletteView::Groups { event_key } => vec![format!(
-            "{} ({})",
-            event_label(event_key),
-            event_key
-        )],
+        HooksPaletteView::Groups { event_key } => {
+            vec![format!("{} ({})", event_label(event_key), event_key)]
+        }
         HooksPaletteView::Handlers {
             event_key,
             group_index,
@@ -350,7 +360,9 @@ fn view_lines(state: &HooksPaletteState) -> Vec<String> {
                 format!("{} ({})", event_label(event_key), event_key),
                 format!(
                     "Matcher: {}",
-                    group.and_then(|group| group.matcher.as_deref()).unwrap_or("*")
+                    group
+                        .and_then(|group| group.matcher.as_deref())
+                        .unwrap_or("*")
                 ),
                 format!(
                     "Command: {}",
