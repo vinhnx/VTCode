@@ -11,7 +11,6 @@ use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::load_dotenv;
-use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 use vtcode_tui::panic_hook;
 
 mod agent;
@@ -146,18 +145,6 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     args.color.write_global();
     if !color_policy.enabled {
         GlobalColorChoice::Never.write_global();
-    } else {
-        // Only probe if color is enabled and we're not running a short-lived automated command
-        // that shouldn't touch the TTY (like checking versions during install)
-        if !args.quiet
-            && !matches!(
-                args.command,
-                Some(vtcode_core::cli::args::Commands::Dependencies(_))
-                    | Some(vtcode_core::cli::args::Commands::Update { .. })
-            )
-        {
-            probe_and_cache_terminal_palette_harmony();
-        }
     }
 
     let startup_runtime = tokio::runtime::Builder::new_current_thread()

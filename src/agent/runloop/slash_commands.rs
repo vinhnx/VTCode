@@ -172,6 +172,9 @@ pub(crate) enum SlashCommandOutcome {
     ToggleTasksPanel,
     ShowJobsPanel,
     ShowStatus,
+    Notify {
+        message: String,
+    },
     StopAgent,
     ManageMcp {
         action: McpCommandAction,
@@ -575,6 +578,13 @@ async fn execute_built_in_command_skill(
             Ok(SlashCommandOutcome::ShowJobsPanel)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
+        "notify" => Ok(SlashCommandOutcome::Notify {
+            message: if args.is_empty() {
+                "Manual notification from /notify".to_string()
+            } else {
+                args.to_string()
+            },
+        }),
         "stop" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /stop")?;
@@ -1058,6 +1068,38 @@ mod tests {
             .expect("memory command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::ShowMemory));
+    }
+
+    #[tokio::test]
+    async fn notify_command_uses_default_message() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("notify", &mut renderer, &workspace)
+            .await
+            .expect("notify command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::Notify { ref message }
+            if message == "Manual notification from /notify"
+        ));
+    }
+
+    #[tokio::test]
+    async fn notify_command_preserves_custom_message() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("notify build finished", &mut renderer, &workspace)
+            .await
+            .expect("notify command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::Notify { ref message }
+            if message == "build finished"
+        ));
     }
 
     #[tokio::test]

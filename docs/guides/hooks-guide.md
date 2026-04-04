@@ -84,6 +84,31 @@ hooks = [
 -   Runs when VT Code starts a new session
 -   Useful for loading development context, installing dependencies, or setting up environment variables
 
+Example:
+
+```bash
+#!/bin/sh
+cat >/dev/null
+vtcode notify --title "VT Code" "Session started"
+```
+
+If you want a visible TUI line as part of `SessionStart`, emit structured JSON
+instead of plain stdout:
+
+```bash
+#!/bin/sh
+cat >/dev/null
+printf '%s\n' '{"systemMessage":"VT Code: SessionStart hook is active.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"SessionStart hook is active."}}'
+```
+
+```toml
+[[hooks.lifecycle.session_start]]
+hooks = [
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/send-notification.sh" },
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/session-banner.sh" }
+]
+```
+
 ### SessionEnd
 
 -   Runs when a VT Code session ends
@@ -173,6 +198,9 @@ Hooks can return structured JSON in stdout for advanced control:
     }
 }
 ```
+
+For `SessionStart`, plain stdout is added to hidden model context. Use
+`systemMessage` when you want a visible line in the TUI.
 
 ## Security Considerations
 

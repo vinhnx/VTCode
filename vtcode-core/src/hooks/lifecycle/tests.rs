@@ -686,6 +686,52 @@ async fn test_session_start_json_like_stdout_failure_does_not_become_context() {
 }
 
 #[tokio::test]
+async fn test_session_start_structured_message_and_context_are_both_applied() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        session_start: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"systemMessage":"Session banner","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":["Context one","Context two"]}}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_session_start()
+        .await
+        .expect("run session start hook");
+
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| message.text == "Session banner")
+    );
+    assert_eq!(
+        outcome.additional_context,
+        vec!["Context one", "Context two"]
+    );
+}
+
+#[tokio::test]
 async fn test_user_prompt_submit_block_requires_stderr_feedback() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();

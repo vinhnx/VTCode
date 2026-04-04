@@ -12,6 +12,7 @@ use vtcode_core::core::threads::{
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::SessionArchiveMetadata;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
+use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 
 #[derive(Clone, Debug)]
 pub(crate) struct SessionContinuation {
@@ -127,6 +128,10 @@ pub(crate) async fn run_single_agent_loop(
     plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<SessionContinuation>,
 ) -> Result<()> {
+    // Probe terminal palette only for real interactive sessions so one-shot CLI
+    // commands never emit OSC queries back into the user's shell.
+    probe_and_cache_terminal_palette_harmony();
+
     let mut runtime_cfg = config.clone();
     if let Some(resume_session) = resume.as_ref() {
         apply_resume_runtime_overrides(&mut runtime_cfg, resume_session);

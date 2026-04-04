@@ -18,6 +18,7 @@ use vtcode_tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, Inli
 
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::hooks::SessionEndReason;
+use vtcode_core::notifications::{NotificationEvent, send_global_notification_force};
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::hooks_browser::{
@@ -94,6 +95,22 @@ pub(super) use ui::{
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::handle_initialize_workspace;
+
+pub(super) async fn handle_notify(
+    ctx: SlashCommandContext<'_>,
+    message: String,
+) -> Result<SlashCommandControl> {
+    send_global_notification_force(NotificationEvent::Custom {
+        title: "VT Code".to_string(),
+        message: message.clone(),
+    })
+    .await?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!("Sent VT Code notification: {message}"),
+    )?;
+    Ok(SlashCommandControl::Continue)
+}
 
 pub(super) async fn handle_manage_loop(
     ctx: SlashCommandContext<'_>,

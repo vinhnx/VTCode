@@ -11,7 +11,7 @@ use crate::cli::anthropic_api::handle_anthropic_api_command;
 use crate::cli::app_server::handle_app_server_command;
 use crate::cli::{
     analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man,
-    revert, review, schedule, schema, skills, snapshots, trajectory, update,
+    notify, revert, review, schedule, schema, skills, snapshots, trajectory, update,
 };
 
 pub(crate) async fn dispatch_command(
@@ -137,6 +137,9 @@ pub(crate) async fn dispatch_command(
         }
         Commands::Trajectory { file, top } => {
             trajectory::handle_trajectory_command(core_cfg, file, top).await?;
+        }
+        Commands::Notify { title, message } => {
+            notify::handle_notify_command(startup, title, message).await?;
         }
         Commands::CreateProject { name, features } => {
             create_project::handle_create_project_command(core_cfg, &name, &features).await?;

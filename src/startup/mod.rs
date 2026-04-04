@@ -354,6 +354,7 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
                 | Commands::Logout { .. }
                 | Commands::Auth { .. }
                 | Commands::AppServer { .. }
+                | Commands::Notify { .. }
                 | Commands::Schedule { .. }
         )
     )
@@ -366,6 +367,7 @@ fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
             Commands::ToolPolicy { .. }
                 | Commands::AgentClientProtocol { .. }
                 | Commands::AppServer { .. }
+                | Commands::Notify { .. }
                 | Commands::Schedule { .. }
         )
     )
@@ -427,6 +429,17 @@ mod validation_tests {
     fn tool_policy_can_start_without_provider_auth() {
         let command = Commands::ToolPolicy {
             command: vtcode_core::cli::tool_policy_commands::ToolPolicyCommands::Status,
+        };
+
+        assert!(command_skips_provider_auth(Some(&command)));
+        assert!(can_start_without_provider_auth(Some(&command)));
+    }
+
+    #[test]
+    fn notify_can_start_without_provider_auth() {
+        let command = Commands::Notify {
+            title: Some("VT Code".to_string()),
+            message: "Session started".to_string(),
         };
 
         assert!(command_skips_provider_auth(Some(&command)));

@@ -299,6 +299,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "status"
     ),
     built_in_command_spec!(
+        "notify",
+        "Send a VT Code notification immediately (usage: /notify [message])",
+        "/notify [message]",
+        "status"
+    ),
+    built_in_command_spec!(
         "stop",
         "Stop the active turn immediately",
         "/stop",

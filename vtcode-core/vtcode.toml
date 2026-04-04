@@ -949,6 +949,8 @@ enabled = true
 
 [hooks.lifecycle]
 quiet_success_output = false
+# Example:
+# session_start = [{ hooks = [{ command = "cat >/dev/null; vtcode notify --title \"VT Code\" \"Session started\"" }, { command = "cat >/dev/null; printf '%s\\n' '{\"systemMessage\":\"VT Code: SessionStart hook is active.\",\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"SessionStart hook is active.\"}}'" }] }]
 session_start = []
 session_end = []
 subagent_start = []

@@ -8,6 +8,23 @@ use super::common::{
     handle_timeout, looks_like_json, matches_hook_event, parse_json_output,
 };
 
+fn push_additional_context_value(additional_context: &mut Vec<String>, value: &Value) {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                additional_context.push(trimmed.to_owned());
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                push_additional_context_value(additional_context, value);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(crate) fn interpret_session_start(
     command: &HookCommandConfig,
     result: &HookCommandResult,
@@ -38,21 +55,15 @@ pub(crate) fn interpret_session_start(
         let common = extract_common_fields(&json, messages);
         if let Some(Value::Object(spec)) = common.hook_specific
             && matches_hook_event(&spec, "SessionStart")
-            && let Some(additional) = spec
-                .get("additionalContext")
-                .and_then(|value| value.as_str())
-            && !additional.trim().is_empty()
+            && let Some(additional) = spec.get("additionalContext")
         {
-            additional_context.push(additional.trim().to_owned());
+            push_additional_context_value(additional_context, additional);
         }
 
         if !common.suppress_stdout
-            && let Some(text) = json
-                .get("additional_context")
-                .and_then(|value| value.as_str())
-            && !text.trim().is_empty()
+            && let Some(additional) = json.get("additional_context")
         {
-            additional_context.push(text.trim().to_owned());
+            push_additional_context_value(additional_context, additional);
         }
     } else if !result.stdout.trim().is_empty() {
         if looks_like_json(&result.stdout) {

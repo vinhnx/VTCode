@@ -186,6 +186,7 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::ToggleTasksPanel => handlers::handle_toggle_tasks_panel(ctx).await,
         SlashCommandOutcome::ShowJobsPanel => handlers::handle_show_jobs_panel(ctx).await,
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
+        SlashCommandOutcome::Notify { message } => handlers::handle_notify(ctx, message).await,
         SlashCommandOutcome::StopAgent => handlers::handle_stop_agent(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 

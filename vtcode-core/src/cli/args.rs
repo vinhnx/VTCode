@@ -521,6 +521,16 @@ pub enum Commands {
         top: usize,
     },
 
+    /// Send a VT Code notification using the built-in notification system
+    Notify {
+        /// Optional notification title
+        #[arg(long, value_name = "TITLE")]
+        title: Option<String>,
+        /// Notification message
+        #[arg(value_name = "MESSAGE")]
+        message: String,
+    },
+
     /// Benchmark against SWE-bench evaluation framework
     Benchmark {
         /// Path to a JSON benchmark specification
@@ -1138,6 +1148,17 @@ mod exec_command_tests {
         let cli = Cli::parse_from(["vtcode", "--fork-session", "session-123", "--summarize"]);
         assert_eq!(cli.fork_session.as_deref(), Some("session-123"));
         assert!(cli.summarize);
+    }
+
+    #[test]
+    fn notify_parses_title_and_message() {
+        let cli = Cli::parse_from(["vtcode", "notify", "--title", "VT Code", "Session started"]);
+        let Some(Commands::Notify { title, message }) = cli.command else {
+            panic!("expected notify command");
+        };
+
+        assert_eq!(title.as_deref(), Some("VT Code"));
+        assert_eq!(message, "Session started");
     }
 
     #[test]

@@ -20,6 +20,8 @@ use vtcode_config::{
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NotificationEvent {
+    /// Generic ad-hoc notification
+    Custom { title: String, message: String },
     /// Command execution failed
     CommandFailure {
         command: String,
@@ -275,6 +277,7 @@ impl NotificationManager {
 
     fn event_enabled(&self, event: &NotificationEvent, config: &NotificationConfig) -> bool {
         match event {
+            NotificationEvent::Custom { .. } => true,
             NotificationEvent::CommandFailure { .. } => config.command_failure_notifications,
             NotificationEvent::ToolFailure { .. } => config.tool_failure_notifications,
             NotificationEvent::ToolSuccess { .. } => config.tool_success_notifications,
@@ -394,6 +397,7 @@ impl NotificationManager {
 
     fn repeat_fingerprint(&self, event: &NotificationEvent) -> Option<String> {
         let event_type = match event {
+            NotificationEvent::Custom { .. } => "custom",
             NotificationEvent::CommandFailure { .. } => "command_failure",
             NotificationEvent::ToolFailure { .. } => "tool_failure",
             NotificationEvent::ToolSuccess { .. } => "tool_success",
@@ -423,6 +427,14 @@ impl NotificationManager {
     /// Format a notification message based on the event
     fn format_notification_message(&self, event: &NotificationEvent) -> String {
         match event {
+            NotificationEvent::Custom { title, message } => {
+                let title = title.trim();
+                if title.is_empty() {
+                    message.clone()
+                } else {
+                    format!("{title}: {message}")
+                }
+            }
             NotificationEvent::CommandFailure {
                 command,
                 error,
@@ -658,6 +670,26 @@ pub async fn send_global_notification(event: NotificationEvent) -> Result<(), an
     }
 }
 
+/// Send a notification immediately, even when the terminal is currently focused.
+pub async fn send_global_notification_force(event: NotificationEvent) -> Result<(), anyhow::Error> {
+    if let Some(manager) = get_global_notification_manager() {
+        let original = manager.get_config().await;
+        let mut forced = original.clone();
+        forced.suppress_when_focused = false;
+        manager.update_config(forced).await;
+        let result = manager.send_notification(event).await;
+        manager.update_config(original).await;
+        result
+    } else {
+        let config = NotificationConfig {
+            suppress_when_focused: false,
+            ..NotificationConfig::default()
+        };
+        let manager = NotificationManager::with_config(config);
+        manager.send_notification(event).await
+    }
+}
+
 /// Set the terminal focus state using the global notification manager
 pub fn set_global_terminal_focused(focused: bool) {
     if let Some(manager) = get_global_notification_manager() {
@@ -852,5 +884,19 @@ mod tests {
             manager.repeat_decision(&event, &config),
             RepeatDecision::Suppress
         ));
+    }
+
+    #[test]
+    fn custom_notifications_format_title_and_message() {
+        let manager = NotificationManager::new();
+        let event = NotificationEvent::Custom {
+            title: "VT Code".to_string(),
+            message: "Session started".to_string(),
+        };
+
+        assert_eq!(
+            manager.format_notification_message(&event),
+            "VT Code: Session started"
+        );
     }
 }

@@ -9,9 +9,9 @@ persistence = "file"
 [tui]
 
 [agent]
-provider = "ollama"
-api_key_env = "OLLAMA_API_KEY"
-default_model = "gpt-oss:20b-cloud"
+provider = "openai"
+api_key_env = "OPENAI_API_KEY"
+default_model = "gpt-5.3-codex"
 theme = "ciapre"
 system_prompt_mode = "default"
 tool_documentation_mode = "progressive"
@@ -19,7 +19,7 @@ enable_split_tool_results = true
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "high"
+reasoning_effort = "none"
 verbosity = "medium"
 temperature = 0.7
 refine_temperature = 0.3
@@ -236,7 +236,7 @@ switch_to_edit_mode = "prompt"
 switch_to_plan_mode = "prompt"
 task_tracker = "prompt"
 track_tasks = "prompt"
-unified_exec = "allow"
+unified_exec = "prompt"
 unified_file = "allow"
 unified_search = "allow"
 vtcode-check = "prompt"
@@ -507,7 +507,7 @@ deny_regex = [
 ]
 
 [permissions]
-default_mode = "auto"
+default_mode = "default"
 allowed_tools = []
 disallowed_tools = []
 allow = []
@@ -922,7 +922,7 @@ bind_address = "127.0.0.1"
 port = 3000
 transport = "sse"
 name = "vtcode-mcp-server"
-version = "0.96.12"
+version = "0.96.15"
 exposed_tools = []
 
 [mcp.allowlist]
@@ -977,7 +977,7 @@ enabled = true
 
 [hooks.lifecycle]
 quiet_success_output = false
-session_start = []
+
 session_end = []
 subagent_start = []
 subagent_stop = []
@@ -990,6 +990,7 @@ task_completed = []
 notification = []
 permission_request = []
 stop = []
+session_start= []
 
 [model]
 skip_loop_detection = false

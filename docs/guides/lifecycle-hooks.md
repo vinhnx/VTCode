@@ -282,7 +282,7 @@ processing and include a custom reason.
 Hooks can append strings to the model context in two ways:
 
 1. Print plain text to stdout with exit code `0` (SessionStart and
-   UserPromptSubmit automatically inject stdout as context).
+   UserPromptSubmit automatically inject stdout as hidden model context).
 2. Provide `hookSpecificOutput.additionalContext` as a JSON array or string in
 the JSON response.
 
@@ -325,6 +325,52 @@ touch vtcode.toml
 mkdir -p .vtcode/hooks
 ```
 
+### Example Setup: Notification On SessionStart
+
+Here's a minimal example that sends a VT Code notification and then shows a line in the TUI when a session starts:
+
+1. **Create a notification script** at `.vtcode/hooks/send-notification.sh`:
+
+```bash
+#!/bin/bash
+
+# Consume the JSON payload so the pipe is drained cleanly.
+cat >/dev/null
+
+vtcode notify --title "VT Code" "Session started"
+```
+
+2. **Create a TUI message script** at `.vtcode/hooks/session-banner.sh`:
+
+```bash
+#!/bin/bash
+
+# Consume the JSON payload so the pipe is drained cleanly.
+cat >/dev/null
+
+printf '%s\n' '{"systemMessage":"VT Code: SessionStart hook is active.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"SessionStart hook is active."}}'
+```
+
+3. **Make both scripts executable**:
+
+```bash
+chmod +x .vtcode/hooks/send-notification.sh
+chmod +x .vtcode/hooks/session-banner.sh
+```
+
+4. **Configure the hooks** in your `vtcode.toml`:
+
+```toml
+[hooks.lifecycle]
+session_start = [{ hooks = [
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/send-notification.sh" },
+  { command = "$VT_PROJECT_DIR/.vtcode/hooks/session-banner.sh" }
+] }]
+```
+
+Plain stdout from `SessionStart` becomes hidden model context. Use
+`systemMessage` when you want a visible line in the TUI.
+
 ### Example Setup: Enhanced Session Context
 
 Here's a practical example that adds project context when a session starts:
@@ -357,13 +403,7 @@ chmod +x .vtcode/hooks/session-context.sh
 
 ```toml
 [hooks.lifecycle]
-session_start = [
-  { 
-    hooks = [ 
-      { command = "$VT_PROJECT_DIR/.vtcode/hooks/session-context.sh" } 
-    ] 
-  }
-]
+session_start = [{ hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/session-context.sh" }] }]
 ```
 
 ### Example Setup: Pre-Tool Validation
