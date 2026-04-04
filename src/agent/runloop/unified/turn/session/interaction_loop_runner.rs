@@ -1073,7 +1073,7 @@ pub(super) async fn run_interaction_loop_impl(
                         &outcome.messages,
                     )?;
                     crate::agent::runloop::unified::turn::utils::append_additional_context(
-                        &mut ctx.conversation_history,
+                        ctx.conversation_history,
                         outcome.additional_context,
                     );
                     if !outcome.allow_prompt {
