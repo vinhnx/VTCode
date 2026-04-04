@@ -41,8 +41,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
-          sparse-checkout: |
-            !docs/
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -125,8 +123,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
-          sparse-checkout: |
-            !docs/
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -186,8 +182,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
-          sparse-checkout: |
-            !docs/
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
