@@ -68,15 +68,25 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
 
     let mut resolved_assets = Vec::new();
     for (relative, dest_relative) in EMBEDDED_ASSETS {
-        let source = locate_asset(&manifest_dir, &workspace_dir, relative)?;
-        println!("cargo:rerun-if-changed={}", source.display());
+        match locate_asset(&manifest_dir, &workspace_dir, relative) {
+            Ok(source) => {
+                println!("cargo:rerun-if-changed={}", source.display());
 
-        let fallback = fallback_path(&manifest_dir, relative);
-        if fallback.exists() && fallback != source {
-            println!("cargo:rerun-if-changed={}", fallback.display());
+                let fallback = fallback_path(&manifest_dir, relative);
+                if fallback.exists() && fallback != source {
+                    println!("cargo:rerun-if-changed={}", fallback.display());
+                }
+
+                resolved_assets.push((Some(source), *dest_relative));
+            }
+            Err(error) if can_fallback_to_placeholder(&error) => {
+                println!(
+                    "cargo:warning=using placeholder embedded asset for `{relative}`: {error}"
+                );
+                resolved_assets.push((None, *dest_relative));
+            }
+            Err(error) => return Err(error.into()),
         }
-
-        resolved_assets.push((source, dest_relative));
     }
 
     for (source, dest_relative) in resolved_assets {
@@ -84,7 +94,14 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::copy(&source, &destination)?;
+        match source {
+            Some(source) => {
+                fs::copy(&source, &destination)?;
+            }
+            None => {
+                fs::write(&destination, b"")?;
+            }
+        }
     }
 
     let mut metadata = String::new();
@@ -168,6 +185,13 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
     fs::write(out_dir.join("openrouter_metadata.rs"), metadata)?;
 
     Ok(())
+}
+
+fn can_fallback_to_placeholder(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
+    )
 }
 
 fn locate_asset(manifest_dir: &Path, workspace_dir: &Path, relative: &str) -> io::Result<PathBuf> {
