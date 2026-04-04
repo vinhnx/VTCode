@@ -364,6 +364,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     #[serial]
+    #[allow(unsafe_code)]
     fn create_env_preserves_non_utf8_path() {
         let original_path = std::env::var_os("PATH");
         let non_utf8_path = OsString::from_vec(b"/tmp/alpha:\xFFbeta".to_vec());
