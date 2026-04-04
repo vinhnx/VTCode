@@ -22,7 +22,7 @@ use super::HitlDecision;
 use super::shell_approval::PersistentApprovalTarget;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ToolPermissionPromptKind {
+pub(super) enum ToolPermissionPromptKind {
     Standard,
     Mcp,
 }
@@ -40,7 +40,7 @@ fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&
     vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, args).then_some(args)
 }
 
-fn tool_permission_prompt_kind(tool_name: &str) -> ToolPermissionPromptKind {
+pub(super) fn tool_permission_prompt_kind(tool_name: &str) -> ToolPermissionPromptKind {
     if vtcode_core::tools::mcp::is_legacy_mcp_tool_name(tool_name)
         || vtcode_core::tools::mcp::parse_canonical_mcp_tool_name(tool_name).is_some()
         || tool_name.starts_with(vtcode_core::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX)

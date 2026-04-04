@@ -182,6 +182,8 @@ pub(crate) struct ToolContext<'a> {
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub permissions_state:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
@@ -264,6 +266,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub permissions_state:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
@@ -319,6 +323,7 @@ impl<'a> TurnProcessingContext<'a> {
             lifecycle_hooks: ui.lifecycle_hooks,
             default_placeholder: ui.default_placeholder,
             tool_permission_cache: tool.tool_permission_cache,
+            permissions_state: tool.permissions_state,
             safety_validator: tool.safety_validator,
             provider_client: llm.provider_client,
             config: llm.config,
@@ -345,6 +350,7 @@ impl<'a> TurnProcessingContext<'a> {
             tools: self.tools,
             tool_catalog: self.tool_catalog,
             tool_permission_cache: self.tool_permission_cache,
+            permissions_state: self.permissions_state,
             safety_validator: self.safety_validator,
             circuit_breaker: self.circuit_breaker,
             tool_health_tracker: self.tool_health_tracker,
@@ -427,6 +433,7 @@ impl<'a> TurnProcessingContext<'a> {
             ui_ctx.lifecycle_hooks,
             ui_ctx.default_placeholder,
             tool_ctx.tool_permission_cache,
+            tool_ctx.permissions_state,
             tool_ctx.safety_validator,
             tool_ctx.circuit_breaker,
             tool_ctx.tool_health_tracker,
@@ -475,6 +482,7 @@ impl<'a> TurnProcessingContext<'a> {
             tool_ctx.tools,
             tool_ctx.tool_result_cache,
             tool_ctx.tool_permission_cache,
+            tool_ctx.permissions_state,
             llm_ctx.decision_ledger,
             state.session_stats,
             state.mcp_panel_state,
@@ -745,6 +753,7 @@ impl<'a> TurnProcessingContext<'a> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
         let tool_free_recovery_pass = recovery_pass_response && self.recovery_is_tool_free();
         let recovery_progress_only = tool_free_recovery_pass && is_interim_progress_update(&text);
+        let final_text = text.clone();
         let continuation_decision = if tool_free_recovery_pass {
             InterimTextContinuationDecision {
                 should_continue: false,
@@ -806,6 +815,22 @@ impl<'a> TurnProcessingContext<'a> {
             push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
             return Ok(TurnHandlerOutcome::Continue);
         }
+
+        if let Some(hooks) = self.lifecycle_hooks {
+            let outcome = hooks
+                .run_stop(&final_text, self.harness_state.stop_hook_active)
+                .await?;
+            crate::agent::runloop::unified::turn::utils::render_hook_messages(
+                self.renderer,
+                &outcome.messages,
+            )?;
+            if let Some(reason) = outcome.block_reason {
+                push_system_directive_once(self.working_history, &reason);
+                self.harness_state.stop_hook_active = true;
+                return Ok(TurnHandlerOutcome::Continue);
+            }
+        }
+        self.harness_state.stop_hook_active = false;
 
         if self.session_stats.is_plan_mode()
             && let Some(plan_text) = proposed_plan

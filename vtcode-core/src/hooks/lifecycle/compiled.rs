@@ -13,23 +13,28 @@ pub(super) struct CompiledLifecycleHooks {
     pub(super) user_prompt_submit: Vec<CompiledHookGroup>,
     pub(super) pre_tool_use: Vec<CompiledHookGroup>,
     pub(super) post_tool_use: Vec<CompiledHookGroup>,
+    pub(super) permission_request: Vec<CompiledHookGroup>,
     pub(super) pre_compact: Vec<CompiledHookGroup>,
+    pub(super) stop: Vec<CompiledHookGroup>,
     pub(super) notification: Vec<CompiledHookGroup>,
 }
 
 impl CompiledLifecycleHooks {
     pub(super) fn from_config(config: &LifecycleHooksConfig) -> Result<Self> {
+        let normalized = config.normalized();
         Ok(Self {
-            quiet_success_output: config.quiet_success_output,
-            session_start: compile_groups(&config.session_start)?,
-            session_end: compile_groups(&config.session_end)?,
-            subagent_start: compile_groups(&config.subagent_start)?,
-            subagent_stop: compile_groups(&config.subagent_stop)?,
-            user_prompt_submit: compile_groups(&config.user_prompt_submit)?,
-            pre_tool_use: compile_groups(&config.pre_tool_use)?,
-            post_tool_use: compile_groups(&config.post_tool_use)?,
-            pre_compact: compile_groups(&config.pre_compact)?,
-            notification: compile_groups(&config.notification)?,
+            quiet_success_output: normalized.quiet_success_output,
+            session_start: compile_groups(&normalized.session_start)?,
+            session_end: compile_groups(&normalized.session_end)?,
+            subagent_start: compile_groups(&normalized.subagent_start)?,
+            subagent_stop: compile_groups(&normalized.subagent_stop)?,
+            user_prompt_submit: compile_groups(&normalized.user_prompt_submit)?,
+            pre_tool_use: compile_groups(&normalized.pre_tool_use)?,
+            post_tool_use: compile_groups(&normalized.post_tool_use)?,
+            permission_request: compile_groups(&normalized.permission_request)?,
+            pre_compact: compile_groups(&normalized.pre_compact)?,
+            stop: compile_groups(&normalized.stop)?,
+            notification: compile_groups(&normalized.notification)?,
         })
     }
 
@@ -41,7 +46,9 @@ impl CompiledLifecycleHooks {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.permission_request.is_empty()
             && self.pre_compact.is_empty()
+            && self.stop.is_empty()
             && self.notification.is_empty()
     }
 }

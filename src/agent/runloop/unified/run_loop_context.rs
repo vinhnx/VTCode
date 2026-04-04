@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -92,6 +93,7 @@ pub(crate) struct HarnessTurnState {
     last_file_read_family_signature: Option<String>,
     seen_successful_readonly_signatures: HashSet<String>,
     streamed_tool_call_item_ids: HashMap<String, String>,
+    pub stop_hook_active: bool,
     pub seen_task_tracker_create_signatures: HashSet<String>,
     pub replaceable_task_tracker_block: Option<Vec<String>>,
     pub tool_budget_warning_emitted: bool,
@@ -128,6 +130,7 @@ impl HarnessTurnState {
             last_file_read_family_signature: None,
             seen_successful_readonly_signatures: HashSet::new(),
             streamed_tool_call_item_ids: HashMap::new(),
+            stop_hook_active: false,
             seen_task_tracker_create_signatures: HashSet::new(),
             replaceable_task_tracker_block: None,
             tool_budget_warning_emitted: false,
@@ -373,6 +376,7 @@ pub(crate) struct RunLoopContext<'a> {
     pub tool_registry: &'a mut ToolRegistry,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+    pub permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut McpPanelState,
@@ -401,6 +405,7 @@ impl<'a> RunLoopContext<'a> {
         _tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
         tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+        permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
         mcp_panel_state: &'a mut McpPanelState,
@@ -418,6 +423,7 @@ impl<'a> RunLoopContext<'a> {
             _tools,
             tool_result_cache,
             tool_permission_cache,
+            permissions_state,
             decision_ledger,
             session_stats,
             mcp_panel_state,
@@ -439,6 +445,7 @@ impl<'a> RunLoopContext<'a> {
         _tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
         tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+        permissions_state: &'a Arc<RwLock<PermissionsConfig>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
         session_stats: &'a mut SessionStats,
         mcp_panel_state: &'a mut McpPanelState,
@@ -456,6 +463,7 @@ impl<'a> RunLoopContext<'a> {
             tool_registry,
             tool_result_cache,
             tool_permission_cache,
+            permissions_state,
             decision_ledger,
             session_stats,
             mcp_panel_state,

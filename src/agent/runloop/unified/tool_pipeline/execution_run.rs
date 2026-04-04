@@ -465,6 +465,7 @@ async fn check_tool_permission(
             approval_recorder: Some(ctx.approval_recorder),
             decision_ledger: Some(ctx.decision_ledger),
             tool_permission_cache: Some(ctx.tool_permission_cache),
+            permissions_state: Some(ctx.permissions_state),
             hitl_notification_bell: vt_cfg
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
@@ -482,7 +483,7 @@ async fn check_tool_permission(
     )
     .await
     {
-        Ok(ToolPermissionFlow::Approved) => None,
+        Ok(ToolPermissionFlow::Approved { .. }) => None,
         Ok(ToolPermissionFlow::Denied) => Some(ToolExecutionStatus::Failure {
             error: structured_failure_from_message(name, "Tool permission denied"),
         }),

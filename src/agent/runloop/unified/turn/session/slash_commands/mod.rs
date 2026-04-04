@@ -168,6 +168,7 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::ShowSettingsAtPath { path } => {
             handlers::handle_show_settings_at_path(ctx, Some(&path)).await
         }
+        SlashCommandOutcome::ShowHooks => handlers::handle_show_hooks(ctx).await,
         SlashCommandOutcome::ShowMemoryConfig => handlers::handle_show_memory_config(ctx).await,
         SlashCommandOutcome::ShowPermissions => handlers::handle_show_permissions(ctx).await,
         SlashCommandOutcome::ShowMemory => handlers::handle_show_memory(ctx).await,

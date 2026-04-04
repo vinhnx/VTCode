@@ -16,8 +16,13 @@ use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::command_safety::parse_bash_lc_commands;
 use vtcode_core::config::{PermissionMode, PermissionsConfig};
+use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::hooks::{
+    LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope,
+    PermissionUpdateKind, PreToolHookDecision,
+};
 use vtcode_core::permissions::{
     PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
 };
@@ -44,8 +49,6 @@ use shell_approval::{
     approval_learning_target, exact_shell_approval_target, persistent_approval_target,
     tool_display_labels,
 };
-use vtcode_core::hooks::{LifecycleHookEngine, PreToolHookDecision};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HitlDecision {
     Approved,
@@ -59,7 +62,7 @@ pub(crate) enum HitlDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ToolPermissionFlow {
-    Approved,
+    Approved { updated_args: Option<Value> },
     Denied,
     Blocked { reason: String },
     Exit,
@@ -125,6 +128,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub decision_ledger:
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
+    pub permissions_state: Option<&'a Arc<RwLock<PermissionsConfig>>>,
     pub hitl_notification_bell: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
@@ -133,17 +137,15 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub session_stats: Option<&'a mut SessionStats>,
 }
 
-fn current_permission_mode(config: Option<&PermissionsConfig>) -> PermissionMode {
-    config
-        .map(|config| config.default_mode)
-        .unwrap_or(PermissionMode::Default)
+fn current_permission_mode(config: &PermissionsConfig) -> PermissionMode {
+    config.default_mode
 }
 
 fn effective_permissions_config(
-    config: Option<&PermissionsConfig>,
+    config: &PermissionsConfig,
     permission_mode: PermissionMode,
 ) -> Option<PermissionsConfig> {
-    let mut effective = config?.clone();
+    let mut effective = config.clone();
     if permission_mode != PermissionMode::Auto || !effective.auto_mode.drop_broad_allow_rules {
         return Some(effective);
     }
@@ -164,6 +166,300 @@ fn effective_permissions_config(
         );
     }
     Some(effective)
+}
+
+fn build_permission_suggestions(
+    prompt_kind: permission_prompt::ToolPermissionPromptKind,
+    persistent_approval_target: Option<&shell_approval::PersistentApprovalTarget>,
+) -> Vec<Value> {
+    let mut suggestions = vec![
+        serde_json::json!({
+            "id": "allow_once",
+            "behavior": "allow",
+            "scope": "once",
+        }),
+        serde_json::json!({
+            "id": "allow_session",
+            "behavior": "allow",
+            "scope": "session",
+        }),
+        serde_json::json!({
+            "id": "deny_once",
+            "behavior": "deny",
+            "scope": "once",
+        }),
+    ];
+
+    if persistent_approval_target.is_some() {
+        suggestions.push(serde_json::json!({
+            "id": "allow_permanent",
+            "behavior": "allow",
+            "scope": "permanent",
+        }));
+    }
+
+    if matches!(
+        persistent_approval_target,
+        Some(shell_approval::PersistentApprovalTarget::ToolLevel)
+    ) && prompt_kind != permission_prompt::ToolPermissionPromptKind::Mcp
+    {
+        suggestions.push(serde_json::json!({
+            "id": "deny_permanent",
+            "behavior": "deny",
+            "scope": "permanent",
+        }));
+    }
+
+    suggestions
+}
+
+async fn apply_permission_hook_updates(
+    tool_registry: &ToolRegistry,
+    permissions_state: &Arc<RwLock<PermissionsConfig>>,
+    behavior: PermissionDecisionBehavior,
+    updates: &[vtcode_core::hooks::PermissionUpdateRequest],
+) -> Vec<vtcode_core::hooks::HookMessage> {
+    use std::collections::BTreeSet;
+    use vtcode_core::hooks::{HookMessage, PermissionUpdateDestination, PermissionUpdateKind};
+
+    let mut messages = Vec::new();
+    if updates.is_empty() {
+        return messages;
+    }
+
+    let mut next_permissions = permissions_state.read().await.clone();
+    let mut changed = false;
+    let mut persist_project = false;
+
+    for update in updates {
+        match (&update.destination, &update.kind) {
+            (PermissionUpdateDestination::Unsupported(destination), _) => {
+                messages.push(HookMessage::warning(format!(
+                    "PermissionRequest hook ignored unsupported destination `{destination}`"
+                )));
+            }
+            (_, PermissionUpdateKind::Unsupported(field)) => {
+                messages.push(HookMessage::warning(format!(
+                    "PermissionRequest hook ignored unsupported permission update `{field}`"
+                )));
+            }
+            (destination, PermissionUpdateKind::SetMode(mode)) => {
+                next_permissions.default_mode = *mode;
+                changed = true;
+                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+            }
+            (destination, PermissionUpdateKind::AddRules(rules)) => {
+                let target = match behavior {
+                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
+                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                };
+                let mut seen = target.iter().cloned().collect::<BTreeSet<_>>();
+                for rule in rules {
+                    if seen.insert(rule.clone()) {
+                        target.push(rule.clone());
+                        changed = true;
+                    }
+                }
+                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+            }
+            (destination, PermissionUpdateKind::ReplaceRules(rules)) => {
+                let target = match behavior {
+                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
+                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                };
+                if *target != *rules {
+                    *target = rules.clone();
+                    changed = true;
+                }
+                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+            }
+            (destination, PermissionUpdateKind::RemoveRules(rules)) => {
+                let target = match behavior {
+                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
+                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                };
+                let initial_len = target.len();
+                target.retain(|rule| !rules.iter().any(|candidate| candidate == rule));
+                changed |= target.len() != initial_len;
+                persist_project |= matches!(destination, PermissionUpdateDestination::ProjectSettings);
+            }
+        }
+    }
+
+    if !changed {
+        return messages;
+    }
+
+    {
+        let mut state = permissions_state.write().await;
+        *state = next_permissions.clone();
+    }
+    tool_registry.apply_permissions_config(&next_permissions);
+
+    if persist_project {
+        let workspace_root = tool_registry.workspace_root().clone();
+        match ConfigManager::load_from_workspace(&workspace_root) {
+            Ok(mut manager) => {
+                let mut config = manager.config().clone();
+                config.permissions = next_permissions;
+                if let Err(err) = manager.save_config(&config) {
+                    messages.push(HookMessage::error(format!(
+                        "PermissionRequest hook failed to persist project settings: {err}"
+                    )));
+                }
+            }
+            Err(err) => messages.push(HookMessage::error(format!(
+                "PermissionRequest hook failed to load project configuration: {err}"
+            ))),
+        }
+    }
+
+    messages
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn finalize_permission_decision(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    normalized_tool_name: &str,
+    tool_args: Option<&Value>,
+    cache_key: &str,
+    tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    approval_learning_target: &shell_approval::ApprovalLearningTarget,
+    exact_shell_approval_target: Option<&shell_approval::ApprovalLearningTarget>,
+    persistent_approval_target: &shell_approval::PersistentApprovalTarget,
+    decision: HitlDecision,
+    updated_args: Option<Value>,
+) -> Result<ToolPermissionFlow> {
+    match decision {
+        HitlDecision::Approved | HitlDecision::ApprovedSession => {
+            let grant = if decision == HitlDecision::Approved {
+                PermissionGrant::Once
+            } else {
+                PermissionGrant::Session
+            };
+
+            tool_registry.mark_tool_preapproved(tool_name).await;
+
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(cache_key.to_string(), grant);
+            }
+
+            if let Some(recorder) = approval_recorder {
+                spawn_approval_record_task(recorder, approval_learning_target, true);
+            }
+
+            Ok(ToolPermissionFlow::Approved { updated_args })
+        }
+        HitlDecision::ApprovedPermanent => {
+            tool_registry.mark_tool_preapproved(tool_name).await;
+
+            if let shell_approval::PersistentApprovalTarget::PrefixRule { prefix_rule, .. } =
+                persistent_approval_target
+            {
+                match persist_shell_approval_prefix_rule(
+                    tool_registry,
+                    tool_name,
+                    tool_args,
+                    prefix_rule.as_slice(),
+                )
+                .await
+                {
+                    Ok(rendered_rule) => {
+                        tracing::info!(
+                            tool = %tool_name,
+                            prefix_rule = %rendered_rule,
+                            "✓ Shell approval prefix persisted"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            tool = %tool_name,
+                            error = %err,
+                            "Failed to persist shell approval prefix"
+                        );
+                    }
+                }
+            }
+
+            persist_approval_cache_key(
+                tool_registry,
+                tool_name,
+                &approval_learning_target.approval_key,
+                "Failed to persist approval cache entry",
+            )
+            .await;
+            if let Some(exact_target) = exact_shell_approval_target
+                && exact_target.approval_key != approval_learning_target.approval_key
+            {
+                persist_approval_cache_key(
+                    tool_registry,
+                    tool_name,
+                    &exact_target.approval_key,
+                    "Failed to persist exact shell approval cache entry",
+                )
+                .await;
+            }
+            persist_segment_approval_cache_keys(
+                tool_registry,
+                tool_name,
+                normalized_tool_name,
+                tool_args,
+            )
+            .await;
+
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(cache_key.to_string(), PermissionGrant::Permanent);
+            }
+
+            if let Some(recorder) = approval_recorder {
+                spawn_approval_record_task(recorder, approval_learning_target, true);
+            }
+
+            Ok(ToolPermissionFlow::Approved { updated_args })
+        }
+        HitlDecision::Denied | HitlDecision::DeniedOnce => {
+            if decision == HitlDecision::Denied {
+                if let Some(cache) = tool_permission_cache {
+                    let mut perm_cache = cache.write().await;
+                    perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
+                }
+
+                if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Deny).await {
+                    tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
+                }
+
+                if let Err(err) = tool_registry
+                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to persist MCP denial for tool '{}': {}",
+                        tool_name,
+                        err
+                    );
+                }
+            }
+
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder
+                    .record_approval(
+                        &approval_learning_target.approval_key,
+                        Some(&approval_learning_target.display_label),
+                        false,
+                        None,
+                    )
+                    .await;
+            }
+
+            Ok(ToolPermissionFlow::Denied)
+        }
+        HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
+        HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
+    }
 }
 
 fn is_broad_auto_mode_allow_rule(rule: &str) -> bool {
@@ -428,6 +724,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         approval_recorder,
         decision_ledger,
         tool_permission_cache,
+        permissions_state,
         hitl_notification_bell,
         approval_policy,
         skip_confirmations,
@@ -482,8 +779,13 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
     let current_dir =
         std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
-    let permission_mode = current_permission_mode(permissions_config);
-    let effective_permissions = effective_permissions_config(permissions_config, permission_mode);
+    let permissions_snapshot = if let Some(state) = permissions_state {
+        state.read().await.clone()
+    } else {
+        permissions_config.cloned().unwrap_or_default()
+    };
+    let permission_mode = current_permission_mode(&permissions_snapshot);
+    let effective_permissions = effective_permissions_config(&permissions_snapshot, permission_mode);
     let permission_request = build_permission_request(
         tool_registry.workspace_root(),
         &current_dir,
@@ -567,7 +869,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             approval_key = %approval_key,
             "Using persisted segmented shell approval cache entries"
         );
-        return Ok(ToolPermissionFlow::Approved);
+        return Ok(ToolPermissionFlow::Approved { updated_args: None });
     }
 
     if can_reuse_saved_approval
@@ -587,7 +889,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             approval_key = %approval_key,
             "Using persisted approval cache entry"
         );
-        return Ok(ToolPermissionFlow::Approved);
+        return Ok(ToolPermissionFlow::Approved { updated_args: None });
     }
 
     // Session approvals are reusable, but only after hook/policy deny checks.
@@ -599,29 +901,29 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 "Using cached ACP permission for tool invocation: {}",
                 cache_key
             );
-            return Ok(ToolPermissionFlow::Approved);
+            return Ok(ToolPermissionFlow::Approved { updated_args: None });
         }
     }
 
     if !requires_rule_prompt && !requires_sandbox_prompt {
         if permission_matches.allow {
-            return Ok(ToolPermissionFlow::Approved);
+            return Ok(ToolPermissionFlow::Approved { updated_args: None });
         }
 
         if permission_mode == PermissionMode::Auto
             && auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request)
         {
-            return Ok(ToolPermissionFlow::Approved);
+            return Ok(ToolPermissionFlow::Approved { updated_args: None });
         }
 
         if permission_mode == PermissionMode::AcceptEdits
             && permission_request.builtin_file_mutation
         {
-            return Ok(ToolPermissionFlow::Approved);
+            return Ok(ToolPermissionFlow::Approved { updated_args: None });
         }
 
         if permission_mode == PermissionMode::BypassPermissions {
-            return Ok(ToolPermissionFlow::Approved);
+            return Ok(ToolPermissionFlow::Approved { updated_args: None });
         }
     }
 
@@ -634,28 +936,30 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         && !requires_sandbox_prompt
         && !auto_mode_classifier_review
     {
-        return Ok(ToolPermissionFlow::Approved);
+        return Ok(ToolPermissionFlow::Approved { updated_args: None });
     }
 
     if skip_confirmations {
-        return Ok(ToolPermissionFlow::Approved);
+        return Ok(ToolPermissionFlow::Approved { updated_args: None });
     }
 
     let mut requires_auto_fallback_prompt = false;
-    if auto_mode_classifier_review && let Some(permissions) = permissions_config {
+    if auto_mode_classifier_review {
         match resolve_auto_mode_permission(
             renderer,
             tool_registry,
             &normalized_tool_name,
             tool_args,
             &permission_request,
-            permissions,
+            &permissions_snapshot,
             auto_mode_runtime,
             session_stats,
         )
         .await?
         {
-            AutoModePermissionOutcome::Allow => return Ok(ToolPermissionFlow::Approved),
+            AutoModePermissionOutcome::Allow => {
+                return Ok(ToolPermissionFlow::Approved { updated_args: None });
+            }
             AutoModePermissionOutcome::Block => return Ok(ToolPermissionFlow::Denied),
             AutoModePermissionOutcome::PromptFallback => {
                 requires_auto_fallback_prompt = true;
@@ -671,7 +975,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         || requires_auto_fallback_prompt
         || (policy_decision == ToolPermissionDecision::Prompt && !auto_mode_classifier_review);
     if !should_prompt {
-        return Ok(ToolPermissionFlow::Approved);
+        return Ok(ToolPermissionFlow::Approved { updated_args: None });
     }
 
     if approval_policy_rejects_prompt(
@@ -682,6 +986,93 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         requires_sandbox_prompt,
     ) {
         return Ok(ToolPermissionFlow::Denied);
+    }
+
+    let prompt_kind = permission_prompt::tool_permission_prompt_kind(tool_name);
+    let permission_suggestions =
+        build_permission_suggestions(prompt_kind, Some(&persistent_approval_target));
+    if let Some(hooks) = hooks {
+        match hooks
+            .run_permission_request(
+                tool_name,
+                tool_args,
+                &permission_request,
+                &permission_suggestions,
+            )
+            .await
+        {
+            Ok(outcome) => {
+                render_hook_messages(renderer, &outcome.messages)?;
+                if let Some(decision) = outcome.decision {
+                    let update_messages = if let Some(permissions_state) = permissions_state {
+                        let update_messages = apply_permission_hook_updates(
+                            tool_registry,
+                            permissions_state,
+                            decision.behavior,
+                            &decision.permission_updates,
+                        )
+                        .await;
+                        if decision
+                            .permission_updates
+                            .iter()
+                            .any(|update| matches!(update.kind, PermissionUpdateKind::SetMode(_)))
+                        {
+                            let current_mode = permissions_state.read().await.default_mode;
+                            hooks.update_permission_mode(current_mode).await;
+                        }
+                        update_messages
+                    } else if !decision.permission_updates.is_empty() {
+                        vec![vtcode_core::hooks::HookMessage::warning(
+                            "PermissionRequest hook returned permission updates without runtime permission state; ignoring updates.",
+                        )]
+                    } else {
+                        Vec::new()
+                    }
+                    render_hook_messages(renderer, &update_messages)?;
+
+                    let mapped = match (decision.behavior, decision.scope, decision.interrupt) {
+                        (PermissionDecisionBehavior::Allow, PermissionDecisionScope::Once, _) => {
+                            HitlDecision::Approved
+                        }
+                        (
+                            PermissionDecisionBehavior::Allow,
+                            PermissionDecisionScope::Session,
+                            _,
+                        ) => HitlDecision::ApprovedSession,
+                        (
+                            PermissionDecisionBehavior::Allow,
+                            PermissionDecisionScope::Permanent,
+                            _,
+                        ) => HitlDecision::ApprovedPermanent,
+                        (PermissionDecisionBehavior::Deny, _, true) => HitlDecision::Interrupt,
+                        (PermissionDecisionBehavior::Deny, PermissionDecisionScope::Permanent, _) => {
+                            HitlDecision::Denied
+                        }
+                        (PermissionDecisionBehavior::Deny, _, false) => HitlDecision::DeniedOnce,
+                    };
+
+                    return finalize_permission_decision(
+                        tool_registry,
+                        tool_name,
+                        &normalized_tool_name,
+                        tool_args,
+                        &cache_key,
+                        tool_permission_cache,
+                        approval_recorder,
+                        &approval_learning_target,
+                        exact_shell_approval_target.as_ref(),
+                        &persistent_approval_target,
+                        mapped,
+                        decision.updated_input,
+                    )
+                    .await;
+                }
+            }
+            Err(err) => renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to run permission request hooks: {}", err),
+            )?,
+        }
     }
 
     let mut risk_context = build_tool_risk_context(&normalized_tool_name, tool_args);
@@ -730,143 +1121,21 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         active_thread_label.filter(|label| *label != "main"),
     )
     .await?;
-    match decision {
-        HitlDecision::Approved | HitlDecision::ApprovedSession => {
-            let grant = if decision == HitlDecision::Approved {
-                PermissionGrant::Once
-            } else {
-                PermissionGrant::Session
-            };
-
-            // Mark as preapproved for this execution
-            tool_registry.mark_tool_preapproved(tool_name).await;
-
-            // Cache permission grant using the granular cache_key for session/once
-            if let Some(cache) = tool_permission_cache {
-                let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(cache_key.clone(), grant);
-            }
-
-            // Record approval decision for pattern learning (fire-and-forget)
-            if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, &approval_learning_target, true);
-            }
-
-            Ok(ToolPermissionFlow::Approved)
-        }
-        HitlDecision::ApprovedPermanent => {
-            tool_registry.mark_tool_preapproved(tool_name).await;
-
-            if let shell_approval::PersistentApprovalTarget::PrefixRule { prefix_rule, .. } =
-                &persistent_approval_target
-            {
-                match persist_shell_approval_prefix_rule(
-                    tool_registry,
-                    tool_name,
-                    tool_args,
-                    prefix_rule.as_slice(),
-                )
-                .await
-                {
-                    Ok(rendered_rule) => {
-                        tracing::info!(
-                            tool = %tool_name,
-                            prefix_rule = %rendered_rule,
-                            "✓ Shell approval prefix persisted"
-                        );
-                    }
-                    Err(err) => {
-                        tracing::warn!(
-                            tool = %tool_name,
-                            error = %err,
-                            "Failed to persist shell approval prefix"
-                        );
-                    }
-                }
-            }
-
-            persist_approval_cache_key(
-                tool_registry,
-                tool_name,
-                &approval_learning_target.approval_key,
-                "Failed to persist approval cache entry",
-            )
-            .await;
-            if let Some(exact_target) = exact_shell_approval_target.as_ref()
-                && exact_target.approval_key != approval_learning_target.approval_key
-            {
-                persist_approval_cache_key(
-                    tool_registry,
-                    tool_name,
-                    &exact_target.approval_key,
-                    "Failed to persist exact shell approval cache entry",
-                )
-                .await;
-            }
-            persist_segment_approval_cache_keys(
-                tool_registry,
-                tool_name,
-                &normalized_tool_name,
-                tool_args,
-            )
-            .await;
-
-            if let Some(cache) = tool_permission_cache {
-                let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
-            }
-
-            // Record approval decision for pattern learning
-            if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, &approval_learning_target, true);
-            }
-
-            Ok(ToolPermissionFlow::Approved)
-        }
-        HitlDecision::Denied | HitlDecision::DeniedOnce => {
-            if decision == HitlDecision::Denied {
-                // Persist denial to policy so future runs honor the choice.
-                if let Some(cache) = tool_permission_cache {
-                    let mut perm_cache = cache.write().await;
-                    perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
-                }
-
-                if let Err(err) = tool_registry
-                    .set_tool_policy(tool_name, ToolPolicy::Deny)
-                    .await
-                {
-                    tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
-                }
-
-                if let Err(err) = tool_registry
-                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
-                    .await
-                {
-                    tracing::warn!(
-                        "Failed to persist MCP denial for tool '{}': {}",
-                        tool_name,
-                        err
-                    );
-                }
-            }
-
-            // Record denial decision for pattern learning
-            if let Some(recorder) = approval_recorder {
-                let _ = recorder
-                    .record_approval(
-                        &approval_learning_target.approval_key,
-                        Some(&approval_learning_target.display_label),
-                        false,
-                        None,
-                    )
-                    .await;
-            }
-
-            Ok(ToolPermissionFlow::Denied)
-        }
-        HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
-        HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
-    }
+    finalize_permission_decision(
+        tool_registry,
+        tool_name,
+        &normalized_tool_name,
+        tool_args,
+        &cache_key,
+        tool_permission_cache,
+        approval_recorder,
+        &approval_learning_target,
+        exact_shell_approval_target.as_ref(),
+        &persistent_approval_target,
+        decision,
+        None,
+    )
+    .await
 }
 
 pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(

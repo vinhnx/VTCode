@@ -20,13 +20,6 @@ https://code.claude.com/docs/en/headless
 
 ---
 
-hooks
-
-https://developers.openai.com/codex/hooks
-
-https://deepwiki.com/search/how-does-hooks-works-in-codex_68383f0e-ec03-44eb-be92-69a26aa3d1e1?mode=fast
-
-https://code.claude.com/docs/en/hooks
 
 ==
 
@@ -42,20 +35,6 @@ https://deepwiki.com/search/httpsdevelopersopenaicomcodexp_ee8404d4-ca94-48ac-9f
 
 ---
 
-CRITICAL: currently github copilot auth doesn't show device login code -> can't login. check recent regerssions and fix
-
----
-
-Use hooks to deterministically run logic as part of the agent lifecycle
-
-For example, use hooks to:
-
-- Dynamically load in context each time you start Claude (SessionStart)
-- Log every bash command the model runs (PreToolUse)
-- Route permission prompts to WhatsApp for you to approve/deny (PermissionRequest)
-- Poke Claude to keep going whenever it stops (Stop)
-
-See https://code.claude.com/docs/en/hooks
 
 ---
 

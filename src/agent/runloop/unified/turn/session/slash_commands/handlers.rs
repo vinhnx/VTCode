@@ -24,6 +24,9 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
 };
+use crate::agent::runloop::unified::hooks_browser::{
+    create_hooks_palette_state, render_hooks_summary, show_hooks_palette,
+};
 use crate::agent::runloop::unified::state::CtrlCSignal;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
 #[path = "activation.rs"]
@@ -191,6 +194,31 @@ pub(super) async fn handle_show_permissions(
 ) -> Result<SlashCommandControl> {
     let mut ctx = ctx;
     show_settings_at_path_from_context(&mut ctx, Some("permissions")).await
+}
+
+pub(super) async fn handle_show_hooks(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    let ctx = ctx;
+    if !ctx.renderer.supports_inline_ui() {
+        let lifecycle = ctx
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.hooks.lifecycle.normalized())
+            .unwrap_or_default();
+        render_hooks_summary(ctx.renderer, &lifecycle)?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let workspace_path = ctx.config.workspace.clone();
+    let vt_snapshot = ctx.vt_cfg.clone();
+    let hooks_state = create_hooks_palette_state(&workspace_path, &vt_snapshot)?;
+    if show_hooks_palette(ctx.renderer, &hooks_state, None)? {
+        *ctx.palette_state = Some(ActivePalette::Hooks {
+            state: Box::new(hooks_state),
+            esc_armed: false,
+        });
+    }
+
+    Ok(SlashCommandControl::Continue)
 }
 
 pub(super) async fn handle_show_settings_at_path(

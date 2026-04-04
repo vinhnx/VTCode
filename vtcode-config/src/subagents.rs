@@ -932,7 +932,8 @@ fn optional_hooks(value: Option<&JsonValue>) -> Result<Option<HooksConfig>> {
         let target = match event.as_str() {
             "PreToolUse" | "pre_tool_use" => &mut config.lifecycle.pre_tool_use,
             "PostToolUse" | "post_tool_use" => &mut config.lifecycle.post_tool_use,
-            "Stop" | "stop" => &mut config.lifecycle.task_completed,
+            "PermissionRequest" | "permission_request" => &mut config.lifecycle.permission_request,
+            "Stop" | "stop" => &mut config.lifecycle.stop,
             "SubagentStart" | "subagent_start" => &mut config.lifecycle.subagent_start,
             "SubagentStop" | "subagent_stop" => &mut config.lifecycle.subagent_stop,
             _ => continue,

@@ -342,6 +342,11 @@ pub(crate) async fn initialize_session(
         .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
         .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
     let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
+    let permissions_state = Arc::new(RwLock::new(
+        vt_cfg
+            .map(|cfg| cfg.permissions.clone())
+            .unwrap_or_default(),
+    ));
     if let Some(cfg) = vt_cfg
         && cfg.context.dynamic.enabled
         && let Err(err) = vtcode_core::context::initialize_dynamic_context(
@@ -372,6 +377,7 @@ pub(crate) async fn initialize_session(
         execution: ToolExecutionContext {
             tool_result_cache,
             tool_permission_cache,
+            permissions_state,
             approval_recorder,
             safety_validator: Arc::new(ToolCallSafetyValidator::new()),
             circuit_breaker: circuit_breaker.clone(),

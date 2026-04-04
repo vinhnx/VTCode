@@ -10,18 +10,19 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::time;
 
-use crate::config::{HookCommandConfig, HooksConfig};
+use crate::config::{HookCommandConfig, HooksConfig, PermissionMode};
 use crate::exec::events::{CompactionMode, CompactionTrigger};
+use crate::permissions::PermissionRequest;
 
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
-    HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
-    interpret_session_start, interpret_user_prompt,
+    HookCommandResult, interpret_permission_request, interpret_post_tool, interpret_pre_tool,
+    interpret_session_end, interpret_session_start, interpret_stop, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
-    HookMessage, NotificationHookType, PostToolHookOutcome, PreCompactHookOutcome,
-    PreToolHookDecision, PreToolHookOutcome, SessionEndReason, SessionStartHookOutcome,
-    SessionStartTrigger, UserPromptHookOutcome,
+    HookMessage, NotificationHookType, PermissionRequestHookOutcome, PostToolHookOutcome,
+    PreCompactHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
+    SessionStartHookOutcome, SessionStartTrigger, StopHookOutcome, UserPromptHookOutcome,
 };
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 
@@ -40,6 +41,22 @@ impl LifecycleHookEngine {
         config: &HooksConfig,
         trigger: SessionStartTrigger,
     ) -> Result<Option<Self>> {
+        Self::new_with_session(
+            workspace,
+            config,
+            trigger,
+            generate_session_id(),
+            PermissionMode::Default,
+        )
+    }
+
+    pub fn new_with_session(
+        workspace: PathBuf,
+        config: &HooksConfig,
+        trigger: SessionStartTrigger,
+        session_id: impl Into<String>,
+        permission_mode: PermissionMode,
+    ) -> Result<Option<Self>> {
         if config.lifecycle.is_empty() {
             return Ok(None);
         }
@@ -49,11 +66,11 @@ impl LifecycleHookEngine {
             return Ok(None);
         }
 
-        let session_id = generate_session_id();
         Ok(Some(Self {
             inner: Arc::new(LifecycleHookInner {
                 workspace,
-                session_id,
+                session_id: session_id.into(),
+                permission_mode: tokio::sync::RwLock::new(permission_mode),
                 trigger,
                 hooks: compiled,
                 state: Mutex::new(LifecycleHookState {
@@ -305,6 +322,60 @@ impl LifecycleHookEngine {
         Ok(outcome)
     }
 
+    pub async fn run_permission_request(
+        &self,
+        tool_name: &str,
+        tool_input: Option<&Value>,
+        permission_request: &PermissionRequest,
+        permission_suggestions: &[Value],
+    ) -> Result<PermissionRequestHookOutcome> {
+        let mut outcome = PermissionRequestHookOutcome::default();
+
+        if self.inner.hooks.permission_request.is_empty() {
+            return Ok(outcome);
+        }
+
+        let payload = self
+            .build_permission_request_payload(
+                tool_name,
+                tool_input,
+                permission_request,
+                permission_suggestions,
+            )
+            .await?;
+
+        for group in &self.inner.hooks.permission_request {
+            if !group.matcher.matches(tool_name) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self
+                    .execute_command("PermissionRequest", command, &payload)
+                    .await
+                {
+                    Ok(result) => {
+                        interpret_permission_request(
+                            command,
+                            &result,
+                            &mut outcome,
+                            self.inner.hooks.quiet_success_output,
+                        );
+                        if outcome.decision.is_some() {
+                            return Ok(outcome);
+                        }
+                    }
+                    Err(err) => outcome.messages.push(HookMessage::error(format!(
+                        "PermissionRequest hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(outcome)
+    }
+
     pub async fn run_pre_tool_use(
         &self,
         tool_name: &str,
@@ -485,9 +556,58 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
+    pub async fn run_stop(
+        &self,
+        last_assistant_message: &str,
+        stop_hook_active: bool,
+    ) -> Result<StopHookOutcome> {
+        let mut outcome = StopHookOutcome::default();
+
+        if self.inner.hooks.stop.is_empty() {
+            return Ok(outcome);
+        }
+
+        let payload = self
+            .build_stop_payload(last_assistant_message, stop_hook_active)
+            .await?;
+
+        for group in &self.inner.hooks.stop {
+            if !group.matcher.matches("stop") {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self.execute_command("Stop", command, &payload).await {
+                    Ok(result) => {
+                        interpret_stop(
+                            command,
+                            &result,
+                            &mut outcome,
+                            self.inner.hooks.quiet_success_output,
+                        );
+                        if outcome.block_reason.is_some() {
+                            return Ok(outcome);
+                        }
+                    }
+                    Err(err) => outcome.messages.push(HookMessage::error(format!(
+                        "Stop hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(outcome)
+    }
+
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {
         let mut state = self.inner.state.lock().await;
         state.transcript_path = path;
+    }
+
+    pub async fn update_permission_mode(&self, permission_mode: PermissionMode) {
+        let mut current = self.inner.permission_mode.write().await;
+        *current = permission_mode;
     }
 
     async fn execute_command(
@@ -506,11 +626,14 @@ impl LifecycleHookEngine {
 
         let workspace_str = self.inner.workspace.to_string_lossy().into_owned();
         process.env("VT_PROJECT_DIR", &workspace_str);
+        process.env("CLAUDE_PROJECT_DIR", &workspace_str);
         process.env("VT_SESSION_ID", &self.inner.session_id);
+        process.env("CLAUDE_SESSION_ID", &self.inner.session_id);
         process.env("VT_HOOK_EVENT", event_name);
 
         if let Some(transcript_path) = self.current_transcript_path().await {
             process.env("VT_TRANSCRIPT_PATH", &transcript_path);
+            process.env("CLAUDE_TRANSCRIPT_PATH", &transcript_path);
         }
 
         let mut child = process
@@ -597,6 +720,7 @@ impl LifecycleHookEngine {
 struct LifecycleHookInner {
     workspace: PathBuf,
     session_id: String,
+    permission_mode: tokio::sync::RwLock<PermissionMode>,
     trigger: SessionStartTrigger,
     hooks: CompiledLifecycleHooks,
     state: Mutex<LifecycleHookState>,

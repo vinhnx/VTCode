@@ -60,6 +60,8 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub full_auto: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub permissions_state:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
     pub loaded_skills:
         &'a Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::Skill>>>,
     pub default_placeholder: &'a mut Option<String>,
@@ -100,6 +102,7 @@ impl<'a> InteractionLoopContext<'a> {
             tools: self.tools,
             tool_catalog: self.tool_catalog,
             tool_permission_cache: self.tool_permission_cache,
+            permissions_state: self.permissions_state,
             safety_validator: self.safety_validator,
             circuit_breaker: self.circuit_breaker,
             tool_health_tracker: self.tool_health_tracker,
