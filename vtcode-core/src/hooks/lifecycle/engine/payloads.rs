@@ -14,7 +14,10 @@ impl LifecycleHookEngine {
         let transcript_path = self.current_transcript_path().await;
         let permission_mode = *self.inner.permission_mode.read().await;
         Ok(serde_json::Map::from_iter([
-            ("session_id".to_string(), Value::String(self.inner.session_id.clone())),
+            (
+                "session_id".to_string(),
+                Value::String(self.inner.session_id.clone()),
+            ),
             ("cwd".to_string(), Value::String(cwd)),
             (
                 "hook_event_name".to_string(),
@@ -47,7 +50,10 @@ impl LifecycleHookEngine {
     ) -> Result<Value> {
         let mut payload = self.base_payload("SessionEnd").await?;
         payload.insert("turn_id".to_string(), Value::String(turn_id.to_owned()));
-        payload.insert("reason".to_string(), Value::String(reason.as_str().to_owned()));
+        payload.insert(
+            "reason".to_string(),
+            Value::String(reason.as_str().to_owned()),
+        );
         Ok(Value::Object(payload))
     }
 
@@ -70,7 +76,10 @@ impl LifecycleHookEngine {
             "child_thread_id".to_string(),
             Value::String(child_thread_id.to_owned()),
         );
-        payload.insert("agent_name".to_string(), Value::String(agent_name.to_owned()));
+        payload.insert(
+            "agent_name".to_string(),
+            Value::String(agent_name.to_owned()),
+        );
         payload.insert(
             "display_label".to_string(),
             Value::String(display_label.to_owned()),
@@ -105,7 +114,10 @@ impl LifecycleHookEngine {
             "child_thread_id".to_string(),
             Value::String(child_thread_id.to_owned()),
         );
-        payload.insert("agent_name".to_string(), Value::String(agent_name.to_owned()));
+        payload.insert(
+            "agent_name".to_string(),
+            Value::String(agent_name.to_owned()),
+        );
         payload.insert(
             "display_label".to_string(),
             Value::String(display_label.to_owned()),
@@ -240,7 +252,9 @@ impl LifecycleHookEngine {
         );
         payload.insert(
             "history_artifact_path".to_string(),
-            history_artifact_path.map(|path| json!(path)).unwrap_or(Value::Null),
+            history_artifact_path
+                .map(|path| json!(path))
+                .unwrap_or(Value::Null),
         );
         Ok(Value::Object(payload))
     }
@@ -252,9 +266,7 @@ fn build_permission_request_summary(permission_request: &PermissionRequest) -> V
         PermissionRequestKind::Read { paths } => ("read", json!({ "paths": paths })),
         PermissionRequestKind::Edit { paths } => ("edit", json!({ "paths": paths })),
         PermissionRequestKind::Write { paths } => ("write", json!({ "paths": paths })),
-        PermissionRequestKind::WebFetch { domains } => {
-            ("webfetch", json!({ "domains": domains }))
-        }
+        PermissionRequestKind::WebFetch { domains } => ("webfetch", json!({ "domains": domains })),
         PermissionRequestKind::Mcp { server, tool } => {
             ("mcp", json!({ "server": server, "tool": tool }))
         }

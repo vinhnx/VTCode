@@ -703,6 +703,9 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),
@@ -739,6 +742,7 @@ mod tests {
             &tools,
             &cache,
             &permission_cache_arc,
+            &permissions_state,
             &decision_ledger,
             &mut session_stats,
             &mut mcp_panel,
@@ -898,6 +902,9 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),
@@ -927,6 +934,7 @@ mod tests {
             &tools,
             &cache,
             &permission_cache_arc,
+            &permissions_state,
             &decision_ledger,
             &mut session_stats,
             &mut mcp_panel,

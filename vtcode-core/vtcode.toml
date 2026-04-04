@@ -960,6 +960,8 @@ pre_compact = []
 task_completion = []
 task_completed = []
 notification = []
+permission_request = []
+stop = []
 
 [model]
 skip_loop_detection = false

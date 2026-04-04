@@ -126,6 +126,7 @@ pub(crate) async fn run_tool_call_with_args(
     turn_index: usize,
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
+    let mut effective_args = args_val.clone();
     let mut canonical_name = requested_name.to_string();
     let tool_call_id = tool_item_id.as_str();
     let (safety_invocation_id, fallback_harness_item_id) =
@@ -193,26 +194,27 @@ pub(crate) async fn run_tool_call_with_args(
         let _ = emitter.emit(tool_started_event(
             harness_item_id.clone(),
             name,
-            Some(args_val),
+            Some(&effective_args),
             Some(tool_call_id),
         ));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
-    let finish_with_status = |status: ToolExecutionStatus, tool_execution_started: bool| {
-        let outcome = ToolPipelineOutcome::from_status(status);
-        emit_tool_completion_for_status(
-            harness_emitter,
-            tool_started_emitted,
-            tool_execution_started,
-            &harness_item_id,
-            tool_call_id,
-            name,
-            args_val,
-            &outcome.status,
-        );
-        outcome
-    };
+    let finish_with_status =
+        |status: ToolExecutionStatus, tool_execution_started: bool, args: &Value| {
+            let outcome = ToolPipelineOutcome::from_status(status);
+            emit_tool_completion_for_status(
+                harness_emitter,
+                tool_started_emitted,
+                tool_execution_started,
+                &harness_item_id,
+                tool_call_id,
+                name,
+                args,
+                &outcome.status,
+            );
+            outcome
+        };
 
     if !ctx.session_stats.is_plan_mode() && name == tools::PLAN_TASK_TRACKER {
         return Ok(finish_with_status(
@@ -225,14 +227,15 @@ pub(crate) async fn run_tool_call_with_args(
                 ),
             },
             false,
+            &effective_args,
         ));
     }
 
     if !prevalidated {
-        if let Some(permission_failure) = check_tool_permission(
+        match check_tool_permission(
             ctx,
             name,
-            args_val,
+            &effective_args,
             ctrl_c_state,
             ctrl_c_notify,
             default_placeholder,
@@ -242,7 +245,15 @@ pub(crate) async fn run_tool_call_with_args(
         )
         .await
         {
-            return Ok(finish_with_status(permission_failure, false));
+            Ok(Some(updated_args)) => effective_args = updated_args,
+            Ok(None) => {}
+            Err(permission_failure) => {
+                return Ok(finish_with_status(
+                    permission_failure,
+                    false,
+                    &effective_args,
+                ));
+            }
         }
 
         ctx.harness_state.record_tool_call();
@@ -271,7 +282,7 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         ctx.handle,
         ctx.session,
-        args_val,
+        &effective_args,
         ctrl_c_state,
         ctrl_c_notify,
         request_user_input_enabled,
@@ -294,13 +305,13 @@ pub(crate) async fn run_tool_call_with_args(
                 error: structured_failure(name, &error),
             },
         };
-        return Ok(finish_with_status(status, true));
+        return Ok(finish_with_status(status, true, &effective_args));
     }
 
     if let Some(outcome) = handle_enter_plan_mode(
         ctx,
         name,
-        args_val,
+        &effective_args,
         ctrl_c_state,
         ctrl_c_notify,
         max_tool_retries,
@@ -315,7 +326,7 @@ pub(crate) async fn run_tool_call_with_args(
             &harness_item_id,
             tool_call_id,
             name,
-            args_val,
+            &effective_args,
             &outcome.status,
         );
         return Ok(outcome);
@@ -323,7 +334,7 @@ pub(crate) async fn run_tool_call_with_args(
     if let Some(outcome) = handle_exit_plan_mode(
         ctx,
         name,
-        args_val,
+        &effective_args,
         ctrl_c_state,
         ctrl_c_notify,
         max_tool_retries,
@@ -338,7 +349,7 @@ pub(crate) async fn run_tool_call_with_args(
             &harness_item_id,
             tool_call_id,
             name,
-            args_val,
+            &effective_args,
             &outcome.status,
         );
         return Ok(outcome);
@@ -350,14 +361,14 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         &harness_item_id,
         tool_call_id,
-        args_val,
+        &effective_args,
         ctrl_c_state,
         ctrl_c_notify,
         ctx.handle,
         harness_emitter.cloned(),
         vt_cfg,
         max_tool_retries,
-        should_settle_noninteractive_unified_exec(prevalidated, name, args_val),
+        should_settle_noninteractive_unified_exec(prevalidated, name, &effective_args),
     )
     .await;
     let execution_status = resolve_file_conflict_status(
@@ -368,7 +379,7 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         &harness_item_id,
         tool_call_id,
-        args_val,
+        &effective_args,
         execution,
         ctrl_c_state,
         ctrl_c_notify,
@@ -384,7 +395,7 @@ pub(crate) async fn run_tool_call_with_args(
         &harness_item_id,
         tool_call_id,
         name,
-        args_val,
+        &effective_args,
         turn_index,
         skip_confirmations,
         harness_emitter,
@@ -400,7 +411,7 @@ pub(crate) async fn run_tool_call_with_args(
         &harness_item_id,
         tool_call_id,
         name,
-        args_val,
+        &effective_args,
         &pipeline_outcome.status,
     );
     Ok(pipeline_outcome)
@@ -440,7 +451,7 @@ async fn check_tool_permission(
     lifecycle_hooks: Option<&LifecycleHookEngine>,
     skip_confirmations: bool,
     vt_cfg: Option<&VTCodeConfig>,
-) -> Option<ToolExecutionStatus> {
+) -> std::result::Result<Option<Value>, ToolExecutionStatus> {
     let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
         crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
             config: auto_mode.config,
@@ -483,17 +494,17 @@ async fn check_tool_permission(
     )
     .await
     {
-        Ok(ToolPermissionFlow::Approved { .. }) => None,
-        Ok(ToolPermissionFlow::Denied) => Some(ToolExecutionStatus::Failure {
+        Ok(ToolPermissionFlow::Approved { updated_args }) => Ok(updated_args),
+        Ok(ToolPermissionFlow::Denied) => Err(ToolExecutionStatus::Failure {
             error: structured_failure_from_message(name, "Tool permission denied"),
         }),
-        Ok(ToolPermissionFlow::Blocked { reason }) => Some(ToolExecutionStatus::Failure {
+        Ok(ToolPermissionFlow::Blocked { reason }) => Err(ToolExecutionStatus::Failure {
             error: structured_failure_from_message(name, reason),
         }),
         Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
-            Some(ToolExecutionStatus::Cancelled)
+            Err(ToolExecutionStatus::Cancelled)
         }
-        Err(error) => Some(ToolExecutionStatus::Failure {
+        Err(error) => Err(ToolExecutionStatus::Failure {
             error: structured_failure(name, &error),
         }),
     }

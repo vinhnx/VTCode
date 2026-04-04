@@ -84,6 +84,7 @@ pub(crate) struct TestTurnProcessingBacking {
     tools: Arc<RwLock<Vec<ToolDefinition>>>,
     tool_result_cache: Arc<RwLock<ToolResultCache>>,
     tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    permissions_state: Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     approval_recorder: Arc<ApprovalRecorder>,
     session_stats: SessionStats,
@@ -124,6 +125,9 @@ impl TestTurnProcessingBacking {
         let tools = Arc::new(RwLock::new(Vec::new()));
         let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let permissions_state = Arc::new(RwLock::new(
+            vtcode_core::config::PermissionsConfig::default(),
+        ));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
@@ -190,6 +194,7 @@ impl TestTurnProcessingBacking {
             tools,
             tool_result_cache,
             tool_permission_cache,
+            permissions_state,
             decision_ledger,
             approval_recorder,
             session_stats,
@@ -283,6 +288,7 @@ impl TestTurnProcessingBacking {
             None,
             &self.default_placeholder,
             &self.tool_permission_cache,
+            &self.permissions_state,
             &self.safety_validator,
             &self.circuit_breaker,
             &self.tool_health_tracker,
@@ -311,6 +317,7 @@ impl TestTurnProcessingBacking {
             tools: &self.tools,
             tool_catalog: &self.tool_catalog,
             tool_permission_cache: &self.tool_permission_cache,
+            permissions_state: &self.permissions_state,
             safety_validator: &self.safety_validator,
             circuit_breaker: &self.circuit_breaker,
             tool_health_tracker: &self.tool_health_tracker,

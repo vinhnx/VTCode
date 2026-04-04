@@ -3,9 +3,9 @@ use serde_json::Value;
 use crate::config::HookCommandConfig;
 use crate::config::PermissionMode;
 use crate::hooks::lifecycle::types::{
-    HookMessage, PermissionDecisionBehavior, PermissionDecisionScope, PermissionRequestHookDecision,
-    PermissionRequestHookOutcome, PermissionUpdateDestination, PermissionUpdateKind,
-    PermissionUpdateRequest,
+    HookMessage, PermissionDecisionBehavior, PermissionDecisionScope,
+    PermissionRequestHookDecision, PermissionRequestHookOutcome, PermissionUpdateDestination,
+    PermissionUpdateKind, PermissionUpdateRequest,
 };
 
 use super::common::{
@@ -67,7 +67,9 @@ pub(crate) fn interpret_permission_request(
         .and_then(|decision| decision.get("behavior"))
         .and_then(Value::as_str)
     {
-        Some(value) if value.eq_ignore_ascii_case("allow") => Some(PermissionDecisionBehavior::Allow),
+        Some(value) if value.eq_ignore_ascii_case("allow") => {
+            Some(PermissionDecisionBehavior::Allow)
+        }
         Some(value) if value.eq_ignore_ascii_case("deny") => Some(PermissionDecisionBehavior::Deny),
         _ => None,
     };
@@ -175,11 +177,16 @@ fn parse_permission_update(value: &Value) -> Option<PermissionUpdateRequest> {
         });
     }
 
-    let unsupported_key = ["localSettings", "userSettings", "addDirectories", "removeDirectories"]
-        .into_iter()
-        .find(|key| object.contains_key(*key))
-        .map(str::to_string)
-        .or_else(|| object.keys().next().cloned())?;
+    let unsupported_key = [
+        "localSettings",
+        "userSettings",
+        "addDirectories",
+        "removeDirectories",
+    ]
+    .into_iter()
+    .find(|key| object.contains_key(*key))
+    .map(str::to_string)
+    .or_else(|| object.keys().next().cloned())?;
 
     Some(PermissionUpdateRequest {
         destination,
