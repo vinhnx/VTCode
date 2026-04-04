@@ -59,24 +59,7 @@ mod headless_pty {
     use crate::utils::path::ensure_path_within_workspace;
     use crate::zsh_exec_bridge::ZshExecBridgeSession;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct PtySize {
-        pub rows: u16,
-        pub cols: u16,
-        pub pixel_width: u16,
-        pub pixel_height: u16,
-    }
-
-    impl Default for PtySize {
-        fn default() -> Self {
-            Self {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            }
-        }
-    }
+    pub use portable_pty::PtySize;
 
     pub type PtyOutputCallback = Arc<dyn Fn(&str) + Send + Sync>;
 
@@ -100,7 +83,12 @@ mod headless_pty {
                 command,
                 working_dir,
                 timeout,
-                size: PtySize::default(),
+                size: PtySize {
+                    rows: 24,
+                    cols: 80,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                },
                 max_tokens: None,
                 output_callback: Some(callback),
             }

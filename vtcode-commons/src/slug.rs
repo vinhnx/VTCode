@@ -5,7 +5,7 @@
 //!
 //! Based on OpenCode's slug utility pattern for plan mode file naming.
 
-use rand::RngExt;
+use rand::Rng;
 
 /// Adjectives for slug generation (30 options)
 const ADJECTIVES: &[&str] = &[

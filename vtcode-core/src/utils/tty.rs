@@ -207,9 +207,9 @@ mod tests {
         let stdin = io::stdin();
 
         // Just verify the methods don't panic
-        let _ = stdout.is_tty();
-        let _ = stderr.is_tty();
-        let _ = stdin.is_tty();
+        let _ = stdout.is_terminal();
+        let _ = stderr.is_terminal();
+        let _ = stdin.is_terminal();
     }
 
     #[test]

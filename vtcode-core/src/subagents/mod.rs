@@ -1,7 +1,7 @@
+use crate::tools::pty::PtySize;
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{DateTime, Utc};
 use futures::future::select_all;
-use portable_pty::PtySize;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, VecDeque};

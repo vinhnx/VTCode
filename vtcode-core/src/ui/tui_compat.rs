@@ -12,6 +12,8 @@ use crate::ui::tui::{
     InlineTheme, KeyboardProtocolSettings, LayoutModeOverride, ReasoningDisplayMode,
     SessionSurface, SlashCommandItem, UiMode,
 };
+#[cfg(feature = "tui")]
+use vtcode_tui::ui::theme::ThemeStyles as TuiThemeStyles;
 
 #[cfg(feature = "tui")]
 use crate::ui::tui::{FullscreenInteractionSettings, SessionAppearanceConfig};
@@ -72,8 +74,8 @@ pub fn inline_theme_from_core_styles(styles: &ThemeStyles) -> InlineTheme {
 }
 
 #[cfg(feature = "tui")]
-pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> vtcode_tui::ui::theme::ThemeStyles {
-    vtcode_tui::ui::theme::ThemeStyles {
+pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> TuiThemeStyles {
+    TuiThemeStyles {
         info: styles.info,
         error: styles.error,
         output: styles.output,

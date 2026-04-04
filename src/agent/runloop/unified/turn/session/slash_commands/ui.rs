@@ -763,91 +763,6 @@ fn preview_status_label(status_left: Option<&str>) -> &'static str {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::items_after_test_module)]
-mod tests {
-    use std::path::Path;
-
-    use super::{
-        apply_terminal_title_action, build_terminal_title_preview,
-        build_terminal_title_setup_items, effective_terminal_title_items,
-    };
-
-    #[test]
-    fn effective_items_default_to_spinner_and_project() {
-        assert_eq!(
-            effective_terminal_title_items(None),
-            vec!["spinner".to_string(), "project".to_string()]
-        );
-    }
-
-    #[test]
-    fn setup_items_preserve_current_order() {
-        let items =
-            build_terminal_title_setup_items(&["spinner".to_string(), "project".to_string()]);
-
-        assert_eq!(items[0].title, "Remove Spinner");
-        assert_eq!(items[1].title, "Move Spinner down");
-        assert_eq!(items[2].title, "Remove Project");
-        assert_eq!(items[3].title, "Move Project up");
-    }
-
-    #[test]
-    fn preview_text_uses_spinner_separator_rules() {
-        let preview = build_terminal_title_preview(
-            Path::new("/tmp/demo-project"),
-            "main",
-            Some("feature/title"),
-            "gpt-5.4",
-            Some("Thinking"),
-            &[
-                "project".to_string(),
-                "spinner".to_string(),
-                "status".to_string(),
-            ],
-        );
-
-        assert_eq!(preview, "demo-project ... Thinking");
-    }
-
-    #[test]
-    fn apply_actions_support_reorder_and_disable() {
-        let mut items = vec!["spinner".to_string(), "project".to_string()];
-
-        apply_terminal_title_action("title:move_down:spinner", &mut items).expect("move down");
-        assert_eq!(items, vec!["project".to_string(), "spinner".to_string()]);
-
-        apply_terminal_title_action("title:remove:project", &mut items).expect("remove");
-        assert_eq!(items, vec!["spinner".to_string()]);
-
-        apply_terminal_title_action("title:remove:spinner", &mut items).expect("disable");
-        assert!(items.is_empty());
-    }
-
-    #[test]
-    fn cancel_action_leaves_draft_unchanged_for_restore() {
-        let mut items = vec!["spinner".to_string(), "project".to_string()];
-        let original = items.clone();
-
-        let action =
-            apply_terminal_title_action("title:cancel", &mut items).expect("cancel should parse");
-
-        assert_eq!(action, super::TerminalTitleSetupAction::Cancel);
-        assert_eq!(items, original);
-    }
-
-    #[test]
-    fn save_action_is_supported() {
-        let mut items = vec!["spinner".to_string(), "project".to_string()];
-
-        let action =
-            apply_terminal_title_action("title:save", &mut items).expect("save should parse");
-
-        assert_eq!(action, super::TerminalTitleSetupAction::Save);
-        assert_eq!(items, vec!["spinner".to_string(), "project".to_string()]);
-    }
-}
-
 pub(crate) async fn handle_toggle_ide_context(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
@@ -980,4 +895,88 @@ pub(super) async fn start_model_picker(
         }
     }
     Ok(SlashCommandControl::Continue)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{
+        apply_terminal_title_action, build_terminal_title_preview,
+        build_terminal_title_setup_items, effective_terminal_title_items,
+    };
+
+    #[test]
+    fn effective_items_default_to_spinner_and_project() {
+        assert_eq!(
+            effective_terminal_title_items(None),
+            vec!["spinner".to_string(), "project".to_string()]
+        );
+    }
+
+    #[test]
+    fn setup_items_preserve_current_order() {
+        let items =
+            build_terminal_title_setup_items(&["spinner".to_string(), "project".to_string()]);
+
+        assert_eq!(items[0].title, "Remove Spinner");
+        assert_eq!(items[1].title, "Move Spinner down");
+        assert_eq!(items[2].title, "Remove Project");
+        assert_eq!(items[3].title, "Move Project up");
+    }
+
+    #[test]
+    fn preview_text_uses_spinner_separator_rules() {
+        let preview = build_terminal_title_preview(
+            Path::new("/tmp/demo-project"),
+            "main",
+            Some("feature/title"),
+            "gpt-5.4",
+            Some("Thinking"),
+            &[
+                "project".to_string(),
+                "spinner".to_string(),
+                "status".to_string(),
+            ],
+        );
+
+        assert_eq!(preview, "demo-project ... Thinking");
+    }
+
+    #[test]
+    fn apply_actions_support_reorder_and_disable() {
+        let mut items = vec!["spinner".to_string(), "project".to_string()];
+
+        apply_terminal_title_action("title:move_down:spinner", &mut items).expect("move down");
+        assert_eq!(items, vec!["project".to_string(), "spinner".to_string()]);
+
+        apply_terminal_title_action("title:remove:project", &mut items).expect("remove");
+        assert_eq!(items, vec!["spinner".to_string()]);
+
+        apply_terminal_title_action("title:remove:spinner", &mut items).expect("disable");
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn cancel_action_leaves_draft_unchanged_for_restore() {
+        let mut items = vec!["spinner".to_string(), "project".to_string()];
+        let original = items.clone();
+
+        let action =
+            apply_terminal_title_action("title:cancel", &mut items).expect("cancel should parse");
+
+        assert_eq!(action, super::TerminalTitleSetupAction::Cancel);
+        assert_eq!(items, original);
+    }
+
+    #[test]
+    fn save_action_is_supported() {
+        let mut items = vec!["spinner".to_string(), "project".to_string()];
+
+        let action =
+            apply_terminal_title_action("title:save", &mut items).expect("save should parse");
+
+        assert_eq!(action, super::TerminalTitleSetupAction::Save);
+        assert_eq!(items, vec!["spinner".to_string(), "project".to_string()]);
+    }
 }

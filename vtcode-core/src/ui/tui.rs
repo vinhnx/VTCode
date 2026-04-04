@@ -65,34 +65,88 @@ mod headless {
         HistoryNext,
     }
 
+    /// Minimal command surface used by tests and headless sinks.
+    #[derive(Clone, Debug)]
+    pub enum InlineCommand {
+        AppendLine {
+            kind: InlineMessageKind,
+            segments: Vec<InlineSegment>,
+        },
+        AppendPastedMessage {
+            kind: InlineMessageKind,
+            text: String,
+            line_count: usize,
+        },
+        Inline {
+            kind: InlineMessageKind,
+            segment: InlineSegment,
+        },
+        ReplaceLast {
+            count: usize,
+            kind: InlineMessageKind,
+            lines: Vec<Vec<InlineSegment>>,
+        },
+        ForceRedraw,
+        Shutdown,
+        ClearScreen,
+        CloseModal,
+        SetReasoningStage(Option<String>),
+    }
+
     /// No-op handle for headless builds. All methods silently discard.
     #[derive(Clone, Debug)]
-    pub struct InlineHandle;
+    pub struct InlineHandle {
+        sender: Option<UnboundedSender<InlineCommand>>,
+    }
 
     impl InlineHandle {
-        pub fn new_for_tests(_sender: UnboundedSender<()>) -> Self {
-            Self
+        pub fn new_for_tests(sender: UnboundedSender<InlineCommand>) -> Self {
+            Self {
+                sender: Some(sender),
+            }
         }
 
-        pub fn append_line(&self, _kind: InlineMessageKind, _segments: Vec<InlineSegment>) {}
+        fn send_command(&self, command: InlineCommand) {
+            if let Some(sender) = &self.sender {
+                let _ = sender.send(command);
+            }
+        }
+
+        pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
+            self.send_command(InlineCommand::AppendLine { kind, segments });
+        }
         pub fn append_pasted_message(
             &self,
-            _kind: InlineMessageKind,
-            _text: String,
-            _line_count: usize,
+            kind: InlineMessageKind,
+            text: String,
+            line_count: usize,
         ) {
+            self.send_command(InlineCommand::AppendPastedMessage {
+                kind,
+                text,
+                line_count,
+            });
         }
-        pub fn inline(&self, _kind: InlineMessageKind, _segment: InlineSegment) {}
+        pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
+            self.send_command(InlineCommand::Inline { kind, segment });
+        }
         pub fn replace_last(
             &self,
-            _count: usize,
-            _kind: InlineMessageKind,
-            _lines: Vec<Vec<InlineSegment>>,
+            count: usize,
+            kind: InlineMessageKind,
+            lines: Vec<Vec<InlineSegment>>,
         ) {
+            self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
         }
-        pub fn force_redraw(&self) {}
-        pub fn shutdown(&self) {}
-        pub fn clear_screen(&self) {}
+        pub fn force_redraw(&self) {
+            self.send_command(InlineCommand::ForceRedraw);
+        }
+        pub fn shutdown(&self) {
+            self.send_command(InlineCommand::Shutdown);
+        }
+        pub fn clear_screen(&self) {
+            self.send_command(InlineCommand::ClearScreen);
+        }
         pub fn show_modal(
             &self,
             _title: String,
@@ -109,8 +163,12 @@ mod headless {
             _search: Option<InlineListSearchConfig>,
         ) {
         }
-        pub fn close_modal(&self) {}
-        pub fn set_reasoning_stage(&self, _stage: Option<String>) {}
+        pub fn close_modal(&self) {
+            self.send_command(InlineCommand::CloseModal);
+        }
+        pub fn set_reasoning_stage(&self, stage: Option<String>) {
+            self.send_command(InlineCommand::SetReasoningStage(stage));
+        }
     }
 
     /// Headless session — events never arrive.
