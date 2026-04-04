@@ -35,6 +35,8 @@ These rules apply to product code and refactors alike. The burden of proof is on
 
 Artifacts are written to `.vtcode/perf/` and include JSON metrics plus raw logs.
 
+The perf harness clears `RUSTC_WRAPPER` and `CARGO_BUILD_RUSTC_WRAPPER` by default for its cargo steps so local measurements still work when `sccache` is configured but unavailable. Set `PERF_KEEP_RUSTC_WRAPPER=1` only when you explicitly want to keep the wrapper. `startup_ms` measures the built `target/debug/vtcode` binary rather than `cargo run`, which keeps compile time out of the startup number.
+
 Use this loop for any non-trivial performance change. Change one thing at a time so the comparison stays attributable.
 
 ## Profiling Build
