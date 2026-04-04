@@ -103,12 +103,7 @@ quick_cache = "0.6"
 roff = "1.1"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }
-nix = { version = "0.31", features = [
-    "user",
-    "signal",
-    "poll",
-    "term",
-] }
+nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
     "unstable-rendered-line-info",
