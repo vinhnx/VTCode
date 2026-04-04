@@ -800,7 +800,10 @@ mod tests {
         let state =
             create_settings_palette_state(temp.path(), &None).expect("settings state should load");
 
-        assert_eq!(state.source_path, source_path);
+        assert_eq!(
+            std::fs::canonicalize(&state.source_path).expect("canonical state source path"),
+            std::fs::canonicalize(&source_path).expect("canonical expected source path")
+        );
         assert_eq!(state.draft.agent.theme, "ansi");
     }
 

@@ -498,10 +498,10 @@ impl AgentRunner {
                 let turn_model = self.get_selected_model();
                 let provider_name = self.provider_client.name().to_string();
                 if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
-                    eprintln!(
-                        "vtcode-debug: turn provider_client={} turn_model={}",
-                        self.provider_client.name(),
-                        turn_model
+                    tracing::debug!(
+                        provider_client = self.provider_client.name(),
+                        turn_model,
+                        "Provider debug turn selection"
                     );
                 }
                 let turn_reasoning = if is_simple_task {

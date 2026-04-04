@@ -394,9 +394,12 @@ impl TimeoutDetector {
                         .await;
 
                     let delay = self.calculate_retry_delay(&operation_type, attempt).await;
-                    eprintln!(
-                        "Operation '{}' failed (attempt {}/{}), retrying in {:?}",
-                        operation_id, attempt, config.max_retries, delay
+                    tracing::warn!(
+                        operation_id,
+                        attempt,
+                        max_retries = config.max_retries,
+                        delay = ?delay,
+                        "Operation failed and will be retried"
                     );
                     time::sleep(delay).await;
                 }

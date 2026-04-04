@@ -145,10 +145,10 @@ fn prune_expired_debug_logs(log_dir: &Path, max_age_days: u32) -> Result<()> {
         let entry = match entry {
             Ok(value) => value,
             Err(err) => {
-                eprintln!(
-                    "warning: failed to read a debug log entry in {}: {}",
-                    log_dir.display(),
-                    err
+                tracing::warn!(
+                    log_dir = %log_dir.display(),
+                    error = %err,
+                    "Failed to read a debug log entry"
                 );
                 continue;
             }
@@ -160,10 +160,10 @@ fn prune_expired_debug_logs(log_dir: &Path, max_age_days: u32) -> Result<()> {
         let metadata = match entry.metadata() {
             Ok(value) => value,
             Err(err) => {
-                eprintln!(
-                    "warning: failed to read debug log metadata {}: {}",
-                    path.display(),
-                    err
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %err,
+                    "Failed to read debug log metadata"
                 );
                 continue;
             }
@@ -174,10 +174,10 @@ fn prune_expired_debug_logs(log_dir: &Path, max_age_days: u32) -> Result<()> {
         if metadata.modified().unwrap_or(UNIX_EPOCH) <= cutoff
             && let Err(err) = fs::remove_file(&path)
         {
-            eprintln!(
-                "warning: failed to remove expired debug log {}: {}",
-                path.display(),
-                err
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "Failed to remove expired debug log"
             );
         }
     }

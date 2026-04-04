@@ -464,14 +464,10 @@ impl BenchmarkUtils {
             || comparison.throughput_change_percent < -max_regression_percent;
 
         if regression {
-            eprintln!("Performance regression detected:");
-            eprintln!(
-                "  Latency change: {:.2}%",
-                comparison.avg_latency_change_percent
-            );
-            eprintln!(
-                "  Throughput change: {:.2}%",
-                comparison.throughput_change_percent
+            tracing::warn!(
+                latency_change_percent = comparison.avg_latency_change_percent,
+                throughput_change_percent = comparison.throughput_change_percent,
+                "Performance regression detected"
             );
         }
 

@@ -641,14 +641,6 @@ mode = "Auto"
 refresh_interval_ms = 1000
 command_timeout_ms = 200
 
-[ui.keyboard_protocol]
-enabled = true
-mode = "default"
-disambiguate_escape_codes = true
-report_event_types = true
-report_alternate_keys = true
-report_all_keys = false
-
 [ui.terminal_title]
 items = [
     "project",
@@ -656,6 +648,14 @@ items = [
     "app-name",
     "git-branch",
 ]
+
+[ui.keyboard_protocol]
+enabled = true
+mode = "default"
+disambiguate_escape_codes = true
+report_event_types = true
+report_alternate_keys = true
+report_all_keys = false
 
 [ui.notifications]
 enabled = true
