@@ -108,7 +108,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
 
     // Parse YAML frontmatter
     let yaml: SkillYaml =
-        serde_yaml::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
+        serde_saphyr::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
 
     let name = yaml.name.trim().to_string();
     anyhow::ensure!(!name.is_empty(), "name is required and must not be empty");

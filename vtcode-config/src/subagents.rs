@@ -613,7 +613,7 @@ fn parse_markdown_subagent(content: &str, source: SubagentSource) -> Result<Suba
     };
     let frontmatter_text = rest[..end_idx].trim();
     let prompt = rest[end_idx + 4..].trim().to_string();
-    let frontmatter = serde_yaml::from_str::<JsonValue>(frontmatter_text)
+    let frontmatter = serde_saphyr::from_str::<JsonValue>(frontmatter_text)
         .context("failed to parse subagent YAML frontmatter")?;
     let Some(object) = frontmatter.as_object() else {
         bail!("subagent frontmatter must be a YAML mapping");

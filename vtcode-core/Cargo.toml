@@ -86,7 +86,7 @@ bytes = "1.11"
 # Home directory detection
 dirs = { workspace = true }
 # YAML support
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true }
 # Zip support for skill packaging
 zip = { version = "8.4", default-features = false, features = ["deflate"] }
 flate2 = "1.1"

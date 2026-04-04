@@ -90,7 +90,7 @@ impl OutputStyleManager {
             && let Some(frontmatter_end) = frontmatter_body.find("\n---\n")
         {
             let frontmatter_content = &frontmatter_body[..frontmatter_end];
-            let config: OutputStyleFileConfig = serde_yaml::from_str(frontmatter_content)?;
+            let config: OutputStyleFileConfig = serde_saphyr::from_str(frontmatter_content)?;
 
             // Get the content after the frontmatter
             let content_start = frontmatter_end + 5; // Skip past body + "\n---\n"
