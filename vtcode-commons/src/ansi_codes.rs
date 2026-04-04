@@ -3,8 +3,7 @@
 //! See `docs/reference/ansi-in-vtcode.md` for the cross-crate integration map.
 
 use once_cell::sync::Lazy;
-use ratatui::crossterm::tty::IsTty;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 
 /// Escape character as a raw byte (ESC = 0x1B = 27)
 pub const ESC_BYTE: u8 = 0x1b;
@@ -104,7 +103,7 @@ pub fn notify_attention_with_mode(
         return;
     }
 
-    if !std::io::stdout().is_tty() {
+    if !std::io::stdout().is_terminal() {
         return;
     }
 

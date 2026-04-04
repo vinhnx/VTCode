@@ -7,7 +7,7 @@ use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_pro
 use crate::llm::provider::{LLMRequest, Message};
 use crate::prompts::system::lightweight_instruction_text;
 use anyhow::Result;
-use crossterm::tty::IsTty;
+use std::io::IsTerminal;
 use std::sync::Arc;
 
 /// Handle the ask command - single prompt without tools
@@ -95,7 +95,7 @@ pub async fn handle_ask_command(
 }
 
 fn is_pipe_output() -> bool {
-    !std::io::stdout().is_tty()
+    !std::io::stdout().is_terminal()
 }
 
 fn extract_code_only(text: &str) -> Option<String> {
