@@ -51,6 +51,7 @@ use vtcode_tui::app::{
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
+    session_id: &str,
     session_state: &mut SessionState,
     resume_state: Option<&ResumeSession>,
     session_archive: Option<SessionArchive>,
@@ -64,7 +65,13 @@ pub(crate) async fn initialize_session_ui(
         SessionStartTrigger::Startup
     };
     let lifecycle_hooks = if let Some(vt) = vt_cfg {
-        LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
+        LifecycleHookEngine::new_with_session(
+            config.workspace.clone(),
+            &vt.hooks,
+            session_trigger,
+            session_id,
+            vt.permissions.default_mode,
+        )?
     } else {
         None
     };

@@ -555,3 +555,149 @@ async fn test_regex_matcher_functionality() {
 
     assert!(outcome.additional_context.is_empty());
 }
+
+#[tokio::test]
+async fn test_permission_request_hook_parses_decision_and_updates() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        permission_request: vec![HookGroupConfig {
+            matcher: Some("unified_exec".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"},"updatedInput":{"command":"echo approved"},"updatedPermissions":[{"destination":"session","addRules":["bash(echo approved)"]}]}}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new_with_session(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+        "session-123",
+        vtcode_config::PermissionMode::Default,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let permission_request = vtcode_core::permissions::build_permission_request(
+        workspace,
+        workspace,
+        "unified_exec",
+        Some(&json!({"command": "echo hi"})),
+    );
+
+    let outcome = engine
+        .run_permission_request(
+            "unified_exec",
+            Some(&json!({"command": "echo hi"})),
+            &permission_request,
+            &[json!({"id": "allow_once", "behavior": "allow", "scope": "once"})],
+        )
+        .await
+        .expect("permission request hook");
+
+    let decision = outcome.decision.expect("hook decision");
+    assert!(matches!(
+        decision.behavior,
+        PermissionDecisionBehavior::Allow
+    ));
+    assert!(matches!(decision.scope, PermissionDecisionScope::Session));
+    assert_eq!(decision.updated_input, Some(json!({"command": "echo approved"})));
+    assert_eq!(decision.permission_updates.len(), 1);
+}
+
+#[tokio::test]
+async fn test_stop_hook_blocks_completion() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        stop: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"decision":"block","reason":"keep going"}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new_with_session(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+        "session-123",
+        vtcode_config::PermissionMode::Default,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_stop("final answer", false)
+        .await
+        .expect("stop hook");
+
+    assert_eq!(outcome.block_reason.as_deref(), Some("keep going"));
+}
+
+#[tokio::test]
+async fn test_hook_env_exposes_claude_aliases() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+    let transcript_path = workspace.join("transcript.jsonl");
+
+    let hooks_config = LifecycleHooksConfig {
+        session_start: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"additional_context":"'"$CLAUDE_SESSION_ID"'|'"$CLAUDE_PROJECT_DIR"'|'"$CLAUDE_TRANSCRIPT_PATH"'"}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new_with_session(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+        "session-abc",
+        vtcode_config::PermissionMode::AcceptEdits,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+    engine.update_transcript_path(Some(transcript_path.clone())).await;
+
+    let outcome = engine
+        .run_session_start()
+        .await
+        .expect("session start hook");
+
+    assert_eq!(outcome.additional_context.len(), 1);
+    assert_eq!(
+        outcome.additional_context[0],
+        format!(
+            "session-abc|{}|{}",
+            workspace.display(),
+            transcript_path.display()
+        )
+    );
+}

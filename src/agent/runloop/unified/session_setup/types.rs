@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use tokio::sync::{Notify, RwLock};
 use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::config::PermissionsConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
@@ -48,6 +49,7 @@ impl Drop for BackgroundTaskGuard {
 pub(crate) struct ToolExecutionContext {
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    pub permissions_state: Arc<RwLock<PermissionsConfig>>,
     pub approval_recorder: Arc<ApprovalRecorder>,
     pub safety_validator: Arc<ToolCallSafetyValidator>,
     pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,

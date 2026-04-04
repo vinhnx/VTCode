@@ -164,6 +164,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!(
+        "hooks",
+        "Browse resolved lifecycle hooks for this session and workspace",
+        "/hooks",
+        "configuration"
+    ),
+    built_in_command_spec!(
         "permissions",
         "Open the permissions settings section and effective summary",
         "/permissions",

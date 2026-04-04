@@ -187,6 +187,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
         approval_recorder: Some(ctx.approval_recorder.as_ref()),
         decision_ledger: Some(ctx.decision_ledger),
         tool_permission_cache: Some(ctx.tool_permission_cache),
+        permissions_state: Some(ctx.permissions_state),
         hitl_notification_bell: ctx
             .vt_cfg
             .map(|cfg| cfg.security.hitl_notification_bell)
@@ -478,7 +479,10 @@ pub(crate) async fn validate_tool_call<'a>(
     .await;
 
     match permission_result {
-        Ok(ToolPermissionFlow::Approved) => {
+        Ok(ToolPermissionFlow::Approved { updated_args }) => {
+            if let Some(updated_args) = updated_args {
+                prepared.effective_args = updated_args;
+            }
             if canonical_tool_name == tool_names::ENTER_PLAN_MODE {
                 ctx.harness_state.clear_task_tracker_create_signatures();
             }

@@ -491,10 +491,12 @@ pub struct SubagentController {
 impl SubagentController {
     pub async fn new(config: SubagentControllerConfig) -> Result<Self> {
         let discovered = discover_controller_subagents(&config.workspace_root).await?;
-        let lifecycle_hooks = LifecycleHookEngine::new(
+        let lifecycle_hooks = LifecycleHookEngine::new_with_session(
             config.workspace_root.clone(),
             &config.vt_cfg.hooks,
             crate::hooks::SessionStartTrigger::Startup,
+            config.parent_session_id.clone(),
+            config.vt_cfg.permissions.default_mode,
         )?;
         let background_children = load_background_state(&config.workspace_root)?
             .records
@@ -2221,18 +2223,26 @@ fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
     child
         .hooks
         .lifecycle
+        .permission_request
+        .extend(hooks.lifecycle.permission_request.clone());
+    child
+        .hooks
+        .lifecycle
         .pre_compact
         .extend(hooks.lifecycle.pre_compact.clone());
     child
         .hooks
         .lifecycle
-        .task_completion
-        .extend(hooks.lifecycle.task_completion.clone());
-    child
-        .hooks
-        .lifecycle
-        .task_completed
-        .extend(hooks.lifecycle.task_completed.clone());
+        .stop
+        .extend(hooks.lifecycle.stop.clone());
+    child.hooks.lifecycle.stop.extend(
+        hooks
+            .lifecycle
+            .task_completion
+            .iter()
+            .chain(hooks.lifecycle.task_completed.iter())
+            .cloned(),
+    );
     child
         .hooks
         .lifecycle

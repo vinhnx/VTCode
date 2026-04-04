@@ -271,6 +271,7 @@ pub(crate) async fn execute_llm_request(
                         ctx.approval_recorder,
                         ctx.decision_ledger,
                         ctx.tool_permission_cache,
+                        ctx.permissions_state,
                         ctx.safety_validator,
                         ctx.lifecycle_hooks,
                         ctx.vt_cfg,

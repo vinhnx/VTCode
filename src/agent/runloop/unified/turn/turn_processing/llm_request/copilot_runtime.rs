@@ -66,6 +66,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     approval_recorder: &'a vtcode_core::tools::ApprovalRecorder,
     decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+    permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
     safety_validator: &'a Arc<ToolCallSafetyValidator>,
     lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
     approval_policy: AskForApproval,
@@ -98,6 +99,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         approval_recorder: &'a vtcode_core::tools::ApprovalRecorder,
         decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+        permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
         safety_validator: &'a Arc<ToolCallSafetyValidator>,
         lifecycle_hooks: Option<&'a vtcode_core::hooks::LifecycleHookEngine>,
         vt_cfg: Option<&'a vtcode_config::loader::VTCodeConfig>,
@@ -131,6 +133,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             approval_recorder,
             decision_ledger,
             tool_permission_cache,
+            permissions_state,
             safety_validator,
             lifecycle_hooks,
             approval_policy: vt_cfg
@@ -288,6 +291,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 &tools,
                 self.tool_result_cache,
                 self.tool_permission_cache,
+                self.permissions_state,
                 self.decision_ledger,
                 self.session_stats,
                 self.mcp_panel_state,
@@ -402,6 +406,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 approval_recorder: Some(self.approval_recorder),
                 decision_ledger: Some(self.decision_ledger),
                 tool_permission_cache: Some(self.tool_permission_cache),
+                permissions_state: Some(self.permissions_state),
                 hitl_notification_bell: self.hitl_notification_bell,
                 approval_policy: self.approval_policy,
                 skip_confirmations: self.skip_confirmations,
@@ -414,7 +419,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         )
         .await?
         {
-            ToolPermissionFlow::Approved => {}
+            ToolPermissionFlow::Approved { .. } => {}
             ToolPermissionFlow::Denied => {
                 return Ok(Some(denied_tool_execution_response(
                     tool_name,

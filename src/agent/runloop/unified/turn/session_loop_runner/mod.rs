@@ -646,6 +646,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let ui_setup = initialize_session_ui(
             &config,
             vt_cfg.as_ref(),
+            thread_handle.thread_id().as_str(),
             &mut session_state,
             resume_ref,
             session_archive,
@@ -716,6 +717,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         runtime.state.messages = conversation_history;
         let tool_result_cache = execution.tool_result_cache;
         let tool_permission_cache = execution.tool_permission_cache;
+        let permissions_state = execution.permissions_state;
         let approval_recorder = execution.approval_recorder;
         let safety_validator = execution.safety_validator;
         let circuit_breaker = execution.circuit_breaker;
@@ -883,6 +885,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     full_auto,
                     approval_recorder: &approval_recorder,
                     tool_permission_cache: &tool_permission_cache,
+                    permissions_state: &permissions_state,
                     loaded_skills: &loaded_skills,
                     default_placeholder: &mut default_placeholder,
                     follow_up_placeholder: &mut follow_up_placeholder,
@@ -1079,6 +1082,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         lifecycle_hooks.as_ref(),
                         &default_placeholder,
                         &tool_permission_cache,
+                        &permissions_state,
                         &safety_validator,
                         &circuit_breaker,
                         &tool_health_tracker,

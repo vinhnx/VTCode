@@ -134,6 +134,7 @@ pub(crate) enum SlashCommandOutcome {
     ShowSettingsAtPath {
         path: String,
     },
+    ShowHooks,
     ShowMemoryConfig,
     ShowPermissions,
     ShowMemory,
@@ -610,6 +611,13 @@ async fn execute_built_in_command_skill(
         },
         "mcp" => handle_mcp_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "hooks" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /hooks")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ShowHooks)
+        }
         "ide" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /ide")?;

@@ -16,6 +16,9 @@ use crate::agent::runloop::model_picker::{
 };
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::hooks_browser::{
+    HooksPaletteState, apply_hooks_action, parent_view as parent_hooks_view, show_hooks_palette,
+};
 use crate::agent::runloop::unified::model_selection::finalize_lightweight_model_selection;
 use crate::agent::runloop::unified::settings_interactive::{
     SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
@@ -67,6 +70,10 @@ pub(crate) enum ActivePalette {
     },
     Settings {
         state: Box<SettingsPaletteState>,
+        esc_armed: bool,
+    },
+    Hooks {
+        state: Box<HooksPaletteState>,
         esc_armed: bool,
     },
     ModelTarget,
@@ -571,6 +578,23 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
+        ActivePalette::Hooks {
+            mut state,
+            esc_armed: _,
+        } => {
+            if let InlineListSelection::ConfigAction(action) = &selection {
+                apply_hooks_action(state.as_mut(), action)?;
+            }
+
+            if show_hooks_palette(renderer, state.as_ref(), Some(selection))? {
+                Ok(Some(ActivePalette::Hooks {
+                    state,
+                    esc_armed: false,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
         ActivePalette::ModelTarget => {
             if show_model_target_palette(renderer)? {
                 Ok(Some(ActivePalette::ModelTarget))
@@ -654,6 +678,10 @@ pub(crate) fn handle_palette_preview(
         ActivePalette::UrlGuard { prompt, previous } => {
             Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
         }
+        ActivePalette::Hooks { state, .. } => Ok(Some(ActivePalette::Hooks {
+            state,
+            esc_armed: false,
+        })),
         ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings {
             state,
             esc_armed: false,
@@ -749,6 +777,32 @@ pub(crate) fn handle_palette_cancel(
             state.view_path = parent_view_path(&current_path);
             if show_settings_palette(renderer, state.as_ref(), None)? {
                 Ok(Some(ActivePalette::Settings {
+                    state,
+                    esc_armed: true,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+        ActivePalette::Hooks {
+            mut state,
+            esc_armed,
+        } => {
+            if esc_armed {
+                return Ok(None);
+            }
+
+            let next_view = parent_hooks_view(&state.view);
+            if next_view == state.view {
+                if !renderer.supports_inline_ui() {
+                    renderer.line(MessageStyle::Info, "Closed hooks browser.")?;
+                }
+                return Ok(None);
+            }
+
+            state.view = next_view;
+            if show_hooks_palette(renderer, state.as_ref(), None)? {
+                Ok(Some(ActivePalette::Hooks {
                     state,
                     esc_armed: true,
                 }))

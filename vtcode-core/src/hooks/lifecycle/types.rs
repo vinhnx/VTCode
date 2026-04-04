@@ -1,3 +1,8 @@
+use serde_json::Value;
+
+use crate::config::PermissionMode;
+use crate::exec::events::ThreadCompletionSubtype;
+
 #[derive(Debug, Clone)]
 pub struct HookMessage {
     pub level: HookMessageLevel,
@@ -76,6 +81,62 @@ pub struct PreCompactHookOutcome {
     pub messages: Vec<HookMessage>,
 }
 
+#[derive(Default)]
+pub struct PermissionRequestHookOutcome {
+    pub decision: Option<PermissionRequestHookDecision>,
+    pub messages: Vec<HookMessage>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PermissionRequestHookDecision {
+    pub behavior: PermissionDecisionBehavior,
+    pub scope: PermissionDecisionScope,
+    pub updated_input: Option<Value>,
+    pub permission_updates: Vec<PermissionUpdateRequest>,
+    pub interrupt: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionDecisionBehavior {
+    Allow,
+    Deny,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionDecisionScope {
+    Once,
+    Session,
+    Permanent,
+}
+
+#[derive(Debug, Clone)]
+pub struct PermissionUpdateRequest {
+    pub destination: PermissionUpdateDestination,
+    pub kind: PermissionUpdateKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PermissionUpdateDestination {
+    Session,
+    ProjectSettings,
+    Unsupported(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PermissionUpdateKind {
+    AddRules(Vec<String>),
+    ReplaceRules(Vec<String>),
+    RemoveRules(Vec<String>),
+    SetMode(PermissionMode),
+    Unsupported(String),
+}
+
+#[derive(Default)]
+pub struct StopHookOutcome {
+    pub messages: Vec<HookMessage>,
+    pub block_reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub enum PreToolHookDecision {
     #[default]
@@ -84,9 +145,6 @@ pub enum PreToolHookDecision {
     Deny,
     Ask,
 }
-
-use crate::exec::events::ThreadCompletionSubtype;
-
 #[derive(Debug, Clone, Copy)]
 pub enum SessionStartTrigger {
     Startup,

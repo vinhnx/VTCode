@@ -48,15 +48,23 @@ pub struct LifecycleHooksConfig {
     #[serde(default)]
     pub post_tool_use: Vec<HookGroupConfig>,
 
+    /// Commands to run when VT Code is about to request interactive permission approval
+    #[serde(default)]
+    pub permission_request: Vec<HookGroupConfig>,
+
     /// Commands to run immediately before VT Code compacts conversation history
     #[serde(default)]
     pub pre_compact: Vec<HookGroupConfig>,
 
-    /// Commands to run when the agent indicates task completion (pre-exit)
+    /// Commands to run after VT Code produces a final answer but before the turn completes
+    #[serde(default)]
+    pub stop: Vec<HookGroupConfig>,
+
+    /// Deprecated alias for `stop`
     #[serde(default)]
     pub task_completion: Vec<HookGroupConfig>,
 
-    /// Commands to run after a task is finalized and session is closed
+    /// Deprecated alias for `stop`
     #[serde(default)]
     pub task_completed: Vec<HookGroupConfig>,
 
@@ -74,10 +82,21 @@ impl LifecycleHooksConfig {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.permission_request.is_empty()
             && self.pre_compact.is_empty()
+            && self.stop.is_empty()
             && self.task_completion.is_empty()
             && self.task_completed.is_empty()
             && self.notification.is_empty()
+    }
+
+    pub fn normalized(&self) -> Self {
+        let mut normalized = self.clone();
+        normalized.stop.extend(self.task_completion.clone());
+        normalized.stop.extend(self.task_completed.clone());
+        normalized.task_completion.clear();
+        normalized.task_completed.clear();
+        normalized
     }
 }
 
@@ -139,7 +158,9 @@ impl LifecycleHooksConfig {
         validate_groups(&self.user_prompt_submit, "user_prompt_submit")?;
         validate_groups(&self.pre_tool_use, "pre_tool_use")?;
         validate_groups(&self.post_tool_use, "post_tool_use")?;
+        validate_groups(&self.permission_request, "permission_request")?;
         validate_groups(&self.pre_compact, "pre_compact")?;
+        validate_groups(&self.stop, "stop")?;
         validate_groups(&self.task_completion, "task_completion")?;
         validate_groups(&self.task_completed, "task_completed")?;
         validate_groups(&self.notification, "notification")?;
@@ -193,4 +214,45 @@ fn validate_matcher(pattern: &str) -> Result<()> {
     Regex::new(&regex_pattern)
         .with_context(|| format!("failed to compile lifecycle hook matcher: {pattern}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_group() -> HookGroupConfig {
+        HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: HookCommandKind::Command,
+                command: "echo ok".to_string(),
+                timeout_seconds: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn permission_request_and_stop_validate() {
+        let config = LifecycleHooksConfig {
+            permission_request: vec![sample_group()],
+            stop: vec![sample_group()],
+            ..Default::default()
+        };
+
+        config.validate().expect("hooks validate");
+    }
+
+    #[test]
+    fn task_aliases_normalize_into_stop() {
+        let config = LifecycleHooksConfig {
+            task_completion: vec![sample_group()],
+            task_completed: vec![sample_group()],
+            ..Default::default()
+        };
+
+        let normalized = config.normalized();
+        assert_eq!(normalized.stop.len(), 2);
+        assert!(normalized.task_completion.is_empty());
+        assert!(normalized.task_completed.is_empty());
+    }
 }
