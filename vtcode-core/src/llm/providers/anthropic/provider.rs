@@ -462,10 +462,20 @@ fn uses_anthropic_compaction(context_management: &Value) -> bool {
     context_management
         .as_array()
         .is_some_and(|items| items.iter().any(is_compaction_item))
+        || context_management
+            .get("edits")
+            .and_then(Value::as_array)
+            .is_some_and(|edits| edits.iter().any(is_compaction_edit_item))
 }
 
 fn is_compaction_item(item: &Value) -> bool {
     item.get("type").and_then(Value::as_str) == Some("compaction")
+}
+
+fn is_compaction_edit_item(item: &Value) -> bool {
+    item.get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|edit_type| edit_type.starts_with("compact_"))
 }
 
 fn uses_anthropic_context_edits(context_management: &Value) -> bool {
@@ -896,6 +906,71 @@ mod tests {
 
         let betas = provider.effective_betas(&request).expect("betas");
         assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
+    }
+
+    #[test]
+    fn effective_betas_include_compact_beta_for_compaction_edits() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("continue".to_string())],
+            context_management: Some(json!({
+                "edits": [
+                    {
+                        "type": "compact_20260112",
+                        "trigger": {
+                            "type": "input_tokens",
+                            "value": 180000
+                        }
+                    }
+                ]
+            })),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
+        assert!(
+            !betas
+                .iter()
+                .any(|beta| beta == "context-management-2025-06-27")
+        );
+    }
+
+    #[test]
+    fn effective_betas_include_both_headers_for_mixed_context_edits() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("continue".to_string())],
+            context_management: Some(json!({
+                "edits": [
+                    {"type": "clear_tool_uses_20250919"},
+                    {
+                        "type": "compact_20260112",
+                        "trigger": {
+                            "type": "input_tokens",
+                            "value": 180000
+                        }
+                    }
+                ]
+            })),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
+        assert!(
+            betas
+                .iter()
+                .any(|beta| beta == "context-management-2025-06-27")
+        );
     }
 
     #[test]

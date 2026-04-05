@@ -824,23 +824,28 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
     )
     .await;
 
-    let legacy_detector = backing.autonomous_executor.loop_detector();
-    {
-        let mut detector = legacy_detector
-            .write()
-            .expect("legacy loop detector should lock");
-        detector.set_tool_limit(tool_names::READ_FILE, 2);
-        let seeded_args = json!({"path": valid_file.to_string_lossy()});
-        assert!(
-            detector
-                .record_call(tool_names::READ_FILE, &seeded_args)
-                .is_none()
-        );
-        let _ = detector.record_call(tool_names::READ_FILE, &seeded_args);
-        let warning = detector.record_call(tool_names::READ_FILE, &seeded_args);
-        assert!(warning.is_some());
-        assert!(detector.is_hard_limit_exceeded(tool_names::READ_FILE));
-    }
+    backing
+        .autonomous_executor
+        .set_loop_limit(tool_names::READ_FILE, 2);
+    let seeded_args = json!({"path": valid_file.to_string_lossy()});
+    assert!(
+        backing
+            .autonomous_executor
+            .record_tool_call(tool_names::READ_FILE, &seeded_args)
+            .is_none()
+    );
+    let _ = backing
+        .autonomous_executor
+        .record_tool_call(tool_names::READ_FILE, &seeded_args);
+    let warning = backing
+        .autonomous_executor
+        .record_tool_call(tool_names::READ_FILE, &seeded_args);
+    assert!(warning.is_some());
+    assert!(
+        backing
+            .autonomous_executor
+            .is_hard_limit_exceeded(tool_names::READ_FILE)
+    );
 
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -869,9 +874,8 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
             .contains("Loop detector stopped repeated")
     }));
     assert!(
-        legacy_detector
-            .read()
-            .expect("legacy loop detector should lock")
+        backing
+            .autonomous_executor
             .is_hard_limit_exceeded(tool_names::READ_FILE)
     );
 }

@@ -250,7 +250,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/full_auto_mode.md`
   - **Content**: Full-Auto Mode
-  - **Topics**: Activation Checklist, Runtime Behaviour, Customising the Allow-List, Profile File Recommendations
+  - **Topics**: Activation Checklist, Runtime Behaviour, Customising the Allow-List, Orchestrated Harness Mode, Profile File Recommendations
   - **User Questions**: "What can you tell me about Full-Auto Mode?", "How does Activation Checklist work?", "How does Runtime Behaviour work?"
 
 - **File**: `docs/guides/memory-management.md`
@@ -556,7 +556,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
-  - **Topics**: Overview, Context Engineering vs Prompt Engineering, Accuracy Optimization Loop, Core Principles, Context Strategy
+  - **Topics**: Overview, Context Engineering vs Prompt Engineering, VT Code's Three Context Primitives, Accuracy Optimization Loop, Core Principles
   - **User Questions**: "What can you tell me about Context Engineering in VT Code?", "How does Overview work?", "How does Context Engineering vs Prompt Engineering work?"
 
 - **File**: `docs/harness/CORE_BELIEFS.md`

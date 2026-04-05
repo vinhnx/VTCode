@@ -208,11 +208,23 @@ max_age_days = 30
 # Harness limits
 [agent.harness]
 # Enable automatic context compaction when token pressure crosses threshold.
+# VT Code uses provider-native compaction where available (for example OpenAI
+# Responses compaction or Anthropic compact edits) and falls back to local
+# compaction otherwise.
 auto_compaction_enabled = false
 
-# Optional absolute compact threshold in tokens. Applies to Responses server-side compaction when the
-# provider supports it, and to VT Code's local fallback compaction otherwise.
+# Optional absolute compact threshold in tokens. Applies to provider-native
+# compaction when supported, and to VT Code's local fallback compaction otherwise.
 # auto_compaction_threshold_tokens = 200000
+
+# Anthropic-only provider-native tool-result clearing for re-fetchable tool outputs.
+# Useful when large file reads or command results are inflating the live context.
+# [agent.harness.tool_result_clearing]
+# enabled = false
+# trigger_tokens = 100000
+# keep_tool_uses = 3
+# clear_at_least_tokens = 30000
+# clear_tool_inputs = false
 
 # Controls harness-managed continuation loops: "off", "exec_only", or "all".
 continuation_policy = "all"
