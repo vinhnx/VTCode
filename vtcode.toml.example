@@ -1038,6 +1038,12 @@ max_recent_errors = 3
 # Enable trajectory logging for usage analysis
 trajectory_enabled = true
 
+# Enable ATIF (Agent Trajectory Interchange Format) trajectory export
+# When enabled, sessions write an atif-trajectory.json alongside the .jsonl log
+# Useful for debugging, visualization, SFT, and RL pipelines
+# See: docs/protocols/ATIF_TRAJECTORY_FORMAT.md
+atif_enabled = false
+
 # Syntax highlighting configuration
 [syntax_highlighting]
 # Enable syntax highlighting for code in tool output

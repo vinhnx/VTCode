@@ -33,7 +33,7 @@ Harness primitives in VT Code map to the runtime like this:
 - **Hooks / middleware**: lifecycle hooks, tool middleware, guard rails, duplicate-call protection, and plan-mode enforcement add deterministic control around the model loop.
 - **Continuation**: exec/full-auto now uses a harness-managed continuation controller that accepts completion only when tracker state is complete and verification commands pass.
 - **Scheduling**: session-scoped `/loop` tasks live on the interactive runtime, while durable `vtcode schedule` jobs persist definitions under the VT Code config/data directories and launch fresh `vtcode exec` runs through a local daemon.
-- **Traces / archives**: thread events, session archives, checkpoints, Open Responses emission, and optional harness event logs capture what happened for resume, audit, and downstream tooling.
+- **Traces / archives**: thread events, session archives, checkpoints, Open Responses emission, ATIF trajectory export, and optional harness event logs capture what happened for resume, audit, and downstream tooling. The [ATIF](https://www.harborframework.com/docs/agents/trajectory-format) exporter (`vtcode-exec-events::atif`) converts live `ThreadEvent` streams into the standardized Agent Trajectory Interchange Format for SFT/RL pipelines, debugging, and visualization.
 
 `vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract across exec mode, harness logs, and interactive lifecycle emission. Item lifecycle events come from the shared runtime/event builders, while outer `TurnStarted` / `TurnCompleted` / `TurnFailed` events remain wrapper-owned submission boundaries. Follow-up inputs are queued in the runtime and injected one-at-a-time only after a turn reaches an idle boundary.
 
@@ -256,7 +256,8 @@ modular runtime with a data and evaluation strategy designed for agentless skill
 -   **Dual Roles** – Prompt templates for `BugFixer` and `TestWriter` share the same tool registry, enabling deterministic skill
     acquisition before agentic orchestration.
 -   **Execution Telemetry** – Command and sandbox outputs are captured through the existing `bash_runner` and PTY subsystems,
-    allowing outcome-based rewards for RL without extra instrumentation.
+    allowing outcome-based rewards for RL without extra instrumentation. The ATIF trajectory exporter provides standardized
+    per-step metrics (token usage, costs, logprobs) directly consumable by SFT and RL training pipelines.
 -   **Self-Play Hooks** – The tool layer exposes high-signal search, diff, and patching capabilities that feed directly into the
     multi-rollout evaluation loop defined in the training roadmap.
 -   **Context Capacity** – Long-context support in the LLM provider abstraction ensures that multi-turn reasoning traces and

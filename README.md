@@ -192,6 +192,17 @@ Key features of Open Responses conformance:
 
 For more information about Open Responses implementation, see [Open Responses Documentation](./docs/protocols/OPEN_RESPONSES.md).
 
+#### Agent Trajectory Interchange Format (ATIF)
+
+VT Code implements the [Agent Trajectory Interchange Format (ATIF)](https://www.harborframework.com/docs/agents/trajectory-format) v1.4 for standardized session trajectory export. ATIF captures complete interaction histories — user messages, agent responses, tool calls, observations, and LLM metrics — in a JSON format usable across debugging, visualization, SFT, and RL pipelines.
+
+- **Complete History**: Every agent step, tool invocation, and observation in one file
+- **LLM Metrics**: Per-step and aggregate token usage, costs, and cache statistics
+- **Interoperable**: Compatible with Harbor, OpenHands, Gemini CLI, Claude Code, and Codex trajectories
+- **Opt-in**: Enable via `telemetry.atif_enabled = true` in `vtcode.toml`
+
+For more information, see [ATIF Trajectory Format Documentation](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md).
+
 ### Authentication
 
 VT Code supports secure OAuth 2.0 authentication for seamless account-based access:
@@ -310,6 +321,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
     - [Security Documentation Index](./docs/security/SECURITY_DOCUMENTATION_INDEX.md)
     - [Tool Policies](./docs/modules/vtcode_tools_policy.md)
 - [**Anthropic API Compatibility**](./docs/a2a/a2a-protocol.md) - Documentation for Anthropic Messages API compatibility server
+- [**ATIF Trajectory Format**](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md) - Standardized agent trajectory export for debugging, SFT, and RL pipelines
 
 ---
 

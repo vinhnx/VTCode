@@ -14,6 +14,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod atif;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.

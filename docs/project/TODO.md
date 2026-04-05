@@ -21,3 +21,7 @@ https://deepwiki.com/instructkr/claw-code
 ---
 
 https://zread.ai/instructkr/claude-code
+
+---
+
+https://sathwick.xyz/blog/claude-code.html

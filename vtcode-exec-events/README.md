@@ -119,6 +119,16 @@ Key features of Open Responses conformance:
 
 For more information about Open Responses implementation, see [Open Responses Documentation](./docs/protocols/protocols/OPEN_RESPONSES.md).
 
+#### Agent Trajectory Interchange Format (ATIF)
+
+VT Code implements the [ATIF](https://www.harborframework.com/docs/agents/trajectory-format) v1.4 specification for standardized session trajectory export. The `vtcode-exec-events` crate provides the ATIF schema types and an `AtifTrajectoryBuilder` that converts live `ThreadEvent` streams into ATIF-compliant JSON.
+
+- **Complete History**: User messages, agent responses, tool calls, observations, and LLM metrics
+- **Interoperable**: Compatible with Harbor, OpenHands, Gemini CLI, Claude Code, and Codex
+- **Opt-in**: Enable via `telemetry.atif_enabled = true` in `vtcode.toml`
+
+For more information, see [ATIF Trajectory Format Documentation](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md).
+
 ### Configuration
 
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
