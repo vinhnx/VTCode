@@ -82,7 +82,7 @@ struct EvaluatorFinding {
     detail: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
 struct EvaluatorScorecard {
     #[serde(default)]
     contract_fidelity: Option<u8>,
@@ -106,12 +106,31 @@ impl EvaluatorScorecard {
         ]
     }
 
+    fn missing_criteria(&self) -> Vec<String> {
+        self.entries()
+            .into_iter()
+            .filter(|(_, score)| score.is_none())
+            .map(|(label, _)| label.to_string())
+            .collect()
+    }
+
+    fn invalid_criteria(&self) -> Vec<String> {
+        self.entries()
+            .into_iter()
+            .filter_map(|(label, score)| {
+                score
+                    .filter(|score| !(1..=5).contains(score))
+                    .map(|score| format!("{label} {score}/5"))
+            })
+            .collect()
+    }
+
     fn failing_criteria(&self) -> Vec<String> {
         self.entries()
             .into_iter()
             .filter_map(|(label, score)| {
                 score
-                    .filter(|score| *score < EVALUATOR_SCORE_THRESHOLD)
+                    .filter(|score| (1..=5).contains(score) && *score < EVALUATOR_SCORE_THRESHOLD)
                     .map(|score| format!("{label} {score}/5"))
             })
             .collect()
@@ -123,22 +142,53 @@ impl EvaluatorScorecard {
 }
 
 impl EvaluatorResponse {
+    fn effective_scorecard(&self) -> EvaluatorScorecard {
+        self.scorecard.unwrap_or_default()
+    }
+
+    fn missing_criteria(&self) -> Vec<String> {
+        self.effective_scorecard().missing_criteria()
+    }
+
+    fn invalid_criteria(&self) -> Vec<String> {
+        self.effective_scorecard().invalid_criteria()
+    }
+
     fn failing_criteria(&self) -> Vec<String> {
-        self.scorecard
-            .as_ref()
-            .map(EvaluatorScorecard::failing_criteria)
-            .unwrap_or_default()
+        self.effective_scorecard().failing_criteria()
     }
 
     fn passed(&self) -> bool {
         self.verdict.eq_ignore_ascii_case("pass")
             && self.high_severity_findings == 0
+            && self.missing_criteria().is_empty()
+            && self.invalid_criteria().is_empty()
             && self.failing_criteria().is_empty()
     }
 
     fn effective_summary(&self) -> String {
         let mut summary = self.summary.trim().to_string();
+        let missing_criteria = self.missing_criteria();
+        let invalid_criteria = self.invalid_criteria();
         let failing_criteria = self.failing_criteria();
+        if !missing_criteria.is_empty() {
+            if !summary.is_empty() {
+                summary.push(' ');
+            }
+            summary.push_str(&format!(
+                "Scorecard incomplete: missing {}.",
+                missing_criteria.join(", ")
+            ));
+        }
+        if !invalid_criteria.is_empty() {
+            if !summary.is_empty() {
+                summary.push(' ');
+            }
+            summary.push_str(&format!(
+                "Scorecard invalid (scores must be 1-5): {}.",
+                invalid_criteria.join(", ")
+            ));
+        }
         if !failing_criteria.is_empty() {
             if !summary.is_empty() {
                 summary.push(' ');
@@ -156,7 +206,10 @@ impl EvaluatorResponse {
                     self.high_severity_findings
                 );
             }
-            if failing_criteria.is_empty() {
+            if missing_criteria.is_empty()
+                && invalid_criteria.is_empty()
+                && failing_criteria.is_empty()
+            {
                 return "Evaluator returned no summary.".to_string();
             }
         }
