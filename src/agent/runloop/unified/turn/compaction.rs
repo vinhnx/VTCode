@@ -3253,7 +3253,7 @@ mod tests {
                 "{\"error\":\"denied\"}".to_string(),
                 "read_file".to_string(),
             ),
-            Message::user("Remember I prefer concise answers.".to_string()),
+            Message::user("I prefer concise answers.".to_string()),
         ];
 
         let facts = super::dedup_latest_facts(&history, 5);
