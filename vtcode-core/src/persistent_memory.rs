@@ -489,16 +489,64 @@ pub fn maybe_extract_user_fact(message: &Message) -> Option<GroundedFactRecord> 
         return None;
     }
 
-    let lowered = text.to_ascii_lowercase();
-    let looks_explicit = lowered.contains("remember")
-        || lowered.contains("note that")
-        || lowered.starts_with("important:")
-        || lowered.starts_with("i am ")
-        || lowered.starts_with("i'm ")
-        || lowered.starts_with("my ");
-    looks_explicit.then(|| GroundedFactRecord {
-        fact: truncate_for_fact(&text, 180),
+    let candidate_text = strip_user_memory_candidate_prefixes(&text);
+    let (candidate_text, looks_authored_note) = strip_user_memory_note_marker(candidate_text)
+        .map(|fact| (fact, true))
+        .unwrap_or((candidate_text, false));
+    let lowered = candidate_text.to_ascii_lowercase();
+    let looks_durable_self_fact = [
+        "my name is ",
+        "i prefer ",
+        "my preferred ",
+        "my pronouns are ",
+        "my timezone is ",
+    ]
+    .iter()
+    .any(|prefix| lowered.starts_with(prefix));
+
+    let should_extract = looks_authored_note || looks_durable_self_fact;
+    should_extract.then(|| GroundedFactRecord {
+        fact: truncate_for_fact(candidate_text, 180),
         source: "user_assertion".to_string(),
+    })
+}
+
+fn strip_user_memory_candidate_prefixes(text: &str) -> &str {
+    const PREFIXES: &[&str] = &[
+        "please ",
+        "please, ",
+        "can you ",
+        "could you ",
+        "would you ",
+        "vt code, ",
+        "vt code ",
+    ];
+
+    let mut trimmed = text.trim();
+    loop {
+        let lowered = trimmed.to_ascii_lowercase();
+        let Some(prefix) = PREFIXES.iter().find(|prefix| lowered.starts_with(**prefix)) else {
+            return trimmed;
+        };
+        trimmed = trimmed
+            .get(prefix.len()..)
+            .unwrap_or("")
+            .trim_start_matches([',', ':', '-', ' '])
+            .trim_start();
+    }
+}
+
+fn strip_user_memory_note_marker(text: &str) -> Option<&str> {
+    const NOTE_PREFIXES: &[&str] = &["note that ", "important:"];
+
+    let lowered = text.to_ascii_lowercase();
+    NOTE_PREFIXES.iter().find_map(|prefix| {
+        lowered.starts_with(prefix).then(|| {
+            text.get(prefix.len()..)
+                .unwrap_or("")
+                .trim_start_matches([',', ':', '-', ' '])
+                .trim_start()
+        })
     })
 }
 
@@ -3055,7 +3103,7 @@ mod tests {
 
     fn message_history() -> Vec<Message> {
         vec![
-            Message::user("remember that I prefer cargo nextest".to_string()),
+            Message::user("I prefer cargo nextest".to_string()),
             Message::tool_response_with_origin(
                 "call-1".to_string(),
                 serde_json::json!({"summary":"Tests live under vtcode-core/tests"}).to_string(),
@@ -3114,6 +3162,127 @@ mod tests {
                 .iter()
                 .any(|fact| fact.source == "tool:unified_search")
         );
+    }
+
+    #[test]
+    fn maybe_extract_user_fact_keeps_durable_self_facts() {
+        let name = maybe_extract_user_fact(&Message::user("My name is Vinh Nguyen".to_string()))
+            .expect("name should be extracted");
+        assert_eq!(name.source, "user_assertion");
+        assert_eq!(name.fact, "My name is Vinh Nguyen");
+
+        let preference = maybe_extract_user_fact(&Message::user(
+            "I prefer cargo nextest for test runs".to_string(),
+        ))
+        .expect("preference should be extracted");
+        assert_eq!(preference.source, "user_assertion");
+        assert_eq!(preference.fact, "I prefer cargo nextest for test runs");
+    }
+
+    #[test]
+    fn maybe_extract_user_fact_ignores_transient_first_person_task_chatter() {
+        assert!(
+            maybe_extract_user_fact(&Message::user(
+                "I am debugging a failing vtcode-core test".to_string(),
+            ))
+            .is_none()
+        );
+        assert!(
+            maybe_extract_user_fact(&Message::user(
+                "My tests are still failing after the refactor".to_string(),
+            ))
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn maybe_extract_user_fact_keeps_authored_notes_after_polite_prefixes() {
+        let note = maybe_extract_user_fact(&Message::user(
+            "Please note that I prefer pnpm in JavaScript workspaces".to_string(),
+        ))
+        .expect("authored note should be extracted");
+        assert_eq!(note.source, "user_assertion");
+        assert_eq!(note.fact, "I prefer pnpm in JavaScript workspaces");
+    }
+
+    #[test]
+    fn maybe_extract_user_fact_ignores_memory_prompts_and_questions() {
+        assert!(
+            maybe_extract_user_fact(&Message::user(
+                "remember that I prefer cargo nextest".to_string(),
+            ))
+            .is_none()
+        );
+        assert!(
+            maybe_extract_user_fact(&Message::user("do you remember my name?".to_string()))
+                .is_none()
+        );
+        assert!(
+            maybe_extract_user_fact(&Message::user(
+                "what do you remember about this repo?".to_string(),
+            ))
+            .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn finalize_persistent_memory_ignores_explicit_memory_prompts() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+
+        let mut runtime = runtime_config(workspace.path());
+        runtime.provider = "missing-provider".to_string();
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+
+        let report = finalize_persistent_memory(
+            &runtime,
+            Some(&vt_cfg),
+            &[Message::user(
+                "remember that I prefer cargo nextest".to_string(),
+            )],
+        )
+        .await
+        .expect("finalize should skip ignored prompts");
+
+        assert!(report.is_none());
+    }
+
+    #[tokio::test]
+    async fn finalize_persistent_memory_skips_existing_authored_note_duplicates() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+
+        let mut runtime = runtime_config(workspace.path());
+        runtime.provider = "missing-provider".to_string();
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+
+        let memory_dir =
+            resolve_persistent_memory_dir(&vt_cfg.agent.persistent_memory, workspace.path())
+                .expect("memory dir")
+                .expect("resolved dir");
+        let files = PersistentMemoryFiles::new(memory_dir);
+        std::fs::create_dir_all(&files.directory).expect("dir");
+        std::fs::write(
+            &files.preferences_file,
+            "# Preferences\n\n- [user_assertion] I prefer cargo nextest for test runs\n",
+        )
+        .expect("prefs");
+
+        let report = finalize_persistent_memory(
+            &runtime,
+            Some(&vt_cfg),
+            &[Message::user(
+                "Please note that I prefer cargo nextest for test runs".to_string(),
+            )],
+        )
+        .await
+        .expect("existing duplicate should skip routing");
+
+        assert!(report.is_none());
     }
 
     #[tokio::test]
