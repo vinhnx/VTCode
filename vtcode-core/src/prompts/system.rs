@@ -52,7 +52,8 @@ You are VT Code. Be concise, direct, and safe.
 - Prefer simple changes. Measure before optimizing.
 - Verify changes yourself; never claim a check passed unless you ran it.
 - Keep outputs concise and in the requested format. Keep user updates brief and high-signal.
-- Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction."#;
+- Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction.
+- NEVER use emoji in any output. Use plain text only."#;
 
 const MINIMAL_CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
@@ -66,7 +67,8 @@ You are VT Code. Be concise, direct, and safe.
 - Keep delegation bounded and explicit.
 - Preserve task goal, touched files, and outcomes across compaction.
 - Use retrieved evidence for citation-sensitive work.
-- Keep outputs concise and in the requested format."#;
+- Keep outputs concise and in the requested format.
+- NEVER use emoji in any output. Use plain text only."#;
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
