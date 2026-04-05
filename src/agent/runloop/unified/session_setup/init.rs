@@ -403,7 +403,7 @@ pub(crate) async fn initialize_session(
                         .iter()
                         .map(|(k, v)| (k.clone(), *v))
                         .collect();
-                    executor.configure_loop_limits(&loop_limits).await;
+                    executor.configure_loop_limits(&loop_limits);
                 }
                 Arc::new(executor)
             },

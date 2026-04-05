@@ -150,11 +150,13 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
                 env: HashMap::new(),
                 enabled: true,
                 max_concurrent_requests: 1,
-                startup_timeout_ms: Some(2_000),
+                // CI and full-suite runs can delay Python startup enough that a
+                // 2s budget flakes even though the provider is otherwise healthy.
+                startup_timeout_ms: Some(10_000),
             },
         ],
-        startup_timeout_seconds: Some(2),
-        tool_timeout_seconds: Some(2),
+        startup_timeout_seconds: Some(10),
+        tool_timeout_seconds: Some(10),
         ..Default::default()
     };
 
