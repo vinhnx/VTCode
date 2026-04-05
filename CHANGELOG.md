@@ -2,6 +2,52 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.97.0 - 2026-04-05
+
+### Highlights
+#### Bug Fixes
+
+- Include terminal-detection before tui publish (6f68a365) (@vinhnx)
+- Publish specs crates before core (0c1da64d) (@vinhnx)
+- Allow publishing specs crates (2f91bd14) (@vinhnx)
+- Update task_tracker permission and model version in configuration (05405f5c) (@vinhnx)
+- Harden perf baseline startup measurement (32f657dc) 
+- Animate active file operation indicator (c2baca0a) 
+- Enhance command safety checks and segment handling (d7491771) 
+- Dim top-level task tail lines in tool blocks (060ec1f5) 
+- Isolate shared state locks (0d685107) 
+#### Documentation
+
+- Add Codex and debug startup release notes (9d24fb99) 
+#### Features
+
+- Add Anthropic native memory and tool result clearing (7b7124f2) 
+- Update notification delivery mode to desktop (80b49f12) 
+- Combine native clearing with compaction (4edb1f65) 
+- Implement orchestrated harness mode with contract evaluation (b437d588) 
+- Enhance scorecard validation and add tests for missing/invalid criteria (29e3df0a) 
+- Update tool policies and add new tools with appropriate permissions (b7e51521) 
+### Other Changes
+#### Other
+
+- Fix badge duplication in README.md (4ffc53bb) (@vinhnx)
+- Migrate to serde-saphyr  (c29cdd5d) (@Sachin-Bhat)
+- Enhance first-run wizard with startup modes and memory (199d1569) 
+- Fix check script and logging guard regressions (c6781996) 
+- Refactor system prompts and contracts for clarity and conciseness; optimize skill rendering and memory handling; enhance path policy checks; update execution kernel for unified file actions; adjust configuration formatting. (1b1d0c79) 
+- Remove sparse-checkout configuration from release workflow steps (d4be7f53) 
+- Enhance recovery handling and fallback messages; update command sharing options; adjust configuration for model and tool limits. (ebad1810) 
+- Update agent prompt for auto mode rule reviewer and adjust model settings in configuration (7ae71a83) 
+- Add permission request and stop hooks to lifecycle management (5186a3ea) 
+- Refactor permission handling and improve code readability across multiple modules (a28db433) 
+- Implement notification system with /notify command and enhance session start hooks (e1bc7e41) 
+- Add configurable desktop notification backends (bf8c51d8) 
+- Enhance pty command handling, update configuration options, and add new JSON schemas for collaboration and command execution (6cf2dd04) 
+- Refactor vtcode.toml configuration: streamline agent settings, enhance permissions, and update context management (a5e4e440) 
+- Tighten persistent memory extraction and tool policies (f15b43a5) 
+- Add Agent Trajectory Interchange Format (ATIF) support for session trajectory export (0e09ef90) 
+### Contributors
+@vinhnx
 ## 0.96.15 - 2026-04-04
 
 ### Highlights
