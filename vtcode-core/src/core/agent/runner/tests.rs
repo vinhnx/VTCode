@@ -629,6 +629,10 @@ fn tool_call_response(tool_name: &str, args: serde_json::Value) -> LLMResponse {
 fn planner_response_json(verify_command: &str) -> serde_json::Value {
     json!({
         "spec_markdown": "# Execution Spec\n\nImplement the requested change with a resumable tracker.",
+        "contract_markdown": format!(
+            "# Execution Contract\n\n## Done Criteria\n- Implement the requested change.\n- Verify with `{}`.\n",
+            verify_command
+        ),
         "task_title": "Planner seeded task",
         "items": [{
             "description": "Implement the requested change",
@@ -643,10 +647,30 @@ fn evaluator_response_json(
     summary: &str,
     high_severity_findings: usize,
 ) -> serde_json::Value {
+    let scores = if verdict.eq_ignore_ascii_case("pass") && high_severity_findings == 0 {
+        (5, 5, 5, 5)
+    } else {
+        (3, 2, 4, 3)
+    };
+    evaluator_response_json_with_scorecard(verdict, summary, high_severity_findings, scores)
+}
+
+fn evaluator_response_json_with_scorecard(
+    verdict: &str,
+    summary: &str,
+    high_severity_findings: usize,
+    scores: (u8, u8, u8, u8),
+) -> serde_json::Value {
     json!({
         "verdict": verdict,
         "summary": summary,
         "high_severity_findings": high_severity_findings,
+        "scorecard": {
+            "contract_fidelity": scores.0,
+            "functionality": scores.1,
+            "code_quality": scores.2,
+            "verification_integrity": scores.3,
+        },
         "findings": [{
             "severity": if high_severity_findings > 0 { "high" } else { "low" },
             "title": summary,
@@ -1097,6 +1121,10 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
         "planner should write current_spec.md"
     );
     assert!(
+        workspace.join(".vtcode/tasks/current_contract.md").exists(),
+        "planner should write current_contract.md"
+    );
+    assert!(
         workspace
             .join(".vtcode/tasks/current_evaluation.md")
             .exists(),
@@ -1106,6 +1134,10 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
         fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
     assert!(tracker.contains("outcome: The requested change is implemented and tracked."));
     assert!(tracker.contains("verify: pwd"));
+    let contract = fs::read_to_string(workspace.join(".vtcode/tasks/current_contract.md"))
+        .expect("contract file");
+    assert!(contract.contains("Execution Contract"));
+    assert!(contract.contains("Verify with `pwd`"));
 
     let events = harness_events(&result);
     assert!(events.contains(&HarnessEventKind::PlanningStarted));
@@ -1207,8 +1239,64 @@ async fn evaluator_request_includes_verification_results() {
         .first()
         .map(|message| message.content.as_text().into_owned())
         .expect("evaluator prompt");
+    assert!(evaluator_prompt.contains("Current contract:"));
     assert!(evaluator_prompt.contains("Verification results:"));
     assert!(evaluator_prompt.contains("[PASS] pwd (exit 0)"));
+    assert!(evaluator_prompt.contains("contract_fidelity"));
+}
+
+#[tokio::test]
+async fn evaluator_scorecard_below_threshold_forces_revision() {
+    let temp = TempDir::new().expect("tempdir");
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
+    vt_cfg.automation.full_auto.max_turns = 4;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-scorecard").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json_with_scorecard(
+            "pass",
+            "Looks mostly good.",
+            0,
+            (5, 3, 5, 5),
+        )),
+        text_response("Revision 1: task is complete."),
+        json_response(evaluator_response_json(
+            "pass",
+            "All issues have been addressed.",
+            0,
+        )),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Evaluator scorecard revision", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::EvaluationFailed));
+    assert!(events.contains(&HarnessEventKind::RevisionStarted));
+    assert!(events.contains(&HarnessEventKind::EvaluationPassed));
+
+    let evaluation = fs::read_to_string(temp.path().join(".vtcode/tasks/current_evaluation.md"))
+        .expect("evaluation file");
+    assert!(evaluation.contains("## Scorecard"));
+    assert!(evaluation.contains("Functionality: 5/5"));
 }
 
 #[tokio::test]
@@ -1260,9 +1348,11 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
     for path in paths {
         let content = fs::read_to_string(&path).expect("blocked handoff file");
         assert!(content.contains("current_spec.md"));
+        assert!(content.contains("current_contract.md"));
         assert!(content.contains("current_evaluation.md"));
     }
     assert!(workspace.join(".vtcode/tasks/current_spec.md").exists());
+    assert!(workspace.join(".vtcode/tasks/current_contract.md").exists());
     assert!(
         workspace
             .join(".vtcode/tasks/current_evaluation.md")

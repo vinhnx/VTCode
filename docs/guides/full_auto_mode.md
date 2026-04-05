@@ -54,6 +54,28 @@ Tips:
     isolated).
 -   Combine with tool policies if you need per-tool constraints or prompts even in full-auto mode.
 
+## Orchestrated Harness Mode
+
+For longer autonomous builds, prefer enabling the planner/evaluator harness instead of relying on a
+single uninterrupted build loop:
+
+```toml
+[agent.harness]
+orchestration_mode = "plan_build_evaluate"
+max_revision_rounds = 2
+```
+
+When enabled, `vtcode exec --full-auto` writes a small set of working artifacts under
+`.vtcode/tasks/`:
+
+- `current_spec.md`: high-level execution spec
+- `current_contract.md`: observable done criteria and verification contract
+- `current_task.md`: tracker state
+- `current_evaluation.md`: skeptical evaluator output after a completion attempt
+
+This keeps long-running work resumable and makes evaluator-driven revision rounds explicit instead
+of relying on the generator to judge itself.
+
 ## Profile File Recommendations
 
 The profile file is a simple acknowledgement document. Suggested content:

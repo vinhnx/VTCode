@@ -45,9 +45,18 @@ The harness configuration is intentionally split across three existing surfaces 
 - `automation.full_auto` controls autonomous execution and turn limits.
 - `context.dynamic` controls how much state and history are reintroduced on each turn.
 
-That split keeps VT Code aligned with the current runtime while making the harness explicit enough to evolve. Multi-agent
-orchestration, dynamic tool assembly, and harness self-analysis remain follow-on work after single-agent long-horizon execution is
-stable.
+That split keeps VT Code aligned with the current runtime while making the harness explicit enough to evolve.
+
+When `agent.harness.orchestration_mode = "plan_build_evaluate"` is enabled for `exec/full-auto`, VT Code adds a lightweight
+planner/evaluator loop on top of the single-agent runtime instead of introducing a separate always-on agent subsystem:
+
+- The planner writes `.vtcode/tasks/current_spec.md` and `.vtcode/tasks/current_contract.md`, then seeds `current_task.md`.
+- The generator still runs on the main session, but it is constrained by those artifacts plus tracker completion and verification.
+- The evaluator performs a skeptical post-build pass over the spec, contract, tracker, verification results, warnings, and changed files, then writes `.vtcode/tasks/current_evaluation.md`.
+- Failed evaluation triggers bounded revision rounds rather than silent acceptance, and the artifacts survive blocked handoff, resume, and local compaction.
+
+Broader multi-agent orchestration, dynamic tool assembly, and harness self-analysis remain follow-on work after this single-threaded
+plan/build/evaluate path is stable.
 
 ### Explicit Delegation Model
 

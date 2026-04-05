@@ -15,6 +15,7 @@ use serde_json::json;
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {
     pub spec_path: std::path::PathBuf,
+    pub contract_path: std::path::PathBuf,
     pub tracker_path: std::path::PathBuf,
 }
 
@@ -23,7 +24,6 @@ pub(super) struct EvaluationArtifacts {
     pub evaluation_path: std::path::PathBuf,
     pub passed: bool,
     pub summary: String,
-    pub high_severity_findings: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,8 @@ pub(super) enum EvaluatorGateOutcome {
 #[derive(Debug, Deserialize)]
 struct PlannerResponse {
     spec_markdown: String,
+    #[serde(default)]
+    contract_markdown: Option<String>,
     #[serde(default)]
     task_title: Option<String>,
     #[serde(default)]
@@ -61,6 +63,8 @@ struct EvaluatorResponse {
     #[serde(default)]
     high_severity_findings: usize,
     #[serde(default)]
+    scorecard: Option<EvaluatorScorecard>,
+    #[serde(default)]
     findings: Vec<EvaluatorFinding>,
     #[serde(default)]
     unmet_contract_items: Vec<String>,
@@ -76,6 +80,89 @@ struct EvaluatorFinding {
     title: String,
     #[serde(default)]
     detail: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct EvaluatorScorecard {
+    #[serde(default)]
+    contract_fidelity: Option<u8>,
+    #[serde(default)]
+    functionality: Option<u8>,
+    #[serde(default)]
+    code_quality: Option<u8>,
+    #[serde(default)]
+    verification_integrity: Option<u8>,
+}
+
+const EVALUATOR_SCORE_THRESHOLD: u8 = 4;
+
+impl EvaluatorScorecard {
+    fn entries(&self) -> [(&'static str, Option<u8>); 4] {
+        [
+            ("Contract fidelity", self.contract_fidelity),
+            ("Functionality", self.functionality),
+            ("Code quality", self.code_quality),
+            ("Verification integrity", self.verification_integrity),
+        ]
+    }
+
+    fn failing_criteria(&self) -> Vec<String> {
+        self.entries()
+            .into_iter()
+            .filter_map(|(label, score)| {
+                score
+                    .filter(|score| *score < EVALUATOR_SCORE_THRESHOLD)
+                    .map(|score| format!("{label} {score}/5"))
+            })
+            .collect()
+    }
+
+    fn has_scores(&self) -> bool {
+        self.entries().into_iter().any(|(_, score)| score.is_some())
+    }
+}
+
+impl EvaluatorResponse {
+    fn failing_criteria(&self) -> Vec<String> {
+        self.scorecard
+            .as_ref()
+            .map(EvaluatorScorecard::failing_criteria)
+            .unwrap_or_default()
+    }
+
+    fn passed(&self) -> bool {
+        self.verdict.eq_ignore_ascii_case("pass")
+            && self.high_severity_findings == 0
+            && self.failing_criteria().is_empty()
+    }
+
+    fn effective_summary(&self) -> String {
+        let mut summary = self.summary.trim().to_string();
+        let failing_criteria = self.failing_criteria();
+        if !failing_criteria.is_empty() {
+            if !summary.is_empty() {
+                summary.push(' ');
+            }
+            summary.push_str(&format!(
+                "Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required): {}.",
+                failing_criteria.join(", ")
+            ));
+        }
+
+        if summary.is_empty() {
+            if self.high_severity_findings > 0 {
+                return format!(
+                    "Evaluator reported {} high-severity finding(s).",
+                    self.high_severity_findings
+                );
+            }
+            if failing_criteria.is_empty() {
+                return "Evaluator returned no summary.".to_string();
+            }
+        }
+
+        summary
+    }
 }
 
 impl AgentRunner {
@@ -100,7 +187,7 @@ impl AgentRunner {
     ) -> Result<PlannerArtifacts> {
         event_recorder.harness_event(
             HarnessEventKind::PlanningStarted,
-            Some("Generating execution spec and task tracker.".to_string()),
+            Some("Generating execution spec, contract, and task tracker.".to_string()),
             None,
             None,
             None,
@@ -115,6 +202,12 @@ impl AgentRunner {
         let spec_path = harness_artifacts::write_spec(&self._workspace, &spec_markdown).await?;
 
         let tracker_items = self.build_planner_tracker_items(task, planner_response.items);
+        let contract_markdown = planner_response
+            .contract_markdown
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| self.render_contract_markdown(task, &tracker_items));
+        let contract_path =
+            harness_artifacts::write_contract(&self._workspace, &contract_markdown).await?;
         let tracker_title = planner_response
             .task_title
             .filter(|value| !value.trim().is_empty())
@@ -136,8 +229,9 @@ impl AgentRunner {
         event_recorder.harness_event(
             HarnessEventKind::PlanningCompleted,
             Some(format!(
-                "Planner wrote {} and seeded {}.",
+                "Planner wrote {}, {}, and seeded {}.",
                 spec_path.display(),
+                contract_path.display(),
                 tracker_path.display()
             )),
             None,
@@ -147,6 +241,7 @@ impl AgentRunner {
 
         Ok(PlannerArtifacts {
             spec_path,
+            contract_path,
             tracker_path,
         })
     }
@@ -154,8 +249,9 @@ impl AgentRunner {
     pub(super) fn augment_generator_task(&self, task: &Task, artifacts: &PlannerArtifacts) -> Task {
         let mut effective_task = task.clone();
         let addendum = format!(
-            "Generator contract:\n- Treat `{}` and `{}` as the source of truth.\n- Work one tracker step at a time.\n- Keep the tracker current.\n- Leave resumable state before yielding.",
+            "Generator contract:\n- Treat `{}`, `{}`, and `{}` as the source of truth.\n- The execution contract defines what done must look like in observable terms.\n- Work one tracker step at a time.\n- Do not mark a step done until the implementation and verification evidence both support it.\n- Keep the tracker current.\n- Leave resumable state before yielding.",
             artifacts.spec_path.display(),
+            artifacts.contract_path.display(),
             artifacts.tracker_path.display()
         );
         effective_task.instructions = Some(match task.instructions.as_deref() {
@@ -183,7 +279,8 @@ impl AgentRunner {
         let evaluator = self
             .request_evaluator_response(task, session_state, verification_results)
             .await?;
-        let passed = evaluator.verdict.eq_ignore_ascii_case("pass");
+        let summary = evaluator.effective_summary();
+        let passed = evaluator.passed();
         let evaluation_path = harness_artifacts::write_evaluation(
             &self._workspace,
             &self.render_evaluation(&evaluator),
@@ -193,8 +290,7 @@ impl AgentRunner {
         Ok(EvaluationArtifacts {
             evaluation_path,
             passed,
-            summary: evaluator.summary,
-            high_severity_findings: evaluator.high_severity_findings,
+            summary,
         })
     }
 
@@ -225,7 +321,7 @@ impl AgentRunner {
         let evaluation = self
             .run_evaluator_phase(task, session_state, event_recorder, verification_results)
             .await?;
-        if evaluation.passed && evaluation.high_severity_findings == 0 {
+        if evaluation.passed {
             event_recorder.harness_event(
                 HarnessEventKind::EvaluationPassed,
                 Some(evaluation.summary.clone()),
@@ -368,9 +464,9 @@ impl AgentRunner {
 
     async fn request_planner_response(&mut self, task: &Task) -> Result<PlannerResponse> {
         let model = self.get_selected_model();
-        let system_prompt = "You are the VT Code exec harness planner. Expand the task into a concise markdown spec and a concrete tracker. Return strict JSON only with keys: spec_markdown, task_title, items. Each item must include description, outcome, and verify. Keep the spec high-level and implementation-agnostic.";
+        let system_prompt = "You are the VT Code exec harness planner. Expand the task into a concise execution spec, a concrete execution contract, and a tracker. Return strict JSON only with keys: spec_markdown, contract_markdown, task_title, items. Keep spec_markdown high-level and implementation-agnostic. Use contract_markdown and items to define observable done conditions and verification. Each item must include description, outcome, and verify; files is optional. Keep scope tight to the user request and do not invent speculative work.";
         let user_prompt = format!(
-            "Plan this task.\n\nTitle: {}\nDescription: {}\nInstructions: {}\n\nReturn JSON only.",
+            "Plan this task.\n\nTitle: {}\nDescription: {}\nInstructions: {}\n\nProduce:\n- a concise execution spec\n- a concrete execution contract with observable done signals\n- tracker items with explicit verification commands\n\nReturn JSON only.",
             task.title,
             task.description,
             task.instructions.as_deref().unwrap_or("(none)")
@@ -404,6 +500,10 @@ impl AgentRunner {
             tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
                 .await
                 .unwrap_or_default();
+        let contract_content =
+            tokio::fs::read_to_string(harness_artifacts::current_contract_path(&self._workspace))
+                .await
+                .unwrap_or_default();
         let tracker_content =
             tokio::fs::read_to_string(harness_artifacts::current_task_path(&self._workspace))
                 .await
@@ -411,12 +511,13 @@ impl AgentRunner {
         let changed_files =
             load_changed_file_snapshots(&self._workspace, &session_state.modified_files).await;
         let verification_summary = format_verification_results(verification_results);
-        let system_prompt = "You are the VT Code exec harness evaluator. Judge the candidate skeptically. Return strict JSON only with keys verdict, summary, high_severity_findings, findings, unmet_contract_items, residual_risks, required_tracker_updates. Use verdict=pass only when the tracker, verification evidence, and implemented state are consistent and there are no high-severity issues.";
+        let system_prompt = "You are the VT Code exec harness evaluator. You are not the builder. Judge the candidate skeptically and prefer failing borderline cases. Return strict JSON only with keys verdict, summary, high_severity_findings, scorecard, findings, unmet_contract_items, residual_risks, required_tracker_updates. The scorecard must contain 1-5 scores for contract_fidelity, functionality, code_quality, and verification_integrity. Use verdict=pass only when every provided score is at least 4, the tracker/spec/contract all agree, verification evidence is credible, and there are no high-severity issues.";
         let user_prompt = format!(
-            "Evaluate this run.\n\nTask title: {}\nTask description: {}\n\nCurrent spec:\n{}\n\nCurrent tracker:\n{}\n\nVerification results:\n{}\n\nModified files:\n{}\n\nWarnings:\n{}\n\nReturn JSON only.",
+            "Evaluate this run against the current execution contract.\n\nTask title: {}\nTask description: {}\n\nCurrent spec:\n{}\n\nCurrent contract:\n{}\n\nCurrent tracker:\n{}\n\nVerification results:\n{}\n\nModified files:\n{}\n\nWarnings:\n{}\n\nScoring guidance:\n- contract_fidelity: Did the implementation satisfy the spec and contract rather than a looser interpretation?\n- functionality: Do the implemented paths actually work beyond stubs and happy-path claims?\n- code_quality: Are the changes coherent, scoped, and consistent with local patterns?\n- verification_integrity: Do the tracker state and verification evidence really justify completion?\n\nReturn JSON only.",
             task.title,
             task.description,
             spec_content,
+            contract_content,
             tracker_content,
             verification_summary,
             changed_files,
@@ -431,7 +532,7 @@ impl AgentRunner {
                 model,
                 stream: false,
                 temperature: Some(0.1),
-                max_tokens: Some(1400),
+                max_tokens: Some(1800),
                 ..Default::default()
             })
             .await
@@ -444,8 +545,19 @@ impl AgentRunner {
         let mut markdown = format!(
             "# Evaluation\n\n## Verdict\n{}\n\n## Summary\n{}\n",
             evaluation.verdict.trim(),
-            evaluation.summary.trim()
+            evaluation.effective_summary()
         );
+
+        if let Some(scorecard) = evaluation.scorecard.as_ref()
+            && scorecard.has_scores()
+        {
+            markdown.push_str("\n## Scorecard\n");
+            for (label, score) in scorecard.entries() {
+                if let Some(score) = score {
+                    markdown.push_str(&format!("- {}: {}/5\n", label, score));
+                }
+            }
+        }
 
         if !evaluation.findings.is_empty() {
             markdown.push_str("\n## Findings\n");
@@ -496,6 +608,61 @@ impl AgentRunner {
 
         markdown
     }
+
+    fn render_contract_markdown(&self, task: &Task, tracker_items: &[serde_json::Value]) -> String {
+        let mut markdown = format!(
+            "# Execution Contract\n\n## Goal\n{}\n\n## Done Criteria\n",
+            task.description.trim()
+        );
+
+        if tracker_items.is_empty() {
+            markdown.push_str("- Deliver the requested change.\n");
+            markdown.push_str("- Keep the result verifiable.\n");
+        } else {
+            for (index, item) in tracker_items.iter().enumerate() {
+                let description = item
+                    .get("description")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(task.description.trim());
+                let outcome = item
+                    .get("outcome")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("Requested work is implemented and tracked.");
+                let files = json_string_list(item, "files");
+                let verify = json_string_list(item, "verify");
+
+                markdown.push_str(&format!("- Step {}: {}\n", index + 1, description));
+                markdown.push_str(&format!("- Outcome: {}\n", outcome));
+                if !files.is_empty() {
+                    markdown.push_str(&format!("- Files: {}\n", files.join(", ")));
+                }
+                if !verify.is_empty() {
+                    markdown.push_str(&format!("- Verify: {}\n", verify.join(" | ")));
+                }
+            }
+        }
+
+        markdown.push_str(
+            "\n## Review Standard\n- Prefer observable behavior over claimed completion.\n- Prefer failing borderline output over accepting unverifiable work.\n",
+        );
+        markdown
+    }
+}
+
+fn json_string_list(item: &serde_json::Value, key: &str) -> Vec<String> {
+    item.get(key)
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .collect()
 }
 
 fn parse_json_response<T>(text: &str) -> Result<T>

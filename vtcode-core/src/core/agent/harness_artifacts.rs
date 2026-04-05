@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 const TASKS_DIR: &str = ".vtcode/tasks";
 const CURRENT_TASK_FILE: &str = "current_task.md";
 const CURRENT_SPEC_FILE: &str = "current_spec.md";
+const CURRENT_CONTRACT_FILE: &str = "current_contract.md";
 const CURRENT_EVALUATION_FILE: &str = "current_evaluation.md";
 const SUMMARY_PREVIEW_CHARS: usize = 280;
 
@@ -16,6 +17,10 @@ pub fn current_spec_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(TASKS_DIR).join(CURRENT_SPEC_FILE)
 }
 
+pub fn current_contract_path(workspace_root: &Path) -> PathBuf {
+    workspace_root.join(TASKS_DIR).join(CURRENT_CONTRACT_FILE)
+}
+
 pub fn current_evaluation_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(TASKS_DIR).join(CURRENT_EVALUATION_FILE)
 }
@@ -23,6 +28,7 @@ pub fn current_evaluation_path(workspace_root: &Path) -> PathBuf {
 pub fn existing_harness_artifact_paths(workspace_root: &Path) -> Vec<PathBuf> {
     [
         current_spec_path(workspace_root),
+        current_contract_path(workspace_root),
         current_evaluation_path(workspace_root),
     ]
     .into_iter()
@@ -32,6 +38,10 @@ pub fn existing_harness_artifact_paths(workspace_root: &Path) -> Vec<PathBuf> {
 
 pub fn read_spec_summary(workspace_root: &Path) -> Option<String> {
     read_markdown_summary(&current_spec_path(workspace_root), "Spec")
+}
+
+pub fn read_contract_summary(workspace_root: &Path) -> Option<String> {
+    read_markdown_summary(&current_contract_path(workspace_root), "Contract")
 }
 
 pub fn read_evaluation_summary(workspace_root: &Path) -> Option<String> {
@@ -47,6 +57,12 @@ pub async fn write_spec(workspace_root: &Path, content: &str) -> Result<PathBuf>
 pub async fn write_evaluation(workspace_root: &Path, content: &str) -> Result<PathBuf> {
     let path = current_evaluation_path(workspace_root);
     write_artifact(path.as_path(), content, "current evaluation").await?;
+    Ok(path)
+}
+
+pub async fn write_contract(workspace_root: &Path, content: &str) -> Result<PathBuf> {
+    let path = current_contract_path(workspace_root);
+    write_artifact(path.as_path(), content, "current contract").await?;
     Ok(path)
 }
 
@@ -107,6 +123,12 @@ mod tests {
         )
         .await
         .expect("write spec");
+        write_contract(
+            temp.path(),
+            "# Contract\n\n- Deliver the requested change.\n- Verify with cargo check.\n",
+        )
+        .await
+        .expect("write contract");
         write_evaluation(
             temp.path(),
             "# Evaluation\n\nVerdict: fail\n\nNeed another revision round.\n",
@@ -115,10 +137,17 @@ mod tests {
         .expect("write evaluation");
 
         let paths = existing_harness_artifact_paths(temp.path());
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 3);
         assert_eq!(
             read_spec_summary(temp.path()),
             Some("Spec: Build a stronger exec harness. | Keep it resumable.".to_string())
+        );
+        assert_eq!(
+            read_contract_summary(temp.path()),
+            Some(
+                "Contract: - Deliver the requested change. | - Verify with cargo check."
+                    .to_string()
+            )
         );
         assert_eq!(
             read_evaluation_summary(temp.path()),
