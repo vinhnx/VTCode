@@ -529,6 +529,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Implemented Behavior, Supported `SKILL.md` Fields, Validation Rules, Discovery Precedence, Deliberate Non-Support
   - **User Questions**: "What can you tell me about Agent Skills Spec Implementation?", "How does Implemented Behavior work?", "How does Supported `SKILL.md` Fields work?"
 
+- **File**: `docs/protocols/ATIF_TRAJECTORY_FORMAT.md`
+  - **Content**: Agent Trajectory Interchange Format (ATIF)
+  - **Topics**: Overview, Configuration, Schema, VT Code Event Mapping, Implementation
+  - **User Questions**: "What can you tell me about Agent Trajectory Interchange Format (ATIF)?", "How does Overview work?", "How does Configuration work?"
+
 - **File**: `docs/a2a/README.md`
   - **Content**: Agent2Agent (A2A) Protocol Support
   - **Topics**: Overview, Architecture, Usage, JSON-RPC API Reference, Error Handling

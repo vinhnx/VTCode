@@ -18,6 +18,12 @@ pub struct TelemetryConfig {
     #[serde(default = "default_retention_days")]
     pub retention_days: u32,
 
+    /// Enable ATIF (Agent Trajectory Interchange Format) trajectory export.
+    /// When enabled, sessions write an `atif-trajectory.json` alongside the
+    /// existing `.jsonl` trajectory log.
+    #[serde(default)]
+    pub atif_enabled: bool,
+
     /// Emit bottleneck traces for slow paths
     #[serde(default)]
     pub bottleneck_tracing: bool,
@@ -43,6 +49,7 @@ impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
             trajectory_enabled: true,
+            atif_enabled: false,
             dashboards_enabled: true,
             sample_interval_ms: default_interval(),
             retention_days: default_retention_days(),
