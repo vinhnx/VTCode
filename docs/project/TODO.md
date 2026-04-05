@@ -65,3 +65,15 @@ https://x.com/jpschroeder/status/2038960058499768427
 ===
 
 https://x.com/cryptodavidw/status/2039198363615457538
+
+---
+
+check if same then fix
+
+https://www.reddit.com/r/ClaudeCode/comments/1s7mitf/psa_claude_code_has_two_cache_bugs_that_can/
+
+https://www.reddit.com/r/ClaudeCode/comments/1s9pjbl/claude_code_cache_crisis_a_complete/
+
+---
+
+must read and apply https://magazine.sebastianraschka.com/p/components-of-a-coding-agent

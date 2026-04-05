@@ -50,13 +50,31 @@ pub(crate) async fn handle_chat_command(
 
 pub(super) async fn handle_analyze_command(
     core_cfg: CoreAgentConfig,
+    vt_cfg: Option<VTCodeConfig>,
     analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
     if core_cfg
         .provider
         .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
     {
-        anyhow::bail!("provider=codex currently supports interactive chat and ask only");
+        let prompt = codex_analyze_prompt(&analysis_type);
+        let completed = crate::codex_app_server::run_codex_noninteractive(
+            &core_cfg,
+            vt_cfg.as_ref(),
+            crate::codex_app_server::CodexNonInteractiveRun {
+                prompt,
+                read_only: true,
+                plan_mode: false,
+                skip_confirmations: true,
+                ephemeral: true,
+                resume_thread_id: None,
+                seed_messages: Vec::new(),
+                review_target: None,
+            },
+        )
+        .await?;
+        println!("{}", completed.output);
+        return Ok(());
     }
 
     vtcode_core::commands::analyze::handle_analyze_command(
@@ -65,6 +83,33 @@ pub(super) async fn handle_analyze_command(
         "text".to_string(),
     )
     .await
+}
+
+fn codex_analyze_prompt(analysis_type: &analyze::AnalysisType) -> String {
+    let focus = match analysis_type {
+        analyze::AnalysisType::Full => {
+            "architecture, main subsystems, risks, and the most important next investigation areas"
+        }
+        analyze::AnalysisType::Structure => {
+            "project structure, entrypoints, crate/module boundaries, and code organization"
+        }
+        analyze::AnalysisType::Security => {
+            "security-relevant trust boundaries, dangerous operations, auth, and likely security gaps"
+        }
+        analyze::AnalysisType::Performance => {
+            "performance-sensitive paths, avoidable work, I/O hotspots, and likely bottlenecks"
+        }
+        analyze::AnalysisType::Dependencies => {
+            "dependency shape, integration boundaries, and notable external coupling"
+        }
+        analyze::AnalysisType::Complexity => {
+            "complex control flow, high-risk modules, and areas likely to be hard to change safely"
+        }
+    };
+
+    format!(
+        "Analyze the current workspace in read-only mode. Focus on {focus}. Ground the answer in the repository, include concise file references when useful, and do not modify files or request additional user input."
+    )
 }
 
 pub(crate) async fn handle_resume_session_command(

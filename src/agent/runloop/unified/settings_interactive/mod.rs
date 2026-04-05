@@ -236,6 +236,9 @@ pub(crate) fn resolve_settings_view_path(path: &str) -> String {
         "model" => SETTINGS_MODEL_CONFIG_PATH.to_string(),
         "model.main" => SETTINGS_MODEL_CONFIG_MAIN_PATH.to_string(),
         "model.lightweight" => SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH.to_string(),
+        "codex" | "codex_app_server" | "codex.app_server" | "app_server" => {
+            "agent.codex_app_server".to_string()
+        }
         other => other.to_string(),
     }
 }
@@ -502,6 +505,14 @@ mod tests {
             resolve_settings_view_path("model.lightweight"),
             SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH
         );
+        assert_eq!(
+            resolve_settings_view_path("codex"),
+            "agent.codex_app_server"
+        );
+        assert_eq!(
+            resolve_settings_view_path("codex_app_server"),
+            "agent.codex_app_server"
+        );
     }
 
     #[test]
@@ -551,6 +562,64 @@ mod tests {
             entry.selection,
             Some(InlineListSelection::ConfigAction(
                 ACTION_CONFIGURE_EDITOR.to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn root_settings_include_codex_app_server_quick_access() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "Codex App Server")
+            .expect("codex app server quick access");
+        assert_eq!(
+            entry.selection,
+            Some(InlineListSelection::ConfigAction(
+                "settings:open:agent.codex_app_server".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn codex_app_server_custom_command_entry_is_cycleable() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("agent.codex_app_server".to_string()),
+        };
+        let draft: TomlValue = toml::from_str(
+            r#"
+            [agent.codex_app_server]
+            command = "/usr/local/bin/codex"
+            args = ["app-server"]
+            startup_timeout_secs = 10
+            experimental_features = false
+            "#,
+        )
+        .expect("valid draft value");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "Command")
+            .expect("command entry");
+        assert_eq!(
+            entry.selection,
+            Some(InlineListSelection::ConfigAction(
+                "settings:set:agent.codex_app_server.command:cycle".to_string()
             ))
         );
     }

@@ -48,6 +48,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Failure pause thresholds and recovery guardrails.",
     ),
     (
+        "agent.codex_app_server",
+        "Codex App Server",
+        "Local Codex sidecar launch command, startup timeout, and experimental integration switches.",
+    ),
+    (
         "agent.harness",
         "Harness Limits",
         "Per-turn tool call and timing safety limits.",

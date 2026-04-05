@@ -63,9 +63,9 @@ pub enum NotificationDeliveryMode {
     /// Terminal-native alerts only (bell/OSC).
     Terminal,
     /// Terminal alerts with desktop notifications when supported.
-    #[default]
     Hybrid,
-    /// Desktop notifications first; fall back to terminal alerts when unavailable.
+    /// Desktop notifications only unless the terminal backend is selected explicitly.
+    #[default]
     Desktop,
 }
 

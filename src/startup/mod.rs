@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
 use vtcode_core::utils::validation::validate_path_exists;
 
@@ -25,8 +25,8 @@ use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::models::Provider;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::models::{Provider, model_catalog_entry};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::validator::{
     check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
@@ -37,7 +37,7 @@ use vtcode_core::core::agent::config::{
     resolve_runtime_model_selection,
 };
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_core::{initialize_dot_folder, update_theme_preference};
+use vtcode_core::{initialize_dot_folder, update_model_preference, update_theme_preference};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
 };
@@ -78,6 +78,7 @@ impl StartupContext {
 
         let mut config = loaded.config;
         apply_autonomous_mode_compat(&mut config, args.permission_mode.as_deref());
+        apply_codex_experimental_override(&mut config, args.codex_experimental_override());
 
         // Determine plan mode: CLI flag takes precedence, then config default_editing_mode
         let plan_mode_from_cli = args
@@ -114,7 +115,18 @@ impl StartupContext {
             );
         }
 
-        let selection = resolve_runtime_model_selection(args, &config);
+        let mut selection = resolve_runtime_model_selection(args, &config);
+        let codex_fallback_notice = if command_skips_provider_auth(args.command.as_ref()) {
+            None
+        } else {
+            maybe_apply_codex_sidecar_fallback(
+                &mut config,
+                &loaded.workspace,
+                &mut selection,
+                loaded.first_run_occurred,
+            )
+            .await?
+        };
 
         initialize_dot_folder().await.ok();
 
@@ -197,6 +209,12 @@ impl StartupContext {
             Some(&loaded.workspace),
         );
 
+        if let Some(notice) = codex_fallback_notice
+            && !args.quiet
+        {
+            eprintln!("warning: {notice}");
+        }
+
         Ok(StartupContext {
             workspace: loaded.workspace,
             config,
@@ -224,6 +242,119 @@ fn apply_autonomous_mode_compat(config: &mut VTCodeConfig, cli_permission_mode: 
         );
         config.permissions.default_mode = PermissionMode::Auto;
     }
+}
+
+fn apply_codex_experimental_override(config: &mut VTCodeConfig, override_value: Option<bool>) {
+    if let Some(enabled) = override_value {
+        config.agent.codex_app_server.experimental_features = enabled;
+    }
+}
+
+async fn maybe_apply_codex_sidecar_fallback(
+    config: &mut VTCodeConfig,
+    workspace: &Path,
+    selection: &mut RuntimeModelSelection,
+    first_run_occurred: bool,
+) -> Result<Option<String>> {
+    if !selection
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        return Ok(None);
+    }
+
+    let unavailable = match crate::codex_app_server::ensure_codex_sidecar_available(Some(config)) {
+        Ok(()) => return Ok(None),
+        Err(err) => err,
+    };
+
+    let fallback =
+        match resolve_codex_fallback_selection(config, workspace, selection, first_run_occurred)
+            .await
+        {
+            Ok(fallback) => fallback,
+            Err(err) => return Err(anyhow!("{unavailable} {err}")),
+        };
+    persist_runtime_selection(config, workspace, &fallback).await?;
+
+    let notice = format!(
+        "{} Falling back to {} ({}) and updating the saved VT Code selection.",
+        unavailable,
+        provider_label(&fallback.provider, Some(config)),
+        fallback.model
+    );
+    *selection = fallback;
+    Ok(Some(notice))
+}
+
+async fn resolve_codex_fallback_selection(
+    config: &VTCodeConfig,
+    workspace: &Path,
+    selection: &RuntimeModelSelection,
+    first_run_occurred: bool,
+) -> Result<RuntimeModelSelection> {
+    let openai_candidate = RuntimeModelSelection {
+        model: openai_fallback_model(&selection.model),
+        provider: "openai".to_string(),
+        model_source: selection.model_source,
+    };
+    if resolve_runtime_provider_auth(config, workspace, &openai_candidate, first_run_occurred)
+        .await
+        .is_ok()
+    {
+        return Ok(openai_candidate);
+    }
+
+    let copilot_candidate = RuntimeModelSelection {
+        model: vtcode_core::config::constants::models::copilot::DEFAULT_MODEL.to_string(),
+        provider: "copilot".to_string(),
+        model_source: selection.model_source,
+    };
+    if resolve_runtime_provider_auth(config, workspace, &copilot_candidate, first_run_occurred)
+        .await
+        .is_ok()
+    {
+        return Ok(copilot_candidate);
+    }
+
+    bail!(
+        "No authenticated fallback provider is available. Authenticate OpenAI (`vtcode login openai` or OPENAI_API_KEY) or GitHub Copilot (`vtcode login copilot`)."
+    );
+}
+
+fn openai_fallback_model(model: &str) -> String {
+    if model_catalog_entry("openai", model).is_some() {
+        return model.to_string();
+    }
+
+    vtcode_core::config::constants::models::openai::DEFAULT_MODEL.to_string()
+}
+
+async fn persist_runtime_selection(
+    config: &mut VTCodeConfig,
+    workspace: &Path,
+    selection: &RuntimeModelSelection,
+) -> Result<()> {
+    config.agent.provider = selection.provider.clone();
+    config.agent.default_model = selection.model.clone();
+    config.agent.api_key_env = api_key_env_var(&selection.provider);
+    if !selection.provider.eq_ignore_ascii_case("openai")
+        || !Provider::OpenAI.supports_service_tier(&selection.model)
+    {
+        config.provider.openai.service_tier = None;
+    }
+
+    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+        format!(
+            "Failed to load vtcode configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+    manager.save_config(config)?;
+    update_model_preference(&selection.provider, &selection.model)
+        .await
+        .ok();
+    Ok(())
 }
 
 async fn resolve_runtime_provider_auth(
@@ -295,7 +426,10 @@ fn missing_api_key_message(
         .provider
         .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
     {
-        return "Codex authentication is managed by the official `codex app-server`. Run `vtcode auth codex`, `vtcode login codex`, or install `codex` if it is unavailable.".to_string();
+        return format!(
+            "Codex authentication is managed by the official `codex app-server`. Run `vtcode auth codex` or `vtcode login codex`. {}",
+            crate::codex_app_server::codex_sidecar_requirement_note()
+        );
     }
 
     if selection.provider.eq_ignore_ascii_case("copilot") {
@@ -378,7 +512,31 @@ mod validation_tests {
     use super::*;
     use assert_fs::TempDir;
     use clap::Parser;
+    use std::fs;
+    use std::path::Path;
+    use std::sync::LazyLock;
+    use tokio::sync::Mutex;
+    use vtcode_config::OpenAIPreferredMethod;
+    use vtcode_config::auth::AuthCredentialsStoreMode;
     use vtcode_core::cli::args::Cli;
+
+    static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn write_fake_executable(path: &Path) {
+        fs::write(path, "#!/bin/sh\nexit 0\n").expect("write fake executable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("set permissions");
+        }
+    }
+
+    fn save_workspace_config(workspace: &Path, config: &VTCodeConfig) {
+        ConfigManager::save_config_to_path(workspace.join("vtcode.toml"), config)
+            .expect("save workspace config");
+    }
 
     #[test]
     fn retention_warning_for_non_responses_model() {
@@ -485,6 +643,7 @@ mod validation_tests {
 
         assert!(message.contains("codex app-server"));
         assert!(message.contains("vtcode auth codex"));
+        assert!(message.contains("`$PATH`"));
     }
 
     #[test]
@@ -688,5 +847,134 @@ mod validation_tests {
         );
 
         assert!(maybe_warning.is_none());
+    }
+
+    #[test]
+    fn cli_codex_experimental_override_updates_loaded_config() {
+        let mut config = VTCodeConfig::default();
+        assert!(!config.agent.codex_app_server.experimental_features);
+
+        apply_codex_experimental_override(&mut config, Some(true));
+        assert!(config.agent.codex_app_server.experimental_features);
+
+        apply_codex_experimental_override(&mut config, Some(false));
+        assert!(!config.agent.codex_app_server.experimental_features);
+    }
+
+    #[tokio::test]
+    async fn missing_codex_sidecar_falls_back_to_openai_and_persists_selection() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "codex".to_string();
+        config.agent.default_model = "gpt-5.3-codex".to_string();
+        config.agent.codex_app_server.command =
+            workspace.join("missing-codex").display().to_string();
+        config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
+        config.auth.openai.preferred_method = OpenAIPreferredMethod::ApiKey;
+        config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
+        save_workspace_config(&workspace, &config);
+
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test-openai-key");
+            std::env::remove_var("GITHUB_TOKEN");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup should fall back to openai");
+
+        assert_eq!(ctx.agent_config.provider, "openai");
+        assert_eq!(ctx.agent_config.model, "gpt-5.3-codex");
+        assert_eq!(ctx.config.agent.provider, "openai");
+        assert_eq!(ctx.config.agent.default_model, "gpt-5.3-codex");
+
+        let persisted = ConfigManager::load_from_workspace(&workspace)
+            .expect("reload persisted config")
+            .config()
+            .clone();
+        assert_eq!(persisted.agent.provider, "openai");
+        assert_eq!(persisted.agent.default_model, "gpt-5.3-codex");
+    }
+
+    #[tokio::test]
+    async fn missing_codex_sidecar_falls_back_to_copilot_when_openai_is_unavailable() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+        let fake_copilot = workspace.join("copilot");
+        write_fake_executable(&fake_copilot);
+
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "codex".to_string();
+        config.agent.default_model = "gpt-5.3-codex".to_string();
+        config.agent.codex_app_server.command =
+            workspace.join("missing-codex").display().to_string();
+        config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
+        config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
+        config.auth.copilot.command = Some(fake_copilot.display().to_string());
+        save_workspace_config(&workspace, &config);
+
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::set_var("GITHUB_TOKEN", "test-github-token");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup should fall back to copilot");
+
+        assert_eq!(ctx.agent_config.provider, "copilot");
+        assert_eq!(
+            ctx.agent_config.model,
+            vtcode_core::config::constants::models::copilot::DEFAULT_MODEL
+        );
+        assert_eq!(ctx.config.agent.provider, "copilot");
+    }
+
+    #[tokio::test]
+    async fn missing_codex_sidecar_without_fallback_reports_actionable_error() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "codex".to_string();
+        config.agent.default_model = "gpt-5.3-codex".to_string();
+        config.agent.codex_app_server.command =
+            workspace.join("missing-codex").display().to_string();
+        config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
+        config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
+        config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
+        save_workspace_config(&workspace, &config);
+
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("GITHUB_TOKEN");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+        ]);
+
+        let err = StartupContext::from_cli_args(&args)
+            .await
+            .expect_err("startup should fail without any fallback provider");
+        let message = err.to_string();
+        assert!(message.contains("Codex app-server sidecar is unavailable"));
+        assert!(message.contains("`$PATH`"));
+        assert!(message.contains("[agent.codex_app_server].command"));
+        assert!(message.contains("No authenticated fallback provider is available"));
     }
 }

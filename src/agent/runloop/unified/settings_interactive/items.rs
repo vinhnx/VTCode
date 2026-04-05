@@ -62,6 +62,12 @@ pub(super) fn build_settings_items(
             Some("Setup"),
             ACTION_CONFIGURE_EDITOR,
         ));
+        items.push(action_item(
+            "Codex App Server",
+            "Review the local Codex sidecar command, startup timeout, and experimental switches",
+            Some("Section"),
+            &format!("{}agent.codex_app_server", ACTION_PREFIX_OPEN),
+        ));
         append_table_items(&mut items, table, None, None, draft);
     }
 

@@ -222,7 +222,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "deepseek" => get_deepseek_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
         "codex" => Err(anyhow::anyhow!(
-            "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`."
+            "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`. The default `[agent.codex_app_server].command = \"codex\"` requires the `codex` CLI on `$PATH`, or you can set `[agent.codex_app_server].command` to a custom executable path."
         )),
         "zai" => get_zai_api_key(sources),
         "ollama" => get_ollama_api_key(sources),

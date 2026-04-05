@@ -10,6 +10,9 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
+use vtcode_core::git_info::get_head_commit_hash;
+use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+use vtcode_core::review::ReviewTarget;
 use vtcode_core::utils::file_utils::write_file_with_context;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
@@ -17,6 +20,9 @@ use super::event_output::{
     ExecEventProcessor, exec_archive_transcript, lock_or_recover, open_events_writer,
 };
 use super::{ExecCommandKind, ExecCommandOptions, prep};
+use crate::codex_app_server::{
+    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget, run_codex_noninteractive,
+};
 
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
@@ -108,6 +114,13 @@ pub(super) async fn handle_exec_command_impl(
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
 ) -> Result<()> {
+    if config
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        return handle_codex_exec_command_impl(config, vt_cfg, options).await;
+    }
+
     let prepared = prep::prepare_exec_run(config, vt_cfg, &options).await?;
     let prep::ExecPreparedRun {
         config: run_config,
@@ -234,12 +247,151 @@ pub(super) async fn handle_exec_command_impl(
     Ok(())
 }
 
+async fn handle_codex_exec_command_impl(
+    config: &CoreAgentConfig,
+    vt_cfg: &VTCodeConfig,
+    options: ExecCommandOptions,
+) -> Result<()> {
+    let prepared = prep::prepare_exec_run(config, vt_cfg, &options).await?;
+    let prep::ExecPreparedRun {
+        config: run_config,
+        vt_cfg: run_vt_cfg,
+        model_id: _,
+        prompt,
+        session_id: _,
+        archive,
+        thread_bootstrap,
+    } = prepared;
+
+    if options.events_path.is_some() || run_vt_cfg.agent.harness.event_log_path.is_some() {
+        eprintln!(
+            "warning: provider=codex does not yet emit exec event logs; continuing without events output"
+        );
+    }
+
+    let completed = run_codex_noninteractive(
+        &run_config,
+        Some(&run_vt_cfg),
+        CodexNonInteractiveRun {
+            prompt,
+            read_only: options.dry_run || matches!(options.command, ExecCommandKind::Review { .. }),
+            plan_mode: options.dry_run,
+            skip_confirmations: true,
+            ephemeral: archive.is_none(),
+            resume_thread_id: external_thread_id_from_bootstrap(&thread_bootstrap),
+            seed_messages: thread_bootstrap
+                .messages
+                .iter()
+                .map(SessionMessage::from)
+                .collect(),
+            review_target: native_review_target(&options.command, run_config.workspace.as_path())?,
+        },
+    )
+    .await?;
+
+    if let Some(path) = &options.last_message_file {
+        write_file_with_context(path, completed.output.as_str(), "last message file").await?;
+    }
+
+    if options.json {
+        let response = LLMResponse {
+            content: Some(completed.output.clone()),
+            model: run_config.model.clone(),
+            tool_calls: None,
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: Vec::new(),
+        };
+        let payload = serde_json::json!({
+            "response": response,
+            "provider": {
+                "kind": CODEX_PROVIDER,
+                "model": run_config.model,
+            },
+            "threadId": completed.thread_id,
+        });
+        serde_json::to_writer_pretty(&mut std::io::stdout().lock(), &payload)?;
+        println!();
+    } else {
+        println!("{}", completed.output);
+    }
+
+    if let Some(archive) = archive {
+        archive
+            .finalize(
+                completed
+                    .messages
+                    .iter()
+                    .map(|message| {
+                        let role = match message.role {
+                            vtcode_core::llm::provider::MessageRole::User => "user",
+                            vtcode_core::llm::provider::MessageRole::Assistant => "assistant",
+                            vtcode_core::llm::provider::MessageRole::System => "system",
+                            vtcode_core::llm::provider::MessageRole::Tool => "tool",
+                        };
+                        format!("{role}: {}", message.content.as_text())
+                    })
+                    .collect(),
+                completed.messages.len(),
+                Vec::new(),
+                completed.messages,
+            )
+            .context("Failed to save codex exec session archive")?;
+    }
+
+    Ok(())
+}
+
+fn external_thread_id_from_bootstrap(
+    bootstrap: &vtcode_core::core::threads::ThreadBootstrap,
+) -> Option<String> {
+    bootstrap
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.external_thread_id.clone())
+        .or_else(|| {
+            bootstrap
+                .archive_listing
+                .as_ref()
+                .and_then(|listing| listing.snapshot.metadata.external_thread_id.clone())
+        })
+}
+
+fn native_review_target(
+    command: &ExecCommandKind,
+    workspace: &Path,
+) -> Result<Option<CodexReviewTarget>> {
+    let ExecCommandKind::Review { spec } = command else {
+        return Ok(None);
+    };
+
+    if spec.style.is_some() {
+        return Ok(None);
+    }
+
+    Ok(match &spec.target {
+        ReviewTarget::CurrentDiff => Some(CodexReviewTarget::UncommittedChanges),
+        ReviewTarget::LastDiff => get_head_commit_hash(workspace)?
+            .map(|sha| CodexReviewTarget::Commit { sha, title: None }),
+        ReviewTarget::Custom(target) => Some(CodexReviewTarget::Custom {
+            instructions: target.clone(),
+        }),
+        ReviewTarget::Files(_) => None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::checkpoint_exec_archive;
+    use super::{checkpoint_exec_archive, native_review_target};
     use anyhow::{Context, Result};
     use chrono::Utc;
+    use std::path::Path;
     use vtcode_core::llm::provider::Message;
+    use vtcode_core::review::{ReviewSpec, ReviewTarget};
     use vtcode_core::utils::session_archive::{
         SessionArchive, SessionArchiveMetadata, SessionListing, SessionSnapshot,
     };
@@ -276,5 +428,55 @@ mod tests {
         assert!(snapshot.progress.is_some());
 
         Ok(())
+    }
+
+    #[test]
+    fn native_review_target_uses_uncommitted_changes_when_style_is_absent() {
+        let command = super::ExecCommandKind::Review {
+            spec: ReviewSpec {
+                target: ReviewTarget::CurrentDiff,
+                style: None,
+            },
+        };
+
+        let target = native_review_target(&command, Path::new("/tmp"))
+            .expect("target resolution should succeed");
+
+        assert_eq!(target, Some(super::CodexReviewTarget::UncommittedChanges));
+    }
+
+    #[test]
+    fn native_review_target_preserves_style_by_falling_back_to_prompt_review() {
+        let command = super::ExecCommandKind::Review {
+            spec: ReviewSpec {
+                target: ReviewTarget::CurrentDiff,
+                style: Some("security".to_string()),
+            },
+        };
+
+        let target = native_review_target(&command, Path::new("/tmp"))
+            .expect("target resolution should succeed");
+
+        assert!(target.is_none());
+    }
+
+    #[test]
+    fn native_review_target_maps_custom_review_targets() {
+        let command = super::ExecCommandKind::Review {
+            spec: ReviewSpec {
+                target: ReviewTarget::Custom("review auth handling".to_string()),
+                style: None,
+            },
+        };
+
+        let target = native_review_target(&command, Path::new("/tmp"))
+            .expect("target resolution should succeed");
+
+        assert_eq!(
+            target,
+            Some(super::CodexReviewTarget::Custom {
+                instructions: "review auth handling".to_string(),
+            })
+        );
     }
 }

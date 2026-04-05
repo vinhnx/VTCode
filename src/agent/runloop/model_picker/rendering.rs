@@ -33,6 +33,8 @@ const CURRENT_BADGE: &str = "Current";
 const CONTEXT_LABEL: &str = "Context";
 const TOOLS_LABEL: &str = "Tools";
 const NO_TOOLS_LABEL: &str = "No tools";
+const CODEX_RUNTIME_NOTE: &str =
+    "Codex app-server runtime is configured via /config codex, not the /model provider list.";
 
 pub(super) const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
 
@@ -276,6 +278,21 @@ pub(super) fn current_model_line(current_provider: &str, current_model: &str) ->
     }
 }
 
+fn should_show_codex_runtime_note(current_provider: &str) -> bool {
+    current_provider.trim().eq_ignore_ascii_case("codex")
+}
+
+pub(super) fn step_one_header_lines(current_provider: &str, current_model: &str) -> Vec<String> {
+    let mut lines = vec![
+        current_model_line(current_provider, current_model),
+        "↑/↓ select • Enter choose • Esc cancel".to_string(),
+    ];
+    if should_show_codex_runtime_note(current_provider) {
+        lines.push(CODEX_RUNTIME_NOTE.to_string());
+    }
+    lines
+}
+
 pub(super) fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
@@ -435,10 +452,7 @@ pub(super) fn render_step_one_inline(
         search_value: Some("custom provider".to_string()),
     });
 
-    let lines = vec![
-        current_model_line(current_provider, current_model),
-        "↑/↓ select • Enter choose • Esc cancel".to_string(),
-    ];
+    let lines = step_one_header_lines(current_provider, current_model);
 
     let search = InlineListSearchConfig {
         label: "Search models".to_string(),
@@ -454,6 +468,7 @@ pub(super) fn render_step_one_plain(
     options: &[ModelOption],
     dynamic_models: &DynamicModelRegistry,
     custom_providers: &[SelectionDetail],
+    current_provider: &str,
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -471,6 +486,9 @@ pub(super) fn render_step_one_plain(
         MessageStyle::Info,
         "Type 'refresh' to re-query LM Studio and Ollama servers.",
     )?;
+    if should_show_codex_runtime_note(current_provider) {
+        renderer.line(MessageStyle::Info, CODEX_RUNTIME_NOTE)?;
+    }
 
     let mut first_section = true;
     for provider in picker_provider_order() {

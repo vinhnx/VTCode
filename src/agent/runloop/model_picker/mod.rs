@@ -250,6 +250,7 @@ impl ModelPickerState {
                             options,
                             &state.dynamic_models,
                             &state.custom_providers,
+                            &state.current_provider,
                         )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
@@ -261,6 +262,7 @@ impl ModelPickerState {
                             options,
                             &state.dynamic_models,
                             &state.custom_providers,
+                            &state.current_provider,
                         )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
@@ -289,6 +291,7 @@ impl ModelPickerState {
                             options,
                             &state.dynamic_models,
                             &state.custom_providers,
+                            &state.current_provider,
                         )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
@@ -340,6 +343,7 @@ impl ModelPickerState {
                 self.options,
                 &self.dynamic_models,
                 &self.custom_providers,
+                &self.current_provider,
             )?;
             if matches!(self.step, PickerStep::AwaitModel) {
                 prompt_custom_model_entry(renderer)?;

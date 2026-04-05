@@ -76,12 +76,6 @@ pub(crate) async fn dispatch_command(
             command,
             prompt,
         } => {
-            if core_cfg
-                .provider
-                .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-            {
-                anyhow::bail!("provider=codex currently supports interactive chat and ask only");
-            }
             let command = exec::resolve_exec_command(command, prompt)?;
             let options = exec::ExecCommandOptions {
                 json,
@@ -100,12 +94,6 @@ pub(crate) async fn dispatch_command(
                 .await?;
         }
         Commands::Review(review) => {
-            if core_cfg
-                .provider
-                .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-            {
-                anyhow::bail!("provider=codex currently supports interactive chat and ask only");
-            }
             let files = review
                 .files
                 .iter()
@@ -131,6 +119,7 @@ pub(crate) async fn dispatch_command(
         Commands::Analyze { analysis_type } => {
             handle_analyze_command(
                 core_cfg.clone(),
+                Some(cfg.clone()),
                 analyze::AnalysisType::from_cli_arg(&analysis_type),
             )
             .await?;

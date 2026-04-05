@@ -817,8 +817,11 @@ fn render_codex_auth_status(
 
 fn render_codex_unavailable_status() {
     println!("Codex");
-    println!("  Auth: CLI unavailable");
-    println!("  Help: install `codex` or configure `[agent.codex_app_server].command`.");
+    println!("  Auth: sidecar unavailable");
+    println!(
+        "  Help: {}",
+        crate::codex_app_server::codex_sidecar_requirement_note()
+    );
 }
 
 fn print_codex_login_summary(status: &CodexAccountReadResponse) {

@@ -33,6 +33,8 @@ use vtcode_commons::color256_theme::set_harmonious_runtime_hint;
 
 #[cfg(unix)]
 const DA1_RESPONSE_PREFIX: [u8; 3] = [ESC_BYTE, b'[', b'?'];
+#[cfg(unix)]
+const RESPONSE_SETTLE_WINDOW: Duration = Duration::from_millis(40);
 
 /// Run OSC probe once at startup and cache results in shared runtime hints.
 pub fn probe_and_cache_terminal_palette_harmony() {
@@ -158,28 +160,27 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
     let poll_tty = tty
         .try_clone()
         .context("failed to duplicate tty for polling")?;
-    let deadline = Instant::now() + timeout;
+    let overall_deadline = Instant::now() + timeout;
     let mut buffer = Vec::with_capacity(1024);
+    let mut settle_deadline = None;
 
     loop {
-        // Look for the DA1 response start
-        if let Some(pos) = buffer
-            .windows(DA1_RESPONSE_PREFIX.len())
-            .position(|window| window == DA1_RESPONSE_PREFIX)
-        {
-            // If found the start, we MUST also wait for the end ('c')
-            // This ensures we consume the entire sentinel sequence
-            if buffer[pos..].contains(&b'c') {
-                return Ok(buffer);
-            }
+        if has_complete_da1_response(&buffer) && settle_deadline.is_none() {
+            settle_deadline = Some(Instant::now() + RESPONSE_SETTLE_WINDOW);
         }
 
         let now = Instant::now();
-        if now >= deadline {
+        let active_deadline = settle_deadline
+            .map(|deadline| deadline.min(overall_deadline))
+            .unwrap_or(overall_deadline);
+        if now >= active_deadline {
+            if settle_deadline.is_some() {
+                return Ok(buffer);
+            }
             return Err(anyhow!("timed out waiting for DA1 sentinel response"));
         }
 
-        let remaining_ms = (deadline - now).as_millis().min(i32::MAX as u128) as i32;
+        let remaining_ms = (active_deadline - now).as_millis().min(i32::MAX as u128) as i32;
         let timeout = PollTimeout::try_from(remaining_ms).unwrap_or(PollTimeout::MAX);
         let mut pollfd = [PollFd::new(poll_tty.as_fd(), PollFlags::POLLIN)];
         let poll_result = poll(&mut pollfd, timeout).context("poll failed during OSC probe")?;
@@ -201,7 +202,18 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
             ));
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
+        if settle_deadline.is_some() {
+            settle_deadline = Some(Instant::now() + RESPONSE_SETTLE_WINDOW);
+        }
     }
+}
+
+#[cfg(unix)]
+fn has_complete_da1_response(buffer: &[u8]) -> bool {
+    buffer
+        .windows(DA1_RESPONSE_PREFIX.len())
+        .position(|window| window == DA1_RESPONSE_PREFIX)
+        .is_some_and(|pos| buffer[pos..].contains(&b'c'))
 }
 
 #[cfg(unix)]
@@ -315,5 +327,13 @@ mod tests {
         let [fg, _, _, c231] = parse_four_colors(response.as_bytes()).expect("valid colors");
         assert_eq!(fg, (0xaa, 0xbb, 0xcc));
         assert_eq!(c231, (0xff, 0xff, 0xff));
+    }
+
+    #[test]
+    fn detects_only_complete_da1_responses() {
+        assert!(!has_complete_da1_response(b""));
+        assert!(!has_complete_da1_response(b"\x1b[?62;22"));
+        assert!(has_complete_da1_response(b"\x1b[?62;22;52c"));
+        assert!(has_complete_da1_response(b"noise\x1b[?1;2cmore"));
     }
 }

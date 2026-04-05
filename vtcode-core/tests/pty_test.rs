@@ -244,8 +244,9 @@ async fn test_pty_command_not_found_handling() {
             "run_pty_cmd",
             json!({
                 "mode": "pty",
+                "shell": "/bin/bash",
                 "command": "this_command_definitely_does_not_exist_12345",
-                // Force login shell to test robust extraction logic (shell -l -c ...)
+                // Force a deterministic login shell to test robust extraction logic (shell -l -c ...)
                 "login": true
             }),
         )

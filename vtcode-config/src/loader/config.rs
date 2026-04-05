@@ -712,7 +712,7 @@ show_timeline_pane = false
 enabled = true
 
 # Delivery mode: "terminal", "hybrid", or "desktop"
-delivery_mode = "hybrid"
+delivery_mode = "desktop"
 
 # Preferred desktop backend: "auto", "osascript", "notify_rust", or "terminal"
 backend = "auto"
