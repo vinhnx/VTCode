@@ -53,6 +53,9 @@ This documentation is organized to support different user personas and use cases
 
 VT Code has undergone significant improvements inspired by Anthropic's agent architecture:
 
+- **Codex App-Server Integration** - `provider=codex` now routes through the local Codex sidecar with `/config codex` for setup, `/model` guidance, and fallback behavior when the sidecar is unavailable
+- **Experimental Codex Toggle** - Collaboration-mode discovery and native review routing can be enabled or disabled per config or CLI run
+- **Debug Startup Stability** - Terminal OSC color probing now drains late responses so `run-debug.sh` starts cleanly without leaking raw escape sequences into the prompt
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
 - **Conversation Summarization** - Automatic compression for extended sessions with quality metrics
