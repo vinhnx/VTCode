@@ -115,8 +115,8 @@ impl FileOpsTool {
                 )
             })?;
 
-            // Pre-acquire the gitignore lock to avoid lock-per-entry overhead (KISS/DRY)
-            let gitignore = crate::utils::vtcodegitignore::get_global_vtcode_gitignore().await;
+            // Copy the ignore state up front so no async lock is held during directory IO.
+            let gitignore = crate::utils::vtcodegitignore::snapshot_global_vtcode_gitignore().await;
 
             while let Some(entry) = entries
                 .next_entry()

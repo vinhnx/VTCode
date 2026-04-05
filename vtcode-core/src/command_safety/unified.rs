@@ -14,7 +14,6 @@ use crate::command_safety::{
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 /// Detailed reason for evaluation result
 #[derive(Clone, Debug, PartialEq)]
@@ -74,10 +73,6 @@ pub struct UnifiedCommandEvaluator {
     database: CommandDatabase,
     cache: SafetyDecisionCache,
     audit_logger: SafetyAuditLogger,
-    // Policy component (wrapped for cloning)
-    // Note: CommandPolicyEvaluator doesn't implement Clone in the codebase,
-    // so we'll integrate it via Arc<Mutex<T>> in a real implementation
-    // For now, we provide the structure and will integrate when adding to CommandTool
 }
 
 impl UnifiedCommandEvaluator {
@@ -487,7 +482,7 @@ mod tests {
 /// allowing gradual migration from CommandPolicyEvaluator to UnifiedCommandEvaluator.
 #[derive(Clone)]
 pub struct PolicyAwareEvaluator {
-    unified: Arc<Mutex<UnifiedCommandEvaluator>>,
+    unified: Arc<UnifiedCommandEvaluator>,
     /// Policy allow decision (if Some, policy layer is active)
     allow_policy_decision: Option<bool>,
     policy_reason: Option<String>,
@@ -497,7 +492,7 @@ impl PolicyAwareEvaluator {
     /// Create a new policy-aware evaluator with default components
     pub fn new() -> Self {
         Self {
-            unified: Arc::new(Mutex::new(UnifiedCommandEvaluator::new())),
+            unified: Arc::new(UnifiedCommandEvaluator::new()),
             allow_policy_decision: None,
             policy_reason: None,
         }
@@ -506,7 +501,7 @@ impl PolicyAwareEvaluator {
     /// Create with explicit policy decision
     pub fn with_policy(allow_policy_decision: bool, policy_reason: impl Into<String>) -> Self {
         Self {
-            unified: Arc::new(Mutex::new(UnifiedCommandEvaluator::new())),
+            unified: Arc::new(UnifiedCommandEvaluator::new()),
             allow_policy_decision: Some(allow_policy_decision),
             policy_reason: Some(policy_reason.into()),
         }
@@ -514,18 +509,16 @@ impl PolicyAwareEvaluator {
 
     /// Evaluate command with optional policy layer
     pub async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
-        let evaluator = self.unified.lock().await;
-
         // Apply policy layer if configured
         if let (Some(policy_allowed), Some(reason)) =
             (&self.allow_policy_decision, &self.policy_reason)
         {
-            evaluator
+            self.unified
                 .evaluate_with_policy(command, *policy_allowed, reason)
                 .await
         } else {
             // No policy configured, use pure safety evaluation
-            evaluator.evaluate(command).await
+            self.unified.evaluate(command).await
         }
     }
 
@@ -542,7 +535,7 @@ impl PolicyAwareEvaluator {
     }
 
     /// Get reference to the underlying evaluator for advanced access
-    pub fn unified(&self) -> Arc<Mutex<UnifiedCommandEvaluator>> {
+    pub fn unified(&self) -> Arc<UnifiedCommandEvaluator> {
         Arc::clone(&self.unified)
     }
 }

@@ -434,9 +434,14 @@ impl PromptEnricher {
         enriched
     }
 
-    /// Get reference to workspace state for tests that seed activity.
     #[cfg(test)]
-    pub fn workspace_state(&self) -> Arc<RwLock<WorkspaceState>> {
-        self.workspace_state.clone()
+    pub async fn record_workspace_change_for_test(
+        &self,
+        path: PathBuf,
+        content_before: Option<String>,
+        content_after: String,
+    ) {
+        let mut state = self.workspace_state.write().await;
+        state.record_change(path, content_before, content_after);
     }
 }

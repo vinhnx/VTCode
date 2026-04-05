@@ -167,11 +167,6 @@ impl ToolRegistry {
         registry.initialize_resiliency_trackers();
         registry
     }
-
-    #[must_use]
-    pub fn session_scheduler(&self) -> Arc<tokio::sync::Mutex<crate::scheduler::SessionScheduler>> {
-        Arc::clone(&self.session_scheduler)
-    }
 }
 
 #[cfg(test)]

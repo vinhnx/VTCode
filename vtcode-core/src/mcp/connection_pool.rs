@@ -189,9 +189,12 @@ impl McpConnectionPool {
 
     /// Shutdown all providers gracefully
     pub async fn shutdown_all(&self) {
-        let mut providers = self.providers.write().await;
+        let providers: Vec<_> = {
+            let mut providers = self.providers.write().await;
+            providers.drain().collect()
+        };
 
-        for (name, provider) in providers.drain() {
+        for (name, provider) in providers {
             if let Err(err) = provider.shutdown().await {
                 error!("Failed to shutdown MCP provider '{}': {}", name, err);
             }
@@ -202,10 +205,16 @@ impl McpConnectionPool {
     ///
     /// Returns a map of provider name → `true` (healthy) / `false` (unhealthy).
     pub async fn health_check(&self) -> HashMap<String, bool> {
-        let providers = self.providers.read().await;
+        let providers: Vec<_> = {
+            let providers = self.providers.read().await;
+            providers
+                .iter()
+                .map(|(name, provider)| (name.clone(), Arc::clone(provider)))
+                .collect()
+        };
         let mut results = HashMap::with_capacity(providers.len());
-        for (name, provider) in providers.iter() {
-            results.insert(name.clone(), provider.is_healthy().await);
+        for (name, provider) in providers {
+            results.insert(name, provider.is_healthy().await);
         }
         results
     }
@@ -219,9 +228,15 @@ impl McpConnectionPool {
         tool_timeout: Option<Duration>,
         allowlist: &McpAllowListConfig,
     ) -> Vec<String> {
-        let providers = self.providers.read().await;
+        let providers: Vec<_> = {
+            let providers = self.providers.read().await;
+            providers
+                .iter()
+                .map(|(name, provider)| (name.clone(), Arc::clone(provider)))
+                .collect()
+        };
         let mut reconnected = Vec::new();
-        for (name, provider) in providers.iter() {
+        for (name, provider) in providers {
             if !provider.is_healthy().await {
                 info!("Provider '{}' is unhealthy, attempting reconnect", name);
                 match provider
@@ -230,7 +245,7 @@ impl McpConnectionPool {
                 {
                     Ok(()) => {
                         info!("Successfully reconnected MCP provider '{}'", name);
-                        reconnected.push(name.clone());
+                        reconnected.push(name);
                     }
                     Err(err) => {
                         error!("Failed to reconnect MCP provider '{}': {}", name, err);

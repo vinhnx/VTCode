@@ -293,24 +293,28 @@ impl OptimizedAgentEngine {
     async fn handle_tool_execution_state(&self) -> Result<()> {
         debug!("Executing tools with optimization");
 
-        let context = self.context.read().await;
-        let hints = &context.performance_hints;
+        let parallel_execution_groups = {
+            let context = self.context.read().await;
+            context.performance_hints.parallel_execution_groups.clone()
+        };
 
         // Execute tools in parallel groups when possible
-        for group in &hints.parallel_execution_groups {
+        for group in &parallel_execution_groups {
             self.execute_tool_group_parallel(group).await?;
         }
 
         // Check if all tools are complete
-        let all_complete = context.active_tools.values().all(|state| {
-            matches!(
-                state.status,
-                ToolStatus::Completed | ToolStatus::Failed { .. }
-            )
-        });
+        let all_complete = {
+            let context = self.context.read().await;
+            context.active_tools.values().all(|state| {
+                matches!(
+                    state.status,
+                    ToolStatus::Completed | ToolStatus::Failed { .. }
+                )
+            })
+        };
 
         if all_complete {
-            drop(context);
             self.transition_state(
                 AgentState::ExecutingTools,
                 AgentState::GeneratingResponse,

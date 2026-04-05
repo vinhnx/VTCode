@@ -399,15 +399,13 @@ async fn test_value_inference_decrease_by_half_milestone() {
     let enricher = PromptEnricher::new(workspace_root.clone(), vt_cfg.clone());
 
     // Simulate recent file edit with padding value
-    {
-        let state_arc = enricher.workspace_state();
-        let mut state = state_arc.write().await;
-        state.record_change(
+    enricher
+        .record_workspace_change_for_test(
             PathBuf::from("src/styles.css"),
             Some("  padding: 32px;".to_string()),
             "  padding: 32px;".to_string(),
-        );
-    }
+        )
+        .await;
 
     // Test "decrease the padding by half"
     let prompt = "decrease the padding by half";
@@ -457,15 +455,13 @@ async fn test_value_inference_multiple_patterns() {
     let enricher = PromptEnricher::new(workspace_root.clone(), vt_cfg.clone());
 
     // Test with JSON config value
-    {
-        let state_arc = enricher.workspace_state();
-        let mut state = state_arc.write().await;
-        state.record_change(
+    enricher
+        .record_workspace_change_for_test(
             PathBuf::from("config.json"),
             None,
             r#"  "timeout": 5000,"#.to_string(),
-        );
-    }
+        )
+        .await;
 
     let prompt = "double the timeout";
     let enriched = enricher.enrich_vague_prompt(prompt).await;

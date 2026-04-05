@@ -151,14 +151,15 @@ async fn handle_session_language_command(
     };
     match command? {
         SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at } => {
-            let scheduler = ctx.tool_registry.session_scheduler();
-            let mut scheduler = scheduler.lock().await;
-            let summary = scheduler.create_prompt_task(
-                None,
-                prompt,
-                ScheduleSpec::one_shot(run_at),
-                Utc::now(),
-            )?;
+            let summary = ctx
+                .tool_registry
+                .create_session_prompt_task(
+                    None,
+                    prompt,
+                    ScheduleSpec::one_shot(run_at),
+                    Utc::now(),
+                )
+                .await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 &format!(
@@ -173,9 +174,7 @@ async fn handle_session_language_command(
             Ok(Some(CommandProcessingResult::ContinueLoop))
         }
         SessionLanguageCommand::ListTasks => {
-            let scheduler = ctx.tool_registry.session_scheduler();
-            let scheduler = scheduler.lock().await;
-            let tasks = scheduler.list();
+            let tasks = ctx.tool_registry.list_session_tasks().await;
             if tasks.is_empty() {
                 ctx.renderer
                     .line(MessageStyle::Info, "No session scheduled tasks.")?;
@@ -203,9 +202,7 @@ async fn handle_session_language_command(
             Ok(Some(CommandProcessingResult::ContinueLoop))
         }
         SessionLanguageCommand::CancelTask { query } => {
-            let scheduler = ctx.tool_registry.session_scheduler();
-            let mut scheduler = scheduler.lock().await;
-            let Some(task) = scheduler.delete(&query) else {
+            let Some(task) = ctx.tool_registry.delete_session_task(&query).await else {
                 return Ok(None);
             };
             ctx.renderer.line(

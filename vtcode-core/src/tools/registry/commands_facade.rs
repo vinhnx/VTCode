@@ -6,12 +6,7 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub fn apply_commands_config(&self, commands_config: &CommandsConfig) {
-        match self.inventory.command_tool().write() {
-            Ok(mut command_tool) => command_tool.update_commands_config(commands_config),
-            Err(poisoned) => poisoned
-                .into_inner()
-                .update_commands_config(commands_config),
-        }
+        self.inventory.update_commands_config(commands_config);
         self.pty_sessions
             .manager()
             .apply_commands_config(commands_config);

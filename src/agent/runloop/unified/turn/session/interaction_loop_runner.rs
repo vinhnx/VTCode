@@ -905,10 +905,10 @@ pub(super) async fn run_interaction_loop_impl(
             && state.queued_inputs.is_empty()
             && last_input_activity_at.elapsed() >= SCHEDULED_PROMPT_INACTIVITY_GRACE
         {
-            let scheduler = ctx.tool_registry.session_scheduler();
-            let mut scheduler = scheduler.lock().await;
-            let due = scheduler.collect_due_prompts(chrono::Utc::now())?;
-            drop(scheduler);
+            let due = ctx
+                .tool_registry
+                .collect_due_session_prompts(chrono::Utc::now())
+                .await?;
             for task in due {
                 state.queued_inputs.push_back(task.prompt);
                 ctx.renderer.line(

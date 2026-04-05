@@ -3,6 +3,7 @@
 use anyhow::{Result, anyhow};
 use glob::Pattern;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 
 /// Represents a .vtcodegitignore file with pattern matching capabilities
@@ -207,32 +208,31 @@ impl Default for VTCodeGitignore {
 }
 
 /// Global .vtcodegitignore instance for easy access
-pub static VTCODE_GITIGNORE: once_cell::sync::Lazy<tokio::sync::RwLock<VTCodeGitignore>> =
-    once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(VTCodeGitignore::default()));
+pub static VTCODE_GITIGNORE: once_cell::sync::Lazy<tokio::sync::RwLock<Arc<VTCodeGitignore>>> =
+    once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(Arc::new(VTCodeGitignore::default())));
 
 /// Initialize the global .vtcodegitignore instance
 pub async fn initialize_vtcode_gitignore() -> Result<()> {
     let gitignore = VTCodeGitignore::new().await?;
     let mut global_gitignore = VTCODE_GITIGNORE.write().await;
-    *global_gitignore = gitignore;
+    *global_gitignore = Arc::new(gitignore);
     Ok(())
 }
 
-/// Get the global .vtcodegitignore instance
-pub async fn get_global_vtcode_gitignore() -> tokio::sync::RwLockReadGuard<'static, VTCodeGitignore>
-{
-    VTCODE_GITIGNORE.read().await
+/// Snapshot the global .vtcodegitignore instance.
+pub async fn snapshot_global_vtcode_gitignore() -> Arc<VTCodeGitignore> {
+    VTCODE_GITIGNORE.read().await.clone()
 }
 
 /// Check if a file should be excluded by the global .vtcodegitignore
 pub async fn should_exclude_file(file_path: &Path) -> bool {
-    let gitignore = get_global_vtcode_gitignore().await;
+    let gitignore = snapshot_global_vtcode_gitignore().await;
     gitignore.should_exclude(file_path)
 }
 
 /// Filter paths using the global .vtcodegitignore
 pub async fn filter_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    let gitignore = get_global_vtcode_gitignore().await;
+    let gitignore = snapshot_global_vtcode_gitignore().await;
     gitignore.filter_paths(paths)
 }
 

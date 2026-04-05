@@ -125,18 +125,31 @@ impl AutonomousExecutor {
     }
 
     /// Configure loop detection thresholds
-    pub async fn configure_loop_limits(&self, limits: &HashMap<String, usize>) {
+    pub fn configure_loop_limits(&self, limits: &HashMap<String, usize>) {
         if let Ok(mut detector) = self.loop_detector.write() {
             for (tool, limit) in limits {
-                detector.set_tool_limit(tool, *limit);
+                detector.set_tool_limit(Self::canonical_tool_key(tool), *limit);
             }
         } else {
             tracing::warn!("Failed to acquire loop detector lock for configuration");
         }
     }
 
-    pub fn loop_detector(&self) -> Arc<RwLock<LoopDetector>> {
-        self.loop_detector.clone()
+    pub fn set_loop_limit(&self, tool_name: &str, limit: usize) {
+        let tool_key = Self::canonical_tool_key(tool_name);
+        if let Ok(mut detector) = self.loop_detector.write() {
+            detector.set_tool_limit(tool_key, limit);
+        } else {
+            tracing::warn!("Failed to acquire loop detector lock for configuration");
+        }
+    }
+
+    pub fn is_hard_limit_exceeded(&self, tool_name: &str) -> bool {
+        let tool_key = Self::canonical_tool_key(tool_name);
+        self.loop_detector
+            .read()
+            .map(|detector| detector.is_hard_limit_exceeded(tool_key))
+            .unwrap_or(false)
     }
 
     /// Reset loop-detection streaks at the start of a new turn.

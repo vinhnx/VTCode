@@ -13,7 +13,7 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     let mut limits = HashMap::new();
     limits.insert("read_file".to_string(), 3); // Strict limit for read_file
     limits.insert("list_files".to_string(), 5); // Relaxed limit for list_files
-    executor.configure_loop_limits(&limits).await;
+    executor.configure_loop_limits(&limits);
 
     // 3. Test "read_file" limit (Should trigger on 3rd attempt)
     let tool_name = "read_file";
@@ -39,13 +39,10 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     );
 
     // Verify hard limit check
-    let detector_arc = executor.loop_detector();
-    let detector = detector_arc.read().unwrap();
     assert!(
-        !detector.is_hard_limit_exceeded(tool_name),
+        !executor.is_hard_limit_exceeded(tool_name),
         "Hard limit should not be exceeded at soft-limit warning"
     );
-    drop(detector);
 
     // 4. Test "list_files" limit (Should NOT trigger on 3rd attempt)
     let list_tool = "list_files";

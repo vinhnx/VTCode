@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 use super::registration::ToolRegistration;
+use crate::config::CommandsConfig;
 use crate::exec::skill_manager::SkillManager;
 use crate::tools::command::CommandTool;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
@@ -105,9 +106,13 @@ impl ToolInventory {
         &self.file_ops_tool
     }
 
-    #[allow(dead_code)]
-    pub fn command_tool(&self) -> Arc<std::sync::RwLock<CommandTool>> {
-        self.command_tool.clone()
+    pub(super) fn update_commands_config(&self, commands_config: &CommandsConfig) {
+        match self.command_tool.write() {
+            Ok(mut command_tool) => command_tool.update_commands_config(commands_config),
+            Err(poisoned) => poisoned
+                .into_inner()
+                .update_commands_config(commands_config),
+        }
     }
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {

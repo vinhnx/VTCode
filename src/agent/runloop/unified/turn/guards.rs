@@ -674,23 +674,17 @@ mod tests {
     #[tokio::test]
     async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_blocks() {
         let mut backing = TestTurnProcessingBacking::new(8).await;
-        let legacy_detector = backing.legacy_loop_detector();
-        {
-            let mut detector = legacy_detector
-                .write()
-                .expect("legacy loop detector should lock");
-            detector.set_tool_limit(tool_names::UNIFIED_SEARCH, 2);
-            let seeded_args = json!({"action":"grep","path":"vtcode-tui","pattern":"-> Result"});
-            assert!(
-                detector
-                    .record_call(tool_names::UNIFIED_SEARCH, &seeded_args)
-                    .is_none()
-            );
-            let _ = detector.record_call(tool_names::UNIFIED_SEARCH, &seeded_args);
-            let warning = detector.record_call(tool_names::UNIFIED_SEARCH, &seeded_args);
-            assert!(warning.is_some());
-            assert!(detector.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
-        }
+        backing.set_loop_limit(tool_names::UNIFIED_SEARCH, 2);
+        let seeded_args = json!({"action":"grep","path":"vtcode-tui","pattern":"-> Result"});
+        assert!(
+            backing
+                .record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args)
+                .is_none()
+        );
+        let _ = backing.record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args);
+        let warning = backing.record_tool_call(tool_names::UNIFIED_SEARCH, &seeded_args);
+        assert!(warning.is_some());
+        assert!(backing.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
         let mut ctx = backing.turn_processing_context();
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -755,12 +749,7 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
         ));
         assert!(!ctx.is_recovery_active());
-        assert!(
-            legacy_detector
-                .read()
-                .expect("legacy loop detector should lock")
-                .is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH)
-        );
+        assert!(backing.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
     }
 
     #[tokio::test]

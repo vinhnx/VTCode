@@ -129,14 +129,15 @@ pub(super) async fn handle_manage_loop(
         interval,
         normalization_note,
     } = command;
-    let scheduler = ctx.tool_registry.session_scheduler();
-    let mut scheduler = scheduler.lock().await;
-    let summary = scheduler.create_prompt_task(
-        None,
-        prompt,
-        ScheduleSpec::FixedInterval(interval),
-        Utc::now(),
-    )?;
+    let summary = ctx
+        .tool_registry
+        .create_session_prompt_task(
+            None,
+            prompt,
+            ScheduleSpec::FixedInterval(interval),
+            Utc::now(),
+        )
+        .await?;
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(

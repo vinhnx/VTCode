@@ -1315,34 +1315,23 @@ mod tests {
     #[tokio::test]
     async fn turn_loop_preserves_legacy_loop_detector_state() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let legacy_detector = backing.legacy_loop_detector();
-        {
-            let mut detector = legacy_detector
-                .write()
-                .expect("legacy loop detector should lock");
-            detector.set_tool_limit(tool_names::READ_FILE, 2);
-            let seeded_args = json!({"path":"sample.txt"});
-            assert!(
-                detector
-                    .record_call(tool_names::READ_FILE, &seeded_args)
-                    .is_none()
-            );
-            let _ = detector.record_call(tool_names::READ_FILE, &seeded_args);
-            let warning = detector.record_call(tool_names::READ_FILE, &seeded_args);
-            assert!(warning.is_some());
-            assert!(detector.is_hard_limit_exceeded(tool_names::READ_FILE));
-        }
+        backing.set_loop_limit(tool_names::READ_FILE, 2);
+        let seeded_args = json!({"path":"sample.txt"});
+        assert!(
+            backing
+                .record_tool_call(tool_names::READ_FILE, &seeded_args)
+                .is_none()
+        );
+        let _ = backing.record_tool_call(tool_names::READ_FILE, &seeded_args);
+        let warning = backing.record_tool_call(tool_names::READ_FILE, &seeded_args);
+        assert!(warning.is_some());
+        assert!(backing.is_hard_limit_exceeded(tool_names::READ_FILE));
 
         let mut history = vec![uni::Message::user("continue".to_string())];
         run_turn_loop(&mut history, backing.turn_loop_context())
             .await
             .expect("turn loop should complete");
 
-        assert!(
-            legacy_detector
-                .read()
-                .expect("legacy loop detector should lock")
-                .is_hard_limit_exceeded(tool_names::READ_FILE)
-        );
+        assert!(backing.is_hard_limit_exceeded(tool_names::READ_FILE));
     }
 }

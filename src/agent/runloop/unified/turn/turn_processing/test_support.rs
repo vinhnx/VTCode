@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use hashbrown::HashMap;
+use serde_json::Value;
 use tokio::sync::{Notify, RwLock};
 use vtcode_config::core::PromptCachingConfig;
 use vtcode_core::acp::ToolPermissionCache;
@@ -248,10 +249,16 @@ impl TestTurnProcessingBacking {
         inputs
     }
 
-    pub(crate) fn legacy_loop_detector(
-        &self,
-    ) -> Arc<std::sync::RwLock<vtcode_core::core::loop_detector::LoopDetector>> {
-        self.autonomous_executor.loop_detector()
+    pub(crate) fn set_loop_limit(&self, tool_name: &str, limit: usize) {
+        self.autonomous_executor.set_loop_limit(tool_name, limit);
+    }
+
+    pub(crate) fn record_tool_call(&self, tool_name: &str, args: &Value) -> Option<String> {
+        self.autonomous_executor.record_tool_call(tool_name, args)
+    }
+
+    pub(crate) fn is_hard_limit_exceeded(&self, tool_name: &str) -> bool {
+        self.autonomous_executor.is_hard_limit_exceeded(tool_name)
     }
 
     pub(crate) fn recovery_is_tool_free(&self) -> bool {

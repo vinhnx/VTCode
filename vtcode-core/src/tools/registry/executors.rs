@@ -1571,20 +1571,17 @@ impl ToolRegistry {
                 _ => bail!("Choose exactly one of cron, delay_minutes, or run_at"),
             };
 
-            let scheduler = self.session_scheduler();
-            let mut scheduler = scheduler.lock().await;
-            let summary =
-                scheduler.create_prompt_task(name, prompt, schedule, chrono::Utc::now())?;
+            let summary = self
+                .create_session_prompt_task(name, prompt, schedule, chrono::Utc::now())
+                .await?;
             serde_json::to_value(summary).context("Failed to serialize cron_create response")
         })
     }
 
     pub(super) fn cron_list_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            let scheduler = self.session_scheduler();
-            let scheduler = scheduler.lock().await;
             Ok(json!({
-                "tasks": scheduler.list(),
+                "tasks": self.list_session_tasks().await,
             }))
         })
     }
@@ -1597,9 +1594,7 @@ impl ToolRegistry {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow!("cron_delete requires id"))?;
-            let scheduler = self.session_scheduler();
-            let mut scheduler = scheduler.lock().await;
-            let deleted = scheduler.delete(id);
+            let deleted = self.delete_session_task(id).await;
             Ok(json!({
                 "deleted": deleted.is_some(),
                 "task": deleted,
