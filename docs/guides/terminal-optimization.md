@@ -81,7 +81,7 @@ hitl_notification_bell = true
 
 [ui.notifications]
 enabled = true
-delivery_mode = "hybrid"
+delivery_mode = "desktop"
 backend = "auto"
 completion_failure = true
 completion_success = false
