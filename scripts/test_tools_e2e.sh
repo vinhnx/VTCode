@@ -4,6 +4,10 @@
 
 set -e  # Exit on any error
 
+cargo_cmd() {
+    env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo "$@"
+}
+
 echo "🧪 VT Code Tools End-to-End Test Suite"
 echo "===================================="
 
@@ -45,8 +49,8 @@ test_tool_directly() {
     echo -e "\n${YELLOW}Testing $tool_name tool directly${NC}"
 
     # Build and execute the tool through the binary
-    if cargo build --bin vtcode >/dev/null 2>&1; then
-        output=$(cargo run --quiet --bin vtcode -- "$tool_name" "$test_input" 2>/dev/null)
+    if cargo_cmd build --bin vtcode >/dev/null 2>&1; then
+        output=$(cargo_cmd run --quiet --bin vtcode -- "$tool_name" "$test_input" 2>/dev/null)
         if echo "$output" | grep -q "$expected_contains"; then
             echo -e "${GREEN}Tool output verified${NC}"
             TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -63,7 +67,7 @@ echo -e "\nTesting Tool Compilation"
 echo "============================"
 
 # Test 1: Check if tools compile
-run_test "VT Code Core Compilation" "cargo check --package vtcode-core --quiet && echo 'success'" "success"
+run_test "VT Code Core Compilation" "cargo_cmd check --package vtcode-core --quiet && echo 'success'" "success"
 
 echo -e "\nTesting External Dependencies"
 echo "=============================="

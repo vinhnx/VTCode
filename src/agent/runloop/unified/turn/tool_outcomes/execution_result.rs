@@ -9,6 +9,7 @@ use vtcode_core::llm::{
     resolve_lightweight_route,
 };
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
+use vtcode_core::persistent_memory::GroundedFactRecord;
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::ToolExecutionError;
@@ -19,6 +20,9 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::auto_mode::probe_tool_output;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+use crate::agent::runloop::unified::turn::compaction::{
+    SessionMemoryEnvelopeUpdate, refresh_session_memory_envelope,
+};
 
 use super::helpers::{check_is_argument_error, serialize_output, signature_key_for};
 
@@ -90,6 +94,15 @@ const TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS: usize = 12_000;
 const TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS: u32 = 400;
 const TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT: &str = "You summarize tool outputs for VT Code before they are added to the model context. Preserve actionable facts, concrete errors, file paths, commands, and next steps. Keep it concise, faithful, and specific. Do not invent details.";
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ParsedSubagentSummary {
+    summary: Vec<String>,
+    facts: Vec<String>,
+    touched_files: Vec<String>,
+    verification: Vec<String>,
+    open_questions: Vec<String>,
+}
+
 fn request_user_input_result_stats(output: &serde_json::Value) -> (usize, bool) {
     let cancelled = output
         .get("cancelled")
@@ -136,6 +149,204 @@ fn record_request_user_input_interview_result(
         .unwrap_or((0, true));
     ctx.session_stats
         .record_plan_mode_interview_result(answered_questions, cancelled);
+}
+
+fn normalize_subagent_section_items(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let item = line
+                .strip_prefix("- ")
+                .or_else(|| line.strip_prefix("* "))
+                .unwrap_or(line)
+                .trim();
+            (!item.eq_ignore_ascii_case("none")).then_some(item.to_string())
+        })
+        .collect()
+}
+
+fn parse_subagent_summary_markdown(summary: &str) -> Option<ParsedSubagentSummary> {
+    #[derive(Clone, Copy)]
+    enum Section {
+        Summary,
+        Facts,
+        TouchedFiles,
+        Verification,
+        OpenQuestions,
+    }
+
+    let mut current = None;
+    let mut summary_lines = Vec::new();
+    let mut fact_lines = Vec::new();
+    let mut touched_files = Vec::new();
+    let mut verification = Vec::new();
+    let mut open_questions = Vec::new();
+    let mut saw_contract = false;
+
+    for raw_line in summary.replace("\r\n", "\n").lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        current = match line {
+            "## Summary" => {
+                saw_contract = true;
+                Some(Section::Summary)
+            }
+            "## Facts" => {
+                saw_contract = true;
+                Some(Section::Facts)
+            }
+            "## Touched Files" => {
+                saw_contract = true;
+                Some(Section::TouchedFiles)
+            }
+            "## Verification" => {
+                saw_contract = true;
+                Some(Section::Verification)
+            }
+            "## Open Questions" => {
+                saw_contract = true;
+                Some(Section::OpenQuestions)
+            }
+            _ => current,
+        };
+
+        if line.starts_with("## ") {
+            continue;
+        }
+
+        match current {
+            Some(Section::Summary) => summary_lines.push(line.to_string()),
+            Some(Section::Facts) => fact_lines.push(line.to_string()),
+            Some(Section::TouchedFiles) => touched_files.push(line.to_string()),
+            Some(Section::Verification) => verification.push(line.to_string()),
+            Some(Section::OpenQuestions) => open_questions.push(line.to_string()),
+            None => {}
+        }
+    }
+
+    saw_contract.then(|| ParsedSubagentSummary {
+        summary: normalize_subagent_section_items(&summary_lines),
+        facts: normalize_subagent_section_items(&fact_lines),
+        touched_files: normalize_subagent_section_items(&touched_files),
+        verification: normalize_subagent_section_items(&verification),
+        open_questions: normalize_subagent_section_items(&open_questions),
+    })
+}
+
+fn extract_completed_subagent_entries(output: &serde_json::Value) -> Vec<&serde_json::Value> {
+    let mut entries = Vec::new();
+
+    if output.get("completed").and_then(serde_json::Value::as_bool) == Some(true)
+        && let Some(entry) = output.get("entry")
+    {
+        entries.push(entry);
+    }
+
+    if output
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|status| status == "completed")
+    {
+        entries.push(output);
+    }
+
+    entries
+}
+
+fn build_subagent_memory_update(output: &serde_json::Value) -> Option<SessionMemoryEnvelopeUpdate> {
+    let entries = extract_completed_subagent_entries(output);
+    if entries.is_empty() {
+        return None;
+    }
+
+    let mut update = SessionMemoryEnvelopeUpdate::default();
+    let mut saw_summary = false;
+    for entry in entries {
+        let Some(summary) = entry.get("summary").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if summary.trim().is_empty() {
+            continue;
+        }
+
+        let agent_name = entry
+            .get("agent_name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("subagent");
+        saw_summary = true;
+
+        if let Some(parsed) = parse_subagent_summary_markdown(summary) {
+            update
+                .grounded_facts
+                .extend(parsed.facts.into_iter().map(|fact| GroundedFactRecord {
+                    fact,
+                    source: format!("subagent:{agent_name}"),
+                }));
+            update.touched_files.extend(parsed.touched_files);
+            update.open_questions.extend(parsed.open_questions);
+            update.verification_todo.extend(parsed.verification);
+            if !parsed.summary.is_empty() {
+                update
+                    .delegation_notes
+                    .push(format!("{agent_name}: {}", parsed.summary.join(" | ")));
+            }
+        } else {
+            update
+                .delegation_notes
+                .push(format!("{agent_name}: {}", summary.trim()));
+        }
+    }
+
+    (saw_summary
+        && (!update.grounded_facts.is_empty()
+            || !update.touched_files.is_empty()
+            || !update.open_questions.is_empty()
+            || !update.verification_todo.is_empty()
+            || !update.delegation_notes.is_empty()))
+    .then_some(update)
+}
+
+fn merge_subagent_completion_into_memory(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    output: &serde_json::Value,
+) -> Result<()> {
+    if !matches!(
+        tool_name,
+        tool_names::SPAWN_AGENT
+            | tool_names::SEND_INPUT
+            | tool_names::WAIT_AGENT
+            | tool_names::RESUME_AGENT
+            | tool_names::CLOSE_AGENT
+    ) {
+        return Ok(());
+    }
+
+    let session_id = ctx.tool_registry.harness_context_snapshot().session_id;
+    let Some(update) = build_subagent_memory_update(output) else {
+        return Ok(());
+    };
+
+    if !update.touched_files.is_empty() {
+        ctx.session_stats
+            .record_touched_files(update.touched_files.iter().cloned());
+    }
+
+    refresh_session_memory_envelope(
+        ctx.config.workspace.as_path(),
+        &session_id,
+        ctx.vt_cfg,
+        ctx.working_history,
+        ctx.session_stats,
+        Some(&update),
+    )?;
+
+    Ok(())
 }
 
 fn truncate_text_for_model(value: &str, max_chars: usize) -> (String, bool) {
@@ -1281,6 +1492,7 @@ async fn handle_success<'a>(
             .iter()
             .map(|path| path.display().to_string()),
     );
+    merge_subagent_completion_into_memory(t_ctx.ctx, tool_name, output)?;
 
     // Run post-tool hooks
     run_post_tool_hooks(t_ctx.ctx, tool_name, args_val, output).await?;
@@ -2220,6 +2432,113 @@ mod tests {
         assert!(!is_blocked_or_denied_failure(
             "stream request timed out after 30000ms"
         ));
+    }
+
+    #[test]
+    fn parse_subagent_summary_markdown_reads_fixed_contract() {
+        let parsed = parse_subagent_summary_markdown(
+            "## Summary\n- Investigated compaction flow\n\n## Facts\n- `context.dynamic.retained_user_messages` defaults to 4\n- `read_file` duplicates are deduped locally\n\n## Touched Files\n- src/agent/runloop/unified/turn/compaction.rs\n\n## Verification\n- Run cargo check\n\n## Open Questions\n- Should batch reads be deduped too?\n",
+        )
+        .expect("structured summary should parse");
+
+        assert_eq!(parsed.summary, vec!["Investigated compaction flow"]);
+        assert_eq!(
+            parsed.facts,
+            vec![
+                "`context.dynamic.retained_user_messages` defaults to 4",
+                "`read_file` duplicates are deduped locally",
+            ]
+        );
+        assert_eq!(
+            parsed.touched_files,
+            vec!["src/agent/runloop/unified/turn/compaction.rs"]
+        );
+        assert_eq!(parsed.verification, vec!["Run cargo check"]);
+        assert_eq!(
+            parsed.open_questions,
+            vec!["Should batch reads be deduped too?"]
+        );
+    }
+
+    #[test]
+    fn parse_subagent_summary_markdown_treats_none_sections_as_empty() {
+        let parsed = parse_subagent_summary_markdown(
+            "## Summary\n- None\n\n## Facts\n- None\n\n## Touched Files\n- None\n\n## Verification\n- None\n\n## Open Questions\n- None\n",
+        )
+        .expect("structured summary should parse");
+
+        assert!(parsed.summary.is_empty());
+        assert!(parsed.facts.is_empty());
+        assert!(parsed.touched_files.is_empty());
+        assert!(parsed.verification.is_empty());
+        assert!(parsed.open_questions.is_empty());
+    }
+
+    #[test]
+    fn parse_subagent_summary_markdown_rejects_unstructured_text() {
+        assert!(parse_subagent_summary_markdown("plain paragraph without headings").is_none());
+    }
+
+    #[test]
+    fn build_subagent_memory_update_aggregates_structured_child_results() {
+        let output = serde_json::json!({
+            "completed": true,
+            "entry": {
+                "agent_name": "reviewer",
+                "summary": "## Summary\n- Investigated compaction flow\n- Confirmed contract\n\n## Facts\n- Local compaction dedupes repeated reads\n\n## Touched Files\n- src/agent/runloop/unified/turn/compaction.rs\n\n## Verification\n- Run cargo check\n\n## Open Questions\n- None\n"
+            }
+        });
+
+        let update = build_subagent_memory_update(&output).expect("update");
+
+        assert_eq!(
+            update.grounded_facts,
+            vec![GroundedFactRecord {
+                fact: "Local compaction dedupes repeated reads".to_string(),
+                source: "subagent:reviewer".to_string(),
+            }]
+        );
+        assert_eq!(
+            update.touched_files,
+            vec!["src/agent/runloop/unified/turn/compaction.rs".to_string()]
+        );
+        assert_eq!(
+            update.verification_todo,
+            vec!["Run cargo check".to_string()]
+        );
+        assert_eq!(
+            update.delegation_notes,
+            vec!["reviewer: Investigated compaction flow | Confirmed contract".to_string()]
+        );
+    }
+
+    #[test]
+    fn build_subagent_memory_update_falls_back_to_raw_summary() {
+        let output = serde_json::json!({
+            "status": "completed",
+            "agent_name": "worker",
+            "summary": "plain child summary"
+        });
+
+        let update = build_subagent_memory_update(&output).expect("update");
+
+        assert!(update.grounded_facts.is_empty());
+        assert!(update.touched_files.is_empty());
+        assert_eq!(
+            update.delegation_notes,
+            vec!["worker: plain child summary".to_string()]
+        );
+    }
+
+    #[test]
+    fn build_subagent_memory_update_ignores_empty_structured_summary() {
+        let output = serde_json::json!({
+            "status": "completed",
+            "agent_name": "worker",
+            "summary": "## Summary\n- None\n\n## Facts\n- None\n\n## Touched Files\n- None\n\n## Verification\n- None\n\n## Open Questions\n- None\n"
+        });
+
+        assert!(build_subagent_memory_update(&output).is_none());
     }
 
     #[test]

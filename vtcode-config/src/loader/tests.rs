@@ -460,7 +460,11 @@ fn config_defaults_provider_overrides_paths_and_theme() {
         let resolved_path = manager
             .config_path()
             .expect("config path should be resolved");
-        assert_eq!(resolved_path, config_path);
+        let resolved_canonical =
+            fs::canonicalize(resolved_path).expect("resolved config path should canonicalize");
+        let expected_canonical =
+            fs::canonicalize(&config_path).expect("expected config path should canonicalize");
+        assert_eq!(resolved_canonical, expected_canonical);
 
         assert_eq!(SyntaxHighlightingDefaults::theme(), "custom-theme");
         assert_eq!(

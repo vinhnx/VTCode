@@ -405,6 +405,7 @@ auto_compaction_threshold_tokens = 120000
 [context.dynamic]
 enabled = true
 persist_history = true
+retained_user_messages = 4
 ```
 
 Notes:
@@ -412,7 +413,8 @@ Notes:
 - `agent.harness.auto_compaction_enabled` enables automatic compaction when prompt-side token pressure crosses the configured threshold.
 - `agent.harness.auto_compaction_threshold_tokens` applies to both provider-native compaction and VT Code's local fallback compaction.
 - `context.dynamic.persist_history = true` lets VT Code persist compaction artifacts and the session memory envelope so later resumes and summarized forks can reuse that context.
-- There is currently no config knob for the retained-user-message budget used by local fallback compaction or summarized forks.
+- `context.dynamic.retained_user_messages` controls how many recent real user messages VT Code preserves verbatim on the local fallback compaction path and in summarized forks. The default is `4`.
+- The session memory envelope is VT Code's durable working-memory artifact. It is refreshed at turn boundaries and after completed child-agent results, then persisted beside history artifacts as `.memory.json`.
 
 ## MCP integration
 

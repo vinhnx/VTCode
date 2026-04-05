@@ -25,6 +25,10 @@ pub struct DynamicContextConfig {
     #[serde(default = "default_persist_history")]
     pub persist_history: bool,
 
+    /// Maximum number of recent user messages to retain verbatim during local compaction
+    #[serde(default = "default_retained_user_messages")]
+    pub retained_user_messages: usize,
+
     /// Enable syncing MCP tool descriptions to .vtcode/mcp/tools/
     #[serde(default = "default_sync_mcp_tools")]
     pub sync_mcp_tools: bool,
@@ -49,6 +53,7 @@ impl Default for DynamicContextConfig {
             tool_output_threshold: default_tool_output_threshold(),
             sync_terminals: default_sync_terminals(),
             persist_history: default_persist_history(),
+            retained_user_messages: default_retained_user_messages(),
             sync_mcp_tools: default_sync_mcp_tools(),
             sync_skills: default_sync_skills(),
             spool_max_age_secs: default_spool_max_age_secs(),
@@ -66,6 +71,10 @@ impl DynamicContextConfig {
         ensure!(
             self.max_spooled_files > 0,
             "Max spooled files must be greater than zero"
+        );
+        ensure!(
+            self.retained_user_messages > 0,
+            "Retained user messages must be greater than zero"
         );
         Ok(())
     }
@@ -85,6 +94,10 @@ fn default_sync_terminals() -> bool {
 
 fn default_persist_history() -> bool {
     true
+}
+
+fn default_retained_user_messages() -> usize {
+    4
 }
 
 fn default_sync_mcp_tools() -> bool {
@@ -213,4 +226,26 @@ fn default_preserve_recent_turns() -> usize {
 
 fn default_preserve_in_compression() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DynamicContextConfig;
+
+    #[test]
+    fn dynamic_context_defaults_retain_four_user_messages() {
+        let config = DynamicContextConfig::default();
+
+        assert_eq!(config.retained_user_messages, 4);
+    }
+
+    #[test]
+    fn dynamic_context_validation_rejects_zero_retained_user_messages() {
+        let config = DynamicContextConfig {
+            retained_user_messages: 0,
+            ..DynamicContextConfig::default()
+        };
+
+        assert!(config.validate().is_err());
+    }
 }

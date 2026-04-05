@@ -2297,6 +2297,9 @@ fn compose_subagent_instructions(spec: &SubagentSpec, memory_appendix: Option<St
     if !spec.prompt.trim().is_empty() {
         sections.push(spec.prompt.trim().to_string());
     }
+    sections.push(
+        "Return your final response using this exact Markdown contract:\n\n## Summary\n- [Concise outcome]\n\n## Facts\n- [Grounded fact]\n\n## Touched Files\n- [Relative path]\n\n## Verification\n- [Check performed or still needed]\n\n## Open Questions\n- [Any unresolved question]\n\nUse `- None` for empty sections. Keep it concise and grounded in the work you actually performed.".to_string(),
+    );
     if spec.is_read_only() {
         sections.push(
             "Tool reminder: stay inside the exposed read-only tool set for this child. Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `unified_file`, or `unified_exec` when they are not visible. For workspace discovery here, prefer `unified_search`; if that is insufficient, report the blocker instead of retrying denied calls.".to_string(),

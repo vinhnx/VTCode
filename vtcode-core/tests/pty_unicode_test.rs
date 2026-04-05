@@ -146,33 +146,13 @@ mod test_unicode_push_utf8 {
 async fn test_unicode_rendering_scenarios() {
     // This test demonstrates real-world scenarios where unicode rendering issues might occur
 
-    use std::path::PathBuf;
     use vtcode_core::tools::ToolRegistry;
 
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(std::path::PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     // Test 1: Command with unicode output
     println!("Testing unicode output from commands...");
-
-    // Create a test file with unicode content
-    let test_content = r#"#!/bin/bash
-echo "Testing unicode characters:"
-echo "  Emojis: 🌍🚀✨"
-echo "  CJK: 你好世界 こんにちは 안녕하세요"
-echo "  Accents: café naïve résumé"
-echo "  Mixed: English 中文 العربية русский"
-"#;
-
-    // Keep the script inside the workspace so the default sandbox can read it.
-    let temp_dir = tempfile::tempdir_in(".").expect("Failed to create workspace temp dir");
-    let test_script = temp_dir.path().join("test_unicode.sh");
-    std::fs::write(&test_script, test_content).expect("Failed to write test script");
-    std::fs::set_permissions(
-        &test_script,
-        std::os::unix::fs::PermissionsExt::from_mode(0o755),
-    )
-    .expect("Failed to set permissions");
 
     // Run the script and capture output
     let result = registry
@@ -180,8 +160,11 @@ echo "  Mixed: English 中文 العربية русский"
             "unified_exec",
             serde_json::json!({
                 "action": "run",
-                "command": "bash",
-                "args": [test_script.to_string_lossy().to_string()]
+                "command": "python3",
+                "args": [
+                    "-c",
+                    "print('Testing unicode characters:'); print('  Emojis: 🌍🚀✨'); print('  CJK: 你好世界 こんにちは 안녕하세요'); print('  Accents: café naïve résumé'); print('  Mixed: English 中文 العربية русский')"
+                ]
             }),
         )
         .await;

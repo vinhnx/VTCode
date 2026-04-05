@@ -32,7 +32,7 @@
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
     "task_tracker": "prompt",
-    "unified_exec": "prompt",
+    "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
     "close_agent": "prompt",

@@ -48,9 +48,11 @@ jobs:
       - name: Build
         run: cargo build --locked --workspace --quiet
 
-      - name: Run tool eval harness
+      - name: Run tool smoke harness
         run: |
-          cargo run --bin eval-tools | tee tool-eval.log || true
+          set -euo pipefail
+          bash scripts/test_tools_e2e.sh | tee tool-eval.log
+          bash scripts/test_pty_tools.sh | tee -a tool-eval.log
 
       - name: Upload eval artifacts
         uses: actions/upload-artifact@v7

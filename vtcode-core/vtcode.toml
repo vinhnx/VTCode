@@ -125,7 +125,6 @@ clear_at_least_tokens = 30000
 clear_tool_inputs = false
 
 [agent.codex_app_server]
-# Requires the local `codex` CLI on `$PATH` unless this is set to a custom executable path.
 command = "codex"
 args = ["app-server"]
 startup_timeout_secs = 10
@@ -700,6 +699,7 @@ enabled = true
 tool_output_threshold = 8192
 sync_terminals = true
 persist_history = true
+retained_user_messages = 4
 sync_mcp_tools = true
 sync_skills = true
 spool_max_age_secs = 3600

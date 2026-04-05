@@ -1,288 +1,242 @@
-file_opener = "none"
-project_doc_fallback_filenames = []
-notify = []
 custom_providers = []
+file_opener = "none"
+notify = []
+project_doc_fallback_filenames = []
 
-[history]
-persistence = "file"
+[acp]
+enabled = false
 
-[tui]
+[acp.zed]
+enabled = false
+transport = "stdio"
+workspace_trust = "full_auto"
+
+[acp.zed.auth]
+default_method = "agent"
+
+[acp.zed.tools]
+list_files = true
+read_file = true
 
 [agent]
-provider = "openai"
-api_key_env = "OPENAI_API_KEY"
-default_model = "gpt-5.3-codex"
-theme = "ciapre"
-system_prompt_mode = "default"
-tool_documentation_mode = "progressive"
-enable_split_tool_results = true
-todo_planning_mode = true
-ui_surface = "auto"
-max_conversation_turns = 150
-reasoning_effort = "low"
-verbosity = "medium"
-temperature = 0.7
-refine_temperature = 0.3
+api_key_env = "OLLAMA_API_KEY"
+autonomous_mode = false
+credential_storage_mode = "keyring"
+default_editing_mode = "edit"
+default_model = "minimax-m2.7:cloud"
 enable_self_review = false
+enable_split_tool_results = true
+include_temporal_context = true
+include_working_directory = true
+instruction_excludes = []
+instruction_files = []
+instruction_import_max_depth = 5
+instruction_max_bytes = 16384
+max_conversation_turns = 150
 max_review_passes = 1
+max_task_retries = 2
+project_doc_fallback_filenames = []
+project_doc_max_bytes = 16384
+provider = "ollama"
+reasoning_effort = "none"
 refine_prompts_enabled = false
 refine_prompts_max_passes = 1
 refine_prompts_model = ""
-project_doc_max_bytes = 16384
-project_doc_fallback_filenames = []
-instruction_max_bytes = 16384
-instruction_files = []
-instruction_excludes = []
-instruction_import_max_depth = 5
-credential_storage_mode = "keyring"
-max_task_retries = 2
-include_temporal_context = true
-temporal_context_use_utc = false
-include_working_directory = true
-default_editing_mode = "edit"
+refine_temperature = 0.3
 require_plan_confirmation = true
-autonomous_mode = false
+system_prompt_mode = "default"
+temperature = 0.7
+temporal_context_use_utc = false
+theme = "ciapre"
+todo_planning_mode = true
+tool_documentation_mode = "progressive"
+ui_surface = "auto"
+verbosity = "medium"
 
-[agent.small_model]
+[agent.checkpointing]
 enabled = true
-model = ""
-temperature = 0.3
-use_for_large_reads = true
-use_for_web_summary = true
-use_for_git_history = true
-use_for_memory = true
+max_age_days = 30
+max_snapshots = 50
 
-[agent.prompt_suggestions]
+[agent.circuit_breaker]
 enabled = true
-model = ""
-temperature = 0.3
-show_cost_notice = true
+failure_threshold = 7
+max_open_circuits = 3
+pause_on_open = true
+recovery_cooldown = 60
+
+[agent.codex_app_server]
+args = ["app-server"]
+command = "codex"
+experimental_features = false
+startup_timeout_secs = 10
+
+[agent.harness]
+auto_compaction_enabled = false
+continuation_policy = "all"
+event_log_path = ""
+max_revision_rounds = 2
+max_tool_calls_per_turn = 0
+max_tool_retries = 2
+max_tool_wall_clock_secs = 600
+orchestration_mode = "single"
+
+[agent.harness.tool_result_clearing]
+clear_at_least_tokens = 30000
+clear_tool_inputs = false
+enabled = false
+keep_tool_uses = 3
+trigger_tokens = 100000
 
 [agent.onboarding]
 enabled = true
-intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
-include_project_overview = true
-include_language_summary = false
-include_guideline_highlights = true
-include_usage_tips_in_welcome = false
-include_recommended_actions_in_welcome = false
 guideline_highlight_limit = 3
+include_guideline_highlights = true
+include_language_summary = false
+include_project_overview = true
+include_recommended_actions_in_welcome = false
+include_usage_tips_in_welcome = false
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+recommended_actions = [
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+]
 usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ]
-recommended_actions = [
-    "Review the highlighted guidelines and share the task you want to tackle.",
-    "Ask for a workspace tour if you need more context.",
-]
-
-[agent.persistent_memory]
-enabled = false
-auto_write = true
-startup_line_limit = 200
-startup_byte_limit = 25600
-
-[agent.checkpointing]
-enabled = true
-max_snapshots = 50
-max_age_days = 30
-
-[agent.vibe_coding]
-enabled = false
-min_prompt_length = 5
-min_prompt_words = 2
-enable_entity_resolution = true
-entity_index_cache = ".vtcode/entity_index.json"
-max_entity_matches = 5
-track_workspace_state = true
-max_recent_files = 20
-track_value_history = true
-enable_conversation_memory = true
-max_memory_turns = 50
-enable_pronoun_resolution = true
-enable_proactive_context = true
-max_context_files = 3
-max_context_snippets_per_file = 20
-max_search_results = 5
-enable_relative_value_inference = true
-
-[agent.harness]
-max_tool_calls_per_turn = 0
-max_tool_wall_clock_secs = 600
-max_tool_retries = 2
-auto_compaction_enabled = false
-continuation_policy = "all"
-event_log_path = ""
-orchestration_mode = "single"
-max_revision_rounds = 2
-
-[agent.harness.tool_result_clearing]
-enabled = false
-trigger_tokens = 100000
-keep_tool_uses = 3
-clear_at_least_tokens = 30000
-clear_tool_inputs = false
-
-[agent.codex_app_server]
-command = "codex"
-args = ["app-server"]
-startup_timeout_secs = 10
-experimental_features = true
-
-[agent.circuit_breaker]
-enabled = true
-failure_threshold = 7
-pause_on_open = true
-max_open_circuits = 3
-recovery_cooldown = 60
 
 [agent.open_responses]
-enabled = false
 emit_events = true
+enabled = false
 include_extensions = true
-map_tool_calls = true
 include_reasoning = true
+map_tool_calls = true
 
-[auth.openrouter]
-use_oauth = false
-callback_port = 8484
-auto_refresh = true
-flow_timeout_secs = 300
+[agent.persistent_memory]
+auto_write = true
+enabled = true
+startup_byte_limit = 25600
+startup_line_limit = 200
 
-[auth.openai]
-preferred_method = "auto"
-callback_port = 1455
-auto_refresh = true
-flow_timeout_secs = 300
+[agent.prompt_suggestions]
+enabled = true
+model = ""
+show_cost_notice = true
+temperature = 0.3
+
+[agent.small_model]
+enabled = true
+model = ""
+temperature = 0.3
+use_for_git_history = true
+use_for_large_reads = true
+use_for_memory = true
+use_for_web_summary = true
+
+[agent.vibe_coding]
+enable_conversation_memory = true
+enable_entity_resolution = true
+enable_proactive_context = true
+enable_pronoun_resolution = true
+enable_relative_value_inference = true
+enabled = false
+entity_index_cache = ".vtcode/entity_index.json"
+max_context_files = 3
+max_context_snippets_per_file = 20
+max_entity_matches = 5
+max_memory_turns = 50
+max_recent_files = 20
+max_search_results = 5
+min_prompt_length = 5
+min_prompt_words = 2
+track_value_history = true
+track_workspace_state = true
 
 [auth.copilot]
+auth_timeout_secs = 300
 available_tools = [
     "view",
     "glob",
     "grep",
 ]
 excluded_tools = []
+startup_timeout_secs = 20
 vtcode_tool_allowlist = [
     "unified_search",
     "unified_file",
     "unified_exec",
     "apply_patch",
 ]
-startup_timeout_secs = 20
-auth_timeout_secs = 300
 
-[tools]
-default_policy = "prompt"
-max_tool_loops = 0
-max_repeated_tool_calls = 2
-max_consecutive_blocked_tool_calls_per_turn = 3
-max_sequential_spool_chunk_reads = 6
+[auth.openai]
+auto_refresh = true
+callback_port = 1455
+flow_timeout_secs = 300
+preferred_method = "auto"
 
-[tools.policies]
-"/edit" = "prompt"
-"/plan" = "prompt"
-"/plan_off" = "prompt"
-agent_info = "allow"
-apply_patch = "prompt"
-ask_user_question = "allow"
-"assistant<|channel|>apply_patch" = "allow"
-checklist = "prompt"
-close_pty_session = "allow"
-coder_mode = "prompt"
-create_file = "allow"
-create_pty_session = "allow"
-delete_file = "prompt"
-edit_file = "allow"
-enter_plan = "prompt"
-enter_plan_mode = "prompt"
-exec_code = "allow"
-execute_code = "allow"
-exit_plan = "prompt"
-exit_plan_mode = "prompt"
-git_diff = "allow"
-grep_file = "allow"
-implement_plan = "prompt"
-list_files = "allow"
-list_pty_sessions = "allow"
-list_skills = "allow"
-load_skill = "allow"
-load_skill_resource = "allow"
-memory = "allow"
-mode_edit = "prompt"
-mode_plan = "prompt"
-open_file = "allow"
-plan_checklist = "prompt"
-plan_exit = "prompt"
-plan_manager = "prompt"
-plan_mode = "prompt"
-plan_off = "prompt"
-plan_on = "prompt"
-plan_start = "prompt"
-plan_task_tracker = "prompt"
-plan_tasks = "prompt"
-planner_mode = "prompt"
-read_file = "allow"
-read_pty_session = "allow"
-request_user_input = "allow"
-resize_pty_session = "allow"
-resume_agent = "allow"
-resume_edit_mode = "prompt"
-run_pty_cmd = "allow"
-search_file = "allow"
-search_replace = "prompt"
-search_tools = "allow"
-"send_command<|channel|>analysis" = "allow"
-send_input = "allow"
-send_pty_input = "prompt"
-skill = "allow"
-spawn_agent = "allow"
-start_implementation = "prompt"
-start_planning = "prompt"
-switch_edit_mode = "prompt"
-switch_plan_mode = "prompt"
-switch_to_edit_mode = "prompt"
-switch_to_plan_mode = "prompt"
-task_tracker = "prompt"
-track_tasks = "prompt"
-unified_exec = "prompt"
-unified_file = "allow"
-unified_search = "allow"
-vtcode-check = "prompt"
-vtcode-clippy = "prompt"
-wait_agent = "allow"
-web_fetch = "allow"
-write_file = "allow"
+[auth.openrouter]
+auto_refresh = true
+callback_port = 8484
+flow_timeout_secs = 300
+use_oauth = false
 
-[tools.web_fetch]
-mode = "restricted"
-dynamic_blocklist_enabled = false
-dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
-dynamic_whitelist_enabled = false
-dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
-blocked_domains = []
-allowed_domains = []
-blocked_patterns = []
-enable_audit_logging = false
-audit_log_path = "~/.vtcode/web_fetch_audit.log"
-strict_https_only = true
+[automation.full_auto]
+allowed_tools = [
+    "read_file",
+    "unified_search",
+]
+enabled = false
+max_turns = 30
+require_profile_ack = true
 
-[tools.plugins]
+[automation.scheduled_tasks]
+enabled = false
+
+[chat.askQuestions]
 enabled = true
-manifests = []
-default_trust = "sandbox"
-allow = []
-deny = []
-auto_reload = true
-
-[tools.editor]
-enabled = true
-preferred_editor = ""
-suspend_tui = true
-
-[tools.loop_thresholds]
 
 [commands]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "rustc *",
+    "python *",
+    "python3 *",
+    "pip *",
+    "pip3 *",
+    "virtualenv *",
+    "node *",
+    "npm *",
+    "npm run *",
+    "yarn *",
+    "yarn run *",
+    "pnpm *",
+    "pnpm run *",
+    "bun *",
+    "bun run *",
+    "npx *",
+    "go *",
+    "gcc *",
+    "g++ *",
+    "clang *",
+    "clang++ *",
+    "javac *",
+    "java *",
+    "mvn *",
+    "gradle *",
+    "make *",
+    "cmake *",
+    "ninja *",
+    "docker *",
+    "docker-compose *",
+    "tar *",
+    "zip *",
+    "unzip *",
+    "gzip *",
+    "gunzip *",
+]
 allow_list = [
     "ls",
     "pwd",
@@ -368,15 +322,36 @@ allow_list = [
     "docker",
     "docker-compose",
 ]
+allow_regex = [
+    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
+    '^git (status|diff|log|show|branch|remote)\b',
+    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
+    '^rustc\b',
+    '^(python|python3) (-m | )?\w*',
+    '^(pip|pip3)\b',
+    '^virtualenv\b',
+    '^(node|npm|yarn|pnpm|bun|npx)\b',
+    '^go\b',
+    '^(gcc|g\+\+|clang|clang\++)\b',
+    '^(javac|java)\b',
+    '^(mvn|gradle)\b',
+    '^(make|cmake)\b',
+    '^(docker|docker-compose)\b',
+]
 approval_prefixes = []
-extra_path_entries = [
-    "$HOME/.cargo/bin",
-    "$HOME/.local/bin",
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "$HOME/.asdf/bin",
-    "$HOME/.asdf/shims",
-    "$HOME/go/bin",
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kill *",
+    "pkill *",
+    "systemctl *",
+    "service *",
+    "mount *",
+    "umount *",
+    "docker run *",
+    "kubectl *",
 ]
 deny_list = [
     "rm",
@@ -437,75 +412,6 @@ deny_list = [
     "tail -f /var/log",
     "head -n 1 /var/log",
 ]
-allow_glob = [
-    "git *",
-    "cargo *",
-    "rustc *",
-    "python *",
-    "python3 *",
-    "pip *",
-    "pip3 *",
-    "virtualenv *",
-    "node *",
-    "npm *",
-    "npm run *",
-    "yarn *",
-    "yarn run *",
-    "pnpm *",
-    "pnpm run *",
-    "bun *",
-    "bun run *",
-    "npx *",
-    "go *",
-    "gcc *",
-    "g++ *",
-    "clang *",
-    "clang++ *",
-    "javac *",
-    "java *",
-    "mvn *",
-    "gradle *",
-    "make *",
-    "cmake *",
-    "ninja *",
-    "docker *",
-    "docker-compose *",
-    "tar *",
-    "zip *",
-    "unzip *",
-    "gzip *",
-    "gunzip *",
-]
-deny_glob = [
-    "rm *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kill *",
-    "pkill *",
-    "systemctl *",
-    "service *",
-    "mount *",
-    "umount *",
-    "docker run *",
-    "kubectl *",
-]
-allow_regex = [
-    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
-    '^git (status|diff|log|show|branch|remote)\b',
-    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
-    '^rustc\b',
-    '^(python|python3) (-m | )?\w*',
-    '^(pip|pip3)\b',
-    '^virtualenv\b',
-    '^(node|npm|yarn|pnpm|bun|npx)\b',
-    '^go\b',
-    '^(gcc|g\+\+|clang|clang\++)\b',
-    '^(javac|java)\b',
-    '^(mvn|gradle)\b',
-    '^(make|cmake)\b',
-    '^(docker|docker-compose)\b',
-]
 deny_regex = [
     'rm\s+(-rf|--force)',
     'sudo\s+.*',
@@ -514,561 +420,50 @@ deny_regex = [
     'docker\s+run\s+.*--privileged',
     'kubectl\s+(delete|drain|uncordon)',
 ]
-
-[permissions]
-default_mode = "auto"
-allowed_tools = []
-disallowed_tools = []
-allow = []
-ask = []
-deny = []
-enabled = true
-resolve_commands = true
-audit_enabled = true
-audit_directory = "~/.vtcode/audit"
-log_allowed_commands = true
-log_denied_commands = true
-log_permission_prompts = true
-cache_enabled = true
-cache_ttl_seconds = 300
-
-[permissions.auto_mode]
-model = ""
-probe_model = ""
-max_consecutive_denials = 3
-max_total_denials = 20
-drop_broad_allow_rules = true
-block_rules = [
-    "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.",
-    "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.",
-    "Block sending workspace contents, credentials, environment variables, or other sensitive data to external endpoints unless the user explicitly named both the destination and the data.",
-    "Block credential hunting, secret discovery, or scanning config and environment stores for alternative tokens unless the user explicitly asked for that credential workflow.",
-    "Block commands that bypass safety checks, disable verification, install persistence, or weaken the host security posture.",
-    "Block destructive or production/shared-infrastructure actions unless the user explicitly authorized the target and the action.",
-    "Block destructive actions against inferred, fuzzy-matched, or agent-selected targets when the user did not name the exact target.",
+extra_path_entries = [
+    "$HOME/.cargo/bin",
+    "$HOME/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "$HOME/.asdf/bin",
+    "$HOME/.asdf/shims",
+    "$HOME/go/bin",
 ]
-allow_exceptions = [
-    "Allow read-only tools and read-only browsing/search actions.",
-    "Allow file edits and writes inside the current workspace when the path is not protected.",
-    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
-]
-
-[permissions.auto_mode.environment]
-trusted_paths = []
-trusted_domains = []
-trusted_git_hosts = []
-trusted_git_orgs = []
-trusted_services = []
-
-[security]
-human_in_the_loop = true
-require_write_tool_for_claims = true
-auto_apply_detected_patches = false
-zero_trust_mode = true
-encrypt_payloads = true
-integrity_checks = true
-hitl_notification_bell = true
-
-[security.gatekeeper]
-warn_on_quarantine = true
-auto_clear_quarantine = false
-auto_clear_paths = [
-    ".vtcode/bin",
-    "~/.vtcode/bin",
-]
-
-[sandbox]
-enabled = false
-default_mode = "read_only"
-
-[sandbox.network]
-allow_all = false
-allowlist = []
-block_all = false
-
-[sandbox.sensitive_paths]
-use_defaults = true
-additional = []
-exceptions = []
-
-[sandbox.resource_limits]
-preset = "moderate"
-max_memory_mb = 0
-max_pids = 0
-max_disk_mb = 0
-cpu_time_secs = 0
-timeout_secs = 0
-
-[sandbox.seccomp]
-enabled = true
-profile = "strict"
-additional_blocked = []
-log_only = false
-
-[sandbox.external]
-sandbox_type = "none"
-
-[sandbox.external.docker]
-image = "ubuntu:22.04"
-memory_limit = ""
-cpu_limit = ""
-network_mode = "none"
-
-[sandbox.external.microvm]
-vmm = ""
-kernel_path = ""
-rootfs_path = ""
-memory_mb = 512
-vcpus = 1
-
-[ui]
-tool_output_mode = "compact"
-tool_output_max_lines = 600
-tool_output_spool_bytes = 200000
-allow_tool_ansi = false
-inline_viewport_rows = 16
-reasoning_display_mode = "toggle"
-reasoning_visible_default = true
-vim_mode = false
-layout_mode = "auto"
-display_mode = "minimal"
-show_sidebar = true
-dim_completed_todos = true
-message_block_spacing = true
-show_turn_timer = false
-show_diagnostics_in_transcript = false
-minimum_contrast = 4.5
-bold_is_bright = false
-safe_colors_only = false
-color_scheme_mode = "auto"
-screen_reader_mode = false
-reduce_motion_mode = false
-reduce_motion_keep_progress_animation = false
-
-[ui.status_line]
-mode = "Auto"
-refresh_interval_ms = 1000
-command_timeout_ms = 200
-
-[ui.terminal_title]
-items = [
-    "project",
-    "spinner",
-    "app-name",
-    "git-branch",
-]
-
-[ui.keyboard_protocol]
-enabled = true
-mode = "default"
-disambiguate_escape_codes = true
-report_event_types = true
-report_alternate_keys = true
-report_all_keys = false
-
-[ui.notifications]
-enabled = true
-delivery_mode = "desktop"
-backend = "auto"
-suppress_when_focused = true
-command_failure = false
-tool_failure = false
-error = true
-completion = true
-completion_success = false
-completion_failure = true
-hitl = true
-policy_approval = true
-request = false
-tool_success = false
-repeat_window_seconds = 30
-max_identical_in_window = 1
-
-[ui.fullscreen]
-mouse_capture = true
-copy_on_select = true
-scroll_speed = 3
-
-[chat.askQuestions]
-enabled = true
-
-[pty]
-enabled = true
-default_rows = 24
-default_cols = 80
-max_sessions = 10
-command_timeout_seconds = 300
-stdout_tail_lines = 20
-scrollback_lines = 400
-max_scrollback_bytes = 25000000
-emulation_backend = "ghostty"
-large_output_threshold_kb = 5000
-shell_zsh_fork = false
-
-[debug]
-enable_tracing = false
-trace_level = "info"
-trace_targets = []
-max_debug_log_size_mb = 50
-max_debug_log_age_days = 7
 
 [context]
 max_context_tokens = 90000
-trim_to_percent = 60
 preserve_recent_turns = 10
-
-[context.ledger]
-enabled = true
-max_entries = 12
-include_in_prompt = true
-preserve_in_compression = true
+trim_to_percent = 60
 
 [context.dynamic]
 enabled = true
-tool_output_threshold = 8192
-sync_terminals = true
+max_spooled_files = 100
 persist_history = true
+retained_user_messages = 4
+spool_max_age_secs = 3600
 sync_mcp_tools = true
 sync_skills = true
-spool_max_age_secs = 3600
-max_spooled_files = 100
+sync_terminals = true
+tool_output_threshold = 8192
 
-[telemetry]
-trajectory_enabled = true
-dashboards_enabled = true
-sample_interval_ms = 1000
-retention_days = 14
-bottleneck_tracing = true
-perf_events = true
-trajectory_max_files = 50
-trajectory_max_age_days = 14
-trajectory_max_size_mb = 50
-
-[optimization.memory_pool]
+[context.ledger]
 enabled = true
-max_string_pool_size = 64
-max_value_pool_size = 32
-max_vec_pool_size = 16
+include_in_prompt = true
+max_entries = 12
+preserve_in_compression = true
 
-[optimization.tool_registry]
-use_optimized_registry = true
-max_concurrent_tools = 4
-hot_cache_size = 16
-default_timeout_secs = 180
-
-[optimization.async_pipeline]
-enable_batching = false
-enable_caching = true
-max_batch_size = 5
-batch_timeout_ms = 100
-cache_size = 100
-
-[optimization.llm_client]
-enable_connection_pooling = false
-enable_response_caching = true
-enable_request_batching = false
-connection_pool_size = 4
-response_cache_size = 50
-cache_ttl_secs = 300
-rate_limit_rps = 10.0
-rate_limit_burst = 20
-
-[optimization.agent_execution]
-use_optimized_loop = true
-enable_performance_prediction = false
-state_history_size = 1000
-resource_monitor_interval_ms = 100
-max_memory_mb = 1024
-max_execution_time_secs = 300
-idle_timeout_ms = 5000
-idle_backoff_ms = 100
-max_idle_cycles = 10
-
-[optimization.profiling]
-enabled = false
-monitor_interval_ms = 100
-max_history_size = 1000
-auto_export_results = false
-export_file_path = "benchmark_results.json"
-enable_regression_testing = false
-max_regression_percent = 10.0
-
-[optimization.file_read_cache]
-enabled = true
-min_size_bytes = 262144
-max_size_bytes = 10485760
-ttl_secs = 300
-max_entries = 128
-
-[optimization.command_cache]
-enabled = true
-ttl_ms = 2000
-max_entries = 128
-allowlist = [
-    "rg",
-    "ls",
-    "git status",
-    "git diff --stat",
-]
-
-[syntax_highlighting]
-enabled = true
-theme = "base16-ocean.dark"
-cache_themes = true
-max_file_size_mb = 10
-enabled_languages = []
-highlight_timeout_ms = 5000
-
-[timeouts]
-default_ceiling_seconds = 180
-pty_ceiling_seconds = 300
-mcp_ceiling_seconds = 120
-streaming_ceiling_seconds = 600
-warning_threshold_percent = 80
-adaptive_decay_ratio = 0.875
-adaptive_success_streak = 5
-adaptive_min_floor_ms = 1000
-
-[automation.full_auto]
-enabled = false
-max_turns = 30
-allowed_tools = [
-    "read_file",
-    "unified_search",
-]
-require_profile_ack = true
-
-[automation.scheduled_tasks]
-enabled = false
-
-[subagents]
-enabled = true
-max_concurrent = 3
-max_depth = 1
-default_timeout_seconds = 300
-auto_delegate_read_only = true
-
-[subagents.background]
-enabled = false
-default_agent = "default"
-refresh_interval_ms = 2000
-auto_restore = false
-toggle_shortcut = "ctrl+b"
-
-[prompt_cache]
-enabled = true
-cache_dir = "~/.vtcode/cache/prompts"
-max_entries = 1000
-max_age_days = 30
-enable_auto_cleanup = true
-min_quality_threshold = 0.7
-cache_friendly_prompt_shaping = true
-
-[prompt_cache.providers.openai]
-enabled = true
-min_prefix_tokens = 1024
-idle_expiration_seconds = 3600
-surface_metrics = true
-prompt_cache_key_mode = "session"
-
-[prompt_cache.providers.anthropic]
-enabled = true
-tools_ttl_seconds = 3600
-messages_ttl_seconds = 300
-max_breakpoints = 4
-cache_system_messages = true
-cache_user_messages = true
-cache_tool_definitions = true
-min_message_length_for_cache = 256
-extended_ttl_seconds = 3600
-
-[prompt_cache.providers.gemini]
-enabled = true
-mode = "implicit"
-min_prefix_tokens = 1024
-explicit_ttl_seconds = 3600
-
-[prompt_cache.providers.openrouter]
-enabled = true
-propagate_provider_capabilities = true
-report_savings = true
-
-[prompt_cache.providers.moonshot]
-enabled = true
-
-[prompt_cache.providers.deepseek]
-enabled = true
-surface_metrics = true
-
-[prompt_cache.providers.zai]
-enabled = false
-
-[mcp]
-enabled = false
-providers = []
-max_concurrent_connections = 5
-request_timeout_seconds = 30
-retry_attempts = 3
-experimental_use_rmcp_client = true
-connection_pooling_enabled = true
-tool_cache_capacity = 100
-connection_timeout_seconds = 30
-
-[mcp.ui]
-mode = "compact"
-max_events = 50
-show_provider_names = true
-
-[mcp.ui.renderers]
-
-[mcp.requirements]
-enforce = false
-allowed_stdio_commands = []
-allowed_http_endpoints = []
-
-[mcp.server]
-enabled = false
-bind_address = "127.0.0.1"
-port = 3000
-transport = "sse"
-name = "vtcode-mcp-server"
-version = "0.96.15"
-exposed_tools = []
-
-[mcp.allowlist]
-enforce = false
-
-[mcp.allowlist.default]
-
-[mcp.allowlist.providers]
-
-[mcp.security]
-auth_enabled = false
-
-[mcp.security.rate_limit]
-requests_per_minute = 100
-concurrent_requests = 10
-
-[mcp.security.validation]
-schema_validation_enabled = true
-path_traversal_protection = true
-max_argument_size = 1048576
-
-[acp]
-enabled = false
-
-[acp.zed]
-enabled = false
-transport = "stdio"
-workspace_trust = "full_auto"
-
-[acp.zed.tools]
-read_file = true
-list_files = true
-
-[acp.zed.auth]
-default_method = "agent"
-
-[ide_context]
-enabled = true
-inject_into_prompt = true
-show_in_tui = true
-include_selection_text = true
-provider_mode = "auto"
-
-[ide_context.providers.vscode_compatible]
-enabled = true
-
-[ide_context.providers.zed]
-enabled = true
-
-[ide_context.providers.generic]
-enabled = true
-
-[hooks.lifecycle]
-quiet_success_output = false
-session_start = []
-session_end = []
-subagent_start = []
-subagent_stop = []
-user_prompt_submit = []
-pre_tool_use = []
-post_tool_use = []
-permission_request = []
-pre_compact = []
-stop = []
-task_completion = []
-task_completed = []
-notification = []
-
-[model]
-skip_loop_detection = false
-loop_detection_threshold = 2
-loop_detection_interactive = true
-
-[provider.openai]
-websocket_mode = false
-service_tier = "flex"
-
-[provider.openai.manual_compaction]
-
-[provider.openai.hosted_shell]
-enabled = false
-environment = "container_auto"
-
-[provider.openai.hosted_shell.network_policy]
-type = "disabled"
-
-[provider.openai.tool_search]
-enabled = true
-defer_by_default = true
-always_available_tools = []
-
-[provider.anthropic]
-skip_model_validation = false
-extended_thinking_enabled = true
-interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
-interleaved_thinking_budget_tokens = 31999
-interleaved_thinking_type_enabled = "enabled"
-effort = "low"
-count_tokens_enabled = false
-
-[provider.anthropic.tool_search]
-enabled = true
-algorithm = "regex"
-defer_by_default = true
-max_results = 5
-always_available_tools = []
-
-[provider.anthropic.memory]
-enabled = true
-
-[skills]
-render-mode = "lean"
-prompt-format = "xml"
-max-skills-in-prompt = 10
-enable-auto-trigger = true
-enable-description-matching = true
-min-keyword-matches = 2
-
-[skills.bundled]
-enabled = true
-
-[output_style]
-active_style = "default"
+[debug]
+enable_tracing = false
+max_debug_log_age_days = 7
+max_debug_log_size_mb = 50
+trace_level = "info"
+trace_targets = []
 
 [dotfile_protection]
-enabled = true
-require_explicit_confirmation = true
-audit_logging_enabled = true
-audit_log_path = "~/.vtcode/dotfile_audit.log"
-prevent_cascading_modifications = true
-create_backups = true
-backup_directory = "~/.vtcode/dotfile_backups"
-max_backups_per_file = 10
-preserve_permissions = true
-whitelist = []
 additional_protected_patterns = []
+audit_log_path = "~/.vtcode/dotfile_audit.log"
+audit_logging_enabled = true
+backup_directory = "~/.vtcode/dotfile_backups"
 block_during_automation = true
 blocked_operations = [
     "dependency_installation",
@@ -1080,4 +475,610 @@ blocked_operations = [
     "linting",
     "auto_fix",
 ]
+create_backups = true
+enabled = true
+max_backups_per_file = 10
+preserve_permissions = true
+prevent_cascading_modifications = true
+require_explicit_confirmation = true
 require_secondary_auth_for_whitelist = true
+whitelist = []
+
+[history]
+persistence = "file"
+
+[hooks.lifecycle]
+notification = []
+permission_request = []
+post_tool_use = []
+pre_compact = []
+pre_tool_use = []
+quiet_success_output = false
+session_end = []
+session_start = []
+stop = []
+subagent_start = []
+subagent_stop = []
+task_completed = []
+task_completion = []
+user_prompt_submit = []
+
+[ide_context]
+enabled = true
+include_selection_text = true
+inject_into_prompt = true
+provider_mode = "auto"
+show_in_tui = true
+
+[ide_context.providers.generic]
+enabled = true
+
+[ide_context.providers.vscode_compatible]
+enabled = true
+
+[ide_context.providers.zed]
+enabled = true
+
+[mcp]
+connection_pooling_enabled = true
+connection_timeout_seconds = 30
+enabled = false
+experimental_use_rmcp_client = true
+max_concurrent_connections = 5
+providers = []
+request_timeout_seconds = 30
+retry_attempts = 3
+tool_cache_capacity = 100
+
+[mcp.allowlist]
+enforce = false
+
+[mcp.allowlist.default]
+
+[mcp.allowlist.providers]
+
+[mcp.requirements]
+allowed_http_endpoints = []
+allowed_stdio_commands = []
+enforce = false
+
+[mcp.security]
+auth_enabled = false
+
+[mcp.security.rate_limit]
+concurrent_requests = 10
+requests_per_minute = 100
+
+[mcp.security.validation]
+max_argument_size = 1048576
+path_traversal_protection = true
+schema_validation_enabled = true
+
+[mcp.server]
+bind_address = "127.0.0.1"
+enabled = false
+exposed_tools = []
+name = "vtcode-mcp-server"
+port = 3000
+transport = "sse"
+version = "0.96.15"
+
+[mcp.ui]
+max_events = 50
+mode = "compact"
+show_provider_names = true
+
+[mcp.ui.renderers]
+
+[model]
+loop_detection_interactive = true
+loop_detection_threshold = 2
+skip_loop_detection = false
+
+[optimization.agent_execution]
+enable_performance_prediction = false
+idle_backoff_ms = 100
+idle_timeout_ms = 5000
+max_execution_time_secs = 300
+max_idle_cycles = 10
+max_memory_mb = 1024
+resource_monitor_interval_ms = 100
+state_history_size = 1000
+use_optimized_loop = true
+
+[optimization.async_pipeline]
+batch_timeout_ms = 100
+cache_size = 100
+enable_batching = false
+enable_caching = true
+max_batch_size = 5
+
+[optimization.command_cache]
+allowlist = [
+    "rg",
+    "ls",
+    "git status",
+    "git diff --stat",
+]
+enabled = true
+max_entries = 128
+ttl_ms = 2000
+
+[optimization.file_read_cache]
+enabled = true
+max_entries = 128
+max_size_bytes = 10485760
+min_size_bytes = 262144
+ttl_secs = 300
+
+[optimization.llm_client]
+cache_ttl_secs = 300
+connection_pool_size = 4
+enable_connection_pooling = false
+enable_request_batching = false
+enable_response_caching = true
+rate_limit_burst = 20
+rate_limit_rps = 10.0
+response_cache_size = 50
+
+[optimization.memory_pool]
+enabled = true
+max_string_pool_size = 64
+max_value_pool_size = 32
+max_vec_pool_size = 16
+
+[optimization.profiling]
+auto_export_results = false
+enable_regression_testing = false
+enabled = false
+export_file_path = "benchmark_results.json"
+max_history_size = 1000
+max_regression_percent = 10.0
+monitor_interval_ms = 100
+
+[optimization.tool_registry]
+default_timeout_secs = 180
+hot_cache_size = 16
+max_concurrent_tools = 4
+use_optimized_registry = true
+
+[output_style]
+active_style = "default"
+
+[permissions]
+allow = []
+allowed_tools = []
+ask = []
+audit_directory = "~/.vtcode/audit"
+audit_enabled = true
+cache_enabled = true
+cache_ttl_seconds = 300
+default_mode = "default"
+deny = []
+disallowed_tools = []
+enabled = true
+log_allowed_commands = true
+log_denied_commands = true
+log_permission_prompts = true
+resolve_commands = true
+
+[permissions.auto_mode]
+allow_exceptions = [
+    "Allow read-only tools and read-only browsing/search actions.",
+    "Allow file edits and writes inside the current workspace when the path is not protected.",
+    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
+]
+block_rules = [
+    "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.",
+    "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.",
+    "Block sending workspace contents, credentials, environment variables, or other sensitive data to external endpoints unless the user explicitly named both the destination and the data.",
+    "Block credential hunting, secret discovery, or scanning config and environment stores for alternative tokens unless the user explicitly asked for that credential workflow.",
+    "Block commands that bypass safety checks, disable verification, install persistence, or weaken the host security posture.",
+    "Block destructive or production/shared-infrastructure actions unless the user explicitly authorized the target and the action.",
+    "Block destructive actions against inferred, fuzzy-matched, or agent-selected targets when the user did not name the exact target.",
+]
+drop_broad_allow_rules = true
+max_consecutive_denials = 3
+max_total_denials = 20
+model = ""
+probe_model = ""
+
+[permissions.auto_mode.environment]
+trusted_domains = []
+trusted_git_hosts = []
+trusted_git_orgs = []
+trusted_paths = []
+trusted_services = []
+
+[prompt_cache]
+cache_dir = "~/.vtcode/cache/prompts"
+cache_friendly_prompt_shaping = true
+enable_auto_cleanup = true
+enabled = true
+max_age_days = 30
+max_entries = 1000
+min_quality_threshold = 0.7
+
+[prompt_cache.providers.anthropic]
+cache_system_messages = true
+cache_tool_definitions = true
+cache_user_messages = true
+enabled = true
+extended_ttl_seconds = 3600
+max_breakpoints = 4
+messages_ttl_seconds = 300
+min_message_length_for_cache = 256
+tools_ttl_seconds = 3600
+
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
+[prompt_cache.providers.gemini]
+enabled = true
+explicit_ttl_seconds = 3600
+min_prefix_tokens = 1024
+mode = "implicit"
+
+[prompt_cache.providers.moonshot]
+enabled = true
+
+[prompt_cache.providers.openai]
+enabled = true
+idle_expiration_seconds = 3600
+min_prefix_tokens = 1024
+prompt_cache_key_mode = "session"
+surface_metrics = true
+
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+[prompt_cache.providers.zai]
+enabled = false
+
+[provider.anthropic]
+count_tokens_enabled = false
+effort = "low"
+extended_thinking_enabled = true
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+interleaved_thinking_budget_tokens = 31999
+interleaved_thinking_type_enabled = "enabled"
+skip_model_validation = false
+
+[provider.anthropic.memory]
+enabled = false
+
+[provider.anthropic.tool_search]
+algorithm = "regex"
+always_available_tools = []
+defer_by_default = true
+enabled = true
+max_results = 5
+
+[provider.openai]
+service_tier = "flex"
+websocket_mode = false
+
+[provider.openai.hosted_shell]
+enabled = false
+environment = "container_auto"
+
+[provider.openai.hosted_shell.network_policy]
+type = "disabled"
+
+[provider.openai.manual_compaction]
+
+[provider.openai.tool_search]
+always_available_tools = []
+defer_by_default = true
+enabled = true
+
+[pty]
+command_timeout_seconds = 300
+default_cols = 80
+default_rows = 24
+emulation_backend = "ghostty"
+enabled = true
+large_output_threshold_kb = 5000
+max_scrollback_bytes = 25000000
+max_sessions = 10
+scrollback_lines = 400
+shell_zsh_fork = false
+stdout_tail_lines = 20
+
+[sandbox]
+default_mode = "read_only"
+enabled = false
+
+[sandbox.external]
+sandbox_type = "none"
+
+[sandbox.external.docker]
+cpu_limit = ""
+image = "ubuntu:22.04"
+memory_limit = ""
+network_mode = "none"
+
+[sandbox.external.microvm]
+kernel_path = ""
+memory_mb = 512
+rootfs_path = ""
+vcpus = 1
+vmm = ""
+
+[sandbox.network]
+allow_all = false
+allowlist = []
+block_all = false
+
+[sandbox.resource_limits]
+cpu_time_secs = 0
+max_disk_mb = 0
+max_memory_mb = 0
+max_pids = 0
+preset = "moderate"
+timeout_secs = 0
+
+[sandbox.seccomp]
+additional_blocked = []
+enabled = true
+log_only = false
+profile = "strict"
+
+[sandbox.sensitive_paths]
+additional = []
+exceptions = []
+use_defaults = true
+
+[security]
+auto_apply_detected_patches = false
+encrypt_payloads = true
+hitl_notification_bell = true
+human_in_the_loop = true
+integrity_checks = true
+require_write_tool_for_claims = true
+zero_trust_mode = true
+
+[security.gatekeeper]
+auto_clear_paths = [
+    ".vtcode/bin",
+    "~/.vtcode/bin",
+]
+auto_clear_quarantine = false
+warn_on_quarantine = true
+
+[skills]
+enable-auto-trigger = true
+enable-description-matching = true
+max-skills-in-prompt = 10
+min-keyword-matches = 2
+prompt-format = "xml"
+render-mode = "lean"
+
+[skills.bundled]
+enabled = true
+
+[subagents]
+auto_delegate_read_only = true
+default_timeout_seconds = 300
+enabled = true
+max_concurrent = 3
+max_depth = 1
+
+[subagents.background]
+auto_restore = false
+default_agent = "default"
+enabled = false
+refresh_interval_ms = 2000
+toggle_shortcut = "ctrl+b"
+
+[syntax_highlighting]
+cache_themes = true
+enabled = true
+enabled_languages = []
+highlight_timeout_ms = 5000
+max_file_size_mb = 10
+theme = "base16-ocean.dark"
+
+[telemetry]
+bottleneck_tracing = true
+dashboards_enabled = true
+perf_events = true
+retention_days = 14
+sample_interval_ms = 1000
+trajectory_enabled = true
+trajectory_max_age_days = 14
+trajectory_max_files = 50
+trajectory_max_size_mb = 50
+
+[timeouts]
+adaptive_decay_ratio = 0.875
+adaptive_min_floor_ms = 1000
+adaptive_success_streak = 5
+default_ceiling_seconds = 180
+mcp_ceiling_seconds = 120
+pty_ceiling_seconds = 300
+streaming_ceiling_seconds = 600
+warning_threshold_percent = 80
+
+[tools]
+default_policy = "prompt"
+max_consecutive_blocked_tool_calls_per_turn = 3
+max_repeated_tool_calls = 2
+max_sequential_spool_chunk_reads = 6
+max_tool_loops = 0
+
+[tools.editor]
+enabled = true
+preferred_editor = ""
+suspend_tui = true
+
+[tools.loop_thresholds]
+
+[tools.plugins]
+allow = []
+auto_reload = true
+default_trust = "sandbox"
+deny = []
+enabled = true
+manifests = []
+
+[tools.policies]
+"/edit" = "prompt"
+"/plan" = "prompt"
+"/plan_off" = "prompt"
+agent_info = "allow"
+apply_patch = "prompt"
+ask_user_question = "allow"
+"assistant<|channel|>apply_patch" = "allow"
+checklist = "prompt"
+close_pty_session = "allow"
+coder_mode = "prompt"
+create_file = "allow"
+create_pty_session = "allow"
+delete_file = "prompt"
+edit_file = "allow"
+enter_plan = "prompt"
+enter_plan_mode = "prompt"
+exec_code = "allow"
+execute_code = "allow"
+exit_plan = "prompt"
+exit_plan_mode = "prompt"
+git_diff = "allow"
+grep_file = "allow"
+implement_plan = "prompt"
+list_files = "allow"
+list_pty_sessions = "allow"
+list_skills = "allow"
+load_skill = "allow"
+load_skill_resource = "allow"
+memory = "allow"
+mode_edit = "prompt"
+mode_plan = "prompt"
+open_file = "allow"
+plan_checklist = "prompt"
+plan_exit = "prompt"
+plan_manager = "prompt"
+plan_mode = "prompt"
+plan_off = "prompt"
+plan_on = "prompt"
+plan_start = "prompt"
+plan_task_tracker = "prompt"
+plan_tasks = "prompt"
+planner_mode = "prompt"
+read_file = "allow"
+read_pty_session = "allow"
+request_user_input = "allow"
+resize_pty_session = "allow"
+resume_agent = "allow"
+resume_edit_mode = "prompt"
+run_pty_cmd = "allow"
+search_file = "allow"
+search_replace = "prompt"
+search_tools = "allow"
+"send_command<|channel|>analysis" = "allow"
+send_input = "allow"
+send_pty_input = "prompt"
+skill = "allow"
+spawn_agent = "allow"
+start_implementation = "prompt"
+start_planning = "prompt"
+switch_edit_mode = "prompt"
+switch_plan_mode = "prompt"
+switch_to_edit_mode = "prompt"
+switch_to_plan_mode = "prompt"
+task_tracker = "prompt"
+track_tasks = "prompt"
+unified_exec = "allow"
+unified_file = "allow"
+unified_search = "allow"
+vtcode-check = "prompt"
+vtcode-clippy = "prompt"
+wait_agent = "allow"
+web_fetch = "allow"
+write_file = "allow"
+
+[tools.web_fetch]
+allowed_domains = []
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+blocked_domains = []
+blocked_patterns = []
+dynamic_blocklist_enabled = false
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+dynamic_whitelist_enabled = false
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+enable_audit_logging = false
+mode = "restricted"
+strict_https_only = true
+
+[tui]
+
+[ui]
+allow_tool_ansi = false
+bold_is_bright = false
+color_scheme_mode = "auto"
+dim_completed_todos = true
+display_mode = "minimal"
+inline_viewport_rows = 16
+layout_mode = "auto"
+message_block_spacing = true
+minimum_contrast = 4.5
+reasoning_display_mode = "toggle"
+reasoning_visible_default = true
+reduce_motion_keep_progress_animation = false
+reduce_motion_mode = false
+safe_colors_only = false
+screen_reader_mode = false
+show_diagnostics_in_transcript = false
+show_sidebar = true
+show_turn_timer = false
+tool_output_max_lines = 600
+tool_output_mode = "compact"
+tool_output_spool_bytes = 200000
+vim_mode = false
+
+[ui.fullscreen]
+copy_on_select = true
+mouse_capture = true
+scroll_speed = 3
+
+[ui.keyboard_protocol]
+disambiguate_escape_codes = true
+enabled = true
+mode = "default"
+report_all_keys = false
+report_alternate_keys = true
+report_event_types = true
+
+[ui.notifications]
+backend = "auto"
+command_failure = false
+completion = true
+completion_failure = true
+completion_success = false
+delivery_mode = "desktop"
+enabled = true
+error = true
+hitl = true
+max_identical_in_window = 1
+policy_approval = true
+repeat_window_seconds = 30
+request = false
+suppress_when_focused = true
+tool_failure = false
+tool_success = false
+
+[ui.status_line]
+command_timeout_ms = 200
+mode = "Auto"
+refresh_interval_ms = 1000
+
+[ui.terminal_title]
+items = [
+    "project",
+    "spinner",
+    "app-name",
+    "git-branch",
+]

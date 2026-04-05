@@ -11,6 +11,7 @@ pub mod summarizer;
 const DEFAULT_COMPACTION_TARGET_THRESHOLD: f64 = 0.50;
 const DEFAULT_COMPACTION_KEEP_LAST_MESSAGES: usize = 10;
 const DEFAULT_RETAINED_USER_MESSAGE_TOKENS: usize = 20_000;
+const DEFAULT_RETAINED_USER_MESSAGES: usize = 4;
 const SUMMARY_PREFIX: &str = "Previous conversation summary:\n";
 
 /// Compaction configuration for context window management.
@@ -26,6 +27,8 @@ pub struct CompactionConfig {
     pub keep_last_messages: usize,
     /// Total token budget reserved for retaining real user messages verbatim.
     pub retained_user_message_tokens: usize,
+    /// Maximum number of recent user messages to retain verbatim.
+    pub retained_user_messages: usize,
     /// Force local summarization even for short histories and providers with native compaction.
     pub always_summarize: bool,
 }
@@ -39,6 +42,7 @@ impl Default for CompactionConfig {
                 .to_string(),
             keep_last_messages: DEFAULT_COMPACTION_KEEP_LAST_MESSAGES,
             retained_user_message_tokens: DEFAULT_RETAINED_USER_MESSAGE_TOKENS,
+            retained_user_messages: DEFAULT_RETAINED_USER_MESSAGES,
             always_summarize: false,
         }
     }
@@ -83,6 +87,7 @@ pub async fn compact_history(
         history,
         &summary,
         config.retained_user_message_tokens,
+        config.retained_user_messages,
     ))
 }
 
@@ -117,8 +122,13 @@ fn build_local_compacted_history(
     history: &[Message],
     summary: &str,
     retained_user_message_tokens: usize,
+    retained_user_messages: usize,
 ) -> Vec<Message> {
-    let retained_users = collect_retained_user_messages(history, retained_user_message_tokens);
+    let retained_users = collect_retained_user_messages(
+        history,
+        retained_user_message_tokens,
+        retained_user_messages,
+    );
     let mut new_history = Vec::with_capacity(retained_users.len().saturating_add(1));
     new_history.push(Message::system(format!(
         "{SUMMARY_PREFIX}{}",
@@ -128,8 +138,12 @@ fn build_local_compacted_history(
     new_history
 }
 
-fn collect_retained_user_messages(history: &[Message], token_budget: usize) -> Vec<Message> {
-    if token_budget == 0 {
+fn collect_retained_user_messages(
+    history: &[Message],
+    token_budget: usize,
+    max_messages: usize,
+) -> Vec<Message> {
+    if token_budget == 0 || max_messages == 0 {
         return Vec::new();
     }
 
@@ -137,6 +151,9 @@ fn collect_retained_user_messages(history: &[Message], token_budget: usize) -> V
     let mut remaining = token_budget;
 
     for message in history.iter().rev() {
+        if kept.len() >= max_messages {
+            break;
+        }
         if !is_real_user_message(message) {
             continue;
         }
@@ -290,6 +307,45 @@ mod tests {
 
         assert_eq!(compacted.len(), 2);
         assert_eq!(compacted[1].content.as_text(), "newest request");
+    }
+
+    #[tokio::test]
+    async fn compact_history_caps_retained_user_message_count() {
+        let history = vec![
+            Message::user("first request".to_string()),
+            Message::assistant("ack".to_string()),
+            Message::user("second request".to_string()),
+            Message::assistant("ack".to_string()),
+            Message::user("third request".to_string()),
+            Message::assistant("ack".to_string()),
+            Message::user("fourth request".to_string()),
+            Message::assistant("ack".to_string()),
+            Message::user("fifth request".to_string()),
+        ];
+        let config = CompactionConfig {
+            always_summarize: true,
+            retained_user_messages: 4,
+            ..CompactionConfig::default()
+        };
+
+        let compacted = compact_history(&StubProvider, "stub-model", &history, &config)
+            .await
+            .expect("compacted history");
+
+        let retained = compacted
+            .iter()
+            .skip(1)
+            .map(|message| message.content.as_text().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            retained,
+            vec![
+                "second request".to_string(),
+                "third request".to_string(),
+                "fourth request".to_string(),
+                "fifth request".to_string(),
+            ]
+        );
     }
 
     #[tokio::test]

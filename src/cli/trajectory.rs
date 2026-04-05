@@ -45,6 +45,14 @@ enum Rec {
         cache_creation_tokens: Option<u32>,
         ts: i64,
     },
+    #[serde(rename = "tool_catalog_cache_metrics")]
+    ToolCatalogCacheMetrics {
+        #[serde(rename = "turn")]
+        _turn: usize,
+        model: String,
+        prefix_change_reason: String,
+        ts: i64,
+    },
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -55,6 +63,15 @@ struct PromptCacheModelStats {
     records: usize,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+struct PromptCacheChurnStats {
+    model_changes: usize,
+    unchanged: usize,
+    stable_prefix_changes: usize,
+    tool_catalog_changes: usize,
+    combined_changes: usize,
+}
+
 #[derive(Debug, Default)]
 struct TrajectorySummary {
     class_counts: HashMap<String, usize>,
@@ -62,9 +79,11 @@ struct TrajectorySummary {
     tool_ok: HashMap<String, usize>,
     tool_err: HashMap<String, usize>,
     prompt_cache: HashMap<String, PromptCacheModelStats>,
+    prompt_cache_churn: HashMap<String, PromptCacheChurnStats>,
     total_routes: usize,
     total_tools: usize,
     total_prompt_cache_records: usize,
+    total_prompt_cache_churn_records: usize,
     recent_timestamps: Vec<i64>,
 }
 
@@ -115,6 +134,24 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
                     stats.cache_creation_tokens += cache_creation_tokens.unwrap_or(0) as u64;
                     stats.records += 1;
                     summary.total_prompt_cache_records += 1;
+                    summary.recent_timestamps.push(ts);
+                }
+                Rec::ToolCatalogCacheMetrics {
+                    model,
+                    prefix_change_reason,
+                    ts,
+                    ..
+                } => {
+                    let stats = summary.prompt_cache_churn.entry(model).or_default();
+                    match prefix_change_reason.as_str() {
+                        "model" => stats.model_changes += 1,
+                        "unchanged" => stats.unchanged += 1,
+                        "stable_prefix" => stats.stable_prefix_changes += 1,
+                        "tool_catalog" => stats.tool_catalog_changes += 1,
+                        "stable_prefix+tool_catalog" => stats.combined_changes += 1,
+                        _ => {}
+                    }
+                    summary.total_prompt_cache_churn_records += 1;
                     summary.recent_timestamps.push(ts);
                 }
             }
@@ -262,6 +299,28 @@ pub async fn handle_trajectory_command(
         }
     }
 
+    if !summary.prompt_cache_churn.is_empty() {
+        println!("\n{}", style("Cache Churn").bold());
+        let mut churn_models: Vec<_> = summary.prompt_cache_churn.into_iter().collect();
+        churn_models.sort_by_key(|(_, stats)| {
+            Reverse(
+                stats.stable_prefix_changes + stats.tool_catalog_changes + stats.combined_changes,
+            )
+        });
+        for (i, (model, stats)) in churn_models.into_iter().take(top).enumerate() {
+            println!(
+                "{:>2}. {:<25} stable_prefix: {:<4} tool_catalog: {:<4} both: {:<4} unchanged: {:<4} model: {}",
+                i + 1,
+                model,
+                stats.stable_prefix_changes,
+                stats.tool_catalog_changes,
+                stats.combined_changes,
+                stats.unchanged,
+                stats.model_changes,
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -285,7 +344,7 @@ fn format_token_count(tokens: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{PromptCacheModelStats, summarize_trajectory};
+    use super::{PromptCacheChurnStats, PromptCacheModelStats, summarize_trajectory};
     use std::io::Cursor;
 
     #[test]
@@ -294,6 +353,9 @@ mod tests {
 {"kind":"route","turn":1,"selected_model":"gpt-5","class":"default","ts":1}
 {"kind":"prompt_cache_metrics","turn":1,"model":"gpt-5","prompt_tokens":1000,"cached_prompt_tokens":400,"ts":2}
 {"kind":"prompt_cache_metrics","turn":2,"model":"claude-sonnet","prompt_tokens":1200,"cached_prompt_tokens":300,"cache_read_tokens":350,"cache_creation_tokens":50,"ts":3}
+{"kind":"tool_catalog_cache_metrics","turn":2,"model":"gpt-5","prefix_change_reason":"stable_prefix","ts":4}
+{"kind":"tool_catalog_cache_metrics","turn":3,"model":"gpt-5","prefix_change_reason":"tool_catalog","ts":5}
+{"kind":"tool_catalog_cache_metrics","turn":4,"model":"gpt-5","prefix_change_reason":"stable_prefix+tool_catalog","ts":6}
 "#;
 
         let summary = summarize_trajectory(Cursor::new(input)).expect("summary");
@@ -315,6 +377,16 @@ mod tests {
                 cache_read_tokens: 350,
                 cache_creation_tokens: 50,
                 records: 1,
+            })
+        );
+        assert_eq!(
+            summary.prompt_cache_churn.get("gpt-5"),
+            Some(&PromptCacheChurnStats {
+                model_changes: 0,
+                unchanged: 0,
+                stable_prefix_changes: 1,
+                tool_catalog_changes: 1,
+                combined_changes: 1,
             })
         );
     }

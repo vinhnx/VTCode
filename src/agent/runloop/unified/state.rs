@@ -83,6 +83,13 @@ pub(crate) struct SessionStats {
     last_prompt_cache_model: Option<String>,
     last_stable_prefix_hash: Option<u64>,
     last_tool_catalog_hash: Option<u64>,
+    last_prompt_cache_change_reason: Option<String>,
+    prompt_cache_observations: usize,
+    prompt_cache_model_changes: usize,
+    prompt_cache_unchanged: usize,
+    prompt_cache_stable_prefix_changes: usize,
+    prompt_cache_tool_catalog_changes: usize,
+    prompt_cache_combined_changes: usize,
     recent_touched_files: VecDeque<String>,
     total_usage: HarnessUsage,
     total_cost_usd: Option<f64>,
@@ -370,6 +377,20 @@ impl SessionStats {
         self.prompt_cache_lineage_id.as_deref()
     }
 
+    pub(crate) fn prompt_cache_diagnostics(&self) -> PromptCacheDiagnostics {
+        PromptCacheDiagnostics {
+            observations: self.prompt_cache_observations,
+            model_changes: self.prompt_cache_model_changes,
+            unchanged: self.prompt_cache_unchanged,
+            stable_prefix_changes: self.prompt_cache_stable_prefix_changes,
+            tool_catalog_changes: self.prompt_cache_tool_catalog_changes,
+            combined_changes: self.prompt_cache_combined_changes,
+            last_change_reason: self.last_prompt_cache_change_reason.clone(),
+            last_stable_prefix_hash: self.last_stable_prefix_hash,
+            last_tool_catalog_hash: self.last_tool_catalog_hash,
+        }
+    }
+
     pub(crate) fn record_prompt_cache_fingerprint(
         &mut self,
         model: &str,
@@ -384,15 +405,39 @@ impl SessionStats {
                 self.last_tool_catalog_hash == tool_catalog_hash,
             ) {
                 (true, true) => "unchanged",
-                (false, true) => "system_prompt",
+                (false, true) => "stable_prefix",
                 (true, false) => "tool_catalog",
-                (false, false) => "system_prompt+tool_catalog",
+                (false, false) => "stable_prefix+tool_catalog",
             }
         };
+
+        self.prompt_cache_observations = self.prompt_cache_observations.saturating_add(1);
+        match reason {
+            "model" => {
+                self.prompt_cache_model_changes = self.prompt_cache_model_changes.saturating_add(1);
+            }
+            "unchanged" => {
+                self.prompt_cache_unchanged = self.prompt_cache_unchanged.saturating_add(1);
+            }
+            "stable_prefix" => {
+                self.prompt_cache_stable_prefix_changes =
+                    self.prompt_cache_stable_prefix_changes.saturating_add(1);
+            }
+            "tool_catalog" => {
+                self.prompt_cache_tool_catalog_changes =
+                    self.prompt_cache_tool_catalog_changes.saturating_add(1);
+            }
+            "stable_prefix+tool_catalog" => {
+                self.prompt_cache_combined_changes =
+                    self.prompt_cache_combined_changes.saturating_add(1);
+            }
+            _ => {}
+        }
 
         self.last_prompt_cache_model = Some(model.to_string());
         self.last_stable_prefix_hash = Some(stable_prefix_hash);
         self.last_tool_catalog_hash = tool_catalog_hash;
+        self.last_prompt_cache_change_reason = Some(reason.to_string());
 
         reason
     }
@@ -508,6 +553,19 @@ pub(crate) fn should_enforce_safe_mode_prompts(
     }
 
     !matches!(workspace_trust_level, Some(WorkspaceTrustLevel::FullAuto))
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PromptCacheDiagnostics {
+    pub observations: usize,
+    pub model_changes: usize,
+    pub unchanged: usize,
+    pub stable_prefix_changes: usize,
+    pub tool_catalog_changes: usize,
+    pub combined_changes: usize,
+    pub last_change_reason: Option<String>,
+    pub last_stable_prefix_hash: Option<u64>,
+    pub last_tool_catalog_hash: Option<u64>,
 }
 
 pub(crate) fn is_follow_up_prompt_like(input: &str) -> bool {
@@ -669,7 +727,7 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AutoModeDenial, CtrlCSignal, CtrlCState, SessionMode, SessionStats,
+        AutoModeDenial, CtrlCSignal, CtrlCState, PromptCacheDiagnostics, SessionMode, SessionStats,
         is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
@@ -864,7 +922,7 @@ mod tests {
         );
         assert_eq!(
             stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(22)),
-            "system_prompt"
+            "stable_prefix"
         );
         assert_eq!(
             stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(44)),
@@ -872,11 +930,26 @@ mod tests {
         );
         assert_eq!(
             stats.record_prompt_cache_fingerprint("gpt-5", 55, Some(66)),
-            "system_prompt+tool_catalog"
+            "stable_prefix+tool_catalog"
         );
         assert_eq!(
             stats.record_prompt_cache_fingerprint("gpt-5-mini", 55, Some(66)),
             "model"
+        );
+
+        assert_eq!(
+            stats.prompt_cache_diagnostics(),
+            PromptCacheDiagnostics {
+                observations: 6,
+                model_changes: 2,
+                unchanged: 1,
+                stable_prefix_changes: 1,
+                tool_catalog_changes: 1,
+                combined_changes: 1,
+                last_change_reason: Some("model".to_string()),
+                last_stable_prefix_hash: Some(55),
+                last_tool_catalog_hash: Some(66),
+            }
         );
     }
 

@@ -2,10 +2,12 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_core::compaction::CompactionConfig;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::context::history_files::{HistoryFileManager, messages_to_history_messages};
 use vtcode_core::core::agent::harness_artifacts::{
@@ -25,6 +27,9 @@ use crate::agent::runloop::unified::state::SessionStats;
 
 const MEMORY_ENVELOPE_HEADER: &str = "[Session Memory Envelope]";
 const MEMORY_ENVELOPE_SUFFIX: &str = ".memory.json";
+const SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION: u32 = 2;
+const MEMORY_LIST_LIMIT: usize = 5;
+const DEDUPED_FILE_READ_NOTE: &str = "Older duplicate file read omitted during local compaction; a newer read of the same target slice is retained later in history.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MemoryEnvelopePersistence {
@@ -118,14 +123,64 @@ struct CompactionPlan {
 pub(crate) struct SessionMemoryEnvelope {
     #[serde(default)]
     pub session_id: String,
+    #[serde(default)]
+    pub schema_version: Option<u32>,
     pub summary: String,
+    #[serde(default)]
+    pub objective: Option<String>,
     pub task_summary: Option<String>,
     pub spec_summary: Option<String>,
     pub evaluation_summary: Option<String>,
+    #[serde(default)]
+    pub constraints: Vec<String>,
     pub grounded_facts: Vec<GroundedFactRecord>,
     pub touched_files: Vec<String>,
+    #[serde(default)]
+    pub open_questions: Vec<String>,
+    #[serde(default)]
+    pub verification_todo: Vec<String>,
+    #[serde(default)]
+    pub delegation_notes: Vec<String>,
     pub history_artifact_path: Option<String>,
     pub generated_at: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SessionMemoryEnvelopeUpdate {
+    pub objective: Option<String>,
+    pub constraints: Vec<String>,
+    pub grounded_facts: Vec<GroundedFactRecord>,
+    pub touched_files: Vec<String>,
+    pub open_questions: Vec<String>,
+    pub verification_todo: Vec<String>,
+    pub delegation_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct TaskTrackerSnapshot {
+    summary: Option<String>,
+    objective: Option<String>,
+    verification_todo: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct FileReadDedupKey {
+    target: String,
+    start_line: Option<u64>,
+    end_line: Option<u64>,
+    spool_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileReadDedupCandidate {
+    key: FileReadDedupKey,
+    placeholder_content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileReadToolKind {
+    ReadFile,
+    UnifiedFileRead,
 }
 
 pub(crate) fn resolve_compaction_threshold(
@@ -183,6 +238,13 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     text.push_str("\nSummary:\n");
     text.push_str(envelope.summary.trim());
 
+    if let Some(objective) = envelope.objective.as_deref()
+        && !objective.trim().is_empty()
+    {
+        text.push_str("\n\nObjective:\n");
+        text.push_str(objective.trim());
+    }
+
     if let Some(task_summary) = envelope.task_summary.as_deref()
         && !task_summary.trim().is_empty()
     {
@@ -204,6 +266,11 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
         text.push_str(evaluation_summary.trim());
     }
 
+    if !envelope.constraints.is_empty() {
+        text.push_str("\n\nConstraints:\n- ");
+        text.push_str(&envelope.constraints.join("\n- "));
+    }
+
     if !envelope.touched_files.is_empty() {
         text.push_str("\n\nTouched Files:\n- ");
         text.push_str(&envelope.touched_files.join("\n- "));
@@ -221,6 +288,21 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
         while text.ends_with('\n') {
             text.pop();
         }
+    }
+
+    if !envelope.open_questions.is_empty() {
+        text.push_str("\n\nOpen Questions:\n- ");
+        text.push_str(&envelope.open_questions.join("\n- "));
+    }
+
+    if !envelope.verification_todo.is_empty() {
+        text.push_str("\n\nVerification Todo:\n- ");
+        text.push_str(&envelope.verification_todo.join("\n- "));
+    }
+
+    if !envelope.delegation_notes.is_empty() {
+        text.push_str("\n\nDelegation Notes:\n- ");
+        text.push_str(&envelope.delegation_notes.join("\n- "));
     }
 
     if let Some(history_path) = envelope.history_artifact_path.as_deref() {
@@ -313,9 +395,11 @@ fn memory_envelope_file_matches_session(name: &str, session_id: &str) -> bool {
             && name.ends_with(MEMORY_ENVELOPE_SUFFIX))
 }
 
-fn read_task_summary(workspace_root: &Path) -> Option<String> {
+fn read_task_tracker_snapshot(workspace_root: &Path) -> TaskTrackerSnapshot {
     let tracker_path = current_task_path(workspace_root);
-    let content = fs::read_to_string(&tracker_path).ok()?;
+    let Ok(content) = fs::read_to_string(&tracker_path) else {
+        return TaskTrackerSnapshot::default();
+    };
 
     let title = content
         .lines()
@@ -327,12 +411,23 @@ fn read_task_summary(workspace_root: &Path) -> Option<String> {
         .take(5)
         .map(normalize_whitespace)
         .collect::<Vec<_>>();
-
-    match (title, checklist.is_empty()) {
+    let verification_todo = content
+        .lines()
+        .filter(|line| line.trim_start().starts_with("- [ ]"))
+        .take(MEMORY_LIST_LIMIT)
+        .map(normalize_whitespace)
+        .collect::<Vec<_>>();
+    let summary = match (title.clone(), checklist.is_empty()) {
         (Some(title), false) => Some(format!("{title}: {}", checklist.join(" | "))),
         (Some(title), true) => Some(title),
         (None, false) => Some(checklist.join(" | ")),
         (None, true) => None,
+    };
+
+    TaskTrackerSnapshot {
+        summary,
+        objective: title,
+        verification_todo,
     }
 }
 
@@ -360,6 +455,13 @@ fn memory_envelope_path_from_history_path(workspace_root: &Path, history_path: &
         .map(Path::to_path_buf)
         .unwrap_or_else(|| workspace_root.join(".vtcode").join("history"));
     parent.join(file_name)
+}
+
+fn default_memory_envelope_path_for_session(workspace_root: &Path, session_id: &str) -> PathBuf {
+    workspace_root.join(".vtcode").join("history").join(format!(
+        "{}{MEMORY_ENVELOPE_SUFFIX}",
+        sanitize_session_id(session_id)
+    ))
 }
 
 fn memory_envelope_paths_for_session(workspace_root: &Path, session_id: &str) -> Vec<PathBuf> {
@@ -470,9 +572,261 @@ fn merge_touched_files(
     merged
 }
 
+fn merge_recent_strings(prior: &[String], updates: &[String], limit: usize) -> Vec<String> {
+    let mut merged = prior
+        .iter()
+        .map(|value| normalize_whitespace(value))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+
+    for value in updates
+        .iter()
+        .map(|value| normalize_whitespace(value))
+        .filter(|value| !value.is_empty())
+    {
+        let key = value.to_ascii_lowercase();
+        if let Some(existing_idx) = merged
+            .iter()
+            .position(|item| item.to_ascii_lowercase() == key)
+        {
+            merged.remove(existing_idx);
+        }
+        merged.push(value);
+    }
+
+    let keep_from = merged.len().saturating_sub(limit);
+    merged.into_iter().skip(keep_from).collect()
+}
+
+fn extract_constraints_from_summary(text: Option<&str>) -> Vec<String> {
+    text.into_iter()
+        .flat_map(|value| value.lines())
+        .map(normalize_whitespace)
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            if let Some(rest) = line.strip_prefix("- ") {
+                return Some(rest.trim().to_string());
+            }
+            line.strip_prefix("* ").map(|rest| rest.trim().to_string())
+        })
+        .take(MEMORY_LIST_LIMIT)
+        .collect()
+}
+
+fn derive_continuity_summary(
+    history: &[Message],
+    prior_envelope: Option<&SessionMemoryEnvelope>,
+) -> String {
+    let mut recent = history
+        .iter()
+        .rev()
+        .filter(|message| {
+            !(message.role == MessageRole::System
+                && message
+                    .content
+                    .as_text()
+                    .starts_with(MEMORY_ENVELOPE_HEADER))
+        })
+        .filter_map(|message| {
+            let trimmed = normalize_whitespace(message.content.as_text().as_ref());
+            (!trimmed.is_empty()).then_some(format!(
+                "{}: {}",
+                message.role.as_generic_str(),
+                truncate_for_fact(&trimmed, 160)
+            ))
+        })
+        .take(4)
+        .collect::<Vec<_>>();
+    recent.reverse();
+
+    if recent.is_empty() {
+        prior_envelope
+            .map(|envelope| envelope.summary.clone())
+            .unwrap_or_else(|| "Session continuity facts preserved.".to_string())
+    } else {
+        format!("Recent session context: {}", recent.join(" | "))
+    }
+}
+
+fn is_read_file_tool_name(tool_name: &str) -> bool {
+    tool_name == tool_names::READ_FILE || tool_name.ends_with(".read_file")
+}
+
+fn collect_file_read_tool_kinds(history: &[Message]) -> HashMap<String, FileReadToolKind> {
+    let mut kinds = HashMap::new();
+
+    for message in history {
+        let Some(tool_calls) = message.tool_calls.as_ref() else {
+            continue;
+        };
+
+        for tool_call in tool_calls {
+            let Some(tool_name) = tool_call.tool_name() else {
+                continue;
+            };
+
+            let kind = if is_read_file_tool_name(tool_name) {
+                Some(FileReadToolKind::ReadFile)
+            } else if tool_name == tool_names::UNIFIED_FILE {
+                tool_call.execution_arguments().ok().and_then(|args| {
+                    args.get("action")
+                        .and_then(Value::as_str)
+                        .filter(|action| *action == "read")
+                        .map(|_| FileReadToolKind::UnifiedFileRead)
+                })
+            } else {
+                None
+            };
+
+            if let Some(kind) = kind {
+                kinds.insert(tool_call.id.clone(), kind);
+            }
+        }
+    }
+
+    kinds
+}
+
+fn normalize_file_read_target(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.replace('\\', "/"))
+}
+
+fn build_file_read_dedup_key(payload: &Value) -> Option<FileReadDedupKey> {
+    let object = payload.as_object()?;
+    if object.get("items").is_some()
+        || object.get("error").is_some()
+        || object
+            .get("spool_chunked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        || object
+            .get("has_more")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let target = object
+        .get("file_path")
+        .and_then(Value::as_str)
+        .or_else(|| object.get("path").and_then(Value::as_str))
+        .and_then(normalize_file_read_target)?;
+
+    Some(FileReadDedupKey {
+        target,
+        start_line: object.get("start_line").and_then(Value::as_u64),
+        end_line: object.get("end_line").and_then(Value::as_u64),
+        spool_path: object
+            .get("spool_path")
+            .and_then(Value::as_str)
+            .and_then(normalize_file_read_target),
+    })
+}
+
+fn build_file_read_placeholder_content(payload: &Value, key: &FileReadDedupKey) -> String {
+    let mut placeholder = serde_json::Map::new();
+    placeholder.insert("deduped_read".to_string(), Value::Bool(true));
+    placeholder.insert(
+        "note".to_string(),
+        Value::String(DEDUPED_FILE_READ_NOTE.to_string()),
+    );
+    if let Some(file_path) = payload.get("file_path").and_then(Value::as_str) {
+        let trimmed = file_path.trim();
+        if !trimmed.is_empty() {
+            placeholder.insert("file_path".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+    if let Some(path) = payload.get("path").and_then(Value::as_str) {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            placeholder.insert("path".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+    if let Some(start_line) = key.start_line {
+        placeholder.insert("start_line".to_string(), json!(start_line));
+    }
+    if let Some(end_line) = key.end_line {
+        placeholder.insert("end_line".to_string(), json!(end_line));
+    }
+    if let Some(spool_path) = key.spool_path.as_deref() {
+        placeholder.insert("spool_path".to_string(), json!(spool_path));
+    }
+
+    Value::Object(placeholder).to_string()
+}
+
+fn file_read_dedup_candidate(
+    message: &Message,
+    tool_kinds: &HashMap<String, FileReadToolKind>,
+) -> Option<FileReadDedupCandidate> {
+    if message.role != MessageRole::Tool {
+        return None;
+    }
+
+    let kind = message
+        .tool_call_id
+        .as_deref()
+        .and_then(|tool_call_id| tool_kinds.get(tool_call_id).copied())
+        .or_else(|| {
+            message.origin_tool.as_deref().and_then(|tool_name| {
+                is_read_file_tool_name(tool_name).then_some(FileReadToolKind::ReadFile)
+            })
+        })?;
+
+    if !matches!(
+        kind,
+        FileReadToolKind::ReadFile | FileReadToolKind::UnifiedFileRead
+    ) {
+        return None;
+    }
+
+    let payload: Value = serde_json::from_str(message.content.as_text().as_ref()).ok()?;
+    let key = build_file_read_dedup_key(&payload)?;
+
+    Some(FileReadDedupCandidate {
+        placeholder_content: build_file_read_placeholder_content(&payload, &key),
+        key,
+    })
+}
+
+fn dedup_repeated_file_reads_for_local_compaction(history: &[Message]) -> Vec<Message> {
+    let tool_kinds = collect_file_read_tool_kinds(history);
+    let mut last_index_by_key = HashMap::new();
+    let mut candidates = Vec::new();
+
+    for (index, message) in history.iter().enumerate() {
+        let Some(candidate) = file_read_dedup_candidate(message, &tool_kinds) else {
+            continue;
+        };
+        last_index_by_key.insert(candidate.key.clone(), index);
+        candidates.push((index, candidate));
+    }
+
+    let mut deduped = history.to_vec();
+    let mut changed = false;
+    for (index, candidate) in candidates {
+        let Some(last_index) = last_index_by_key.get(&candidate.key).copied() else {
+            continue;
+        };
+        if last_index == index {
+            continue;
+        }
+
+        if let Some(message) = deduped.get_mut(index) {
+            message.content = candidate.placeholder_content.into();
+            changed = true;
+        }
+    }
+
+    if changed { deduped } else { history.to_vec() }
+}
+
 fn merge_grounded_facts(
     prior_envelope: Option<&SessionMemoryEnvelope>,
     original_history: &[Message],
+    updates: &[GroundedFactRecord],
 ) -> Vec<GroundedFactRecord> {
     let mut merged = prior_envelope
         .map(|envelope| envelope.grounded_facts.clone())
@@ -486,7 +840,18 @@ fn merge_grounded_facts(
         {
             merged.remove(existing_idx);
         }
-        merged.push(fact);
+        merged.push(fact.clone());
+    }
+
+    for fact in updates {
+        let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
+        if let Some(existing_idx) = merged
+            .iter()
+            .position(|entry| normalize_whitespace(&entry.fact).to_ascii_lowercase() == normalized)
+        {
+            merged.remove(existing_idx);
+        }
+        merged.push(fact.clone());
     }
 
     let keep_from = merged.len().saturating_sub(5);
@@ -498,26 +863,106 @@ fn build_session_memory_envelope(
     workspace_root: &Path,
     original_history: &[Message],
     touched_files: &[String],
-    compacted: &[Message],
+    summary: String,
     history_artifact_path: Option<&PathBuf>,
     prior_envelope: Option<&SessionMemoryEnvelope>,
-    task_summary: Option<String>,
+    task_snapshot: &TaskTrackerSnapshot,
+    envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> SessionMemoryEnvelope {
+    let spec_summary = read_spec_summary(workspace_root)
+        .or_else(|| prior_envelope.and_then(|envelope| envelope.spec_summary.clone()));
+    let evaluation_summary = read_evaluation_summary(workspace_root)
+        .or_else(|| prior_envelope.and_then(|envelope| envelope.evaluation_summary.clone()));
+    let derived_constraints = merge_recent_strings(
+        prior_envelope
+            .map(|envelope| envelope.constraints.as_slice())
+            .unwrap_or(&[]),
+        &extract_constraints_from_summary(spec_summary.as_deref()),
+        MEMORY_LIST_LIMIT,
+    );
+    let derived_constraints = merge_recent_strings(
+        &derived_constraints,
+        &extract_constraints_from_summary(evaluation_summary.as_deref()),
+        MEMORY_LIST_LIMIT,
+    );
+    let update = envelope_update.cloned().unwrap_or_default();
+
     SessionMemoryEnvelope {
         session_id: session_id.to_string(),
-        summary: extract_compaction_summary(compacted, original_history),
-        task_summary,
-        spec_summary: read_spec_summary(workspace_root)
-            .or_else(|| prior_envelope.and_then(|envelope| envelope.spec_summary.clone())),
-        evaluation_summary: read_evaluation_summary(workspace_root)
-            .or_else(|| prior_envelope.and_then(|envelope| envelope.evaluation_summary.clone())),
-        grounded_facts: merge_grounded_facts(prior_envelope, original_history),
-        touched_files: merge_touched_files(prior_envelope, touched_files),
+        schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+        summary,
+        objective: update.objective.or_else(|| {
+            task_snapshot
+                .objective
+                .clone()
+                .or_else(|| prior_envelope.and_then(|envelope| envelope.objective.clone()))
+        }),
+        task_summary: task_snapshot
+            .summary
+            .clone()
+            .or_else(|| prior_envelope.and_then(|envelope| envelope.task_summary.clone())),
+        spec_summary,
+        evaluation_summary,
+        constraints: merge_recent_strings(
+            &derived_constraints,
+            &update.constraints,
+            MEMORY_LIST_LIMIT,
+        ),
+        grounded_facts: merge_grounded_facts(
+            prior_envelope,
+            original_history,
+            &update.grounded_facts,
+        ),
+        touched_files: merge_touched_files(
+            prior_envelope,
+            &touched_files
+                .iter()
+                .cloned()
+                .chain(update.touched_files)
+                .collect::<Vec<_>>(),
+        ),
+        open_questions: merge_recent_strings(
+            prior_envelope
+                .map(|envelope| envelope.open_questions.as_slice())
+                .unwrap_or(&[]),
+            &update.open_questions,
+            MEMORY_LIST_LIMIT,
+        ),
+        verification_todo: merge_recent_strings(
+            prior_envelope
+                .map(|envelope| envelope.verification_todo.as_slice())
+                .unwrap_or(&[]),
+            &task_snapshot
+                .verification_todo
+                .iter()
+                .cloned()
+                .chain(update.verification_todo)
+                .collect::<Vec<_>>(),
+            MEMORY_LIST_LIMIT,
+        ),
+        delegation_notes: merge_recent_strings(
+            prior_envelope
+                .map(|envelope| envelope.delegation_notes.as_slice())
+                .unwrap_or(&[]),
+            &update.delegation_notes,
+            MEMORY_LIST_LIMIT,
+        ),
         history_artifact_path: history_artifact_path
             .map(|path| path.display().to_string())
             .or_else(|| prior_envelope.and_then(|envelope| envelope.history_artifact_path.clone())),
         generated_at: Utc::now().to_rfc3339(),
     }
+}
+
+fn write_memory_envelope_to_path(path: &Path, envelope: &SessionMemoryEnvelope) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create memory envelope directory {}", parent.display()))?;
+    }
+    let serialized = serde_json::to_string_pretty(envelope)?;
+    fs::write(path, serialized)
+        .with_context(|| format!("write memory envelope {}", path.display()))?;
+    Ok(())
 }
 
 fn persist_memory_envelope(
@@ -538,7 +983,7 @@ fn persist_memory_envelope(
         return Ok(None);
     }
 
-    let task_summary = read_task_summary(workspace_root);
+    let task_snapshot = read_task_tracker_snapshot(workspace_root);
     let history_artifact_path =
         if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
             let mut history_manager = HistoryFileManager::new(workspace_root, session_id);
@@ -567,27 +1012,71 @@ fn persist_memory_envelope(
         workspace_root,
         original_history,
         touched_files,
-        compacted,
+        extract_compaction_summary(compacted, original_history),
         history_artifact_path.as_ref(),
         prior_envelope,
-        task_summary,
+        &task_snapshot,
+        None,
     );
 
-    if let Some(history_artifact_path) = history_artifact_path {
+    if let Some(history_artifact_path) = history_artifact_path.as_ref() {
         let envelope_path =
-            memory_envelope_path_from_history_path(workspace_root, &history_artifact_path);
-        if let Some(parent) = envelope_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("create memory envelope directory {}", parent.display())
-            })?;
-        }
-        let serialized = serde_json::to_string_pretty(&envelope)?;
-        fs::write(&envelope_path, serialized)
-            .with_context(|| format!("write memory envelope {}", envelope_path.display()))?;
+            memory_envelope_path_from_history_path(workspace_root, history_artifact_path);
+        write_memory_envelope_to_path(&envelope_path, &envelope)?;
     }
 
     apply_memory_envelope(compacted, &envelope, placement);
 
+    Ok(Some(envelope))
+}
+
+fn configured_retained_user_messages(vt_cfg: Option<&VTCodeConfig>) -> usize {
+    vt_cfg
+        .map(|cfg| cfg.context.dynamic.retained_user_messages)
+        .unwrap_or(4)
+}
+
+fn local_compaction_config(
+    vt_cfg: Option<&VTCodeConfig>,
+    always_summarize: bool,
+) -> CompactionConfig {
+    CompactionConfig {
+        always_summarize,
+        retained_user_messages: configured_retained_user_messages(vt_cfg),
+        ..CompactionConfig::default()
+    }
+}
+
+pub(crate) fn refresh_session_memory_envelope(
+    workspace_root: &Path,
+    session_id: &str,
+    vt_cfg: Option<&VTCodeConfig>,
+    history: &mut Vec<Message>,
+    session_stats: &SessionStats,
+    envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
+) -> Result<Option<SessionMemoryEnvelope>> {
+    if history.is_empty() || !should_persist_memory_envelope(vt_cfg) {
+        return Ok(None);
+    }
+
+    let prior_envelope = load_latest_memory_envelope(workspace_root, session_id);
+    let task_snapshot = read_task_tracker_snapshot(workspace_root);
+    let touched_files = session_stats.recent_touched_files();
+    let envelope = build_session_memory_envelope(
+        session_id,
+        workspace_root,
+        history,
+        &touched_files,
+        derive_continuity_summary(history, prior_envelope.as_ref()),
+        None,
+        prior_envelope.as_ref(),
+        &task_snapshot,
+        envelope_update,
+    );
+    let envelope_path = latest_memory_envelope_path_for_session(workspace_root, session_id)
+        .unwrap_or_else(|| default_memory_envelope_path_for_session(workspace_root, session_id));
+    write_memory_envelope_to_path(&envelope_path, &envelope)?;
+    apply_memory_envelope(history, &envelope, MemoryEnvelopePlacement::Start);
     Ok(Some(envelope))
 }
 
@@ -615,14 +1104,12 @@ pub(crate) async fn build_summarized_fork_history(
         );
     }
 
+    let compaction_input = dedup_repeated_file_reads_for_local_compaction(&source_history);
     let mut compacted = vtcode_core::compaction::compact_history(
         provider,
         model,
-        &source_history,
-        &CompactionConfig {
-            always_summarize: true,
-            ..CompactionConfig::default()
-        },
+        &compaction_input,
+        &local_compaction_config(vt_cfg, true),
     )
     .await?;
 
@@ -801,15 +1288,20 @@ async fn compact_history_segment_in_place(
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
+    let compaction_history = if provider.supports_responses_compaction(model) {
+        compaction_input
+    } else {
+        dedup_repeated_file_reads_for_local_compaction(&compaction_input)
+    };
     let compacted = vtcode_core::compaction::compact_history(
         provider,
         model,
-        &compaction_input,
-        &CompactionConfig::default(),
+        &compaction_history,
+        &local_compaction_config(vt_cfg, false),
     )
     .await?;
 
-    if compacted == compaction_input {
+    if compacted == compaction_history {
         return Ok(None);
     }
 
@@ -1177,13 +1669,15 @@ mod tests {
     use hashbrown::HashMap;
     use serde_json::json;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::tempdir;
     use tokio::sync::RwLock;
     use vtcode_commons::llm::Usage;
+    use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{
         LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
-        ResponsesCompactionOptions,
+        ResponsesCompactionOptions, ToolCall,
     };
 
     struct LocalCompactionProvider;
@@ -1193,6 +1687,10 @@ mod tests {
     struct NoOpProviderCompactionProvider;
 
     struct FailingProviderCompactionProvider;
+
+    struct RecordingProviderCompactionProvider {
+        seen_history: Arc<RwLock<Vec<Message>>>,
+    }
 
     #[async_trait]
     impl LLMProvider for LocalCompactionProvider {
@@ -1357,6 +1855,51 @@ mod tests {
         }
     }
 
+    #[async_trait]
+    impl LLMProvider for RecordingProviderCompactionProvider {
+        fn name(&self) -> &str {
+            "recording-provider-stub"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        async fn compact_history(
+            &self,
+            _model: &str,
+            history: &[Message],
+        ) -> Result<Vec<Message>, LLMError> {
+            *self.seen_history.write().await = history.to_vec();
+            Ok(history.to_vec())
+        }
+
+        async fn compact_history_with_options(
+            &self,
+            _model: &str,
+            history: &[Message],
+            _options: &ResponsesCompactionOptions,
+        ) -> Result<Vec<Message>, LLMError> {
+            self.compact_history("stub-model", history).await
+        }
+
+        fn supports_responses_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        fn effective_context_size(&self, _model: &str) -> usize {
+            1_000
+        }
+    }
+
     fn test_history() -> Vec<Message> {
         vec![
             Message::user("message-0".to_string()),
@@ -1383,7 +1926,15 @@ mod tests {
     }
 
     fn assert_local_compaction_history(history: &[Message], envelope_index: usize) {
-        assert_eq!(history.len(), 6);
+        assert_local_compaction_history_with_user_count(history, envelope_index, 4);
+    }
+
+    fn assert_local_compaction_history_with_user_count(
+        history: &[Message],
+        envelope_index: usize,
+        retained_user_messages: usize,
+    ) {
+        assert_eq!(history.len(), retained_user_messages + 2);
         assert!(
             history[envelope_index]
                 .content
@@ -1411,8 +1962,30 @@ mod tests {
                 .iter()
                 .filter(|message| message.role == MessageRole::User)
                 .count(),
-            4
+            retained_user_messages
         );
+    }
+
+    fn read_file_tool_call(id: &str, path: &str) -> ToolCall {
+        ToolCall::function(
+            id.to_string(),
+            tool_names::READ_FILE.to_string(),
+            json!({ "path": path }).to_string(),
+        )
+    }
+
+    fn unified_file_read_tool_call(id: &str, path: &str) -> ToolCall {
+        ToolCall::function(
+            id.to_string(),
+            tool_names::UNIFIED_FILE.to_string(),
+            json!({ "action": "read", "path": path }).to_string(),
+        )
+    }
+
+    fn assistant_with_tool_call(tool_call: ToolCall) -> Message {
+        let mut message = Message::assistant(String::new());
+        message.tool_calls = Some(vec![tool_call]);
+        message
     }
 
     fn test_context_manager() -> ContextManager {
@@ -1673,6 +2246,358 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn provider_compaction_preserves_original_repeated_file_reads() {
+        let temp = tempdir().expect("tempdir");
+        let seen_history = Arc::new(RwLock::new(Vec::new()));
+        let provider = RecordingProviderCompactionProvider {
+            seen_history: Arc::clone(&seen_history),
+        };
+        let mut history = vec![
+            assistant_with_tool_call(read_file_tool_call("call-1", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-1".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "older contents"
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+            assistant_with_tool_call(read_file_tool_call("call-2", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-2".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "newer contents"
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+        ];
+        history.extend(test_history());
+        let original_history = history.clone();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let outcome = compact_history_in_place_with_events(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            vtcode_core::exec::events::CompactionTrigger::Manual,
+        )
+        .await
+        .expect("provider compaction succeeds");
+
+        assert!(outcome.is_none());
+        assert_eq!(history, original_history);
+
+        let seen = seen_history.read().await.clone();
+        assert_eq!(seen.len(), original_history.len());
+        assert!(seen[1].content.as_text().contains("older contents"));
+        assert!(!seen[1].content.as_text().contains("deduped_read"));
+    }
+
+    #[test]
+    fn dedup_repeated_file_reads_rewrites_only_older_exact_matches() {
+        let history = vec![
+            assistant_with_tool_call(read_file_tool_call("call-1", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-1".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "older contents"
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+            assistant_with_tool_call(unified_file_read_tool_call("call-2", "src/lib.rs")),
+            Message::tool_response(
+                "call-2".to_string(),
+                json!({
+                    "path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "newer contents"
+                })
+                .to_string(),
+            ),
+        ];
+
+        let deduped = super::dedup_repeated_file_reads_for_local_compaction(&history);
+
+        let older_payload: serde_json::Value =
+            serde_json::from_str(deduped[1].content.as_text().as_ref()).expect("json payload");
+        assert_eq!(
+            older_payload
+                .get("deduped_read")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            older_payload
+                .get("note")
+                .and_then(serde_json::Value::as_str),
+            Some(super::DEDUPED_FILE_READ_NOTE)
+        );
+        assert_eq!(
+            older_payload
+                .get("file_path")
+                .and_then(serde_json::Value::as_str),
+            Some("src/lib.rs")
+        );
+        assert!(deduped[3].content.as_text().contains("newer contents"));
+        assert!(!deduped[3].content.as_text().contains("deduped_read"));
+    }
+
+    #[test]
+    fn dedup_repeated_file_reads_keeps_different_slices_and_chunked_reads() {
+        let different_slice_history = vec![
+            assistant_with_tool_call(read_file_tool_call("call-1", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-1".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 20,
+                    "result": "slice one"
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+            assistant_with_tool_call(read_file_tool_call("call-2", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-2".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 21,
+                    "end_line": 40,
+                    "result": "slice two"
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+        ];
+        let chunked_history = vec![
+            assistant_with_tool_call(read_file_tool_call("call-3", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-3".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "first chunk",
+                    "spool_chunked": true,
+                    "has_more": true
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+            assistant_with_tool_call(read_file_tool_call("call-4", "src/lib.rs")),
+            Message::tool_response_with_origin(
+                "call-4".to_string(),
+                json!({
+                    "file_path": "src/lib.rs",
+                    "start_line": 1,
+                    "end_line": 40,
+                    "result": "second chunk",
+                    "spool_chunked": true,
+                    "has_more": false
+                })
+                .to_string(),
+                tool_names::READ_FILE.to_string(),
+            ),
+        ];
+
+        assert_eq!(
+            super::dedup_repeated_file_reads_for_local_compaction(&different_slice_history),
+            different_slice_history
+        );
+        assert_eq!(
+            super::dedup_repeated_file_reads_for_local_compaction(&chunked_history),
+            chunked_history
+        );
+    }
+
+    #[test]
+    fn legacy_memory_envelope_deserializes_with_new_fields_defaulted() {
+        let envelope: super::SessionMemoryEnvelope = serde_json::from_value(json!({
+            "session_id": "session-alpha",
+            "summary": "Persisted summary",
+            "task_summary": "Task tracker",
+            "spec_summary": null,
+            "evaluation_summary": null,
+            "grounded_facts": [{
+                "fact": "fact",
+                "source": "tool:read_file"
+            }],
+            "touched_files": ["src/lib.rs"],
+            "history_artifact_path": ".vtcode/history/session-alpha.jsonl",
+            "generated_at": "2026-03-14T00:00:00Z"
+        }))
+        .expect("legacy envelope should deserialize");
+
+        assert_eq!(envelope.schema_version, None);
+        assert_eq!(envelope.objective, None);
+        assert!(envelope.constraints.is_empty());
+        assert!(envelope.open_questions.is_empty());
+        assert!(envelope.verification_todo.is_empty());
+        assert!(envelope.delegation_notes.is_empty());
+    }
+
+    #[test]
+    fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
+        let temp = tempdir().expect("tempdir");
+        let history_dir = temp.path().join(".vtcode").join("history");
+        fs::create_dir_all(&history_dir).expect("history dir");
+        fs::create_dir_all(temp.path().join(".vtcode").join("tasks")).expect("tasks dir");
+        fs::write(
+            temp.path()
+                .join(".vtcode")
+                .join("tasks")
+                .join("current_task.md"),
+            "# Ship compaction cleanup\n- [ ] Run cargo nextest\n- [x] Wire in config\n",
+        )
+        .expect("write task");
+        fs::write(
+            temp.path()
+                .join(".vtcode")
+                .join("tasks")
+                .join("current_spec.md"),
+            "# Spec\nKeep local compaction aligned with summarized forks.\n",
+        )
+        .expect("write spec");
+        fs::write(
+            temp.path()
+                .join(".vtcode")
+                .join("tasks")
+                .join("current_evaluation.md"),
+            "# Eval\nNeed a regression test for repeated reads.\n",
+        )
+        .expect("write eval");
+
+        let prior_envelope = super::SessionMemoryEnvelope {
+            session_id: "session-alpha".to_string(),
+            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+            summary: "Prior summary".to_string(),
+            objective: Some("Keep continuity".to_string()),
+            task_summary: Some("Older task summary".to_string()),
+            spec_summary: None,
+            evaluation_summary: None,
+            constraints: vec!["Do not redesign the harness".to_string()],
+            grounded_facts: vec![GroundedFactRecord {
+                fact: "Existing grounded fact".to_string(),
+                source: "tool:read_file".to_string(),
+            }],
+            touched_files: vec!["src/old.rs".to_string()],
+            open_questions: vec!["What should summarized forks retain?".to_string()],
+            verification_todo: vec!["Confirm refresh runs at turn boundaries.".to_string()],
+            delegation_notes: vec!["explorer: looked at compaction flow".to_string()],
+            history_artifact_path: Some(".vtcode/history/session-alpha_0001.jsonl".to_string()),
+            generated_at: "2026-03-14T00:00:00Z".to_string(),
+        };
+        fs::write(
+            history_dir.join("session-alpha.memory.json"),
+            serde_json::to_string_pretty(&prior_envelope).expect("serialize envelope"),
+        )
+        .expect("write envelope");
+
+        let mut history = vec![
+            Message::user("Continue the compaction work.".to_string()),
+            Message::assistant("I will update the local compaction path.".to_string()),
+        ];
+        let mut session_stats = SessionStats::default();
+        session_stats.record_touched_files(["src/new.rs".to_string()]);
+
+        let update = super::SessionMemoryEnvelopeUpdate {
+            grounded_facts: vec![GroundedFactRecord {
+                fact: "Child agent confirmed the parser contract.".to_string(),
+                source: "subagent:reviewer".to_string(),
+            }],
+            touched_files: vec!["src/child.rs".to_string()],
+            open_questions: vec!["Should dedup cover batch reads?".to_string()],
+            verification_todo: vec!["Run cargo check".to_string()],
+            delegation_notes: vec!["reviewer: parser contract validated".to_string()],
+            ..Default::default()
+        };
+
+        let envelope = super::refresh_session_memory_envelope(
+            temp.path(),
+            "session-alpha",
+            Some(&VTCodeConfig::default()),
+            &mut history,
+            &session_stats,
+            Some(&update),
+        )
+        .expect("refresh succeeds")
+        .expect("envelope should be refreshed");
+
+        assert_eq!(
+            envelope.objective.as_deref(),
+            Some("Ship compaction cleanup")
+        );
+        assert!(
+            envelope
+                .constraints
+                .contains(&"Do not redesign the harness".to_string())
+        );
+        assert!(
+            envelope
+                .spec_summary
+                .as_deref()
+                .is_some_and(|summary| summary.contains("Keep local compaction aligned"))
+        );
+        assert!(
+            envelope
+                .evaluation_summary
+                .as_deref()
+                .is_some_and(|summary| summary.contains("Need a regression test"))
+        );
+        assert!(
+            envelope
+                .open_questions
+                .contains(&"Should dedup cover batch reads?".to_string())
+        );
+        assert!(
+            envelope
+                .verification_todo
+                .iter()
+                .any(|item| item.contains("Run cargo nextest"))
+        );
+        assert!(
+            envelope
+                .verification_todo
+                .contains(&"Run cargo check".to_string())
+        );
+        assert!(
+            envelope
+                .delegation_notes
+                .contains(&"reviewer: parser contract validated".to_string())
+        );
+        assert!(envelope.touched_files.contains(&"src/new.rs".to_string()));
+        assert!(envelope.touched_files.contains(&"src/child.rs".to_string()));
+        assert!(
+            history[0]
+                .content
+                .as_text()
+                .contains("[Session Memory Envelope]")
+        );
+    }
+
+    #[tokio::test]
     async fn provider_compaction_error_preserves_existing_history() {
         let temp = tempdir().expect("tempdir");
         let provider = FailingProviderCompactionProvider;
@@ -1911,15 +2836,21 @@ mod tests {
         let envelope_path = history_dir.join("resume-session_001.memory.json");
         let envelope = super::SessionMemoryEnvelope {
             session_id: "resume-session".to_string(),
+            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
             summary: "Persisted summary".to_string(),
+            objective: None,
             task_summary: Some("Tracker: - [ ] Follow up".to_string()),
             spec_summary: None,
             evaluation_summary: None,
+            constraints: Vec::new(),
             grounded_facts: vec![GroundedFactRecord {
                 fact: "Cargo.toml declares vtcode-core".to_string(),
                 source: "tool:read_file".to_string(),
             }],
             touched_files: vec!["Cargo.toml".to_string()],
+            open_questions: Vec::new(),
+            verification_todo: Vec::new(),
+            delegation_notes: Vec::new(),
             history_artifact_path: Some(".vtcode/history/resume-session_001.jsonl".to_string()),
             generated_at: "2026-03-14T00:00:00Z".to_string(),
         };
@@ -1952,12 +2883,18 @@ mod tests {
             let envelope_path = history_dir.join(format!("{session_id}_0001.memory.json"));
             let envelope = super::SessionMemoryEnvelope {
                 session_id: session_id.to_string(),
+                schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
                 summary: summary.to_string(),
+                objective: None,
                 task_summary: None,
                 spec_summary: None,
                 evaluation_summary: None,
+                constraints: Vec::new(),
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
+                open_questions: Vec::new(),
+                verification_todo: Vec::new(),
+                delegation_notes: Vec::new(),
                 history_artifact_path: None,
                 generated_at: "2026-03-14T00:00:00Z".to_string(),
             };
@@ -1990,12 +2927,18 @@ mod tests {
         ] {
             let envelope = super::SessionMemoryEnvelope {
                 session_id: "session-a".to_string(),
+                schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
                 summary: summary.to_string(),
+                objective: None,
                 task_summary: None,
                 spec_summary: None,
                 evaluation_summary: None,
+                constraints: Vec::new(),
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
+                open_questions: Vec::new(),
+                verification_todo: Vec::new(),
+                delegation_notes: Vec::new(),
                 history_artifact_path: None,
                 generated_at: "2026-03-14T00:00:00Z".to_string(),
             };
@@ -2102,12 +3045,18 @@ mod tests {
         ] {
             let envelope = super::SessionMemoryEnvelope {
                 session_id: session_id.to_string(),
+                schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
                 summary: summary.to_string(),
+                objective: None,
                 task_summary: None,
                 spec_summary: None,
                 evaluation_summary: None,
+                constraints: Vec::new(),
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
+                open_questions: Vec::new(),
+                verification_todo: Vec::new(),
+                delegation_notes: Vec::new(),
                 history_artifact_path: None,
                 generated_at: "2026-03-14T00:00:00Z".to_string(),
             };
@@ -2176,15 +3125,21 @@ mod tests {
         fs::create_dir_all(&history_dir).expect("history dir");
         let source_envelope = super::SessionMemoryEnvelope {
             session_id: "session-source".to_string(),
+            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
             summary: "Prior source summary".to_string(),
+            objective: Some("Keep the source session moving".to_string()),
             task_summary: Some("Tracker: keep going".to_string()),
             spec_summary: None,
             evaluation_summary: None,
+            constraints: Vec::new(),
             grounded_facts: vec![GroundedFactRecord {
                 fact: "src/lib.rs was updated".to_string(),
                 source: "tool:write_file".to_string(),
             }],
             touched_files: vec!["src/lib.rs".to_string()],
+            open_questions: Vec::new(),
+            verification_todo: Vec::new(),
+            delegation_notes: Vec::new(),
             history_artifact_path: Some(".vtcode/history/session-source_0001.jsonl".to_string()),
             generated_at: "2026-03-14T00:00:00Z".to_string(),
         };
@@ -2230,6 +3185,54 @@ mod tests {
         assert!(compacted.iter().all(
             |message| message.role == MessageRole::System || message.role == MessageRole::User
         ));
+    }
+
+    #[tokio::test]
+    async fn local_and_fork_compaction_share_retained_user_budget() {
+        let temp = tempdir().expect("tempdir");
+        let provider = LocalCompactionProvider;
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.context.dynamic.retained_user_messages = 2;
+
+        let mut history = test_history();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        compact_history_in_place(
+            &provider,
+            "stub-model",
+            "session-alpha",
+            temp.path(),
+            Some(&vt_cfg),
+            &mut history,
+            &mut session_stats,
+            &mut context_manager,
+        )
+        .await
+        .expect("compaction succeeds")
+        .expect("history should compact");
+
+        assert_local_compaction_history_with_user_count(&history, 0, 2);
+
+        let compacted = build_summarized_fork_history(
+            &provider,
+            "stub-model",
+            "session-alpha",
+            "session-beta",
+            temp.path(),
+            Some(&vt_cfg),
+            &test_history(),
+        )
+        .await
+        .expect("summarized fork history");
+
+        assert_eq!(
+            compacted
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .count(),
+            2
+        );
     }
 
     #[test]

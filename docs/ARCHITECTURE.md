@@ -28,8 +28,8 @@ Harness primitives in VT Code map to the runtime like this:
 - **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
 - **Tools**: `vtcode-tools/`, `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose filesystem, search, edit, exec, and protocol-backed capabilities to the model.
 - **Sandbox / execution environment**: `vtcode-bash-runner/`, unified exec, workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
-- **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window.
-- **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk.
+- **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification TODOs, and delegated findings for resume and summarized-fork handoff.
+- **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk. On VT Code's local compaction path, older repeated single-file reads are deduplicated before summarization so the summary prompt keeps the newest copy and avoids re-injecting stale file payloads.
 - **Hooks / middleware**: lifecycle hooks, tool middleware, guard rails, duplicate-call protection, and plan-mode enforcement add deterministic control around the model loop.
 - **Continuation**: exec/full-auto now uses a harness-managed continuation controller that accepts completion only when tracker state is complete and verification commands pass.
 - **Scheduling**: session-scoped `/loop` tasks live on the interactive runtime, while durable `vtcode schedule` jobs persist definitions under the VT Code config/data directories and launch fresh `vtcode exec` runs through a local daemon.
@@ -57,6 +57,7 @@ VT Code treats delegation like explicit thread spawning rather than ambient back
 - Child agents are for bounded sidecar work: focused exploration, isolated verification, or disjoint implementation slices.
 - If the next local action depends on a result, the main session should usually do that work itself instead of delegating and waiting.
 - Child output is advisory until the parent thread reads it, validates it, and folds it back into the main task state.
+- Completed child results are merged back into the parent `SessionMemoryEnvelope` at turn boundaries, so delegated facts, touched files, open questions, and verification follow-ups survive resume and summarized forks.
 
 ### Rig Alignment Boundary
 

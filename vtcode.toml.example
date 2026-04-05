@@ -955,6 +955,9 @@ include_in_prompt = true
 # Enable dynamic context discovery features
 enabled = true
 
+# Maximum number of recent user messages retained verbatim during local compaction and summarized forks
+retained_user_messages = 4
+
 # Threshold in bytes above which tool outputs are spooled to files (default: 8KB)
 tool_output_threshold = 8192
 

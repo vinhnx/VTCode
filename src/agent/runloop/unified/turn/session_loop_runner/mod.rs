@@ -1318,6 +1318,22 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         )
                         .ok();
                 }
+                if let Err(err) =
+                    crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(
+                        config.workspace.as_path(),
+                        &harness_snapshot.session_id,
+                        vt_cfg.as_ref(),
+                        &mut runtime.state.messages,
+                        &session_stats,
+                        None,
+                    )
+                {
+                    tracing::warn!(
+                        error = %err,
+                        session_id = %harness_snapshot.session_id,
+                        "Failed to refresh session memory envelope after turn"
+                    );
+                }
                 emit_turn_execution_metrics(TurnExecutionMetrics {
                     attempts_made: attempts.saturating_add(1),
                     retry_count: attempts,

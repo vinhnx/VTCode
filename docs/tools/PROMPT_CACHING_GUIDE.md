@@ -65,6 +65,15 @@ VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default. 
 
 OpenAI additionally keeps `prompt_cache_key` stable per session (unless `prompt_cache_key_mode = "off"`).
 
+VT Code surfaces prompt-cache churn using the same terminology in `vtcode trajectory` and `/share-log` exports:
+
+- `stable_prefix` means the cache-friendly stable system prefix changed while the model stayed the same.
+- `tool_catalog` means the tool-definition hash changed.
+- `stable_prefix+tool_catalog` means both changed in the same observation.
+- `model` means the model changed, so the provider-side cache lineage changed with it.
+
+The share-log HTML overview also reports prompt-cache observations, churn breakdown, and the last visible change reason.
+
 ### Anthropic (Claude)
 
 ```toml

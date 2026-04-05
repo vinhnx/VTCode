@@ -4,6 +4,10 @@
 
 set -e
 
+cargo_cmd() {
+    env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo "$@"
+}
+
 echo "VT Code Tools Test"
 echo "================="
 
@@ -37,10 +41,7 @@ run_test() {
 echo -e "\nTesting External Tools Availability"
 echo "===================================="
 
-# Test 1: CK search
-run_test "CK Search Available" "which ck" "ck"
-
-# Test 2: Ripgrep
+# Test 1: Ripgrep
 run_test "Ripgrep Available" "which rg" "rg"
 
 echo -e "\nTesting Tool Functionality"
@@ -64,7 +65,7 @@ echo "======================="
 
 set +e
 PTY_LOG=$(mktemp)
-cargo test --package vtcode-core --test pty_tests >"$PTY_LOG" 2>&1
+cargo_cmd test --package vtcode-core --test pty_tests >"$PTY_LOG" 2>&1
 PTY_STATUS=$?
 set -e
 

@@ -179,6 +179,7 @@ python3 scripts/generate_config_field_reference.py
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |
 | `context.dynamic.max_spooled_files` | `integer` | no | `100` | Maximum number of spooled files to keep |
 | `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting conversation history during summarization |
+| `context.dynamic.retained_user_messages` | `integer` | no | `4` | Maximum number of recent real user messages retained verbatim during local fallback compaction and summarized forks |
 | `context.dynamic.spool_max_age_secs` | `integer` | no | `3600` | Maximum age in seconds for spooled tool output files before cleanup |
 | `context.dynamic.sync_mcp_tools` | `boolean` | no | `true` | Enable syncing MCP tool descriptions to .vtcode/mcp/tools/ |
 | `context.dynamic.sync_skills` | `boolean` | no | `true` | Enable generating skill index in .agents/skills/INDEX.md |

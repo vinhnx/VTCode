@@ -29,6 +29,27 @@ Notes:
 - `worker` also matches `general` and `general-purpose`
 - child threads cannot spawn more subagents in the current VT Code build
 
+Completed child threads are expected to return a fixed Markdown handoff that VT Code can merge back into the parent session memory:
+
+```markdown
+## Summary
+- ...
+
+## Facts
+- ...
+
+## Touched Files
+- ...
+
+## Verification
+- ...
+
+## Open Questions
+- ...
+```
+
+Use `- None` for empty sections. If a child reply does not follow this contract, VT Code preserves the raw summary as delegation notes but skips structured merge.
+
 ## Quickstart
 
 1. Run `/agents`.

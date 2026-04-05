@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
@@ -303,11 +304,7 @@ pub fn stable_system_prefix_hash(system_prompt: &str) -> u64 {
 }
 
 pub fn hash_tool_definitions(tools: Option<&[ToolDefinition]>) -> Option<u64> {
-    tools.and_then(|defs| {
-        serde_json::to_string(defs)
-            .ok()
-            .map(|text| hash_value(&text))
-    })
+    tools.and_then(hash_json_value)
 }
 
 pub fn should_expose_tool_in_mode(
@@ -362,6 +359,16 @@ fn hash_value<T: Hash>(value: &T) -> u64 {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
     hasher.finish()
+}
+
+fn hash_json_value<T: Serialize + ?Sized>(value: &T) -> Option<u64> {
+    let mut hasher = DefaultHasher::new();
+    serde_json::to_writer(HasherWriter::new(&mut hasher), value)
+        .ok()
+        .map(|_| {
+            hasher.write_u8(0xff);
+            hasher.finish()
+        })
 }
 
 fn reduce_search_result(result: Value) -> Value {
@@ -584,6 +591,27 @@ impl std::io::Write for HashingWriter<'_> {
     }
 }
 
+struct HasherWriter<'a, H> {
+    hasher: &'a mut H,
+}
+
+impl<'a, H> HasherWriter<'a, H> {
+    fn new(hasher: &'a mut H) -> Self {
+        Self { hasher }
+    }
+}
+
+impl<H: Hasher> std::io::Write for HasherWriter<'_, H> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.hasher.write(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -678,6 +706,32 @@ mod tests {
 
         assert!(names.contains(&tools::UNIFIED_SEARCH));
         assert!(!names.contains(&tools::REQUEST_USER_INPUT));
+    }
+
+    #[test]
+    fn tool_catalog_hash_matches_legacy_json_string_hash() {
+        let tools = vec![
+            function_tool(tools::UNIFIED_SEARCH),
+            ToolDefinition::function(
+                "custom_tool".to_string(),
+                "Custom".to_string(),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" },
+                        "line": { "type": "integer" }
+                    }
+                }),
+            )
+            .with_strict(true)
+            .with_defer_loading(true),
+        ];
+
+        let expected = serde_json::to_string(&tools)
+            .ok()
+            .map(|text| hash_value(&text));
+
+        assert_eq!(hash_tool_definitions(Some(&tools)), expected);
     }
 
     #[test]

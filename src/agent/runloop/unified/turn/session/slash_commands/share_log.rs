@@ -60,6 +60,13 @@ struct SessionOverview {
     updated_files: u64,
     deleted_files: u64,
     total_file_changes: u64,
+    prompt_cache_observations: usize,
+    prompt_cache_model_changes: usize,
+    prompt_cache_unchanged: usize,
+    prompt_cache_stable_prefix_changes: usize,
+    prompt_cache_tool_catalog_changes: usize,
+    prompt_cache_combined_changes: usize,
+    last_prompt_cache_change_reason: Option<String>,
     source: String,
     total_rows: usize,
     outcome_code: Option<String>,
@@ -193,6 +200,9 @@ fn build_timeline_export(
     thread_id: &str,
     event_records: &[ThreadEventRecord],
     messages: &[uni::Message],
+    prompt_cache_diagnostics: Option<
+        &crate::agent::runloop::unified::state::PromptCacheDiagnostics,
+    >,
 ) -> TimelineExport {
     let (source, rows) = if event_records.is_empty() {
         (
@@ -205,7 +215,14 @@ fn build_timeline_export(
             timeline_rows_from_thread_events(event_records),
         )
     };
-    let overview = build_session_overview(provider, model, &source, rows.len(), event_records);
+    let overview = build_session_overview(
+        provider,
+        model,
+        &source,
+        rows.len(),
+        event_records,
+        prompt_cache_diagnostics,
+    );
 
     TimelineExport {
         exported_at: exported_at.to_string(),
@@ -227,6 +244,9 @@ fn build_session_overview(
     source: &str,
     total_rows: usize,
     event_records: &[ThreadEventRecord],
+    prompt_cache_diagnostics: Option<
+        &crate::agent::runloop::unified::state::PromptCacheDiagnostics,
+    >,
 ) -> SessionOverview {
     let mut api_calls = 0_u64;
     let mut turns = 0_u64;
@@ -283,6 +303,8 @@ fn build_session_overview(
         }
     }
 
+    let prompt_cache_diagnostics = prompt_cache_diagnostics.cloned().unwrap_or_default();
+
     SessionOverview {
         provider: provider.to_string(),
         model: model.to_string(),
@@ -297,6 +319,13 @@ fn build_session_overview(
         updated_files,
         deleted_files,
         total_file_changes: added_files + updated_files + deleted_files,
+        prompt_cache_observations: prompt_cache_diagnostics.observations,
+        prompt_cache_model_changes: prompt_cache_diagnostics.model_changes,
+        prompt_cache_unchanged: prompt_cache_diagnostics.unchanged,
+        prompt_cache_stable_prefix_changes: prompt_cache_diagnostics.stable_prefix_changes,
+        prompt_cache_tool_catalog_changes: prompt_cache_diagnostics.tool_catalog_changes,
+        prompt_cache_combined_changes: prompt_cache_diagnostics.combined_changes,
+        last_prompt_cache_change_reason: prompt_cache_diagnostics.last_change_reason,
         source: source.to_string(),
         total_rows,
         outcome_code,
@@ -869,7 +898,7 @@ fn render_session_timeline_html(
     html.push_str(&sanitize_json_for_script_tag(&export_json));
     html.push_str("</script>\n<script id=\"vtcode-session-log-data\" type=\"application/json\">");
     html.push_str(&sanitize_json_for_script_tag(&session_log_json));
-    html.push_str("</script>\n<script>\nconst exportData = JSON.parse(document.getElementById('vtcode-session-data').textContent);\nconst sessionLog = JSON.parse(document.getElementById('vtcode-session-log-data').textContent);\nconst rows = exportData.rows || [];\nconst overview = exportData.overview || {};\nconst timelineEl = document.getElementById('timeline');\nconst overviewList = document.getElementById('overview-list');\nconst searchInput = document.getElementById('search-input');\nconst categoryFilter = document.getElementById('category-filter');\nconst statusFilter = document.getElementById('status-filter');\nconst hideLowSignal = document.getElementById('hide-low-signal');\nconst clearFilters = document.getElementById('clear-filters');\nconst resultsCount = document.getElementById('results-count');\nconst themeToggle = document.getElementById('theme-toggle');\nconst openJson = document.getElementById('open-json');\nconst toggleJsonPreview = document.getElementById('toggle-json-preview');\nconst rawLogPreview = document.getElementById('raw-log-preview');\nconst exportedAt = document.getElementById('exported-at');\nconst root = document.documentElement;\nfunction escapeHtml(text){return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll(\"'\",'&#39;');}\nfunction formatNumber(value){return Number(value || 0).toLocaleString(undefined);}\nfunction normalizeText(text){return String(text || '').replace(/\\s+/g,' ').trim();}\nfunction setTheme(theme){root.dataset.theme = theme; if(themeToggle){themeToggle.textContent = theme === 'dark' ? 'Switch to light' : 'Switch to dark';}}\nfunction toggleTheme(){setTheme(root.dataset.theme === 'light' ? 'dark' : 'light');}\nfunction fillSelect(select, values, label){select.innerHTML = `<option value=\"\">${escapeHtml(label)}</option>` + values.map(value => `<option value=\"${escapeHtml(value)}\">${escapeHtml(value)}</option>`).join('');}\nfunction uniqueValues(key){return [...new Set(rows.map(row => row[key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));}\nfunction rowSearchText(row){return [row.role,row.transcript_kind,row.event_type,row.item_type,row.category,row.status,row.title,row.summary,row.body,row.detail_json].filter(Boolean).join('\\n').toLowerCase();}\nfunction statusClass(status){return status ? ` status-${status}` : '';}\nfunction roleClass(role){return role ? ` role-${role}` : ' role-system';}\nfunction inlineMarkdown(text){return escapeHtml(text).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>');}\nfunction splitBlocks(text){return String(text || '').split(/\\n\\s*\\n/).map(block => block.trim()).filter(Boolean);}\nfunction formatLocaleTimestamp(){if(!exportedAt){return;} const raw = exportedAt.getAttribute('datetime') || exportedAt.textContent || ''; const date = new Date(raw); if(Number.isNaN(date.getTime())){return;} exportedAt.textContent = new Intl.DateTimeFormat(undefined,{dateStyle:'full',timeStyle:'long'}).format(date);}\nfunction messageBody(row){const summary = String(row.summary || '').trim(); const body = String(row.body || '').trim(); if(!body){return summary;} if(normalizeText(body) === normalizeText(summary)){return body;} return body;}\nfunction renderBulletList(lines){return `<ul>` + lines.map(line => `<li>${inlineMarkdown(line.replace(/^[-*]\\s+/, '').trim())}</li>`).join('') + `</ul>`;}\nfunction renderMessageBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '<div class=\"message-block\"><div class=\"message-text\"><p>No transcript content.</p></div></div>';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trim()).filter(Boolean); if(!lines.length){return '';} const heading = lines[0].match(/^([A-Za-z][A-Za-z0-9 &/()_-]{0,60}):$/); if(heading && lines.slice(1).every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><span class=\"message-section-title\">${escapeHtml(heading[1])}</span><div class=\"message-text\">${renderBulletList(lines.slice(1))}</div></section>`; } if(lines.every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><div class=\"message-text\">${renderBulletList(lines)}</div></section>`; } return `<section class=\"message-block\"><div class=\"message-text\">` + lines.map(line => `<p>${inlineMarkdown(line)}</p>`).join('') + `</div></section>`; }).join('');}\nfunction renderStreams(text){const normalized = String(text || '').trim(); if(!normalized){return '';} const streamRegex = /(stdout|stderr)\\s+─+\\n([\\s\\S]*?)(?=(?:\\n(?:stdout|stderr)\\s+─+\\n)|$)/gi; const streams = [...normalized.matchAll(streamRegex)]; if(!streams.length){return `<section class=\"log-stream\"><span class=\"log-stream-title\">Output</span><pre>${escapeHtml(normalized)}</pre></section>`;} return streams.map(match => `<section class=\"log-stream\"><span class=\"log-stream-title\">${escapeHtml(match[1])}</span><pre>${escapeHtml((match[2] || '').trim())}</pre></section>`).join('');}\nfunction renderSystemBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trimEnd()).filter(line => line.trim().length > 0); if(!lines.length){return '';} const first = lines[0].trim(); const headingMatch = first.match(/^([A-Za-z][A-Za-z0-9 ()_./-]{0,60}):(.*)$/); if(headingMatch){ const label = headingMatch[1]; const inlineValue = headingMatch[2].trim(); const rest = [inlineValue, ...lines.slice(1).map(line => line.trim())].filter(Boolean).join('\\n').trim(); if(label === 'Output' || label === 'Result' || label === 'Arguments' || label === 'Top results'){ return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span>${renderStreams(rest)}</section>`; } return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span><div class=\"system-copy\"><p>${inlineMarkdown(rest || '')}</p></div></section>`; } return `<section class=\"detail-shell\"><pre>${escapeHtml(lines.join('\\n'))}</pre></section>`; }).join('');}\nfunction renderEntryBody(row){if(row.transcript_kind === 'message'){return renderMessageBlocks(messageBody(row));} if(row.transcript_kind === 'plan' || row.transcript_kind === 'reasoning'){return renderMessageBlocks(row.body || row.summary);} return renderSystemBlocks(row.body || row.summary || '');}\nfunction renderRawEvent(row){if(!row.detail_json){return '';} return `<details><summary>Raw event JSON</summary><pre class=\"raw-json\">${escapeHtml(row.detail_json)}</pre></details>`;}\nfunction renderRow(row){const subtitle = row.summary && normalizeText(row.summary) !== normalizeText(row.body || '') ? `<div class=\"entry-subtitle\">${inlineMarkdown(row.summary)}</div>` : ''; const tags = [`<span class=\"kind-badge\">${escapeHtml(row.transcript_kind || row.category || 'status')}</span>`, row.category ? `<span class=\"kind-badge\">${escapeHtml(row.category)}</span>` : '', row.status ? `<span class=\"status-badge${statusClass(row.status)}\">${escapeHtml(row.status)}</span>` : '', row.is_low_signal ? '<span class=\"status-badge low-signal\">low-signal</span>' : ''].filter(Boolean).join(''); return `<article class=\"entry\"><div class=\"entry-head\"><div class=\"entry-meta\"><div class=\"entry-identity\"><span class=\"role-badge${roleClass(row.role)}\">${escapeHtml(row.role || 'system')}</span><span class=\"seq\">#${row.sequence}</span><span class=\"entry-title\">${escapeHtml(row.title)}</span></div>${subtitle}</div><div class=\"entry-tags\">${tags}</div></div><div class=\"entry-body\">${renderEntryBody(row)}${renderRawEvent(row)}</div></article>`;}\nfunction fillOverview(){const apiCalls = document.getElementById('overview-api-calls'); const tokens = document.getElementById('overview-tokens'); const diff = document.getElementById('overview-diff'); if(apiCalls){apiCalls.textContent = `${formatNumber(overview.api_calls)} call(s) / ${formatNumber(overview.turns)} turn(s)`;} if(tokens){tokens.textContent = `${formatNumber(overview.input_tokens)} in / ${formatNumber(overview.output_tokens)} out`; } if(diff){diff.textContent = `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`;} if(overviewList){const items = [['Provider', overview.provider || ''], ['Model', overview.model || ''], ['Source', overview.source || ''], ['Rows', formatNumber(overview.total_rows)], ['API calls', `${formatNumber(overview.api_calls)} call(s)`], ['Turns', formatNumber(overview.turns)], ['Input tokens', formatNumber(overview.input_tokens)], ['Output tokens', formatNumber(overview.output_tokens)], ['Cached input', formatNumber(overview.cached_input_tokens)], ['Cache creation', formatNumber(overview.cache_creation_tokens)], ['Total tokens', formatNumber(overview.total_tokens)], ['Diff', `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`], ['Outcome', overview.outcome_code || 'n/a'], ['Cost', overview.total_cost_usd || 'n/a'], ['Redaction', exportData.redaction_enabled ? 'enabled' : 'disabled']]; overviewList.innerHTML = items.map(([key, value]) => `<li><span class=\"kv-key\">${escapeHtml(key)}</span><span class=\"kv-value\">${escapeHtml(value)}</span></li>`).join(''); }}\nfunction openRawJsonWindow(){const popup = window.open('', '_blank', 'noopener,noreferrer'); if(!popup){return;} const pretty = JSON.stringify(sessionLog, null, 2); popup.document.write(`<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>VT Code Redacted JSON Log</title><style>body{margin:0;padding:18px;background:#111;color:#f5f5f5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}pre{white-space:pre-wrap;word-break:break-word}</style></head><body><pre>${escapeHtml(pretty)}</pre></body></html>`); popup.document.close();}\nfunction render(){const query = searchInput.value.trim().toLowerCase(); const category = categoryFilter.value; const status = statusFilter.value; const hideLow = hideLowSignal.checked; const filtered = rows.filter(row => { if (hideLow && row.is_low_signal) return false; if (category && row.category !== category) return false; if (status && row.status !== status) return false; if (query && !rowSearchText(row).includes(query)) return false; return true; }); resultsCount.textContent = `${filtered.length} of ${rows.length} rows`; if (!filtered.length){timelineEl.innerHTML = '<div class=\"empty\">No transcript rows match the current filters.</div>'; return;} timelineEl.innerHTML = filtered.map(renderRow).join('');}\nfillSelect(categoryFilter, uniqueValues('category'), 'All categories');\nfillSelect(statusFilter, uniqueValues('status'), 'All statuses');\nfillOverview();\nformatLocaleTimestamp();\nsetTheme(root.dataset.theme || 'dark');\nif(themeToggle){themeToggle.addEventListener('click', toggleTheme);}\nif(openJson){openJson.addEventListener('click', openRawJsonWindow);}\nif(toggleJsonPreview && rawLogPreview){toggleJsonPreview.addEventListener('click', () => { rawLogPreview.hidden = !rawLogPreview.hidden; if(!rawLogPreview.hidden && !rawLogPreview.textContent){ rawLogPreview.textContent = JSON.stringify(sessionLog, null, 2); } });}\nsearchInput.addEventListener('input', render);\ncategoryFilter.addEventListener('change', render);\nstatusFilter.addEventListener('change', render);\nhideLowSignal.addEventListener('change', render);\nclearFilters.addEventListener('click', () => { searchInput.value = ''; categoryFilter.value = ''; statusFilter.value = ''; hideLowSignal.checked = false; render(); });\nrender();\n</script>\n</body>\n</html>\n");
+    html.push_str("</script>\n<script>\nconst exportData = JSON.parse(document.getElementById('vtcode-session-data').textContent);\nconst sessionLog = JSON.parse(document.getElementById('vtcode-session-log-data').textContent);\nconst rows = exportData.rows || [];\nconst overview = exportData.overview || {};\nconst timelineEl = document.getElementById('timeline');\nconst overviewList = document.getElementById('overview-list');\nconst searchInput = document.getElementById('search-input');\nconst categoryFilter = document.getElementById('category-filter');\nconst statusFilter = document.getElementById('status-filter');\nconst hideLowSignal = document.getElementById('hide-low-signal');\nconst clearFilters = document.getElementById('clear-filters');\nconst resultsCount = document.getElementById('results-count');\nconst themeToggle = document.getElementById('theme-toggle');\nconst openJson = document.getElementById('open-json');\nconst toggleJsonPreview = document.getElementById('toggle-json-preview');\nconst rawLogPreview = document.getElementById('raw-log-preview');\nconst exportedAt = document.getElementById('exported-at');\nconst root = document.documentElement;\nfunction escapeHtml(text){return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll(\"'\",'&#39;');}\nfunction formatNumber(value){return Number(value || 0).toLocaleString(undefined);}\nfunction normalizeText(text){return String(text || '').replace(/\\s+/g,' ').trim();}\nfunction setTheme(theme){root.dataset.theme = theme; if(themeToggle){themeToggle.textContent = theme === 'dark' ? 'Switch to light' : 'Switch to dark';}}\nfunction toggleTheme(){setTheme(root.dataset.theme === 'light' ? 'dark' : 'light');}\nfunction fillSelect(select, values, label){select.innerHTML = `<option value=\"\">${escapeHtml(label)}</option>` + values.map(value => `<option value=\"${escapeHtml(value)}\">${escapeHtml(value)}</option>`).join('');}\nfunction uniqueValues(key){return [...new Set(rows.map(row => row[key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));}\nfunction rowSearchText(row){return [row.role,row.transcript_kind,row.event_type,row.item_type,row.category,row.status,row.title,row.summary,row.body,row.detail_json].filter(Boolean).join('\\n').toLowerCase();}\nfunction statusClass(status){return status ? ` status-${status}` : '';}\nfunction roleClass(role){return role ? ` role-${role}` : ' role-system';}\nfunction inlineMarkdown(text){return escapeHtml(text).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>');}\nfunction splitBlocks(text){return String(text || '').split(/\\n\\s*\\n/).map(block => block.trim()).filter(Boolean);}\nfunction formatLocaleTimestamp(){if(!exportedAt){return;} const raw = exportedAt.getAttribute('datetime') || exportedAt.textContent || ''; const date = new Date(raw); if(Number.isNaN(date.getTime())){return;} exportedAt.textContent = new Intl.DateTimeFormat(undefined,{dateStyle:'full',timeStyle:'long'}).format(date);}\nfunction messageBody(row){const summary = String(row.summary || '').trim(); const body = String(row.body || '').trim(); if(!body){return summary;} if(normalizeText(body) === normalizeText(summary)){return body;} return body;}\nfunction renderBulletList(lines){return `<ul>` + lines.map(line => `<li>${inlineMarkdown(line.replace(/^[-*]\\s+/, '').trim())}</li>`).join('') + `</ul>`;}\nfunction renderMessageBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '<div class=\"message-block\"><div class=\"message-text\"><p>No transcript content.</p></div></div>';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trim()).filter(Boolean); if(!lines.length){return '';} const heading = lines[0].match(/^([A-Za-z][A-Za-z0-9 &/()_-]{0,60}):$/); if(heading && lines.slice(1).every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><span class=\"message-section-title\">${escapeHtml(heading[1])}</span><div class=\"message-text\">${renderBulletList(lines.slice(1))}</div></section>`; } if(lines.every(line => /^[-*]\\s+/.test(line))){ return `<section class=\"message-block\"><div class=\"message-text\">${renderBulletList(lines)}</div></section>`; } return `<section class=\"message-block\"><div class=\"message-text\">` + lines.map(line => `<p>${inlineMarkdown(line)}</p>`).join('') + `</div></section>`; }).join('');}\nfunction renderStreams(text){const normalized = String(text || '').trim(); if(!normalized){return '';} const streamRegex = /(stdout|stderr)\\s+─+\\n([\\s\\S]*?)(?=(?:\\n(?:stdout|stderr)\\s+─+\\n)|$)/gi; const streams = [...normalized.matchAll(streamRegex)]; if(!streams.length){return `<section class=\"log-stream\"><span class=\"log-stream-title\">Output</span><pre>${escapeHtml(normalized)}</pre></section>`;} return streams.map(match => `<section class=\"log-stream\"><span class=\"log-stream-title\">${escapeHtml(match[1])}</span><pre>${escapeHtml((match[2] || '').trim())}</pre></section>`).join('');}\nfunction renderSystemBlocks(text){const blocks = splitBlocks(text); if(!blocks.length){return '';} return blocks.map(block => { const lines = block.split('\\n').map(line => line.trimEnd()).filter(line => line.trim().length > 0); if(!lines.length){return '';} const first = lines[0].trim(); const headingMatch = first.match(/^([A-Za-z][A-Za-z0-9 ()_./-]{0,60}):(.*)$/); if(headingMatch){ const label = headingMatch[1]; const inlineValue = headingMatch[2].trim(); const rest = [inlineValue, ...lines.slice(1).map(line => line.trim())].filter(Boolean).join('\\n').trim(); if(label === 'Output' || label === 'Result' || label === 'Arguments' || label === 'Top results'){ return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span>${renderStreams(rest)}</section>`; } return `<section class=\"system-block\"><span class=\"system-label\">${escapeHtml(label)}</span><div class=\"system-copy\"><p>${inlineMarkdown(rest || '')}</p></div></section>`; } return `<section class=\"detail-shell\"><pre>${escapeHtml(lines.join('\\n'))}</pre></section>`; }).join('');}\nfunction renderEntryBody(row){if(row.transcript_kind === 'message'){return renderMessageBlocks(messageBody(row));} if(row.transcript_kind === 'plan' || row.transcript_kind === 'reasoning'){return renderMessageBlocks(row.body || row.summary);} return renderSystemBlocks(row.body || row.summary || '');}\nfunction renderRawEvent(row){if(!row.detail_json){return '';} return `<details><summary>Raw event JSON</summary><pre class=\"raw-json\">${escapeHtml(row.detail_json)}</pre></details>`;}\nfunction renderRow(row){const subtitle = row.summary && normalizeText(row.summary) !== normalizeText(row.body || '') ? `<div class=\"entry-subtitle\">${inlineMarkdown(row.summary)}</div>` : ''; const tags = [`<span class=\"kind-badge\">${escapeHtml(row.transcript_kind || row.category || 'status')}</span>`, row.category ? `<span class=\"kind-badge\">${escapeHtml(row.category)}</span>` : '', row.status ? `<span class=\"status-badge${statusClass(row.status)}\">${escapeHtml(row.status)}</span>` : '', row.is_low_signal ? '<span class=\"status-badge low-signal\">low-signal</span>' : ''].filter(Boolean).join(''); return `<article class=\"entry\"><div class=\"entry-head\"><div class=\"entry-meta\"><div class=\"entry-identity\"><span class=\"role-badge${roleClass(row.role)}\">${escapeHtml(row.role || 'system')}</span><span class=\"seq\">#${row.sequence}</span><span class=\"entry-title\">${escapeHtml(row.title)}</span></div>${subtitle}</div><div class=\"entry-tags\">${tags}</div></div><div class=\"entry-body\">${renderEntryBody(row)}${renderRawEvent(row)}</div></article>`;}\nfunction fillOverview(){const apiCalls = document.getElementById('overview-api-calls'); const tokens = document.getElementById('overview-tokens'); const diff = document.getElementById('overview-diff'); if(apiCalls){apiCalls.textContent = `${formatNumber(overview.api_calls)} call(s) / ${formatNumber(overview.turns)} turn(s)`;} if(tokens){tokens.textContent = `${formatNumber(overview.input_tokens)} in / ${formatNumber(overview.output_tokens)} out`; } if(diff){diff.textContent = `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`;} if(overviewList){const cacheChurn = `stable_prefix: ${formatNumber(overview.prompt_cache_stable_prefix_changes)} | tool_catalog: ${formatNumber(overview.prompt_cache_tool_catalog_changes)} | both: ${formatNumber(overview.prompt_cache_combined_changes)} | model: ${formatNumber(overview.prompt_cache_model_changes)} | unchanged: ${formatNumber(overview.prompt_cache_unchanged)}`; const items = [['Provider', overview.provider || ''], ['Model', overview.model || ''], ['Source', overview.source || ''], ['Rows', formatNumber(overview.total_rows)], ['API calls', `${formatNumber(overview.api_calls)} call(s)`], ['Turns', formatNumber(overview.turns)], ['Input tokens', formatNumber(overview.input_tokens)], ['Output tokens', formatNumber(overview.output_tokens)], ['Cached input', formatNumber(overview.cached_input_tokens)], ['Cache creation', formatNumber(overview.cache_creation_tokens)], ['Total tokens', formatNumber(overview.total_tokens)], ['Diff', `+${formatNumber(overview.added_files)} ~${formatNumber(overview.updated_files)} -${formatNumber(overview.deleted_files)}`], ['Prompt cache observations', formatNumber(overview.prompt_cache_observations)], ['Cache churn', cacheChurn], ['Last cache change', overview.last_prompt_cache_change_reason || 'n/a'], ['Outcome', overview.outcome_code || 'n/a'], ['Cost', overview.total_cost_usd || 'n/a'], ['Redaction', exportData.redaction_enabled ? 'enabled' : 'disabled']]; overviewList.innerHTML = items.map(([key, value]) => `<li><span class=\"kv-key\">${escapeHtml(key)}</span><span class=\"kv-value\">${escapeHtml(value)}</span></li>`).join(''); }}\nfunction openRawJsonWindow(){const popup = window.open('', '_blank', 'noopener,noreferrer'); if(!popup){return;} const pretty = JSON.stringify(sessionLog, null, 2); popup.document.write(`<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>VT Code Redacted JSON Log</title><style>body{margin:0;padding:18px;background:#111;color:#f5f5f5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}pre{white-space:pre-wrap;word-break:break-word}</style></head><body><pre>${escapeHtml(pretty)}</pre></body></html>`); popup.document.close();}\nfunction render(){const query = searchInput.value.trim().toLowerCase(); const category = categoryFilter.value; const status = statusFilter.value; const hideLow = hideLowSignal.checked; const filtered = rows.filter(row => { if (hideLow && row.is_low_signal) return false; if (category && row.category !== category) return false; if (status && row.status !== status) return false; if (query && !rowSearchText(row).includes(query)) return false; return true; }); resultsCount.textContent = `${filtered.length} of ${rows.length} rows`; if (!filtered.length){timelineEl.innerHTML = '<div class=\"empty\">No transcript rows match the current filters.</div>'; return;} timelineEl.innerHTML = filtered.map(renderRow).join('');}\nfillSelect(categoryFilter, uniqueValues('category'), 'All categories');\nfillSelect(statusFilter, uniqueValues('status'), 'All statuses');\nfillOverview();\nformatLocaleTimestamp();\nsetTheme(root.dataset.theme || 'dark');\nif(themeToggle){themeToggle.addEventListener('click', toggleTheme);}\nif(openJson){openJson.addEventListener('click', openRawJsonWindow);}\nif(toggleJsonPreview && rawLogPreview){toggleJsonPreview.addEventListener('click', () => { rawLogPreview.hidden = !rawLogPreview.hidden; if(!rawLogPreview.hidden && !rawLogPreview.textContent){ rawLogPreview.textContent = JSON.stringify(sessionLog, null, 2); } });}\nsearchInput.addEventListener('input', render);\ncategoryFilter.addEventListener('change', render);\nstatusFilter.addEventListener('change', render);\nhideLowSignal.addEventListener('change', render);\nclearFilters.addEventListener('click', () => { searchInput.value = ''; categoryFilter.value = ''; statusFilter.value = ''; hideLowSignal.checked = false; render(); });\nrender();\n</script>\n</body>\n</html>\n");
 
     Ok(html)
 }
@@ -1289,6 +1318,7 @@ pub(crate) async fn handle_share_log(
             ctx.thread_id,
             &thread_events,
             ctx.conversation_history,
+            Some(&ctx.session_stats.prompt_cache_diagnostics()),
         ));
         let html = render_session_timeline_html(&timeline_export, &redacted_session_log_export)?;
         write_file_with_context_sync(&html_output_path, &html, "session timeline")?;
@@ -1401,6 +1431,7 @@ mod tests {
             "thread-1",
             &records,
             &messages,
+            None,
         );
 
         assert_eq!(export.source, TIMELINE_SOURCE_THREAD_EVENTS);
@@ -1479,6 +1510,7 @@ mod tests {
             "thread-1",
             &records,
             &[],
+            None,
         );
         let html = render_session_timeline_html(&export, &json!({"messages": []})).expect("html");
 
@@ -1519,6 +1551,13 @@ mod tests {
                 updated_files: 2,
                 deleted_files: 0,
                 total_file_changes: 3,
+                prompt_cache_observations: 0,
+                prompt_cache_model_changes: 0,
+                prompt_cache_unchanged: 0,
+                prompt_cache_stable_prefix_changes: 0,
+                prompt_cache_tool_catalog_changes: 0,
+                prompt_cache_combined_changes: 0,
+                last_prompt_cache_change_reason: None,
                 source: TIMELINE_SOURCE_THREAD_EVENTS.to_string(),
                 total_rows: 0,
                 outcome_code: Some("completed".to_string()),
@@ -1537,6 +1576,55 @@ mod tests {
         assert!(html.contains("VT Code Thread Share"));
         assert!(html.contains("Search &amp; Filters"));
         assert!(html.contains("Open redacted JSON log"));
+    }
+
+    #[test]
+    fn html_timeline_surfaces_prompt_cache_overview_fields() {
+        let export = TimelineExport {
+            exported_at: "2026-04-04T00:00:00Z".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-test".to_string(),
+            workspace: "/tmp/workspace".to_string(),
+            thread_id: "thread-1".to_string(),
+            source: TIMELINE_SOURCE_THREAD_EVENTS.to_string(),
+            total_rows: 0,
+            redaction_enabled: true,
+            overview: SessionOverview {
+                provider: "openai".to_string(),
+                model: "gpt-test".to_string(),
+                api_calls: 2,
+                turns: 2,
+                input_tokens: 100,
+                output_tokens: 40,
+                cached_input_tokens: 20,
+                cache_creation_tokens: 10,
+                total_tokens: 140,
+                added_files: 1,
+                updated_files: 0,
+                deleted_files: 0,
+                total_file_changes: 1,
+                prompt_cache_observations: 5,
+                prompt_cache_model_changes: 1,
+                prompt_cache_unchanged: 1,
+                prompt_cache_stable_prefix_changes: 2,
+                prompt_cache_tool_catalog_changes: 0,
+                prompt_cache_combined_changes: 1,
+                last_prompt_cache_change_reason: Some("stable_prefix".to_string()),
+                source: TIMELINE_SOURCE_THREAD_EVENTS.to_string(),
+                total_rows: 0,
+                outcome_code: Some("completed".to_string()),
+                total_cost_usd: None,
+            },
+            rows: Vec::new(),
+        };
+
+        let html = render_session_timeline_html(&export, &json!({"messages": []})).expect("html");
+
+        assert!(html.contains("Prompt cache observations"));
+        assert!(html.contains("Cache churn"));
+        assert!(html.contains("Last cache change"));
+        assert!(html.contains("stable_prefix"));
+        assert!(html.contains("tool_catalog"));
     }
 
     #[test]
@@ -1564,6 +1652,13 @@ mod tests {
                 updated_files: 0,
                 deleted_files: 0,
                 total_file_changes: 0,
+                prompt_cache_observations: 0,
+                prompt_cache_model_changes: 0,
+                prompt_cache_unchanged: 0,
+                prompt_cache_stable_prefix_changes: 0,
+                prompt_cache_tool_catalog_changes: 0,
+                prompt_cache_combined_changes: 0,
+                last_prompt_cache_change_reason: None,
                 source: TIMELINE_SOURCE_CONVERSATION_FALLBACK.to_string(),
                 total_rows: 1,
                 outcome_code: None,
