@@ -19,7 +19,9 @@ use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
-use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
+use crate::agent::runloop::unified::turn::compaction::{
+    build_server_compaction_context_management, resolve_compaction_threshold,
+};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 
@@ -275,57 +277,79 @@ fn build_anthropic_context_management(
     turn: &TurnRequestSnapshot,
     active_model: &str,
 ) -> Option<serde_json::Value> {
-    if !turn.capabilities.context_edits || !vt_cfg.agent.harness.tool_result_clearing.enabled {
+    if !turn.capabilities.context_edits {
         return None;
     }
 
+    let mut edits = Vec::new();
     let clearing = &vt_cfg.agent.harness.tool_result_clearing;
-    let mut edit = serde_json::Map::from_iter([
-        (
-            "type".to_string(),
-            serde_json::Value::String("clear_tool_uses_20250919".to_string()),
-        ),
-        (
-            "trigger".to_string(),
-            serde_json::json!({
-                "type": "input_tokens",
-                "value": clearing.trigger_tokens,
-            }),
-        ),
-        (
-            "keep".to_string(),
-            serde_json::json!({
-                "type": "tool_uses",
-                "value": clearing.keep_tool_uses,
-            }),
-        ),
-        (
-            "clear_at_least".to_string(),
-            serde_json::json!({
-                "type": "input_tokens",
-                "value": clearing.clear_at_least_tokens,
-            }),
-        ),
-        (
-            "clear_tool_inputs".to_string(),
-            serde_json::Value::Bool(clearing.clear_tool_inputs),
-        ),
-    ]);
+    if clearing.enabled {
+        let mut edit = serde_json::Map::from_iter([
+            (
+                "type".to_string(),
+                serde_json::Value::String("clear_tool_uses_20250919".to_string()),
+            ),
+            (
+                "trigger".to_string(),
+                serde_json::json!({
+                    "type": "input_tokens",
+                    "value": clearing.trigger_tokens,
+                }),
+            ),
+            (
+                "keep".to_string(),
+                serde_json::json!({
+                    "type": "tool_uses",
+                    "value": clearing.keep_tool_uses,
+                }),
+            ),
+            (
+                "clear_at_least".to_string(),
+                serde_json::json!({
+                    "type": "input_tokens",
+                    "value": clearing.clear_at_least_tokens,
+                }),
+            ),
+            (
+                "clear_tool_inputs".to_string(),
+                serde_json::Value::Bool(clearing.clear_tool_inputs),
+            ),
+        ]);
 
-    if anthropic_native_memory_enabled_for_runtime(
-        vtcode_core::config::models::Provider::from_str(&turn.provider_name).ok(),
-        active_model,
-        Some(vt_cfg),
-    ) {
-        edit.insert(
-            "exclude_tools".to_string(),
-            serde_json::json!([vtcode_core::config::constants::tools::MEMORY]),
-        );
+        if anthropic_native_memory_enabled_for_runtime(
+            vtcode_core::config::models::Provider::from_str(&turn.provider_name).ok(),
+            active_model,
+            Some(vt_cfg),
+        ) {
+            edit.insert(
+                "exclude_tools".to_string(),
+                serde_json::json!([vtcode_core::config::constants::tools::MEMORY]),
+            );
+        }
+
+        edits.push(serde_json::Value::Object(edit));
     }
 
-    Some(serde_json::json!({
-        "edits": [serde_json::Value::Object(edit)],
-    }))
+    if vt_cfg.agent.harness.auto_compaction_enabled
+        && let Some(trigger_tokens) = resolve_compaction_threshold(
+            vt_cfg.agent.harness.auto_compaction_threshold_tokens,
+            turn.context_window_size,
+        )
+    {
+        edits.push(serde_json::json!({
+            "type": "compact_20260112",
+            "trigger": {
+                "type": "input_tokens",
+                "value": trigger_tokens,
+            },
+        }));
+    }
+
+    (!edits.is_empty()).then(|| {
+        serde_json::json!({
+            "edits": edits,
+        })
+    })
 }
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
@@ -782,10 +806,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn anthropic_request_build_emits_tool_result_clearing_only_when_enabled() {
+    async fn anthropic_request_build_combines_clearing_and_compaction_when_enabled() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut cfg = VTCodeConfig::default();
         cfg.agent.provider = "anthropic".to_string();
+        cfg.agent.harness.auto_compaction_enabled = true;
+        cfg.agent.harness.auto_compaction_threshold_tokens = Some(100_000);
         cfg.agent.harness.tool_result_clearing.enabled = true;
         cfg.agent.harness.tool_result_clearing.trigger_tokens = 120_000;
         cfg.agent.harness.tool_result_clearing.keep_tool_uses = 5;
@@ -821,18 +847,48 @@ mod tests {
                     "clear_at_least": { "type": "input_tokens", "value": 40000 },
                     "clear_tool_inputs": false,
                     "exclude_tools": ["memory"],
+                }, {
+                    "type": "compact_20260112",
+                    "trigger": { "type": "input_tokens", "value": 100000 },
+                }]
+            }))
+        );
+
+        let mut compaction_only_cfg = VTCodeConfig::default();
+        compaction_only_cfg.agent.provider = "anthropic".to_string();
+        compaction_only_cfg.agent.harness.auto_compaction_enabled = true;
+        compaction_only_cfg
+            .agent
+            .harness
+            .auto_compaction_threshold_tokens = Some(90_000);
+        ctx.vt_cfg = Some(Box::leak(Box::new(compaction_only_cfg)));
+        let built = build_turn_request(
+            &mut ctx,
+            1,
+            "claude-sonnet-4-6",
+            &snapshot,
+            Some(320),
+            None,
+            false,
+        )
+        .await
+        .expect("compaction-only anthropic request should build");
+        assert_eq!(
+            built.request.context_management,
+            Some(json!({
+                "edits": [{
+                    "type": "compact_20260112",
+                    "trigger": { "type": "input_tokens", "value": 90000 },
                 }]
             }))
         );
 
         ctx.vt_cfg = Some(Box::leak(Box::new(VTCodeConfig::default())));
-        let mut disabled_snapshot = snapshot;
-        disabled_snapshot.capabilities.context_edits = true;
         let built = build_turn_request(
             &mut ctx,
             1,
             "claude-sonnet-4-6",
-            &disabled_snapshot,
+            &snapshot,
             Some(320),
             None,
             false,

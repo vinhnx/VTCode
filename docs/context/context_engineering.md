@@ -39,6 +39,20 @@ Context engineering is about **iterative curation** - deciding what context to p
 
 **Key Insight:** Unlike prompt engineering where you craft a prompt once, context engineering is **iterative** - the curation phase happens each time we decide what to pass to the model.
 
+## VT Code's Three Context Primitives
+
+VT Code now treats long-horizon context management as three separate jobs:
+
+- **Memory** keeps durable facts outside the live prompt. VT Code uses persistent per-repository memory under `/memories` (`memory_summary.md`, `preferences.md`, `repository-facts.md`, `notes/**`) plus the session-local `SessionMemoryEnvelope` used for resume and summarized forks.
+- **Compaction** shrinks the whole in-session transcript when token pressure gets high. VT Code can use provider-native compaction where available, and otherwise falls back to local compaction that preserves a structured summary, recent user prompts, and the session memory envelope.
+- **Tool-result clearing / offloading** keeps re-fetchable tool output out of the live window. VT Code does this locally with split tool results and output spooling, and on Anthropic it can now emit provider-native `clear_tool_uses_*` edits alongside native compaction.
+
+Those layers compose, but they solve different problems:
+
+- Use **memory** when information must survive a new session.
+- Use **compaction** when the whole transcript is getting too large.
+- Use **tool-result clearing/offloading** when the context is mostly bloated by large, recoverable tool payloads.
+
 ## Accuracy Optimization Loop
 
 VT Code treats LLM optimization as a diagnosis problem, not a fixed ladder from prompt engineering to RAG to fine-tuning.
@@ -175,6 +189,8 @@ To prevent context pollution from verbose tool outputs:
 
 -   **Auto-Truncation**: Command outputs >10k lines show first 5k + last 5k
 -   **Concise Formats**: Tools default to `response_format="concise"`
+-   **Split Results / Spooling**: Large tool outputs stay on disk or in UI-facing channels instead of being replayed verbatim to the model
+-   **Provider-Native Clearing**: Anthropic sessions can drop stale tool results while retaining the fact that the tool call happened
 
 ### 7. **Tool Design for Efficiency**
 
