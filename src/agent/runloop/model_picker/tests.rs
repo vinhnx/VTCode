@@ -291,6 +291,20 @@ fn current_model_line_shows_effective_anthropic_context_window() {
     assert_eq!(line, "Current: anthropic / claude-sonnet-4-6 • Context: 1M");
 }
 
+#[test]
+fn step_one_header_lines_explain_codex_runtime_configuration() {
+    let lines = super::rendering::step_one_header_lines("codex", "gpt-5.3-codex");
+
+    assert!(
+        lines.iter().any(|line| line.contains("/config codex")),
+        "expected Codex runtime note in picker header"
+    );
+    assert!(
+        lines.iter().any(|line| line.contains("/model")),
+        "expected note to clarify /model scope"
+    );
+}
+
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {
     ModelPickerState {
         options: MODEL_OPTIONS.as_slice(),

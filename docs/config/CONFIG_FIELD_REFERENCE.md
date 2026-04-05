@@ -32,7 +32,8 @@ python3 scripts/generate_config_field_reference.py
 | `agent.circuit_breaker.recovery_cooldown` | `integer` | no | `60` | Cooldown period between recovery prompts (seconds) |
 | `agent.codex_app_server.args` | `array` | no | `["app-server"]` | Arguments passed before VT Code appends `--listen stdio://`. |
 | `agent.codex_app_server.args[]` | `string` | no | `-` | - |
-| `agent.codex_app_server.command` | `string` | no | `"codex"` | Executable used to launch the official Codex app-server sidecar. |
+| `agent.codex_app_server.command` | `string` | no | `"codex"` | Executable used to launch the local Codex app-server sidecar. The default `codex` value must be installed and available on `$PATH`; alternatively set this to a custom executable path. |
+| `agent.codex_app_server.experimental_features` | `boolean` | no | `false` | Enable experimental Codex app-server features such as collaboration modes and native review routing. |
 | `agent.codex_app_server.startup_timeout_secs` | `integer` | no | `10` | Maximum startup handshake time when launching the sidecar. |
 | `agent.credential_storage_mode` | `string` | no | `"keyring"` | Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service). This is the default as it's the most secure. - `file`: Use AES-256-GCM encrypted file with machine-derived key - `auto`: Try keyring first, fall back to file if unavailable |
 | `agent.custom_api_keys` | `object` | no | `-` | Provider-specific API keys captured from interactive configuration flows Note: Actual API keys are stored securely in the OS keyring. This field only tracks which providers have keys stored (for UI/migration purposes). The keys themselves are NOT serialized to the config file for security. |
@@ -697,7 +698,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.completion_failure` | `boolean \| null` | no | `null` | Notify when a turn/session is partial, failed, or cancelled. If omitted, falls back to `completion`. |
 | `ui.notifications.completion_success` | `boolean \| null` | no | `null` | Notify when a turn/session completes successfully. If omitted, falls back to `completion`. |
 | `ui.notifications.backend` | `string` | no | `"auto"` | Preferred desktop notification backend. Supported values: `"auto"`, `"osascript"`, `"notify_rust"`, and `"terminal"`. |
-| `ui.notifications.delivery_mode` | `string` | no | `"hybrid"` | Notification transport strategy. |
+| `ui.notifications.delivery_mode` | `string` | no | `"desktop"` | Notification transport strategy. |
 | `ui.notifications.enabled` | `boolean` | no | `true` | Master toggle for all runtime notifications. |
 | `ui.notifications.error` | `boolean` | no | `true` | Notify on runtime/system errors. |
 | `ui.notifications.hitl` | `boolean` | no | `true` | Notify when human input/approval is required. |

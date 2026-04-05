@@ -456,6 +456,10 @@ pub struct AgentCodexAppServerConfig {
     /// Maximum startup handshake time when launching the sidecar.
     #[serde(default = "default_codex_app_server_startup_timeout_secs")]
     pub startup_timeout_secs: u64,
+    /// Enable experimental Codex app-server features such as collaboration modes
+    /// and native review routing.
+    #[serde(default = "default_codex_app_server_experimental_features")]
+    pub experimental_features: bool,
 }
 
 impl Default for AgentCodexAppServerConfig {
@@ -464,6 +468,7 @@ impl Default for AgentCodexAppServerConfig {
             command: default_codex_app_server_command(),
             args: default_codex_app_server_args(),
             startup_timeout_secs: default_codex_app_server_startup_timeout_secs(),
+            experimental_features: default_codex_app_server_experimental_features(),
         }
     }
 }
@@ -585,6 +590,11 @@ fn default_codex_app_server_args() -> Vec<String> {
 #[inline]
 const fn default_codex_app_server_startup_timeout_secs() -> u64 {
     10
+}
+
+#[inline]
+const fn default_codex_app_server_experimental_features() -> bool {
+    false
 }
 
 impl Default for AgentConfig {
@@ -1528,6 +1538,29 @@ mod tests {
         assert_eq!(clearing.keep_tool_uses, 3);
         assert_eq!(clearing.clear_at_least_tokens, 30_000);
         assert!(!clearing.clear_tool_inputs);
+    }
+
+    #[test]
+    fn test_codex_app_server_experimental_features_default_to_disabled() {
+        let config = AgentConfig::default();
+
+        assert!(!config.codex_app_server.experimental_features);
+    }
+
+    #[test]
+    fn test_codex_app_server_experimental_features_parse_from_toml() {
+        let parsed: AgentCodexAppServerConfig = toml::from_str(
+            r#"
+                command = "codex"
+                args = ["app-server"]
+                startup_timeout_secs = 15
+                experimental_features = true
+            "#,
+        )
+        .expect("valid codex app-server config");
+
+        assert!(parsed.experimental_features);
+        assert_eq!(parsed.startup_timeout_secs, 15);
     }
 
     #[test]

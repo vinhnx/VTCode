@@ -19,7 +19,7 @@ enable_split_tool_results = true
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "none"
+reasoning_effort = "low"
 verbosity = "medium"
 temperature = 0.7
 refine_temperature = 0.3
@@ -128,6 +128,7 @@ clear_tool_inputs = false
 command = "codex"
 args = ["app-server"]
 startup_timeout_secs = 10
+experimental_features = true
 
 [agent.circuit_breaker]
 enabled = true
@@ -207,6 +208,7 @@ list_pty_sessions = "allow"
 list_skills = "allow"
 load_skill = "allow"
 load_skill_resource = "allow"
+memory = "allow"
 mode_edit = "prompt"
 mode_plan = "prompt"
 open_file = "allow"
@@ -251,7 +253,6 @@ vtcode-clippy = "prompt"
 wait_agent = "allow"
 web_fetch = "allow"
 write_file = "allow"
-memory = "allow"
 
 [tools.web_fetch]
 mode = "restricted"
@@ -515,7 +516,7 @@ deny_regex = [
 ]
 
 [permissions]
-default_mode = "default"
+default_mode = "auto"
 allowed_tools = []
 disallowed_tools = []
 allow = []
@@ -667,7 +668,7 @@ report_all_keys = false
 
 [ui.notifications]
 enabled = true
-delivery_mode = "hybrid"
+delivery_mode = "desktop"
 backend = "auto"
 suppress_when_focused = true
 command_failure = false
@@ -1039,6 +1040,9 @@ defer_by_default = true
 max_results = 5
 always_available_tools = []
 
+[provider.anthropic.memory]
+enabled = true
+
 [skills]
 render-mode = "lean"
 prompt-format = "xml"
@@ -1046,9 +1050,6 @@ max-skills-in-prompt = 10
 enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
-
-[provider.anthropic.memory]
-enabled = false
 
 [skills.bundled]
 enabled = true

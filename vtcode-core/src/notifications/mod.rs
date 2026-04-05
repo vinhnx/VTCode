@@ -11,8 +11,6 @@ use std::io::Write;
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-#[cfg(all(feature = "desktop-notifications", target_os = "macos"))]
-use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -131,7 +129,7 @@ impl Default for NotificationConfig {
             tool_success_notifications: false,
             terminal_notifications_enabled: true,
             suppress_when_focused: true,
-            delivery_mode: NotificationDeliveryMode::Hybrid,
+            delivery_mode: NotificationDeliveryMode::Desktop,
             backend: NotificationBackend::Auto,
             notification_method: TerminalNotificationMethod::Auto,
             repeat_window_seconds: 30,
@@ -231,12 +229,6 @@ enum DesktopNotificationBackend {
     NotifyRust,
 }
 
-#[cfg(target_os = "macos")]
-const AUTO_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] = &[
-    DesktopNotificationBackend::Osascript,
-    DesktopNotificationBackend::NotifyRust,
-];
-#[cfg(not(target_os = "macos"))]
 const AUTO_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] =
     &[DesktopNotificationBackend::NotifyRust];
 #[cfg(target_os = "macos")]
@@ -410,11 +402,15 @@ impl NotificationManager {
             }
             NotificationDeliveryMode::Hybrid => {
                 self.send_terminal_bell(message).await;
-                let _ = self.send_desktop_notification(message, config).await;
+                if config.backend != NotificationBackend::Terminal {
+                    let _ = self.send_desktop_notification(message, config).await;
+                }
             }
             NotificationDeliveryMode::Desktop => {
-                if !self.send_desktop_notification(message, config).await {
+                if config.backend == NotificationBackend::Terminal {
                     self.send_terminal_bell(message).await;
+                } else {
+                    let _ = self.send_desktop_notification(message, config).await;
                 }
             }
         }
@@ -609,9 +605,6 @@ impl NotificationManager {
     fn send_notify_rust_notification(&self, message: &str) -> bool {
         #[cfg(feature = "desktop-notifications")]
         {
-            #[cfg(target_os = "macos")]
-            configure_macos_notification_application();
-
             use std::time::Duration;
             match notify_rust::Notification::new()
                 .summary("VT Code")
@@ -890,68 +883,6 @@ end run
     }
 }
 
-#[cfg(all(feature = "desktop-notifications", target_os = "macos"))]
-fn configure_macos_notification_application() {
-    static INIT: Once = Once::new();
-
-    INIT.call_once(|| {
-        let Some(bundle) = macos_notification_bundle_identifier(
-            std::env::var("TERM_PROGRAM").ok().as_deref(),
-            std::env::var("TERM").ok().as_deref(),
-        ) else {
-            return;
-        };
-
-        if let Err(error) = notify_rust::set_application(bundle) {
-            tracing::warn!(
-                bundle,
-                error = %error,
-                "Failed to configure macOS notification application"
-            );
-        } else {
-            tracing::debug!(bundle, "Configured macOS notification application");
-        }
-    });
-}
-
-#[cfg(all(feature = "desktop-notifications", target_os = "macos"))]
-fn macos_notification_bundle_identifier(
-    term_program: Option<&str>,
-    term: Option<&str>,
-) -> Option<&'static str> {
-    match term_program
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        Some(value) if value.eq_ignore_ascii_case("ghostty") => Some("com.mitchellh.ghostty"),
-        Some(value) if value.eq_ignore_ascii_case("wezterm") => Some("com.github.wez.wezterm"),
-        Some(value) if value.eq_ignore_ascii_case("alacritty") => Some("org.alacritty"),
-        Some(value)
-            if value.eq_ignore_ascii_case("apple_terminal")
-                || value.eq_ignore_ascii_case("terminal") =>
-        {
-            Some("com.apple.Terminal")
-        }
-        Some(value)
-            if value.eq_ignore_ascii_case("iterm.app")
-                || value.eq_ignore_ascii_case("iterm2")
-                || value.eq_ignore_ascii_case("iterm") =>
-        {
-            Some("com.googlecode.iterm2")
-        }
-        Some(value) if value.eq_ignore_ascii_case("kitty") => Some("net.kovidgoyal.kitty"),
-        _ => None,
-    }
-    .or_else(
-        || match term.map(str::trim).filter(|value| !value.is_empty()) {
-            Some(value) if value.eq_ignore_ascii_case("xterm-ghostty") => {
-                Some("com.mitchellh.ghostty")
-            }
-            _ => None,
-        },
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -966,6 +897,7 @@ mod tests {
         assert!(config.error_notifications);
         assert!(!config.completion_success_notifications);
         assert!(config.completion_failure_notifications);
+        assert_eq!(config.delivery_mode, NotificationDeliveryMode::Desktop);
         assert_eq!(config.backend, NotificationBackend::Auto);
         assert_eq!(config.repeat_window_seconds, 30);
         assert_eq!(config.max_identical_notifications_in_window, 1);
@@ -1009,6 +941,22 @@ mod tests {
             manager.desktop_notification_backends(NotificationBackend::Auto),
             AUTO_DESKTOP_NOTIFICATION_BACKENDS
         );
+    }
+
+    #[tokio::test]
+    async fn desktop_delivery_does_not_fall_back_to_terminal_attention() {
+        let config = NotificationConfig {
+            delivery_mode: NotificationDeliveryMode::Desktop,
+            backend: NotificationBackend::NotifyRust,
+            ..Default::default()
+        };
+        let manager = NotificationManager::with_config(config);
+
+        let result = manager
+            .send_message("Session started", &manager.get_config_sync())
+            .await;
+
+        assert!(result.is_ok());
     }
 
     #[cfg(target_os = "macos")]
@@ -1148,35 +1096,6 @@ mod tests {
         assert_eq!(
             manager.format_notification_message(&event),
             "VT Code: Session started"
-        );
-    }
-
-    #[cfg(all(feature = "desktop-notifications", target_os = "macos"))]
-    #[test]
-    fn macos_notification_bundle_identifier_maps_known_term_programs() {
-        assert_eq!(
-            macos_notification_bundle_identifier(Some("ghostty"), None),
-            Some("com.mitchellh.ghostty")
-        );
-        assert_eq!(
-            macos_notification_bundle_identifier(Some("Apple_Terminal"), None),
-            Some("com.apple.Terminal")
-        );
-        assert_eq!(
-            macos_notification_bundle_identifier(Some("iTerm.app"), None),
-            Some("com.googlecode.iterm2")
-        );
-        assert_eq!(
-            macos_notification_bundle_identifier(Some("WezTerm"), None),
-            Some("com.github.wez.wezterm")
-        );
-        assert_eq!(
-            macos_notification_bundle_identifier(None, Some("xterm-ghostty")),
-            Some("com.mitchellh.ghostty")
-        );
-        assert_eq!(
-            macos_notification_bundle_identifier(Some("unknown"), None),
-            None
         );
     }
 

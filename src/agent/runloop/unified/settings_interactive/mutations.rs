@@ -93,6 +93,10 @@ pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
 }
 
 fn default_array_item(path: &str, existing: &[TomlValue]) -> TomlValue {
+    if normalize_config_path(path) == "agent.codex_app_server.args" {
+        return TomlValue::String("app-server".to_string());
+    }
+
     if normalize_config_path(path) == "custom_providers" {
         return default_custom_provider_item(existing);
     }
@@ -271,6 +275,16 @@ pub(super) fn resolve_cycle_options(
     path: &str,
     current: &str,
 ) -> Vec<String> {
+    match normalize_config_path(path).as_str() {
+        "agent.codex_app_server.command" => {
+            return codex_sidecar_cycle_options(current, "codex");
+        }
+        "agent.codex_app_server.args[]" => {
+            return codex_sidecar_cycle_options(current, "app-server");
+        }
+        _ => {}
+    }
+
     if normalize_config_path(path) == "agent.theme" {
         return theme::available_themes()
             .into_iter()
@@ -292,6 +306,15 @@ pub(super) fn resolve_cycle_options(
                 vec![current.to_string()]
             }
         })
+}
+
+fn codex_sidecar_cycle_options(current: &str, default: &str) -> Vec<String> {
+    let mut options = vec![default.to_string()];
+    let trimmed = current.trim();
+    if !trimmed.is_empty() && trimmed != default {
+        options.push(trimmed.to_string());
+    }
+    options
 }
 
 fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> Vec<String> {

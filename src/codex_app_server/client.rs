@@ -3,19 +3,23 @@ use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::sync::broadcast;
-use vtcode_acp::{StdioTransport, StdioTransportOptions};
+use vtcode_acp::{AcpError, StdioTransport, StdioTransportOptions};
 use vtcode_config::{AgentCodexAppServerConfig, VTCodeConfig};
 
 pub(crate) const CODEX_PROVIDER: &str = "codex";
 const STDIO_LISTEN_TARGET: &str = "stdio://";
 const DEFAULT_RPC_TIMEOUT_SECS: u64 = 30;
 const SERVER_ERROR_CODE: i32 = -32000;
-const CODEX_CLI_UNAVAILABLE_MESSAGE: &str = "Codex CLI is unavailable. Install `codex` or set [agent.codex_app_server].command in vtcode.toml.";
+const SERVER_OVERLOADED_ERROR_CODE: i32 = -32001;
+const CODEX_SIDECAR_UNAVAILABLE_PREFIX: &str = "Codex app-server sidecar is unavailable.";
+const IDEMPOTENT_REQUEST_RETRY_LIMIT: usize = 3;
 
 type RefreshHandler = Arc<
     dyn Fn(ChatGptAuthTokensRefreshParams) -> BoxFuture<'static, Result<ChatGptAuthTokens>>
@@ -36,9 +40,16 @@ pub(crate) struct CodexAppServerClient {
     refresh_handler: Arc<Mutex<Option<RefreshHandler>>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestRetryPolicy {
+    Never,
+    Idempotent,
+}
+
 impl CodexAppServerClient {
     pub(crate) async fn connect(vt_cfg: Option<&VTCodeConfig>) -> Result<Self> {
         let sidecar_cfg = sidecar_config(vt_cfg);
+        ensure_codex_sidecar_available(vt_cfg)?;
         let mut command = Command::new(&sidecar_cfg.command);
         command
             .args(&sidecar_cfg.args)
@@ -108,7 +119,7 @@ impl CodexAppServerClient {
     }
 
     pub(crate) async fn account_read(&self) -> Result<CodexAccountReadResponse> {
-        self.request("account/read", json!({})).await
+        self.request_idempotent("account/read", json!({})).await
     }
 
     pub(crate) async fn account_login_chatgpt(&self) -> Result<CodexLoginAccountResponse> {
@@ -132,7 +143,15 @@ impl CodexAppServerClient {
     }
 
     pub(crate) async fn mcp_server_status_list(&self) -> Result<CodexMcpServerStatusListResponse> {
-        self.request("mcpServerStatus/list", json!({})).await
+        self.request_idempotent("mcpServerStatus/list", json!({}))
+            .await
+    }
+
+    pub(crate) async fn collaboration_mode_list(
+        &self,
+    ) -> Result<CodexCollaborationModeListResponse> {
+        self.request_idempotent("collaborationMode/list", json!({}))
+            .await
     }
 
     pub(crate) async fn thread_start(
@@ -169,6 +188,54 @@ impl CodexAppServerClient {
         self.request("turn/start", params.as_json()).await
     }
 
+    pub(crate) async fn turn_interrupt(&self, thread_id: &str, turn_id: &str) -> Result<()> {
+        let _: CodexEmptyResponse = self
+            .request(
+                "turn/interrupt",
+                json!({
+                    "threadId": thread_id,
+                    "turnId": turn_id,
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn turn_steer(
+        &self,
+        thread_id: &str,
+        turn_id: &str,
+        input: String,
+    ) -> Result<CodexTurnSteerResponse> {
+        self.request(
+            "turn/steer",
+            json!({
+                "expectedTurnId": turn_id,
+                "input": [{
+                    "type": "text",
+                    "text": input,
+                }],
+                "threadId": thread_id,
+            }),
+        )
+        .await
+    }
+
+    pub(crate) async fn review_start(
+        &self,
+        params: CodexReviewStartRequest,
+    ) -> Result<CodexReviewStartResponse> {
+        self.request("review/start", params.as_json()).await
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn command_exec(
+        &self,
+        params: CodexCommandExecRequest,
+    ) -> Result<CodexCommandExecResponse> {
+        self.request("command/exec", params.as_json()).await
+    }
+
     pub(crate) fn respond_to_server_request(&self, id: Value, result: Value) -> Result<()> {
         self.transport
             .respond_value(id, result)
@@ -179,15 +246,52 @@ impl CodexAppServerClient {
     where
         T: DeserializeOwned,
     {
-        let response = self
-            .transport
-            .call(method, params)
+        self.request_with_policy(method, params, RequestRetryPolicy::Never)
             .await
-            .map_err(|err| anyhow!(err.to_string()))
-            .with_context(|| format!("codex app-server request failed: {method}"))?;
+    }
 
-        serde_json::from_value(response)
-            .with_context(|| format!("failed to decode codex app-server response for {method}"))
+    async fn request_idempotent<T>(&self, method: &str, params: Value) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        self.request_with_policy(method, params, RequestRetryPolicy::Idempotent)
+            .await
+    }
+
+    async fn request_with_policy<T>(
+        &self,
+        method: &str,
+        params: Value,
+        retry_policy: RequestRetryPolicy,
+    ) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let mut attempts = 0usize;
+        loop {
+            match self.transport.call(method, params.clone()).await {
+                Ok(response) => {
+                    return serde_json::from_value(response).with_context(|| {
+                        format!("failed to decode codex app-server response for {method}")
+                    });
+                }
+                Err(err) if is_server_overloaded_error(&err) => {
+                    attempts += 1;
+                    if retry_policy == RequestRetryPolicy::Idempotent
+                        && attempts < IDEMPOTENT_REQUEST_RETRY_LIMIT
+                    {
+                        tokio::time::sleep(idempotent_retry_delay(attempts)).await;
+                        continue;
+                    }
+                    return Err(overloaded_request_error(method, retry_policy))
+                        .with_context(|| format!("codex app-server request failed: {method}"));
+                }
+                Err(err) => {
+                    return Err(anyhow!(err.to_string()))
+                        .with_context(|| format!("codex app-server request failed: {method}"));
+                }
+            }
+        }
     }
 }
 
@@ -195,15 +299,8 @@ pub(crate) async fn launch_app_server_proxy(
     vt_cfg: Option<&VTCodeConfig>,
     listen: &str,
 ) -> Result<()> {
-    let listen = listen.trim();
-    if listen.is_empty() {
-        bail!("app-server listen target cannot be empty");
-    }
-    if listen != STDIO_LISTEN_TARGET {
-        bail!(
-            "vtcode app-server currently supports only `--listen {STDIO_LISTEN_TARGET}`; use `codex app-server` directly for other transports"
-        );
-    }
+    let listen = validate_listen_target(listen)?;
+    ensure_codex_sidecar_available(vt_cfg)?;
 
     let sidecar_cfg = sidecar_config(vt_cfg);
     let status = Command::new(&sidecar_cfg.command)
@@ -359,12 +456,162 @@ fn sidecar_config(vt_cfg: Option<&VTCodeConfig>) -> AgentCodexAppServerConfig {
         .unwrap_or_default()
 }
 
+pub(crate) fn ensure_codex_sidecar_available(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
+    let sidecar_cfg = sidecar_config(vt_cfg);
+    ensure_codex_sidecar_command_available(&sidecar_cfg.command)
+}
+
+pub(crate) fn codex_sidecar_requirement_note() -> &'static str {
+    "The default `[agent.codex_app_server].command = \"codex\"` requires the `codex` CLI to be installed and available on `$PATH`. Install `codex` and ensure it is on `$PATH`, or set `[agent.codex_app_server].command` to a custom executable path."
+}
+
 fn codex_cli_unavailable_error() -> anyhow::Error {
-    anyhow!(CODEX_CLI_UNAVAILABLE_MESSAGE)
+    anyhow!(
+        "{} {}",
+        CODEX_SIDECAR_UNAVAILABLE_PREFIX,
+        codex_sidecar_requirement_note()
+    )
+}
+
+fn ensure_codex_sidecar_command_available(command: &str) -> Result<()> {
+    let command = command.trim();
+    if command.is_empty() {
+        bail!(
+            "{} `[agent.codex_app_server].command` is empty. {}",
+            CODEX_SIDECAR_UNAVAILABLE_PREFIX,
+            codex_sidecar_requirement_note()
+        );
+    }
+
+    if resolve_sidecar_command_path(command).is_some() {
+        return Ok(());
+    }
+
+    if is_path_like_command(command) {
+        bail!(
+            "{} Configured `[agent.codex_app_server].command = \"{}\"` was not found or is not executable. {}",
+            CODEX_SIDECAR_UNAVAILABLE_PREFIX,
+            command,
+            codex_sidecar_requirement_note()
+        );
+    }
+
+    Err(codex_cli_unavailable_error())
+}
+
+fn resolve_sidecar_command_path(command: &str) -> Option<PathBuf> {
+    resolve_sidecar_command_path_with_path(command, std::env::var_os("PATH").as_deref())
+}
+
+fn resolve_sidecar_command_path_with_path(
+    command: &str,
+    path_env: Option<&OsStr>,
+) -> Option<PathBuf> {
+    if is_path_like_command(command) {
+        let path = PathBuf::from(command);
+        return candidate_command_paths(&path)
+            .into_iter()
+            .find(|candidate| path_is_launchable(candidate));
+    }
+
+    path_env
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .flat_map(|dir| candidate_command_paths(&dir.join(command)))
+        .find(|candidate| path_is_launchable(candidate))
+}
+
+fn is_path_like_command(command: &str) -> bool {
+    let path = Path::new(command);
+    path.is_absolute()
+        || command.contains(std::path::MAIN_SEPARATOR)
+        || command.contains('/')
+        || command.contains('\\')
+}
+
+fn candidate_command_paths(base: &Path) -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        if base.extension().is_some() {
+            return vec![base.to_path_buf()];
+        }
+
+        let mut candidates = vec![base.to_path_buf()];
+        if let Some(path_ext) = std::env::var_os("PATHEXT") {
+            for ext in std::env::split_paths(&path_ext)
+                .filter_map(|path| path.into_os_string().into_string().ok())
+            {
+                let trimmed = ext.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let suffix = trimmed.trim_start_matches('.');
+                candidates.push(base.with_extension(suffix));
+            }
+        }
+        candidates
+    }
+    #[cfg(not(windows))]
+    {
+        vec![base.to_path_buf()]
+    }
+}
+
+fn path_is_launchable(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn validate_listen_target(listen: &str) -> Result<&str> {
+    let listen = listen.trim();
+    if listen.is_empty() {
+        bail!("app-server listen target cannot be empty");
+    }
+    Ok(listen)
+}
+
+fn is_server_overloaded_error(err: &AcpError) -> bool {
+    matches!(
+        err,
+        AcpError::RemoteError {
+            code: Some(SERVER_OVERLOADED_ERROR_CODE),
+            ..
+        }
+    )
+}
+
+fn idempotent_retry_delay(attempt: usize) -> Duration {
+    Duration::from_millis((attempt as u64) * 200)
+}
+
+fn overloaded_request_error(method: &str, retry_policy: RequestRetryPolicy) -> anyhow::Error {
+    match retry_policy {
+        RequestRetryPolicy::Idempotent => anyhow!(
+            "codex app-server overloaded while processing {method}; retry later if the issue persists"
+        ),
+        RequestRetryPolicy::Never => anyhow!(
+            "codex app-server overloaded while processing {method}; the request was not retried automatically because it may not be idempotent"
+        ),
+    }
 }
 
 pub(crate) fn is_codex_cli_unavailable(err: &anyhow::Error) -> bool {
-    err.to_string().contains(CODEX_CLI_UNAVAILABLE_MESSAGE)
+    err.to_string().contains(CODEX_SIDECAR_UNAVAILABLE_PREFIX)
 }
 
 #[derive(Debug, Clone)]
@@ -398,27 +645,42 @@ pub(crate) struct CodexTurnRequest {
     pub(crate) approval_policy: &'static str,
     pub(crate) sandbox_policy: Value,
     pub(crate) reasoning_effort: Option<String>,
+    pub(crate) collaboration_mode: Option<CodexCollaborationMode>,
 }
 
 impl CodexTurnRequest {
     fn as_json(&self) -> Value {
-        json!({
+        let mut payload = json!({
             "approvalPolicy": self.approval_policy,
             "approvalsReviewer": "user",
             "cwd": self.cwd,
-            "effort": self.reasoning_effort,
+            "effort": self
+                .collaboration_mode
+                .as_ref()
+                .map(|_| None::<String>)
+                .unwrap_or_else(|| self.reasoning_effort.clone()),
             "input": [
                 {
                     "type": "text",
                     "text": self.input,
                 }
             ],
-            "model": self.model,
+            "model": self
+                .collaboration_mode
+                .as_ref()
+                .map(|_| None::<String>)
+                .unwrap_or_else(|| self.model.clone()),
             "personality": "pragmatic",
             "sandboxPolicy": self.sandbox_policy,
             "summary": "concise",
             "threadId": self.thread_id,
-        })
+        });
+        if let Some(collaboration_mode) = self.collaboration_mode.clone()
+            && let Some(object) = payload.as_object_mut()
+        {
+            object.insert("collaborationMode".to_string(), json!(collaboration_mode));
+        }
+        payload
     }
 }
 
@@ -512,6 +774,115 @@ pub(crate) struct CodexTurn {
     pub(crate) id: String,
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct CodexTurnSteerResponse {
+    #[serde(rename = "turnId")]
+    pub(crate) turn_id: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct CodexReviewStartResponse {
+    #[serde(rename = "reviewThreadId")]
+    pub(crate) review_thread_id: String,
+    pub(crate) turn: CodexTurn,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CodexReviewStartRequest {
+    pub(crate) thread_id: String,
+    pub(crate) target: CodexReviewTarget,
+}
+
+impl CodexReviewStartRequest {
+    fn as_json(&self) -> Value {
+        json!({
+            "target": self.target,
+            "threadId": self.thread_id,
+        })
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(tag = "type")]
+pub(crate) enum CodexReviewTarget {
+    #[serde(rename = "uncommittedChanges")]
+    UncommittedChanges,
+    #[serde(rename = "baseBranch")]
+    BaseBranch { branch: String },
+    #[serde(rename = "commit")]
+    Commit {
+        sha: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+    },
+    #[serde(rename = "custom")]
+    Custom { instructions: String },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct CodexCollaborationModeListResponse {
+    pub(crate) data: Vec<CodexCollaborationModeMask>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub(crate) struct CodexCollaborationModeMask {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) mode: Option<String>,
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    #[serde(rename = "reasoning_effort", default)]
+    pub(crate) reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct CodexCollaborationMode {
+    pub(crate) mode: String,
+    pub(crate) settings: CodexCollaborationModeSettings,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct CodexCollaborationModeSettings {
+    #[serde(rename = "developer_instructions")]
+    pub(crate) developer_instructions: Option<String>,
+    pub(crate) model: String,
+    #[serde(rename = "reasoning_effort", skip_serializing_if = "Option::is_none")]
+    pub(crate) reasoning_effort: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CodexCommandExecRequest {
+    pub(crate) command: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) cwd: Option<String>,
+    #[serde(rename = "sandboxPolicy", skip_serializing_if = "Option::is_none")]
+    pub(crate) sandbox_policy: Option<Value>,
+    #[serde(rename = "streamStdoutStderr", skip_serializing_if = "Option::is_none")]
+    pub(crate) stream_stdout_stderr: Option<bool>,
+}
+
+impl CodexCommandExecRequest {
+    fn as_json(&self) -> Value {
+        json!(self)
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct CodexCommandExecResponse {
+    #[serde(rename = "exitCode")]
+    pub(crate) exit_code: i32,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct CodexEmptyResponse {}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct ChatGptAuthTokensRefreshParams {
     #[serde(rename = "previousAccountId", default)]
@@ -532,19 +903,69 @@ pub(crate) struct ChatGptAuthTokens {
 #[cfg(test)]
 mod tests {
     use super::{
-        CodexLoginAccountResponse, CodexThreadRequest, CodexTurnRequest, STDIO_LISTEN_TARGET,
-        is_codex_cli_unavailable, launch_app_server_proxy,
+        CodexCollaborationMode, CodexCollaborationModeSettings, CodexLoginAccountResponse,
+        CodexThreadRequest, CodexTurnRequest, RequestRetryPolicy, STDIO_LISTEN_TARGET,
+        codex_sidecar_requirement_note, ensure_codex_sidecar_command_available,
+        idempotent_retry_delay, is_codex_cli_unavailable, overloaded_request_error,
+        resolve_sidecar_command_path_with_path, validate_listen_target,
     };
     use anyhow::anyhow;
     use serde_json::json;
+    use std::fs;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    fn write_fake_executable(path: &Path) {
+        fs::write(path, "#!/bin/sh\nexit 0\n").expect("write fake executable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("set permissions");
+        }
+    }
 
     #[test]
     fn codex_cli_unavailable_detection_matches_install_guidance() {
         let error = anyhow!(
-            "Codex CLI is unavailable. Install `codex` or set [agent.codex_app_server].command in vtcode.toml."
+            "Codex app-server sidecar is unavailable. {}",
+            codex_sidecar_requirement_note()
         );
         assert!(is_codex_cli_unavailable(&error));
         assert!(!is_codex_cli_unavailable(&anyhow!("other failure")));
+    }
+
+    #[test]
+    fn sidecar_requirement_note_mentions_path_and_override() {
+        let note = codex_sidecar_requirement_note();
+        assert!(note.contains("`codex` CLI"));
+        assert!(note.contains("`$PATH`"));
+        assert!(note.contains("[agent.codex_app_server].command"));
+    }
+
+    #[test]
+    fn relative_sidecar_path_is_accepted_when_executable() {
+        let temp = tempdir().expect("tempdir");
+        let script = temp.path().join("codex-sidecar");
+        write_fake_executable(&script);
+
+        ensure_codex_sidecar_command_available(
+            script.to_str().expect("script path should be valid utf-8"),
+        )
+        .expect("custom executable path should be accepted");
+    }
+
+    #[test]
+    fn default_command_resolves_from_path_search() {
+        let temp = tempdir().expect("tempdir");
+        let script = temp.path().join("codex");
+        write_fake_executable(&script);
+
+        let resolved =
+            resolve_sidecar_command_path_with_path("codex", Some(temp.path().as_os_str()))
+                .expect("command should resolve from provided PATH");
+        assert_eq!(resolved, script);
     }
 
     #[test]
@@ -552,16 +973,11 @@ mod tests {
         assert_eq!(STDIO_LISTEN_TARGET, "stdio://");
     }
 
-    #[tokio::test]
-    async fn proxy_rejects_non_stdio_transports() {
-        let error = launch_app_server_proxy(None, "ws://127.0.0.1:0")
-            .await
-            .expect_err("non-stdio listen target should fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("supports only `--listen stdio://`")
+    #[test]
+    fn proxy_accepts_non_stdio_transports() {
+        assert_eq!(
+            validate_listen_target("ws://127.0.0.1:0").expect("listen target should be accepted"),
+            "ws://127.0.0.1:0"
         );
     }
 
@@ -603,6 +1019,7 @@ mod tests {
             approval_policy: "interactive",
             sandbox_policy: json!({"type": "workspaceWrite", "networkAccess": false}),
             reasoning_effort: Some("medium".to_string()),
+            collaboration_mode: None,
         };
 
         assert_eq!(
@@ -610,5 +1027,59 @@ mod tests {
             json!("user")
         );
         assert_eq!(turn.as_json()["approvalsReviewer"], json!("user"));
+        assert!(turn.as_json().get("collaborationMode").is_none());
+    }
+
+    #[test]
+    fn turn_request_serializes_collaboration_mode_with_builtin_instructions() {
+        let turn = CodexTurnRequest {
+            thread_id: "thread-123".to_string(),
+            input: "plan this change".to_string(),
+            cwd: "/tmp/demo".to_string(),
+            model: Some("gpt-5".to_string()),
+            approval_policy: "interactive",
+            sandbox_policy: json!({"type": "readOnly", "networkAccess": false}),
+            reasoning_effort: Some("medium".to_string()),
+            collaboration_mode: Some(CodexCollaborationMode {
+                mode: "plan".to_string(),
+                settings: CodexCollaborationModeSettings {
+                    developer_instructions: None,
+                    model: "gpt-5".to_string(),
+                    reasoning_effort: Some("medium".to_string()),
+                },
+            }),
+        };
+
+        assert_eq!(turn.as_json()["collaborationMode"]["mode"], json!("plan"));
+        assert_eq!(
+            turn.as_json()["collaborationMode"]["settings"]["developer_instructions"],
+            serde_json::Value::Null
+        );
+        assert_eq!(turn.as_json()["model"], serde_json::Value::Null);
+        assert_eq!(turn.as_json()["effort"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn overloaded_non_idempotent_requests_surface_retry_guidance() {
+        let error = overloaded_request_error("turn/start", RequestRetryPolicy::Never);
+        assert!(error.to_string().contains("not be idempotent"));
+    }
+
+    #[test]
+    fn idempotent_retry_delay_increases_per_attempt() {
+        assert!(idempotent_retry_delay(2) > idempotent_retry_delay(1));
+    }
+
+    #[test]
+    fn checked_in_schema_fixture_matches_turn_fields_in_use() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/codex_app_server_schema/v2/TurnStartParams.json"
+        ))
+        .expect("schema fixture should parse");
+
+        let properties = &schema["properties"];
+        assert!(properties.get("collaborationMode").is_some());
+        assert!(properties.get("sandboxPolicy").is_some());
+        assert!(properties.get("approvalPolicy").is_some());
     }
 }

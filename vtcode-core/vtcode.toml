@@ -125,9 +125,11 @@ clear_at_least_tokens = 30000
 clear_tool_inputs = false
 
 [agent.codex_app_server]
+# Requires the local `codex` CLI on `$PATH` unless this is set to a custom executable path.
 command = "codex"
 args = ["app-server"]
 startup_timeout_secs = 10
+experimental_features = false
 
 [agent.circuit_breaker]
 enabled = true
@@ -185,12 +187,16 @@ max_sequential_spool_chunk_reads = 6
 apply_patch = "prompt"
 checklist = "prompt"
 coder_mode = "prompt"
+create_file = "allow"
+delete_file = "prompt"
+edit_file = "allow"
 enter_plan = "prompt"
 enter_plan_mode = "prompt"
 exit_plan = "prompt"
 exit_plan_mode = "prompt"
 implement_plan = "prompt"
 list_files = "allow"
+memory = "allow"
 mode_edit = "prompt"
 mode_plan = "prompt"
 plan_checklist = "prompt"
@@ -221,10 +227,6 @@ unified_file = "allow"
 unified_search = "allow"
 web_fetch = "prompt"
 write_file = "allow"
-edit_file = "allow"
-create_file = "allow"
-delete_file = "prompt"
-memory = "allow"
 
 [tools.web_fetch]
 mode = "restricted"
@@ -638,7 +640,7 @@ report_all_keys = false
 
 [ui.notifications]
 enabled = true
-delivery_mode = "hybrid"
+delivery_mode = "desktop"
 backend = "auto"
 suppress_when_focused = true
 command_failure = false
@@ -839,8 +841,6 @@ min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
 prompt_cache_key_mode = "session"
-# Supported values: "in_memory" or "24h" (leave commented out for default behavior)
-# prompt_cache_retention = "24h"
 
 [prompt_cache.providers.anthropic]
 enabled = true
@@ -958,8 +958,6 @@ enabled = true
 
 [hooks.lifecycle]
 quiet_success_output = false
-# Example:
-# session_start = [{ hooks = [{ command = "cat >/dev/null; vtcode notify --title \"VT Code\" \"Session started\"" }, { command = "cat >/dev/null; printf '%s\\n' '{\"systemMessage\":\"VT Code: SessionStart hook is active.\",\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"SessionStart hook is active.\"}}'" }] }]
 session_start = []
 session_end = []
 subagent_start = []
@@ -967,12 +965,12 @@ subagent_stop = []
 user_prompt_submit = []
 pre_tool_use = []
 post_tool_use = []
+permission_request = []
 pre_compact = []
+stop = []
 task_completion = []
 task_completed = []
 notification = []
-permission_request = []
-stop = []
 
 [model]
 skip_loop_detection = false
@@ -1012,6 +1010,9 @@ defer_by_default = true
 max_results = 5
 always_available_tools = []
 
+[provider.anthropic.memory]
+enabled = false
+
 [skills]
 render-mode = "lean"
 prompt-format = "xml"
@@ -1019,9 +1020,6 @@ max-skills-in-prompt = 10
 enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
-
-[provider.anthropic.memory]
-enabled = false
 
 [skills.bundled]
 enabled = true

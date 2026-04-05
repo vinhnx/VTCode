@@ -160,6 +160,22 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
+    /// Enable experimental Codex app-server features for this run
+    #[arg(
+        long = "codex-experimental",
+        global = true,
+        conflicts_with = "no_codex_experimental"
+    )]
+    pub codex_experimental: bool,
+
+    /// Disable experimental Codex app-server features for this run
+    #[arg(
+        long = "no-codex-experimental",
+        global = true,
+        conflicts_with = "codex_experimental"
+    )]
+    pub no_codex_experimental: bool,
+
     /// Print response without launching the interactive TUI
     #[arg(
         short = 'p',
@@ -1396,6 +1412,8 @@ impl Default for Cli {
             no_color: false,
             theme: None,
             skip_confirmations: false,
+            codex_experimental: false,
+            no_codex_experimental: false,
             print: None,
             full_auto: None,
             resume_session: None,
@@ -1597,6 +1615,16 @@ impl Cli {
     pub fn is_debug_mode(&self) -> bool {
         self.debug || self.verbose
     }
+
+    pub fn codex_experimental_override(&self) -> Option<bool> {
+        if self.codex_experimental {
+            Some(true)
+        } else if self.no_codex_experimental {
+            Some(false)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1672,5 +1700,22 @@ mod tests {
                 device_code: true
             }) if provider == "codex"
         ));
+    }
+
+    #[test]
+    fn parses_codex_experimental_flags() {
+        let enabled = Cli::parse_from(["vtcode", "--codex-experimental"]);
+        assert_eq!(enabled.codex_experimental_override(), Some(true));
+
+        let disabled = Cli::parse_from(["vtcode", "--no-codex-experimental"]);
+        assert_eq!(disabled.codex_experimental_override(), Some(false));
+    }
+
+    #[test]
+    fn codex_experimental_flags_conflict() {
+        let result =
+            Cli::try_parse_from(["vtcode", "--codex-experimental", "--no-codex-experimental"]);
+
+        assert!(result.is_err());
     }
 }

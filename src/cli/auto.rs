@@ -21,13 +21,6 @@ pub async fn handle_auto_task_command(
     vt_cfg: &VTCodeConfig,
     prompt: &str,
 ) -> Result<()> {
-    if config
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
-        bail!("provider=codex currently supports interactive chat and ask only");
-    }
-
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
         bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");
@@ -41,6 +34,31 @@ pub async fn handle_auto_task_command(
         bail!(
             "Automation is disabled in configuration. Enable [automation.full_auto] to continue."
         );
+    }
+
+    if config
+        .provider
+        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
+    {
+        let completed = crate::codex_app_server::run_codex_noninteractive(
+            config,
+            Some(vt_cfg),
+            crate::codex_app_server::CodexNonInteractiveRun {
+                prompt: trimmed.to_string(),
+                read_only: false,
+                plan_mode: false,
+                skip_confirmations: true,
+                ephemeral: true,
+                resume_thread_id: None,
+                seed_messages: Vec::new(),
+                review_target: None,
+            },
+        )
+        .await?;
+        if !completed.output.trim().is_empty() {
+            println!("{}", completed.output.trim());
+        }
+        return Ok(());
     }
 
     let model_id = ModelId::from_str(&config.model).with_context(|| {
