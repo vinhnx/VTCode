@@ -53,10 +53,11 @@ impl RetryPolicy {
 
     pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
         let multiplier = self.multiplier.powi(attempt_index as i32);
-        let base_delay = Duration::from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
+        let base_delay = Duration::try_from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
+            .unwrap_or(self.max_delay)
             .min(self.max_delay);
 
-        if self.jitter <= 0.0 {
+        if !self.jitter.is_finite() || self.jitter <= 0.0 {
             return base_delay;
         }
 
@@ -67,7 +68,7 @@ impl RetryPolicy {
             return base_delay;
         }
 
-        let offset = (u64::from(attempt_index) * 31) % (max_jitter_ms + 1);
+        let offset = (u64::from(attempt_index) * 31) % max_jitter_ms.saturating_add(1);
         base_delay.saturating_add(Duration::from_millis(offset))
     }
 
@@ -313,6 +314,32 @@ mod tests {
         assert!(decision.retryable);
         assert_eq!(decision.retry_after, Some(Duration::from_secs(7)));
         assert_eq!(decision.delay, Some(Duration::from_secs(7)));
+    }
+
+    #[test]
+    fn delay_for_attempt_clamps_overflowing_backoff_to_max_delay() {
+        let policy =
+            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), f64::MAX);
+
+        assert_eq!(policy.delay_for_attempt(2), Duration::from_secs(8));
+    }
+
+    #[test]
+    fn delay_for_attempt_ignores_non_finite_jitter() {
+        let mut policy =
+            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        policy.jitter = f64::INFINITY;
+
+        assert_eq!(policy.delay_for_attempt(1), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn delay_for_attempt_handles_huge_finite_jitter() {
+        let mut policy =
+            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        policy.jitter = f64::MAX;
+
+        assert!(policy.delay_for_attempt(1) >= Duration::from_secs(2));
     }
 
     #[test]

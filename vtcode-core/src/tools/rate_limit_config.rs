@@ -3,6 +3,11 @@
 use std::env;
 
 const TOOL_CALLS_PER_MIN_ENV: &str = "VTCODE_TOOL_CALLS_PER_MIN";
+const TOOL_RATE_LIMIT_PER_SECOND_ENV: &str = "VTCODE_TOOL_RATE_LIMIT_PER_SECOND";
+
+pub(crate) fn tool_calls_per_second_from_env() -> Option<usize> {
+    positive_rate_limit_from_env(TOOL_RATE_LIMIT_PER_SECOND_ENV)
+}
 
 pub(crate) fn tool_calls_per_minute_from_env() -> Option<usize> {
     positive_rate_limit_from_env(TOOL_CALLS_PER_MIN_ENV)

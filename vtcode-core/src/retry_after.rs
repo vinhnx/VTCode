@@ -11,11 +11,8 @@ pub(crate) fn parse_retry_after_header(raw: &str) -> Option<Duration> {
     if let Ok(seconds) = raw.parse::<u64>() {
         return Some(Duration::from_secs(seconds));
     }
-    if let Ok(seconds) = raw.parse::<f64>()
-        && seconds.is_finite()
-        && seconds >= 0.0
-    {
-        return Some(Duration::from_secs_f64(seconds));
+    if let Ok(seconds) = raw.parse::<f64>() {
+        return Duration::try_from_secs_f64(seconds).ok();
     }
     None
 }
@@ -50,5 +47,6 @@ mod tests {
         assert_eq!(parse_retry_after_header("soon"), None);
         assert_eq!(parse_retry_after_header("-1"), None);
         assert_eq!(parse_retry_after_header("inf"), None);
+        assert_eq!(parse_retry_after_header("1e20"), None);
     }
 }

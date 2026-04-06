@@ -327,7 +327,8 @@ impl CircuitBreaker {
                 state.open_count += 1;
                 // Exponential backoff
                 let next_backoff = state.current_backoff.as_secs_f64() * self.config.backoff_factor;
-                state.current_backoff = Duration::from_secs_f64(next_backoff)
+                state.current_backoff = Duration::try_from_secs_f64(next_backoff)
+                    .unwrap_or(self.config.max_backoff)
                     .min(self.config.max_backoff)
                     .max(self.config.min_backoff);
                 self.record_circuit_open_metric();
@@ -541,5 +542,27 @@ mod tests {
         assert_eq!(execution.circuit_open_events, 1);
         assert_eq!(execution.breaker_denials, 1);
         assert_eq!(execution.half_open_events, 1);
+    }
+
+    #[test]
+    fn overflowing_half_open_backoff_clamps_to_max_backoff() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            min_backoff: Duration::from_millis(1),
+            max_backoff: Duration::from_millis(10),
+            backoff_factor: f64::MAX,
+            ..Default::default()
+        });
+
+        breaker.record_failure_category_for_tool("shell", ErrorCategory::ExecutionError);
+        std::thread::sleep(Duration::from_millis(2));
+        assert!(breaker.allow_request_for_tool("shell"));
+
+        breaker.record_failure_category_for_tool("shell", ErrorCategory::ExecutionError);
+
+        assert_eq!(
+            breaker.get_diagnostics("shell").current_backoff,
+            Duration::from_millis(10)
+        );
     }
 }

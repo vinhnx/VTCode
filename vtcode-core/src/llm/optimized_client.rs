@@ -356,6 +356,7 @@ impl RateLimiter {
         } else {
             1.0
         };
+        let burst_capacity = burst_capacity.max(1);
 
         Self {
             token_bucket: Arc::new(RwLock::new(TokenBucket {
@@ -379,7 +380,8 @@ impl RateLimiter {
                     return Ok(());
                 }
 
-                Duration::from_secs_f64((1.0 - bucket.tokens) / bucket.refill_rate)
+                let wait_secs = (1.0 - bucket.tokens) / bucket.refill_rate;
+                Duration::try_from_secs_f64(wait_secs).unwrap_or(Duration::from_secs(60))
             };
 
             tokio::time::sleep(wait_time).await;
@@ -600,5 +602,17 @@ mod tests {
         .expect("request should succeed");
 
         assert_eq!(response.content, "Batched response");
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_zero_burst_capacity_still_allows_progress() {
+        let limiter = RateLimiter::new(10.0, 0);
+
+        tokio::time::timeout(Duration::from_millis(100), limiter.acquire())
+            .await
+            .expect("rate limiter should not stall with zero configured burst")
+            .expect("rate limiter acquire should succeed");
+
+        assert_eq!(limiter.token_bucket.read().await.capacity, 1.0);
     }
 }

@@ -78,6 +78,8 @@ struct RateLimiterInner {
 
 impl AdaptiveRateLimiter {
     pub fn new(default_capacity: f64, default_refill_rate: f64) -> Self {
+        let default_capacity = positive_finite_or(default_capacity, 1.0);
+        let default_refill_rate = positive_finite_or(default_refill_rate, 1.0);
         Self {
             inner: Mutex::new(RateLimiterInner {
                 buckets: HashMap::new(),
@@ -163,8 +165,16 @@ impl AdaptiveRateLimiter {
                 Priority::Low => base_wait_secs * 1.5 * jitter, // Penalize low priority overflow
             };
 
-            Err(Duration::from_secs_f64(wait_secs))
+            Err(Duration::try_from_secs_f64(wait_secs).unwrap_or(Duration::from_secs(60)))
         }
+    }
+}
+
+fn positive_finite_or(value: f64, fallback: f64) -> f64 {
+    if value.is_finite() && value > 0.0 {
+        value
+    } else {
+        fallback
     }
 }
 
@@ -197,5 +207,16 @@ mod tests {
             .expect_err("low-priority call should be limited");
 
         assert!(high_wait < low_wait);
+    }
+
+    #[test]
+    fn invalid_default_limits_fall_back_to_positive_values() {
+        let limiter = AdaptiveRateLimiter::new(f64::NAN, 0.0);
+        assert!(limiter.try_acquire("tool").is_ok());
+        let wait_hint = limiter
+            .try_acquire("tool")
+            .expect_err("second immediate call should be rate-limited");
+
+        assert!(wait_hint > Duration::ZERO);
     }
 }

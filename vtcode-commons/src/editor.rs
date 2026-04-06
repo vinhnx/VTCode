@@ -220,17 +220,46 @@ fn parse_paren_location_suffix(suffix: &str) -> Option<String> {
 
 #[must_use]
 pub fn normalize_editor_hash_fragment(fragment: &str) -> Option<String> {
-    let fragment = fragment.strip_prefix('L')?;
-    let mut normalized = String::from(":");
-    for ch in fragment.chars() {
-        match ch {
-            'L' => {}
-            'C' => normalized.push(':'),
-            '0'..='9' | '-' => normalized.push(ch),
-            _ => return None,
+    let (start, end) = match fragment.split_once('-') {
+        Some((start, end)) => (start, Some(end)),
+        None => (fragment, None),
+    };
+
+    let (start_line, start_col) = parse_hash_point(start)?;
+    let mut normalized = format!(":{start_line}");
+    if let Some(col) = start_col {
+        normalized.push(':');
+        normalized.push_str(col);
+    }
+
+    if let Some(end) = end {
+        let (end_line, end_col) = parse_hash_point(end)?;
+        normalized.push('-');
+        normalized.push_str(end_line);
+        if let Some(col) = end_col {
+            normalized.push(':');
+            normalized.push_str(col);
         }
     }
+
     Some(normalized)
+}
+
+fn parse_hash_point(point: &str) -> Option<(&str, Option<&str>)> {
+    let point = point.strip_prefix('L')?;
+    let (line, column) = match point.split_once('C') {
+        Some((line, column)) => (line, Some(column)),
+        None => (point, None),
+    };
+    if line.is_empty() || !line.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    if let Some(column) = column
+        && (column.is_empty() || !column.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return None;
+    }
+    Some((line, column))
 }
 
 #[cfg(test)]
@@ -275,6 +304,9 @@ mod tests {
             normalize_editor_hash_fragment("L74-L76"),
             Some(":74-76".to_string())
         );
+        assert_eq!(normalize_editor_hash_fragment("L"), None);
+        assert_eq!(normalize_editor_hash_fragment("L74-"), None);
+        assert_eq!(normalize_editor_hash_fragment("L74C"), None);
     }
 
     #[test]
