@@ -6,13 +6,13 @@ extract and open source more components from vtcode-core
 
 ---
 
-CODEX plus
+remove 
 
-main account
-kiweuro
-writedownapp
-humidapp
-vtchat.io
+Contributors
+
+@vinhnx
+
+hardcode in changelog gen
 
 ---
 
