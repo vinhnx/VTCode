@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.97.1 - 2026-04-06
+
+### Highlights
+#### Features
+
+- Enable ATIF trajectory export and update related configurations (47a230cc) 
+### Other Changes
+#### Other
+
+- Update TODO.md (824acefb) (@vinhnx)
+### Contributors
+@vinhnx
 ## 0.97.0 - 2026-04-05
 
 ### Highlights
