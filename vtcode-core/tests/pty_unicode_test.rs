@@ -146,9 +146,10 @@ mod test_unicode_push_utf8 {
 async fn test_unicode_rendering_scenarios() {
     // This test demonstrates real-world scenarios where unicode rendering issues might occur
 
+    let temp = tempfile::TempDir::new().expect("temp workspace");
     use vtcode_core::tools::ToolRegistry;
 
-    let registry = ToolRegistry::new(std::path::PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
     registry.allow_all_tools().await.ok();
 
     // Test 1: Command with unicode output

@@ -6,7 +6,7 @@ use vtcode_core::config::PermissionMode;
 use vtcode_core::config::constants::{defaults, llm_generation};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
-use vtcode_core::config::types::{EditingMode, ReasoningEffortLevel};
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, update_workspace_trust};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -62,7 +62,6 @@ enum SetupMode {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct StartupModeConfig {
-    editing_mode: EditingMode,
     permission_mode: PermissionMode,
 }
 
@@ -292,11 +291,7 @@ fn apply_selection(
     config.agent.small_model.model = lightweight_model.to_owned();
     config.agent.reasoning_effort = reasoning;
     let startup_mode_config = startup_mode_config(startup_mode);
-    config.agent.default_editing_mode = startup_mode_config.editing_mode;
     config.permissions.default_mode = startup_mode_config.permission_mode;
-    // Keep the deprecated compatibility flag aligned so it cannot silently
-    // override Edit/Plan selections during later startup compatibility mapping.
-    config.agent.autonomous_mode = false;
     config.agent.persistent_memory.enabled = persistent_memory_enabled;
     config.agent.theme = defaults::DEFAULT_THEME.to_owned();
     config.agent.max_conversation_turns = defaults::DEFAULT_MAX_CONVERSATION_TURNS;
@@ -306,16 +301,13 @@ fn apply_selection(
 fn startup_mode_config(mode: StartupMode) -> StartupModeConfig {
     match mode {
         StartupMode::Edit => StartupModeConfig {
-            editing_mode: EditingMode::Edit,
             permission_mode: PermissionMode::Default,
         },
         StartupMode::Auto => StartupModeConfig {
-            editing_mode: EditingMode::Edit,
             permission_mode: PermissionMode::Auto,
         },
         StartupMode::Plan => StartupModeConfig {
-            editing_mode: EditingMode::Plan,
-            permission_mode: PermissionMode::Default,
+            permission_mode: PermissionMode::Plan,
         },
     }
 }
@@ -445,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn edit_startup_mode_writes_editing_and_permission_defaults() {
+    fn edit_startup_mode_writes_permission_default() {
         let mut config = base_config();
 
         apply_selection(
@@ -458,7 +450,6 @@ mod tests {
             false,
         );
 
-        assert_eq!(config.agent.default_editing_mode, EditingMode::Edit);
         assert_eq!(config.permissions.default_mode, PermissionMode::Default);
     }
 
@@ -476,12 +467,11 @@ mod tests {
             false,
         );
 
-        assert_eq!(config.agent.default_editing_mode, EditingMode::Edit);
         assert_eq!(config.permissions.default_mode, PermissionMode::Auto);
     }
 
     #[test]
-    fn plan_startup_mode_writes_plan_editing_mode_without_plan_permission_mode() {
+    fn plan_startup_mode_writes_plan_permission_mode() {
         let mut config = base_config();
 
         apply_selection(
@@ -494,9 +484,7 @@ mod tests {
             false,
         );
 
-        assert_eq!(config.agent.default_editing_mode, EditingMode::Plan);
-        assert_eq!(config.permissions.default_mode, PermissionMode::Default);
-        assert_ne!(config.permissions.default_mode, PermissionMode::Plan);
+        assert_eq!(config.permissions.default_mode, PermissionMode::Plan);
     }
 
     #[test]
@@ -520,7 +508,6 @@ mod tests {
     fn persistent_memory_selection_persists_opt_out() {
         let mut config = base_config();
         config.agent.persistent_memory.enabled = true;
-        config.agent.autonomous_mode = true;
 
         apply_selection(
             &mut config,
@@ -533,7 +520,6 @@ mod tests {
         );
 
         assert!(!config.agent.persistent_memory.enabled);
-        assert!(!config.agent.autonomous_mode);
     }
 
     #[test]

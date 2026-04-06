@@ -20,7 +20,6 @@ python3 scripts/generate_config_field_reference.py
 | `acp.zed.transport` | `string` | no | `"stdio"` | Transport used to communicate with the Zed client |
 | `acp.zed.workspace_trust` | `string` | no | `"full_auto"` | Desired workspace trust level when running under ACP |
 | `agent.api_key_env` | `string` | no | `"OPENAI_API_KEY"` | Environment variable that stores the API key for the active provider |
-| `agent.autonomous_mode` | `boolean` | no | `false` | Deprecated compatibility flag for pre-classifier autonomous mode settings. When true and `[permissions].default_mode` is not explicitly set, VT Code maps the session to `permissions.default_mode = "auto"`. |
 | `agent.checkpointing.enabled` | `boolean` | no | `true` | Enable automatic checkpoints after each successful turn |
 | `agent.checkpointing.max_age_days` | `integer \| null` | no | `30` | Maximum age in days before checkpoints are removed automatically (None disables) |
 | `agent.checkpointing.max_snapshots` | `integer` | no | `50` | Maximum number of checkpoints to retain on disk |
@@ -32,13 +31,12 @@ python3 scripts/generate_config_field_reference.py
 | `agent.circuit_breaker.recovery_cooldown` | `integer` | no | `60` | Cooldown period between recovery prompts (seconds) |
 | `agent.codex_app_server.args` | `array` | no | `["app-server"]` | Arguments passed before VT Code appends `--listen stdio://`. |
 | `agent.codex_app_server.args[]` | `string` | no | `-` | - |
-| `agent.codex_app_server.command` | `string` | no | `"codex"` | Executable used to launch the local Codex app-server sidecar. The default `codex` value must be installed and available on `$PATH`; alternatively set this to a custom executable path. |
+| `agent.codex_app_server.command` | `string` | no | `"codex"` | Executable used to launch the official Codex app-server sidecar. |
 | `agent.codex_app_server.experimental_features` | `boolean` | no | `false` | Enable experimental Codex app-server features such as collaboration modes and native review routing. |
 | `agent.codex_app_server.startup_timeout_secs` | `integer` | no | `10` | Maximum startup handshake time when launching the sidecar. |
 | `agent.credential_storage_mode` | `string` | no | `"keyring"` | Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service). This is the default as it's the most secure. - `file`: Use AES-256-GCM encrypted file with machine-derived key - `auto`: Try keyring first, fall back to file if unavailable |
 | `agent.custom_api_keys` | `object` | no | `-` | Provider-specific API keys captured from interactive configuration flows Note: Actual API keys are stored securely in the OS keyring. This field only tracks which providers have keys stored (for UI/migration purposes). The keys themselves are NOT serialized to the config file for security. |
 | `agent.custom_api_keys.*` | `string` | no | `-` | - |
-| `agent.default_editing_mode` | `string` | no | `"edit"` | Default editing mode on startup: "edit" (default) or "plan" Codex-inspired: Encourages structured planning before execution. |
 | `agent.default_model` | `string` | no | `"gpt-5.3-codex"` | Default model to use |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search, unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use |
@@ -52,6 +50,11 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.max_tool_retries` | `integer` | no | `2` | Maximum retries for retryable tool errors |
 | `agent.harness.max_tool_wall_clock_secs` | `integer` | no | `600` | Maximum wall clock time (seconds) for tool execution in a turn |
 | `agent.harness.orchestration_mode` | `string` | no | `"single"` | Select the exec/full-auto harness orchestration path. |
+| `agent.harness.tool_result_clearing.clear_at_least_tokens` | `integer` | no | `30000` | - |
+| `agent.harness.tool_result_clearing.clear_tool_inputs` | `boolean` | no | `false` | - |
+| `agent.harness.tool_result_clearing.enabled` | `boolean` | no | `false` | - |
+| `agent.harness.tool_result_clearing.keep_tool_uses` | `integer` | no | `3` | - |
+| `agent.harness.tool_result_clearing.trigger_tokens` | `integer` | no | `100000` | - |
 | `agent.include_structured_reasoning_tags` | `boolean \| null` | no | `null` | Controls inclusion of the structured reasoning tag instructions block. Behavior: - `Some(true)`: always include structured reasoning instructions. - `Some(false)`: never include structured reasoning instructions. - `None` (default): include only for `default` and `specialized` prompt modes. This keeps lightweight/minimal prompts smaller by default while allowing explicit opt-in when users want tag-based reasoning guidance. |
 | `agent.include_temporal_context` | `boolean` | no | `true` | Include current date/time in system prompt for temporal awareness Helps LLM understand context for time-sensitive tasks (default: true) |
 | `agent.include_working_directory` | `boolean` | no | `true` | Include current working directory in system prompt (default: true) |
@@ -85,8 +88,8 @@ python3 scripts/generate_config_field_reference.py
 | `agent.persistent_memory.auto_write` | `boolean` | no | `true` | Write durable memory after completed turns and session finalization |
 | `agent.persistent_memory.directory_override` | `null \| string` | no | `null` | Optional user-local directory override for persistent memory storage |
 | `agent.persistent_memory.enabled` | `boolean` | no | `false` | Toggle main-session persistent memory for this repository |
-| `agent.persistent_memory.startup_byte_limit` | `integer` | no | `25600` | Startup byte budget scanned from `memory_summary.md` before VT Code renders the compact memory summary |
-| `agent.persistent_memory.startup_line_limit` | `integer` | no | `200` | Startup line budget scanned from `memory_summary.md` before VT Code renders the compact memory summary |
+| `agent.persistent_memory.startup_byte_limit` | `integer` | no | `25600` | Startup byte budget scanned from memory_summary.md before VT Code renders a compact startup summary |
+| `agent.persistent_memory.startup_line_limit` | `integer` | no | `200` | Startup line budget scanned from memory_summary.md before VT Code renders a compact startup summary |
 | `agent.project_doc_fallback_filenames` | `array` | no | `[]` | Additional filenames to check when AGENTS.md is absent at a directory level. |
 | `agent.project_doc_fallback_filenames[]` | `string` | no | `-` | - |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |
@@ -108,7 +111,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
 | `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable small model for persistent memory classification and summary refresh |
 | `agent.small_model.use_for_web_summary` | `boolean` | no | `true` | Enable small model for web content summarization |
-| `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling verbosity and token overhead Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k) Inspired by pi-coding-agent: modern models often perform well with minimal prompts |
+| `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling prompt verbosity and token overhead. Options target lean base prompts: minimal (~150-250 tokens), lightweight/default (~250-350 tokens), specialized (~350-500 tokens) before dynamic runtime addenda. |
 | `agent.temperature` | `number` | no | `0.699999988079071` | Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0 (maximum randomness) |
 | `agent.temporal_context_use_utc` | `boolean` | no | `false` | Use UTC instead of local time for temporal context in system prompts |
 | `agent.theme` | `string` | no | `"ciapre"` | UI theme identifier controlling ANSI styling |
@@ -179,7 +182,7 @@ python3 scripts/generate_config_field_reference.py
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |
 | `context.dynamic.max_spooled_files` | `integer` | no | `100` | Maximum number of spooled files to keep |
 | `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting conversation history during summarization |
-| `context.dynamic.retained_user_messages` | `integer` | no | `4` | Maximum number of recent real user messages retained verbatim during local fallback compaction and summarized forks |
+| `context.dynamic.retained_user_messages` | `integer` | no | `4` | Maximum number of recent user messages to retain verbatim during local compaction |
 | `context.dynamic.spool_max_age_secs` | `integer` | no | `3600` | Maximum age in seconds for spooled tool output files before cleanup |
 | `context.dynamic.sync_mcp_tools` | `boolean` | no | `true` | Enable syncing MCP tool descriptions to .vtcode/mcp/tools/ |
 | `context.dynamic.sync_skills` | `boolean` | no | `true` | Enable generating skill index in .agents/skills/INDEX.md |
@@ -195,7 +198,7 @@ python3 scripts/generate_config_field_reference.py
 | `custom_providers` | `array` | no | `[]` | User-defined OpenAI-compatible provider endpoints. These entries are editable in `/config` and appear in the model picker using each entry's `display_name`. |
 | `custom_providers[].api_key_env` | `string` | no | `""` | Environment variable name that holds the API key for this endpoint (e.g., "MYCORP_API_KEY"). |
 | `custom_providers[].auth` | `CustomProviderCommandAuthConfig \| null` | no | `-` | Optional command-backed bearer token configuration. |
-| `custom_providers[].base_url` | `string` | yes | `-` | Base URL of the OpenAI-compatible API endpoint (e.g., "https://llm.corp.example/v1"). |
+| `custom_providers[].base_url` | `string` | yes | `-` | Base URL of the OpenAI-compatible API endpoint (e.g., `<https://llm.corp.example/v1>`). |
 | `custom_providers[].display_name` | `string` | yes | `-` | Human-friendly label shown in the TUI header, footer, and model picker (e.g., "MyCorporateName"). |
 | `custom_providers[].model` | `string` | no | `""` | Default model to use with this endpoint (e.g., "gpt-5-mini"). |
 | `custom_providers[].name` | `string` | yes | `-` | Stable provider key used for routing and persistence (e.g., "mycorp"). Must be lowercase alphanumeric with optional hyphens/underscores. |
@@ -232,18 +235,18 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.notification[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.notification[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.notification[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.permission_request` | `array` | no | `[]` | Commands to run when VT Code is about to request interactive permission approval |
+| `hooks.lifecycle.permission_request[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
+| `hooks.lifecycle.permission_request[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
+| `hooks.lifecycle.permission_request[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
+| `hooks.lifecycle.permission_request[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
+| `hooks.lifecycle.permission_request[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
 | `hooks.lifecycle.post_tool_use` | `array` | no | `[]` | Commands to run immediately after a tool returns its output |
 | `hooks.lifecycle.post_tool_use[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.post_tool_use[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
 | `hooks.lifecycle.post_tool_use[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.post_tool_use[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.post_tool_use[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
-| `hooks.lifecycle.permission_request` | `array` | no | `[]` | Commands to run only when VT Code is about to show a human approval prompt |
-| `hooks.lifecycle.permission_request[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
-| `hooks.lifecycle.permission_request[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
-| `hooks.lifecycle.permission_request[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
-| `hooks.lifecycle.permission_request[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.permission_request[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against tool names. |
 | `hooks.lifecycle.pre_compact` | `array` | no | `[]` | Commands to run immediately before VT Code compacts conversation history |
 | `hooks.lifecycle.pre_compact[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.pre_compact[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
@@ -269,6 +272,12 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.session_start[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.session_start[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.session_start[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.stop` | `array` | no | `[]` | Commands to run after VT Code produces a final answer but before the turn completes |
+| `hooks.lifecycle.stop[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
+| `hooks.lifecycle.stop[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
+| `hooks.lifecycle.stop[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
+| `hooks.lifecycle.stop[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
+| `hooks.lifecycle.stop[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
 | `hooks.lifecycle.subagent_start` | `array` | no | `[]` | Commands to run when a delegated subagent starts |
 | `hooks.lifecycle.subagent_start[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.subagent_start[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
@@ -281,24 +290,18 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.subagent_stop[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.subagent_stop[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.subagent_stop[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
-| `hooks.lifecycle.stop` | `array` | no | `[]` | Commands to run after VT Code drafts a reply but before the turn is finalized |
-| `hooks.lifecycle.stop[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
-| `hooks.lifecycle.stop[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
-| `hooks.lifecycle.stop[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
-| `hooks.lifecycle.stop[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.stop[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against the configured stop matcher string. |
-| `hooks.lifecycle.task_completed` | `array` | no | `[]` | Deprecated alias for `hooks.lifecycle.stop` |
+| `hooks.lifecycle.task_completed` | `array` | no | `[]` | Deprecated alias for `stop` |
 | `hooks.lifecycle.task_completed[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.task_completed[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
 | `hooks.lifecycle.task_completed[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.task_completed[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.task_completed[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Deprecated alias matcher for `hooks.lifecycle.stop`. |
-| `hooks.lifecycle.task_completion` | `array` | no | `[]` | Deprecated alias for `hooks.lifecycle.stop` |
+| `hooks.lifecycle.task_completed[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.task_completion` | `array` | no | `[]` | Deprecated alias for `stop` |
 | `hooks.lifecycle.task_completion[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.task_completion[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
 | `hooks.lifecycle.task_completion[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.task_completion[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.task_completion[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Deprecated alias matcher for `hooks.lifecycle.stop`. |
+| `hooks.lifecycle.task_completion[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
 | `hooks.lifecycle.user_prompt_submit` | `array` | no | `[]` | Commands to run when the user submits a prompt (pre-processing) |
 | `hooks.lifecycle.user_prompt_submit[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.user_prompt_submit[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
@@ -361,7 +364,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.96.12"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.97.2"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -412,7 +415,7 @@ python3 scripts/generate_config_field_reference.py
 | `optimization.memory_pool.enabled` | `boolean` | yes | `-` | Enable memory pool (can be disabled for debugging) |
 | `optimization.memory_pool.max_string_pool_size` | `integer` | yes | `-` | Maximum number of strings to pool |
 | `optimization.memory_pool.max_value_pool_size` | `integer` | yes | `-` | Maximum number of Values to pool |
-| `optimization.memory_pool.max_vec_pool_size` | `integer` | yes | `-` | Maximum number of Vec<String> to pool |
+| `optimization.memory_pool.max_vec_pool_size` | `integer` | yes | `-` | Maximum number of `Vec<String>` to pool |
 | `optimization.profiling.auto_export_results` | `boolean` | yes | `-` | Auto-export results to file |
 | `optimization.profiling.enable_regression_testing` | `boolean` | yes | `-` | Enable regression testing |
 | `optimization.profiling.enabled` | `boolean` | yes | `-` | Enable performance profiling |
@@ -427,8 +430,6 @@ python3 scripts/generate_config_field_reference.py
 | `output_style.active_style` | `string` | no | `"default"` | - |
 | `permissions.allow` | `array` | no | `[]` | Rules that allow matching tool calls without prompting. |
 | `permissions.allow[]` | `string` | no | `-` | - |
-| `permissions.allowed_tools` | `array` | no | `[]` | Claude-style compatibility allow-list for exact tool ids. |
-| `permissions.allowed_tools[]` | `string` | no | `-` | - |
 | `permissions.ask` | `array` | no | `[]` | Rules that require an interactive prompt when they match. |
 | `permissions.ask[]` | `string` | no | `-` | - |
 | `permissions.audit_directory` | `string` | no | `"~/.vtcode/audit"` | Directory for audit logs (created if not exists) Defaults to ~/.vtcode/audit |
@@ -457,16 +458,11 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.default_mode` | `string` | no | `"default"` | Default unified permission mode for the current session. |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls. |
 | `permissions.deny[]` | `string` | no | `-` | - |
-| `permissions.disallowed_tools` | `array` | no | `[]` | Claude-style compatibility deny-list for exact tool ids. |
-| `permissions.disallowed_tools[]` | `string` | no | `-` | - |
 | `permissions.enabled` | `boolean` | no | `true` | Enable the enhanced permission system (resolver + audit logger + cache) |
 | `permissions.log_allowed_commands` | `boolean` | no | `true` | Log allowed commands to audit trail |
 | `permissions.log_denied_commands` | `boolean` | no | `true` | Log denied commands to audit trail |
 | `permissions.log_permission_prompts` | `boolean` | no | `true` | Log permission prompts (when user is asked for confirmation) |
 | `permissions.resolve_commands` | `boolean` | no | `true` | Enable command resolution to actual paths (helps identify suspicious commands) |
-| `project_doc_fallback_filenames` | `array` | no | `[]` | Codex-compatible fallback filenames for project instructions discovery. |
-| `project_doc_fallback_filenames[]` | `string` | no | `-` | - |
-| `project_doc_max_bytes` | `integer \| null` | no | `null` | Codex-compatible project doc byte limit override. |
 | `prompt_cache.cache_dir` | `string` | no | `"~/.vtcode/cache/prompts"` | Base directory for local prompt cache storage (supports `~` expansion) |
 | `prompt_cache.cache_friendly_prompt_shaping` | `boolean` | no | `true` | Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code keeps volatile runtime context at the end of prompt text. |
 | `prompt_cache.enable_auto_cleanup` | `boolean` | no | `true` | Automatically evict stale entries on startup/shutdown |
@@ -502,10 +498,11 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.providers.zai.enabled` | `boolean` | no | `false` | - |
 | `provider.anthropic.count_tokens_enabled` | `boolean` | no | `false` | Enable token counting via the count_tokens endpoint When enabled, the agent can estimate input token counts before making API calls Useful for proactive management of rate limits and costs |
 | `provider.anthropic.effort` | `string` | no | `"low"` | Effort level for token usage (high, medium, low) Controls how many tokens Claude uses when responding, trading off between response thoroughness and token efficiency. Supported by Claude Opus 4.5/4.6 (4.5 requires effort beta header) |
-| `provider.anthropic.extended_thinking_enabled` | `boolean` | no | `true` | Enable extended thinking feature for Anthropic models When enabled, Claude uses internal reasoning before responding, providing enhanced reasoning capabilities for complex tasks. Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models. Claude 4.6 uses adaptive thinking instead of extended thinking. Note: Extended thinking is now auto-enabled by default (31,999 tokens). Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models. See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking |
+| `provider.anthropic.extended_thinking_enabled` | `boolean` | no | `true` | Enable extended thinking feature for Anthropic models When enabled, Claude uses internal reasoning before responding, providing enhanced reasoning capabilities for complex tasks. Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models. Claude 4.6 uses adaptive thinking instead of extended thinking. Note: Extended thinking is now auto-enabled by default (31,999 tokens). Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models. See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking> |
 | `provider.anthropic.interleaved_thinking_beta` | `string` | no | `"interleaved-thinking-2025-05-14"` | Beta header for interleaved thinking feature |
 | `provider.anthropic.interleaved_thinking_budget_tokens` | `integer` | no | `31999` | Budget tokens for extended thinking (minimum: 1024, default: 31999) On 64K output models (Opus 4.5, Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999 On 32K output models (Opus 4): max 31,999 Use MAX_THINKING_TOKENS environment variable to override. |
 | `provider.anthropic.interleaved_thinking_type_enabled` | `string` | no | `"enabled"` | Type value for enabling interleaved thinking |
+| `provider.anthropic.memory.enabled` | `boolean` | no | `false` | - |
 | `provider.anthropic.skip_model_validation` | `boolean` | no | `false` | DEPRECATED: Model name validation has been removed. The Anthropic API validates model names directly, avoiding maintenance burden and allowing flexibility. This field is kept for backward compatibility but has no effect. |
 | `provider.anthropic.tool_search.algorithm` | `string` | no | `"regex"` | Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language) |
 | `provider.anthropic.tool_search.always_available_tools` | `array` | no | `[]` | Tool names that should never be deferred (always available) |
@@ -618,7 +615,7 @@ python3 scripts/generate_config_field_reference.py
 | `syntax_highlighting.highlight_timeout_ms` | `integer` | no | `5000` | Performance settings - highlight timeout in milliseconds |
 | `syntax_highlighting.max_file_size_mb` | `integer` | no | `10` | Maximum file size for syntax highlighting (in MB) |
 | `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for syntax highlighting |
-| `telemetry.atif_enabled` | `boolean` | no | `false` | Enable ATIF trajectory export (writes atif-trajectory JSON alongside harness logs) |
+| `telemetry.atif_enabled` | `boolean` | no | `false` | Enable ATIF (Agent Trajectory Interchange Format) trajectory export. When enabled, sessions write an `atif-trajectory.json` alongside the existing `.jsonl` trajectory log. |
 | `telemetry.bottleneck_tracing` | `boolean` | no | `false` | Emit bottleneck traces for slow paths |
 | `telemetry.dashboards_enabled` | `boolean` | no | `true` | Enable real-time dashboards |
 | `telemetry.perf_events` | `boolean` | no | `true` | Emit performance events for file I/O, spawns, and UI latency |
@@ -680,7 +677,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.allow_tool_ansi` | `boolean` | no | `false` | Allow ANSI escape sequences in tool output (enables colors but may cause layout issues) |
 | `ui.bold_is_bright` | `boolean` | no | `false` | Compatibility mode for legacy terminals that map bold to bright colors. When enabled, avoids using bold styling on text that would become bright colors, preventing visibility issues in terminals with "bold is bright" behavior. |
 | `ui.color_scheme_mode` | `string` | no | `"auto"` | Color scheme mode for automatic light/dark theme switching. - "auto": Detect from terminal (via OSC 11 or COLORFGBG env var) - "light": Force light mode theme selection - "dark": Force dark mode theme selection |
-| `ui.dim_completed_todos` | `boolean` | no | `true` | Dim completed todo items (- [x]) in agent output |
+| `ui.dim_completed_todos` | `boolean` | no | `true` | Dim completed todo items (- \[x\]) in agent output |
 | `ui.display_mode` | `string` | no | `"minimal"` | UI display mode preset (full, minimal, focused) |
 | `ui.fullscreen.copy_on_select` | `boolean` | no | `true` | Copy selected transcript text immediately when the mouse selection ends. Can also be controlled via VTCODE_FULLSCREEN_COPY_ON_SELECT=0/1. |
 | `ui.fullscreen.mouse_capture` | `boolean` | no | `true` | Capture mouse events inside the fullscreen UI. Can also be controlled via VTCODE_FULLSCREEN_MOUSE_CAPTURE=0/1. |
@@ -695,11 +692,11 @@ python3 scripts/generate_config_field_reference.py
 | `ui.layout_mode` | `string` | no | `"auto"` | Override the responsive layout mode |
 | `ui.message_block_spacing` | `boolean` | no | `true` | Add spacing between message blocks |
 | `ui.minimum_contrast` | `number` | no | `4.5` | Minimum contrast ratio for text against background (WCAG 2.1 standard) - 4.5: WCAG AA (default, suitable for most users) - 7.0: WCAG AAA (enhanced, for low-vision users) - 3.0: Large text minimum - 1.0: Disable contrast enforcement |
+| `ui.notifications.backend` | `string` | no | `"auto"` | Preferred backend for desktop notification delivery. |
 | `ui.notifications.command_failure` | `boolean \| null` | no | `null` | Notify when a shell/command execution fails. If omitted, falls back to `tool_failure` for backward compatibility. |
 | `ui.notifications.completion` | `boolean` | no | `true` | Legacy master toggle for completion notifications. New installs should prefer `completion_success` and `completion_failure`. |
 | `ui.notifications.completion_failure` | `boolean \| null` | no | `null` | Notify when a turn/session is partial, failed, or cancelled. If omitted, falls back to `completion`. |
 | `ui.notifications.completion_success` | `boolean \| null` | no | `null` | Notify when a turn/session completes successfully. If omitted, falls back to `completion`. |
-| `ui.notifications.backend` | `string` | no | `"auto"` | Preferred desktop notification backend. Supported values: `"auto"`, `"osascript"`, `"notify_rust"`, and `"terminal"`. |
 | `ui.notifications.delivery_mode` | `string` | no | `"desktop"` | Notification transport strategy. |
 | `ui.notifications.enabled` | `boolean` | no | `true` | Master toggle for all runtime notifications. |
 | `ui.notifications.error` | `boolean` | no | `true` | Notify on runtime/system errors. |
@@ -715,7 +712,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. |
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via VTCODE_REDUCE_MOTION=1 environment variable. |
-| `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: https://blog.xoria.org/terminal-colors/ |
+| `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: <https://blog.xoria.org/terminal-colors/> |
 | `ui.screen_reader_mode` | `boolean` | no | `false` | Screen reader mode: disables animations, uses plain text indicators, and optimizes output for assistive technology compatibility. Can also be enabled via VTCODE_SCREEN_READER=1 environment variable. |
 | `ui.show_diagnostics_in_transcript` | `boolean` | no | `false` | Show warning/error/fatal diagnostic lines in the TUI transcript and log panel. Also controls whether ERROR-level tracing logs appear in the TUI session log. Errors are always captured in the session archive JSON regardless of this setting. |
 | `ui.show_sidebar` | `boolean` | no | `true` | Show the right sidebar (queue, context, tools) |

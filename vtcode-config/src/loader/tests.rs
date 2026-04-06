@@ -390,12 +390,12 @@ fn save_config_preserves_comments() {
     let config_with_comments = r#"# This is a test comment
 [agent]
 # Provider comment
-provider = "openai"
+provider = "anthropic"
 default_model = "gpt-5-nano"
 
 # Tools section comment
 [tools]
-default_policy = "prompt"
+default_policy = "deny"
 "#;
 
     write!(temp_file, "{}", config_with_comments).expect("failed to write temp config");
@@ -514,8 +514,8 @@ show_sidebar = false
         saved_content
     );
     assert!(
-        saved_content.contains("show_sidebar = true"),
-        "saved config should contain show_sidebar = true. Got:\n{}",
+        !saved_content.contains("show_sidebar"),
+        "saved config should prune default show_sidebar. Got:\n{}",
         saved_content
     );
 
@@ -536,4 +536,96 @@ show_sidebar = false
         "reloaded config should have show_sidebar = true, got: {}",
         new_manager2.config().ui.show_sidebar
     );
+}
+
+#[test]
+#[serial]
+fn save_config_writes_sparse_model_theme_and_mode_values() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace = temp_dir.path();
+    let config_path = workspace.join("vtcode.toml");
+    fs::write(&config_path, "").expect("failed to write initial config");
+
+    let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
+    let mut modified_config = manager.config().clone();
+    modified_config.agent.default_model = "gpt-5.4".to_string();
+    modified_config.agent.theme = "ansi".to_string();
+    modified_config.permissions.default_mode = crate::PermissionMode::Plan;
+
+    manager
+        .save_config(&modified_config)
+        .expect("failed to save config");
+
+    let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
+    assert!(saved_content.contains("[agent]"));
+    assert!(saved_content.contains("default_model = \"gpt-5.4\""));
+    assert!(saved_content.contains("theme = \"ansi\""));
+    assert!(saved_content.contains("[permissions]"));
+    assert!(saved_content.contains("default_mode = \"plan\""));
+    assert!(
+        !saved_content.contains("provider = \"openai\""),
+        "default agent provider should not be expanded. Got:\n{}",
+        saved_content
+    );
+    assert!(
+        !saved_content.contains("[ui]"),
+        "default UI section should not be expanded. Got:\n{}",
+        saved_content
+    );
+
+    let reloaded = ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
+    assert_eq!(reloaded.config().agent.default_model, "gpt-5.4");
+    assert_eq!(reloaded.config().agent.theme, "ansi");
+    assert_eq!(
+        reloaded.config().permissions.default_mode,
+        crate::PermissionMode::Plan
+    );
+}
+
+#[test]
+#[serial]
+fn save_config_removes_deprecated_config_keys() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace = temp_dir.path();
+    let config_path = workspace.join("vtcode.toml");
+    fs::write(
+        &config_path,
+        r#"
+project_doc_max_bytes = 1
+project_doc_fallback_filenames = ["RULES.md"]
+
+[agent]
+default_model = "gpt-5.4"
+autonomous_mode = true
+default_editing_mode = "plan"
+
+[permissions]
+default_mode = "plan"
+allowed_tools = ["read_file"]
+disallowed_tools = ["unified_exec"]
+"#,
+    )
+    .expect("failed to write initial config");
+
+    let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
+    let config = manager.config().clone();
+
+    manager.save_config(&config).expect("failed to save config");
+
+    let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
+    for removed_key in [
+        "project_doc_max_bytes",
+        "project_doc_fallback_filenames",
+        "autonomous_mode",
+        "default_editing_mode",
+        "allowed_tools",
+        "disallowed_tools",
+    ] {
+        assert!(
+            !saved_content.contains(removed_key),
+            "saved config should remove deprecated key {removed_key}. Got:\n{saved_content}"
+        );
+    }
+    assert!(saved_content.contains("default_model = \"gpt-5.4\""));
+    assert!(saved_content.contains("default_mode = \"plan\""));
 }

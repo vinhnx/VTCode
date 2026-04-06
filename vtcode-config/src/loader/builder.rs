@@ -79,7 +79,6 @@ impl ConfigBuilder {
             manager.config = effective_toml
                 .try_into()
                 .context("Failed to deserialize effective configuration after runtime overrides")?;
-            manager.config.apply_compat_defaults();
             manager
                 .config
                 .validate()

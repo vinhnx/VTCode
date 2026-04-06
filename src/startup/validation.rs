@@ -77,19 +77,11 @@ pub(super) fn apply_cli_permission_overrides(
     disallowed_tools: &[String],
 ) {
     for entry in iter_permission_entries(allowed_tools) {
-        if entry_uses_rule_grammar(entry) {
-            push_unique_permission_entry(&mut config.permissions.allow, entry);
-        } else {
-            push_unique_permission_entry(&mut config.permissions.allowed_tools, entry);
-        }
+        push_unique_permission_entry(&mut config.permissions.allow, entry);
     }
 
     for entry in iter_permission_entries(disallowed_tools) {
-        if entry_uses_rule_grammar(entry) {
-            push_unique_permission_entry(&mut config.permissions.deny, entry);
-        } else {
-            push_unique_permission_entry(&mut config.permissions.disallowed_tools, entry);
-        }
+        push_unique_permission_entry(&mut config.permissions.deny, entry);
     }
 }
 
@@ -105,14 +97,6 @@ fn push_unique_permission_entry(target: &mut Vec<String>, entry: &str) {
     if !target.iter().any(|existing| existing == entry) {
         target.push(entry.to_string());
     }
-}
-
-fn entry_uses_rule_grammar(entry: &str) -> bool {
-    entry.contains(['(', ')', '/', '*', ':'])
-        || entry
-            .chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_uppercase())
 }
 
 pub(super) fn parse_cli_config_entries(
@@ -304,7 +288,7 @@ mod tests {
     #[test]
     fn cli_permission_overrides_append_unique_entries() {
         let mut config = VTCodeConfig::default();
-        config.permissions.allowed_tools = vec!["read_file".to_string()];
+        config.permissions.allow = vec!["read_file".to_string()];
 
         apply_cli_permission_overrides(
             &mut config,
@@ -316,7 +300,7 @@ mod tests {
         );
 
         assert_eq!(
-            config.permissions.allowed_tools,
+            config.permissions.allow,
             vec![
                 "read_file".to_string(),
                 "unified_search".to_string(),
@@ -324,7 +308,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            config.permissions.disallowed_tools,
+            config.permissions.deny,
             vec!["apply_patch".to_string(), "unified_exec".to_string()]
         );
     }
@@ -349,9 +333,7 @@ mod tests {
                 "Bash(cargo check)".to_string()
             ]
         );
-        assert_eq!(config.permissions.allowed_tools, Vec::<String>::new());
         assert_eq!(config.permissions.deny, vec!["Edit(/.git/**)".to_string()]);
-        assert_eq!(config.permissions.disallowed_tools, Vec::<String>::new());
     }
 
     #[test]

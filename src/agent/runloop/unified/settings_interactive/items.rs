@@ -17,7 +17,7 @@ use super::{
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
 
-const HIDDEN_SETTINGS_PATHS: &[&str] = &["agent.autonomous_mode"];
+const HIDDEN_SETTINGS_PATHS: &[&str] = &[];
 
 pub(super) fn build_settings_items(
     state: &SettingsPaletteState,

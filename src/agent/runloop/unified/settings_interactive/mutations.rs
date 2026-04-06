@@ -428,7 +428,7 @@ fn persist_draft(state: &mut SettingsPaletteState) -> Result<()> {
 }
 
 pub(super) fn render_commented_config(config: &VTCodeConfig) -> Result<String> {
-    let value = TomlValue::try_from(config.clone())
+    let value = ConfigManager::sparse_config_value(config)
         .context("Failed to serialize configuration for comment rendering")?;
 
     let TomlValue::Table(root_table) = value else {

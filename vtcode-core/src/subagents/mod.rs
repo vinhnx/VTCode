@@ -2098,18 +2098,18 @@ fn build_child_config(
     let mut allowed_tools = spec.tools.clone().unwrap_or_default();
     if !allowed_tools.is_empty() {
         allowed_tools.retain(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool));
-        child.permissions.allowed_tools =
-            intersect_allowed_tools(&parent.permissions.allowed_tools, &allowed_tools);
+        child.permissions.allow =
+            intersect_allowed_tools(&parent.permissions.allow, &allowed_tools);
     }
 
-    let mut disallowed_tools = parent.permissions.disallowed_tools.clone();
+    let mut disallowed_tools = parent.permissions.deny.clone();
     disallowed_tools.extend(spec.disallowed_tools.clone());
     for tool in SUBAGENT_TOOL_NAMES {
         if !disallowed_tools.iter().any(|entry| entry == tool) {
             disallowed_tools.push((*tool).to_string());
         }
     }
-    child.permissions.disallowed_tools = disallowed_tools;
+    child.permissions.deny = disallowed_tools;
     merge_child_hooks(&mut child, spec.hooks.as_ref());
     merge_child_mcp_servers(&mut child, spec.mcp_servers.as_slice());
     child
@@ -2178,15 +2178,35 @@ fn permission_rank(mode: PermissionMode) -> u8 {
 }
 
 fn intersect_allowed_tools(parent_allowed: &[String], spec_allowed: &[String]) -> Vec<String> {
-    if parent_allowed.is_empty() {
+    let parent_exact_tools: Vec<&str> = parent_allowed
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|entry| is_exact_tool_id(entry))
+        .collect();
+
+    if parent_exact_tools.is_empty() {
         return spec_allowed.to_vec();
     }
 
     spec_allowed
         .iter()
-        .filter(|candidate| parent_allowed.iter().any(|allowed| allowed == *candidate))
+        .filter(|candidate| {
+            let candidate = candidate.trim();
+            parent_exact_tools.contains(&candidate)
+        })
         .cloned()
         .collect()
+}
+
+fn is_exact_tool_id(entry: &str) -> bool {
+    let entry = entry.trim();
+    !entry.is_empty()
+        && !entry.contains(['(', ')', '*'])
+        && !matches!(
+            entry.to_ascii_lowercase().as_str(),
+            "bash" | "read" | "edit" | "write" | "webfetch"
+        )
 }
 
 fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
@@ -3531,11 +3551,11 @@ mod tests {
     fn build_child_config_clamps_permissions_and_intersects_allowed_tools() {
         let mut parent = VTCodeConfig::default();
         parent.permissions.default_mode = PermissionMode::Default;
-        parent.permissions.allowed_tools = vec![
+        parent.permissions.allow = vec![
             tools::READ_FILE.to_string(),
             tools::UNIFIED_SEARCH.to_string(),
         ];
-        parent.permissions.disallowed_tools = vec![tools::UNIFIED_EXEC.to_string()];
+        parent.permissions.deny = vec![tools::UNIFIED_EXEC.to_string()];
 
         let mut spec = vtcode_config::builtin_subagents()
             .into_iter()
@@ -3551,7 +3571,7 @@ mod tests {
         let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
         assert_eq!(child.permissions.default_mode, PermissionMode::Default);
         assert_eq!(
-            child.permissions.allowed_tools,
+            child.permissions.allow,
             vec![
                 tools::UNIFIED_SEARCH.to_string(),
                 tools::READ_FILE.to_string()
@@ -3560,14 +3580,44 @@ mod tests {
         assert!(
             child
                 .permissions
-                .disallowed_tools
+                .deny
                 .contains(&tools::UNIFIED_EXEC.to_string())
         );
         assert!(
             child
                 .permissions
-                .disallowed_tools
+                .deny
                 .contains(&tools::SPAWN_AGENT.to_string())
+        );
+    }
+
+    #[test]
+    fn build_child_config_intersects_qualified_exact_tool_ids() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.allow = vec![
+            "Read".to_string(),
+            "mcp::context7::search".to_string(),
+            tools::READ_FILE.to_string(),
+        ];
+
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.tools = Some(vec![
+            "mcp::context7::search".to_string(),
+            tools::UNIFIED_EXEC.to_string(),
+            tools::READ_FILE.to_string(),
+        ]);
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(
+            child.permissions.allow,
+            vec![
+                "mcp::context7::search".to_string(),
+                tools::READ_FILE.to_string()
+            ]
         );
     }
 

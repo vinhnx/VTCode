@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::EditingMode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::ui::interactive_list::SelectionEntry;
 
@@ -35,12 +34,9 @@ impl StartupMode {
 }
 
 pub(crate) fn resolve_initial_startup_mode(config: &VTCodeConfig) -> StartupMode {
-    if config.agent.default_editing_mode == EditingMode::Plan {
+    if config.permissions.default_mode == PermissionMode::Plan {
         StartupMode::Plan
-    } else if config.permissions.default_mode == PermissionMode::Auto
-        || (config.permissions.default_mode == PermissionMode::Default
-            && config.agent.autonomous_mode)
-    {
+    } else if config.permissions.default_mode == PermissionMode::Auto {
         StartupMode::Auto
     } else {
         StartupMode::Edit
@@ -173,8 +169,7 @@ mod tests {
     #[test]
     fn resolve_initial_startup_mode_prefers_plan() {
         let mut config = VTCodeConfig::default();
-        config.agent.default_editing_mode = EditingMode::Plan;
-        config.permissions.default_mode = PermissionMode::Auto;
+        config.permissions.default_mode = PermissionMode::Plan;
 
         assert_eq!(resolve_initial_startup_mode(&config), StartupMode::Plan);
     }

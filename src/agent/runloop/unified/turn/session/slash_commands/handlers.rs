@@ -4,7 +4,6 @@ use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::agent::snapshots::{
     CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata,
 };
@@ -153,12 +152,11 @@ pub(super) async fn handle_manage_loop(
 pub(super) fn persist_mode_settings(
     workspace: &std::path::Path,
     vt_cfg: &mut Option<VTCodeConfig>,
-    editing_mode: Option<ConfigEditingMode>,
     permission_mode: Option<PermissionMode>,
 ) -> Result<()> {
-    if editing_mode.is_none() && permission_mode.is_none() {
+    let Some(mode) = permission_mode else {
         return Ok(());
-    }
+    };
 
     let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
         format!(
@@ -168,25 +166,14 @@ pub(super) fn persist_mode_settings(
     })?;
     let mut config = manager.config().clone();
 
-    if let Some(mode) = editing_mode {
-        config.agent.default_editing_mode = mode;
-    }
-
-    if let Some(mode) = permission_mode {
-        config.permissions.default_mode = mode;
-    }
+    config.permissions.default_mode = mode;
 
     manager
         .save_config(&config)
         .context("Failed to persist mode settings")?;
 
     if let Some(cfg) = vt_cfg.as_mut() {
-        if let Some(mode) = editing_mode {
-            cfg.agent.default_editing_mode = mode;
-        }
-        if let Some(mode) = permission_mode {
-            cfg.permissions.default_mode = mode;
-        }
+        cfg.permissions.default_mode = mode;
     }
 
     Ok(())
@@ -991,14 +978,16 @@ mod tests {
         .expect("write config");
 
         let mut vt_cfg = Some(initial.clone());
-        persist_mode_settings(workspace, &mut vt_cfg, None, Some(PermissionMode::Auto))
+        persist_mode_settings(workspace, &mut vt_cfg, Some(PermissionMode::Auto))
             .expect("persist mode settings");
 
         let persisted = std::fs::read_to_string(workspace.join("vtcode.toml")).expect("config");
         assert!(persisted.contains("default_mode = \"auto\""));
-        assert!(!persisted.contains("autonomous_mode = true"));
-        assert!(vt_cfg.is_some_and(|cfg| {
-            cfg.permissions.default_mode == PermissionMode::Auto && !cfg.agent.autonomous_mode
-        }));
+        assert!(
+            !persisted.contains("default_model ="),
+            "mode persistence should not expand agent defaults. Got:\n{}",
+            persisted
+        );
+        assert!(vt_cfg.is_some_and(|cfg| { cfg.permissions.default_mode == PermissionMode::Auto }));
     }
 }

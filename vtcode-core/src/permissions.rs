@@ -104,15 +104,9 @@ struct PermissionEvaluator {
 impl PermissionEvaluator {
     fn new(config: &PermissionsConfig, workspace_root: &Path, current_dir: &Path) -> Self {
         Self {
-            deny: compile_rules(&config.deny, workspace_root, current_dir)
-                .into_iter()
-                .chain(compile_exact_tool_rules(&config.disallowed_tools))
-                .collect(),
+            deny: compile_rules(&config.deny, workspace_root, current_dir),
             ask: compile_rules(&config.ask, workspace_root, current_dir),
-            allow: compile_rules(&config.allow, workspace_root, current_dir)
-                .into_iter()
-                .chain(compile_exact_tool_rules(&config.allowed_tools))
-                .collect(),
+            allow: compile_rules(&config.allow, workspace_root, current_dir),
         }
     }
 
@@ -133,16 +127,6 @@ fn compile_rules(
     rules
         .iter()
         .filter_map(|rule| CompiledPermissionRule::compile(rule, workspace_root, current_dir))
-        .collect()
-}
-
-fn compile_exact_tool_rules(rules: &[String]) -> Vec<CompiledPermissionRule> {
-    rules
-        .iter()
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|rule| !rule.is_empty())
-        .map(|rule| CompiledPermissionRule::ExactTool(rule.to_string()))
         .collect()
 }
 
@@ -768,11 +752,11 @@ mod tests {
     }
 
     #[test]
-    fn exact_compat_tool_lists_feed_rule_tiers() {
+    fn exact_tool_rules_feed_rule_tiers() {
         let (_temp, workspace, cwd) = workspace_roots();
         let config = PermissionsConfig {
-            allowed_tools: vec!["read_file".to_string()],
-            disallowed_tools: vec!["unified_exec".to_string()],
+            allow: vec!["read_file".to_string()],
+            deny: vec!["unified_exec".to_string()],
             ..PermissionsConfig::default()
         };
 

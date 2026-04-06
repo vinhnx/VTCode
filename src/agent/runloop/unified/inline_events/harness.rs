@@ -141,12 +141,7 @@ impl HarnessEventEmitter {
 
     /// Finishes the ATIF trajectory and writes the JSON file to disk.
     pub(crate) fn finish_atif(&self) {
-        let state = self
-            .inner
-            .atif
-            .lock()
-            .ok()
-            .and_then(|mut g| g.take());
+        let state = self.inner.atif.lock().ok().and_then(|mut g| g.take());
         let Some(state) = state else { return };
 
         let trajectory = state.builder.finish(None);

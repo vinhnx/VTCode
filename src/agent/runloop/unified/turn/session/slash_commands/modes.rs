@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
@@ -97,12 +96,11 @@ pub(crate) async fn handle_toggle_plan_mode(
         ctx.renderer,
         ctx.config.workspace.as_path(),
         ctx.vt_cfg,
-        if new_state {
-            ConfigEditingMode::Plan
+        Some(if new_state {
+            PermissionMode::Plan
         } else {
-            ConfigEditingMode::Edit
-        },
-        Some(PermissionMode::Default),
+            PermissionMode::Default
+        }),
         "plan mode preference",
     )?;
 
@@ -221,11 +219,10 @@ fn persist_mode_preference(
     renderer: &mut AnsiRenderer,
     workspace: &std::path::Path,
     vt_cfg: &mut Option<VTCodeConfig>,
-    mode: ConfigEditingMode,
     permission_mode: Option<PermissionMode>,
     preference_label: &str,
 ) -> Result<()> {
-    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), permission_mode) {
+    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, permission_mode) {
         renderer.line(
             MessageStyle::Error,
             &format!("Failed to persist {preference_label}: {}", err),
@@ -302,12 +299,9 @@ async fn apply_session_mode(
         ctx.config.workspace.as_path(),
         ctx.vt_cfg,
         match new_mode {
-            SessionMode::Plan => ConfigEditingMode::Plan,
-            SessionMode::Edit | SessionMode::Auto => ConfigEditingMode::Edit,
-        },
-        match new_mode {
             SessionMode::Auto => Some(PermissionMode::Auto),
-            SessionMode::Edit | SessionMode::Plan => Some(PermissionMode::Default),
+            SessionMode::Plan => Some(PermissionMode::Plan),
+            SessionMode::Edit => Some(PermissionMode::Default),
         },
         "editing mode preference",
     )?;

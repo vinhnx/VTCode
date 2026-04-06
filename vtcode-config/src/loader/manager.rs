@@ -104,8 +104,7 @@ impl ConfigManager {
 
         // If no layers found, use default config
         if layer_stack.layers().is_empty() {
-            let mut config = VTCodeConfig::default();
-            config.apply_compat_defaults();
+            let config = VTCodeConfig::default();
             config
                 .validate()
                 .context("Default configuration failed validation")?;
@@ -131,7 +130,6 @@ impl ConfigManager {
         let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
-        config.apply_compat_defaults();
         Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
 
         config
@@ -280,13 +278,12 @@ impl ConfigManager {
         }
 
         let (effective_toml, origins) = layer_stack.effective_config_with_origins();
-        let mut config: VTCodeConfig = effective_toml.try_into().with_context(|| {
+        let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
             format!(
                 "Failed to parse effective config with file: {}",
                 path.display()
             )
         })?;
-        config.apply_compat_defaults();
         Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
 
         config.validate().with_context(|| {
@@ -343,6 +340,10 @@ impl ConfigManager {
     /// Persist configuration to a specific path, preserving comments
     pub fn save_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
         let path = path.as_ref();
+        let sparse_value =
+            Self::sparse_config_value(config).context("Failed to prepare sparse configuration")?;
+        let sparse_content = toml::to_string_pretty(&sparse_value)
+            .context("Failed to serialize sparse configuration")?;
 
         // If file exists, preserve comments by using toml_edit
         if path.exists() {
@@ -352,56 +353,166 @@ impl ConfigManager {
             let mut doc = original_content
                 .parse::<toml_edit::DocumentMut>()
                 .with_context(|| format!("Failed to parse existing config: {}", path.display()))?;
+            Self::remove_deprecated_config_keys(&mut doc);
 
-            // Serialize new config to TOML value
-            let new_value =
-                toml::to_string_pretty(config).context("Failed to serialize configuration")?;
-            let new_doc: toml_edit::DocumentMut = new_value
+            let new_doc: toml_edit::DocumentMut = sparse_content
                 .parse()
-                .context("Failed to parse serialized configuration")?;
+                .context("Failed to parse sparse serialized configuration")?;
+            let default_value = toml::Value::try_from(VTCodeConfig::default())
+                .context("Failed to serialize default configuration")?;
+            let default_doc: toml_edit::DocumentMut = toml::to_string_pretty(&default_value)
+                .context("Failed to serialize default configuration")?
+                .parse()
+                .context("Failed to parse default serialized configuration")?;
 
             // Update values while preserving structure and comments
-            Self::merge_toml_documents(&mut doc, &new_doc);
+            Self::merge_sparse_toml_documents(&mut doc, &new_doc, &default_doc);
 
             fs::write(path, doc.to_string())
                 .with_context(|| format!("Failed to write config file: {}", path.display()))?;
         } else {
-            // New file, just write normally
-            let content =
-                toml::to_string_pretty(config).context("Failed to serialize configuration")?;
-            fs::write(path, content)
+            fs::write(path, sparse_content)
                 .with_context(|| format!("Failed to write config file: {}", path.display()))?;
         }
 
         Ok(())
     }
 
+    fn remove_deprecated_config_keys(doc: &mut toml_edit::DocumentMut) {
+        let table = doc.as_table_mut();
+        table.remove("project_doc_max_bytes");
+        table.remove("project_doc_fallback_filenames");
+        Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
+        Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools"]);
+    }
+
+    fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {
+        let Some(section) = table
+            .get_mut(section)
+            .and_then(toml_edit::Item::as_table_mut)
+        else {
+            return;
+        };
+
+        for key in keys {
+            section.remove(key);
+        }
+    }
+
+    pub fn sparse_config_value(config: &VTCodeConfig) -> Result<toml::Value> {
+        let mut value =
+            toml::Value::try_from(config).context("Failed to serialize configuration")?;
+        let default_value = toml::Value::try_from(VTCodeConfig::default())
+            .context("Failed to serialize default configuration")?;
+        Self::prune_default_values(&mut value, &default_value);
+        Ok(value)
+    }
+
+    fn prune_default_values(value: &mut toml::Value, default_value: &toml::Value) -> bool {
+        match (value, default_value) {
+            (toml::Value::Table(table), toml::Value::Table(default_table)) => {
+                table.retain(|key, child| {
+                    default_table.get(key).is_none_or(|default_child| {
+                        !Self::prune_default_values(child, default_child)
+                    })
+                });
+                table.is_empty()
+            }
+            (value, default_value) => value == default_value,
+        }
+    }
+
     /// Merge TOML documents, preserving comments and structure from original
-    fn merge_toml_documents(original: &mut toml_edit::DocumentMut, new: &toml_edit::DocumentMut) {
+    fn merge_sparse_toml_documents(
+        original: &mut toml_edit::DocumentMut,
+        new: &toml_edit::DocumentMut,
+        default_doc: &toml_edit::DocumentMut,
+    ) {
+        Self::merge_sparse_tables(
+            original.as_table_mut(),
+            new.as_table(),
+            default_doc.as_table(),
+        );
+    }
+
+    fn merge_sparse_tables(
+        original: &mut toml_edit::Table,
+        new: &toml_edit::Table,
+        default_table: &toml_edit::Table,
+    ) {
+        let mut remove_keys = Vec::new();
+
+        for (key, default_value) in default_table.iter() {
+            if let Some(new_value) = new.get(key) {
+                if let Some(original_value) = original.get_mut(key) {
+                    Self::merge_sparse_items(original_value, new_value, default_value);
+                } else {
+                    original[key] = new_value.clone();
+                }
+            } else {
+                let Some(original_value) = original.get_mut(key) else {
+                    continue;
+                };
+                if Self::remove_known_default_item(original_value, default_value) {
+                    remove_keys.push(key.to_string());
+                }
+            }
+        }
+
+        for key in remove_keys {
+            original.remove(&key);
+        }
+
         for (key, new_value) in new.iter() {
+            if default_table.contains_key(key) {
+                continue;
+            }
             if let Some(original_value) = original.get_mut(key) {
-                Self::merge_toml_items(original_value, new_value);
+                *original_value = new_value.clone();
             } else {
                 original[key] = new_value.clone();
             }
         }
     }
 
-    /// Recursively merge TOML items
-    fn merge_toml_items(original: &mut toml_edit::Item, new: &toml_edit::Item) {
-        match (original, new) {
-            (toml_edit::Item::Table(orig_table), toml_edit::Item::Table(new_table)) => {
-                for (key, new_value) in new_table.iter() {
-                    if let Some(orig_value) = orig_table.get_mut(key) {
-                        Self::merge_toml_items(orig_value, new_value);
-                    } else {
-                        orig_table[key] = new_value.clone();
-                    }
-                }
-            }
-            (orig, new) => {
+    fn merge_sparse_items(
+        original: &mut toml_edit::Item,
+        new: &toml_edit::Item,
+        default_value: &toml_edit::Item,
+    ) {
+        match (original, new, default_value) {
+            (
+                toml_edit::Item::Table(orig_table),
+                toml_edit::Item::Table(new_table),
+                toml_edit::Item::Table(default_table),
+            ) => Self::merge_sparse_tables(orig_table, new_table, default_table),
+            (orig, new, _) => {
                 *orig = new.clone();
             }
+        }
+    }
+
+    fn remove_known_default_item(
+        original: &mut toml_edit::Item,
+        default_value: &toml_edit::Item,
+    ) -> bool {
+        match (original, default_value) {
+            (toml_edit::Item::Table(orig_table), toml_edit::Item::Table(default_table)) => {
+                let mut remove_keys = Vec::new();
+                for (key, default_child) in default_table.iter() {
+                    let Some(orig_child) = orig_table.get_mut(key) else {
+                        continue;
+                    };
+                    if Self::remove_known_default_item(orig_child, default_child) {
+                        remove_keys.push(key.to_string());
+                    }
+                }
+                for key in remove_keys {
+                    orig_table.remove(&key);
+                }
+                orig_table.is_empty()
+            }
+            _ => true,
         }
     }
 

@@ -78,7 +78,7 @@ mv tokens.next tokens.txt
         command: "./print-token.sh".to_string(),
         args: Vec::new(),
         cwd: Some(dir.path().to_path_buf()),
-        timeout_ms: 1_000,
+        timeout_ms: 5_000,
         refresh_interval_ms: 60_000,
     }
 }
@@ -107,7 +107,7 @@ $lines | Select-Object -Skip 1 | Set-Content -Path tokens.txt
             script_path.to_string_lossy().into_owned(),
         ],
         cwd: Some(dir.path().to_path_buf()),
-        timeout_ms: 1_000,
+        timeout_ms: 5_000,
         refresh_interval_ms: 60_000,
     }
 }

@@ -46,14 +46,6 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub file_opener: FileOpener,
 
-    /// Codex-compatible project doc byte limit override.
-    #[serde(default)]
-    pub project_doc_max_bytes: Option<usize>,
-
-    /// Codex-compatible fallback filenames for project instructions discovery.
-    #[serde(default)]
-    pub project_doc_fallback_filenames: Vec<String>,
-
     /// External notification command invoked for supported events.
     #[serde(default)]
     pub notify: Vec<String>,
@@ -186,16 +178,6 @@ pub struct VTCodeConfig {
 }
 
 impl VTCodeConfig {
-    pub fn apply_compat_defaults(&mut self) {
-        if let Some(max_bytes) = self.project_doc_max_bytes {
-            self.agent.project_doc_max_bytes = max_bytes;
-        }
-
-        if !self.project_doc_fallback_filenames.is_empty() {
-            self.agent.project_doc_fallback_filenames = self.project_doc_fallback_filenames.clone();
-        }
-    }
-
     pub fn validate(&self) -> Result<()> {
         self.syntax_highlighting
             .validate()
@@ -396,9 +378,6 @@ impl VTCodeConfig {
 # Clickable file citation URI scheme ("vscode", "cursor", "windsurf", "vscode-insiders", "none")
 file_opener = "none"
 
-# Additional fallback filenames to use when AGENTS.md is absent
-project_doc_fallback_filenames = []
-
 # Optional external command invoked after each completed agent turn
 notify = []
 
@@ -514,12 +493,6 @@ use_for_large_reads = true
 use_for_web_summary = true
 use_for_git_history = true
 use_for_memory = true
-
-# Default editing mode on startup: "edit" or "plan"
-# "edit" - Full tool access for file modifications and command execution (default)
-# "plan" - Read-only mode that produces implementation plans without making changes
-# Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "edit"
 
 # Inline prompt suggestions for the chat composer
 [agent.prompt_suggestions]

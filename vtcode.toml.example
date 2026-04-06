@@ -645,11 +645,8 @@ deny_regex = []
 # Standard mode prompts when matching rules or legacy policy require approval.
 default_mode = "default"
 
-# Claude-style compatibility lists for exact VT Code tool ids.
-allowed_tools = []
-disallowed_tools = []
-
-# Rules are evaluated in order: deny -> ask -> allow.
+# Rules are evaluated in order: deny -> ask -> allow. Exact tool ids can be
+# listed directly in allow/deny.
 deny = [
   "Edit(/.git/**)",
 ]

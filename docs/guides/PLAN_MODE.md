@@ -32,7 +32,7 @@ In Plan Mode, the agent **cannot**:
 vtcode --permission-mode plan
 ```
 
-If `default_editing_mode = "plan"` is set in `vtcode.toml`, VT Code will prompt once at session start to confirm whether to enter Plan Mode. Declining starts in Edit mode.
+If `permissions.default_mode = "plan"` is set in `vtcode.toml`, VT Code will prompt once at session start to confirm whether to enter Plan Mode. Declining starts in Edit mode.
 
 ### Toggling Plan Mode in a session
 

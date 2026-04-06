@@ -1,6 +1,19 @@
 use serde_json::json;
-use std::path::PathBuf;
+use std::fs;
+use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
+
+async fn temp_registry() -> (TempDir, ToolRegistry) {
+    let temp = TempDir::new().expect("temp workspace");
+    fs::write(
+        temp.path().join("Cargo.toml"),
+        "[package]\nname = \"pty-test\"\n",
+    )
+    .expect("write fixture Cargo.toml");
+    let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+    registry.allow_all_tools().await.ok();
+    (temp, registry)
+}
 
 fn exec_session_id(response: &serde_json::Value) -> String {
     response
@@ -44,8 +57,7 @@ async fn read_session_until_exit(
 
 #[tokio::test]
 async fn test_pty_functionality() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     // Run an allow-listed command and verify output is captured
     let result = registry
@@ -82,8 +94,7 @@ async fn test_pty_functionality() {
 
 #[tokio::test]
 async fn test_pty_functionality_with_exit_code() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     // Run an allow-listed command that exits with a non-zero code
     let result = registry
@@ -113,8 +124,7 @@ async fn test_pty_functionality_with_exit_code() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_pty_run_returns_live_session_after_yield_window() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(
@@ -151,8 +161,7 @@ async fn test_pty_run_returns_live_session_after_yield_window() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_pty_shell_option_runs_through_requested_shell() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let result = registry
         .execute_tool(
@@ -174,8 +183,7 @@ async fn test_pty_shell_option_runs_through_requested_shell() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_create_pty_session_uses_requested_shell() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let create_result = registry
         .execute_tool(
@@ -198,8 +206,7 @@ async fn test_create_pty_session_uses_requested_shell() {
 
 #[tokio::test]
 async fn test_pty_output_has_no_ansi_codes() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let result = registry
         .execute_tool(
@@ -235,8 +242,7 @@ async fn test_pty_output_has_no_ansi_codes() {
 
 #[tokio::test]
 async fn test_pty_command_not_found_handling() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     // Run a command that definitely doesn't exist
     let result = registry
@@ -282,8 +288,7 @@ async fn test_pty_command_not_found_handling() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_read_pty_session_includes_command_context_fields() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(
@@ -336,8 +341,7 @@ async fn test_read_pty_session_includes_command_context_fields() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_inspect_does_not_drain_session_output() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(
@@ -417,8 +421,7 @@ async fn test_inspect_does_not_drain_session_output() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_exited_sessions_are_pruned_after_final_poll() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(
@@ -481,8 +484,7 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_unified_exec_write_preserves_whitespace() {
-    let registry = ToolRegistry::new(PathBuf::from(".")).await;
-    registry.allow_all_tools().await.ok();
+    let (_temp, registry) = temp_registry().await;
 
     let start = registry
         .execute_tool(

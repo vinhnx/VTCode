@@ -37,7 +37,10 @@ impl ToolRegistry {
                 if let Some(default_policy) = metadata.default_permission() {
                     let current = policy.get_policy(&name);
                     if matches!(current, ToolPolicy::Prompt) {
-                        if let Err(err) = policy.set_policy(&name, default_policy.clone()).await {
+                        if let Err(err) = policy
+                            .seed_default_policy(&name, default_policy.clone())
+                            .await
+                        {
                             tracing::warn!(
                                 tool = %name,
                                 error = %err,

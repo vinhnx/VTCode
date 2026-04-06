@@ -417,8 +417,10 @@ mod tests {
 
     #[test]
     fn render_commented_config_includes_section_heading() {
-        let rendered =
-            render_commented_config(&VTCodeConfig::default()).expect("config should render");
+        let mut config = VTCodeConfig::default();
+        config.agent.default_model = "gpt-5.4".to_string();
+
+        let rendered = render_commented_config(&config).expect("config should render");
         assert!(rendered.contains("# Agent Defaults"));
         assert!(rendered.contains("[agent]"));
     }

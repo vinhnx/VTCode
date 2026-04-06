@@ -1,7 +1,7 @@
 use crate::constants::{defaults, llm_generation, prompt_budget};
 use crate::types::{
-    EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
-    UiSurfacePreference, VerbosityLevel,
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -221,22 +221,11 @@ pub struct AgentConfig {
     #[serde(default)]
     pub user_instructions: Option<String>,
 
-    /// Default editing mode on startup: "edit" (default) or "plan"
-    /// Codex-inspired: Encourages structured planning before execution.
-    #[serde(default)]
-    pub default_editing_mode: EditingMode,
-
     /// Require user confirmation before executing a plan generated in plan mode
     /// When true, exiting plan mode shows the implementation blueprint and
     /// requires explicit user approval before enabling edit tools.
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
-
-    /// Deprecated compatibility flag for pre-classifier autonomous mode settings.
-    /// When true and `[permissions].default_mode` is not explicitly set, VT Code maps
-    /// the session to `permissions.default_mode = "auto"`.
-    #[serde(default = "default_autonomous_mode")]
-    pub autonomous_mode: bool,
 
     /// Circuit breaker configuration for resilient tool execution
     /// Controls when the agent should pause and ask for user guidance due to repeated failures
@@ -641,9 +630,7 @@ impl Default for AgentConfig {
             include_working_directory: default_include_working_directory(),
             include_structured_reasoning_tags: None,
             user_instructions: None,
-            default_editing_mode: EditingMode::default(),
             require_plan_confirmation: default_require_plan_confirmation(),
-            autonomous_mode: default_autonomous_mode(),
             circuit_breaker: CircuitBreakerConfig::default(),
             open_responses: OpenResponsesConfig::default(),
         }
@@ -841,11 +828,6 @@ const fn default_include_working_directory() -> bool {
 #[inline]
 const fn default_require_plan_confirmation() -> bool {
     true // Default: require confirmation (HITL pattern)
-}
-
-#[inline]
-const fn default_autonomous_mode() -> bool {
-    false // Default: interactive mode with full HITL
 }
 
 #[inline]
@@ -1514,11 +1496,9 @@ mod tests {
     }
 
     #[test]
-    fn test_editing_mode_config_default() {
+    fn test_plan_confirmation_config_default() {
         let config = AgentConfig::default();
-        assert_eq!(config.default_editing_mode, EditingMode::Edit);
         assert!(config.require_plan_confirmation);
-        assert!(!config.autonomous_mode);
     }
 
     #[test]

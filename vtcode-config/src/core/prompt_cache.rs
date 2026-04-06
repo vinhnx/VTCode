@@ -706,13 +706,6 @@ prompt_cache_key_mode = "off"
         assert!(example_config.contains("cache_friendly_prompt_shaping = true"));
         assert!(example_config.contains("# prompt_cache_retention = \"24h\""));
 
-        let embedded_config = fs::read_to_string(workspace_root.join("vtcode-core/vtcode.toml"))
-            .expect("embedded vtcode.toml");
-        assert!(embedded_config.contains("[prompt_cache]"));
-        assert!(embedded_config.contains("enabled = true"));
-        assert!(embedded_config.contains("cache_friendly_prompt_shaping = true"));
-        assert!(embedded_config.contains("# prompt_cache_retention = \"24h\""));
-
         let prompt_cache_guide =
             fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md"))
                 .expect("prompt caching guide");

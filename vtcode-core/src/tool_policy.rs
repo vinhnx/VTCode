@@ -955,6 +955,16 @@ impl ToolPolicyManager {
         self.persist_policy_to_workspace_config(&canonical, policy)
     }
 
+    pub(crate) async fn seed_default_policy(
+        &mut self,
+        tool_name: &str,
+        policy: ToolPolicy,
+    ) -> Result<()> {
+        let canonical = canonical_tool_name(tool_name).into_owned();
+        self.config.policies.insert(canonical, policy);
+        self.save_config().await
+    }
+
     /// Reset all tools to prompt
     pub async fn reset_all_to_prompt(&mut self) -> Result<()> {
         for policy in self.config.policies.values_mut() {

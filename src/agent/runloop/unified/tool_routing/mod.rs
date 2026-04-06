@@ -150,15 +150,11 @@ fn effective_permissions_config(
         return Some(effective);
     }
 
-    let initial_rule_count = effective.allow.len() + effective.allowed_tools.len();
+    let initial_rule_count = effective.allow.len();
     effective
         .allow
         .retain(|rule| !is_broad_auto_mode_allow_rule(rule));
-    effective
-        .allowed_tools
-        .retain(|tool| !is_broad_auto_mode_allow_rule(tool));
-    let dropped =
-        initial_rule_count.saturating_sub(effective.allow.len() + effective.allowed_tools.len());
+    let dropped = initial_rule_count.saturating_sub(effective.allow.len());
     if dropped > 0 {
         tracing::trace!(
             dropped_broad_allow_rules = dropped,
@@ -1729,7 +1725,7 @@ mod tests {
         let ctrl_c_notify = Arc::new(Notify::new());
         let permissions = PermissionsConfig {
             default_mode: PermissionMode::DontAsk,
-            allowed_tools: vec![tools::READ_FILE.to_string()],
+            allow: vec![tools::READ_FILE.to_string()],
             ..PermissionsConfig::default()
         };
 
@@ -1981,7 +1977,7 @@ mod tests {
         let ctrl_c_notify = Arc::new(Notify::new());
         let permissions = PermissionsConfig {
             default_mode: PermissionMode::BypassPermissions,
-            disallowed_tools: vec![tools::UNIFIED_EXEC.to_string()],
+            deny: vec![tools::UNIFIED_EXEC.to_string()],
             ..PermissionsConfig::default()
         };
 
