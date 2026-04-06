@@ -22,7 +22,10 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
-use crate::llm::provider::{FinishReason, Message, ToolCall, prepare_openai_responses_request};
+use crate::llm::provider::{
+    FinishReason, Message, ToolCall, prepare_responses_continuation_request,
+    supports_responses_chaining,
+};
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
@@ -97,16 +100,6 @@ fn summarize_verification_output(result: &serde_json::Value) -> String {
         .unwrap_or_default()
 }
 
-fn supports_responses_chaining(
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-) -> bool {
-    provider_supports_responses_compaction
-        || provider_name.eq_ignore_ascii_case("openai")
-        || provider_name.eq_ignore_ascii_case("openresponses")
-        || provider_name.eq_ignore_ascii_case("gemini")
-}
-
 fn prepare_responses_request_messages(
     session_state: &mut AgentSessionState,
     provider_name: &str,
@@ -114,23 +107,9 @@ fn prepare_responses_request_messages(
     model: &str,
     messages: Vec<Message>,
 ) -> (Vec<Message>, Option<String>) {
-    if !supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
-        return (messages, None);
-    }
-
-    let uses_openai_incremental_history = provider_name.eq_ignore_ascii_case("openai")
-        || (provider_supports_responses_compaction
-            && !provider_name.eq_ignore_ascii_case("openresponses")
-            && !provider_name.eq_ignore_ascii_case("gemini"));
-
-    if !uses_openai_incremental_history {
-        return (
-            messages,
-            session_state.previous_response_id_for(provider_name, model),
-        );
-    }
-
-    let prepared = prepare_openai_responses_request(
+    let prepared = prepare_responses_continuation_request(
+        provider_name,
+        provider_supports_responses_compaction,
         messages,
         session_state.previous_response_chain_for(provider_name, model),
     );

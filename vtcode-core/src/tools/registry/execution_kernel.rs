@@ -175,52 +175,6 @@ fn unified_file_action_for_limit(normalized_tool_name: &str, args: &Value) -> Op
     None
 }
 
-fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<Value> {
-    let obj = args.as_object()?;
-    let command = obj
-        .get("command")
-        .or_else(|| obj.get("cmd"))
-        .or_else(|| obj.get("raw_command"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-    let action = obj.get("action").and_then(Value::as_str).map(str::trim);
-    if let Some(action) = action
-        && !action.is_empty()
-        && !action.eq_ignore_ascii_case("run")
-        && !action.eq_ignore_ascii_case("exec")
-        && !action.eq_ignore_ascii_case("execute")
-        && !action.eq_ignore_ascii_case("shell")
-    {
-        return None;
-    }
-
-    let mut mapped = Map::new();
-    mapped.insert("action".to_string(), Value::String("run".to_string()));
-    mapped.insert("command".to_string(), Value::String(command.to_string()));
-
-    for key in [
-        "args",
-        "cwd",
-        "workdir",
-        "env",
-        "timeout_ms",
-        "yield_time_ms",
-        "login",
-        "shell",
-        "tty",
-        "sandbox_permissions",
-        "justification",
-        "prefix_rule",
-    ] {
-        if let Some(value) = obj.get(key) {
-            mapped.insert(key.to_string(), value.clone());
-        }
-    }
-
-    Some(Value::Object(mapped))
-}
-
 pub(super) fn remap_public_unified_file_alias_args(
     requested_name: &str,
     normalized_tool_name: &str,
@@ -365,7 +319,9 @@ pub(super) fn preflight_validate_resolved_call(
         normalize_tool_args(normalized_tool_name, args, parameter_schema.as_ref())?;
     if normalized_tool_name == tool_names::UNIFIED_FILE
         && let Some(remapped_args) =
-            remap_unified_file_command_args_to_unified_exec(validation_args.as_ref())
+            crate::tools::tool_intent::remap_unified_file_command_args_to_unified_exec(
+                validation_args.as_ref(),
+            )
     {
         effective_tool_name = tool_names::UNIFIED_EXEC.to_string();
         let exec_schema = registry
@@ -959,6 +915,26 @@ mod tests {
         )?;
 
         assert_eq!(result.normalized_tool_name, tool_names::UNIFIED_EXEC);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unified_file_command_payload_preflight_remaps_to_unified_exec() -> Result<()> {
+        let (_temp, registry) = new_test_registry().await;
+
+        let result = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_FILE,
+            &json!({
+                "command": "echo vtcode",
+                "cwd": ".",
+            }),
+        )?;
+
+        assert_eq!(result.normalized_tool_name, tool_names::UNIFIED_EXEC);
+        assert_eq!(result.effective_args["action"], "run");
+        assert_eq!(result.effective_args["command"], "echo vtcode");
+        assert_eq!(result.effective_args["cwd"], ".");
         Ok(())
     }
 }

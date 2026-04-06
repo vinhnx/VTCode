@@ -1,4 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashSet, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Duration;
@@ -144,13 +144,50 @@ impl PreparedToolBatch {
         layout
     }
 
+    pub fn plan_layout_with_names<'a>(
+        calls: impl IntoIterator<Item = (bool, &'a str)>,
+        allow_parallel: bool,
+    ) -> Vec<(PreparedToolBatchKind, usize)> {
+        if !allow_parallel {
+            return calls
+                .into_iter()
+                .map(|_| (PreparedToolBatchKind::Sequential, 1))
+                .collect();
+        }
+
+        let mut layout = Vec::new();
+        let mut parallel_batch_len = 0usize;
+        let mut parallel_tool_names = HashSet::new();
+
+        for (can_parallelize, tool_name) in calls {
+            if !can_parallelize {
+                push_parallel_batch_layout(&mut layout, &mut parallel_batch_len);
+                parallel_tool_names.clear();
+                layout.push((PreparedToolBatchKind::Sequential, 1));
+                continue;
+            }
+
+            if !parallel_tool_names.insert(tool_name) {
+                push_parallel_batch_layout(&mut layout, &mut parallel_batch_len);
+                parallel_tool_names.clear();
+                parallel_tool_names.insert(tool_name);
+            }
+            parallel_batch_len += 1;
+        }
+
+        push_parallel_batch_layout(&mut layout, &mut parallel_batch_len);
+        layout
+    }
+
     pub fn plan(
         calls: impl IntoIterator<Item = PreparedToolCall>,
         allow_parallel: bool,
     ) -> Vec<Self> {
         let calls: Vec<_> = calls.into_iter().collect();
-        let layout = Self::plan_layout(
-            calls.iter().map(PreparedToolCall::can_parallelize),
+        let layout = Self::plan_layout_with_names(
+            calls
+                .iter()
+                .map(|call| (call.can_parallelize(), call.canonical_name.as_str())),
             allow_parallel,
         );
         let mut calls = calls.into_iter();
@@ -163,6 +200,18 @@ impl PreparedToolBatch {
             })
             .collect()
     }
+}
+
+fn push_parallel_batch_layout(
+    layout: &mut Vec<(PreparedToolBatchKind, usize)>,
+    parallel_batch_len: &mut usize,
+) {
+    match *parallel_batch_len {
+        0 => {}
+        1 => layout.push((PreparedToolBatchKind::Sequential, 1)),
+        len => layout.push((PreparedToolBatchKind::ParallelReadonly, len)),
+    }
+    *parallel_batch_len = 0;
 }
 
 #[derive(Debug, Clone)]
@@ -381,7 +430,7 @@ fn reduce_search_result(result: Value) -> Value {
 
     if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
         let mut deduped = Vec::with_capacity(matches.len());
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         for entry in matches {
             let path = entry
                 .get("path")
@@ -691,6 +740,64 @@ mod tests {
         assert_eq!(batches[0].kind, PreparedToolBatchKind::ParallelReadonly);
         assert_eq!(batches[0].calls.len(), 2);
         assert_eq!(batches[1].kind, PreparedToolBatchKind::Sequential);
+    }
+
+    #[test]
+    fn prepared_tool_batches_preserve_order_around_mutating_calls() {
+        let batches = PreparedToolBatch::plan(
+            vec![
+                PreparedToolCall::new("read_a".to_string(), true, true, serde_json::json!({})),
+                PreparedToolCall::new("edit".to_string(), false, false, serde_json::json!({})),
+                PreparedToolCall::new("read_b".to_string(), true, true, serde_json::json!({})),
+            ],
+            true,
+        );
+
+        assert_eq!(batches.len(), 3);
+        assert!(
+            batches
+                .iter()
+                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
+        );
+        assert_eq!(batches[0].calls[0].canonical_name, "read_a");
+        assert_eq!(batches[1].calls[0].canonical_name, "edit");
+        assert_eq!(batches[2].calls[0].canonical_name, "read_b");
+    }
+
+    #[test]
+    fn prepared_tool_batches_split_duplicate_parallel_tool_names() {
+        let batches = PreparedToolBatch::plan(
+            vec![
+                PreparedToolCall::new("read_file".to_string(), true, true, serde_json::json!({})),
+                PreparedToolCall::new("read_file".to_string(), true, true, serde_json::json!({})),
+            ],
+            true,
+        );
+
+        assert_eq!(batches.len(), 2);
+        assert!(
+            batches
+                .iter()
+                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
+        );
+    }
+
+    #[test]
+    fn prepared_tool_batches_serializes_all_calls_when_parallel_disabled() {
+        let batches = PreparedToolBatch::plan(
+            vec![
+                PreparedToolCall::new("read_a".to_string(), true, true, serde_json::json!({})),
+                PreparedToolCall::new("read_b".to_string(), true, true, serde_json::json!({})),
+            ],
+            false,
+        );
+
+        assert_eq!(batches.len(), 2);
+        assert!(
+            batches
+                .iter()
+                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
+        );
     }
 
     #[test]

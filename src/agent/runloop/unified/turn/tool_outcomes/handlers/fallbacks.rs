@@ -170,54 +170,8 @@ pub(super) fn preflight_validation_fallback(
         return None;
     }
 
-    remap_unified_file_command_args_to_unified_exec(args_val)
+    tool_intent::remap_unified_file_command_args_to_unified_exec(args_val)
         .map(|args| (tool_names::UNIFIED_EXEC.to_string(), args))
-}
-
-pub(super) fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<Value> {
-    let obj = args.as_object()?;
-    let command = obj
-        .get("command")
-        .or_else(|| obj.get("cmd"))
-        .or_else(|| obj.get("raw_command"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-    let action = obj.get("action").and_then(Value::as_str).map(str::trim);
-    if let Some(action) = action
-        && !action.is_empty()
-        && !action.eq_ignore_ascii_case("run")
-        && !action.eq_ignore_ascii_case("exec")
-        && !action.eq_ignore_ascii_case("execute")
-        && !action.eq_ignore_ascii_case("shell")
-    {
-        return None;
-    }
-
-    let mut mapped = serde_json::Map::new();
-    mapped.insert("action".to_string(), Value::String("run".to_string()));
-    mapped.insert("command".to_string(), Value::String(command.to_string()));
-
-    for key in [
-        "args",
-        "cwd",
-        "workdir",
-        "env",
-        "timeout_ms",
-        "yield_time_ms",
-        "login",
-        "shell",
-        "tty",
-        "sandbox_permissions",
-        "justification",
-        "prefix_rule",
-    ] {
-        if let Some(value) = obj.get(key) {
-            mapped.insert(key.to_string(), value.clone());
-        }
-    }
-
-    Some(Value::Object(mapped))
 }
 
 fn find_ci_field<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a Value> {

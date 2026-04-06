@@ -286,6 +286,52 @@ pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     }
 }
 
+pub fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<Value> {
+    let obj = args.as_object()?;
+    let command = obj
+        .get("command")
+        .or_else(|| obj.get("cmd"))
+        .or_else(|| obj.get("raw_command"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let action = obj.get("action").and_then(Value::as_str).map(str::trim);
+    if let Some(action) = action
+        && !action.is_empty()
+        && !action.eq_ignore_ascii_case("run")
+        && !action.eq_ignore_ascii_case("exec")
+        && !action.eq_ignore_ascii_case("execute")
+        && !action.eq_ignore_ascii_case("shell")
+    {
+        return None;
+    }
+
+    let mut mapped = serde_json::Map::new();
+    mapped.insert("action".to_string(), Value::String("run".to_string()));
+    mapped.insert("command".to_string(), Value::String(command.to_string()));
+
+    for key in [
+        "args",
+        "cwd",
+        "workdir",
+        "env",
+        "timeout_ms",
+        "yield_time_ms",
+        "login",
+        "shell",
+        "tty",
+        "sandbox_permissions",
+        "justification",
+        "prefix_rule",
+    ] {
+        if let Some(value) = obj.get(key) {
+            mapped.insert(key.to_string(), value.clone());
+        }
+    }
+
+    Some(Value::Object(mapped))
+}
+
 fn unified_file_intent(args: &Value) -> ToolIntent {
     let readonly_unified_action = unified_file_action(args)
         .map(|action| action.eq_ignore_ascii_case("read"))
@@ -724,7 +770,8 @@ mod tests {
     use super::{
         canonical_unified_exec_tool_name, classify_tool_intent, is_command_run_tool_call,
         is_edited_file_conflict_guarded_call, is_parallel_safe_call, normalize_unified_search_args,
-        should_use_spool_reference_only, unified_file_action,
+        remap_unified_file_command_args_to_unified_exec, should_use_spool_reference_only,
+        unified_file_action,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -916,6 +963,43 @@ mod tests {
         });
         let action = unified_file_action(&args);
         assert_eq!(action, Some("read"));
+    }
+
+    #[test]
+    fn remap_unified_file_command_args_maps_command_payload_to_unified_exec() {
+        let remapped = remap_unified_file_command_args_to_unified_exec(&json!({
+            "command": "cargo check",
+            "cwd": ".",
+            "timeout_ms": 1000
+        }))
+        .expect("command payload should remap");
+
+        assert_eq!(remapped["action"], "run");
+        assert_eq!(remapped["command"], "cargo check");
+        assert_eq!(remapped["cwd"], ".");
+        assert_eq!(remapped["timeout_ms"], 1000);
+    }
+
+    #[test]
+    fn remap_unified_file_command_args_accepts_exec_action_aliases() {
+        let remapped = remap_unified_file_command_args_to_unified_exec(&json!({
+            "action": "shell",
+            "cmd": "echo ok"
+        }))
+        .expect("shell action alias should remap");
+
+        assert_eq!(remapped["action"], "run");
+        assert_eq!(remapped["command"], "echo ok");
+    }
+
+    #[test]
+    fn remap_unified_file_command_args_rejects_non_command_actions() {
+        let remapped = remap_unified_file_command_args_to_unified_exec(&json!({
+            "action": "read",
+            "command": "echo ok"
+        }));
+
+        assert_eq!(remapped, None);
     }
 
     #[test]

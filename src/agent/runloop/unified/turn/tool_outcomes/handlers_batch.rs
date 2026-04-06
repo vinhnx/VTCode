@@ -16,6 +16,7 @@ use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handl
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     push_invalid_tool_args_response, resolve_max_tool_retries, update_repetition_tracker,
 };
+use vtcode_core::core::agent::harness_kernel::{PreparedToolBatch, PreparedToolBatchKind};
 
 struct ValidatedToolCall<'a> {
     tool_call: &'a PreparedAssistantToolCall,
@@ -63,40 +64,39 @@ impl ValidatedToolCall<'_> {
     }
 }
 
+#[cfg(test)]
 fn planned_execution_group_stats(
     validated_calls: &[ValidatedToolCall<'_>],
     allow_parallel: bool,
 ) -> (usize, usize, usize) {
-    if !allow_parallel {
-        let groups = validated_calls.len();
-        return (groups, 0, usize::from(groups > 0));
-    }
+    let layout = planned_execution_layout(validated_calls, allow_parallel);
+    execution_group_stats_from_layout(&layout)
+}
 
-    let mut groups = 0usize;
-    let mut parallel_groups = 0usize;
-    let mut max_group_size = 1usize;
-    let mut current_parallel_group_size = 0usize;
+fn planned_execution_layout(
+    validated_calls: &[ValidatedToolCall<'_>],
+    allow_parallel: bool,
+) -> Vec<(PreparedToolBatchKind, usize)> {
+    PreparedToolBatch::plan_layout_with_names(
+        validated_calls.iter().map(|validated_call| {
+            (
+                validated_call.can_parallelize(),
+                validated_call.prepared.canonical_name.as_str(),
+            )
+        }),
+        allow_parallel,
+    )
+}
 
-    for validated_call in validated_calls {
-        if validated_call.can_parallelize() {
-            current_parallel_group_size += 1;
-            continue;
-        }
-
-        if current_parallel_group_size > 0 {
-            groups += 1;
-            parallel_groups += 1;
-            max_group_size = max_group_size.max(current_parallel_group_size);
-            current_parallel_group_size = 0;
-        }
-        groups += 1;
-    }
-
-    if current_parallel_group_size > 0 {
-        groups += 1;
-        parallel_groups += 1;
-        max_group_size = max_group_size.max(current_parallel_group_size);
-    }
+fn execution_group_stats_from_layout(
+    layout: &[(PreparedToolBatchKind, usize)],
+) -> (usize, usize, usize) {
+    let groups = layout.len();
+    let parallel_groups = layout
+        .iter()
+        .filter(|(kind, _)| matches!(kind, PreparedToolBatchKind::ParallelReadonly))
+        .count();
+    let max_group_size = layout.iter().map(|(_, len)| *len).max().unwrap_or(0);
 
     (groups, parallel_groups, max_group_size)
 }
@@ -262,17 +262,6 @@ async fn execute_parallel_group<'a, 'b>(
     Ok(None)
 }
 
-async fn flush_parallel_group<'a, 'b>(
-    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
-    parallel_group: &mut Vec<ValidatedToolCall<'_>>,
-    batch_tracker: &mut crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome,
-) -> Result<Option<TurnHandlerOutcome>> {
-    if parallel_group.is_empty() {
-        return Ok(None);
-    }
-    execute_parallel_group(t_ctx, std::mem::take(parallel_group), batch_tracker).await
-}
-
 pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_calls: &[PreparedAssistantToolCall],
@@ -319,8 +308,9 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
         return Ok(None);
     }
 
+    let planned_layout = planned_execution_layout(&validated_calls, t_ctx.ctx.full_auto);
     let (groups, parallel_groups, max_group_size) =
-        planned_execution_group_stats(&validated_calls, t_ctx.ctx.full_auto);
+        execution_group_stats_from_layout(&planned_layout);
     tracing::debug!(
         target: "vtcode.turn.metrics",
         metric = "tool_dispatch_groups",
@@ -331,39 +321,39 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
     );
 
     let mut batch_tracker = crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome::new();
-    let mut parallel_group = Vec::with_capacity(max_group_size);
+    let mut validated_calls = validated_calls.into_iter();
 
-    for validated_call in validated_calls {
-        if t_ctx.ctx.full_auto && validated_call.can_parallelize() {
-            parallel_group.push(validated_call);
-            continue;
+    for (kind, len) in planned_layout {
+        let group = validated_calls.by_ref().take(len).collect::<Vec<_>>();
+        match kind {
+            PreparedToolBatchKind::ParallelReadonly => {
+                if let Some(outcome) =
+                    execute_parallel_group(t_ctx, group, &mut batch_tracker).await?
+                {
+                    return Ok(Some(outcome));
+                }
+            }
+            PreparedToolBatchKind::Sequential => {
+                for validated_call in group {
+                    let tool_call_id = validated_call.call_id().to_string();
+                    let tool_name = validated_call.prepared.canonical_name;
+                    let args = validated_call.prepared.effective_args;
+                    if let Some(outcome) = execute_and_handle_tool_call(
+                        t_ctx.ctx,
+                        t_ctx.repeated_tool_attempts,
+                        t_ctx.turn_modified_files,
+                        tool_call_id,
+                        &tool_name,
+                        args,
+                        None,
+                    )
+                    .await?
+                    {
+                        return Ok(Some(outcome));
+                    }
+                }
+            }
         }
-
-        if let Some(outcome) =
-            flush_parallel_group(t_ctx, &mut parallel_group, &mut batch_tracker).await?
-        {
-            return Ok(Some(outcome));
-        }
-
-        if let Some(outcome) = execute_and_handle_tool_call(
-            t_ctx.ctx,
-            t_ctx.repeated_tool_attempts,
-            t_ctx.turn_modified_files,
-            validated_call.call_id().to_string(),
-            &validated_call.prepared.canonical_name,
-            validated_call.prepared.effective_args,
-            None,
-        )
-        .await?
-        {
-            return Ok(Some(outcome));
-        }
-    }
-
-    if let Some(outcome) =
-        flush_parallel_group(t_ctx, &mut parallel_group, &mut batch_tracker).await?
-    {
-        return Ok(Some(outcome));
     }
 
     if batch_tracker.entries.len() > 1 {
@@ -528,10 +518,10 @@ mod tests {
                 ),
                 validated_call(
                     "call_2",
-                    tools::UNIFIED_SEARCH,
+                    tools::READ_FILE,
                     true,
                     true,
-                    serde_json::json!({"action":"grep","pattern":"tool outcomes"}),
+                    serde_json::json!({"path":"src/main.rs"}),
                 ),
             ],
             true,
@@ -569,7 +559,32 @@ mod tests {
             true,
         );
 
-        assert_eq!(stats, (3, 2, 1));
+        assert_eq!(stats, (3, 0, 1));
+    }
+
+    #[test]
+    fn build_execution_groups_splits_duplicate_parallel_tool_names() {
+        let stats = planned_execution_group_stats(
+            &[
+                validated_call(
+                    "call_1",
+                    tools::UNIFIED_SEARCH,
+                    true,
+                    true,
+                    serde_json::json!({"action":"grep","pattern":"alpha"}),
+                ),
+                validated_call(
+                    "call_2",
+                    tools::UNIFIED_SEARCH,
+                    true,
+                    true,
+                    serde_json::json!({"action":"grep","pattern":"beta"}),
+                ),
+            ],
+            true,
+        );
+
+        assert_eq!(stats, (2, 0, 1));
     }
 
     #[test]
@@ -619,7 +634,7 @@ mod tests {
             true,
         );
 
-        assert_eq!(stats, (2, 1, 1));
+        assert_eq!(stats, (2, 0, 1));
     }
 
     #[test]
@@ -655,7 +670,7 @@ mod tests {
             true,
         );
 
-        assert_eq!(stats, (2, 1, 1));
+        assert_eq!(stats, (2, 0, 1));
     }
 
     #[tokio::test]
