@@ -6,7 +6,7 @@ extract and open source more components from vtcode-core
 
 ---
 
-remove 
+remove
 
 Contributors
 
@@ -33,3 +33,11 @@ review and deduplicate and clean up configs in vtcode.toml, simplify settings an
 ---
 
 remove "continue" keyword prompt beeing overriden from user prompt to actual prompt.
+
+---
+
+Removed /vim command (toggle vim mode via /config → Editor mode)
+
+---
+
+/release-notes is now an interactive version picker
