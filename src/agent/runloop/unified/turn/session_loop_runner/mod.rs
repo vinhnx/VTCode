@@ -632,6 +632,23 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let _ =
                     emitter.enable_open_responses(open_responses_config, &config.model, or_path);
             }
+            // Enable ATIF trajectory export if configured
+            let atif_enabled = vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.telemetry.atif_enabled)
+                .unwrap_or(false);
+            if atif_enabled {
+                let dir = effective_log_path
+                    .as_ref()
+                    .map(|base| std::path::PathBuf::from(base.as_str()))
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                let atif_path = dir.join(format!(
+                    "atif-trajectory-{}-{}.json",
+                    turn_run_id.0, timestamp
+                ));
+                let _ = emitter.enable_atif(&config.model, atif_path);
+            }
             let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
                 thread_id: turn_run_id.0.clone(),
             }));
@@ -1453,6 +1470,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         }
         if let Some(emitter) = harness_emitter.as_ref() {
             emitter.finish_open_responses();
+            emitter.finish_atif();
         }
         agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
         // Skip persistent memory on interrupt-exits (it makes LLM API calls which

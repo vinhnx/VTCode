@@ -31,9 +31,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{
-    ThreadEvent, ThreadItemDetails, ToolCallStatus,
-};
+use crate::{ThreadEvent, ThreadItemDetails, ToolCallStatus};
 
 /// Current ATIF schema version supported by this implementation.
 pub const ATIF_SCHEMA_VERSION: &str = "ATIF-v1.4";
@@ -377,9 +375,8 @@ impl AtifTrajectoryBuilder {
                     self.session_id = Some(e.session_id.clone());
                 }
                 // Accumulate aggregate usage
-                self.total_input_tokens = self
-                    .total_input_tokens
-                    .saturating_add(e.usage.input_tokens);
+                self.total_input_tokens =
+                    self.total_input_tokens.saturating_add(e.usage.input_tokens);
                 self.total_output_tokens = self
                     .total_output_tokens
                     .saturating_add(e.usage.output_tokens);
@@ -389,9 +386,8 @@ impl AtifTrajectoryBuilder {
                 self.num_turns = e.num_turns;
             }
             ThreadEvent::TurnCompleted(e) => {
-                self.total_input_tokens = self
-                    .total_input_tokens
-                    .saturating_add(e.usage.input_tokens);
+                self.total_input_tokens =
+                    self.total_input_tokens.saturating_add(e.usage.input_tokens);
                 self.total_output_tokens = self
                     .total_output_tokens
                     .saturating_add(e.usage.output_tokens);
@@ -407,12 +403,10 @@ impl AtifTrajectoryBuilder {
             }
             ThreadEvent::TurnFailed(e) => {
                 if let Some(usage) = &e.usage {
-                    self.total_input_tokens = self
-                        .total_input_tokens
-                        .saturating_add(usage.input_tokens);
-                    self.total_output_tokens = self
-                        .total_output_tokens
-                        .saturating_add(usage.output_tokens);
+                    self.total_input_tokens =
+                        self.total_input_tokens.saturating_add(usage.input_tokens);
+                    self.total_output_tokens =
+                        self.total_output_tokens.saturating_add(usage.output_tokens);
                 }
                 let mut step = Step::system(self.next_step_id, &e.message);
                 step.timestamp = Some(ts_str);
@@ -483,18 +477,17 @@ impl AtifTrajectoryBuilder {
                     .iter()
                     .position(|p| p.call_id == output.call_id);
 
-                let (tool_name, arguments, tool_call_id, inv_ts) =
-                    if let Some(idx) = pending_idx {
-                        let p = self.pending_tool_calls.remove(idx);
-                        (p.tool_name, p.arguments, p.tool_call_id, p.timestamp)
-                    } else {
-                        (
-                            "unknown".to_string(),
-                            None,
-                            output.tool_call_id.clone(),
-                            ts.to_string(),
-                        )
-                    };
+                let (tool_name, arguments, tool_call_id, inv_ts) = if let Some(idx) = pending_idx {
+                    let p = self.pending_tool_calls.remove(idx);
+                    (p.tool_name, p.arguments, p.tool_call_id, p.timestamp)
+                } else {
+                    (
+                        "unknown".to_string(),
+                        None,
+                        output.tool_call_id.clone(),
+                        ts.to_string(),
+                    )
+                };
 
                 let call_id = tool_call_id
                     .clone()
@@ -664,8 +657,8 @@ impl crate::EventEmitter for AtifTrajectoryBuilder {
 mod tests {
     use super::*;
     use crate::{
-        AgentMessageItem, ItemCompletedEvent, ThreadItem, ThreadStartedEvent,
-        ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, Usage,
+        AgentMessageItem, ItemCompletedEvent, ThreadItem, ThreadStartedEvent, ToolInvocationItem,
+        ToolOutputItem, TurnCompletedEvent, Usage,
     };
 
     fn fixed_ts() -> DateTime<Utc> {

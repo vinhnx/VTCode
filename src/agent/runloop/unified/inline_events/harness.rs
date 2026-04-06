@@ -18,6 +18,7 @@ use vtcode_core::core::agent::events::{
 };
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
+use vtcode_core::exec::events::atif::{AtifAgent, AtifTrajectoryBuilder};
 use vtcode_core::exec::events::{
     CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
     ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent,
@@ -39,6 +40,13 @@ struct HarnessEventEmitterInner {
     path: PathBuf,
     writer: Mutex<BufWriter<File>>,
     open_responses: Mutex<Option<OpenResponsesState>>,
+    atif: Mutex<Option<AtifState>>,
+}
+
+/// State for ATIF trajectory export.
+struct AtifState {
+    builder: AtifTrajectoryBuilder,
+    output_path: PathBuf,
 }
 
 /// State for Open Responses event emission.
@@ -66,6 +74,7 @@ impl HarnessEventEmitter {
                 path,
                 writer: Mutex::new(BufWriter::new(file)),
                 open_responses: Mutex::new(None),
+                atif: Mutex::new(None),
             }),
         })
     }
@@ -110,6 +119,56 @@ impl HarnessEventEmitter {
         Ok(())
     }
 
+    /// Enables ATIF trajectory export.
+    ///
+    /// When enabled, events are collected by an `AtifTrajectoryBuilder` and
+    /// written as a single JSON file on [`finish_atif`](Self::finish_atif).
+    pub(crate) fn enable_atif(&self, model: &str, output_path: PathBuf) -> Result<()> {
+        let agent = AtifAgent::vtcode().with_model(model);
+        let builder = AtifTrajectoryBuilder::new(agent);
+
+        let mut guard = self
+            .inner
+            .atif
+            .lock()
+            .map_err(|_| anyhow::anyhow!("ATIF lock poisoned"))?;
+        *guard = Some(AtifState {
+            builder,
+            output_path,
+        });
+        Ok(())
+    }
+
+    /// Finishes the ATIF trajectory and writes the JSON file to disk.
+    pub(crate) fn finish_atif(&self) {
+        let state = self
+            .inner
+            .atif
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take());
+        let Some(state) = state else { return };
+
+        let trajectory = state.builder.finish(None);
+        let json = match serde_json::to_string_pretty(&trajectory) {
+            Ok(j) => j,
+            Err(err) => {
+                tracing::debug!(error = %err, "failed to serialize ATIF trajectory");
+                return;
+            }
+        };
+        if let Some(parent) = state.output_path.parent() {
+            let _ = ensure_dir_exists_sync(parent);
+        }
+        if let Err(err) = std::fs::write(&state.output_path, json) {
+            tracing::debug!(
+                error = %err,
+                path = %state.output_path.display(),
+                "failed to write ATIF trajectory"
+            );
+        }
+    }
+
     pub(crate) fn emit(&self, event: ThreadEvent) -> Result<()> {
         // Write to harness log (internal format)
         let payload = VersionedThreadEvent::new(event.clone());
@@ -152,6 +211,13 @@ impl HarnessEventEmitter {
                     let _ = writer.flush();
                 }
             }
+        }
+
+        // Also feed ATIF trajectory builder if enabled
+        if let Ok(mut guard) = self.inner.atif.lock()
+            && let Some(ref mut state) = *guard
+        {
+            state.builder.process_event(&event);
         }
 
         Ok(())

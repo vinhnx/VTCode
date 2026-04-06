@@ -19,7 +19,7 @@ atif_enabled = true
 
 The ATIF export is independent of `trajectory_enabled` — you can enable one without the other.
 
-Output location: `.vtcode/logs/atif-trajectory.json`
+Output location: `~/.vtcode/sessions/atif-trajectory-<session-id>-<timestamp>.json`
 
 ## Schema
 
