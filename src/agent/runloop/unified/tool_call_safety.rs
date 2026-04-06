@@ -50,40 +50,28 @@ struct TestRateLimits {
 
 impl ToolCallSafetyValidator {
     pub(crate) fn new() -> Self {
-        let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(5);
-
-        let rate_limit_per_minute = std::env::var("VTCODE_TOOL_CALLS_PER_MIN")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|v| *v > 0);
-
-        let max_per_turn = 10;
-        let max_per_session = 100;
+        // The runloop enforces adaptive per-tool throttling separately.
+        // Keep SafetyGateway focused on turn/session budgets by default.
         let gateway_config = SafetyGatewayConfig {
-            max_per_turn,
-            max_per_session,
-            rate_limit_per_second,
-            rate_limit_per_minute,
+            max_per_turn: 10,
+            max_per_session: 100,
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
-            // The runloop enforces adaptive per-tool throttling separately.
-            // Keep SafetyGateway focused on turn/session budgets by default.
             enforce_rate_limits: false,
+            ..SafetyGatewayConfig::default()
+        };
+        #[cfg(test)]
+        let test_rate_limits = TestRateLimits {
+            per_second: gateway_config.rate_limit_per_second,
+            per_minute: gateway_config.rate_limit_per_minute,
         };
 
         Self {
             safety_gateway: SafetyGateway::with_config(gateway_config),
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
             #[cfg(test)]
-            test_rate_limits: Mutex::new(TestRateLimits {
-                per_second: rate_limit_per_second,
-                per_minute: rate_limit_per_minute,
-            }),
+            test_rate_limits: Mutex::new(test_rate_limits),
         }
     }
 

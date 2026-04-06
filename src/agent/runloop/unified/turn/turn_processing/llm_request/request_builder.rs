@@ -12,20 +12,19 @@ use vtcode_core::core::agent::harness_kernel::{
     stable_system_prefix_hash,
 };
 use vtcode_core::llm::provider::{
-    self as uni, ParallelToolConfig, prepare_openai_responses_request,
+    self as uni, ParallelToolConfig, prepare_responses_continuation_request,
+    supports_responses_chaining,
 };
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 
+use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
 use crate::agent::runloop::unified::turn::compaction::{
     build_server_compaction_context_management, resolve_compaction_threshold,
 };
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
-
-use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
 
 pub(super) fn is_openai_prompt_cache_enabled(
     provider_name: &str,
@@ -387,23 +386,9 @@ fn prepare_responses_request_history(
     active_model: &str,
     messages: Vec<uni::Message>,
 ) -> (Vec<uni::Message>, Option<String>) {
-    if !supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
-        return (messages, None);
-    }
-
-    let uses_openai_incremental_history = provider_name.eq_ignore_ascii_case("openai")
-        || (provider_supports_responses_compaction
-            && !provider_name.eq_ignore_ascii_case("openresponses")
-            && !provider_name.eq_ignore_ascii_case("gemini"));
-
-    if !uses_openai_incremental_history {
-        return (
-            messages,
-            session_stats.previous_response_id_for(provider_name, active_model),
-        );
-    }
-
-    let prepared = prepare_openai_responses_request(
+    let prepared = prepare_responses_continuation_request(
+        provider_name,
+        provider_supports_responses_compaction,
         messages,
         session_stats.previous_response_chain_for(provider_name, active_model),
     );

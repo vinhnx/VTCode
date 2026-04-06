@@ -530,7 +530,10 @@ fn transcript_file_fixture_absolute_path() -> String {
 
 fn quoted_transcript_temp_file_path() -> PathBuf {
     let unique = TRANSCRIPT_TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("vtcode transcript quoted path {unique}.txt"))
+    std::env::temp_dir().join(format!(
+        "vtcode transcript quoted path {} {unique}.txt",
+        std::process::id()
+    ))
 }
 
 #[cfg(target_os = "macos")]

@@ -11,14 +11,13 @@ use tokio::task;
 use tracing::debug;
 #[cfg(test)]
 use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
-use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::llm::provider::{self as uni, ParallelToolConfig, supports_responses_chaining};
 
 use crate::agent::runloop::unified::extract_action_from_messages;
 #[cfg(test)]
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions,
     stream_and_render_response_with_options_and_progress,
