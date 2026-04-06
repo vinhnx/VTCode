@@ -1,6 +1,7 @@
 use super::MarkdownSegment;
 use regex::Regex;
 use std::sync::LazyLock;
+use vtcode_commons::normalize_editor_hash_fragment;
 
 pub(crate) static COLON_LOCATION_SUFFIX_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$").expect("invalid location suffix regex")
@@ -55,29 +56,7 @@ pub(crate) fn extract_hidden_location_suffix(dest_url: &str) -> Option<String> {
 }
 
 pub(crate) fn normalize_hash_location(fragment: &str) -> Option<String> {
-    let (start, end) = match fragment.split_once('-') {
-        Some((start, end)) => (start, Some(end)),
-        None => (fragment, None),
-    };
-
-    let (start_line, start_col) = parse_hash_point(start)?;
-    let mut result = format!(":{start_line}");
-    if let Some(col) = start_col {
-        result.push(':');
-        result.push_str(col);
-    }
-
-    if let Some(end) = end {
-        let (end_line, end_col) = parse_hash_point(end)?;
-        result.push('-');
-        result.push_str(end_line);
-        if let Some(col) = end_col {
-            result.push(':');
-            result.push_str(col);
-        }
-    }
-
-    Some(result)
+    normalize_editor_hash_fragment(fragment)
 }
 
 fn is_local_path_like_link(dest_url: &str) -> bool {
@@ -92,12 +71,4 @@ fn is_local_path_like_link(dest_url: &str) -> bool {
             [drive, b':', separator, ..]
                 if drive.is_ascii_alphabetic() && matches!(separator, b'/' | b'\\')
         )
-}
-
-fn parse_hash_point(point: &str) -> Option<(&str, Option<&str>)> {
-    let point = point.strip_prefix('L')?;
-    Some(match point.split_once('C') {
-        Some((line, col)) => (line, Some(col)),
-        None => (point, None),
-    })
 }

@@ -5,6 +5,7 @@
 //! classification system.
 
 use crate::llm::provider::LLMError;
+use crate::retry_after::retry_after_from_llm_metadata;
 use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use crate::tools::unified_error::{UnifiedErrorKind, UnifiedToolError};
 use serde::{Deserialize, Serialize};
@@ -409,17 +410,7 @@ fn llm_retry_after(error: &LLMError) -> Option<std::time::Duration> {
         | LLMError::Provider { metadata, .. } => metadata.as_ref(),
     }?;
 
-    metadata
-        .retry_after
-        .as_deref()
-        .and_then(parse_retry_after_header)
-}
-
-fn parse_retry_after_header(raw: &str) -> Option<std::time::Duration> {
-    raw.trim()
-        .parse::<u64>()
-        .ok()
-        .map(std::time::Duration::from_secs)
+    retry_after_from_llm_metadata(metadata)
 }
 
 #[cfg(test)]
@@ -499,6 +490,27 @@ mod tests {
         assert_eq!(
             converted.retry_after(),
             Some(std::time::Duration::from_secs(3))
+        );
+    }
+
+    #[test]
+    fn test_llm_error_conversion_preserves_fractional_retry_after() {
+        let err = LLMError::RateLimit {
+            metadata: Some(LLMErrorMetadata::new(
+                "OpenAI",
+                Some(429),
+                Some("rate_limit".to_string()),
+                Some("req-1".to_string()),
+                None,
+                Some("0.5".to_string()),
+                Some("try again later".to_string()),
+            )),
+        };
+
+        let converted = VtCodeError::from(err);
+        assert_eq!(
+            converted.retry_after(),
+            Some(std::time::Duration::from_millis(500))
         );
     }
 

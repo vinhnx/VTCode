@@ -26,6 +26,9 @@ use crate::dotfile_protection::{
 use crate::tools::apply_patch::{Patch, PatchOperation, decode_apply_patch_input};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::invocation::ToolInvocationId;
+use crate::tools::rate_limit_config::{
+    positive_rate_limit_from_env, tool_calls_per_minute_from_env,
+};
 use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
@@ -161,22 +164,14 @@ pub struct SafetyGatewayConfig {
 
 impl Default for SafetyGatewayConfig {
     fn default() -> Self {
-        let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(5);
-
-        let rate_limit_per_minute = std::env::var("VTCODE_TOOL_CALLS_PER_MIN")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|v| *v > 0);
+        let rate_limit_per_second =
+            positive_rate_limit_from_env("VTCODE_TOOL_RATE_LIMIT_PER_SECOND").unwrap_or(5);
 
         Self {
             max_per_turn: 10,
             max_per_session: 100,
             rate_limit_per_second,
-            rate_limit_per_minute,
+            rate_limit_per_minute: tool_calls_per_minute_from_env(),
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,

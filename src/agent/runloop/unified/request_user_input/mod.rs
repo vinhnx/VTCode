@@ -4,6 +4,7 @@ mod schema;
 mod suggestions;
 
 pub(crate) use modal::execute_request_user_input_tool;
+pub(crate) use schema::normalize_request_user_input_fallback_args;
 
 #[cfg(test)]
 mod tests {
@@ -11,6 +12,7 @@ mod tests {
     use super::options::{resolve_question_options, sanitize_provided_options};
     use super::schema::{
         RequestUserInputOption, RequestUserInputQuestion, normalize_request_user_input_args,
+        normalize_request_user_input_fallback_args,
     };
     use super::suggestions::generate_suggested_options;
     use serde_json::json;
@@ -385,6 +387,59 @@ mod tests {
         });
         let result = normalize_request_user_input_args(&legacy_args);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn fallback_normalizes_legacy_tabbed_payload() {
+        let legacy_args = json!({
+            "question": "Choose one",
+            "tabs": [
+                {
+                    "id": "scope",
+                    "title": "Scope",
+                    "items": [
+                        {"id": "minimal", "title": "Minimal scope"},
+                        {"id": "full", "title": "Full scope"}
+                    ]
+                }
+            ]
+        });
+
+        let normalized = normalize_request_user_input_fallback_args(&legacy_args)
+            .expect("fallback should normalize legacy shape");
+        assert_eq!(normalized["questions"][0]["id"], "scope");
+        assert_eq!(normalized["questions"][0]["header"], "Scope");
+        assert_eq!(normalized["questions"][0]["question"], "Choose one");
+        assert_eq!(
+            normalized["questions"][0]["options"]
+                .as_array()
+                .map(|options| options.len()),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn fallback_normalizes_single_question_shorthand() {
+        let args = json!({
+            "question": "Which direction should we take?",
+            "header": "Scope",
+            "options": ["Minimal", "Full", "Minimal"]
+        });
+
+        let normalized = normalize_request_user_input_fallback_args(&args)
+            .expect("fallback should normalize shorthand");
+        assert_eq!(normalized["questions"][0]["id"], "question_1");
+        assert_eq!(normalized["questions"][0]["header"], "Scope");
+        assert_eq!(
+            normalized["questions"][0]["question"],
+            "Which direction should we take?"
+        );
+        assert_eq!(
+            normalized["questions"][0]["options"]
+                .as_array()
+                .map(|options| options.len()),
+            Some(2)
+        );
     }
 
     #[test]

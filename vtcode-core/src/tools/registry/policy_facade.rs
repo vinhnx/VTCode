@@ -204,8 +204,9 @@ impl ToolRegistry {
             detect_window,
             normalized_tools_config.max_repeated_tool_calls,
         );
-        self.execution_history
-            .set_rate_limit_per_minute(super::config_helpers::tool_rate_limit_from_env());
+        self.execution_history.set_rate_limit_per_minute(
+            crate::tools::rate_limit_config::tool_calls_per_minute_from_env(),
+        );
 
         Ok(())
     }

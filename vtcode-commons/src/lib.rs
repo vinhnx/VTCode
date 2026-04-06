@@ -48,7 +48,8 @@ pub mod validation;
 pub mod vtcodegitignore;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use editor::{
-    EditorPoint, EditorTarget, parse_editor_target, resolve_editor_path, resolve_editor_target,
+    EditorPoint, EditorTarget, normalize_editor_hash_fragment, parse_editor_target,
+    resolve_editor_path, resolve_editor_target,
 };
 pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,

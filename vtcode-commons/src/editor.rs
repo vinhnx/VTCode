@@ -85,14 +85,14 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
         let url = Url::parse(raw).ok()?;
         let location_suffix = url
             .fragment()
-            .and_then(normalize_hash_fragment)
+            .and_then(normalize_editor_hash_fragment)
             .or_else(|| extract_trailing_location(url.path()));
         let path = url.to_file_path().ok()?;
         return Some(EditorTarget::new(path, location_suffix));
     }
 
     if let Some((path_str, fragment)) = raw.split_once('#')
-        && let Some(location_suffix) = normalize_hash_fragment(fragment)
+        && let Some(location_suffix) = normalize_editor_hash_fragment(fragment)
     {
         if path_str.is_empty() {
             return None;
@@ -218,7 +218,8 @@ fn parse_paren_location_suffix(suffix: &str) -> Option<String> {
     Some(normalized)
 }
 
-fn normalize_hash_fragment(fragment: &str) -> Option<String> {
+#[must_use]
+pub fn normalize_editor_hash_fragment(fragment: &str) -> Option<String> {
     let fragment = fragment.strip_prefix('L')?;
     let mut normalized = String::from(":");
     for ch in fragment.chars() {
@@ -262,6 +263,18 @@ mod tests {
         let target = parse_editor_target("/tmp/demo.rs#L12C4").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/demo.rs"));
         assert_eq!(target.location_suffix(), Some(":12:4"));
+    }
+
+    #[test]
+    fn normalizes_hash_location_ranges() {
+        assert_eq!(
+            normalize_editor_hash_fragment("L74C3-L76C9"),
+            Some(":74:3-76:9".to_string())
+        );
+        assert_eq!(
+            normalize_editor_hash_fragment("L74-L76"),
+            Some(":74-76".to_string())
+        );
     }
 
     #[test]

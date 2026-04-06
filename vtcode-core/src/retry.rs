@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::config::constants::tools;
 use crate::error::{ErrorCategory, VtCodeError};
+use crate::retry_after::retry_after_from_llm_metadata;
 use crate::tools::registry::ToolExecutionError;
 use crate::tools::tool_intent;
 use crate::tools::unified_error::UnifiedToolError;
@@ -142,7 +143,7 @@ impl RetryPolicy {
     }
 
     pub fn decision_for_llm_error(&self, error: &LLMError, attempt_index: u32) -> RetryDecision {
-        let retry_after = llm_metadata(error).and_then(parse_retry_after_header);
+        let retry_after = llm_metadata(error).and_then(retry_after_from_llm_metadata);
         self.decision_for_category_with_tool(
             ErrorCategory::from(error),
             attempt_index,
@@ -235,17 +236,6 @@ fn llm_metadata(error: &LLMError) -> Option<&LLMErrorMetadata> {
         | LLMError::Network { metadata, .. }
         | LLMError::Provider { metadata, .. } => metadata.as_deref(),
     }
-}
-
-fn parse_retry_after_header(metadata: &LLMErrorMetadata) -> Option<Duration> {
-    let raw = metadata.retry_after.as_deref()?.trim();
-    if let Ok(seconds) = raw.parse::<u64>() {
-        return Some(Duration::from_secs(seconds));
-    }
-    if let Ok(seconds) = raw.parse::<f64>() {
-        return Some(Duration::from_secs_f64(seconds.max(0.0)));
-    }
-    None
 }
 
 pub fn decision_for_vtcode_error(

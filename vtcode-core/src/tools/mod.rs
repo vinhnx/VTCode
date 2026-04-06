@@ -125,6 +125,7 @@ pub(crate) mod ast_grep_language;
 pub mod builder;
 pub mod constants;
 pub mod error_messages;
+pub(crate) mod rate_limit_config;
 pub mod request_user_input;
 
 pub mod autonomous_executor;

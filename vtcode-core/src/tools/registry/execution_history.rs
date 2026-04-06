@@ -168,13 +168,6 @@ const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
 /// blocking a single intentional reread.
 const MIN_READONLY_IDENTICAL_LIMIT: usize = 2;
 
-fn tool_rate_limit_from_env() -> Option<usize> {
-    env::var("VTCODE_TOOL_CALLS_PER_MIN")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<usize>().ok())
-        .filter(|value| *value > 0)
-}
-
 fn spool_path_exists(result: &Value) -> bool {
     let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
         return true;
@@ -313,7 +306,7 @@ impl ToolExecutionHistory {
                 defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
             )),
             rate_limit_per_minute: Arc::new(std::sync::atomic::AtomicUsize::new(
-                tool_rate_limit_from_env().unwrap_or(0),
+                crate::tools::rate_limit_config::tool_calls_per_minute_from_env().unwrap_or(0),
             )),
         }
     }
