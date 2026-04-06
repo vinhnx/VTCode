@@ -36,8 +36,4 @@ remove "continue" keyword prompt beeing overriden from user prompt to actual pro
 
 ---
 
-Removed /vim command (toggle vim mode via /config → Editor mode)
-
----
-
 /release-notes is now an interactive version picker

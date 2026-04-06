@@ -241,25 +241,6 @@ pub(crate) async fn handle_start_file_browser(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_toggle_vim_mode(
-    ctx: SlashCommandContext<'_>,
-    enable: Option<bool>,
-) -> Result<SlashCommandControl> {
-    let current = ctx.session_stats.vim_mode_enabled;
-    let next = enable.unwrap_or(!current);
-    ctx.session_stats.vim_mode_enabled = next;
-    ctx.handle.set_vim_mode_enabled(next);
-    ctx.handle.force_redraw();
-
-    let message = if next {
-        "Vim mode enabled for this session. Use /config to persist ui.vim_mode."
-    } else {
-        "Vim mode disabled for this session."
-    };
-    ctx.renderer.line(MessageStyle::Info, message)?;
-    Ok(SlashCommandControl::Continue)
-}
-
 pub(crate) async fn handle_start_statusline_setup(
     mut ctx: SlashCommandContext<'_>,
     instructions: Option<String>,

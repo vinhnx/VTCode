@@ -155,9 +155,6 @@ pub(crate) enum SlashCommandOutcome {
     StartFileBrowser {
         initial_filter: Option<String>,
     },
-    ToggleVimMode {
-        enable: Option<bool>,
-    },
     StartStatuslineSetup {
         instructions: Option<String>,
     },
@@ -504,18 +501,6 @@ async fn execute_built_in_command_skill(
         }
         "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
         "memory" => Ok(SlashCommandOutcome::ShowMemory),
-        "vim" => {
-            let enable = match args {
-                "" | "toggle" => None,
-                "on" | "enable" | "enabled" => Some(true),
-                "off" | "disable" | "disabled" => Some(false),
-                _ => {
-                    renderer.line(MessageStyle::Error, "Usage: /vim [on|off|toggle]")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-            };
-            Ok(SlashCommandOutcome::ToggleVimMode { enable })
-        }
         "statusline" => Ok(SlashCommandOutcome::StartStatuslineSetup {
             instructions: (!args.trim().is_empty()).then(|| args.trim().to_string()),
         }),
@@ -1151,38 +1136,6 @@ mod tests {
             .expect("ide command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::Handled));
-    }
-
-    #[tokio::test]
-    async fn vim_command_parses_enable_disable_and_toggle() {
-        let workspace = std::env::current_dir().expect("workspace");
-        let mut renderer = renderer_for_tests();
-
-        let toggle = handle_slash_command("vim", &mut renderer, &workspace)
-            .await
-            .expect("vim should parse");
-        assert!(matches!(
-            toggle,
-            SlashCommandOutcome::ToggleVimMode { enable: None }
-        ));
-
-        let enable = handle_slash_command("vim on", &mut renderer, &workspace)
-            .await
-            .expect("vim on should parse");
-        assert!(matches!(
-            enable,
-            SlashCommandOutcome::ToggleVimMode { enable: Some(true) }
-        ));
-
-        let disable = handle_slash_command("vim off", &mut renderer, &workspace)
-            .await
-            .expect("vim off should parse");
-        assert!(matches!(
-            disable,
-            SlashCommandOutcome::ToggleVimMode {
-                enable: Some(false)
-            }
-        ));
     }
 
     #[tokio::test]

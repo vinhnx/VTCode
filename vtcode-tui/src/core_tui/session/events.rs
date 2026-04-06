@@ -681,7 +681,7 @@ fn quick_help_lines() -> Vec<String> {
         "Alt+P: Generate an inline prompt suggestion.".to_string(),
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
-        "/vim: Toggle Vim-style prompt editing.".to_string(),
+        "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
         "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),

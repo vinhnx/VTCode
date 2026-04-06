@@ -182,12 +182,6 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!(
-        "vim",
-        "Toggle Vim-style prompt editing (usage: /vim [on|off|toggle])",
-        "/vim [on|off|toggle]",
-        "configuration"
-    ),
-    built_in_command_spec!(
         "model",
         "Launch the interactive model picker",
         "/model",

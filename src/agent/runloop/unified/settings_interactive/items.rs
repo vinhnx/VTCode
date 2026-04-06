@@ -63,6 +63,12 @@ pub(super) fn build_settings_items(
             ACTION_CONFIGURE_EDITOR,
         ));
         items.push(action_item(
+            "Editor Mode",
+            "Toggle Vim-style prompt editing (ui.vim_mode)",
+            Some("Section"),
+            &format!("{}ui", ACTION_PREFIX_OPEN),
+        ));
+        items.push(action_item(
             "Codex App Server",
             "Review the local Codex sidecar command, startup timeout, and experimental switches",
             Some("Section"),
