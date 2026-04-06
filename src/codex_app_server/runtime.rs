@@ -440,12 +440,12 @@ async fn run_interactive_session(
         if should_exit_session(&input) {
             break;
         }
-        let input = normalize_plan_mode_input(&input, &mut plan_mode);
-        if input.is_empty() {
+        let (user_input, turn_input) = normalize_plan_mode_input(&input, &mut plan_mode);
+        if turn_input.is_empty() {
             continue;
         }
 
-        messages.push(SessionMessage::new(MessageRole::User, input.clone()));
+        messages.push(SessionMessage::new(MessageRole::User, user_input));
         let collaboration =
             resolve_collaboration_mode(&collaboration_catalog, plan_mode, experimental_features);
         if let Some(warning) = collaboration.warning
@@ -462,7 +462,7 @@ async fn run_interactive_session(
             build_turn_request(
                 config,
                 thread.thread.id.clone(),
-                input,
+                turn_input,
                 plan_mode,
                 skip_confirmations || full_auto,
                 collaboration.mode,
@@ -1090,20 +1090,25 @@ fn resolve_collaboration_mode(
     }
 }
 
-fn normalize_plan_mode_input(input: &str, plan_mode: &mut bool) -> String {
+fn normalize_plan_mode_input(input: &str, plan_mode: &mut bool) -> (String, String) {
+    let user_input = input.trim().to_string();
+    let mut turn_input = user_input.clone();
+
     if *plan_mode && should_switch_to_execution_mode(input) {
         *plan_mode = false;
-        if input.trim().eq_ignore_ascii_case("implement")
-            || input.trim().eq_ignore_ascii_case("continue")
-            || input.trim().eq_ignore_ascii_case("go")
-            || input.trim().eq_ignore_ascii_case("start")
-            || input.trim().eq_ignore_ascii_case("yes")
-        {
-            return PLAN_MODE_IMPLEMENTATION_PROMPT.to_string();
+        if is_plan_mode_implementation_alias(input) {
+            turn_input = PLAN_MODE_IMPLEMENTATION_PROMPT.to_string();
         }
     }
 
-    input.trim().to_string()
+    (user_input, turn_input)
+}
+
+fn is_plan_mode_implementation_alias(input: &str) -> bool {
+    matches!(
+        input.trim().to_ascii_lowercase().as_str(),
+        "implement" | "continue" | "go" | "start" | "yes"
+    )
 }
 
 fn should_switch_to_execution_mode(input: &str) -> bool {
@@ -1249,9 +1254,20 @@ mod tests {
     #[test]
     fn normalize_plan_mode_input_switches_to_implementation_prompt() {
         let mut plan_mode = true;
-        let normalized = normalize_plan_mode_input("implement", &mut plan_mode);
+        let (user_input, turn_input) = normalize_plan_mode_input("implement", &mut plan_mode);
 
-        assert_eq!(normalized, PLAN_MODE_IMPLEMENTATION_PROMPT);
+        assert_eq!(user_input, "implement");
+        assert_eq!(turn_input, PLAN_MODE_IMPLEMENTATION_PROMPT);
+        assert!(!plan_mode);
+    }
+
+    #[test]
+    fn normalize_plan_mode_input_preserves_continue_user_prompt() {
+        let mut plan_mode = true;
+        let (user_input, turn_input) = normalize_plan_mode_input("continue", &mut plan_mode);
+
+        assert_eq!(user_input, "continue");
+        assert_eq!(turn_input, PLAN_MODE_IMPLEMENTATION_PROMPT);
         assert!(!plan_mode);
     }
 

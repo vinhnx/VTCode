@@ -7,7 +7,6 @@ use vtcode_core::llm::provider as uni;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ReplyKind {
     Immediate,
-    FollowUp,
 }
 
 struct DirectToolCompletion<'a> {
@@ -299,12 +298,10 @@ impl DirectToolCompletion<'_> {
             if is_spawn_agent {
                 return match reply_kind {
                     ReplyKind::Immediate => format!("`{label}` failed to start."),
-                    ReplyKind::FollowUp => format!("`{label}` already failed to start."),
                 };
             }
             return match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed with an error."),
-                ReplyKind::FollowUp => format!("`{label}` already completed with an error."),
             };
         }
         if is_spawn_agent {
@@ -315,25 +312,17 @@ impl DirectToolCompletion<'_> {
             };
             return match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` {started}."),
-                ReplyKind::FollowUp => format!("`{label}` is already {started}."),
             };
         }
         match self.exit_code() {
             Some(0) => match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed successfully (exit code 0)."),
-                ReplyKind::FollowUp => {
-                    format!("`{label}` already completed successfully (exit code 0).")
-                }
             },
             Some(code) => match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed with exit code {code}."),
-                ReplyKind::FollowUp => {
-                    format!("`{label}` already completed with exit code {code}.")
-                }
             },
             None => match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed."),
-                ReplyKind::FollowUp => format!("`{label}` already completed."),
             },
         }
     }
@@ -524,8 +513,8 @@ mod tests {
             ),
         ];
 
-        let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
-        assert!(text.contains("`cargo check` already completed successfully (exit code 0)."));
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("completion text");
+        assert!(text.contains("`cargo check` completed successfully (exit code 0)."));
         assert!(text.contains("Suggested next steps:"));
         assert!(text.contains("cargo nextest run"));
     }
@@ -547,8 +536,8 @@ mod tests {
             ),
         ];
 
-        let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
-        assert!(text.contains("`cargo check` already completed successfully (exit code 0)."));
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("completion text");
+        assert!(text.contains("`cargo check` completed successfully (exit code 0)."));
     }
 
     #[test]
@@ -568,8 +557,8 @@ mod tests {
             ),
         ];
 
-        let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
-        assert!(text.contains("`read docs/project/TODO.md` already completed with an error."));
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("completion text");
+        assert!(text.contains("`read docs/project/TODO.md` completed with an error."));
         assert!(text.contains("Failure details are shown above."));
     }
 
@@ -654,7 +643,7 @@ mod tests {
             uni::Message::assistant("cargo check completed.".to_string()),
         ];
 
-        assert!(completion_reply_text(&history, ReplyKind::FollowUp).is_none());
+        assert!(completion_reply_text(&history, ReplyKind::Immediate).is_none());
     }
 
     #[test]
@@ -730,8 +719,8 @@ mod tests {
             uni::Message::assistant("`cargo fmt` completed successfully.".to_string()),
         ];
 
-        let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
-        assert!(text.contains("`cargo fmt` already completed successfully (exit code 0)."));
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("completion text");
+        assert!(text.contains("`cargo fmt` completed successfully (exit code 0)."));
     }
 
     #[test]

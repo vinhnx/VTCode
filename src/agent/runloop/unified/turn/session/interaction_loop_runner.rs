@@ -41,9 +41,6 @@ use crate::agent::runloop::unified::session_setup::{
 };
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
-use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
-    ReplyKind, generate_completion_reply_with_suggestions,
-};
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, memory_prompt, slash_command_handler,
     slash_commands::run_with_event_loop_suspended, tool_dispatch,
@@ -298,33 +295,18 @@ fn fallback_args_preview(args: &Value) -> String {
     preview
 }
 
-async fn handle_completed_direct_tool_follow_up(
-    ctx: &mut InteractionLoopContext<'_>,
-    input: &str,
-) -> Result<Option<InteractionOutcome>> {
-    let Some(reply) = generate_completion_reply_with_suggestions(
-        ctx.conversation_history,
-        ReplyKind::FollowUp,
-        ctx.provider_client.as_ref(),
-        &ctx.config.model,
-    )
-    .await
-    else {
-        return Ok(None);
-    };
-
-    display_user_message(ctx.renderer, input)?;
-    ctx.conversation_history
-        .push(uni::Message::user(input.to_string()));
-    ctx.renderer.line(MessageStyle::Response, &reply)?;
-    ctx.conversation_history
-        .push(uni::Message::assistant(reply).with_phase(Some(uni::AssistantPhase::FinalAnswer)));
-    ctx.handle.clear_input();
-    if let Some(placeholder) = ctx.default_placeholder.as_ref() {
-        ctx.handle.set_placeholder(Some(placeholder.clone()));
+fn stalled_follow_up_recovery_prompt(stall_reason: &str, has_fallback_hint: bool) -> String {
+    if has_fallback_hint {
+        format!(
+            "Continue autonomously from the last stalled turn. Stall reason: {}. Use the recovered fallback hint as the first adjusted strategy, then continue until you can provide a concrete conclusion and final review.",
+            stall_reason
+        )
+    } else {
+        format!(
+            "Continue autonomously from the last stalled turn. Stall reason: {}. Keep working until you can provide a concrete conclusion and final review.",
+            stall_reason
+        )
     }
-
-    Ok(Some(InteractionOutcome::DirectToolHandled))
 }
 
 fn append_file_reference_metadata(
@@ -1160,14 +1142,6 @@ pub(super) async fn run_interaction_loop_impl(
             None
         };
 
-        if is_follow_up_prompt_like(input_owned.as_str())
-            && recent_follow_up_hint.is_none()
-            && let Some(outcome) =
-                handle_completed_direct_tool_follow_up(ctx, input_owned.as_str()).await?
-        {
-            return Ok(outcome);
-        }
-
         if let Some((tool_name, tool_args)) = recent_follow_up_hint {
             let mut direct_tool_ctx = tool_dispatch::DirectToolContext {
                 interaction_ctx: ctx,
@@ -1230,17 +1204,9 @@ pub(super) async fn run_interaction_loop_impl(
                     )));
                 }
                 ctx.session_stats.suppress_next_follow_up_prompt();
-                input_owned = if fallback_hint.is_some() {
-                    format!(
-                        "Continue autonomously from the last stalled turn. Stall reason: {}. Use the recovered fallback hint as the first adjusted strategy, then continue until you can provide a concrete conclusion and final review.",
-                        stall_reason
-                    )
-                } else {
-                    format!(
-                        "Continue autonomously from the last stalled turn. Stall reason: {}. Keep working until you can provide a concrete conclusion and final review.",
-                        stall_reason
-                    )
-                };
+                ctx.conversation_history.push(uni::Message::system(
+                    stalled_follow_up_recovery_prompt(&stall_reason, fallback_hint.is_some()),
+                ));
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Repeated follow-up after stalled turn detected; enforcing autonomous recovery and conclusion.",
@@ -1363,7 +1329,8 @@ mod tests {
     use super::{
         append_agent_reference_metadata, append_file_reference_metadata,
         build_file_reference_metadata, extract_recent_follow_up_hint, fallback_args_preview,
-        refresh_live_ide_context_update, supports_native_openai_file_inputs, tool_names,
+        refresh_live_ide_context_update, stalled_follow_up_recovery_prompt,
+        supports_native_openai_file_inputs, tool_names,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
@@ -1612,6 +1579,14 @@ mod tests {
         let preview = fallback_args_preview(&args);
         assert!(preview.ends_with("..."));
         assert!(preview.len() <= 243);
+    }
+
+    #[test]
+    fn stalled_follow_up_recovery_prompt_mentions_fallback_without_replacing_user_input() {
+        let prompt = stalled_follow_up_recovery_prompt("turn blocked", true);
+
+        assert!(prompt.contains("Stall reason: turn blocked"));
+        assert!(prompt.contains("Use the recovered fallback hint"));
     }
 
     #[test]
