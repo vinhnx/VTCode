@@ -150,7 +150,7 @@ pub const TUI_SCROLL_CURSOR_STEADY_MS: u64 = 250;
 
 // Viewport size limits to prevent pathological CPU usage with huge terminals
 // (e.g., 2000+ columns causes 100% CPU without these guards)
-// See: https://github.com/anthropics/claude-code/issues/21567
+// See: <https://github.com/anthropics/claude-code/issues/21567>
 /// Maximum effective viewport width (columns) for rendering
 pub const TUI_MAX_VIEWPORT_WIDTH: u16 = 500;
 /// Maximum effective viewport height (rows) for rendering
@@ -205,7 +205,7 @@ pub const PLACEHOLDER_G: u8 = 0x88;
 pub const PLACEHOLDER_B: u8 = 0x88;
 
 // === Safe ANSI Color Palette ===
-// Based on terminal color portability research: https://blog.xoria.org/terminal-colors/
+// Based on terminal color portability research: <https://blog.xoria.org/terminal-colors/>
 // These 11 colors are safe across Basic (light/dark), Tango, and Solarized themes.
 // Colors NOT in this list have visibility issues in common terminal configurations.
 

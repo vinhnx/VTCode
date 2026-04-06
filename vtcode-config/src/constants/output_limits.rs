@@ -1,6 +1,6 @@
 //! Output truncation limits inspired by OpenAI Codex multi-tier truncation.
 //! Prevents OOM with three independent size limits.
-//! Reference: https://openai.com/index/unrolling-the-codex-agent-loop/
+//! Reference: <https://openai.com/index/unrolling-the-codex-agent-loop/>
 
 /// Maximum size for single agent message payloads (bytes) - 4 MB.
 pub const MAX_AGENT_MESSAGES_SIZE: usize = 4 * 1024 * 1024;

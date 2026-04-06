@@ -10,7 +10,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 /// Models that support thinking/reasoning capability with configurable thinking_level
-/// Based on: https://ai.google.dev/gemini-api/docs/gemini-3
+/// Based on: <https://ai.google.dev/gemini-api/docs/gemini-3>
 /// Gemini 3 Pro/Flash: supports low, high (default)
 /// Gemini 3 Flash only: also supports minimal, medium
 pub const REASONING_MODELS: &[&str] = &[
@@ -30,7 +30,7 @@ pub const IMAGE_GENERATION_MODELS: &[&str] = &["gemini-3-pro-image-preview"];
 
 /// Models that support context caching (min 2048 tokens required)
 /// Context caching reduces costs for repeated API calls with similar contexts
-/// Reference: https://ai.google.dev/gemini-api/docs/caching
+/// Reference: <https://ai.google.dev/gemini-api/docs/caching>
 pub const CACHING_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
@@ -40,7 +40,7 @@ pub const CACHING_MODELS: &[&str] = &[
 
 /// Models that support code execution (Python)
 /// Code execution allows models to write and execute Python code
-/// Reference: https://ai.google.dev/gemini-api/docs/code-execution
+/// Reference: <https://ai.google.dev/gemini-api/docs/code-execution>
 pub const CODE_EXECUTION_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",

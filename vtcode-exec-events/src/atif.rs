@@ -9,7 +9,7 @@
 //!
 //! ATIF provides a complete session trajectory: user messages, agent responses,
 //! tool executions, observations, and per-step/aggregate LLM metrics. The
-//! [`AtifTrajectoryBuilder`] converts live [`ThreadEvent`](crate::ThreadEvent)
+//! [`AtifTrajectoryBuilder`] converts live [`ThreadEvent`]
 //! streams into a finished [`Trajectory`].
 //!
 //! # Example

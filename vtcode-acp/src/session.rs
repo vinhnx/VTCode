@@ -6,7 +6,7 @@
 //! - Prompt handling (session/prompt)
 //! - Session updates (session/update notifications)
 //!
-//! Reference: https://agentclientprotocol.com/llms.txt
+//! Reference: <https://agentclientprotocol.com/llms.txt>
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -354,7 +354,7 @@ pub enum SessionUpdate {
     /// Server requests the client to execute a tool (bidirectional ACP protocol).
     ///
     /// Arrives via a `server/request` SSE event. After executing the tool,
-    /// send the result back with [`AcpClientV2::session_tool_response`].
+    /// send the result back with [`crate::client_v2::AcpClientV2::session_tool_response`].
     ServerRequest {
         /// The tool execution request from the agent.
         request: ToolExecutionRequest,

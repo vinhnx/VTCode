@@ -51,6 +51,7 @@ RUN_TESTS=1
 RUN_DOCS=1
 RUN_TAGS=1
 RUN_FOLLOW_UP=1
+CURRENT_VERSION=$(get_current_version)
 
 if [[ ${VT_RELEASE_SKIP_DOCS:-0} -eq 1 ]]; then
     RUN_DOCS=0
@@ -147,6 +148,37 @@ publish_cmd() {
     fi
 }
 
+wait_for_crates_io_version() {
+    local crate="$1"
+    local version="$2"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        echo "[dry-run] Skipping crates.io availability check for ${crate} ${version}."
+        return 0
+    fi
+
+    local endpoint="https://crates.io/api/v1/crates/${crate}/${version}"
+    local attempt=1
+    local max_attempts=36
+
+    print_info "Waiting for ${crate} ${version} to be indexed on crates.io..."
+    while [[ $attempt -le $max_attempts ]]; do
+        if curl --silent --show-error --fail --location "$endpoint" >/dev/null; then
+            print_success "${crate} ${version} is available on crates.io"
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_attempts ]]; then
+            sleep 5
+        fi
+
+        attempt=$((attempt + 1))
+    done
+
+    print_error "Timed out waiting for ${crate} ${version} to appear on crates.io"
+    return 1
+}
+
 generate_docs() {
     local crate="$1"
     if [[ $RUN_DOCS -eq 0 ]]; then
@@ -201,6 +233,7 @@ for crate in "${CRATES[@]}"; do
         run_cmd "cargo publish --dry-run -p vtcode-bash-runner"
     fi
     publish_cmd "$crate"
+    wait_for_crates_io_version "$crate" "$CURRENT_VERSION"
     tag="${crate}-0.1.0"
     maybe_tag "${tag}"
     post_publish_follow_up "${crate}"

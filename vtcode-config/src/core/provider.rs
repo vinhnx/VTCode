@@ -431,7 +431,7 @@ pub struct AnthropicConfig {
     /// Claude 4.6 uses adaptive thinking instead of extended thinking.
     /// Note: Extended thinking is now auto-enabled by default (31,999 tokens).
     /// Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models.
-    /// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+    /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking>
     #[serde(default = "default_extended_thinking_enabled")]
     pub extended_thinking_enabled: bool,
 

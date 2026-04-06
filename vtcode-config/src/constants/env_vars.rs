@@ -16,5 +16,5 @@ pub const LITELLM_BASE_URL: &str = "LITELLM_BASE_URL";
 
 /// Environment variable for setting maximum thinking budget tokens
 /// Set to 63999 to get 2x the default thinking budget on 64K output models
-/// See: https://decodeclaude.com/ultrathink-deprecated/
+/// See: <https://decodeclaude.com/ultrathink-deprecated/>
 pub const MAX_THINKING_TOKENS: &str = "MAX_THINKING_TOKENS";

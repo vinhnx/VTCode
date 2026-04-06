@@ -89,7 +89,7 @@ pub struct PipeSpawnOptions {
     pub cwd: std::path::PathBuf,
     /// Environment variables (if None, inherits from parent).
     pub env: Option<HashMap<String, String>>,
-    /// Override for argv[0] (Unix only).
+    /// Override for `argv[0]` (Unix only).
     pub arg0: Option<String>,
     /// Stdin mode.
     pub stdin_mode: PipeStdinMode,

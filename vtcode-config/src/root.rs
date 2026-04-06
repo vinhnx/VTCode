@@ -276,7 +276,7 @@ pub struct UiConfig {
     #[serde(default = "default_show_sidebar")]
     pub show_sidebar: bool,
 
-    /// Dim completed todo items (- [x]) in agent output
+    /// Dim completed todo items (- \[x\]) in agent output
     #[serde(default = "default_dim_completed_todos")]
     pub dim_completed_todos: bool,
 
@@ -295,8 +295,7 @@ pub struct UiConfig {
     pub show_diagnostics_in_transcript: bool,
 
     // === Color Accessibility Configuration ===
-    // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research
-    // See: https://no-color.org/, https://ghostty.org/docs/config/reference#minimum-contrast
+    // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research.
     /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
     /// - 4.5: WCAG AA (default, suitable for most users)
     /// - 7.0: WCAG AAA (enhanced, for low-vision users)
@@ -315,7 +314,7 @@ pub struct UiConfig {
     /// Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan
     /// Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes),
     /// white/brwhite (light themes), brblue (Basic Dark).
-    /// See: https://blog.xoria.org/terminal-colors/
+    /// See: <https://blog.xoria.org/terminal-colors/>
     #[serde(default = "default_safe_colors_only")]
     pub safe_colors_only: bool,
 
@@ -895,7 +894,7 @@ fn default_reasoning_visible_default() -> bool {
 }
 
 /// Kitty keyboard protocol configuration
-/// Reference: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+/// Reference: <https://sw.kovidgoyal.net/kitty/keyboard-protocol/>
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KeyboardProtocolConfig {

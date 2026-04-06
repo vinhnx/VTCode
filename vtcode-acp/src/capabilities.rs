@@ -5,7 +5,7 @@
 //! - Feature capability exchange
 //! - Agent information structures
 //!
-//! Reference: https://agentclientprotocol.com/llms.txt
+//! Reference: <https://agentclientprotocol.com/llms.txt>
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -340,7 +340,7 @@ pub struct AuthRequirements {
 /// Supported authentication methods
 ///
 /// Follows ACP authentication specification:
-/// https://agentclientprotocol.com/protocol/auth
+/// <https://agentclientprotocol.com/protocol/auth>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthMethod {

@@ -1,7 +1,7 @@
 //! ANSI escape sequence parsing constants
 //!
 //! These constants prevent infinite loops when parsing malformed ANSI sequences.
-//! See: https://github.com/anthropics/claude-code/issues/22094
+//! See: <https://github.com/anthropics/claude-code/issues/22094>
 
 /// Maximum length for OSC/DCS/PM/APC/SOS escape sequences before bailing out.
 /// OSC sequences rarely exceed 4KB in practice (e.g., hyperlinks, window titles).

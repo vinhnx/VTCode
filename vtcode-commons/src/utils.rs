@@ -43,7 +43,7 @@ fn nibble_to_hex(nibble: u8) -> char {
     }
 }
 
-/// Extract a string value from a simple TOML key assignment within [package]
+/// Extract a string value from a simple TOML key assignment within the `[package]` section
 pub fn extract_toml_str(content: &str, key: &str) -> Option<String> {
     // Only consider the [package] section to avoid matching other tables
     let pkg_section = if let Some(start) = content.find("[package]") {

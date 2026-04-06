@@ -75,7 +75,7 @@ pub struct CustomProviderConfig {
     pub display_name: String,
 
     /// Base URL of the OpenAI-compatible API endpoint
-    /// (e.g., "https://llm.corp.example/v1").
+    /// (e.g., `<https://llm.corp.example/v1>`).
     pub base_url: String,
 
     /// Environment variable name that holds the API key for this endpoint

@@ -89,7 +89,7 @@ pub struct MemoryPoolConfig {
     /// Maximum number of Values to pool
     pub max_value_pool_size: usize,
 
-    /// Maximum number of Vec<String> to pool
+    /// Maximum number of `Vec<String>` to pool
     pub max_vec_pool_size: usize,
 }
 

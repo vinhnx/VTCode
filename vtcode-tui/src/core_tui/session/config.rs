@@ -91,7 +91,7 @@ pub struct AppearanceConfig {
     /// Transcript bottom padding
     pub transcript_bottom_padding: u16,
 
-    /// Whether to dim completed todo items (- [x] and ~~strikethrough~~)
+    /// Whether to dim completed todo items (- \[x\] and ~~strikethrough~~)
     pub dim_completed_todos: bool,
 
     /// Number of blank lines between message blocks (0-2)

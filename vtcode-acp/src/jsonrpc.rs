@@ -4,7 +4,7 @@
 //! Agent Client Protocol (ACP). All ACP methods use JSON-RPC 2.0 as the
 //! transport layer.
 //!
-//! Reference: https://agentclientprotocol.com/llms.txt
+//! Reference: <https://agentclientprotocol.com/llms.txt>
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

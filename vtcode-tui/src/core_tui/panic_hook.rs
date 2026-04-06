@@ -151,7 +151,7 @@ fn app_metadata() -> AppMetadata {
 /// This function should be called very early in the application lifecycle,
 /// before any TUI operations begin.
 ///
-/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/better-panic/
+/// Follows Ratatui recipe: <https://ratatui.rs/recipes/apps/better-panic/>
 pub fn init_panic_hook() {
     PANIC_HOOK_ONCE.call_once(|| {
         // Keep original hook for concise non-debug panic output.
@@ -239,7 +239,7 @@ pub fn mark_keyboard_enhancements_pushed(pushed: bool) {
 /// It handles all errors internally to ensure cleanup happens even if individual
 /// operations fail.
 ///
-/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
+/// Follows Ratatui recipe: <https://ratatui.rs/recipes/apps/panic-hooks/>
 pub fn restore_tui() -> io::Result<()> {
     // Ensure restoration only runs once to prevent interleaved cleanup from
     // multiple call-sites (panic hook, signal handler, normal shutdown).

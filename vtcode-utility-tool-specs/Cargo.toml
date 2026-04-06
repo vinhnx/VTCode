@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Passive JSON schemas for VT Code utility and file tool surfaces"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-utility-tool-specs"
 license.workspace = true
 publish = true
 

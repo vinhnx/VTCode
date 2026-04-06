@@ -6,7 +6,7 @@
 //! - SSE streaming for session updates
 //! - Capability negotiation
 //!
-//! Reference: https://agentclientprotocol.com/llms.txt
+//! Reference: <https://agentclientprotocol.com/llms.txt>
 
 use crate::capabilities::{
     AgentCapabilities, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo,
@@ -483,7 +483,7 @@ impl AcpClientV2 {
 
     /// Send a tool execution result back to the agent (`client/response`).
     ///
-    /// Call this after handling a [`SessionUpdate::ServerRequest`] event to
+    /// Call this after handling a [`crate::session::SessionUpdate::ServerRequest`] event to
     /// complete the bidirectional tool call cycle.
     ///
     /// # Errors
