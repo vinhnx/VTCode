@@ -62,6 +62,20 @@ fn make_clickable_target(target: &str) -> Option<String> {
     ))
 }
 
+fn should_strip_inline_local_link_underline(target: &str) -> bool {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return false;
+    }
+    match Url::parse(trimmed) {
+        Ok(url) => url.scheme() == "file",
+        Err(_) => true,
+    }
+}
+
 /// Renderer with deferred output buffering
 pub struct AnsiRenderer {
     writer: AutoStream<io::Stdout>,
@@ -1067,7 +1081,17 @@ impl InlineSink {
                 if segment.text.is_empty() {
                     continue;
                 }
-                let converted = convert_to_inline_style(segment.style);
+                let mut converted = convert_to_inline_style(segment.style);
+                // Plain file-like markdown tokens are styled as underlined during markdown parsing.
+                // In inline UI, actual clickability is decided later from resolved transcript links.
+                // Strip local-link underlines here to avoid showing non-clickable path text as links.
+                if segment
+                    .link_target
+                    .as_deref()
+                    .is_some_and(should_strip_inline_local_link_underline)
+                {
+                    converted.effects = converted.effects.remove(Effects::UNDERLINE);
+                }
                 let mut inline_style = fallback.clone();
                 inline_style.color = None;
                 if let Some(color) = converted.color
@@ -1626,6 +1650,52 @@ mod tests {
             "expected highlighted segments, got {}, line: {}",
             segments.len(),
             plain_line
+        );
+    }
+
+    #[test]
+    fn prepare_markdown_lines_strips_local_path_underlines() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let sink = InlineSink::new(
+            InlineHandle::new_for_tests(sender),
+            SyntaxHighlightingConfig::default(),
+        );
+        let base_style = MessageStyle::Response.style();
+        let markdown = "See README.md for details.";
+
+        let (prepared, _, _) = sink.prepare_markdown_lines(markdown, "", base_style, true, false);
+        let readme_segment = prepared
+            .iter()
+            .flat_map(|line| line.iter())
+            .find(|segment| segment.text.contains("README.md"))
+            .expect("README segment should be present");
+
+        assert!(
+            !readme_segment.style.effects.contains(Effects::UNDERLINE),
+            "local file-like path text should not keep markdown underline in inline UI"
+        );
+    }
+
+    #[test]
+    fn prepare_markdown_lines_keeps_https_link_underlines() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let sink = InlineSink::new(
+            InlineHandle::new_for_tests(sender),
+            SyntaxHighlightingConfig::default(),
+        );
+        let base_style = MessageStyle::Response.style();
+        let markdown = "[docs](https://example.com)";
+
+        let (prepared, _, _) = sink.prepare_markdown_lines(markdown, "", base_style, true, false);
+        let docs_segment = prepared
+            .iter()
+            .flat_map(|line| line.iter())
+            .find(|segment| segment.text.contains("docs"))
+            .expect("docs segment should be present");
+
+        assert!(
+            docs_segment.style.effects.contains(Effects::UNDERLINE),
+            "https markdown links should keep underline styling"
         );
     }
 
