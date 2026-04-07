@@ -57,6 +57,26 @@ pub(super) enum ToolLoopLimitAction {
     BreakLoop,
 }
 
+#[inline]
+pub(super) fn resolve_safety_tool_call_limits(
+    max_tool_calls_per_turn: usize,
+    max_session_turns: usize,
+    plan_mode_active: bool,
+) -> (usize, usize) {
+    let turn_limit = if max_tool_calls_per_turn == 0 {
+        usize::MAX
+    } else {
+        max_tool_calls_per_turn
+    };
+    let session_limit = if plan_mode_active || max_tool_calls_per_turn == 0 {
+        usize::MAX
+    } else {
+        max_tool_calls_per_turn.saturating_mul(max_session_turns.max(1))
+    };
+
+    (turn_limit, session_limit)
+}
+
 const MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 120;
 const MAX_TOOL_LOOP_CAP_MULTIPLIER: usize = 3;
 const MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 50;
@@ -723,14 +743,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
             }
             let previous_max_tool_loops = *current_max_tool_loops;
             *current_max_tool_loops = (*current_max_tool_loops).saturating_add(increment);
-            let current_session_limit = ctx.safety_validator.get_session_limit();
-            ctx.safety_validator
-                .set_limits(*current_max_tool_loops, current_session_limit);
             tracing::info!(
-                "Updated safety validator limits: turn={} (was {}), session={}",
+                "Updated tool loop limit: turn={} (was {}), session tool-call limit remains unchanged",
                 *current_max_tool_loops,
                 previous_max_tool_loops,
-                current_session_limit
             );
             display_status(
                 ctx.renderer,
@@ -750,9 +766,10 @@ mod tests {
     use super::{
         PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
         PLAN_MODE_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
-        extract_turn_config, handle_steering_messages, resolve_tool_loop_limit,
-        should_enter_plan_mode_from_user_text, should_exit_plan_mode_from_confirmation,
-        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
+        extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
+        resolve_tool_loop_limit, should_enter_plan_mode_from_user_text,
+        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -942,6 +959,27 @@ mod tests {
     fn resolve_tool_loop_limit_allows_unlimited_mode() {
         assert_eq!(resolve_tool_loop_limit(0, false), UNLIMITED_TOOL_LOOPS);
         assert_eq!(resolve_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
+    }
+
+    #[test]
+    fn resolve_safety_tool_call_limits_maps_zero_turn_budget_to_unbounded_limits() {
+        assert_eq!(
+            resolve_safety_tool_call_limits(0, 50, false),
+            (usize::MAX, usize::MAX)
+        );
+    }
+
+    #[test]
+    fn resolve_safety_tool_call_limits_scales_session_limit_from_turn_budget() {
+        assert_eq!(resolve_safety_tool_call_limits(12, 40, false), (12, 480));
+    }
+
+    #[test]
+    fn resolve_safety_tool_call_limits_keeps_plan_mode_session_unbounded() {
+        assert_eq!(
+            resolve_safety_tool_call_limits(48, 40, true),
+            (48, usize::MAX)
+        );
     }
 
     #[test]

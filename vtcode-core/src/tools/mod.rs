@@ -187,7 +187,6 @@ pub mod web_fetch;
 // Production-grade improvements modules
 pub mod adaptive_rate_limiter;
 pub mod async_middleware;
-pub mod async_pipeline;
 pub mod circuit_breaker;
 pub mod health;
 pub mod improvement_algorithms;
@@ -211,9 +210,6 @@ pub const NEW_SHARED_TRACKER_ID: &str = "new_shared_tracker";
 
 // Re-export main types and traits for backward compatibility
 pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus};
-pub use async_pipeline::{
-    AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,
-};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;

@@ -2,39 +2,12 @@ use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
-use crate::retry::RetryPolicy;
-use crate::tools::registry::{ToolErrorType, ToolExecutionError};
+use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
 use crate::utils::error_messages::ERR_TOOL_DENIED;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
-use std::borrow::Cow;
-use tokio::time::Duration;
-use tracing::{error, info, trace, warn};
-
-fn tool_retry_delay(error: &ToolExecutionError) -> Option<Duration> {
-    error.retry_after().or_else(|| error.retry_delay())
-}
-
-fn circuit_open_error(tool_name: &str, retry_after: Option<Duration>) -> ToolExecutionError {
-    let mut error = ToolExecutionError::new(
-        tool_name.to_string(),
-        ToolErrorType::ExecutionError,
-        format!(
-            "Tool '{}' is temporarily unavailable after repeated transient failures",
-            tool_name
-        ),
-    );
-    error.category = vtcode_commons::ErrorCategory::CircuitOpen;
-    error.retryable = true;
-    error.is_recoverable = true;
-    error.retry_after_ms = retry_after.map(|delay| delay.as_millis() as u64);
-    error.circuit_breaker_impact = true;
-    error.recovery_suggestions = vec![Cow::Borrowed(
-        "Wait briefly, then retry or choose a different tool.",
-    )];
-    error
-}
+use tracing::info;
 
 impl AgentRunner {
     #[inline]
@@ -184,173 +157,24 @@ impl AgentRunner {
             info!(target = "policy", agent = ?self.agent_type, tool = resolved_tool_name, cmd = %cmd_text, "shell_policy_checked");
         }
 
-        // Canonical retry policy: 3 attempts (1 initial + 2 retries), exponential
-        // backoff from 200ms to 2s.  The `RetryPolicy` uses `ErrorCategory` to
-        // decide retryability — covering Timeout, Network, RateLimit, and
-        // ServiceUnavailable while failing fast on non-retryable errors like
-        // Authentication, PolicyViolation, and InvalidParameters.
-        let policy = RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
+        let mut policy = ExecutionPolicySnapshot::default()
+            .with_prevalidated(prepared.already_preflighted)
+            .with_max_retries(self.config().agent.harness.max_tool_retries as usize);
+        policy.retry_jitter = 0.15;
 
-        // Clone the registry once and reuse across retries (avoids cloning on each attempt)
-        let registry = self.tool_registry.clone();
-        let shared_breaker = self.tool_registry.shared_circuit_breaker();
-
-        // Execute tool with policy-driven adaptive retry
-        let mut last_error: Option<ToolExecutionError> = None;
-        for attempt in 0..policy.max_attempts {
-            if let Some(breaker) = &shared_breaker
-                && !breaker.allow_request_for_tool(resolved_tool_name)
-            {
-                let structured = policy.apply_to_tool_execution_error(
-                    circuit_open_error(
-                        resolved_tool_name,
-                        breaker.remaining_backoff(resolved_tool_name),
-                    )
-                    .with_attempt(attempt + 1)
-                    .with_surface("agent_runner"),
-                    attempt,
-                    Some(resolved_tool_name),
-                );
-                let delay = tool_retry_delay(&structured);
-                trace!(
-                    tool = %resolved_tool_name,
-                    attempt = attempt + 1,
-                    category = ?structured.category,
-                    retryable = structured.retryable,
-                    "tool execution blocked before dispatch"
-                );
-                if let Some(delay) = delay {
-                    warn!(
-                        tool = %resolved_tool_name,
-                        attempt = attempt + 1,
-                        retry_in_ms = delay.as_millis(),
-                        "tool execution blocked by transient service protection"
-                    );
-                    last_error = Some(structured);
-                    tokio::time::sleep(delay).await;
-                    continue;
-                }
-                error!(
-                    tool = %resolved_tool_name,
-                    attempt = attempt + 1,
-                    category = ?structured.category,
-                    "tool execution failed without retry"
-                );
-                return Err(structured);
-            }
-
-            match registry
-                .execute_prepared_public_tool_ref_with_exec_mode(prepared, false)
-                .await
-            {
-                Ok(result) => {
-                    if let Some(structured_error) = ToolExecutionError::from_tool_output(&result) {
-                        let structured = policy.apply_to_tool_execution_error(
-                            structured_error
-                                .with_tool_call_context(resolved_tool_name, args)
-                                .with_attempt(attempt + 1)
-                                .with_surface("agent_runner"),
-                            attempt,
-                            Some(resolved_tool_name),
-                        );
-                        let delay = tool_retry_delay(&structured);
-                        trace!(
-                            tool = %resolved_tool_name,
-                            attempt = attempt + 1,
-                            category = ?structured.category,
-                            retryable = structured.retryable,
-                            partial_state_possible = structured.partial_state_possible,
-                            "tool execution returned structured failure"
-                        );
-                        if let Some(delay) = delay {
-                            warn!(
-                                tool = %resolved_tool_name,
-                                attempt = attempt + 1,
-                                retry_in_ms = delay.as_millis(),
-                                category = ?structured.category,
-                                "transient tool failure; retrying"
-                            );
-                            last_error = Some(structured);
-                            tokio::time::sleep(delay).await;
-                            continue;
-                        }
-                        error!(
-                            tool = %resolved_tool_name,
-                            attempt = attempt + 1,
-                            category = ?structured.category,
-                            "tool execution failed without retry"
-                        );
-                        return Err(structured);
-                    }
-
-                    if attempt > 0 {
-                        info!(
-                            tool = %resolved_tool_name,
-                            attempt = attempt + 1,
-                            "tool execution succeeded after retry"
-                        );
-                    }
-                    return Ok(result);
-                }
-                Err(e) => {
-                    let structured = policy.apply_to_tool_execution_error(
-                        ToolExecutionError::from_anyhow(
-                            resolved_tool_name,
-                            &e,
-                            attempt,
-                            false,
-                            false,
-                            Some("agent_runner"),
-                        )
-                        .with_tool_call_context(resolved_tool_name, args)
-                        .with_attempt(attempt + 1),
-                        attempt,
-                        Some(resolved_tool_name),
-                    );
-                    let delay = tool_retry_delay(&structured);
-                    trace!(
-                        tool = %resolved_tool_name,
-                        attempt = attempt + 1,
-                        category = ?structured.category,
-                        retryable = structured.retryable,
-                        partial_state_possible = structured.partial_state_possible,
-                        "tool execution attempt failed"
-                    );
-                    last_error = Some(structured.clone());
-                    if let Some(delay) = delay {
-                        warn!(
-                            tool = %resolved_tool_name,
-                            attempt = attempt + 1,
-                            retry_in_ms = delay.as_millis(),
-                            category = ?structured.category,
-                            "transient tool failure; retrying"
-                        );
-                        tokio::time::sleep(delay).await;
-                        continue;
-                    }
-                    error!(
-                        tool = %resolved_tool_name,
-                        attempt = attempt + 1,
-                        category = ?structured.category,
-                        "tool execution failed without retry"
-                    );
-                    return Err(structured);
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| {
-            ToolExecutionError::new(
+        let outcome = self
+            .tool_registry
+            .execute_prepared_public_tool_request(prepared, policy)
+            .await;
+        match (outcome.output, outcome.error) {
+            (Some(output), None) => Ok(output),
+            (_, Some(error)) => Err(error.with_surface("agent_runner")),
+            _ => Err(ToolExecutionError::policy_violation(
                 resolved_tool_name.to_string(),
-                ToolErrorType::ExecutionError,
-                format!(
-                    "Tool '{}' exhausted {} attempt(s) without a result",
-                    resolved_tool_name, policy.max_attempts
-                ),
+                "tool execution failed without output or error",
             )
-            .with_tool_call_context(resolved_tool_name, args)
-            .with_surface("agent_runner")
-        }))
+            .with_surface("agent_runner")),
+        }
     }
 
     /// Internal tool execution, skipping validation.

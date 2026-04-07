@@ -164,21 +164,7 @@ pub(crate) async fn run_tool_call_with_args(
             }
         }
 
-        if let Some(safety_validator) = ctx.safety_validator {
-            let validation = safety_validator
-                .validate_call_with_invocation_id(&canonical_name, args_val, safety_invocation_id)
-                .await;
-            if let Err(err) = validation {
-                return Ok(ToolPipelineOutcome::from_status(
-                    ToolExecutionStatus::Failure {
-                        error: structured_failure(
-                            &canonical_name,
-                            &anyhow!("Safety validation failed: {}", err),
-                        ),
-                    },
-                ));
-            }
-        }
+        let _ = safety_invocation_id;
     } else if let Some(tool) = ctx.tool_registry.get_tool(requested_name) {
         canonical_name = tool.name().to_string();
     }

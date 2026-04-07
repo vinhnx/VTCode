@@ -217,7 +217,6 @@ pub use core::agent::task::{
     TaskResults as RunnerTaskResults,
 };
 pub use core::memory_pool::{MemoryPool, global_pool};
-pub use core::optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use core::threads::{
     SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,
@@ -316,8 +315,8 @@ pub use sandboxing::{
     SandboxPolicy as CodexSandboxPolicy, SandboxType, WritableRoot,
 };
 
+pub use tools::OptimizedToolRegistry;
 pub use tools::grep_file::GrepSearchManager;
-pub use tools::{AsyncToolPipeline, AsyncToolRequest, ExecutionPriority, OptimizedToolRegistry};
 pub use tools::{ToolRegistration, ToolRegistry};
 
 /// Macro for consistent error context formatting to reduce code duplication

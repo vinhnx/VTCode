@@ -371,6 +371,7 @@ pub(crate) async fn initialize_session(
         ),
     );
     tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
+    let shared_safety_gateway = tool_registry.safety_gateway();
 
     Ok(SessionState {
         session_bootstrap,
@@ -385,7 +386,9 @@ pub(crate) async fn initialize_session(
             tool_permission_cache,
             permissions_state,
             approval_recorder,
-            safety_validator: Arc::new(ToolCallSafetyValidator::new()),
+            safety_validator: Arc::new(ToolCallSafetyValidator::with_gateway(
+                shared_safety_gateway,
+            )),
             circuit_breaker: circuit_breaker.clone(),
             tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
             rate_limiter: Arc::new(

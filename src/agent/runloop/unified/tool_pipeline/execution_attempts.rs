@@ -8,7 +8,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use vtcode_core::retry::RetryPolicy;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
-use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry};
+use vtcode_core::tools::registry::{
+    ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
+};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -166,7 +168,11 @@ async fn execute_tool_with_progress(
     settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
     let deadline = Instant::now() + tool_timeout;
-    let mut attempt = 0usize;
+    let kernel_max_retries = if retry_allowed {
+        retry_policy.max_attempts.saturating_sub(1) as usize
+    } else {
+        0
+    };
     let mut status = run_attempt_with_logging(
         registry,
         name,
@@ -177,55 +183,32 @@ async fn execute_tool_with_progress(
         deadline.saturating_duration_since(Instant::now()),
         prevalidated,
         settle_noninteractive_exec,
-        attempt,
+        0,
         None,
         retry_policy,
+        kernel_max_retries,
     )
     .await;
 
-    while let Some(delay) = retry_delay_for_status(&status, attempt, retry_allowed, retry_policy) {
-        attempt += 1;
-        progress_reporter
-            .set_message(format!(
-                "Retrying {} (attempt {}/{}) after {}ms...",
-                name,
-                attempt + 1,
-                retry_policy.max_attempts,
-                delay.as_millis()
-            ))
-            .await;
-
-        tokio::select! {
-            _ = tokio::time::sleep(delay) => {},
-            _ = ctrl_c_notify.notified() => return ToolExecutionStatus::Cancelled,
-        }
-
-        let remaining_timeout = deadline.saturating_duration_since(Instant::now());
-        if remaining_timeout < Duration::from_secs(1) {
-            return create_timeout_error(name, timeout_category, Some(tool_timeout));
-        }
-
-        status = run_attempt_with_logging(
-            registry,
-            name,
-            args,
-            ctrl_c_state,
-            ctrl_c_notify,
-            progress_reporter,
-            remaining_timeout,
-            prevalidated,
-            settle_noninteractive_exec,
-            attempt,
-            Some(delay),
-            retry_policy,
+    let remaining_timeout = deadline.saturating_duration_since(Instant::now());
+    if remaining_timeout < Duration::from_secs(1)
+        && matches!(
+            status,
+            ToolExecutionStatus::Failure { .. } | ToolExecutionStatus::Timeout { .. }
         )
-        .await;
+    {
+        status = create_timeout_error(name, timeout_category, Some(tool_timeout));
     }
 
+    let retries_used = status
+        .error()
+        .and_then(|error| error.attempts_made())
+        .map(|attempts| attempts.saturating_sub(1) as usize)
+        .unwrap_or(0);
     emit_tool_retry_outcome_metric(
         name,
         &status,
-        attempt,
+        retries_used,
         retry_policy.max_attempts.saturating_sub(1) as usize,
         retry_allowed,
     );
@@ -245,26 +228,23 @@ async fn run_attempt_with_logging(
     attempt: usize,
     retry_delay: Option<Duration>,
     retry_policy: &RetryPolicy,
+    kernel_max_retries: usize,
 ) -> ToolExecutionStatus {
     let attempt_start = Instant::now();
-    let status = apply_retry_context(
-        run_single_tool_attempt(
-            registry,
-            name,
-            args,
-            ctrl_c_state,
-            ctrl_c_notify,
-            progress_reporter,
-            timeout,
-            prevalidated,
-            settle_noninteractive_exec,
-        )
-        .await,
+    let status = run_single_tool_attempt(
+        registry,
         name,
         args,
-        attempt as u32,
+        ctrl_c_state,
+        ctrl_c_notify,
+        progress_reporter,
+        timeout,
+        prevalidated,
+        settle_noninteractive_exec,
         retry_policy,
-    );
+        kernel_max_retries,
+    )
+    .await;
 
     debug!(
         target: "vtcode.tool.exec",
@@ -280,38 +260,6 @@ async fn run_attempt_with_logging(
     status
 }
 
-fn apply_retry_context(
-    status: ToolExecutionStatus,
-    name: &str,
-    args: &Value,
-    attempt_index: u32,
-    retry_policy: &RetryPolicy,
-) -> ToolExecutionStatus {
-    match status {
-        ToolExecutionStatus::Failure { error } => ToolExecutionStatus::Failure {
-            error: retry_policy.apply_to_tool_execution_error(
-                error
-                    .with_tool_call_context(name, args)
-                    .with_attempt(attempt_index + 1)
-                    .with_surface("unified_runloop"),
-                attempt_index,
-                Some(name),
-            ),
-        },
-        ToolExecutionStatus::Timeout { error } => ToolExecutionStatus::Timeout {
-            error: retry_policy.apply_to_tool_execution_error(
-                error
-                    .with_tool_call_context(name, args)
-                    .with_attempt(attempt_index + 1)
-                    .with_surface("unified_runloop"),
-                attempt_index,
-                Some(name),
-            ),
-        },
-        ToolExecutionStatus::Success { .. } | ToolExecutionStatus::Cancelled => status,
-    }
-}
-
 async fn run_single_tool_attempt(
     registry: &ToolRegistry,
     name: &str,
@@ -322,6 +270,8 @@ async fn run_single_tool_attempt(
     tool_timeout: Duration,
     prevalidated: bool,
     settle_noninteractive_exec: bool,
+    retry_policy: &RetryPolicy,
+    kernel_max_retries: usize,
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
@@ -378,16 +328,27 @@ async fn run_single_tool_attempt(
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
             progress_reporter.set_progress(40).await;
 
-            let result = if prevalidated {
-                registry
-                    .execute_public_tool_ref_prevalidated_with_exec_mode(
-                        name,
-                        args,
-                        settle_noninteractive_exec,
-                    )
-                    .await
+            let mut policy = ExecutionPolicySnapshot::default()
+                .with_max_retries(kernel_max_retries)
+                .with_prevalidated(prevalidated)
+                .with_settle_noninteractive_exec(settle_noninteractive_exec)
+                .with_safety_prevalidated(false);
+            policy.retry_base_delay = retry_policy.initial_delay;
+            policy.retry_max_delay = retry_policy.max_delay;
+            policy.retry_multiplier = retry_policy.multiplier;
+            policy.retry_jitter = retry_policy.jitter;
+
+            let request =
+                ToolExecutionRequest::new(name.to_string(), args.clone()).with_policy(policy);
+            let outcome = registry.execute_public_tool_request(request).await;
+            let result: Result<Value, Error> = if let Some(output) = outcome.output {
+                Ok(output)
+            } else if let Some(error) = outcome.error {
+                Ok(error.to_json_value())
             } else {
-                registry.execute_public_tool_ref(name, args).await
+                Err(anyhow::anyhow!(
+                    "tool execution failed without output or error"
+                ))
             };
 
             progress_reporter
@@ -518,6 +479,7 @@ fn is_retry_safe_tool(registry: &ToolRegistry, name: &str, args: &Value) -> bool
     registry.is_retry_safe_call(name, args)
 }
 
+#[cfg(test)]
 fn retry_delay_for_status(
     status: &ToolExecutionStatus,
     attempt: usize,
