@@ -276,7 +276,7 @@ impl Session {
         frame.render_widget(paragraph.block(block), input_area);
         self.apply_input_selection_highlight(frame.buffer_mut(), inner);
         if self.input_manager.selection_needs_copy() {
-            let _ = self.input_manager.copy_selected_text_to_clipboard();
+            let _ = self.copy_input_selection_to_clipboard();
         }
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
@@ -782,10 +782,14 @@ impl Session {
         }
 
         let mut left = self
-            .input_status_left
-            .as_ref()
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty());
+            .copy_notification_text()
+            .map(str::to_owned)
+            .or_else(|| {
+                self.input_status_left
+                    .as_ref()
+                    .map(|value| value.trim().to_owned())
+                    .filter(|value| !value.is_empty())
+            });
         let right = self
             .input_status_right
             .as_ref()

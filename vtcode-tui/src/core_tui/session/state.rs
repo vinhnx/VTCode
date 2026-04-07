@@ -18,6 +18,7 @@ use super::super::types::{
     InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind,
     ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
 };
+use super::mouse_selection::MouseSelectionState;
 use super::status_requires_shimmer;
 use super::{
     ActiveOverlay, InlinePromptSuggestionState, Session, SuggestedPromptState,
@@ -25,6 +26,9 @@ use super::{
 };
 use crate::config::constants::ui;
 use crate::options::FullscreenInteractionSettings;
+
+const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(3);
+const COPY_NOTIFICATION_TEXT: &str = "Copied to clipboard";
 
 impl Session {
     pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
@@ -38,6 +42,24 @@ impl Session {
         }
         self.inline_prompt_suggestion = InlinePromptSuggestionState::default();
         self.mark_dirty();
+    }
+
+    pub(crate) fn copy_input_selection_to_clipboard(&mut self) -> bool {
+        if self.input_manager.copy_selected_text_to_clipboard() {
+            self.show_copy_notification();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn copy_text_to_clipboard(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        MouseSelectionState::copy_to_clipboard(text);
+        self.show_copy_notification();
     }
 
     pub(crate) fn clear_suggested_prompt_state(&mut self) {
@@ -228,6 +250,12 @@ impl Session {
             self.scroll_cursor_steady_until = None;
             self.needs_redraw = true;
         }
+        if let Some(until) = self.copy_notification_until
+            && Instant::now() >= until
+        {
+            self.copy_notification_until = None;
+            self.needs_redraw = true;
+        }
         if self.last_shimmer_active && !shimmer_active {
             self.needs_redraw = true;
         }
@@ -235,6 +263,17 @@ impl Session {
         if animation_updated {
             self.needs_redraw = true;
         }
+    }
+
+    pub(crate) fn show_copy_notification(&mut self) {
+        self.copy_notification_until = Some(Instant::now() + COPY_NOTIFICATION_DURATION);
+        self.needs_redraw = true;
+    }
+
+    pub(crate) fn copy_notification_text(&self) -> Option<&'static str> {
+        self.copy_notification_until
+            .filter(|until| Instant::now() < *until)
+            .map(|_| COPY_NOTIFICATION_TEXT)
     }
 
     pub(crate) fn is_running_activity(&self) -> bool {

@@ -47,7 +47,7 @@ fn copy_selected_input_if_requested(
         return false;
     }
 
-    if session.input_manager.copy_selected_text_to_clipboard() {
+    if session.copy_input_selection_to_clipboard() {
         session.mark_dirty();
         return true;
     }

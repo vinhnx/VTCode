@@ -1966,13 +1966,25 @@ fn double_click_selects_transcript_word_and_copies_it() {
     assert!(session.mouse_selection.has_selection);
     assert!(session.mouse_selection.needs_copy());
 
-    MouseSelectionState::copy_to_clipboard(&selected);
+    session.copy_text_to_clipboard(&selected);
     session.mouse_selection.mark_copied();
     assert!(!session.mouse_selection.needs_copy());
 
     let clipboard_contents =
         fs::read_to_string(&clipboard_file).expect("read copied transcript text");
     assert_eq!(clipboard_contents, "hello");
+
+    let rendered_status = session
+        .render_input_status_line(VIEW_WIDTH)
+        .expect("input status line")
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    assert!(
+        rendered_status.contains("Copied to clipboard"),
+        "transcript copy should surface a temporary confirmation"
+    );
 }
 
 #[cfg(unix)]
@@ -2044,7 +2056,13 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
         Some(("hello world".len() - 5, "hello world".len()))
     );
 
-    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    let rendered = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("Copied to clipboard")),
+        "input copy should surface a temporary confirmation"
+    );
 
     let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
     assert_eq!(clipboard_contents, "world");
@@ -2602,6 +2620,42 @@ fn empty_input_status_hides_subagent_shortcuts_with_background_only() {
 
     assert!(!rendered.contains("Alt+S"));
     assert!(!rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn copy_notification_renders_in_input_status_line() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.show_copy_notification();
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .expect("input status line")
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(rendered.contains("Copied to clipboard"));
+}
+
+#[test]
+fn copy_notification_expires_after_five_seconds() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.show_copy_notification();
+    session.copy_notification_until = Some(Instant::now() - Duration::from_secs(1));
+    session.handle_tick();
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+
+    assert!(!rendered.contains("Copied to clipboard"));
 }
 
 #[test]

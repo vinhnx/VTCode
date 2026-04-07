@@ -60,7 +60,7 @@ fn copy_selected_input_if_requested(
     has_command: bool,
 ) -> bool {
     if has_command && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
-        if session.core.input_manager.copy_selected_text_to_clipboard() {
+        if session.core.copy_input_selection_to_clipboard() {
             session.mark_dirty();
         }
         return true;
@@ -76,7 +76,7 @@ fn copy_selected_input_if_requested(
         return false;
     }
 
-    if session.core.input_manager.copy_selected_text_to_clipboard() {
+    if session.core.copy_input_selection_to_clipboard() {
         session.mark_dirty();
         return true;
     }

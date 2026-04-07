@@ -217,6 +217,8 @@ pub struct Session {
     placeholder_style: Option<InlineTextStyle>,
     pub(crate) input_status_left: Option<String>,
     pub(crate) input_status_right: Option<String>,
+    /// Transient "copied" confirmation shown in the input status row.
+    copy_notification_until: Option<Instant>,
     input_compact_mode: bool,
 
     // --- UI State ---
