@@ -73,6 +73,7 @@ fuzz/target/
 *.db
 *.sqlite
 *.sqlite3
+.mcp_data/
 
 # Node.js (if used for docs/tools)
 node_modules/

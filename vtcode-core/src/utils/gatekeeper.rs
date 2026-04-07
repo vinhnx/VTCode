@@ -6,8 +6,8 @@ use once_cell::sync::OnceCell;
 
 use crate::config::GatekeeperConfig;
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct GatekeeperPolicy {
     warn_on_quarantine: bool,
     auto_clear_quarantine: bool,
@@ -15,8 +15,8 @@ pub struct GatekeeperPolicy {
     cache: Arc<Mutex<HashMap<PathBuf, GatekeeperCacheEntry>>>,
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct GatekeeperCacheEntry {
     quarantined: bool,
     warned: bool,
@@ -29,6 +29,7 @@ pub fn initialize_gatekeeper(config: &GatekeeperConfig, workspace_root: Option<&
     let _ = GATEKEEPER_POLICY.set(policy);
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 impl GatekeeperPolicy {
     fn from_config(config: &GatekeeperConfig, workspace_root: Option<&Path>) -> Self {
         let auto_clear_paths = config

@@ -4,42 +4,21 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::ui::theme;
 
+// Re-export from commons so existing consumers don't break.
+pub use vtcode_commons::ui_protocol::{convert_style, theme_from_color_fields};
+
 use super::types::{InlineTextStyle, InlineTheme};
 
-fn convert_ansi_color(color: AnsiColorEnum) -> Option<AnsiColorEnum> {
-    Some(match color {
-        AnsiColorEnum::Ansi(ansi) => AnsiColorEnum::Ansi(ansi),
-        AnsiColorEnum::Ansi256(value) => AnsiColorEnum::Ansi256(value),
-        AnsiColorEnum::Rgb(rgb) => AnsiColorEnum::Rgb(rgb),
-    })
-}
-
-fn convert_style_color(style: &AnsiStyle) -> Option<AnsiColorEnum> {
-    style.get_fg_color().and_then(convert_ansi_color)
-}
-
-fn convert_style_bg_color(style: &AnsiStyle) -> Option<AnsiColorEnum> {
-    style.get_bg_color().and_then(convert_ansi_color)
-}
-
-pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
-    InlineTextStyle {
-        color: convert_style_color(&style),
-        bg_color: convert_style_bg_color(&style),
-        effects: style.get_effects(),
-    }
-}
-
 pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
-    InlineTheme {
-        foreground: convert_ansi_color(styles.foreground),
-        background: convert_ansi_color(styles.background),
-        primary: convert_style_color(&styles.primary),
-        secondary: convert_style_color(&styles.secondary),
-        tool_accent: convert_style_color(&styles.tool),
-        tool_body: convert_style_color(&styles.tool_detail),
-        pty_body: convert_style_color(&styles.pty_output),
-    }
+    theme_from_color_fields(
+        styles.foreground,
+        styles.background,
+        styles.primary,
+        styles.secondary,
+        styles.tool,
+        styles.tool_detail,
+        styles.pty_output,
+    )
 }
 
 pub fn measure_text_width(text: &str) -> u16 {
@@ -77,17 +56,14 @@ pub fn ratatui_style_from_inline(
 ) -> Style {
     let mut resolved = Style::default();
 
-    // Foreground color
     if let Some(color) = style.color.or(fallback) {
         resolved = resolved.fg(ratatui_color_from_ansi(color));
     }
 
-    // Background color
     if let Some(color) = style.bg_color {
         resolved = resolved.bg(ratatui_color_from_ansi(color));
     }
 
-    // Effects bitmask
     if style.effects.contains(Effects::BOLD) {
         resolved = resolved.add_modifier(Modifier::BOLD);
     }
@@ -115,9 +91,6 @@ pub fn ratatui_pty_style_from_inline(
 }
 
 /// Convert an `anstyle::Style` directly to a `ratatui::style::Style`.
-///
-/// Provides full effect mapping (bold, italic, underline, dim) in a single step,
-/// eliminating the need for intermediate `InlineTextStyle` conversions.
 pub fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
     let inline = convert_style(style);
     ratatui_style_from_inline(&inline, None)

@@ -98,11 +98,13 @@ tracing-subscriber = { workspace = true }
 # ANSI styling
 anstyle = { workspace = true }
 anstream = "1.0"
+anstyle-git = { workspace = true }
+anstyle-ls = "1.0"
 colorchoice-clap = "1.0"
 quick_cache = "0.6"
 roff = "1.1"
 unicode-width = { workspace = true }
-crossterm = { workspace = true, features = ["event-stream"] }
+crossterm = { workspace = true, features = ["event-stream"], optional = true }
 nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
@@ -147,7 +149,7 @@ rmcp = { version = "1.3", features = [
 openai-harmony = "0.0.8"
 url = { workspace = true }
 jsonschema = "0.45"
-uuid = { workspace = true, features = ["v4", "fast-rng", "serde"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
 which = "8.0.2"
 textwrap = "0.16"
 editor-command = "2.0"
@@ -194,7 +196,8 @@ name = "migration_test"
 path = "examples/migration_test.rs"
 
 [features]
-default = []
+default = ["tui"]
+tui = ["dep:crossterm"]
 schema = ["dep:schemars", "vtcode-config/schema"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 anthropic-api = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]

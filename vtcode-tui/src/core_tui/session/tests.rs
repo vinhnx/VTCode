@@ -14,9 +14,11 @@ use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, ModifierKeyCode, MouseButton,
-    MouseEvent, MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
+#[cfg(target_os = "macos")]
+use ratatui::crossterm::event::{KeyEventKind, ModifierKeyCode};
 use ratatui::{
     Terminal,
     backend::TestBackend,

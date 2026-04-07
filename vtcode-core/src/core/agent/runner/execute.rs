@@ -34,7 +34,7 @@ use crate::utils::colors::style;
 use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{debug, warn};
 
 fn record_terminal_turn_event(
     event_recorder: &mut ExecEventRecorder,
@@ -396,6 +396,7 @@ impl AgentRunner {
                 is_simple_task,
                 request_tools,
                 tool_snapshot.tool_catalog_hash,
+                tool_snapshot.version,
                 system_instruction,
                 preserve_recent_turns,
                 max_tool_loops,
@@ -412,8 +413,9 @@ impl AgentRunner {
             mut event_recorder,
             run_started_at,
             is_simple_task,
-            request_tools,
-            tool_catalog_hash,
+            mut request_tools,
+            mut tool_catalog_hash,
+            mut tool_catalog_version,
             system_instruction,
             preserve_recent_turns,
             max_tool_loops,
@@ -878,6 +880,26 @@ impl AgentRunner {
                     )
                     .await?;
                     event_recorder.record_thread_events(runtime.take_emitted_events());
+                }
+
+                // Refresh tool definitions if the catalog was mutated during tool
+                // execution (e.g. tools.load / tools.unload / skill activation).
+                // The version is bumped by `note_explicit_refresh` on every
+                // register_tool / unregister_tool call; we only re-snapshot when
+                // it has actually changed.
+                {
+                    let current_version = self.tool_registry.tool_catalog_state().current_version();
+                    if current_version != tool_catalog_version {
+                        debug!(
+                            old_version = tool_catalog_version,
+                            new_version = current_version,
+                            "Tool catalog changed mid-task; refreshing tool snapshot"
+                        );
+                        let refreshed = self.build_universal_tool_snapshot().await?;
+                        request_tools = refreshed.snapshot.clone();
+                        tool_catalog_hash = refreshed.tool_catalog_hash;
+                        tool_catalog_version = refreshed.version;
+                    }
                 }
 
                 let had_effective_shell_tool_call =

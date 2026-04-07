@@ -1,4 +1,4 @@
-//! TTY detection and capability utilities using crossterm's IsTty trait.
+//! TTY detection and capability utilities using Rust's `IsTerminal` trait.
 //!
 //! This module provides safe and convenient TTY detection across the codebase,
 //! abstracting away platform differences for TTY detection.
@@ -20,18 +20,18 @@
 //! }
 //! ```
 
-use crossterm::tty::IsTty;
 use std::io;
+use std::io::IsTerminal;
 use vtcode_commons::color_policy::no_color_env_active;
 
 /// Extension trait for TTY detection on standard I/O streams.
 ///
-/// This trait extends crossterm's `IsTty` to provide convenient methods
+/// This trait extends `IsTerminal` to provide convenient methods
 /// for checking TTY capabilities with better error handling.
 pub trait TtyExt {
     /// Returns `true` if this stream is connected to a terminal.
     ///
-    /// This is a convenience wrapper around crossterm's `IsTty` trait
+    /// This is a convenience wrapper around Rust's `IsTerminal` trait
     /// that provides consistent behavior across the codebase.
     fn is_tty_ext(&self) -> bool;
 
@@ -50,11 +50,11 @@ pub trait TtyExt {
 
 impl TtyExt for io::Stdout {
     fn is_tty_ext(&self) -> bool {
-        self.is_tty()
+        self.is_terminal()
     }
 
     fn supports_color(&self) -> bool {
-        if !self.is_tty() {
+        if !self.is_terminal() {
             return false;
         }
 
@@ -72,17 +72,17 @@ impl TtyExt for io::Stdout {
     }
 
     fn is_interactive(&self) -> bool {
-        self.is_tty() && self.supports_color()
+        self.is_terminal() && self.supports_color()
     }
 }
 
 impl TtyExt for io::Stderr {
     fn is_tty_ext(&self) -> bool {
-        self.is_tty()
+        self.is_terminal()
     }
 
     fn supports_color(&self) -> bool {
-        if !self.is_tty() {
+        if !self.is_terminal() {
             return false;
         }
 
@@ -100,22 +100,22 @@ impl TtyExt for io::Stderr {
     }
 
     fn is_interactive(&self) -> bool {
-        self.is_tty() && self.supports_color()
+        self.is_terminal() && self.supports_color()
     }
 }
 
 impl TtyExt for io::Stdin {
     fn is_tty_ext(&self) -> bool {
-        self.is_tty()
+        self.is_terminal()
     }
 
     fn supports_color(&self) -> bool {
         // Stdin doesn't output color, but we check if it's interactive
-        self.is_tty()
+        self.is_terminal()
     }
 
     fn is_interactive(&self) -> bool {
-        self.is_tty()
+        self.is_terminal()
     }
 }
 
@@ -148,7 +148,7 @@ impl TtyCapabilities {
     /// Returns `Some(TtyCapabilities)` if stderr is a TTY, otherwise `None`.
     pub fn detect() -> Option<Self> {
         let stderr = io::stderr();
-        if !stderr.is_tty() {
+        if !stderr.is_terminal() {
             return None;
         }
 
@@ -183,7 +183,7 @@ impl TtyCapabilities {
 /// This is useful for deciding whether to use rich terminal features
 /// or fall back to plain text output.
 pub fn is_interactive_session() -> bool {
-    io::stderr().is_tty() && io::stdin().is_tty()
+    io::stderr().is_terminal() && io::stdin().is_terminal()
 }
 
 /// Get the current terminal dimensions.
@@ -191,7 +191,7 @@ pub fn is_interactive_session() -> bool {
 /// Returns `Some((width, height))` if the terminal size can be determined,
 /// otherwise `None`.
 pub fn terminal_size() -> Option<(u16, u16)> {
-    crossterm::terminal::size().ok()
+    terminal_size::terminal_size().map(|(terminal_size::Width(w), terminal_size::Height(h))| (w, h))
 }
 
 #[cfg(test)]
@@ -207,9 +207,9 @@ mod tests {
         let stdin = io::stdin();
 
         // Just verify the methods don't panic
-        let _ = stdout.is_tty();
-        let _ = stderr.is_tty();
-        let _ = stdin.is_tty();
+        let _ = stdout.is_terminal();
+        let _ = stderr.is_terminal();
+        let _ = stdin.is_terminal();
     }
 
     #[test]

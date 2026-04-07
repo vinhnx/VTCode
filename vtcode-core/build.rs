@@ -11,13 +11,24 @@ const EMBEDDED_ASSETS: &[(&str, &str)] =
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_docsrs = env::var_os("DOCS_RS").is_some();
+    let is_nix_build = env::var_os("NIX_BUILD_TOP").is_some();
 
-    if is_docsrs {
+    if is_docsrs || is_nix_build {
         // When building on docs.rs, generate empty placeholder files to prevent compilation errors
-        println!("cargo:warning=docs.rs build detected, generating placeholder files");
+        println!(
+            "cargo:warning={} build detected, generating placeholder files",
+            if is_docsrs { "docs.rs" } else { "nix" }
+        );
         let out_dir = PathBuf::from(env::var("OUT_DIR")?);
         let assets_out_dir = out_dir.join("embedded_assets");
         fs::create_dir_all(&assets_out_dir)?;
+        for (_, dest_relative) in EMBEDDED_ASSETS {
+            let destination = assets_out_dir.join(dest_relative);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(destination, b"")?;
+        }
 
         // Generate a minimal metadata file for docs.rs builds
         let placeholder_metadata = r#"#[derive(Clone, Copy)]
@@ -68,15 +79,25 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
 
     let mut resolved_assets = Vec::new();
     for (relative, dest_relative) in EMBEDDED_ASSETS {
-        let source = locate_asset(&manifest_dir, &workspace_dir, relative)?;
-        println!("cargo:rerun-if-changed={}", source.display());
+        match locate_asset(&manifest_dir, &workspace_dir, relative) {
+            Ok(source) => {
+                println!("cargo:rerun-if-changed={}", source.display());
 
-        let fallback = fallback_path(&manifest_dir, relative);
-        if fallback.exists() && fallback != source {
-            println!("cargo:rerun-if-changed={}", fallback.display());
+                let fallback = fallback_path(&manifest_dir, relative);
+                if fallback.exists() && fallback != source {
+                    println!("cargo:rerun-if-changed={}", fallback.display());
+                }
+
+                resolved_assets.push((Some(source), *dest_relative));
+            }
+            Err(error) if can_fallback_to_placeholder(&error) => {
+                println!(
+                    "cargo:warning=using placeholder embedded asset for `{relative}`: {error}"
+                );
+                resolved_assets.push((None, *dest_relative));
+            }
+            Err(error) => return Err(error.into()),
         }
-
-        resolved_assets.push((source, dest_relative));
     }
 
     for (source, dest_relative) in resolved_assets {
@@ -84,7 +105,14 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::copy(&source, &destination)?;
+        match source {
+            Some(source) => {
+                fs::copy(&source, &destination)?;
+            }
+            None => {
+                fs::write(&destination, b"")?;
+            }
+        }
     }
 
     let mut metadata = String::new();
@@ -168,6 +196,13 @@ pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
     fs::write(out_dir.join("openrouter_metadata.rs"), metadata)?;
 
     Ok(())
+}
+
+fn can_fallback_to_placeholder(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
+    )
 }
 
 fn locate_asset(manifest_dir: &Path, workspace_dir: &Path, relative: &str) -> io::Result<PathBuf> {

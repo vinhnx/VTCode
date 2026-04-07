@@ -380,14 +380,18 @@ mod tests {
         // environment state after testing. We are modifying process environment variables,
         // which requires unsafe in Rust's std::env API.
         match original_path {
-            // SAFETY: Setting PATH to a string is safe; we're restoring the original value.
-            Some(value) => unsafe {
-                std::env::set_var("PATH", value);
-            },
-            // SAFETY: Removing PATH is safe; environment variables are isolated per test.
-            None => unsafe {
-                std::env::remove_var("PATH");
-            },
+            Some(value) => {
+                // SAFETY: this test runs serially and restores the previous PATH value.
+                unsafe {
+                    std::env::set_var("PATH", value);
+                }
+            }
+            None => {
+                // SAFETY: this test runs serially and restores PATH to the original unset state.
+                unsafe {
+                    std::env::remove_var("PATH");
+                }
+            }
         }
 
         assert_eq!(env.get(&OsString::from("PATH")), Some(&non_utf8_path));

@@ -5,12 +5,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use hashbrown::HashMap;
-use portable_pty::PtySize;
 use tokio::sync::{Mutex, RwLock, watch};
 use tokio::task::JoinHandle;
 use vtcode_bash_runner::{PipeSpawnOptions, ProcessHandle, spawn_pipe_process_with_options};
 
 use crate::tools::ExecSessionId;
+use crate::tools::pty::PtySize;
 use crate::tools::registry::{PtySessionGuard, PtySessionManager};
 use crate::tools::types::VTCodeExecSession;
 use crate::utils::path::{canonicalize_workspace, ensure_path_within_workspace};
@@ -572,17 +572,17 @@ impl ExecSessionManager {
 #[cfg(test)]
 mod tests {
     use hashbrown::HashMap;
-    use portable_pty::PtySize;
     use tempfile::tempdir;
     use tokio::time::{Duration, timeout};
 
     use super::ExecSessionManager;
     use crate::config::PtyConfig;
+    use crate::tools::pty::PtySize;
     use crate::tools::registry::PtySessionManager;
     use crate::utils::path::canonicalize_workspace;
 
-    #[cfg(unix)]
     #[tokio::test]
+    #[cfg(all(unix, feature = "tui"))]
     async fn pty_session_limit_holds_until_exec_session_close() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let workspace_root = canonicalize_workspace(temp_dir.path());
@@ -658,8 +658,8 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(unix)]
     #[tokio::test]
+    #[cfg(unix)]
     async fn pipe_session_activity_receiver_notifies_on_output() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let workspace_root = canonicalize_workspace(temp_dir.path());

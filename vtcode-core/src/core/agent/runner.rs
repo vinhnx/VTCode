@@ -516,6 +516,16 @@ impl AgentRunner {
         self.event_sink = None;
     }
 
+    /// Override the composed system prompt for downstream embedders.
+    pub fn set_system_prompt(&mut self, system_prompt: impl Into<String>) {
+        self.system_prompt = system_prompt.into();
+    }
+
+    /// Clone the underlying tool registry so embedders can register custom tools.
+    pub fn tool_registry(&self) -> ToolRegistry {
+        self.tool_registry.clone()
+    }
+
     pub fn set_tool_definitions_override(
         &mut self,
         definitions: Vec<uni_provider::ToolDefinition>,

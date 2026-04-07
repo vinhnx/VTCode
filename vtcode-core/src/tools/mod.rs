@@ -174,6 +174,7 @@ pub mod shell_snapshot;
 pub mod skills;
 pub mod structural_search;
 pub mod summarizers;
+#[cfg(feature = "tui")]
 pub mod terminal_app;
 pub mod tool_effectiveness;
 pub mod tool_intent;

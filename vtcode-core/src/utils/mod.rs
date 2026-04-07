@@ -104,7 +104,7 @@ pub mod anstyle_utils;
 pub mod async_line_writer;
 pub mod async_utils;
 pub mod at_pattern;
-pub use vtcode_tui::utils::cached_style_parser;
+pub mod cached_style_parser;
 pub mod color_utils;
 pub mod colors;
 pub mod common;

@@ -17,11 +17,11 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use anyhow::{Context, Result, anyhow};
 #[cfg(unix)]
-use crossterm::tty::IsTty;
-#[cfg(unix)]
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 #[cfg(unix)]
 use nix::sys::termios::{self, SetArg};
+#[cfg(unix)]
+use std::io::IsTerminal;
 #[cfg(unix)]
 use std::os::fd::AsFd;
 #[cfg(unix)]
@@ -40,7 +40,7 @@ const RESPONSE_SETTLE_WINDOW: Duration = Duration::from_millis(40);
 pub fn probe_and_cache_terminal_palette_harmony() {
     #[cfg(unix)]
     {
-        if !std::io::stdin().is_tty() || !std::io::stdout().is_tty() {
+        if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
             return;
         }
 

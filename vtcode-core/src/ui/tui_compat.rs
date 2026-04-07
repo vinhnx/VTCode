@@ -1,44 +1,42 @@
+//! Compatibility layer between vtcode-core config types and TUI types.
+//!
+//! These conversions bridge the core configuration layer with the UI surface
+//! types shared via `vtcode-commons::ui_protocol`.
+
 use crate::config::KeyboardProtocolConfig;
 use crate::config::loader::VTCodeConfig;
-use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+use crate::config::types::ReasoningEffortLevel;
 use crate::ui::slash::SlashCommandInfo;
 use crate::ui::theme::ThemeStyles;
-use vtcode_tui::ReasoningEffortLevel as TuiReasoningEffortLevel;
-use vtcode_tui::app::{
-    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface, SlashCommandItem,
+use crate::ui::tui::{
+    InlineTheme, KeyboardProtocolSettings, LayoutModeOverride, ReasoningDisplayMode,
+    SessionSurface, SlashCommandItem, UiMode,
 };
-use vtcode_tui::core::{
-    LayoutModeOverride, ReasoningDisplayMode, SessionAppearanceConfig, UiMode, theme_from_styles,
-};
+#[cfg(feature = "tui")]
 use vtcode_tui::ui::theme::ThemeStyles as TuiThemeStyles;
 
-pub fn to_tui_reasoning(level: ReasoningEffortLevel) -> TuiReasoningEffortLevel {
-    match level {
-        ReasoningEffortLevel::None => TuiReasoningEffortLevel::None,
-        ReasoningEffortLevel::Minimal => TuiReasoningEffortLevel::Minimal,
-        ReasoningEffortLevel::Low => TuiReasoningEffortLevel::Low,
-        ReasoningEffortLevel::Medium => TuiReasoningEffortLevel::Medium,
-        ReasoningEffortLevel::High => TuiReasoningEffortLevel::High,
-        ReasoningEffortLevel::XHigh => TuiReasoningEffortLevel::XHigh,
-    }
+#[cfg(feature = "tui")]
+use crate::ui::tui::{FullscreenInteractionSettings, SessionAppearanceConfig};
+
+#[cfg(not(feature = "tui"))]
+use crate::ui::tui::SessionAppearanceConfig;
+
+/// Convert a config `ReasoningEffortLevel` to the string form used by
+/// `InlineListSelection::Reasoning`.
+pub fn reasoning_to_selection_string(level: ReasoningEffortLevel) -> String {
+    level.as_str().to_owned()
 }
 
-pub fn from_tui_reasoning(level: TuiReasoningEffortLevel) -> ReasoningEffortLevel {
-    match level {
-        TuiReasoningEffortLevel::None => ReasoningEffortLevel::None,
-        TuiReasoningEffortLevel::Minimal => ReasoningEffortLevel::Minimal,
-        TuiReasoningEffortLevel::Low => ReasoningEffortLevel::Low,
-        TuiReasoningEffortLevel::Medium => ReasoningEffortLevel::Medium,
-        TuiReasoningEffortLevel::High => ReasoningEffortLevel::High,
-        TuiReasoningEffortLevel::XHigh => ReasoningEffortLevel::XHigh,
-    }
+/// Convert a reasoning selection string back to a `ReasoningEffortLevel`.
+pub fn reasoning_from_selection_string(s: &str) -> ReasoningEffortLevel {
+    ReasoningEffortLevel::parse(s).unwrap_or_default()
 }
 
-pub fn to_tui_surface(preference: UiSurfacePreference) -> SessionSurface {
+pub fn to_tui_surface(preference: crate::config::types::UiSurfacePreference) -> SessionSurface {
     match preference {
-        UiSurfacePreference::Auto => SessionSurface::Auto,
-        UiSurfacePreference::Alternate => SessionSurface::Alternate,
-        UiSurfacePreference::Inline => SessionSurface::Inline,
+        crate::config::types::UiSurfacePreference::Auto => SessionSurface::Auto,
+        crate::config::types::UiSurfacePreference::Alternate => SessionSurface::Alternate,
+        crate::config::types::UiSurfacePreference::Inline => SessionSurface::Inline,
     }
 }
 
@@ -53,6 +51,7 @@ pub fn to_tui_keyboard_protocol(keyboard: KeyboardProtocolConfig) -> KeyboardPro
     }
 }
 
+#[cfg(feature = "tui")]
 pub fn to_tui_fullscreen(config: &VTCodeConfig) -> FullscreenInteractionSettings {
     FullscreenInteractionSettings {
         mouse_capture: config.ui.fullscreen.mouse_capture,
@@ -61,6 +60,20 @@ pub fn to_tui_fullscreen(config: &VTCodeConfig) -> FullscreenInteractionSettings
     }
 }
 
+/// Build an [`InlineTheme`] from core [`ThemeStyles`].
+pub fn inline_theme_from_core_styles(styles: &ThemeStyles) -> InlineTheme {
+    crate::ui::tui::theme_from_color_fields(
+        styles.foreground,
+        styles.background,
+        styles.primary,
+        styles.secondary,
+        styles.tool,
+        styles.tool_detail,
+        styles.pty_output,
+    )
+}
+
+#[cfg(feature = "tui")]
 pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> TuiThemeStyles {
     TuiThemeStyles {
         info: styles.info,
@@ -82,9 +95,9 @@ pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> TuiThemeStyles {
     }
 }
 
-pub fn inline_theme_from_core_styles(styles: &ThemeStyles) -> vtcode_tui::core::InlineTheme {
-    let mapped = tui_theme_styles_from_core(styles);
-    theme_from_styles(&mapped)
+#[cfg(not(feature = "tui"))]
+pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> ThemeStyles {
+    styles.clone()
 }
 
 pub fn to_tui_slash_commands(commands: &[SlashCommandInfo]) -> Vec<SlashCommandItem> {
