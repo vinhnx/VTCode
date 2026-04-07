@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.97.3 - 2026-04-07
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix tool batching and runloop regressions (2593f015) 
+- Consolidate tool fallback and rate-limit parsing (02fdb3c9) 
+#### Refactors
+
+- Remove Vim mode command and related functionality (f3b44164) 
+- Simplify vtcode configuration (ab835726) 
+- Remove obsolete code (a55f265c) 
+- Remove contributors section from changelog template (30707f13) 
+- Remove FollowUp variant from ReplyKind and update related logic (6f12c2f7) 
+- Improve duration handling and validation in rate limiting and retry logic (3ec14baf) 
 ## 0.97.2 - 2026-04-06
 
 ### Highlights
