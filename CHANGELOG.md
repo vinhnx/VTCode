@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.97.4 - 2026-04-07
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix formatting in README.md for clarity (979d991d) (@vinhnx)
+- Update note (9f327f92) 
+#### Refactors
+
+- Unify tool execution kernel and align harness safety limits (5fbfc7a8) 
 ## 0.97.3 - 2026-04-07
 
 ### Highlights
