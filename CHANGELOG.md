@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.98.0 - 2026-04-07
+
+### Highlights
+#### Features
+
+- Add mouse pointer shape handling and link/text selection detection (3f654089) 
+- Implement clipboard copy functionality and add copy notification (5a28a4be) 
+- Strip underlines from local file links in inline UI and add related tests (728eadc6) 
+- Enhance CLI progress reporting with terminal clear functionality (a600a3b4) 
+- Add Z.AI GLM-5.1 model support across various providers and update related tests (645df2e9) 
+### Other Changes
+#### Other
+
+- Core split  (3d12f6b6) (@poelzi)
+- Update notes (f3ebfd31) 
 ## 0.97.4 - 2026-04-07
 
 ### Highlights
