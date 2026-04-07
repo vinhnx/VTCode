@@ -60,10 +60,10 @@ vtcode dependencies install search-tools
 Ghostty VT is not installed through `vtcode dependencies install ...`.
 Instead, VT Code uses runtime libraries that are either:
 
-- bundled in official macOS/Linux release archives under `ghostty-vt/`
-- copied by the native installers during release installs
-- staged locally for development with `scripts/setup-ghostty-vt-dev.sh`
-- auto-bootstrapped by `./scripts/run.sh` and `./scripts/run-debug.sh` when the runtime libraries are missing
+- Bundled in official macOS/Linux release archives under `ghostty-vt/`
+- Copied by the native installers during release installs
+- Staged locally for development with `scripts/setup-ghostty-vt-dev.sh`
+- Auto-bootstrapped by `./scripts/run.sh` and `./scripts/run-debug.sh` when the runtime libraries are missing
 
 See [Installation Guide](./docs/installation/README.md), [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), and [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
 
@@ -97,10 +97,10 @@ For more information about skills implementation in VT Code, see [Agent Skills G
 VT Code can delegate bounded work to foreground subagents and also run an explicitly configured background subagent as a managed subprocess.
 
 - `/agent` and `/agents active` inspect delegated agents in place without switching the main session
-- background subprocesses are opt-in; VT Code no longer ships with a preconfigured default background agent
+- Background subprocesses are opt-in; VT Code no longer ships with a preconfigured default background agent
 - `Ctrl+B` starts or stops the configured default background subagent only after `[subagents.background]` is enabled and `default_agent` is set
 - `/subprocesses` or `Alt+S` opens the Local Agents drawer
-- the wide-mode sidebar shows a unified Local Agents section for delegated agents and background subprocesses
+- The wide-mode sidebar shows a unified Local Agents section for delegated agents and background subprocesses
 
 The background runtime is configured under `[subagents.background]`:
 
