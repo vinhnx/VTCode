@@ -1,6 +1,6 @@
 [agent]
 api_key_env = "OLLAMA_API_KEY"
-default_model = "gpt-oss:120b-cloud"
+default_model = "glm-5.1:cloud"
 provider = "ollama"
 reasoning_effort = "low"
 
