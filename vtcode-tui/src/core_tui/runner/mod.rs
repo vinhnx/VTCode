@@ -40,6 +40,8 @@ pub trait TuiSessionDriver {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>);
     fn take_redraw(&mut self) -> bool;
     fn use_steady_cursor(&self) -> bool;
+    fn is_hovering_link(&self) -> bool;
+    fn is_selecting_text(&self) -> bool;
     fn should_exit(&self) -> bool;
     fn request_exit(&mut self);
     fn mark_dirty(&mut self);
@@ -88,7 +90,7 @@ mod drive;
 mod events;
 mod signal;
 mod surface;
-mod terminal_io;
+pub(crate) mod terminal_io;
 mod terminal_modes;
 
 use drive::{DriveRuntimeOptions, drive_terminal};

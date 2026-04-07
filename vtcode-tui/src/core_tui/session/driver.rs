@@ -40,6 +40,14 @@ impl TuiSessionDriver for Session {
         self.use_steady_cursor()
     }
 
+    fn is_hovering_link(&self) -> bool {
+        self.is_hovering_link()
+    }
+
+    fn is_selecting_text(&self) -> bool {
+        self.is_selecting_text()
+    }
+
     fn should_exit(&self) -> bool {
         self.should_exit()
     }
