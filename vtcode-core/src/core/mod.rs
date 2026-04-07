@@ -38,11 +38,9 @@ pub mod agent;
 pub mod context_optimizer;
 pub mod decision_tracker;
 pub mod error_recovery;
-pub mod execution_context;
 pub mod interfaces;
 pub mod loop_detector;
 pub mod memory_pool;
-pub mod optimized_agent;
 pub mod orchestrator_retry;
 pub mod performance_profiler;
 pub mod prompt_caching;
@@ -53,9 +51,7 @@ pub mod trajectory;
 
 // Re-export main types
 pub use context_optimizer::ContextOptimizer;
-pub use execution_context::ExecutionContext;
 pub use memory_pool::{MemoryPool, global_pool};
-pub use optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use threads::{
     SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,

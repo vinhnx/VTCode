@@ -16,6 +16,7 @@ mod error;
 mod execution_facade;
 mod execution_history;
 mod execution_kernel;
+mod execution_request;
 mod executors;
 pub mod file_helpers;
 mod file_monitor_facade;
@@ -71,6 +72,7 @@ pub use cgp_facade::wrap_registered_native_tool;
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use execution_kernel::ToolPreflightOutcome;
+pub use execution_request::{ExecutionPolicySnapshot, ToolExecutionOutcome, ToolExecutionRequest};
 pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
@@ -97,6 +99,7 @@ use crate::tools::exec_session::ExecSessionManager;
 use crate::tools::handlers::PlanModeState;
 pub(super) use crate::tools::pty::PtyManager;
 use crate::tools::result::ToolResult as SplitToolResult;
+use crate::tools::safety_gateway::SafetyGateway;
 use parking_lot::Mutex; // Use parking_lot for better performance
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -176,6 +179,8 @@ pub struct ToolRegistry {
 
     /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
     plan_mode_state: PlanModeState,
+    /// Canonical safety gateway shared across registry execution surfaces.
+    safety_gateway: Arc<SafetyGateway>,
     /// Active CGP runtime mode for wrapping registrations added after startup.
     cgp_runtime_mode: Arc<RwLock<Option<CgpRuntimeMode>>>,
     /// Canonical manifest-driven tool assembly used by routing, catalog projections, and policy sync.

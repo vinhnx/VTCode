@@ -17,7 +17,7 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages,
     maybe_handle_plan_mode_enter_trigger, maybe_handle_plan_mode_exit_trigger,
-    maybe_handle_tool_loop_limit,
+    maybe_handle_tool_loop_limit, resolve_safety_tool_call_limits,
 };
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -472,13 +472,13 @@ pub(crate) async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
-        let max_session_turns = if ctx.is_plan_mode() {
-            usize::MAX
-        } else {
-            turn_config.max_session_turns
-        };
+        let (max_per_turn, max_per_session) = resolve_safety_tool_call_limits(
+            ctx.harness_state.max_tool_calls,
+            turn_config.max_session_turns,
+            ctx.is_plan_mode(),
+        );
         ctx.safety_validator
-            .set_limits(current_max_tool_loops, max_session_turns);
+            .set_limits(max_per_turn, max_per_session);
         ctx.safety_validator.start_turn();
     }
 

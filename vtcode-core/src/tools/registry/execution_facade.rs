@@ -17,14 +17,21 @@ use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
+use crate::tools::invocation::ToolInvocationId;
 use crate::tools::mcp::{legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
+use crate::tools::safety_gateway::{
+    SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError,
+};
 use crate::ui::search::fuzzy_match;
 
 use super::LOOP_THROTTLE_MAX_MS;
 use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
 use super::normalize_tool_output;
-use super::{ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry};
+use super::{
+    ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionOutcome,
+    ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
+};
 
 const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
 // Tools should never recursively re-enter themselves in a single task.
@@ -158,6 +165,280 @@ impl Drop for ToolReentrancyGuard {
 }
 
 impl ToolRegistry {
+    fn safety_denial_error(
+        &self,
+        tool_name: &str,
+        reason: &str,
+        violation: Option<GatewaySafetyError>,
+        retry_after: Option<Duration>,
+    ) -> ToolExecutionError {
+        let mut error = ToolExecutionError::policy_violation(
+            tool_name.to_string(),
+            format!("Safety gateway denied execution: {reason}"),
+        );
+
+        match violation {
+            Some(GatewaySafetyError::RateLimitExceeded { .. }) => {
+                error.error_type = ToolErrorType::NetworkError;
+                error.category = ErrorCategory::RateLimit;
+                error.retryable = true;
+                error.is_recoverable = true;
+            }
+            Some(GatewaySafetyError::TurnLimitReached { .. })
+            | Some(GatewaySafetyError::SessionLimitReached { .. }) => {
+                error.error_type = ToolErrorType::ExecutionError;
+                error.category = ErrorCategory::ResourceExhausted;
+                error.retryable = false;
+                error.is_recoverable = false;
+            }
+            Some(GatewaySafetyError::PlanModeViolation(_)) => {
+                error.error_type = ToolErrorType::PolicyViolation;
+                error.category = ErrorCategory::PlanModeViolation;
+                error.retryable = false;
+                error.is_recoverable = true;
+            }
+            Some(GatewaySafetyError::CommandPolicyDenied(_))
+            | Some(GatewaySafetyError::DotfileProtectionViolation(_))
+            | None => {}
+        }
+
+        if let Some(delay) = retry_after {
+            error.retry_after_ms = Some(delay.as_millis() as u64);
+        }
+        error.circuit_breaker_impact = error.category.should_trip_circuit_breaker();
+        error.recovery_suggestions = error.category.recovery_suggestions();
+        error
+    }
+
+    pub fn safety_gateway(&self) -> std::sync::Arc<crate::tools::safety_gateway::SafetyGateway> {
+        std::sync::Arc::clone(&self.safety_gateway)
+    }
+
+    async fn check_safety_for_request(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        invocation_id: Option<String>,
+    ) -> Option<ToolExecutionError> {
+        let context = SafetyContext::new(self.harness_context_snapshot().session_id);
+        let invocation_id = invocation_id
+            .and_then(|id| ToolInvocationId::parse(&id).ok())
+            .unwrap_or_default();
+        let safety_result = self
+            .safety_gateway
+            .check_and_record_with_id(&context, tool_name, args, Some(invocation_id))
+            .await;
+
+        match safety_result.decision {
+            SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => None,
+            SafetyDecision::Deny(reason) => Some(
+                self.safety_denial_error(
+                    tool_name,
+                    &reason,
+                    safety_result.violation,
+                    safety_result.retry_after,
+                )
+                .with_surface("tool_registry"),
+            ),
+        }
+    }
+
+    pub async fn execute_public_tool_request(
+        &self,
+        request: ToolExecutionRequest,
+    ) -> ToolExecutionOutcome {
+        self.execute_tool_request_internal(request).await
+    }
+
+    pub async fn execute_prepared_public_tool_request(
+        &self,
+        prepared: &PreparedToolCall,
+        policy: ExecutionPolicySnapshot,
+    ) -> ToolExecutionOutcome {
+        let request = ToolExecutionRequest::new(
+            prepared.canonical_name.clone(),
+            prepared.effective_args.clone(),
+        )
+        .with_policy(
+            policy
+                .with_prevalidated(prepared.already_preflighted)
+                .with_safety_prevalidated(false),
+        );
+        self.execute_tool_request_internal(request).await
+    }
+
+    async fn execute_tool_request_internal(
+        &self,
+        request: ToolExecutionRequest,
+    ) -> ToolExecutionOutcome {
+        let policy = request.policy.clone();
+        let mut retry_policy = crate::retry::RetryPolicy::from_retries(
+            policy.max_retries as u32,
+            policy.retry_base_delay,
+            policy.retry_max_delay,
+            policy.retry_multiplier,
+        );
+        retry_policy.jitter = policy.retry_jitter.clamp(0.0, 1.0);
+
+        let max_attempts = retry_policy.max_attempts.max(1);
+        let mut attempt_index: u32 = 0;
+        let mut last_error: Option<ToolExecutionError> = None;
+
+        while attempt_index < max_attempts {
+            if !policy.safety_prevalidated
+                && let Some(safety_error) = self
+                    .check_safety_for_request(
+                        request.tool_name.as_str(),
+                        &request.args,
+                        policy.invocation_id.clone(),
+                    )
+                    .await
+            {
+                let structured = retry_policy.apply_to_tool_execution_error(
+                    safety_error
+                        .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                        .with_attempt(attempt_index + 1)
+                        .with_surface("tool_registry"),
+                    attempt_index,
+                    Some(request.tool_name.as_str()),
+                );
+                let retry_delay = structured
+                    .retry_after()
+                    .or_else(|| structured.retry_delay());
+                if structured.retryable
+                    && attempt_index + 1 < max_attempts
+                    && let Some(delay) = retry_delay
+                {
+                    last_error = Some(structured);
+                    tokio::time::sleep(delay).await;
+                    attempt_index = attempt_index.saturating_add(1);
+                    continue;
+                }
+
+                return ToolExecutionOutcome::failure(
+                    request.tool_name.clone(),
+                    attempt_index + 1,
+                    structured,
+                );
+            }
+
+            let result = self
+                .execute_public_tool_ref_internal_with_exec_mode(
+                    request.tool_name.as_str(),
+                    &request.args,
+                    policy.prevalidated,
+                    policy.settle_noninteractive_exec,
+                )
+                .await;
+
+            match result {
+                Ok(output) => {
+                    if let Some(structured_error) = ToolExecutionError::from_tool_output(&output) {
+                        let structured = retry_policy.apply_to_tool_execution_error(
+                            structured_error
+                                .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                                .with_attempt(attempt_index + 1)
+                                .with_surface("tool_registry"),
+                            attempt_index,
+                            Some(request.tool_name.as_str()),
+                        );
+
+                        let retry_delay = structured
+                            .retry_after()
+                            .or_else(|| structured.retry_delay());
+                        if structured.retryable
+                            && attempt_index + 1 < max_attempts
+                            && let Some(delay) = retry_delay
+                        {
+                            last_error = Some(structured);
+                            tokio::time::sleep(delay).await;
+                            attempt_index = attempt_index.saturating_add(1);
+                            continue;
+                        }
+
+                        return ToolExecutionOutcome::failure(
+                            request.tool_name.clone(),
+                            attempt_index + 1,
+                            structured,
+                        );
+                    }
+
+                    return ToolExecutionOutcome::success(
+                        request.tool_name.clone(),
+                        attempt_index + 1,
+                        output,
+                    );
+                }
+                Err(error) => {
+                    let mut base = ToolExecutionError::from_anyhow(
+                        request.tool_name.clone(),
+                        &error,
+                        attempt_index,
+                        false,
+                        false,
+                        Some("tool_registry"),
+                    );
+                    let lower_message = base.message.to_ascii_lowercase();
+                    let lower_original = base
+                        .original_error
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_ascii_lowercase();
+                    if lower_message.contains("circuit breaker")
+                        || lower_original.contains("circuit breaker")
+                    {
+                        base.category = ErrorCategory::CircuitOpen;
+                        base.retryable = true;
+                        base.is_recoverable = true;
+                        if base.retry_delay_ms.is_none() {
+                            base.retry_delay_ms = Some(policy.retry_base_delay.as_millis() as u64);
+                        }
+                    }
+
+                    let structured = retry_policy.apply_to_tool_execution_error(
+                        base,
+                        attempt_index,
+                        Some(request.tool_name.as_str()),
+                    );
+                    let retry_delay = structured
+                        .retry_after()
+                        .or_else(|| structured.retry_delay());
+                    if structured.retryable
+                        && attempt_index + 1 < max_attempts
+                        && let Some(delay) = retry_delay
+                    {
+                        last_error = Some(structured);
+                        tokio::time::sleep(delay).await;
+                        attempt_index = attempt_index.saturating_add(1);
+                        continue;
+                    }
+
+                    return ToolExecutionOutcome::failure(
+                        request.tool_name.clone(),
+                        attempt_index + 1,
+                        structured,
+                    );
+                }
+            }
+        }
+
+        ToolExecutionOutcome::failure(
+            request.tool_name.clone(),
+            max_attempts,
+            last_error.unwrap_or_else(|| {
+                ToolExecutionError::new(
+                    request.tool_name.clone(),
+                    ToolErrorType::ExecutionError,
+                    format!(
+                        "Tool '{}' failed after {} attempts with no structured error",
+                        request.tool_name, max_attempts
+                    ),
+                )
+                .with_surface("tool_registry")
+            }),
+        )
+    }
+
     async fn should_skip_loop_detection_for_active_exec_continuation(
         &self,
         tool_name: &str,

@@ -13,6 +13,7 @@ use crate::core::memory_pool::MemoryPool;
 use crate::tool_policy::ToolPolicyManager;
 use crate::tools::handlers::PlanModeState;
 use crate::tools::output_spooler::{SpoolerConfig, ToolOutputSpooler};
+use crate::tools::safety_gateway::SafetyGateway;
 use vtcode_config::DynamicContextConfig;
 use vtcode_config::loader::ConfigManager;
 
@@ -153,6 +154,7 @@ impl ToolRegistry {
 
             plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             plan_mode_state,
+            safety_gateway: Arc::new(SafetyGateway::default()),
             cgp_runtime_mode: Arc::new(RwLock::new(None)),
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),

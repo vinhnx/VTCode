@@ -7,6 +7,7 @@ use anyhow::anyhow;
 #[cfg(test)]
 use serde_json::Map;
 use serde_json::Value;
+use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
 use thiserror::Error;
@@ -35,7 +36,7 @@ pub(crate) enum SafetyError {
 /// Safety validation rules for tool calls
 pub(crate) struct ToolCallSafetyValidator {
     /// Shared safety gateway for canonical checks
-    safety_gateway: SafetyGateway,
+    safety_gateway: Arc<SafetyGateway>,
     /// Validator-scoped execution context
     gateway_ctx: SafetyContext,
     #[cfg(test)]
@@ -68,7 +69,21 @@ impl ToolCallSafetyValidator {
         };
 
         Self {
-            safety_gateway: SafetyGateway::with_config(gateway_config),
+            safety_gateway: Arc::new(SafetyGateway::with_config(gateway_config)),
+            gateway_ctx: SafetyContext::new("runloop-safety-validator"),
+            #[cfg(test)]
+            test_rate_limits: Mutex::new(test_rate_limits),
+        }
+    }
+
+    pub(crate) fn with_gateway(safety_gateway: Arc<SafetyGateway>) -> Self {
+        #[cfg(test)]
+        let test_rate_limits = TestRateLimits {
+            per_second: SafetyGatewayConfig::default().rate_limit_per_second,
+            per_minute: SafetyGatewayConfig::default().rate_limit_per_minute,
+        };
+        Self {
+            safety_gateway,
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
             #[cfg(test)]
             test_rate_limits: Mutex::new(test_rate_limits),
@@ -107,11 +122,6 @@ impl ToolCallSafetyValidator {
     #[cfg(test)]
     pub fn set_rate_limit_enforcement(&self, enabled: bool) {
         self.safety_gateway.set_rate_limit_enforcement(enabled);
-    }
-
-    /// Get the current session limit
-    pub(crate) fn get_session_limit(&self) -> usize {
-        self.safety_gateway.max_per_session()
     }
 
     /// Validate a tool call before execution
