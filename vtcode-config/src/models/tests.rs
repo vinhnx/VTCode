@@ -40,6 +40,10 @@ fn test_model_string_conversion() {
         models::huggingface::ZAI_GLM_5_NOVITA
     );
     assert_eq!(
+        ModelId::HuggingFaceGlm51ZaiOrg.as_str(),
+        models::huggingface::ZAI_GLM_5_1_ZAI_ORG
+    );
+    assert_eq!(
         ModelId::HuggingFaceQwen3CoderNextNovita.as_str(),
         models::huggingface::QWEN3_CODER_NEXT_NOVITA
     );
@@ -125,6 +129,12 @@ fn test_model_from_string() {
             .parse::<ModelId>()
             .unwrap(),
         ModelId::HuggingFaceGlm5Novita
+    );
+    assert_eq!(
+        models::huggingface::ZAI_GLM_5_1_ZAI_ORG
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::HuggingFaceGlm51ZaiOrg
     );
     assert_eq!(
         models::huggingface::QWEN3_CODER_NEXT_NOVITA
@@ -375,9 +385,11 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM27Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm5Cloud));
+    assert!(ollama_models.contains(&ModelId::OllamaGlm51Cloud));
 
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
     assert!(hf_models.contains(&ModelId::HuggingFaceDeepseekV32));
+    assert!(hf_models.contains(&ModelId::HuggingFaceGlm51ZaiOrg));
     assert!(hf_models.contains(&ModelId::HuggingFaceQwen3CoderNextNovita));
     assert!(hf_models.contains(&ModelId::HuggingFaceXiaomiMimoV2FlashNovita));
 }
@@ -417,6 +429,7 @@ fn test_ollama_cloud_models() {
             models::ollama::MINIMAX_M27_CLOUD,
         ),
         (ModelId::OllamaGlm5Cloud, models::ollama::GLM_5_CLOUD),
+        (ModelId::OllamaGlm51Cloud, models::ollama::GLM_5_1_CLOUD),
     ];
 
     for (model_id, expected_str) in model_pairs {

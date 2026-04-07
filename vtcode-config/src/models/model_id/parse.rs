@@ -77,6 +77,7 @@ impl FromStr for ModelId {
             s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
             s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => Ok(ModelId::OllamaQwen3Next80bCloud),
             s if s == models::ollama::GLM_5_CLOUD => Ok(ModelId::OllamaGlm5Cloud),
+            s if s == models::ollama::GLM_5_1_CLOUD => Ok(ModelId::OllamaGlm51Cloud),
             s if s == models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD => {
                 Ok(ModelId::OllamaGemini3FlashPreviewCloud)
             }
@@ -106,6 +107,9 @@ impl FromStr for ModelId {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
             s if s == models::huggingface::ZAI_GLM_5_NOVITA => Ok(ModelId::HuggingFaceGlm5Novita),
+            s if s == models::huggingface::ZAI_GLM_5_1_ZAI_ORG => {
+                Ok(ModelId::HuggingFaceGlm51ZaiOrg)
+            }
             s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
                 Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
             }

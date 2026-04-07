@@ -125,6 +125,7 @@ impl ModelId {
                 "Qwen3 Next generation 80B model via Ollama Cloud with improved reasoning and long context"
             }
             ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
+            ModelId::OllamaGlm51Cloud => "Cloud-hosted GLM-5.1 model served via Ollama Cloud",
             ModelId::OllamaMinimaxM25Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
@@ -163,6 +164,9 @@ impl ModelId {
             }
             ModelId::HuggingFaceGlm5Novita => {
                 "Z.ai GLM-5 flagship model via Novita inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceGlm51ZaiOrg => {
+                "Z.ai GLM-5.1 model via zai-org inference provider on HuggingFace router."
             }
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."

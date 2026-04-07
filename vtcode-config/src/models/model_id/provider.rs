@@ -45,6 +45,7 @@ impl ModelId {
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
             | ModelId::HuggingFaceGlm5Novita
+            | ModelId::HuggingFaceGlm51ZaiOrg
             | ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::HuggingFaceQwen35397BA17BTogether
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
@@ -62,7 +63,8 @@ impl ModelId {
             | ModelId::OllamaMinimaxM27Cloud
             | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3SuperCloud
-            | ModelId::OllamaGlm5Cloud => Provider::Ollama,
+            | ModelId::OllamaGlm5Cloud
+            | ModelId::OllamaGlm51Cloud => Provider::Ollama,
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter
@@ -101,7 +103,8 @@ impl ModelId {
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
-            | ModelId::OpenRouterZaiGlm5 => Provider::OpenRouter,
+            | ModelId::OpenRouterZaiGlm5
+            | ModelId::OpenRouterZaiGlm51 => Provider::OpenRouter,
         }
     }
 

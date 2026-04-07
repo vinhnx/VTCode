@@ -103,6 +103,8 @@ pub enum ModelId {
     HuggingFaceMinimaxM25Novita,
     /// Z.AI GLM-5 via Novita on Hugging Face router
     HuggingFaceGlm5Novita,
+    /// Z.AI GLM-5.1 via zai-org provider on Hugging Face router
+    HuggingFaceGlm51ZaiOrg,
     /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
     HuggingFaceQwen3CoderNextNovita,
     /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
@@ -140,6 +142,8 @@ pub enum ModelId {
     OllamaMinimaxM27Cloud,
     /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
     OllamaGlm5Cloud,
+    /// GLM-5.1 Cloud - Cloud-hosted GLM-5.1 model served via Ollama Cloud
+    OllamaGlm51Cloud,
     /// MiniMax-M2.5 Cloud - Cloud-hosted MiniMax-M2.5 model served via Ollama Cloud
     OllamaMinimaxM25Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
@@ -226,6 +230,8 @@ pub enum ModelId {
     OpenRouterNvidiaNemotron3Super120bA12bFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
+    /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
+    OpenRouterZaiGlm51,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter
     OpenRouterMinimaxM25,
 }

@@ -941,6 +941,25 @@
           "structured_output": true
         }
       },
+      "zai-org/GLM-5.1:zai-org": {
+        "id": "zai-org/GLM-5.1:zai-org",
+        "name": "GLM-5.1 (zai-org)",
+        "description": "Z.AI GLM-5.1 next-gen foundation model available via Hugging Face router (zai-org provider).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
       "Qwen/Qwen3-4B-Thinking-2507": {
         "id": "Qwen/Qwen3-4B-Thinking-2507",
         "name": "Qwen3 4B Thinking 2507",
@@ -2428,6 +2447,33 @@
           "generation": "GLM-5",
           "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
         }
+      },
+      "z-ai/glm-5.1": {
+        "id": "z-ai/glm-5.1",
+        "name": "Z.AI: GLM-5.1",
+        "description": "Z.ai next-gen GLM-5.1 foundation model with improved reasoning, enhanced agent capabilities, and stronger agentic coding performance.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm51",
+          "constant": "Z_AI_GLM_5_1",
+          "vendor": "zai",
+          "display": "GLM-5.1",
+          "description": "Z.ai next-gen GLM-5.1 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-5.1",
+          "doc_comment": "GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter"
+        }
       }
     },
     "default_model": "z-ai/glm-5"
@@ -2577,6 +2623,22 @@
           ]
         },
         "context": 131072
+      },
+      "glm-5.1:cloud": {
+        "id": "glm-5.1:cloud",
+        "name": "GLM-5.1 (cloud)",
+        "description": "Cloud-hosted Z.AI GLM-5.1 model served via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
       },
       "minimax-m2.5:cloud": {
         "id": "minimax-m2.5:cloud",

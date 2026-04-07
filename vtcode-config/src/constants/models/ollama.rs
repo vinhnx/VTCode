@@ -10,6 +10,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     DEEPSEEK_V32_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
     GLM_5_CLOUD,
+    GLM_5_1_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     MINIMAX_M2_CLOUD,
@@ -27,6 +28,7 @@ pub const REASONING_MODELS: &[&str] = &[
     DEEPSEEK_V32_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
     GLM_5_CLOUD,
+    GLM_5_1_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     MINIMAX_M2_CLOUD,
@@ -41,6 +43,7 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     GPT_OSS_20B_CLOUD,
     GPT_OSS_120B_CLOUD,
     GLM_5_CLOUD,
+    GLM_5_1_CLOUD,
     MINIMAX_M2_CLOUD,
     MINIMAX_M25_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
@@ -55,6 +58,7 @@ pub const QWEN3_CODER_NEXT: &str = "qwen3-coder-next:cloud";
 pub const DEEPSEEK_V32_CLOUD: &str = "deepseek-v3.2:cloud";
 pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const GLM_5_CLOUD: &str = "glm-5:cloud";
+pub const GLM_5_1_CLOUD: &str = "glm-5.1:cloud";
 pub const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:latest";
 pub const GEMINI_3_FLASH_PREVIEW_CLOUD: &str = "gemini-3-flash-preview:cloud";
 pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";

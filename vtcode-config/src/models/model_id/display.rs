@@ -56,6 +56,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaMinimaxM27Cloud => "MiniMax-M2.7 (cloud)",
             ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
+            ModelId::OllamaGlm51Cloud => "GLM-5.1 (cloud)",
             ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
             // Hugging Face models
@@ -66,6 +67,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
+            ModelId::HuggingFaceGlm51ZaiOrg => "GLM-5.1 (zai-org)",
             ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             ModelId::HuggingFaceQwen35397BA17BTogether => "Qwen3.5-397B-A17B (Together)",
             ModelId::HuggingFaceStep35Flash => "Step 3.5 Flash (HF)",

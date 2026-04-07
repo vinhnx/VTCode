@@ -297,6 +297,7 @@ impl ModelId {
                 | ModelId::MinimaxM27
                 | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
+                | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaNemotron3SuperCloud
                 | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
@@ -419,6 +420,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
             ModelId::OllamaGlm5Cloud => "glm-5",
+            ModelId::OllamaGlm51Cloud => "glm-5.1",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
@@ -435,6 +437,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm5Novita => "5",
+            ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
             ModelId::HuggingFaceStep35Flash => "3.5",
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"

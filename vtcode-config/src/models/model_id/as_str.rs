@@ -57,6 +57,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => models::ollama::DEEPSEEK_V32_CLOUD,
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
             ModelId::OllamaGlm5Cloud => models::ollama::GLM_5_CLOUD,
+            ModelId::OllamaGlm51Cloud => models::ollama::GLM_5_1_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaMinimaxM27Cloud => models::ollama::MINIMAX_M27_CLOUD,
@@ -72,6 +73,7 @@ impl ModelId {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
             }
             ModelId::HuggingFaceGlm5Novita => models::huggingface::ZAI_GLM_5_NOVITA,
+            ModelId::HuggingFaceGlm51ZaiOrg => models::huggingface::ZAI_GLM_5_1_ZAI_ORG,
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 models::huggingface::QWEN3_CODER_NEXT_NOVITA
             }
