@@ -14,6 +14,7 @@ use crate::core_tui::types::FocusChangeCallback;
 use crate::options::FullscreenInteractionSettings;
 
 use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEvent};
+use super::terminal_io::{MousePointerShape, set_mouse_pointer_shape};
 use super::{TuiCommand, TuiSessionDriver};
 
 /// Check if session has any modal or palette active that uses keyboard navigation
@@ -181,6 +182,7 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
     session: &mut S,
     event_channels: &EventChannels,
     cursor_steady: &mut bool,
+    mouse_pointer: &mut MousePointerShape,
     input_started_at: Option<Instant>,
 ) -> Result<()> {
     if event_channels.rx_paused.load(Ordering::Acquire) || !session.take_redraw() {
@@ -197,6 +199,18 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
         execute!(io::stderr(), style)
             .context("failed to update cursor style for inline session")?;
         *cursor_steady = desired_steady;
+    }
+
+    let desired_pointer = if session.is_selecting_text() {
+        MousePointerShape::Text
+    } else if session.is_hovering_link() {
+        MousePointerShape::Pointer
+    } else {
+        MousePointerShape::Default
+    };
+    if desired_pointer != *mouse_pointer {
+        set_mouse_pointer_shape(desired_pointer);
+        *mouse_pointer = desired_pointer;
     }
 
     let draw_started_at = Instant::now();
@@ -261,6 +275,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     );
 
     let mut cursor_steady = false;
+    let mut mouse_pointer = MousePointerShape::Default;
     'main: loop {
         // Drain a bounded number of pending commands to prevent unbounded latency
         // under load (e.g., during heavy PTY output or tool execution).
@@ -288,7 +303,14 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
         }
 
         // Render if dirty (catches command-driven changes)
-        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady, None)?;
+        render_if_dirty(
+            terminal,
+            session,
+            &event_channels,
+            &mut cursor_steady,
+            &mut mouse_pointer,
+            None,
+        )?;
 
         if session.should_exit() {
             break 'main;
@@ -407,6 +429,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                                 session,
                                 &event_channels,
                                 &mut cursor_steady,
+                                &mut mouse_pointer,
                                 Some(input_started_at),
                             )?;
                         }

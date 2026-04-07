@@ -198,6 +198,18 @@ impl Session {
         decorated
     }
 
+    pub(crate) fn is_hovering_link(&self) -> bool {
+        self.hovered_transcript_file_link.is_some()
+            || self
+                .last_mouse_position
+                .and_then(|(col, row)| self.modal_link_target_index_at(col, row))
+                .is_some()
+    }
+
+    pub(crate) fn is_selecting_text(&self) -> bool {
+        self.mouse_selection.is_selecting || self.mouse_selection.has_selection
+    }
+
     pub(crate) fn update_transcript_file_link_hover(&mut self, column: u16, row: u16) -> bool {
         let previous_position = self.last_mouse_position;
         let previous_modal_hover = previous_position.and_then(|(previous_column, previous_row)| {

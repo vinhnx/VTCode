@@ -733,6 +733,14 @@ impl TuiSessionDriver for AppSession {
         self.core.use_steady_cursor()
     }
 
+    fn is_hovering_link(&self) -> bool {
+        self.core.is_hovering_link()
+    }
+
+    fn is_selecting_text(&self) -> bool {
+        self.core.is_selecting_text()
+    }
+
     fn should_exit(&self) -> bool {
         self.core.should_exit()
     }

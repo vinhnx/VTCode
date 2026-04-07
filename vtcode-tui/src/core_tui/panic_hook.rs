@@ -290,6 +290,8 @@ pub fn restore_tui() -> io::Result<()> {
         first_error.get_or_insert(error);
     }
 
+    crate::core_tui::runner::terminal_io::reset_mouse_pointer_shape();
+
     // Ensure cursor state is restored
     if let Err(error) = execute!(
         stderr,
