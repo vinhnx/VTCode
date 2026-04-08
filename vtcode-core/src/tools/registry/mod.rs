@@ -224,11 +224,13 @@ mod tests {
     use tempfile::TempDir;
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
+    const SLOW_TIMEOUT_TOOL_NAME: &str = "slow_timeout_test_tool";
     const REENTRANT_TOOL_NAME: &str = "reentrant_guard_test_tool";
     const MUTUAL_REENTRANT_TOOL_A: &str = "mutual_reentrant_tool_a";
     const MUTUAL_REENTRANT_TOOL_B: &str = "mutual_reentrant_tool_b";
 
     struct CustomEchoTool;
+    struct SlowTimeoutTool;
 
     #[async_trait]
     impl Tool for CustomEchoTool {
@@ -245,6 +247,24 @@ mod tests {
 
         fn description(&self) -> &'static str {
             "Custom echo tool for testing"
+        }
+    }
+
+    #[async_trait]
+    impl Tool for SlowTimeoutTool {
+        async fn execute(&self, _args: Value) -> Result<Value> {
+            tokio::time::sleep(Duration::from_millis(1_100)).await;
+            Ok(json!({
+                "ok": true,
+            }))
+        }
+
+        fn name(&self) -> &'static str {
+            SLOW_TIMEOUT_TOOL_NAME
+        }
+
+        fn description(&self) -> &'static str {
+            "Tool that intentionally exceeds low timeout ceilings"
         }
     }
 
@@ -1598,5 +1618,74 @@ mod tests {
             Some(Duration::from_secs(90))
         );
         assert!((policy.warning_fraction() - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn timeout_errors_are_structured_and_track_failures() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                SLOW_TIMEOUT_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                SlowTimeoutTool,
+            ))
+            .await?;
+        registry.allow_all_tools().await?;
+
+        registry.apply_timeout_policy(&TimeoutsConfig {
+            default_ceiling_seconds: 1,
+            pty_ceiling_seconds: 1,
+            mcp_ceiling_seconds: 1,
+            ..Default::default()
+        });
+
+        let mut policy = ExecutionPolicySnapshot::default().with_max_retries(4);
+        policy.retry_base_delay = Duration::from_millis(1);
+        policy.retry_max_delay = Duration::from_millis(1);
+        policy.retry_multiplier = 1.0;
+
+        let request =
+            ToolExecutionRequest::new(SLOW_TIMEOUT_TOOL_NAME, json!({})).with_policy(policy);
+        let outcome = registry.execute_public_tool_request(request).await;
+
+        assert!(!outcome.is_success());
+        assert_eq!(outcome.attempts, 5);
+
+        let error = outcome.error.expect("timeout outcome should include error");
+        assert_eq!(error.tool_name, SLOW_TIMEOUT_TOOL_NAME);
+        assert!(matches!(error.error_type, ToolErrorType::Timeout));
+        assert_eq!(error.category, vtcode_commons::ErrorCategory::Timeout);
+        assert!(error.is_recoverable);
+        assert!(error.retry_after_ms.is_some());
+        assert!(
+            error
+                .message
+                .contains("exceeded the standard timeout ceiling")
+        );
+        assert_eq!(
+            error
+                .debug_context
+                .as_ref()
+                .and_then(|ctx| ctx.surface.as_deref()),
+            Some("tool_registry")
+        );
+
+        let failures = registry.execution_history.get_recent_failures(1);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].timeout_category.as_deref(), Some("standard"));
+        assert_eq!(failures[0].effective_timeout_ms, Some(1_000));
+
+        let consecutive_failures = registry
+            .resiliency
+            .lock()
+            .failure_trackers
+            .get(&ToolTimeoutCategory::Default)
+            .map(|tracker| tracker.consecutive_failures)
+            .unwrap_or(0);
+        assert_eq!(consecutive_failures, 5);
+
+        Ok(())
     }
 }

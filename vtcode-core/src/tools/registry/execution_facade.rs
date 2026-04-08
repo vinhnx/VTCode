@@ -4,6 +4,7 @@ use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use once_cell::sync::Lazy;
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
@@ -165,6 +166,25 @@ impl Drop for ToolReentrancyGuard {
 }
 
 impl ToolRegistry {
+    fn annotate_timeout_error_payload(
+        payload: &mut Value,
+        timeout_category: &str,
+        timeout_ms: u64,
+        circuit_breaker: bool,
+    ) {
+        if let Some(obj) = payload
+            .get_mut("error")
+            .and_then(|value| value.as_object_mut())
+        {
+            obj.insert(
+                "timeout_category".into(),
+                Value::String(timeout_category.to_string()),
+            );
+            obj.insert("timeout_ms".into(), Value::from(timeout_ms));
+            obj.insert("circuit_breaker".into(), Value::Bool(circuit_breaker));
+        }
+    }
+
     fn safety_denial_error(
         &self,
         tool_name: &str,
@@ -1509,31 +1529,79 @@ impl ToolRegistry {
                 Ok(res) => res,
                 Err(_) => {
                     let timeout_ms = limit.as_millis() as u64;
-                    let timeout_payload = json!({
-                        "error": {
-                            "message": format!("Tool execution timed out after {:?} (category: {})", limit, timeout_category.label()),
-                            "timeout_category": timeout_category.label(),
-                            "timeout_ms": timeout_ms,
-                            "circuit_breaker": false,
-                        }
-                    });
+                    let tripped = self.record_tool_failure(timeout_category);
+                    if tripped {
+                        warn!(
+                            tool = %tool_name_owned,
+                            category = %timeout_category.label(),
+                            "Tool circuit breaker tripped after consecutive timeout failures"
+                        );
+                    }
+                    let retry_after = self.should_circuit_break(timeout_category);
+
+                    let mut timeout_error = ToolExecutionError::new(
+                        tool_name_owned.clone(),
+                        ToolErrorType::Timeout,
+                        format!(
+                            "Operation '{}' exceeded the {} timeout ceiling ({}s)",
+                            tool_name_owned,
+                            timeout_category.label(),
+                            limit.as_secs()
+                        ),
+                    )
+                    .with_tool_call_context(&tool_name_owned, &args_for_recording)
+                    .with_surface("tool_registry")
+                    .with_debug_metadata("timeout_category", timeout_category.label())
+                    .with_debug_metadata("timeout_ms", timeout_ms.to_string());
+
+                    if tool_name_owned == tools::UNIFIED_EXEC {
+                        timeout_error.recovery_suggestions = vec![
+                            Cow::Borrowed(
+                                "Use unified_exec with action='poll' to check command progress",
+                            ),
+                            Cow::Borrowed(
+                                "Use unified_exec with action='list' to find active sessions",
+                            ),
+                            Cow::Borrowed(
+                                "Use unified_exec with action='close' if a stale session is still active",
+                            ),
+                        ];
+                    }
+
+                    if let Some(delay) = retry_after {
+                        timeout_error.retry_after_ms =
+                            Some(delay.as_millis().min(u128::from(u64::MAX)) as u64);
+                    }
+
+                    let mut timeout_payload = timeout_error.to_json_value();
+                    Self::annotate_timeout_error_payload(
+                        &mut timeout_payload,
+                        timeout_category.label(),
+                        timeout_ms,
+                        tripped,
+                    );
+
                     if let Some(breaker) = shared_circuit_breaker.as_ref() {
                         breaker.record_failure_category_for_tool(
                             &tool_name_owned,
                             ErrorCategory::Timeout,
                         );
                     }
+                    if is_mcp_tool {
+                        self.mcp_circuit_breaker
+                            .record_failure_category(ErrorCategory::Timeout);
+                    }
                     record_failure(
                         tool_name_owned,
                         is_mcp_tool,
                         mcp_provider,
                         args_for_recording,
-                        "Tool execution timed out".to_string(),
+                        timeout_error.user_message(),
                         timeout_category_label.clone(),
                         base_timeout_ms,
                         adaptive_timeout_ms,
                         Some(timeout_ms),
-                        false,
+                        tripped,
                     );
                     return Ok(timeout_payload);
                 }
@@ -1550,6 +1618,9 @@ impl ToolRegistry {
             Ok(value) => {
                 if let Some(breaker) = shared_circuit_breaker.as_ref() {
                     breaker.record_success_for_tool(&tool_name_owned);
+                }
+                if is_mcp_tool {
+                    self.mcp_circuit_breaker.record_success();
                 }
                 self.reset_tool_failure(timeout_category);
                 let should_decay = {
@@ -1614,6 +1685,10 @@ impl ToolRegistry {
                 if let Some(breaker) = shared_circuit_breaker.as_ref() {
                     breaker.record_failure_category_for_tool(&tool_name_owned, error_category);
                 }
+                if is_mcp_tool {
+                    self.mcp_circuit_breaker
+                        .record_failure_category(error_category);
+                }
 
                 let tripped = if error_category.should_trip_circuit_breaker() {
                     let tripped = self.record_tool_failure(timeout_category);
@@ -1630,17 +1705,12 @@ impl ToolRegistry {
                 };
 
                 let mut payload = error.to_json_value();
-                if let Some(obj) = payload.get_mut("error").and_then(|v| v.as_object_mut()) {
-                    obj.insert(
-                        "timeout_category".into(),
-                        Value::String(timeout_category.label().to_string()),
-                    );
-                    obj.insert(
-                        "timeout_ms".into(),
-                        Value::from(effective_timeout_ms.unwrap_or(0)),
-                    );
-                    obj.insert("circuit_breaker".into(), Value::Bool(tripped));
-                }
+                Self::annotate_timeout_error_payload(
+                    &mut payload,
+                    timeout_category.label(),
+                    effective_timeout_ms.unwrap_or(0),
+                    tripped,
+                );
 
                 record_failure(
                     tool_name_owned,
