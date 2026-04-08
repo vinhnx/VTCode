@@ -2,6 +2,10 @@
 
 use serde_json::Value;
 
+use crate::tools::tool_intent::{
+    unified_exec_action, unified_exec_action_in, unified_exec_action_is,
+};
+
 const INDEXED_COMMAND_TYPE_ERROR: &str = "command array must contain only strings";
 const COMMAND_VALUE_TYPE_ERROR: &str = "command must be a string or array of strings";
 
@@ -151,59 +155,45 @@ pub fn session_id_text(args: &Value) -> Option<&str> {
 }
 
 pub fn unified_exec_missing_required_args(args: &Value) -> Vec<&'static str> {
-    let Some(action) = crate::tools::tool_intent::unified_exec_action(args) else {
+    if unified_exec_action(args).is_none() {
         return Vec::new();
-    };
+    }
 
     let mut missing = Vec::new();
-    match action {
-        action if action.eq_ignore_ascii_case("run") => {
-            if command_text(args).ok().flatten().is_none() {
-                missing.push("command");
-            }
+    if unified_exec_action_is(args, "run") {
+        if command_text(args).ok().flatten().is_none() {
+            missing.push("command");
         }
-        action if action.eq_ignore_ascii_case("write") => {
-            if session_id_text(args).is_none() {
-                missing.push("session_id");
-            }
-            if interactive_input_text(args).is_none() {
-                missing.push("input or chars or text");
-            }
+    } else if unified_exec_action_is(args, "write") {
+        if session_id_text(args).is_none() {
+            missing.push("session_id");
         }
-        action
-            if action.eq_ignore_ascii_case("poll")
-                || action.eq_ignore_ascii_case("continue")
-                || action.eq_ignore_ascii_case("close") =>
-        {
-            if session_id_text(args).is_none() {
-                missing.push("session_id");
-            }
+        if interactive_input_text(args).is_none() {
+            missing.push("input or chars or text");
         }
-        action if action.eq_ignore_ascii_case("inspect") => {
-            let has_session_id = session_id_text(args).is_some();
-            let has_spool_path = has_nonempty_string_field(args, "spool_path");
-            if !has_session_id && !has_spool_path {
-                missing.push("session_id or spool_path");
-            }
+    } else if unified_exec_action_in(args, &["poll", "continue", "close"]) {
+        if session_id_text(args).is_none() {
+            missing.push("session_id");
         }
-        action if action.eq_ignore_ascii_case("code") => {
-            let has_code = has_nonempty_string_field(args, "code")
-                || has_nonempty_string_field(args, "command");
-            if !has_code {
-                missing.push("code or command");
-            }
+    } else if unified_exec_action_is(args, "inspect") {
+        let has_session_id = session_id_text(args).is_some();
+        let has_spool_path = has_nonempty_string_field(args, "spool_path");
+        if !has_session_id && !has_spool_path {
+            missing.push("session_id or spool_path");
         }
-        action if action.eq_ignore_ascii_case("list") => {}
-        _ => {}
+    } else if unified_exec_action_is(args, "code") {
+        let has_code =
+            has_nonempty_string_field(args, "code") || has_nonempty_string_field(args, "command");
+        if !has_code {
+            missing.push("code or command");
+        }
     }
 
     missing
 }
 
 pub fn unified_exec_requires_command_safety(args: &Value) -> bool {
-    crate::tools::tool_intent::unified_exec_action(args)
-        .map(|action| action.eq_ignore_ascii_case("run"))
-        .unwrap_or(false)
+    unified_exec_action_is(args, "run")
 }
 
 pub fn working_dir_text_from_payload(payload: &serde_json::Map<String, Value>) -> Option<&str> {

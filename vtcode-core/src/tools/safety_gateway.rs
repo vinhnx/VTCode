@@ -32,7 +32,10 @@ use crate::tools::rate_limit_config::{
 use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
-use crate::tools::tool_intent::classify_tool_intent;
+use crate::tools::tool_intent::{
+    classify_tool_intent, unified_exec_action_in, unified_exec_action_is, unified_file_action_is,
+    unified_search_action_is,
+};
 use vtcode_config::core::DotfileProtectionConfig;
 
 /// Trust level used by the safety gateway for approval bypass decisions.
@@ -255,20 +258,14 @@ fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
         tools::SEND_PTY_INPUT => {
             crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
         }
-        tools::UNIFIED_EXEC => match crate::tools::tool_intent::unified_exec_action(args) {
-            Some(action) if action.eq_ignore_ascii_case("run") => {
-                crate::tools::command_args::command_text(args)
-                    .ok()
-                    .flatten()
-            }
-            Some(action)
-                if action.eq_ignore_ascii_case("write")
-                    || action.eq_ignore_ascii_case("continue") =>
-            {
-                crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
-            }
-            _ => None,
-        },
+        tools::UNIFIED_EXEC if unified_exec_action_is(args, "run") => {
+            crate::tools::command_args::command_text(args)
+                .ok()
+                .flatten()
+        }
+        tools::UNIFIED_EXEC if unified_exec_action_in(args, &["write", "continue"]) => {
+            crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
+        }
         _ => None,
     }
 }
@@ -339,40 +336,37 @@ fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
         tools::APPLY_PATCH => {
             targets.extend(patch_file_access_targets(args));
         }
-        tools::UNIFIED_FILE => match crate::tools::tool_intent::unified_file_action(args) {
-            Some(action) if action.eq_ignore_ascii_case("write") => {
-                if let Some(path) = primary_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Write);
-                }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "write") => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
             }
-            Some(action) if action.eq_ignore_ascii_case("edit") => {
-                if let Some(path) = primary_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Modify);
-                }
+        }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "edit") => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Modify);
             }
-            Some(action) if action.eq_ignore_ascii_case("delete") => {
-                if let Some(path) = primary_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Delete);
-                }
+        }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "delete") => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Delete);
             }
-            Some(action) if action.eq_ignore_ascii_case("move") => {
-                if let Some(path) = primary_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Modify);
-                }
-                if let Some(path) = destination_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Write);
-                }
+        }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "move") => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Modify);
             }
-            Some(action) if action.eq_ignore_ascii_case("copy") => {
-                if let Some(path) = destination_path_arg(args) {
-                    push_file_access_target(&mut targets, path, AccessType::Write);
-                }
+            if let Some(path) = destination_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
             }
-            Some(action) if action.eq_ignore_ascii_case("patch") => {
-                targets.extend(patch_file_access_targets(args));
+        }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "copy") => {
+            if let Some(path) = destination_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
             }
-            _ => {}
-        },
+        }
+        tools::UNIFIED_FILE if unified_file_action_is(args, "patch") => {
+            targets.extend(patch_file_access_targets(args));
+        }
         _ => {}
     }
 
@@ -957,8 +951,9 @@ impl SafetyGateway {
             ToolSource::Internal
         };
 
-        let action = args.get("action").and_then(|v| v.as_str());
-        let risk_tool_name = if tool_name == tools::UNIFIED_SEARCH && action == Some("web") {
+        let web_search =
+            tool_name == tools::UNIFIED_SEARCH && unified_search_action_is(args, "web");
+        let risk_tool_name = if web_search {
             "unified_search:web"
         } else {
             tool_name
@@ -979,10 +974,7 @@ impl SafetyGateway {
         }
 
         // Check for network access
-        if tool_name == "web_search"
-            || tool_name == "fetch_url"
-            || (tool_name == tools::UNIFIED_SEARCH && action == Some("web"))
-        {
+        if tool_name == "web_search" || tool_name == "fetch_url" || web_search {
             ctx = ctx.accesses_network();
         }
 

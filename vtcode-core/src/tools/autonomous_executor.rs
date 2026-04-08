@@ -12,7 +12,8 @@ use crate::core::loop_detector::LoopDetector;
 use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::command_args::{command_text, interactive_input_text};
 use crate::tools::tool_intent::{
-    self, classify_tool_intent, unified_exec_action, unified_file_action, unified_search_action,
+    self, classify_tool_intent, unified_exec_action, unified_exec_action_in,
+    unified_file_action_in, unified_file_action_is, unified_search_action_is,
 };
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
@@ -245,26 +246,16 @@ impl AutonomousExecutor {
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
         match tool_name {
             tools::APPLY_PATCH | tools::DELETE_FILE => true,
-            tools::UNIFIED_FILE => matches!(
-                unified_file_action(args),
-                Some(action)
-                    if action.eq_ignore_ascii_case("patch")
-                        || action.eq_ignore_ascii_case("delete")
-            ),
+            tools::UNIFIED_FILE => unified_file_action_in(args, &["patch", "delete"]),
             _ if Self::is_command_session_run(tool_name, args) => command_text(args)
                 .ok()
                 .flatten()
                 .is_some_and(|cmd| self.is_destructive_command(&cmd)),
-            _ if Self::is_command_session_tool(tool_name) => match unified_exec_action(args) {
-                Some(action)
-                    if action.eq_ignore_ascii_case("write")
-                        || action.eq_ignore_ascii_case("continue") =>
-                {
-                    interactive_input_text(args)
-                        .is_some_and(|input| self.is_destructive_command(input))
-                }
-                _ => false,
-            },
+            _ if Self::is_command_session_tool(tool_name)
+                && unified_exec_action_in(args, &["write", "continue"]) =>
+            {
+                interactive_input_text(args).is_some_and(|input| self.is_destructive_command(input))
+            }
             _ => false,
         }
     }
@@ -314,35 +305,21 @@ impl AutonomousExecutor {
                         .context("Missing or invalid 'command' argument")?,
                 )?;
             }
-            _ if Self::is_command_session_tool(tool_name) => match unified_exec_action(args) {
-                Some(action)
-                    if action.eq_ignore_ascii_case("write")
-                        || action.eq_ignore_ascii_case("continue") =>
-                {
-                    if let Some(input) = interactive_input_text(args) {
-                        self.validate_command_text(input)?;
-                    }
+            _ if Self::is_command_session_tool(tool_name)
+                && unified_exec_action_in(args, &["write", "continue"]) =>
+            {
+                if let Some(input) = interactive_input_text(args) {
+                    self.validate_command_text(input)?;
                 }
-                _ => {}
-            },
-            tools::UNIFIED_FILE => match unified_file_action(args) {
-                Some(action)
-                    if action.eq_ignore_ascii_case("write")
-                        || action.eq_ignore_ascii_case("edit")
-                        || action.eq_ignore_ascii_case("delete") =>
-                {
-                    self.validate_file_path(args.get("path"))?;
-                }
-                Some(action)
-                    if action.eq_ignore_ascii_case("move")
-                        || action.eq_ignore_ascii_case("copy") =>
-                {
-                    self.validate_file_path(args.get("path"))?;
-                    self.validate_file_path(args.get("destination"))?;
-                }
-                _ => {}
-            },
-            tools::UNIFIED_SEARCH if unified_search_action(args) == Some("list") => {
+            }
+            tools::UNIFIED_FILE if unified_file_action_in(args, &["write", "edit", "delete"]) => {
+                self.validate_file_path(args.get("path"))?;
+            }
+            tools::UNIFIED_FILE if unified_file_action_in(args, &["move", "copy"]) => {
+                self.validate_file_path(args.get("path"))?;
+                self.validate_file_path(args.get("destination"))?;
+            }
+            tools::UNIFIED_SEARCH if unified_search_action_is(args, "list") => {
                 self.validate_list_files_args(args)?;
             }
             _ => {}
@@ -448,7 +425,7 @@ impl AutonomousExecutor {
     /// Generate dry-run preview for verification
     pub fn generate_preview(&self, tool_name: &str, args: &Value) -> String {
         if tool_name == tools::WRITE_FILE
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("write"))
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "write"))
         {
             let path = args
                 .get("path")
@@ -474,7 +451,7 @@ impl AutonomousExecutor {
                 lines, size_kb, path, preview
             )
         } else if tool_name == tools::EDIT_FILE
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("edit"))
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "edit"))
         {
             let path = args
                 .get("path")
@@ -504,7 +481,7 @@ impl AutonomousExecutor {
 
             format!("Will execute: {}{}", cmd, warning)
         } else if tool_name == tools::APPLY_PATCH
-            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("patch"))
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action_is(args, "patch"))
         {
             let patch = decode_apply_patch_input(args)
                 .ok()
@@ -525,13 +502,8 @@ impl AutonomousExecutor {
         }
 
         match canonical_tool_name {
-            tools::UNIFIED_FILE => matches!(
-                unified_file_action(args),
-                Some("write" | "edit" | "move" | "copy")
-            ),
-            tools::UNIFIED_EXEC => {
-                matches!(unified_exec_action(args), Some("run" | "code" | "close"))
-            }
+            tools::UNIFIED_FILE => unified_file_action_in(args, &["write", "edit", "move", "copy"]),
+            tools::UNIFIED_EXEC => unified_exec_action_in(args, &["run", "code", "close"]),
             _ => false,
         }
     }

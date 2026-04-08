@@ -91,6 +91,7 @@ pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
 pub use tool_catalog_facade::SessionToolCatalogState;
+pub(crate) use unified_actions::{UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction};
 
 use assembly::ToolAssembly;
 use inventory::ToolInventory;
