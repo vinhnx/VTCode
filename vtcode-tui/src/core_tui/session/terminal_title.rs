@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 
 use crate::config::constants::ui;
@@ -186,10 +187,19 @@ impl Session {
 
     fn render_terminal_title(&self) -> Option<String> {
         let items = self.resolve_terminal_title_items()?;
-        let parts = items
-            .into_iter()
-            .filter_map(|item| self.title_item_value(item))
-            .collect::<Vec<_>>();
+        let mut parts = Vec::new();
+        let mut seen = HashSet::new();
+        for item in items {
+            let Some(part) = self.title_item_value(item) else {
+                continue;
+            };
+            let key = normalize_title_part(&part.text);
+            if key.is_empty() || seen.contains(&key) {
+                continue;
+            }
+            seen.insert(key);
+            parts.push(part);
+        }
         if parts.is_empty() {
             return None;
         }
@@ -308,11 +318,19 @@ fn truncate_title(title: &str) -> String {
     format!("{truncated}{ELLIPSIS}")
 }
 
+fn normalize_title_part(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Session, TerminalTitleStatus, is_stripped_terminal_title_char, sanitize_terminal_title,
-        truncate_title,
+        Session, TerminalTitleStatus, is_stripped_terminal_title_char, normalize_title_part,
+        sanitize_terminal_title, truncate_title,
     };
 
     fn session_for_title_tests() -> Session {
@@ -452,5 +470,28 @@ mod tests {
             session.render_terminal_title().as_deref(),
             Some("demo-project")
         );
+    }
+
+    #[test]
+    fn duplicate_title_items_are_deduplicated() {
+        let mut session = session_for_title_tests();
+        session.terminal_title_items = Some(vec![
+            "thread".to_string(),
+            "git-branch".to_string(),
+            "status".to_string(),
+        ]);
+        session.terminal_title_thread_label = Some("main".to_string());
+        session.terminal_title_git_branch = Some("main".to_string());
+        session.input_status_left = Some("Ready".to_string());
+
+        assert_eq!(
+            session.render_terminal_title().as_deref(),
+            Some("main | Ready")
+        );
+    }
+
+    #[test]
+    fn normalize_title_part_collapses_spacing_and_case() {
+        assert_eq!(normalize_title_part(" Main   Branch "), "main branch");
     }
 }

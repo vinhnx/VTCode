@@ -7,7 +7,6 @@ use anyhow::Result;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::models::ModelId;
-use vtcode_terminal_detection::TerminalType;
 use vtcode_tui::app::InlineHandle;
 
 use super::status_line_command::run_status_line_command;
@@ -15,7 +14,6 @@ use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
 use vtcode_core::llm::providers::clean_reasoning_text;
 #[derive(Default, Clone)]
 pub(crate) struct InputStatusState {
-    pub(crate) terminal_name: Option<String>,
     pub(crate) left: Option<String>,
     pub(crate) right: Option<String>,
     pub(crate) git_left: Option<String>,
@@ -36,6 +34,33 @@ pub(crate) struct InputStatusState {
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, Default)]
+struct BottomStatusLayout {
+    left: Vec<String>,
+    right: Vec<String>,
+}
+
+impl BottomStatusLayout {
+    fn push_left(&mut self, value: Option<String>) {
+        if let Some(value) = value {
+            push_unique(&mut self.left, value);
+        }
+    }
+
+    fn push_right(&mut self, value: Option<String>) {
+        if let Some(value) = value {
+            push_unique(&mut self.right, value);
+        }
+    }
+
+    fn into_status(self) -> (Option<String>, Option<String>) {
+        (
+            join_status_components(self.left),
+            join_status_components(self.right),
+        )
+    }
+}
 
 pub(crate) fn update_context_budget(
     state: &mut InputStatusState,
@@ -76,17 +101,8 @@ pub(crate) async fn update_input_status_if_changed(
         .unwrap_or(StatusLineMode::Auto);
     let status_line_hidden = matches!(mode, StatusLineMode::Hidden);
 
-    if !status_line_hidden {
-        // Detect terminal name if not already cached
-        if state.terminal_name.is_none() {
-            state.terminal_name = TerminalType::detect()
-                .ok()
-                .filter(|t| *t != TerminalType::Unknown)
-                .map(|t| t.name().to_string());
-        }
-    } else {
+    if status_line_hidden {
         state.git_left = None;
-        state.terminal_name = None;
     }
 
     let should_refresh_git = match state.last_git_refresh {
@@ -103,27 +119,16 @@ pub(crate) async fn update_input_status_if_changed(
                 } else {
                     ui::HEADER_GIT_CLEAN_SUFFIX
                 };
-                let git_display = if summary.branch.is_empty() {
+                let display = if summary.branch.is_empty() {
                     indicator.to_string()
                 } else {
                     format!("{}{}", summary.branch, indicator)
                 };
-
-                let display = if let Some(term) = &state.terminal_name {
-                    format!("{} | {}", term, git_display)
-                } else {
-                    git_display
-                };
-
                 state.git_left = (!status_line_hidden).then_some(display);
                 state.git_summary = Some(summary);
             }
             Ok(None) => {
-                state.git_left = if status_line_hidden {
-                    None
-                } else {
-                    state.terminal_name.clone()
-                };
+                state.git_left = None;
                 state.git_summary = None;
             }
             Err(error) => {
@@ -133,11 +138,7 @@ pub(crate) async fn update_input_status_if_changed(
                     "Failed to resolve git status"
                 );
                 state.git_summary = None;
-                state.git_left = if status_line_hidden {
-                    None
-                } else {
-                    state.terminal_name.clone()
-                };
+                state.git_left = None;
             }
         }
 
@@ -160,17 +161,22 @@ pub(crate) async fn update_input_status_if_changed(
             (None, None)
         }
         StatusLineMode::Auto => {
-            let right = build_model_status_with_context_and_spooled(
+            let mut layout = BottomStatusLayout::default();
+            layout.push_left(state.git_left.clone());
+            for component in auto_status_components(
                 state.thread_context.as_deref(),
                 state.ide_context_source.as_deref(),
+                state.git_summary.as_ref(),
                 trimmed_model,
                 trimmed_reasoning,
                 state.context_utilization,
                 state.context_tokens,
                 state.is_cancelling,
                 state.spooled_files_count,
-            );
-            (state.git_left.clone(), right)
+            ) {
+                layout.push_right(Some(component));
+            }
+            layout.into_status()
         }
         StatusLineMode::Command => {
             if let Some(cfg) = status_config {
@@ -217,31 +223,41 @@ pub(crate) async fn update_input_status_if_changed(
                     (state.command_value.clone(), None)
                 } else {
                     state.command_value = None;
-                    let right = build_model_status_with_context_and_spooled(
+                    let mut layout = BottomStatusLayout::default();
+                    layout.push_left(state.git_left.clone());
+                    for component in auto_status_components(
                         state.thread_context.as_deref(),
                         state.ide_context_source.as_deref(),
+                        state.git_summary.as_ref(),
                         trimmed_model,
                         trimmed_reasoning,
                         state.context_utilization,
                         state.context_tokens,
                         state.is_cancelling,
                         state.spooled_files_count,
-                    );
-                    (state.git_left.clone(), right)
+                    ) {
+                        layout.push_right(Some(component));
+                    }
+                    layout.into_status()
                 }
             } else {
                 state.command_value = None;
-                let right = build_model_status_with_context_and_spooled(
+                let mut layout = BottomStatusLayout::default();
+                layout.push_left(state.git_left.clone());
+                for component in auto_status_components(
                     state.thread_context.as_deref(),
                     state.ide_context_source.as_deref(),
+                    state.git_summary.as_ref(),
                     trimmed_model,
                     trimmed_reasoning,
                     state.context_utilization,
                     state.context_tokens,
                     state.is_cancelling,
                     state.spooled_files_count,
-                );
-                (state.git_left.clone(), right)
+                ) {
+                    layout.push_right(Some(component));
+                }
+                layout.into_status()
             }
         }
     };
@@ -260,8 +276,9 @@ pub(crate) async fn update_input_status_if_changed(
 }
 
 /// Build model status with all context indicators including spooled files
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn build_model_status_with_context_and_spooled(
+fn build_model_status_with_context_and_spooled(
     thread_context: Option<&str>,
     ide_context_source: Option<&str>,
     model: &str,
@@ -271,44 +288,133 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     is_cancelling: bool,
     spooled_files: Option<usize>,
 ) -> Option<String> {
-    let mut parts = Vec::new();
+    join_status_components(auto_status_components(
+        thread_context,
+        ide_context_source,
+        None,
+        model,
+        reasoning,
+        context_utilization,
+        _total_tokens,
+        is_cancelling,
+        spooled_files,
+    ))
+}
 
+#[allow(clippy::too_many_arguments)]
+fn auto_status_components(
+    thread_context: Option<&str>,
+    ide_context_source: Option<&str>,
+    git_summary: Option<&GitStatusSummary>,
+    model: &str,
+    reasoning: &str,
+    context_utilization: Option<f64>,
+    _total_tokens: Option<usize>,
+    is_cancelling: bool,
+    spooled_files: Option<usize>,
+) -> Vec<String> {
+    let mut parts: Vec<Option<String>> = Vec::new();
     if is_cancelling {
-        parts.push("CANCELLING...".to_string());
+        parts.push(Some("CANCELLING...".to_string()));
     }
 
-    if let Some(thread_context) = thread_context
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        parts.push(thread_context.to_string());
-    }
-
-    if let Some(source) = ide_context_source
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        parts.push(source.to_string());
-    }
-
-    parts.push(model.to_string());
+    parts.push(normalize_thread_context(thread_context, git_summary));
+    parts.push(
+        ide_context_source
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+    );
+    parts.push((!model.trim().is_empty()).then(|| model.trim().to_string()));
 
     if let Some(util) = context_utilization {
-        parts.push(format!("{:.0}% context left", util.clamp(0.0, 100.0)));
+        parts.push(Some(format!("{:.0}% context left", util.clamp(0.0, 100.0))));
     }
 
-    // Show spooled files indicator when files have been spooled
     if let Some(count) = spooled_files
         && count > 0
     {
-        parts.push(format!("{} spooled", count));
+        parts.push(Some(format!("{count} spooled")));
     }
 
-    if !reasoning.is_empty() {
-        parts.push(format!("({})", reasoning));
+    if !reasoning.trim().is_empty() {
+        parts.push(Some(format!("({})", reasoning.trim())));
     }
 
-    Some(parts.join(" | "))
+    let mut deduped = Vec::new();
+    for value in parts.into_iter().flatten() {
+        push_unique(&mut deduped, value);
+    }
+    deduped
+}
+
+fn normalize_thread_context(
+    thread_context: Option<&str>,
+    git_summary: Option<&GitStatusSummary>,
+) -> Option<String> {
+    let thread = thread_context
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    let Some(branch) = git_summary
+        .and_then(|summary| {
+            let value = summary.branch.trim();
+            (!value.is_empty()).then_some(value)
+        })
+        .map(normalize_for_dedup)
+    else {
+        return Some(thread.to_string());
+    };
+
+    let thread_normalized = normalize_for_dedup(thread);
+    if thread_normalized == branch {
+        return None;
+    }
+
+    if let Some((head, tail)) = thread.split_once('|')
+        && normalize_for_dedup(head) == branch
+    {
+        let tail = tail.trim();
+        if tail.is_empty() {
+            None
+        } else {
+            Some(tail.to_string())
+        }
+    } else {
+        Some(thread.to_string())
+    }
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let normalized = normalize_for_dedup(trimmed);
+    if values
+        .iter()
+        .any(|existing| normalize_for_dedup(existing) == normalized)
+    {
+        return;
+    }
+    values.push(trimmed.to_string());
+}
+
+fn normalize_for_dedup(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn join_status_components(values: Vec<String>) -> Option<String> {
+    let parts = values
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" | "))
+    }
 }
 
 /// Update spooled files count in status state
@@ -345,8 +451,10 @@ pub(crate) fn update_thread_context(
 #[cfg(test)]
 mod tests {
     use super::{
-        InputStatusState, build_model_status_with_context_and_spooled, update_thread_context,
+        InputStatusState, build_model_status_with_context_and_spooled, normalize_thread_context,
+        update_thread_context,
     };
+    use crate::agent::runloop::git::GitStatusSummary;
 
     #[test]
     fn status_line_shows_context_left_percent() {
@@ -430,5 +538,29 @@ mod tests {
             state.thread_context.as_deref(),
             Some("main | 2 local agents | ↓ explore")
         );
+    }
+
+    #[test]
+    fn thread_context_hides_duplicate_git_branch_label() {
+        let thread = normalize_thread_context(
+            Some("main"),
+            Some(&GitStatusSummary {
+                branch: "main".to_string(),
+                dirty: false,
+            }),
+        );
+        assert_eq!(thread, None);
+    }
+
+    #[test]
+    fn thread_context_strips_duplicate_branch_prefix_when_suffix_exists() {
+        let thread = normalize_thread_context(
+            Some("main | 2 local agents | ↓ explore"),
+            Some(&GitStatusSummary {
+                branch: "main".to_string(),
+                dirty: true,
+            }),
+        );
+        assert_eq!(thread.as_deref(), Some("2 local agents | ↓ explore"));
     }
 }

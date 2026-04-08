@@ -6,7 +6,7 @@ dirty) on the left and the active model with its reasoning effort on the right.
 The `[ui.status_line]` table in `vtcode.toml` lets you override this behaviour or
 turn the status line off entirely.
 
-If you want VT Code to scaffold the command setup for you, run `/statusline` in an interactive session. VT Code will ask whether to persist the script in the user config layer (`~/.config/vtcode/statusline.sh`) or the current workspace (`.vtcode/statusline.sh`), then submit an agent task that updates the script and config together.
+If you want VT Code to scaffold the command setup for you, run `/statusline` in an interactive session. VT Code asks whether to persist the script in the user config layer (`~/.config/vtcode/statusline.sh`) or the current workspace (`.vtcode/statusline.sh`), then lets you configure mode, command, script scaffolding, and timing directly in the inline modal.
 
 ## Available modes
 
