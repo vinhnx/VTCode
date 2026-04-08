@@ -87,10 +87,7 @@ impl ToolRegistry {
     }
 
     pub async fn close_harness_exec_session(&self, session_id: &str) -> Result<()> {
-        let metadata = self.exec_sessions.close_session(session_id).await?;
-        if metadata.backend == "pty" {
-            self.decrement_active_pty_sessions();
-        }
+        self.close_exec_session(session_id).await?;
         Ok(())
     }
 }
