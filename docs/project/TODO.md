@@ -7,5 +7,3 @@ Execute a comprehensive, line-by-line audit of the executors.rs to systematicall
 scan for large monolithic files and functions and break them down into smaller, more focused functions that adhere to the Single Responsibility Principle. This will enhance readability, maintainability, and testability of the codebase.
 
 ---
-
-prevent vtcode ide companion context to create artifact in the project. maybe move to ~/.vtcode or something like that. also make sure it doesn't create artifacts in the project when running in a containerized environment.

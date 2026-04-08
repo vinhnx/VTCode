@@ -169,9 +169,6 @@ const CANONICAL_IDE_CONTEXT_ENV_VARIABLE = "VT_IDE_CONTEXT_FILE";
 const LEGACY_IDE_CONTEXT_ENV_VARIABLE = "VT_VSCODE_CONTEXT_FILE";
 const IDE_CONTEXT_SNAPSHOT_VERSION = 1;
 const IDE_CONTEXT_HEADER = "## VS Code Context";
-const WORKSPACE_IDE_CONTEXT_DIRNAME = ".vtcode";
-const WORKSPACE_IDE_CONTEXT_JSON_FILE = "ide-context.json";
-const WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE = "ide-context.md";
 const MAX_IDE_CONTEXT_CHARS = 6000;
 const MAX_FULL_DOCUMENT_CONTEXT_LINES = 400;
 const ACTIVE_EDITOR_CONTEXT_WINDOW = 80;
@@ -1080,7 +1077,7 @@ function createQuickActions(
             {
                 label: "Refresh IDE context snapshot",
                 description:
-                    "Force a new .vtcode/ide-context block so the agent sees your latest editor state.",
+                    "Force a new IDE context snapshot so the agent sees your latest editor state.",
                 command: "vtcode.flushIdeContextSnapshot",
                 icon: "history",
             },
@@ -3251,44 +3248,6 @@ function getLegacyIdeContextFilePath(): string | undefined {
     return ideContextBridge?.legacyFilePath;
 }
 
-function getWorkspaceIdeContextTarget(
-    workspaceRoot: string | undefined
-): IdeContextFileTarget | undefined {
-    const resolvedWorkspaceRoot =
-        workspaceRoot ?? getPrimaryWorkspaceFolder()?.uri.fsPath;
-    if (!resolvedWorkspaceRoot) {
-        return undefined;
-    }
-
-    const workspaceUri = vscode.Uri.file(resolvedWorkspaceRoot);
-    const directoryUri = vscode.Uri.joinPath(
-        workspaceUri,
-        WORKSPACE_IDE_CONTEXT_DIRNAME
-    );
-    return {
-        directoryUri,
-        snapshotUri: vscode.Uri.joinPath(
-            directoryUri,
-            WORKSPACE_IDE_CONTEXT_JSON_FILE
-        ),
-        legacyMarkdownUri: vscode.Uri.joinPath(
-            directoryUri,
-            WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE
-        ),
-    };
-}
-
-function isSameIdeContextTarget(
-    left: IdeContextFileTarget | undefined,
-    right: IdeContextFileTarget | undefined
-): boolean {
-    if (!left || !right) {
-        return left === right;
-    }
-
-    return left.snapshotUri.toString() === right.snapshotUri.toString();
-}
-
 async function writeIdeContextTarget(
     target: IdeContextFileTarget,
     snapshotContent: string,
@@ -3339,7 +3298,6 @@ function isDocumentVisible(document: vscode.TextDocument): boolean {
 class IdeContextFileBridge implements vscode.Disposable {
     private pendingTimer: NodeJS.Timeout | undefined;
     private currentRefresh: Promise<void> | undefined;
-    private workspaceMirrorTarget: IdeContextFileTarget | undefined;
     private disposed = false;
 
     constructor(
@@ -3427,41 +3385,11 @@ class IdeContextFileBridge implements vscode.Disposable {
                     snapshotUri: this.snapshotUri,
                     legacyMarkdownUri: this.legacyMarkdownUri,
                 };
-                const workspaceTarget = getWorkspaceIdeContextTarget(
-                    snapshot?.workspace_root
+                await writeIdeContextTarget(
+                    storageTarget,
+                    snapshotContent,
+                    markdownContent
                 );
-                const writes = [
-                    writeIdeContextTarget(
-                        storageTarget,
-                        snapshotContent,
-                        markdownContent
-                    ),
-                ];
-                if (
-                    workspaceTarget &&
-                    !isSameIdeContextTarget(workspaceTarget, storageTarget)
-                ) {
-                    writes.push(
-                        writeIdeContextTarget(
-                            workspaceTarget,
-                            snapshotContent,
-                            markdownContent
-                        )
-                    );
-                }
-                if (
-                    this.workspaceMirrorTarget &&
-                    !isSameIdeContextTarget(
-                        this.workspaceMirrorTarget,
-                        workspaceTarget
-                    )
-                ) {
-                    writes.push(
-                        writeIdeContextTarget(this.workspaceMirrorTarget, "", "")
-                    );
-                }
-                this.workspaceMirrorTarget = workspaceTarget;
-                await Promise.all(writes);
             } catch (error) {
                 const message =
                     error instanceof Error ? error.message : String(error);
