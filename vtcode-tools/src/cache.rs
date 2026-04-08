@@ -205,7 +205,7 @@ impl<V: Send + Sync> LruCache<V> {
         self.get(key).await.map(|arc| V::clone(&arc))
     }
 
-    /// Alias to return Arc<V> explicitly (clarifies intent)
+    /// Alias to return `Arc<V>` explicitly (clarifies intent).
     pub async fn get_arc(&self, key: &str) -> Option<Arc<V>> {
         self.get(key).await
     }

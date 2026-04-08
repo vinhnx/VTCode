@@ -1055,6 +1055,20 @@ struct ExecOutputPreview {
     truncated: bool,
 }
 
+struct ExecRunOutputConfig {
+    max_tokens: usize,
+    inspect_query: Option<String>,
+    inspect_literal: bool,
+    inspect_max_matches: usize,
+}
+
+struct PreparedExecCommand {
+    command: Vec<String>,
+    requested_command: Vec<String>,
+    display_command: String,
+    requested_command_display: String,
+}
+
 fn attach_pty_continuation(response: &mut Value, session_id: &str) {
     response["next_continue_args"] = PtyContinuationArgs::new(session_id).to_value();
 }
@@ -1157,6 +1171,101 @@ fn build_exec_response(
         attach_failure_diagnostics_metadata(&mut response, &diagnostics);
     }
     response
+}
+
+fn exec_run_output_config(
+    payload: &serde_json::Map<String, Value>,
+    display_command: &str,
+) -> ExecRunOutputConfig {
+    ExecRunOutputConfig {
+        max_tokens: max_output_tokens_from_payload(payload)
+            .or_else(|| suggest_max_tokens_for_command(display_command))
+            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS),
+        inspect_query: payload
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned),
+        inspect_literal: payload
+            .get("literal")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        inspect_max_matches: clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64)),
+    }
+}
+
+fn build_exec_filtered_response(
+    session_metadata: &VTCodeExecSession,
+    command_display: &str,
+    capture: &PtyEphemeralCapture,
+    output_config: &ExecRunOutputConfig,
+    running_process_id: Option<&str>,
+) -> Result<Value> {
+    let raw_output = filter_pty_output(&strip_ansi(&capture.output));
+    let mut matched_count = None;
+    let mut query_truncated = false;
+    let filtered_output = if let Some(query) = output_config.inspect_query.as_deref() {
+        let (filtered, count, truncated_matches) = filter_lines(
+            &raw_output,
+            query,
+            output_config.inspect_literal,
+            output_config.inspect_max_matches,
+        )?;
+        matched_count = Some(count);
+        query_truncated = truncated_matches;
+        filtered
+    } else {
+        raw_output.clone()
+    };
+    let preview = build_exec_output_preview(filtered_output, output_config.max_tokens);
+
+    Ok(build_exec_response(
+        session_metadata,
+        command_display,
+        capture,
+        ExecOutputPreview {
+            raw_output,
+            output: preview.output,
+            truncated: preview.truncated,
+        },
+        matched_count,
+        query_truncated,
+        running_process_id,
+    ))
+}
+
+fn build_exec_passthrough_response(
+    session_metadata: &VTCodeExecSession,
+    command_display: &str,
+    capture: &PtyEphemeralCapture,
+    max_tokens: Option<usize>,
+) -> Value {
+    let raw_output = filter_pty_output(&strip_ansi(&capture.output));
+    let output_preview = if let Some(limit) = max_tokens {
+        let preview = build_exec_output_preview(raw_output.clone(), limit);
+        ExecOutputPreview {
+            raw_output,
+            output: preview.output,
+            truncated: preview.truncated,
+        }
+    } else {
+        ExecOutputPreview {
+            raw_output: raw_output.clone(),
+            output: raw_output,
+            truncated: false,
+        }
+    };
+
+    build_exec_response(
+        session_metadata,
+        command_display,
+        capture,
+        output_preview,
+        None,
+        false,
+        None,
+    )
 }
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
@@ -1568,72 +1677,64 @@ impl ToolRegistry {
         let action: UnifiedFileAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
         self.log_unified_file_payload_diagnostics(action_str, &args);
+        let tool = self.inventory.file_ops_tool().clone();
 
         match action {
             UnifiedFileAction::Read => {
-                let tool = self.inventory.file_ops_tool().clone();
-                match tool.read_file(args.clone()).await {
-                    Ok(response) => Ok(response),
-                    Err(read_err) => {
-                        let read_err_text = read_err.to_string();
-                        if let Some(fallback_args) =
-                            build_read_pty_fallback_args(&args, &read_err_text)
-                        {
-                            let session_id = fallback_args
-                                .get("session_id")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default()
-                                .to_string();
-                            tracing::info!(
-                                session_id = %session_id,
-                                "Auto-recovering unified_file read via unified_exec poll"
-                            );
-                            match self.execute_command_session_poll(fallback_args).await {
-                                Ok(mut recovered) => {
-                                    if let Some(obj) = recovered.as_object_mut() {
-                                        obj.insert("auto_recovered".to_string(), json!(true));
-                                        obj.insert(
-                                            "recovery_tool".to_string(),
-                                            json!("unified_exec"),
-                                        );
-                                        obj.insert("recovery_action".to_string(), json!("poll"));
-                                        obj.insert(
-                                            "recovery_reason".to_string(),
-                                            json!("missing_pty_spool_file"),
-                                        );
-                                    }
-                                    return Ok(recovered);
-                                }
-                                Err(recovery_err) => {
-                                    tracing::warn!(
-                                        session_id = %session_id,
-                                        error = %recovery_err,
-                                        "Failed auto-recovery via unified_exec poll"
-                                    );
-                                }
-                            }
-                        }
-                        Err(read_err)
-                    }
-                }
+                self.execute_unified_file_read_with_recovery(&tool, args)
+                    .await
             }
-            UnifiedFileAction::Write => {
-                let tool = self.inventory.file_ops_tool().clone();
-                tool.write_file(args).await
-            }
+            UnifiedFileAction::Write => tool.write_file(args).await,
             UnifiedFileAction::Edit => self.edit_file(args).await,
             UnifiedFileAction::Patch => self.execute_apply_patch(args).await,
-            UnifiedFileAction::Delete => {
-                let tool = self.inventory.file_ops_tool().clone();
-                tool.delete_file(args).await
-            }
-            UnifiedFileAction::Move => {
-                let tool = self.inventory.file_ops_tool().clone();
-                tool.move_file(args).await
-            }
-            UnifiedFileAction::Copy => {
-                let tool = self.inventory.file_ops_tool().clone();
-                tool.copy_file(args).await
+            UnifiedFileAction::Delete => tool.delete_file(args).await,
+            UnifiedFileAction::Move => tool.move_file(args).await,
+            UnifiedFileAction::Copy => tool.copy_file(args).await,
+        }
+    }
+
+    async fn execute_unified_file_read_with_recovery(
+        &self,
+        tool: &crate::tools::file_ops::FileOpsTool,
+        args: Value,
+    ) -> Result<Value> {
+        match tool.read_file(args.clone()).await {
+            Ok(response) => Ok(response),
+            Err(read_err) => {
+                let read_err_text = read_err.to_string();
+                if let Some(fallback_args) = build_read_pty_fallback_args(&args, &read_err_text) {
+                    let session_id = fallback_args
+                        .get("session_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    tracing::info!(
+                        session_id = %session_id,
+                        "Auto-recovering unified_file read via unified_exec poll"
+                    );
+                    match self.execute_command_session_poll(fallback_args).await {
+                        Ok(mut recovered) => {
+                            if let Some(obj) = recovered.as_object_mut() {
+                                obj.insert("auto_recovered".to_string(), json!(true));
+                                obj.insert("recovery_tool".to_string(), json!("unified_exec"));
+                                obj.insert("recovery_action".to_string(), json!("poll"));
+                                obj.insert(
+                                    "recovery_reason".to_string(),
+                                    json!("missing_pty_spool_file"),
+                                );
+                            }
+                            return Ok(recovered);
+                        }
+                        Err(recovery_err) => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %recovery_err,
+                                "Failed auto-recovery via unified_exec poll"
+                            );
+                        }
+                    }
+                }
+                Err(read_err)
             }
         }
     }
@@ -2023,13 +2124,11 @@ impl ToolRegistry {
             .as_object()
             .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
 
-        let (mut command, auto_raw_command) = parse_command_parts(
+        let (command, auto_raw_command) = parse_command_parts(
             payload,
             "command execution requires a 'command' value",
             "PTY command cannot be empty",
         )?;
-        let requested_command = command.clone();
-        let is_git_diff = is_git_diff_command(&command);
 
         let shell_program = resolve_shell_preference_with_zsh_fork(
             payload.get("shell").and_then(|value| value.as_str()),
@@ -2044,43 +2143,14 @@ impl ToolRegistry {
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
 
-        let normalized_shell = normalized_shell_name(&shell_program);
-        let existing_shell = command
-            .first()
-            .map(|existing| normalized_shell_name(existing));
-
-        if existing_shell != Some(normalized_shell.clone()) {
-            // Prefer explicit raw_command, fallback to auto-detected from string command
-            let raw_command = payload
-                .get("raw_command")
-                .and_then(|value| value.as_str())
-                .map(|value| value.to_string())
-                .or(auto_raw_command);
-
-            let command_string =
-                build_shell_command_string(raw_command.as_deref(), &command, &shell_program);
-
-            let mut shell_invocation = Vec::with_capacity(4);
-            shell_invocation.push(shell_program.clone());
-
-            if login_shell && !should_use_windows_command_tokenizer(Some(&shell_program)) {
-                shell_invocation.push("-l".to_string());
-            }
-
-            let command_flag = if should_use_windows_command_tokenizer(Some(&shell_program)) {
-                match normalized_shell.as_str() {
-                    "cmd" | "cmd.exe" => "/C".to_string(),
-                    "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
-                    _ => "-c".to_string(),
-                }
-            } else {
-                "-c".to_string()
-            };
-
-            shell_invocation.push(command_flag);
-            shell_invocation.push(command_string);
-            command = shell_invocation;
-        }
+        let mut prepared_command = prepare_exec_command(
+            payload,
+            &shell_program,
+            login_shell,
+            command,
+            auto_raw_command,
+        );
+        let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
 
         let rows =
             parse_pty_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?;
@@ -2094,39 +2164,13 @@ impl ToolRegistry {
         let (sandbox_permissions, additional_permissions) =
             parse_requested_sandbox_permissions(payload, &working_dir_path)?;
 
-        let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
-            join_windows_command(&command)
-        } else {
-            shell_words::join(command.iter().map(|part| part.as_str()))
-        };
-        let requested_command_display =
-            if should_use_windows_command_tokenizer(Some(&shell_program)) {
-                join_windows_command(&requested_command)
-            } else {
-                shell_words::join(requested_command.iter().map(|part| part.as_str()))
-            };
+        let output_config = exec_run_output_config(payload, &prepared_command.display_command);
 
-        // Use explicit max_tokens if provided, otherwise check if command suggests a limit
-        let max_tokens = max_output_tokens_from_payload(payload)
-            .or_else(|| suggest_max_tokens_for_command(&display_command))
-            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
-        let inspect_query = payload
-            .get("query")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        let inspect_literal = payload
-            .get("literal")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let inspect_max_matches =
-            clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
-
-        enforce_pty_command_policy(&display_command, confirm)?;
+        enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
         let sandbox_config = self.sandbox_config();
-        command = apply_runtime_sandbox_to_command(
-            command,
-            &requested_command,
+        prepared_command.command = apply_runtime_sandbox_to_command(
+            prepared_command.command,
+            &prepared_command.requested_command,
             &sandbox_config,
             self.workspace_root(),
             &working_dir_path,
@@ -2154,7 +2198,7 @@ impl ToolRegistry {
         self.exec_sessions
             .create_pty_session(
                 session_id.clone().into(),
-                command,
+                prepared_command.command,
                 working_dir_path,
                 crate::tools::pty::PtySize {
                     rows,
@@ -2178,32 +2222,13 @@ impl ToolRegistry {
             )
             .await;
         let session_metadata = self.exec_session_metadata(&session_id).await?;
-        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-        let mut matched_count = None;
-        let mut query_truncated = false;
-        let filtered_output = if let Some(query) = inspect_query {
-            let (filtered, count, truncated_matches) =
-                filter_lines(&raw_output, query, inspect_literal, inspect_max_matches)?;
-            matched_count = Some(count);
-            query_truncated = truncated_matches;
-            filtered
-        } else {
-            raw_output.clone()
-        };
-        let preview = build_exec_output_preview(filtered_output, max_tokens);
-        let mut response = build_exec_response(
+        let mut response = build_exec_filtered_response(
             &session_metadata,
-            &requested_command_display,
+            &prepared_command.requested_command_display,
             &capture,
-            ExecOutputPreview {
-                raw_output,
-                output: preview.output,
-                truncated: preview.truncated,
-            },
-            matched_count,
-            query_truncated,
+            &output_config,
             Some(&session_id),
-        );
+        )?;
 
         if capture.exit_code.is_some() && !retain_completed_session {
             self.prune_completed_exec_session(&session_id).await?;
@@ -2225,13 +2250,11 @@ impl ToolRegistry {
             .as_object()
             .ok_or_else(|| anyhow!("unified_exec run requires a JSON object"))?;
 
-        let (mut command, auto_raw_command) = parse_command_parts(
+        let (command, auto_raw_command) = parse_command_parts(
             payload,
             "unified_exec run requires a 'command' value",
             "Command cannot be empty",
         )?;
-        let requested_command = command.clone();
-        let is_git_diff = is_git_diff_command(&command);
 
         let shell_program = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
@@ -2246,42 +2269,14 @@ impl ToolRegistry {
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
 
-        let normalized_shell = normalized_shell_name(&shell_program);
-        let existing_shell = command
-            .first()
-            .map(|existing| normalized_shell_name(existing));
-
-        if existing_shell != Some(normalized_shell.clone()) {
-            let raw_command = payload
-                .get("raw_command")
-                .and_then(|value| value.as_str())
-                .map(|value| value.to_string())
-                .or(auto_raw_command);
-
-            let command_string =
-                build_shell_command_string(raw_command.as_deref(), &command, &shell_program);
-
-            let mut shell_invocation = Vec::with_capacity(4);
-            shell_invocation.push(shell_program.clone());
-
-            if login_shell && !should_use_windows_command_tokenizer(Some(&shell_program)) {
-                shell_invocation.push("-l".to_string());
-            }
-
-            let command_flag = if should_use_windows_command_tokenizer(Some(&shell_program)) {
-                match normalized_shell.as_str() {
-                    "cmd" | "cmd.exe" => "/C".to_string(),
-                    "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
-                    _ => "-c".to_string(),
-                }
-            } else {
-                "-c".to_string()
-            };
-
-            shell_invocation.push(command_flag);
-            shell_invocation.push(command_string);
-            command = shell_invocation;
-        }
+        let mut prepared_command = prepare_exec_command(
+            payload,
+            &shell_program,
+            login_shell,
+            command,
+            auto_raw_command,
+        );
+        let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
 
         let working_dir_path = self
             .pty_manager()
@@ -2290,38 +2285,13 @@ impl ToolRegistry {
         let (sandbox_permissions, additional_permissions) =
             parse_requested_sandbox_permissions(payload, &working_dir_path)?;
 
-        let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
-            join_windows_command(&command)
-        } else {
-            shell_words::join(command.iter().map(|part| part.as_str()))
-        };
-        let requested_command_display =
-            if should_use_windows_command_tokenizer(Some(&shell_program)) {
-                join_windows_command(&requested_command)
-            } else {
-                shell_words::join(requested_command.iter().map(|part| part.as_str()))
-            };
+        let output_config = exec_run_output_config(payload, &prepared_command.display_command);
 
-        let max_tokens = max_output_tokens_from_payload(payload)
-            .or_else(|| suggest_max_tokens_for_command(&display_command))
-            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
-        let inspect_query = payload
-            .get("query")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        let inspect_literal = payload
-            .get("literal")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let inspect_max_matches =
-            clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
-
-        enforce_pty_command_policy(&display_command, confirm)?;
+        enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
         let sandbox_config = self.sandbox_config();
-        command = apply_runtime_sandbox_to_command(
-            command,
-            &requested_command,
+        prepared_command.command = apply_runtime_sandbox_to_command(
+            prepared_command.command,
+            &prepared_command.requested_command,
             &sandbox_config,
             self.workspace_root(),
             &working_dir_path,
@@ -2341,7 +2311,7 @@ impl ToolRegistry {
             .exec_sessions
             .create_pipe_session(
                 session_id.clone().into(),
-                command,
+                prepared_command.command,
                 working_dir_path,
                 session_env,
             )
@@ -2355,32 +2325,13 @@ impl ToolRegistry {
                 exec_settlement_mode.settle_noninteractive(),
             )
             .await?;
-        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-        let mut matched_count = None;
-        let mut query_truncated = false;
-        let filtered_output = if let Some(query) = inspect_query {
-            let (filtered, count, truncated_matches) =
-                filter_lines(&raw_output, query, inspect_literal, inspect_max_matches)?;
-            matched_count = Some(count);
-            query_truncated = truncated_matches;
-            filtered
-        } else {
-            raw_output.clone()
-        };
-        let preview = build_exec_output_preview(filtered_output, max_tokens);
-        let mut response = build_exec_response(
+        let mut response = build_exec_filtered_response(
             &session_metadata,
-            &requested_command_display,
+            &prepared_command.requested_command_display,
             &capture,
-            ExecOutputPreview {
-                raw_output,
-                output: preview.output,
-                truncated: preview.truncated,
-            },
-            matched_count,
-            query_truncated,
+            &output_config,
             Some(&session_id),
-        );
+        )?;
 
         if capture.exit_code.is_some() {
             self.prune_completed_exec_session(&session_id).await?;
@@ -2425,20 +2376,11 @@ impl ToolRegistry {
             )
             .await;
         let session_metadata = self.exec_session_metadata(sid).await?;
-        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-        let preview = build_exec_output_preview(raw_output.clone(), max_tokens);
-        let response = build_exec_response(
+        let response = build_exec_passthrough_response(
             &session_metadata,
             &session_command,
             &capture,
-            ExecOutputPreview {
-                raw_output,
-                output: preview.output,
-                truncated: preview.truncated,
-            },
-            None,
-            false,
-            None,
+            Some(max_tokens),
         );
 
         if capture.exit_code.is_some() {
@@ -2480,21 +2422,8 @@ impl ToolRegistry {
             )
             .await?;
         let session_metadata = self.exec_session_metadata(sid).await?;
-
-        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-        let response = build_exec_response(
-            &session_metadata,
-            &session_command,
-            &capture,
-            ExecOutputPreview {
-                raw_output: raw_output.clone(),
-                output: raw_output,
-                truncated: false,
-            },
-            None,
-            false,
-            None,
-        );
+        let response =
+            build_exec_passthrough_response(&session_metadata, &session_command, &capture, None);
 
         if capture.exit_code.is_some() {
             self.prune_completed_exec_session(sid).await?;
@@ -3491,6 +3420,71 @@ fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str)
     }
 }
 
+fn shell_command_flag(shell_program: &str, normalized_shell: &str) -> String {
+    if should_use_windows_command_tokenizer(Some(shell_program)) {
+        match normalized_shell {
+            "cmd" | "cmd.exe" => "/C".to_string(),
+            "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
+            _ => "-c".to_string(),
+        }
+    } else {
+        "-c".to_string()
+    }
+}
+
+fn command_display_for_shell(parts: &[String], shell_program: &str) -> String {
+    if should_use_windows_command_tokenizer(Some(shell_program)) {
+        join_windows_command(parts)
+    } else {
+        shell_words::join(parts.iter().map(|part| part.as_str()))
+    }
+}
+
+fn prepare_exec_command(
+    payload: &serde_json::Map<String, Value>,
+    shell_program: &str,
+    login_shell: bool,
+    mut command: Vec<String>,
+    auto_raw_command: Option<String>,
+) -> PreparedExecCommand {
+    let requested_command = command.clone();
+
+    let normalized_shell = normalized_shell_name(shell_program);
+    let existing_shell = command
+        .first()
+        .map(|existing| normalized_shell_name(existing));
+
+    if existing_shell != Some(normalized_shell.clone()) {
+        // Prefer explicit raw_command, fallback to auto-detected from string command
+        let raw_command = payload
+            .get("raw_command")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string())
+            .or(auto_raw_command);
+
+        let command_string =
+            build_shell_command_string(raw_command.as_deref(), &command, shell_program);
+
+        let mut shell_invocation = Vec::with_capacity(4);
+        shell_invocation.push(shell_program.to_string());
+
+        if login_shell && !should_use_windows_command_tokenizer(Some(shell_program)) {
+            shell_invocation.push("-l".to_string());
+        }
+
+        shell_invocation.push(shell_command_flag(shell_program, &normalized_shell));
+        shell_invocation.push(command_string);
+        command = shell_invocation;
+    }
+
+    PreparedExecCommand {
+        display_command: command_display_for_shell(&command, shell_program),
+        requested_command_display: command_display_for_shell(&requested_command, shell_program),
+        command,
+        requested_command,
+    }
+}
+
 fn code_language_from_args(args: &Value) -> Language {
     let language_str = args
         .get("language")
@@ -4387,7 +4381,8 @@ mod unified_action_error_tests {
 mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, build_shell_execution_plan,
-        enforce_sandbox_preflight_guards, parse_command_parts, parse_requested_sandbox_permissions,
+        enforce_sandbox_preflight_guards, exec_run_output_config, parse_command_parts,
+        parse_requested_sandbox_permissions, prepare_exec_command,
         sandbox_policy_from_runtime_config, sandbox_policy_with_additional_permissions,
     };
     use crate::sandboxing::{
@@ -4747,6 +4742,86 @@ mod sandbox_runtime_tests {
 
         assert_eq!(parts, vec!["cargo", "check", "-p", "vtcode-core"]);
         assert_eq!(raw_command.as_deref(), Some("cargo check -p vtcode-core"));
+    }
+
+    #[test]
+    fn exec_run_output_config_trims_query_and_uses_command_hint() {
+        let payload = json!({
+            "query": "  error  ",
+            "literal": true,
+            "max_matches": 12
+        });
+        let payload = payload.as_object().expect("payload object");
+
+        let config = exec_run_output_config(payload, "cat Cargo.toml");
+
+        assert_eq!(config.max_tokens, 250);
+        assert_eq!(config.inspect_query.as_deref(), Some("error"));
+        assert!(config.inspect_literal);
+        assert_eq!(config.inspect_max_matches, 12);
+    }
+
+    #[test]
+    fn exec_run_output_config_prefers_explicit_max_tokens() {
+        let payload = json!({
+            "max_tokens": 42,
+            "query": "   "
+        });
+        let payload = payload.as_object().expect("payload object");
+
+        let config = exec_run_output_config(payload, "cat Cargo.toml");
+
+        assert_eq!(config.max_tokens, 42);
+        assert!(config.inspect_query.is_none());
+        assert!(!config.inspect_literal);
+    }
+
+    #[test]
+    fn prepare_exec_command_wraps_when_shell_is_missing() {
+        let payload = json!({
+            "raw_command": "echo hi && pwd"
+        });
+        let payload = payload.as_object().expect("payload object");
+        let command = vec!["echo".to_string(), "hi".to_string()];
+
+        let prepared = prepare_exec_command(
+            payload,
+            "/bin/zsh",
+            true,
+            command.clone(),
+            Some("echo hi".into()),
+        );
+
+        assert_eq!(prepared.requested_command, command);
+        assert_eq!(
+            prepared.command,
+            vec![
+                "/bin/zsh".to_string(),
+                "-l".to_string(),
+                "-c".to_string(),
+                "echo hi && pwd".to_string()
+            ]
+        );
+        assert_eq!(prepared.requested_command_display, "echo hi");
+        assert!(prepared.display_command.starts_with("/bin/zsh -l -c"));
+    }
+
+    #[test]
+    fn prepare_exec_command_keeps_existing_shell_invocation() {
+        let payload = json!({});
+        let payload = payload.as_object().expect("payload object");
+        let command = vec![
+            "/bin/zsh".to_string(),
+            "-c".to_string(),
+            "echo hi".to_string(),
+        ];
+
+        let prepared = prepare_exec_command(payload, "/bin/zsh", true, command.clone(), None);
+
+        assert_eq!(prepared.requested_command, command);
+        assert_eq!(prepared.command, command);
+        assert_eq!(prepared.requested_command_display, "/bin/zsh -c 'echo hi'");
+        assert_eq!(prepared.display_command, "/bin/zsh -c 'echo hi'");
     }
 
     #[test]
