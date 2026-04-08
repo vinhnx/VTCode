@@ -1,6 +1,5 @@
 import { spawn, type SpawnOptionsWithoutStdio } from "node:child_process";
 import * as vscode from "vscode";
-import { ChatViewProvider } from "./chatView";
 import { CommandRegistry } from "./commandRegistry";
 import {
     AnalyzeCommand,
@@ -15,14 +14,6 @@ import {
     TaskTrackerCommand,
 } from "./commands";
 import { registerVtcodeLanguageFeatures } from "./languageFeatures";
-import { ParticipantRegistry } from "./participantRegistry";
-import {
-    CodeParticipant,
-    GitParticipant,
-    TerminalParticipant,
-    WorkspaceParticipant,
-} from "./participants";
-import { VtcodeBackend } from "./vtcodeBackend";
 import {
     appendMcpProvider,
     loadConfigSummaryFromUri,
@@ -146,8 +137,6 @@ let lastConfigUri: string | undefined;
 let lastConfigParseError: string | undefined;
 let lastAutomationFullAutoEnabled: boolean | undefined;
 let workspaceTrusted = vscode.workspace.isTrusted;
-let chatBackend: VtcodeBackend | undefined;
-let chatViewProviderInstance: ChatViewProvider | undefined;
 let activationContext: vscode.ExtensionContext | undefined;
 let lastProviderModelWarningKey: string | undefined;
 
@@ -160,8 +149,6 @@ const TRUST_PROMPT_STATE_KEY = "vtcode.trustPromptShown";
 const FULL_AUTO_WARNING_STATE_KEY = "vtcode.fullAutoWarningShown";
 
 const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
-
-let chatLaunchHintShown = false;
 
 let ideContextBridge: IdeContextFileBridge | undefined;
 
@@ -242,52 +229,6 @@ export function activate(context: vscode.ExtensionContext) {
     // Add command registry to disposables
     context.subscriptions.push(commandRegistry);
 
-    // Initialize participant registry
-    const participantRegistry = new ParticipantRegistry();
-
-    // Register all built-in participants
-    participantRegistry.registerAll([
-        new WorkspaceParticipant(),
-        new CodeParticipant(),
-        new TerminalParticipant(),
-        new GitParticipant(),
-    ]);
-
-    // Add participant registry to disposables
-    context.subscriptions.push(participantRegistry);
-
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    chatBackend = new VtcodeBackend(
-        getConfiguredCommandPath(),
-        workspaceRoot,
-        outputChannel
-    );
-    chatBackend.setEnvironmentProvider(() => getVtcodeEnvironment());
-
-    outputChannel.appendLine("[info] Registering chat view provider...");
-    chatViewProviderInstance = new ChatViewProvider(
-        context.extensionUri,
-        chatBackend,
-        outputChannel,
-        context
-    );
-
-    // Register participants with the chat view
-    chatViewProviderInstance.registerParticipants(participantRegistry);
-    const viewId = "vtcodeChatView"; // Hardcoded to match package.json
-    outputChannel.appendLine(`[info] Registering view with ID: ${viewId}`);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            viewId,
-            chatViewProviderInstance
-        )
-    );
-    outputChannel.appendLine(
-        "[info] Chat view provider registered successfully"
-    );
-
-    chatViewProviderInstance.setWorkspaceTrusted(workspaceTrusted);
-
     ensureStableApi(context);
     logExtensionHostContext(context);
     registerVtcodeLanguageFeatures(context);
@@ -352,13 +293,6 @@ export function activate(context: vscode.ExtensionContext) {
         () => {
             quickActionsProviderInstance?.refresh();
             workspaceInsightsProvider?.refresh();
-            const workspaceRoot =
-                vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-            chatBackend?.updateConfiguration(
-                getConfiguredCommandPath(),
-                workspaceRoot,
-                currentConfigSummary
-            );
             void refreshCliAvailability("manual");
         }
     );
@@ -491,45 +425,6 @@ export function activate(context: vscode.ExtensionContext) {
                     "https://github.com/vinhnx/vtcode#installation"
                 )
             );
-        }
-    );
-
-    const openChatCommand = vscode.commands.registerCommand(
-        "vtcode.openChat",
-        async () => {
-            if (
-                !(await ensureWorkspaceTrustedForCommand(
-                    "chat with VT Code in VS Code"
-                ))
-            ) {
-                return;
-            }
-
-            try {
-                await vscode.commands.executeCommand(
-                    "workbench.view.extension.vtcode"
-                );
-            } catch {
-                // If the container is unavailable we still try to focus the view directly.
-            }
-
-            try {
-                await vscode.commands.executeCommand(
-                    `${ChatViewProvider.viewId}.focus`
-                );
-            } catch {
-                void vscode.window.showWarningMessage(
-                    "The VT Code Chat view is unavailable in this environment."
-                );
-                return;
-            }
-
-            if (!chatLaunchHintShown) {
-                chatLaunchHintShown = true;
-                void vscode.window.showInformationMessage(
-                    "Start a conversation with VT Code using the chat panel."
-                );
-            }
         }
     );
 
@@ -912,7 +807,6 @@ export function activate(context: vscode.ExtensionContext) {
         openDeepWiki,
         openWalkthrough,
         openInstallGuide,
-        openChatCommand,
         toggleHumanInTheLoopCommand,
         openToolsPolicyGuideCommand,
         openToolsPolicyConfigCommand,
@@ -1087,13 +981,6 @@ function createQuickActions(
                     "Send a one-off question and stream the answer in VS Code.",
                 command: "vtcode.askAgent",
                 icon: "comment-discussion",
-            },
-            {
-                label: "Open a VT Code chat session",
-                description:
-                    "Launch the VS Code Chat view and collaborate with the VT Code participant.",
-                command: "vtcode.openChat",
-                icon: "comment-quote",
             },
             {
                 label: "Ask about highlighted selection",
@@ -1448,12 +1335,6 @@ function createWorkspaceInsights(
 
 function handleConfigUpdate(summary: VtcodeConfigSummary) {
     currentConfigSummary = summary;
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    chatBackend?.updateConfiguration(
-        getConfiguredCommandPath(),
-        workspaceRoot,
-        summary
-    );
 
     void vscode.commands.executeCommand(
         "setContext",
@@ -1524,8 +1405,6 @@ function handleConfigUpdate(summary: VtcodeConfigSummary) {
         lastAutomationFullAutoEnabled = undefined;
         lastProviderModelWarningKey = undefined;
     }
-
-    chatViewProviderInstance?.updateConfig(summary);
 
     lastConfigUri = configUriString;
     lastConfigParseError = summary.parseError;
@@ -1836,8 +1715,6 @@ function updateWorkspaceTrustState(trusted: boolean): void {
         "vtcode.workspaceTrustVerified",
         trusted
     );
-    chatViewProviderInstance?.setWorkspaceTrusted(trusted);
-
     const commandPath = getConfiguredCommandPath();
     updateCliAvailabilityState(
         cliAvailable,
