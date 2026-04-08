@@ -29,8 +29,8 @@ use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
 use super::normalize_tool_output;
 use super::{
-    ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionOutcome,
-    ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError,
+    ToolExecutionOutcome, ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
 };
 
 const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
@@ -323,11 +323,11 @@ impl ToolRegistry {
             }
 
             let result = self
-                .execute_public_tool_ref_internal_with_exec_mode(
+                .execute_public_tool_ref_internal_with_mode(
                     request.tool_name.as_str(),
                     &request.args,
                     policy.prevalidated,
-                    policy.settle_noninteractive_exec,
+                    policy.exec_settlement_mode,
                 )
                 .await;
 
@@ -533,7 +533,7 @@ impl ToolRegistry {
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
     pub async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
-        self.execute_tool_ref_internal(name, args, false, false)
+        self.execute_tool_ref_internal(name, args, false, ExecSettlementMode::Manual)
             .await
     }
 
@@ -542,7 +542,7 @@ impl ToolRegistry {
     /// This avoids re-running argument/schema/path/command preflight in hot paths
     /// where validation already happened in the runloop.
     pub async fn execute_tool_ref_prevalidated(&self, name: &str, args: &Value) -> Result<Value> {
-        self.execute_tool_ref_internal(name, args, true, false)
+        self.execute_tool_ref_internal(name, args, true, ExecSettlementMode::Manual)
             .await
     }
 
@@ -552,36 +552,31 @@ impl ToolRegistry {
         name: &str,
         args: &Value,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_prevalidated_with_exec_mode(name, args, false)
+        self.execute_public_tool_ref_prevalidated_with_mode(name, args, ExecSettlementMode::Manual)
             .await
     }
 
     #[doc(hidden)]
-    pub async fn execute_public_tool_ref_prevalidated_with_exec_mode(
+    pub async fn execute_public_tool_ref_prevalidated_with_mode(
         &self,
         name: &str,
         args: &Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal_with_exec_mode(
-            name,
-            args,
-            true,
-            settle_noninteractive_exec,
-        )
-        .await
+        self.execute_public_tool_ref_internal_with_mode(name, args, true, exec_settlement_mode)
+            .await
     }
 
-    pub async fn execute_prepared_public_tool_ref_with_exec_mode(
+    pub async fn execute_prepared_public_tool_ref_with_mode(
         &self,
         prepared: &PreparedToolCall,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal_with_exec_mode(
+        self.execute_public_tool_ref_internal_with_mode(
             prepared.canonical_name.as_str(),
             &prepared.effective_args,
             prepared.already_preflighted,
-            settle_noninteractive_exec,
+            exec_settlement_mode,
         )
         .await
     }
@@ -592,16 +587,21 @@ impl ToolRegistry {
         args: &Value,
         prevalidated: bool,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal_with_exec_mode(name, args, prevalidated, false)
-            .await
+        self.execute_public_tool_ref_internal_with_mode(
+            name,
+            args,
+            prevalidated,
+            ExecSettlementMode::Manual,
+        )
+        .await
     }
 
-    async fn execute_public_tool_ref_internal_with_exec_mode(
+    async fn execute_public_tool_ref_internal_with_mode(
         &self,
         name: &str,
         args: &Value,
         prevalidated: bool,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         let routed_name = self
             .resolve_public_tool(name)
@@ -616,7 +616,7 @@ impl ToolRegistry {
             routed_name.as_str(),
             effective_args.as_ref().unwrap_or(args),
             prevalidated,
-            settle_noninteractive_exec,
+            exec_settlement_mode,
         )
         .await
     }
@@ -626,7 +626,7 @@ impl ToolRegistry {
         name: &str,
         args: &Value,
         prevalidated: bool,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         // PERFORMANCE OPTIMIZATION: Use memory pool for string allocations if enabled
         let _pool_guard = if self.optimization_config.memory_pool.enabled {
@@ -1386,14 +1386,18 @@ impl ToolRegistry {
                     .as_deref()
                     .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
                 self.execute_mcp_tool(mcp_name, args).await
-            } else if settle_noninteractive_exec && tool_name == tools::UNIFIED_EXEC {
+            } else if exec_settlement_mode.settle_noninteractive()
+                && tool_name == tools::UNIFIED_EXEC
+            {
                 if self.optimization_config.memory_pool.enabled {
                     let _execution_guard = self.memory_pool.get_value();
                     let _string_guard = self.memory_pool.get_string();
                     let _vec_guard = self.memory_pool.get_vec();
-                    self.execute_unified_exec_internal(args, true).await
+                    self.execute_unified_exec_internal(args, exec_settlement_mode)
+                        .await
                 } else {
-                    self.execute_unified_exec_internal(args, true).await
+                    self.execute_unified_exec_internal(args, exec_settlement_mode)
+                        .await
                 }
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated

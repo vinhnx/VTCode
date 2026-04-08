@@ -4,7 +4,7 @@ use tokio::sync::Notify;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
+use vtcode_core::tools::registry::{ExecSettlementMode, ToolProgressCallback, ToolRegistry};
 use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
 use vtcode_core::tools::tool_intent;
 
@@ -177,7 +177,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
 ) -> RuntimeToolExecution {
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
@@ -270,7 +270,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         ctrl_c_notify,
         progress_reporter.as_ref(),
         max_tool_retries,
-        settle_noninteractive_exec,
+        exec_settlement_mode,
     )
     .await;
 

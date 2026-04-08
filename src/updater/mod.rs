@@ -155,6 +155,7 @@ impl Updater {
                 .repo_name(github::REPO_NAME)
                 .bin_name("vtcode")
                 .target(target)
+                .identifier(".tar.gz")
                 .show_download_progress(true)
                 .no_confirm(true);
 

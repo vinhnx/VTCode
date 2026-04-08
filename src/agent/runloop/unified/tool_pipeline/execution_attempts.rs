@@ -9,7 +9,8 @@ use tracing::debug;
 use vtcode_core::retry::RetryPolicy;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::registry::{
-    ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest,
+    ToolRegistry,
 };
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -65,7 +66,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         progress_reporter,
         max_tool_retries,
         false,
-        false,
+        ExecSettlementMode::Manual,
     )
     .await
 }
@@ -78,7 +79,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
 ) -> ToolExecutionStatus {
     execute_tool_with_timeout_ref_mode(
         registry,
@@ -89,7 +90,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
         progress_reporter,
         max_tool_retries,
         true,
-        settle_noninteractive_exec,
+        exec_settlement_mode,
     )
     .await
 }
@@ -103,7 +104,7 @@ async fn execute_tool_with_timeout_ref_mode(
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
     prevalidated: bool,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
 ) -> ToolExecutionStatus {
     let created_local_reporter = progress_reporter.is_none();
     let fallback_progress_reporter = ProgressReporter::new();
@@ -143,7 +144,7 @@ async fn execute_tool_with_timeout_ref_mode(
         retry_allowed,
         &retry_policy,
         prevalidated,
-        settle_noninteractive_exec,
+        exec_settlement_mode,
     )
     .await;
 
@@ -165,7 +166,7 @@ async fn execute_tool_with_progress(
     retry_allowed: bool,
     retry_policy: &RetryPolicy,
     prevalidated: bool,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
 ) -> ToolExecutionStatus {
     let deadline = Instant::now() + tool_timeout;
     let kernel_max_retries = if retry_allowed {
@@ -182,7 +183,7 @@ async fn execute_tool_with_progress(
         progress_reporter,
         deadline.saturating_duration_since(Instant::now()),
         prevalidated,
-        settle_noninteractive_exec,
+        exec_settlement_mode,
         0,
         None,
         retry_policy,
@@ -224,7 +225,7 @@ async fn run_attempt_with_logging(
     progress_reporter: &ProgressReporter,
     timeout: Duration,
     prevalidated: bool,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
     attempt: usize,
     retry_delay: Option<Duration>,
     retry_policy: &RetryPolicy,
@@ -240,7 +241,7 @@ async fn run_attempt_with_logging(
         progress_reporter,
         timeout,
         prevalidated,
-        settle_noninteractive_exec,
+        exec_settlement_mode,
         retry_policy,
         kernel_max_retries,
     )
@@ -269,7 +270,7 @@ async fn run_single_tool_attempt(
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
     prevalidated: bool,
-    settle_noninteractive_exec: bool,
+    exec_settlement_mode: ExecSettlementMode,
     retry_policy: &RetryPolicy,
     kernel_max_retries: usize,
 ) -> ToolExecutionStatus {
@@ -331,7 +332,7 @@ async fn run_single_tool_attempt(
             let mut policy = ExecutionPolicySnapshot::default()
                 .with_max_retries(kernel_max_retries)
                 .with_prevalidated(prevalidated)
-                .with_settle_noninteractive_exec(settle_noninteractive_exec)
+                .with_exec_settlement_mode(exec_settlement_mode)
                 .with_safety_prevalidated(false);
             policy.retry_base_delay = retry_policy.initial_delay;
             policy.retry_max_delay = retry_policy.max_delay;

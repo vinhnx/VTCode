@@ -140,7 +140,7 @@ pub(crate) async fn launch_editor_from_context(
         if opening_existing_file && !wait_for_editor {
             "Opening file in external editor..."
         } else if opening_existing_file {
-            "Launching editor..."
+            "Launching editor, with the existing file, close the tab or editor to continue on the VT Code session..."
         } else {
             "Launching editor with current input..."
         },

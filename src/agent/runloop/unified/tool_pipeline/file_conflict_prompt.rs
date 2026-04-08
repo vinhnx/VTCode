@@ -8,7 +8,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::tools::edited_file_monitor::FILE_CONFLICT_OVERRIDE_ARG;
-use vtcode_core::tools::registry::ToolRegistry;
+use vtcode_core::tools::registry::{ExecSettlementMode, ToolRegistry};
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_tui::app::{
     DiffOverlayRequest, DiffPreviewMode, InlineHandle, InlineListItem, InlineListSelection,
@@ -112,7 +112,7 @@ where
                     harness_emitter.clone(),
                     vt_cfg,
                     max_tool_retries,
-                    false,
+                    ExecSettlementMode::Manual,
                 )
                 .await;
             }

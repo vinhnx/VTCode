@@ -41,7 +41,7 @@ fn update_highlight(notice: &StartupUpdateNotice) -> InlineHeaderHighlight {
         title: UPDATE_HIGHLIGHT_TITLE.to_string(),
         lines: vec![
             format!("v{} -> v{}", notice.current_version, notice.latest_version),
-            format!("Run {}", notice.guidance.command()),
+            "Run /update install".to_string(),
             Updater::release_url(&notice.latest_version),
         ],
     }
@@ -67,7 +67,7 @@ fn format_update_banner(notice: &StartupUpdateNotice, _use_unicode: bool) -> Str
             "Update available! {} -> {}",
             notice.current_version, notice.latest_version
         ),
-        format!("Run {} to update.", notice.guidance.command()),
+        "Run /update install to update.".to_string(),
         String::new(),
         "See full release notes:".to_string(),
         Updater::release_url(&notice.latest_version),
@@ -98,8 +98,6 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
                 "VT Code {} -> {}",
                 notice.current_version, notice.latest_version
             ),
-            format!("Install source: {}", notice.guidance.action.source_label),
-            format!("Command: {}", notice.guidance.command()),
             format!(
                 "Release notes: {}",
                 Updater::release_url(&notice.latest_version)
@@ -318,6 +316,7 @@ mod tests {
         let banner = format_update_banner(&sample_notice(), true);
         assert!(banner.contains("https://github.com/vinhnx/vtcode/releases/tag/v0.113.0"));
         assert!(banner.contains("0.111.0 -> 0.113.0"));
+        assert!(banner.contains("/update install"));
     }
 
     #[test]

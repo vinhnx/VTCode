@@ -27,6 +27,7 @@ Last reviewed: 2026-03-28
 ## Engineering References
 
 - [Development Setup](development/DEVELOPMENT_SETUP.md) - Canonical contributor setup and local quality loop.
+- [C++ Core Guidelines Adoption](development/CPP_CORE_GUIDELINES_ADOPTION.md) - Rules for C/C++ code paths and cross-language safety intent.
 - [Extension Boundaries](development/EXTENSION_BOUNDARIES.md) - When to use internal Rust traits vs external protocol or manifest seams.
 - [Language Support Matrix](protocols/LANGUAGE_SUPPORT.md) - Tree-sitter and language support status.
 - [Indexer Notes](modules/vtcode_indexer.md) - Indexer behavior and usage.

@@ -3,6 +3,23 @@ use std::time::Duration;
 
 use super::ToolExecutionError;
 
+/// Controls how unified exec calls should settle before returning to the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExecSettlementMode {
+    /// Return on the first yield boundary and require explicit follow-up poll/continue calls.
+    #[default]
+    Manual,
+    /// Keep polling pipe-backed sessions until they reach a terminal state.
+    SettleNonInteractive,
+}
+
+impl ExecSettlementMode {
+    #[must_use]
+    pub fn settle_noninteractive(self) -> bool {
+        matches!(self, Self::SettleNonInteractive)
+    }
+}
+
 /// Runtime execution policy snapshot for a single tool call.
 #[derive(Debug, Clone)]
 pub struct ExecutionPolicySnapshot {
@@ -20,8 +37,8 @@ pub struct ExecutionPolicySnapshot {
     pub prevalidated: bool,
     /// Optional invocation id for cross-surface correlation.
     pub invocation_id: Option<String>,
-    /// Whether unified_exec should settle non-interactive runs.
-    pub settle_noninteractive_exec: bool,
+    /// How unified_exec should settle before returning.
+    pub exec_settlement_mode: ExecSettlementMode,
     /// Whether caller already completed safety gateway admission.
     pub safety_prevalidated: bool,
 }
@@ -36,7 +53,7 @@ impl Default for ExecutionPolicySnapshot {
             retry_jitter: 0.0,
             prevalidated: false,
             invocation_id: None,
-            settle_noninteractive_exec: false,
+            exec_settlement_mode: ExecSettlementMode::Manual,
             safety_prevalidated: false,
         }
     }
@@ -62,8 +79,8 @@ impl ExecutionPolicySnapshot {
     }
 
     #[must_use]
-    pub fn with_settle_noninteractive_exec(mut self, settle: bool) -> Self {
-        self.settle_noninteractive_exec = settle;
+    pub fn with_exec_settlement_mode(mut self, mode: ExecSettlementMode) -> Self {
+        self.exec_settlement_mode = mode;
         self
     }
 
