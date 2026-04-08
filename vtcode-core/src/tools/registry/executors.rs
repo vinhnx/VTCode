@@ -37,7 +37,18 @@ use vtcode_config::{
     ResourceLimitsPreset, SandboxMode as RuntimeSandboxMode, SeccompProfilePreset,
 };
 
-use super::ToolRegistry;
+use super::{ExecSettlementMode, ToolRegistry};
+use cargo_failure_diagnostics::{
+    attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
+    cargo_test_failure_diagnostics,
+};
+
+#[cfg(test)]
+use cargo_failure_diagnostics::{
+    CargoTestCommandKind, cargo_selector_error_diagnostics, cargo_test_rerun_hint,
+};
+
+mod cargo_failure_diagnostics;
 
 #[derive(Debug, Clone)]
 struct ShellExecutionPlan {
@@ -1099,268 +1110,6 @@ fn build_exec_output_preview(raw_output: String, max_tokens: usize) -> ExecOutpu
     }
 }
 
-fn first_command_token(command: &str) -> Option<String> {
-    shell_words::split(command)
-        .ok()
-        .and_then(|parts| parts.into_iter().next())
-        .filter(|part| !part.trim().is_empty())
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CargoTestCommandKind {
-    Test,
-    Nextest,
-}
-
-fn cargo_test_command_kind(command: &str) -> Option<CargoTestCommandKind> {
-    let parts = shell_words::split(command).ok()?;
-    match parts.as_slice() {
-        [cargo, test, ..] if cargo == "cargo" && test == "test" => Some(CargoTestCommandKind::Test),
-        [cargo, nextest, run, ..] if cargo == "cargo" && nextest == "nextest" && run == "run" => {
-            Some(CargoTestCommandKind::Nextest)
-        }
-        _ => None,
-    }
-}
-
-fn cargo_package_from_command(command: &str) -> Option<String> {
-    let parts = shell_words::split(command).ok()?;
-    let mut iter = parts.iter();
-    while let Some(part) = iter.next() {
-        match part.as_str() {
-            "-p" | "--package" => {
-                let value = iter.next()?.trim();
-                if !value.is_empty() {
-                    return Some(value.to_string());
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn infer_cargo_test_binary_kind(
-    source_file: Option<&str>,
-    test_fqname: Option<&str>,
-) -> &'static str {
-    let normalized_path = source_file.map(|path| path.replace('\\', "/"));
-    if let Some(path) = normalized_path.as_deref() {
-        if path.starts_with("tests/") || path.contains("/tests/") {
-            return "integration";
-        }
-        if path.starts_with("src/") || path.contains("/src/") {
-            return "unit";
-        }
-    }
-
-    if test_fqname.is_some_and(|name| name.contains("::")) {
-        "unit"
-    } else {
-        "unknown"
-    }
-}
-
-fn cargo_test_rerun_hint(
-    command_kind: CargoTestCommandKind,
-    package: &str,
-    binary_kind: &str,
-    test_fqname: &str,
-) -> String {
-    match command_kind {
-        CargoTestCommandKind::Nextest => format!("cargo nextest run -p {package} {test_fqname}"),
-        CargoTestCommandKind::Test if binary_kind == "unit" => {
-            format!("cargo test -p {package} --lib {test_fqname} -- --nocapture")
-        }
-        CargoTestCommandKind::Test => {
-            format!("cargo test -p {package} {test_fqname} -- --nocapture")
-        }
-    }
-}
-
-fn cargo_selector_error_diagnostics(
-    command_kind: CargoTestCommandKind,
-    command: &str,
-    output: &str,
-) -> Option<Value> {
-    let regex =
-        Regex::new(r"(?m)^error: no test target named `([^`]+)` in `([^`]+)` package$").ok()?;
-    let captures = regex.captures(output)?;
-    let requested_target = captures.get(1)?.as_str().trim();
-    let package = captures.get(2)?.as_str().trim();
-    if requested_target.is_empty() || package.is_empty() {
-        return None;
-    }
-
-    let validation_hint =
-        format!("cargo test -p {package} --lib -- --list | rg '{requested_target}'");
-    let rerun_hint = match command_kind {
-        CargoTestCommandKind::Nextest => {
-            format!("cargo nextest run -p {package} {requested_target}")
-        }
-        CargoTestCommandKind::Test => {
-            format!("cargo test -p {package} --lib {requested_target} -- --nocapture")
-        }
-    };
-
-    Some(json!({
-        "kind": "cargo_test_selector_error",
-        "package": package,
-        "binary_kind": "test_target_selector",
-        "requested_test_target": requested_target,
-        "selector_error": true,
-        "validation_hint": validation_hint,
-        "rerun_hint": rerun_hint,
-        "critical_note": format!(
-            "Cargo rejected `{requested_target}` as a test target. This usually means a unit test name was passed to `--test`."
-        ),
-        "next_action": format!(
-            "Validate whether `{requested_target}` is a unit test with: {validation_hint}"
-        ),
-        "command": command,
-    }))
-}
-
-fn cargo_failed_test_and_package(output: &str) -> (Option<String>, Option<String>) {
-    let fail_line =
-        Regex::new(r"(?m)^\s*FAIL \[[^\]]+\](?: \(\s*\d+/\d+\))? ([^\s]+) ([^\s]+)\s*$").ok();
-    for line in output.lines().rev() {
-        let trimmed = line.trim();
-        if !trimmed.starts_with("FAIL [") {
-            continue;
-        }
-        if let Some(regex) = fail_line.as_ref()
-            && let Some(captures) = regex.captures(trimmed)
-        {
-            let package = captures.get(1).map(|value| value.as_str().trim());
-            let test_fqname = captures.get(2).map(|value| value.as_str().trim());
-            if let (Some(package), Some(test_fqname)) = (package, test_fqname)
-                && !package.is_empty()
-                && !test_fqname.is_empty()
-            {
-                return (Some(package.to_string()), Some(test_fqname.to_string()));
-            }
-        }
-    }
-
-    let thread_regex = Regex::new(r"thread '([^']+)'").ok();
-    let test_fqname = thread_regex.and_then(|regex| {
-        regex.captures_iter(output).find_map(|captures| {
-            let candidate = captures.get(1)?.as_str().trim();
-            (!candidate.is_empty()).then(|| candidate.to_string())
-        })
-    });
-    (None, test_fqname)
-}
-
-fn cargo_panic_location_and_message(output: &str) -> (Option<String>, Option<u64>, Option<String>) {
-    let panic_location = Regex::new(r"^(.+):(\d+):\d+:$").ok();
-    let lines: Vec<&str> = output.lines().collect();
-    for (index, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        let Some((_, location)) = trimmed.split_once(" panicked at ") else {
-            continue;
-        };
-        let Some(regex) = panic_location.as_ref() else {
-            break;
-        };
-        let Some(captures) = regex.captures(location) else {
-            continue;
-        };
-
-        let source_file = captures
-            .get(1)
-            .map(|value| value.as_str().trim().to_string());
-        let source_line = captures
-            .get(2)
-            .and_then(|value| value.as_str().parse::<u64>().ok());
-        let panic_message = lines.iter().skip(index + 1).find_map(|candidate| {
-            let trimmed = candidate.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-            if trimmed.starts_with("note:") || trimmed.starts_with("stack backtrace:") {
-                return None;
-            }
-            Some(trimmed.to_string())
-        });
-        return (source_file, source_line, panic_message);
-    }
-
-    (None, None, None)
-}
-
-fn cargo_test_failure_diagnostics(
-    command: &str,
-    output: &str,
-    exit_code: Option<i32>,
-) -> Option<Value> {
-    if exit_code == Some(0) {
-        return None;
-    }
-
-    let command_kind = cargo_test_command_kind(command)?;
-    if let Some(diagnostics) = cargo_selector_error_diagnostics(command_kind, command, output) {
-        return Some(diagnostics);
-    }
-
-    let (package_from_output, test_fqname) = cargo_failed_test_and_package(output);
-    let (source_file, source_line, panic_message) = cargo_panic_location_and_message(output);
-    let package = package_from_output.or_else(|| cargo_package_from_command(command))?;
-    let test_fqname = test_fqname?;
-    let binary_kind =
-        infer_cargo_test_binary_kind(source_file.as_deref(), Some(test_fqname.as_str()));
-    let rerun_hint = cargo_test_rerun_hint(command_kind, &package, binary_kind, &test_fqname);
-
-    Some(json!({
-        "kind": "cargo_test_failure",
-        "package": package,
-        "binary_kind": binary_kind,
-        "test_fqname": test_fqname,
-        "panic": panic_message,
-        "source_file": source_file,
-        "source_line": source_line,
-        "rerun_hint": rerun_hint,
-        "critical_note": "Cargo reported a concrete failing test with a panic location.",
-        "next_action": format!("Rerun the failing test directly with: {rerun_hint}"),
-        "command": command,
-    }))
-}
-
-fn attach_failure_diagnostics_metadata(response: &mut Value, diagnostics: &Value) {
-    if let Some(obj) = response.as_object_mut() {
-        for key in [
-            "package",
-            "binary_kind",
-            "test_fqname",
-            "panic",
-            "source_file",
-            "source_line",
-            "selector_error",
-            "validation_hint",
-            "rerun_hint",
-            "critical_note",
-            "next_action",
-        ] {
-            if let Some(value) = diagnostics.get(key) {
-                obj.insert(key.to_string(), value.clone());
-            }
-        }
-        obj.insert("failure_diagnostics".to_string(), diagnostics.clone());
-    }
-}
-
-fn attach_exec_recovery_guidance(response: &mut Value, command: &str, exit_code: Option<i32>) {
-    if exit_code != Some(127) {
-        return;
-    }
-
-    let command_name = first_command_token(command).unwrap_or_else(|| "command".to_string());
-    response["critical_note"] = json!(format!("Command `{command_name}` was not found in PATH."));
-    response["next_action"] =
-        json!("Check the command name or install the missing binary, then rerun the command.");
-}
-
 fn build_exec_response(
     session: &VTCodeExecSession,
     command: &str,
@@ -1744,7 +1493,8 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
-        self.execute_unified_exec_internal(args, false).await
+        self.execute_unified_exec_internal(args, ExecSettlementMode::Manual)
+            .await
     }
 
     pub(super) async fn execute_harness_unified_exec_terminal_run_raw(
@@ -1767,7 +1517,7 @@ impl ToolRegistry {
     pub(super) async fn execute_unified_exec_internal(
         &self,
         args: Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         let args = crate::tools::command_args::normalize_shell_args(&args)
             .map_err(|error| anyhow!(error))?;
@@ -1779,16 +1529,16 @@ impl ToolRegistry {
 
         match action {
             UnifiedExecAction::Run => {
-                self.execute_command_session_run_internal(args, settle_noninteractive_exec)
+                self.execute_command_session_run_internal(args, exec_settlement_mode)
                     .await
             }
             UnifiedExecAction::Write => self.execute_command_session_write(args).await,
             UnifiedExecAction::Poll => {
-                self.execute_command_session_poll_internal(args, settle_noninteractive_exec)
+                self.execute_command_session_poll_internal(args, exec_settlement_mode)
                     .await
             }
             UnifiedExecAction::Continue => {
-                self.execute_command_session_continue_internal(args, settle_noninteractive_exec)
+                self.execute_command_session_continue_internal(args, exec_settlement_mode)
                     .await
             }
             UnifiedExecAction::Inspect => self.execute_command_session_inspect(args).await,
@@ -1801,14 +1551,13 @@ impl ToolRegistry {
     async fn execute_command_session_run_internal(
         &self,
         args: Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         let tty = args.get("tty").and_then(Value::as_bool).unwrap_or(false);
         if tty {
             self.execute_command_session_run_pty(args, false).await
         } else {
-            self.execute_run_pipe_cmd(args, settle_noninteractive_exec)
-                .await
+            self.execute_run_pipe_cmd(args, exec_settlement_mode).await
         }
     }
 
@@ -2470,7 +2219,7 @@ impl ToolRegistry {
     async fn execute_run_pipe_cmd(
         &self,
         args: Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         let payload = args
             .as_object()
@@ -2603,7 +2352,7 @@ impl ToolRegistry {
                 &session_id,
                 yield_duration,
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
-                settle_noninteractive_exec,
+                exec_settlement_mode.settle_noninteractive(),
             )
             .await?;
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
@@ -2700,14 +2449,14 @@ impl ToolRegistry {
     }
 
     async fn execute_command_session_poll(&self, args: Value) -> Result<Value> {
-        self.execute_command_session_poll_internal(args, false)
+        self.execute_command_session_poll_internal(args, ExecSettlementMode::Manual)
             .await
     }
 
     async fn execute_command_session_poll_internal(
         &self,
         args: Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         let payload = args
             .as_object()
@@ -2727,7 +2476,7 @@ impl ToolRegistry {
                 sid,
                 Duration::from_millis(yield_time_ms),
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
-                settle_noninteractive_exec && session_metadata.backend == "pipe",
+                exec_settlement_mode.settle_noninteractive() && session_metadata.backend == "pipe",
             )
             .await?;
         let session_metadata = self.exec_session_metadata(sid).await?;
@@ -2757,7 +2506,7 @@ impl ToolRegistry {
     async fn execute_command_session_continue_internal(
         &self,
         args: Value,
-        settle_noninteractive_exec: bool,
+        exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
         if args
             .get("input")
@@ -2767,7 +2516,7 @@ impl ToolRegistry {
         {
             self.execute_command_session_write(args).await
         } else {
-            self.execute_command_session_poll_internal(args, settle_noninteractive_exec)
+            self.execute_command_session_poll_internal(args, exec_settlement_mode)
                 .await
         }
     }
@@ -3376,6 +3125,38 @@ impl ToolRegistry {
                         pending_lines.push_str(&final_output);
                         if !pending_lines.is_empty() {
                             callback(tool_name, &pending_lines);
+                        }
+                    }
+                }
+                // Pipe sessions append output on a background task. Process exit can be observed
+                // before the final chunk is committed, so keep draining until we observe a quiet
+                // window or a hard deadline.
+                let quiet_window = Duration::from_millis(200);
+                let drain_deadline = Instant::now() + Duration::from_millis(1000);
+                let mut last_output_at = Instant::now();
+                while Instant::now() < drain_deadline {
+                    match self
+                        .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
+                        .await
+                    {
+                        Ok(Some(extra_output)) => {
+                            output.push_str(&extra_output);
+                            if let Some(tool_name) = tool_name
+                                && let Some(ref callback) = progress_callback
+                            {
+                                pending_lines.push_str(&extra_output);
+                                if !pending_lines.is_empty() {
+                                    callback(tool_name, &pending_lines);
+                                    pending_lines.clear();
+                                }
+                            }
+                            last_output_at = Instant::now();
+                        }
+                        Ok(None) | Err(_) => {
+                            if Instant::now().duration_since(last_output_at) >= quiet_window {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_millis(15)).await;
                         }
                     }
                 }

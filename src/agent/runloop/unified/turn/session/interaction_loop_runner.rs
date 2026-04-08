@@ -805,10 +805,11 @@ pub(super) async fn run_interaction_loop_impl(
             .as_ref()
             .is_some_and(tokio::task::JoinHandle::is_finished)
         {
-            let result = durable_scheduler_run
-                .take()
-                .expect("checked durable scheduler task presence")
-                .await;
+            let Some(task) = durable_scheduler_run.take() else {
+                tracing::debug!("Durable scheduler task finished but handle was already consumed");
+                continue;
+            };
+            let result = task.await;
             match result {
                 Ok(Ok(triggered)) => {
                     last_durable_scheduler_error = None;

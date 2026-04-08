@@ -11,7 +11,7 @@ use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::tools::ToolInvocationId;
 use vtcode_core::tools::command_args;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
-use vtcode_core::tools::registry::ToolExecutionError;
+use vtcode_core::tools::registry::{ExecSettlementMode, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -354,7 +354,7 @@ pub(crate) async fn run_tool_call_with_args(
         harness_emitter.cloned(),
         vt_cfg,
         max_tool_retries,
-        should_settle_noninteractive_unified_exec(prevalidated, name, &effective_args),
+        exec_settlement_mode_for_tool_call(prevalidated, name, &effective_args),
     )
     .await;
     let execution_status = resolve_file_conflict_status(
@@ -403,28 +403,38 @@ pub(crate) async fn run_tool_call_with_args(
     Ok(pipeline_outcome)
 }
 
-pub(crate) fn should_settle_noninteractive_unified_exec(
+pub(crate) fn exec_settlement_mode_for_tool_call(
     prevalidated: bool,
     name: &str,
     args: &Value,
-) -> bool {
+) -> ExecSettlementMode {
     if !prevalidated || name != tools::UNIFIED_EXEC {
-        return false;
+        return ExecSettlementMode::Manual;
     }
 
     let Some(action) = tool_intent::unified_exec_action(args) else {
-        return false;
+        return ExecSettlementMode::Manual;
     };
 
     if action.eq_ignore_ascii_case("run") {
-        return !args.get("tty").and_then(Value::as_bool).unwrap_or(false);
+        return if !args.get("tty").and_then(Value::as_bool).unwrap_or(false) {
+            ExecSettlementMode::SettleNonInteractive
+        } else {
+            ExecSettlementMode::Manual
+        };
     }
 
     if action.eq_ignore_ascii_case("poll") {
-        return true;
+        return ExecSettlementMode::SettleNonInteractive;
     }
 
-    action.eq_ignore_ascii_case("continue") && command_args::interactive_input_text(args).is_none()
+    if action.eq_ignore_ascii_case("continue")
+        && command_args::interactive_input_text(args).is_none()
+    {
+        ExecSettlementMode::SettleNonInteractive
+    } else {
+        ExecSettlementMode::Manual
+    }
 }
 
 async fn check_tool_permission(
@@ -554,36 +564,49 @@ async fn apply_post_execution_side_effects(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_harness_item_identity, should_settle_noninteractive_unified_exec};
+    use super::{exec_settlement_mode_for_tool_call, resolve_harness_item_identity};
     use serde_json::json;
+    use vtcode_core::tools::registry::ExecSettlementMode;
     use vtcode_core::{config::constants::tools, tools::ToolInvocationId};
 
     #[test]
     fn settles_prevalidated_noninteractive_run() {
-        assert!(should_settle_noninteractive_unified_exec(
-            true,
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "cargo check"})
-        ));
+        assert_eq!(
+            exec_settlement_mode_for_tool_call(
+                true,
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": "cargo check"})
+            ),
+            ExecSettlementMode::SettleNonInteractive
+        );
     }
 
     #[test]
     fn skips_interactive_or_non_prevalidated_exec_calls() {
-        assert!(!should_settle_noninteractive_unified_exec(
-            false,
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "cargo check"})
-        ));
-        assert!(!should_settle_noninteractive_unified_exec(
-            true,
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "cargo check", "tty": true})
-        ));
-        assert!(!should_settle_noninteractive_unified_exec(
-            true,
-            tools::UNIFIED_EXEC,
-            &json!({"action": "continue", "session_id": "run-1", "input": "y"})
-        ));
+        assert_eq!(
+            exec_settlement_mode_for_tool_call(
+                false,
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": "cargo check"})
+            ),
+            ExecSettlementMode::Manual
+        );
+        assert_eq!(
+            exec_settlement_mode_for_tool_call(
+                true,
+                tools::UNIFIED_EXEC,
+                &json!({"action": "run", "command": "cargo check", "tty": true})
+            ),
+            ExecSettlementMode::Manual
+        );
+        assert_eq!(
+            exec_settlement_mode_for_tool_call(
+                true,
+                tools::UNIFIED_EXEC,
+                &json!({"action": "continue", "session_id": "run-1", "input": "y"})
+            ),
+            ExecSettlementMode::Manual
+        );
     }
 
     #[test]

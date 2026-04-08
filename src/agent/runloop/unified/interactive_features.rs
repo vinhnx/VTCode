@@ -281,7 +281,9 @@ async fn llm_prompt_suggestions(
         return primary;
     }
 
-    let fallback = routes.fallback.as_ref().expect("checked fallback");
+    let Some(fallback) = routes.fallback.as_ref() else {
+        return primary;
+    };
     tracing::warn!(
         model = %routes.primary.model,
         fallback_model = %fallback.model,
@@ -340,7 +342,9 @@ async fn llm_inline_prompt_suggestion(
         return primary;
     }
 
-    let fallback = routes.fallback.as_ref().expect("checked fallback");
+    let Some(fallback) = routes.fallback.as_ref() else {
+        return primary;
+    };
     tracing::warn!(
         model = %routes.primary.model,
         fallback_model = %fallback.model,

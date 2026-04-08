@@ -230,6 +230,12 @@ jobs:
       - name: Run tests
         run: cargo nextest run --locked --profile ci
 
+      - name: Run focused harness PTY/TUI regressions
+        run: |
+          cargo test --locked -p vtcode-core --test pty_tests
+          cargo test --locked -p vtcode-bash-runner --test pipe_tests
+          cargo test --locked -p vtcode --bin vtcode inline_events::tests
+
   # clippy:
   #   name: "Cargo clippy"
   #   runs-on: "ubuntu-latest"

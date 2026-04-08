@@ -6,6 +6,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
+use vtcode_core::tools::registry::ExecSettlementMode;
 use vtcode_tui::app::PlanContent;
 use vtcode_tui::app::{
     InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
@@ -93,7 +94,7 @@ pub(super) async fn handle_enter_plan_mode(
         ctrl_c_notify,
         None,
         max_tool_retries,
-        false,
+        ExecSettlementMode::Manual,
     )
     .await;
 
@@ -166,7 +167,7 @@ pub(super) async fn handle_exit_plan_mode(
         ctrl_c_notify,
         None,
         max_tool_retries,
-        false,
+        ExecSettlementMode::Manual,
     )
     .await;
 
@@ -417,7 +418,7 @@ async fn handle_enter_pending_confirmation(
         ctrl_c_notify,
         None,
         max_tool_retries,
-        false,
+        ExecSettlementMode::Manual,
     )
     .await;
 

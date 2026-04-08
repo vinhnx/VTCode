@@ -47,6 +47,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Quick Checklist, Detailed Steps, Verification, Template for Copy-Paste
   - **User Questions**: "What can you tell me about Adding New Models to VT Code?", "How does Overview work?", "How does Quick Checklist work?"
 
+- **File**: `docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`
+  - **Content**: C++ Core Guidelines Adoption
+  - **Topics**: Scope, Mandatory C++ Rules, Review and Enforcement
+  - **User Questions**: "What can you tell me about C++ Core Guidelines Adoption?", "How does Scope work?", "How does Mandatory C++ Rules work?"
+
 - **File**: `docs/development/ci-cd.md`
   - **Content**: CI/CD and Code Quality
   - **Topics**: GitHub Actions Workflows, Code Quality Tools, Local Development, Best Practices, CI/CD Configuration

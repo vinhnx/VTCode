@@ -72,7 +72,9 @@ pub use cgp_facade::wrap_registered_native_tool;
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use execution_kernel::ToolPreflightOutcome;
-pub use execution_request::{ExecutionPolicySnapshot, ToolExecutionOutcome, ToolExecutionRequest};
+pub use execution_request::{
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionOutcome, ToolExecutionRequest,
+};
 pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
@@ -605,10 +607,10 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let response = registry
-            .execute_public_tool_ref_prevalidated_with_exec_mode(
+            .execute_public_tool_ref_prevalidated_with_mode(
                 tools::UNIFIED_EXEC,
                 &delayed_exec_args(false, 50),
-                true,
+                ExecSettlementMode::SettleNonInteractive,
             )
             .await?;
 
@@ -648,14 +650,14 @@ mod tests {
         assert!(initial.get("exit_code").is_none());
 
         let response = registry
-            .execute_public_tool_ref_prevalidated_with_exec_mode(
+            .execute_public_tool_ref_prevalidated_with_mode(
                 tools::UNIFIED_EXEC,
                 &json!({
                     "action": "poll",
                     "session_id": session_id,
                     "yield_time_ms": 50,
                 }),
-                true,
+                ExecSettlementMode::SettleNonInteractive,
             )
             .await?;
 
@@ -678,10 +680,10 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let response = registry
-            .execute_public_tool_ref_prevalidated_with_exec_mode(
+            .execute_public_tool_ref_prevalidated_with_mode(
                 tools::UNIFIED_EXEC,
                 &delayed_exec_args(true, 50),
-                true,
+                ExecSettlementMode::SettleNonInteractive,
             )
             .await?;
 

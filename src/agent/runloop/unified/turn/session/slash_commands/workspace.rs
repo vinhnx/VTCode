@@ -172,7 +172,15 @@ async fn maybe_ground_project_context(
         MessageStyle::Info,
         "Grounding project context with VT Code explorer subagent...",
     )?;
-    let spec = build_init_grounding_subagent_spec(controller.effective_specs().await.as_slice());
+    let Some(spec) =
+        build_init_grounding_subagent_spec(controller.effective_specs().await.as_slice())
+    else {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "VT Code explorer grounding unavailable: no read-only explorer subagent definition found.",
+        )?;
+        return Ok(None);
+    };
     let spawned = controller
         .spawn_custom(
             spec,
@@ -248,7 +256,7 @@ async fn wait_for_init_grounding(
     Ok(None)
 }
 
-fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> SubagentSpec {
+fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> Option<SubagentSpec> {
     let mut spec = effective_specs
         .iter()
         .find(|candidate| candidate.matches_name("explorer") && candidate.is_read_only())
@@ -257,8 +265,7 @@ fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> Subag
             builtin_subagents()
                 .into_iter()
                 .find(|candidate| candidate.name == "explorer")
-        })
-        .expect("builtin explorer subagent");
+        })?;
     spec.name = INIT_GROUNDING_AGENT_NAME.to_string();
     spec.description =
         "VT Code explorer specialized for grounding `/init` AGENTS.md suggestions.".to_string();
@@ -274,7 +281,7 @@ fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> Subag
     spec.source = SubagentSource::ProjectVtcode;
     spec.file_path = None;
     spec.warnings.clear();
-    spec
+    Some(spec)
 }
 
 fn parse_grounding_from_status(status: &SubagentStatusEntry) -> Option<GuidedInitGrounding> {
@@ -653,7 +660,7 @@ mod tests {
 
     #[test]
     fn init_grounding_subagent_spec_is_vtcode_native_and_read_only() {
-        let spec = build_init_grounding_subagent_spec(&[]);
+        let spec = build_init_grounding_subagent_spec(&[]).expect("init grounding spec");
 
         assert_eq!(spec.name, INIT_GROUNDING_AGENT_NAME);
         assert_eq!(spec.source, SubagentSource::ProjectVtcode);
@@ -690,7 +697,8 @@ mod tests {
             source: SubagentSource::ProjectVtcode,
             file_path: None,
             warnings: vec!["warning".to_string()],
-        }]);
+        }])
+        .expect("init grounding spec");
 
         assert_eq!(spec.model.as_deref(), Some("inherit"));
         assert_eq!(spec.skills.as_slice(), ["repo-skill".to_string()]);

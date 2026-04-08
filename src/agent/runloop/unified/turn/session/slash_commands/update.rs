@@ -45,15 +45,10 @@ pub(crate) async fn handle_update(
                 }
             }
 
-            if check_only || !install {
+            if check_only {
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    "Run /update install to apply this release.",
-                )?;
-                let guidance = updater.update_guidance();
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Recommended command: {}", guidance.command().green()),
+                    &format!("Run {} to apply this release.", "/update install".green()),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }

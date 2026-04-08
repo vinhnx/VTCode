@@ -2,7 +2,7 @@ use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
-use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
+use crate::tools::registry::{ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
 use crate::utils::error_messages::ERR_TOOL_DENIED;
 use anyhow::{Result, anyhow};
@@ -99,7 +99,7 @@ impl AgentRunner {
             return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, canonical_name));
         }
         self.tool_registry
-            .execute_prepared_public_tool_ref_with_exec_mode(&prepared, false)
+            .execute_prepared_public_tool_ref_with_mode(&prepared, ExecSettlementMode::Manual)
             .await
             .map_err(|error| anyhow!(error.to_string()))
     }

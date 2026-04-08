@@ -171,6 +171,21 @@ run_ast_grep_scan() {
     return 1
 }
 
+# Run focused harness regression tests called out in docs/harness/QUALITY_SCORE.md.
+run_harness_regression_tests() {
+    print_status "Running harness PTY/TUI regression tests..."
+
+    if cargo test -p vtcode-core --test pty_tests \
+        && cargo test -p vtcode-bash-runner --test pipe_tests \
+        && cargo test -p vtcode --bin vtcode inline_events::tests; then
+        print_success "Harness PTY/TUI regression tests passed!"
+        return 0
+    else
+        print_error "Harness PTY/TUI regression tests failed."
+        return 1
+    fi
+}
+
 # Run Zen governance checks in the documented warn-first rollout mode.
 run_zen_governance() {
     print_status "Running Zen governance checks (warn mode)..."
@@ -227,6 +242,7 @@ main() {
     run_clippy || ((failed_checks++))
     run_build || ((failed_checks++))
     run_tests || ((failed_checks++))
+    run_harness_regression_tests || ((failed_checks++))
     run_docs || ((failed_checks++))
 
     echo ""
@@ -264,6 +280,9 @@ case "${1:-}" in
     "test")
         run_tests
         ;;
+    "harness")
+        run_harness_regression_tests
+        ;;
     "build")
         run_build
         ;;
@@ -280,6 +299,7 @@ case "${1:-}" in
         echo "  clippy  - Run clippy lints"
         echo "  ast-grep - Run repo ast-grep rule tests and scan via 'vtcode check ast-grep'"
         echo "  test    - Run tests"
+        echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
         echo "  zen     - Run Zen governance checks (warn mode)"
