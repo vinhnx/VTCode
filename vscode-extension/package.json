@@ -2,7 +2,7 @@
   "name": "vtcode-companion",
   "displayName": "VT Code",
   "description": "VS Code extension for VT Code, a Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support. Provides deep integration with the VT Code AI coding assistant for enhanced productivity.",
-  "version": "0.50.12",
+  "version": "0.50.13",
   "publisher": "nguyenxuanvinh",
   "repository": {
     "type": "git",
