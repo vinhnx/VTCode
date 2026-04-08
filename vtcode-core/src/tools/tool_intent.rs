@@ -204,10 +204,7 @@ pub fn is_edited_file_conflict_guarded_call(tool_name: &str, args: &Value) -> bo
 }
 
 fn is_edited_file_conflict_guarded_unified_file_action(action: &str) -> bool {
-    action.eq_ignore_ascii_case("write")
-        || action.eq_ignore_ascii_case("create")
-        || action.eq_ignore_ascii_case("edit")
-        || action.eq_ignore_ascii_case("patch")
+    action_matches_any(Some(action), &["write", "create", "edit", "patch"])
 }
 
 pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str> {
@@ -279,9 +276,7 @@ pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
         | tools::EXEC_PTY_CMD
         | tools::EXEC_COMMAND
         | "exec"
-        | "container.exec" => unified_exec_action(args)
-            .map(|action| action.eq_ignore_ascii_case("run"))
-            .unwrap_or(false),
+        | "container.exec" => unified_exec_action_is(args, "run"),
         _ => false,
     }
 }
@@ -298,10 +293,7 @@ pub fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<V
     let action = obj.get("action").and_then(Value::as_str).map(str::trim);
     if let Some(action) = action
         && !action.is_empty()
-        && !action.eq_ignore_ascii_case("run")
-        && !action.eq_ignore_ascii_case("exec")
-        && !action.eq_ignore_ascii_case("execute")
-        && !action.eq_ignore_ascii_case("shell")
+        && !action_matches_any(Some(action), &["run", "exec", "execute", "shell"])
     {
         return None;
     }
@@ -333,11 +325,7 @@ pub fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<V
 }
 
 fn unified_file_intent(args: &Value) -> ToolIntent {
-    let readonly_unified_action = unified_file_action(args)
-        .map(|action| action.eq_ignore_ascii_case("read"))
-        .unwrap_or(false);
-
-    if readonly_unified_action {
+    if unified_file_action_is(args, "read") {
         ToolIntent::read_only_unified_action()
     } else {
         ToolIntent::mutating()
@@ -346,18 +334,12 @@ fn unified_file_intent(args: &Value) -> ToolIntent {
 
 fn unified_exec_intent(args: &Value) -> ToolIntent {
     let has_exec_input = unified_exec_has_input(args);
-    let readonly_unified_action = unified_exec_action(args)
-        .map(|action| {
-            if action.eq_ignore_ascii_case("run") {
-                is_readonly_unified_exec_command(args)
-            } else {
-                action.eq_ignore_ascii_case("poll")
-                    || action.eq_ignore_ascii_case("list")
-                    || action.eq_ignore_ascii_case("inspect")
-                    || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
-            }
-        })
-        .unwrap_or(false);
+    let readonly_unified_action = if unified_exec_action_is(args, "run") {
+        is_readonly_unified_exec_command(args)
+    } else {
+        unified_exec_action_in(args, &["poll", "list", "inspect"])
+            || (unified_exec_action_is(args, "continue") && !has_exec_input)
+    };
 
     if readonly_unified_action {
         ToolIntent::read_only_unified_action()
@@ -476,6 +458,38 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
             None
         }
     })
+}
+
+fn action_matches(action: Option<&str>, expected: &str) -> bool {
+    action.is_some_and(|candidate| candidate.eq_ignore_ascii_case(expected))
+}
+
+fn action_matches_any(action: Option<&str>, expected: &[&str]) -> bool {
+    action.is_some_and(|candidate| {
+        expected
+            .iter()
+            .any(|expected_action| candidate.eq_ignore_ascii_case(expected_action))
+    })
+}
+
+pub fn unified_file_action_is(args: &Value, expected: &str) -> bool {
+    action_matches(unified_file_action(args), expected)
+}
+
+pub fn unified_file_action_in(args: &Value, expected: &[&str]) -> bool {
+    action_matches_any(unified_file_action(args), expected)
+}
+
+pub fn unified_exec_action_is(args: &Value, expected: &str) -> bool {
+    action_matches(unified_exec_action(args), expected)
+}
+
+pub fn unified_exec_action_in(args: &Value, expected: &[&str]) -> bool {
+    action_matches_any(unified_exec_action(args), expected)
+}
+
+pub fn unified_search_action_is(args: &Value, expected: &str) -> bool {
+    action_matches(unified_search_action(args), expected)
 }
 
 fn unified_exec_has_input(args: &Value) -> bool {

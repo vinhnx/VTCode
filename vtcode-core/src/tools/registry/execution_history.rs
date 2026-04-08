@@ -224,9 +224,7 @@ fn is_read_style_tool_call(tool_name: &str, args: &Value) -> bool {
         return true;
     }
     if is_unified_file_tool_name(tool_name) {
-        return tool_intent::unified_file_action(args)
-            .unwrap_or("read")
-            .eq_ignore_ascii_case("read");
+        return tool_intent::unified_file_action_is(args, "read");
     }
     false
 }
@@ -278,9 +276,7 @@ fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
         return false;
     }
 
-    tool_intent::unified_file_action(&record.args)
-        .unwrap_or("read")
-        .eq_ignore_ascii_case("read")
+    tool_intent::unified_file_action_is(&record.args, "read")
 }
 
 /// Thread-safe execution history for recording tool executions.

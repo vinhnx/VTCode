@@ -468,13 +468,12 @@ impl ToolRegistry {
             return false;
         }
 
-        let Some(action) = crate::tools::tool_intent::unified_exec_action(args) else {
+        if !crate::tools::tool_intent::unified_exec_action_in(args, &["poll", "continue"]) {
             return false;
-        };
-        let is_continuation = action.eq_ignore_ascii_case("poll")
-            || (action.eq_ignore_ascii_case("continue")
-                && crate::tools::command_args::interactive_input_text(args).is_none());
-        if !is_continuation {
+        }
+        if crate::tools::tool_intent::unified_exec_action_is(args, "continue")
+            && crate::tools::command_args::interactive_input_text(args).is_some()
+        {
             return false;
         }
 

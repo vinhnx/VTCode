@@ -8,7 +8,7 @@ use crate::config::constants::tools;
 use crate::config::mcp::McpAllowListConfig;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
-use crate::tools::tool_intent::unified_file_action;
+use crate::tools::tool_intent::{unified_file_action_is, unified_search_action_is};
 
 use super::ToolPermissionDecision;
 use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
@@ -76,10 +76,12 @@ impl ToolPolicyGateway {
         let mut args = args.clone();
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
-        let unified_file_read = normalized == tools::UNIFIED_FILE
-            && unified_file_action(&args)
-                .map(|action| action.eq_ignore_ascii_case("read"))
-                .unwrap_or(false);
+        let unified_file_read =
+            normalized == tools::UNIFIED_FILE && unified_file_action_is(&args, "read");
+        let unified_search_list =
+            normalized == tools::UNIFIED_SEARCH && unified_search_action_is(&args, "list");
+        let unified_search_grep =
+            normalized == tools::UNIFIED_SEARCH && unified_search_action_is(&args, "grep");
 
         if let Some(constraints) = self
             .tool_policy
@@ -108,9 +110,7 @@ impl ToolPolicyGateway {
             }
 
             match normalized {
-                n if n == tools::UNIFIED_SEARCH
-                    && obj.get("action").and_then(|v| v.as_str()) == Some("list") =>
-                {
+                n if n == tools::UNIFIED_SEARCH && unified_search_list => {
                     if let Some(cap) = constraints.max_items_per_call {
                         let requested = obj
                             .get("max_items")
@@ -125,9 +125,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::UNIFIED_SEARCH
-                    && obj.get("action").and_then(|v| v.as_str()) == Some("grep") =>
-                {
+                n if n == tools::UNIFIED_SEARCH && unified_search_grep => {
                     if let Some(cap) = constraints.max_results_per_call {
                         let requested = obj
                             .get("max_results")
@@ -450,5 +448,92 @@ impl ToolPolicyGateway {
                 .await?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tool_policy::{ToolConstraints, ToolPolicyConfig};
+    use indexmap::IndexMap;
+    use serde_json::json;
+
+    async fn gateway_with_constraints(
+        tool_name: &str,
+        constraints: ToolConstraints,
+    ) -> ToolPolicyGateway {
+        let temp = tempfile::tempdir().expect("temp workspace");
+        let config_path = temp.path().join("tool-policy.json");
+        let config = ToolPolicyConfig {
+            constraints: IndexMap::from([(tool_name.to_string(), constraints)]),
+            ..ToolPolicyConfig::default()
+        };
+        std::fs::write(
+            &config_path,
+            serde_json::to_vec_pretty(&config).expect("policy config json"),
+        )
+        .expect("policy config file");
+        let manager = ToolPolicyManager::new_with_config_path(config_path)
+            .await
+            .expect("policy manager");
+        ToolPolicyGateway::with_policy_manager(manager)
+    }
+
+    #[tokio::test]
+    async fn apply_policy_constraints_caps_inferred_unified_search_list_calls() {
+        let gateway = gateway_with_constraints(
+            tools::UNIFIED_SEARCH,
+            ToolConstraints {
+                max_items_per_call: Some(10),
+                ..ToolConstraints::default()
+            },
+        )
+        .await;
+
+        let constrained = gateway
+            .apply_policy_constraints(
+                tools::UNIFIED_SEARCH,
+                &json!({
+                    "path": ".",
+                    "pattern": "*.rs",
+                    "max_items": 25
+                }),
+            )
+            .expect("constrained args");
+
+        assert_eq!(constrained["max_items"], json!(10));
+        assert_eq!(
+            constrained["_policy_note"],
+            json!("Capped max_items to 10 by policy")
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_policy_constraints_caps_inferred_unified_search_grep_calls() {
+        let gateway = gateway_with_constraints(
+            tools::UNIFIED_SEARCH,
+            ToolConstraints {
+                max_results_per_call: Some(15),
+                ..ToolConstraints::default()
+            },
+        )
+        .await;
+
+        let constrained = gateway
+            .apply_policy_constraints(
+                tools::UNIFIED_SEARCH,
+                &json!({
+                    "path": ".",
+                    "pattern": "ToolRegistry",
+                    "max_results": 50
+                }),
+            )
+            .expect("constrained args");
+
+        assert_eq!(constrained["max_results"], json!(15));
+        assert_eq!(
+            constrained["_policy_note"],
+            json!("Capped max_results to 15 by policy")
+        );
     }
 }

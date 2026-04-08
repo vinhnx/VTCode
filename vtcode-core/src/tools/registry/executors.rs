@@ -1,25 +1,15 @@
 use crate::config::ConfigManager;
-use crate::exec::code_executor::Language;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::mcp::{DetailLevel, ToolDiscovery};
-use crate::sandboxing::{
-    AdditionalPermissions, CommandSpec as SandboxCommandSpec, NetworkAllowlistEntry,
-    ResourceLimits, SandboxManager, SandboxPermissions, SandboxPolicy, SandboxTransformError,
-    SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,
-};
-use crate::tools::continuation::PtyContinuationArgs;
-use crate::tools::edited_file_monitor::{MutationLease, conflict_override_snapshot};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::native_memory;
 use crate::tools::registry::unified_actions::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
-use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodeExecSession;
 use crate::zsh_exec_bridge::ZshExecBridgeSession;
-use regex::Regex;
 
 use anyhow::{Context, Result, anyhow, bail};
 use chrono;
@@ -27,1371 +17,84 @@ use futures::future::BoxFuture;
 use hashbrown::HashMap;
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, Instant, SystemTime},
 };
 use tokio::fs;
-use vtcode_commons::preview::excerpt_text_lines;
-use vtcode_config::{
-    ResourceLimitsPreset, SandboxMode as RuntimeSandboxMode, SeccompProfilePreset,
-};
 
 use super::{ExecSettlementMode, ToolRegistry};
-use cargo_failure_diagnostics::{
-    attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
-    cargo_test_failure_diagnostics,
-};
+use exec_support::*;
+use sandbox_runtime::*;
 
 #[cfg(test)]
 use cargo_failure_diagnostics::{
-    CargoTestCommandKind, cargo_selector_error_diagnostics, cargo_test_rerun_hint,
+    CargoTestCommandKind, attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
+    cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint,
 };
 
 mod cargo_failure_diagnostics;
+mod exec_support;
+mod patch_pipeline;
+mod sandbox_runtime;
+mod subagents;
 
-#[derive(Debug, Clone)]
-struct ShellExecutionPlan {
-    approval_reason: Option<String>,
-    sandbox_policy: Option<SandboxPolicy>,
+#[derive(Clone, Copy)]
+enum ExecRunBackendKind {
+    Pty,
+    Pipe,
 }
 
-fn push_unique_reason(reasons: &mut Vec<String>, reason: impl Into<String>) {
-    let reason = reason.into();
-    if !reasons.iter().any(|existing| existing == &reason) {
-        reasons.push(reason);
-    }
+struct PreparedExecRunRequest {
+    prepared_command: PreparedExecCommand,
+    working_dir_path: PathBuf,
+    output_config: ExecRunOutputConfig,
+    yield_duration: Duration,
+    session_id: String,
+    shell_program: String,
+    env_overrides: HashMap<String, String>,
+    is_git_diff: bool,
+    confirm: bool,
+    rows: Option<u16>,
+    cols: Option<u16>,
 }
 
-fn join_shell_approval_reasons(reasons: Vec<String>) -> Option<String> {
-    if reasons.is_empty() {
-        None
-    } else {
-        Some(reasons.join(" "))
-    }
+fn set_payload_default(payload: &mut serde_json::Map<String, Value>, key: &str, value: Value) {
+    payload.entry(key.to_string()).or_insert(value);
 }
 
-fn shell_permission_approval_reason(permissions: SandboxPermissions) -> Option<&'static str> {
-    match permissions {
-        SandboxPermissions::UseDefault => None,
-        SandboxPermissions::RequireEscalated | SandboxPermissions::BypassSandbox => {
-            Some("Command requested execution without sandbox restrictions.")
-        }
-        SandboxPermissions::WithAdditionalPermissions => {
-            Some("Command requested additional sandboxed filesystem access.")
-        }
-    }
-}
-
-fn shell_run_payload<'a>(
-    tool_name: &str,
-    tool_args: Option<&'a Value>,
-) -> Option<&'a serde_json::Map<String, Value>> {
-    let args_value = tool_args?;
-    let args = args_value.as_object()?;
-    tool_intent::is_command_run_tool_call(tool_name, args_value).then_some(args)
-}
-
-fn shell_working_dir_value(payload: &serde_json::Map<String, Value>) -> Option<&str> {
-    crate::tools::command_args::working_dir_text_from_payload(payload)
-}
-
-fn build_shell_execution_plan(
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
-    requested_command: &[String],
-    sandbox_permissions: SandboxPermissions,
-    additional_permissions: Option<&AdditionalPermissions>,
-) -> Result<ShellExecutionPlan> {
-    let mut approval_reasons = Vec::new();
-    if crate::command_safety::command_might_be_dangerous(requested_command) {
-        push_unique_reason(
-            &mut approval_reasons,
-            "Command appears dangerous and requires approval.",
-        );
-    }
-    if let Some(reason) = shell_permission_approval_reason(sandbox_permissions) {
-        push_unique_reason(&mut approval_reasons, reason);
-    }
-
-    if sandbox_permissions.requires_escalated_permissions() || !sandbox_config.enabled {
-        return Ok(ShellExecutionPlan {
-            approval_reason: join_shell_approval_reasons(approval_reasons),
-            sandbox_policy: None,
-        });
-    }
-
-    let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
-    if matches!(policy, SandboxPolicy::ReadOnly { .. })
-        && command_likely_writes_workspace(requested_command)
-    {
-        push_unique_reason(
-            &mut approval_reasons,
-            "Command appears to modify workspace files and needs workspace-write sandbox access.",
-        );
-        policy = workspace_write_policy_from_runtime_config(sandbox_config, workspace_root);
-    }
-
-    if sandbox_permissions.uses_additional_permissions() {
-        let Some(additional_permissions) = additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
-        };
-        policy = sandbox_policy_with_additional_permissions(policy, additional_permissions);
-    }
-
-    let sandbox_policy = if matches!(policy, SandboxPolicy::DangerFullAccess) {
-        None
-    } else {
-        Some(policy)
-    };
-
-    Ok(ShellExecutionPlan {
-        approval_reason: join_shell_approval_reasons(approval_reasons),
-        sandbox_policy,
-    })
-}
-
-fn sandbox_policy_from_runtime_config(
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
-) -> Result<SandboxPolicy> {
-    match sandbox_config.default_mode {
-        RuntimeSandboxMode::ReadOnly => Ok(read_only_policy_from_runtime_config(sandbox_config)),
-        RuntimeSandboxMode::DangerFullAccess => Ok(SandboxPolicy::full_access()),
-        RuntimeSandboxMode::External => Ok(SandboxPolicy::ExternalSandbox {
-            description: format!(
-                "external sandbox requested ({:?})",
-                sandbox_config.external.sandbox_type
-            ),
-        }),
-        RuntimeSandboxMode::WorkspaceWrite => Ok(workspace_write_policy_from_runtime_config(
-            sandbox_config,
-            workspace_root,
-        )),
-    }
-}
-
-fn read_only_policy_from_runtime_config(
-    sandbox_config: &vtcode_config::SandboxConfig,
-) -> SandboxPolicy {
-    let (network_allow_all, network_allowlist) = runtime_network_policy(sandbox_config);
-
-    if network_allow_all {
-        SandboxPolicy::read_only_with_full_network()
-    } else if network_allowlist.is_empty() {
-        SandboxPolicy::read_only()
-    } else {
-        SandboxPolicy::read_only_with_network(network_allowlist)
-    }
-}
-
-fn workspace_write_policy_from_runtime_config(
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
-) -> SandboxPolicy {
-    let (network_allow_all, network_allowlist) = runtime_network_policy(sandbox_config);
-    let network_enabled = network_allow_all || !network_allowlist.is_empty();
-    let sensitive_paths = sensitive_paths_from_runtime_config(&sandbox_config.sensitive_paths);
-    let resource_limits = resource_limits_from_runtime_config(&sandbox_config.resource_limits);
-    let seccomp_profile = seccomp_profile_from_runtime_config(sandbox_config, network_enabled);
-
-    let mut policy = SandboxPolicy::workspace_write_full(
-        vec![workspace_root.to_path_buf()],
-        network_allowlist,
-        Some(sensitive_paths),
-        resource_limits,
-        seccomp_profile,
-    );
-    if network_allow_all
-        && let SandboxPolicy::WorkspaceWrite {
-            network_access,
-            network_allowlist,
-            ..
-        } = &mut policy
-    {
-        *network_access = true;
-        network_allowlist.clear();
-    }
-    policy
-}
-
-fn runtime_network_policy(
-    sandbox_config: &vtcode_config::SandboxConfig,
-) -> (bool, Vec<NetworkAllowlistEntry>) {
-    let network_blocked = sandbox_config.network.block_all;
-    let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
-    let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
-        Vec::new()
-    } else {
-        sandbox_config
-            .network
-            .allowlist
-            .iter()
-            .filter_map(|entry| {
-                let domain = entry.domain.trim();
-                (!domain.is_empty())
-                    .then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
-            })
-            .collect()
-    };
-
-    (network_allow_all, network_allowlist)
-}
-
-fn resource_limits_from_runtime_config(
-    limits_config: &vtcode_config::ResourceLimitsConfig,
-) -> ResourceLimits {
-    let mut limits = match limits_config.preset {
-        ResourceLimitsPreset::Unlimited => ResourceLimits::unlimited(),
-        ResourceLimitsPreset::Conservative => ResourceLimits::conservative(),
-        ResourceLimitsPreset::Moderate => ResourceLimits::moderate(),
-        ResourceLimitsPreset::Generous => ResourceLimits::generous(),
-        ResourceLimitsPreset::Custom => ResourceLimits::default(),
-    };
-
-    if limits_config.max_memory_mb > 0 {
-        limits.max_memory_mb = limits_config.max_memory_mb;
-    }
-    if limits_config.max_pids > 0 {
-        limits.max_pids = limits_config.max_pids;
-    }
-    if limits_config.max_disk_mb > 0 {
-        limits.max_disk_mb = limits_config.max_disk_mb;
-    }
-    if limits_config.cpu_time_secs > 0 {
-        limits.cpu_time_secs = limits_config.cpu_time_secs;
-    }
-    if limits_config.timeout_secs > 0 {
-        limits.timeout_secs = limits_config.timeout_secs;
-    }
-
-    limits
-}
-
-fn seccomp_profile_from_runtime_config(
-    sandbox_config: &vtcode_config::SandboxConfig,
-    network_enabled: bool,
-) -> SeccompProfile {
-    let seccomp_cfg = &sandbox_config.seccomp;
-    let mut seccomp_profile =
-        if !seccomp_cfg.enabled || seccomp_cfg.profile == SeccompProfilePreset::Disabled {
-            SeccompProfile::permissive()
-        } else {
-            match seccomp_cfg.profile {
-                SeccompProfilePreset::Strict => SeccompProfile::strict(),
-                SeccompProfilePreset::Permissive => SeccompProfile::permissive(),
-                SeccompProfilePreset::Disabled => SeccompProfile::permissive(),
-            }
-        };
-
-    if network_enabled {
-        seccomp_profile = seccomp_profile.with_network();
-    }
-    if seccomp_cfg.log_only {
-        seccomp_profile = seccomp_profile.with_logging();
-    }
-    for syscall in &seccomp_cfg.additional_blocked {
-        let syscall = syscall.trim();
-        if !syscall.is_empty() {
-            seccomp_profile = seccomp_profile.block_syscall(syscall.to_string());
+fn normalize_unified_exec_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
+    let mut args =
+        crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
+    if let Some(payload) = args.as_object_mut() {
+        set_payload_default(payload, "action", json!("run"));
+        if tty {
+            set_payload_default(payload, "tty", json!(true));
         }
     }
-
-    seccomp_profile
+    Ok(args)
 }
 
-fn sensitive_paths_from_runtime_config(
-    sensitive_paths_config: &vtcode_config::SensitivePathsConfig,
-) -> Vec<SensitivePath> {
-    let mut sensitive_paths = if sensitive_paths_config.use_defaults {
-        default_sensitive_paths()
-    } else {
-        Vec::new()
-    };
-
-    for path in &sensitive_paths_config.additional {
-        let path = path.trim();
-        if !path.is_empty() {
-            sensitive_paths.push(SensitivePath::new(path.to_string()));
-        }
+fn with_unified_exec_action_default(mut args: Value, action: &'static str) -> Value {
+    if let Some(payload) = args.as_object_mut() {
+        set_payload_default(payload, "action", json!(action));
     }
-
-    if !sensitive_paths_config.exceptions.is_empty() {
-        let exception_paths = sensitive_paths_config
-            .exceptions
-            .iter()
-            .filter_map(|path| {
-                let path = path.trim();
-                (!path.is_empty()).then(|| expand_tilde_path(path))
-            })
-            .collect::<Vec<_>>();
-        sensitive_paths.retain(|entry| {
-            let expanded = entry.expand_path();
-            !exception_paths
-                .iter()
-                .any(|allowed| expanded.starts_with(allowed))
-        });
-    }
-
-    sensitive_paths
+    args
 }
 
-const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str = "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
-const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str = "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
-
-fn parse_requested_sandbox_permissions(
-    payload: &serde_json::Map<String, Value>,
-    cwd: &Path,
-) -> Result<(SandboxPermissions, Option<AdditionalPermissions>)> {
-    let sandbox_permissions = payload
-        .get("sandbox_permissions")
-        .cloned()
-        .map(serde_json::from_value::<SandboxPermissions>)
-        .transpose()
-        .with_context(|| {
-            "Invalid sandbox_permissions. Use one of: use_default, with_additional_permissions, require_escalated."
-        })?
-        .unwrap_or_default();
-
-    let additional_permissions = payload
-        .get("additional_permissions")
-        .cloned()
-        .map(serde_json::from_value::<AdditionalPermissions>)
-        .transpose()
-        .with_context(|| {
-            "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
-        })?
-        .filter(|permissions| !permissions.is_empty());
-
-    if sandbox_permissions.requires_escalated_permissions() {
-        let justification = payload
-            .get("justification")
-            .and_then(Value::as_str)
-            .map(str::trim);
-        if justification.is_none_or(str::is_empty) {
-            return Err(anyhow!(MISSING_ESCALATION_JUSTIFICATION_MESSAGE));
-        }
-    }
-
-    let additional_permissions = if sandbox_permissions.uses_additional_permissions() {
-        let Some(additional_permissions) = additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
-        };
-        let normalized = normalize_additional_permissions(additional_permissions, cwd)?;
-        if normalized.is_empty() {
-            return Err(anyhow!(
-                "`additional_permissions` must include at least one path in `fs_read` or `fs_write`"
-            ));
-        }
-        Some(normalized)
-    } else {
-        if additional_permissions.is_some() {
-            return Err(anyhow!(
-                "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`"
-            ));
-        }
-        None
-    };
-
-    Ok((sandbox_permissions, additional_permissions))
-}
-
-fn normalize_permission_paths(
-    paths: Vec<PathBuf>,
-    command_cwd: &Path,
-    permission_kind: &str,
-) -> Result<Vec<PathBuf>> {
-    let mut out = Vec::with_capacity(paths.len());
-    let mut seen = BTreeSet::new();
-
-    for path in paths {
-        if path.as_os_str().is_empty() {
-            return Err(anyhow!("{permission_kind} contains an empty path"));
-        }
-
-        let resolved = if path.is_absolute() {
-            path
-        } else {
-            command_cwd.join(path)
-        };
-        let normalized = crate::utils::path::normalize_path(&resolved);
-        if seen.insert(normalized.clone()) {
-            out.push(normalized);
-        }
-    }
-
-    Ok(out)
-}
-
-fn normalize_additional_permissions(
-    additional_permissions: AdditionalPermissions,
-    command_cwd: &Path,
-) -> Result<AdditionalPermissions> {
-    let fs_read =
-        normalize_permission_paths(additional_permissions.fs_read, command_cwd, "fs_read")?;
-    let fs_write =
-        normalize_permission_paths(additional_permissions.fs_write, command_cwd, "fs_write")?;
-
-    Ok(AdditionalPermissions { fs_read, fs_write })
-}
-
-fn dedupe_writable_roots(writable_roots: Vec<WritableRoot>) -> Vec<WritableRoot> {
-    let mut deduped = Vec::with_capacity(writable_roots.len());
-    let mut seen = BTreeSet::new();
-
-    for root in writable_roots {
-        let normalized = crate::utils::path::normalize_path(&root.root);
-        if seen.insert(normalized.clone()) {
-            deduped.push(WritableRoot::new(normalized));
-        }
-    }
-
-    deduped
-}
-
-fn sandbox_policy_with_additional_permissions(
-    sandbox_policy: SandboxPolicy,
-    additional_permissions: &AdditionalPermissions,
-) -> SandboxPolicy {
-    if additional_permissions.is_empty() {
-        return sandbox_policy;
-    }
-
-    match sandbox_policy {
-        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. } => sandbox_policy,
-        SandboxPolicy::WorkspaceWrite {
-            writable_roots,
-            network_access,
-            network_allowlist,
-            sensitive_paths,
-            resource_limits,
-            seccomp_profile,
-            exclude_tmpdir_env_var,
-            exclude_slash_tmp,
-        } => {
-            let mut merged_writes = writable_roots;
-            merged_writes.extend(
-                additional_permissions
-                    .fs_write
-                    .iter()
-                    .cloned()
-                    .map(WritableRoot::new),
-            );
-            SandboxPolicy::WorkspaceWrite {
-                writable_roots: dedupe_writable_roots(merged_writes),
-                network_access,
-                network_allowlist,
-                sensitive_paths,
-                resource_limits,
-                seccomp_profile,
-                exclude_tmpdir_env_var,
-                exclude_slash_tmp,
-            }
-        }
-        SandboxPolicy::ReadOnly {
-            network_access,
-            network_allowlist,
-        } => {
-            if additional_permissions.fs_write.is_empty() {
-                SandboxPolicy::ReadOnly {
-                    network_access,
-                    network_allowlist,
-                }
-            } else {
-                let network_enabled = network_access || !network_allowlist.is_empty();
-                SandboxPolicy::WorkspaceWrite {
-                    writable_roots: dedupe_writable_roots(
-                        additional_permissions
-                            .fs_write
-                            .iter()
-                            .cloned()
-                            .map(WritableRoot::new)
-                            .collect(),
-                    ),
-                    network_access,
-                    network_allowlist,
-                    sensitive_paths: None,
-                    resource_limits: ResourceLimits::conservative(),
-                    seccomp_profile: if network_enabled {
-                        SeccompProfile::strict().with_network()
-                    } else {
-                        SeccompProfile::strict()
-                    },
-                    exclude_tmpdir_env_var: false,
-                    exclude_slash_tmp: false,
-                }
-            }
-        }
+fn annotate_exec_run_response(response: &mut Value, is_git_diff: bool) {
+    if is_git_diff {
+        response["no_spool"] = json!(true);
+        response["content_type"] = json!("git_diff");
     }
 }
 
-fn apply_runtime_sandbox_to_command(
-    command: Vec<String>,
-    requested_command: &[String],
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
-    working_dir: &Path,
-    sandbox_permissions: SandboxPermissions,
-    additional_permissions: Option<&AdditionalPermissions>,
-) -> Result<Vec<String>> {
-    let plan = build_shell_execution_plan(
-        sandbox_config,
-        workspace_root,
-        requested_command,
-        sandbox_permissions,
-        additional_permissions,
-    )?;
-    let Some(policy) = plan.sandbox_policy else {
-        return Ok(command);
-    };
-    if matches!(policy, SandboxPolicy::ExternalSandbox { .. }) {
-        return Err(anyhow!(
-            "Sandbox mode 'external' is not supported by local command-session execution. \
-             Use `read_only`/`workspace_write` or disable sandbox for this run."
-        ));
-    }
-
-    enforce_sandbox_preflight_guards(requested_command, &policy, working_dir)?;
-    transform_command_with_sandbox_policy(command, &policy, working_dir)
-}
-
-fn transform_command_with_sandbox_policy(
-    command: Vec<String>,
-    policy: &SandboxPolicy,
-    sandbox_cwd: &Path,
-) -> Result<Vec<String>> {
-    if command.is_empty() {
-        return Err(anyhow!("Sandbox transform received an empty command"));
-    }
-
-    let spec = SandboxCommandSpec::new(command[0].clone())
-        .with_args(command[1..].to_vec())
-        .with_cwd(sandbox_cwd.to_path_buf());
-    let manager = SandboxManager::new();
-    let linux_sandbox_executable = resolve_linux_sandbox_executable();
-    let exec_env = manager
-        .transform(
-            spec,
-            policy,
-            sandbox_cwd,
-            linux_sandbox_executable.as_deref(),
-        )
-        .map_err(|err| map_sandbox_transform_error(err, policy))?;
-
-    let executable = exec_env.program.to_string_lossy().to_string();
-    if exec_env.sandbox_active && !Path::new(&executable).exists() {
-        return Err(anyhow!(
-            "Sandbox is enabled but executable '{}' was not found on this system.",
-            executable
-        ));
-    }
-
-    let mut transformed = Vec::with_capacity(1 + exec_env.args.len());
-    transformed.push(executable);
-    transformed.extend(exec_env.args);
-    Ok(transformed)
-}
-
-fn map_sandbox_transform_error(
-    error: SandboxTransformError,
-    policy: &SandboxPolicy,
-) -> anyhow::Error {
-    match error {
-        SandboxTransformError::MissingSandboxExecutable => anyhow!(
-            "Sandbox is enabled for '{}' but no Linux sandbox helper is configured. \
-             Set `VTCODE_LINUX_SANDBOX_EXECUTABLE` to a helper that accepts \
-             `--sandbox-policy`, `--seccomp-profile`, and `--resource-limits`.",
-            policy.description()
-        ),
-        SandboxTransformError::UnavailableSandboxType(sandbox_type) => anyhow!(
-            "Sandbox policy '{}' requires {:?}, which is unavailable on this platform.",
-            policy.description(),
-            sandbox_type
-        ),
-        SandboxTransformError::CreationFailed(msg) | SandboxTransformError::InvalidPolicy(msg) => {
-            anyhow!(
-                "Failed to initialize sandbox for command execution: {}",
-                msg
-            )
-        }
-    }
-}
-
-fn enforce_sandbox_preflight_guards(
-    requested_command: &[String],
-    policy: &SandboxPolicy,
-    working_dir: &Path,
-) -> Result<()> {
-    if requested_command.is_empty() {
-        return Ok(());
-    }
-
-    let network_disabled = !policy.has_full_network_access() && !policy.has_network_allowlist();
-    if network_disabled && command_likely_needs_network(requested_command) {
-        return Err(anyhow!(
-            "Command '{}' appears to require network access, but sandbox policy '{}' denies network.",
-            shell_words::join(requested_command.iter().map(String::as_str)),
-            policy.description()
-        ));
-    }
-
-    let mut blocked_paths = BTreeSet::new();
-    for argument in requested_command.iter().skip(1) {
-        if let Some(candidate) = resolve_argument_path(argument, working_dir)
-            && !policy.is_path_readable(&candidate)
-        {
-            blocked_paths.insert(candidate.display().to_string());
-        }
-    }
-    if !blocked_paths.is_empty() {
-        let listed = blocked_paths
-            .into_iter()
-            .take(3)
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(anyhow!(
-            "Command references sensitive path(s) blocked by sandbox policy '{}': {}",
-            policy.description(),
-            listed
-        ));
-    }
-
-    if command_likely_writes_workspace(requested_command) {
-        let mut blocked_write_paths = BTreeSet::new();
-        for argument in requested_command.iter().skip(1) {
-            if let Some(candidate) = resolve_argument_path(argument, working_dir)
-                && !policy.is_path_writable(&candidate, working_dir)
-            {
-                blocked_write_paths.insert(candidate.display().to_string());
-            }
-        }
-        if !blocked_write_paths.is_empty() {
-            let listed = blocked_write_paths
-                .into_iter()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join(", ");
-            return Err(anyhow!(
-                "Command references path(s) blocked for writes by sandbox policy '{}': {}",
-                policy.description(),
-                listed
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-fn command_likely_needs_network(command: &[String]) -> bool {
-    let Some(program) = command.first() else {
-        return false;
-    };
-    let name = Path::new(program)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or(program.as_str())
-        .to_ascii_lowercase();
-    if matches!(
-        name.as_str(),
-        "curl"
-            | "wget"
-            | "ping"
-            | "ssh"
-            | "scp"
-            | "sftp"
-            | "ftp"
-            | "telnet"
-            | "nc"
-            | "ncat"
-            | "nmap"
-            | "dig"
-            | "nslookup"
-            | "host"
-    ) {
-        return true;
-    }
-    if name == "git" {
-        return command.iter().skip(1).any(|arg| {
-            matches!(
-                arg.as_str(),
-                "clone" | "fetch" | "pull" | "push" | "ls-remote" | "remote" | "submodule"
-            )
-        });
-    }
-    false
-}
-
-fn command_likely_writes_workspace(command: &[String]) -> bool {
-    let Some(program) = command.first() else {
-        return false;
-    };
-    let name = Path::new(program)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or(program.as_str())
-        .to_ascii_lowercase();
-
-    if matches!(
-        name.as_str(),
-        "touch"
-            | "mkdir"
-            | "rm"
-            | "rmdir"
-            | "mv"
-            | "cp"
-            | "chmod"
-            | "chown"
-            | "ln"
-            | "install"
-            | "truncate"
-            | "rustfmt"
-            | "gofmt"
-    ) {
-        return true;
-    }
-
-    if name == "sed" {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| arg == "-i" || arg.starts_with("-i"));
-    }
-
-    if name == "perl" {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| arg == "-i" || arg.starts_with("-i"));
-    }
-
-    if name == "cargo" {
-        return command.iter().skip(1).any(|arg| {
-            matches!(
-                arg.as_str(),
-                "fmt" | "fix" | "build" | "check" | "clippy" | "test" | "nextest" | "clean"
-            )
-        });
-    }
-
-    if matches!(name.as_str(), "npm" | "pnpm" | "yarn" | "bun") {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| matches!(arg.as_str(), "install" | "ci" | "add" | "update"));
-    }
-
-    if name == "go" {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| matches!(arg.as_str(), "fmt" | "test" | "build" | "mod"));
-    }
-
-    if name == "git" {
-        return command.iter().skip(1).any(|arg| {
-            matches!(
-                arg.as_str(),
-                "add"
-                    | "apply"
-                    | "checkout"
-                    | "switch"
-                    | "merge"
-                    | "rebase"
-                    | "cherry-pick"
-                    | "commit"
-                    | "stash"
-                    | "reset"
-                    | "restore"
-                    | "rm"
-                    | "mv"
-            )
-        });
-    }
-
-    false
-}
-
-fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> {
-    let trimmed = argument.trim().trim_matches(|ch| ch == '"' || ch == '\'');
-    if trimmed.is_empty() || trimmed.starts_with('-') || trimmed.contains("://") {
-        return None;
-    }
-
-    let candidate = if trimmed.starts_with("~/") || trimmed == "~" {
-        Some(expand_tilde_path(trimmed))
-    } else if trimmed.starts_with('/') {
-        Some(PathBuf::from(trimmed))
-    } else if trimmed.starts_with("./") || trimmed.starts_with("../") {
-        Some(working_dir.join(trimmed))
-    } else if let Some((_, value)) = trimmed.split_once('=') {
-        if value.starts_with("~/")
-            || value == "~"
-            || value.starts_with('/')
-            || value.starts_with("./")
-            || value.starts_with("../")
-        {
-            Some(resolve_argument_path(value, working_dir)?)
-        } else {
-            None
-        }
-    } else {
-        None
-    }?;
-
-    Some(candidate)
-}
-
-fn expand_tilde_path(path: &str) -> PathBuf {
-    if path == "~" {
-        return dirs::home_dir().unwrap_or_else(|| PathBuf::from(path));
-    }
-    if let Some(rest) = path.strip_prefix("~/")
-        && let Some(home) = dirs::home_dir()
-    {
-        return home.join(rest);
-    }
-    PathBuf::from(path)
-}
-
-#[cfg(target_os = "linux")]
-fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
-    std::env::var_os("VTCODE_LINUX_SANDBOX_EXECUTABLE").map(PathBuf::from)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
-    None
-}
-
-fn summarized_arg_keys(args: &Value) -> String {
-    match args.as_object() {
-        Some(map) => {
-            if map.is_empty() {
-                return "<none>".to_string();
-            }
-            let mut keys: Vec<&str> = map.keys().map(|k| k.as_str()).collect();
-            keys.sort_unstable();
-            let mut preview = keys.into_iter().take(10).collect::<Vec<_>>().join(", ");
-            if map.len() > 10 {
-                preview.push_str(", ...");
-            }
-            preview
-        }
-        None => match args {
-            Value::Null => "<null>".to_string(),
-            Value::Array(_) => "<array>".to_string(),
-            Value::String(_) => "<string>".to_string(),
-            Value::Bool(_) => "<bool>".to_string(),
-            Value::Number(_) => "<number>".to_string(),
-            Value::Object(_) => "<object>".to_string(),
-        },
-    }
-}
-
-fn serialized_payload_size_bytes(args: &Value) -> usize {
-    serde_json::to_vec(args)
-        .map(|bytes| bytes.len())
-        .unwrap_or_else(|_| args.to_string().len())
-}
-
-fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
-    anyhow!(
-        "Missing unified_exec action. Use `action` or fields: \
-         `command|cmd|raw_command` (run), `session_id`+`input|chars|text` (write), \
-         `session_id` (poll), `action:\"continue\"` with `session_id` and optional `input|chars|text`, \
-         `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
-         or `action:\"list\"|\"close\"`. Keys: {}",
-        summarized_arg_keys(args)
-    )
-}
-
-fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
-    anyhow!(
-        "Missing action in unified_file. Provide `action` or file-operation fields such as \
-         `path`, `content`, `old_str`, `patch`, or `destination`. Received keys: {}",
-        summarized_arg_keys(args)
-    )
-}
-
-fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
-    anyhow!(
-        "Missing unified_search action. Use `action` or fields: \
-         `pattern|query` (grep), `action:\"structural\"` with `pattern` (structural search), `path` (list), `keyword` (tools), \
-         `scope` (errors), `url` (web), `sub_action|name` (skill). Keys: {}",
-        summarized_arg_keys(args)
-    )
-}
-
-fn is_valid_pty_session_id(session_id: &str) -> bool {
-    !session_id.trim().is_empty()
-        && session_id.len() <= 128
-        && session_id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
-fn validate_exec_session_id<'a>(raw_session_id: &'a str, context: &str) -> Result<&'a str> {
-    let session_id = raw_session_id.trim();
-    if is_valid_pty_session_id(session_id) {
-        Ok(session_id)
-    } else {
-        Err(anyhow!(
-            "Invalid session_id for {}: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
-            context,
-            raw_session_id
-        ))
-    }
-}
-
-fn build_session_command_display_parts(command: &str, args: &[String]) -> String {
-    if let Some(flag_index) = args
-        .iter()
-        .position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
-        && let Some(command) = args.get(flag_index + 1)
-        && !command.trim().is_empty()
-    {
-        return command.clone();
-    }
-
-    let mut parts = Vec::with_capacity(1 + args.len());
-    if !command.trim().is_empty() {
-        parts.push(command);
-    }
-    for arg in args {
-        if !arg.trim().is_empty() {
-            parts.push(arg.as_str());
-        }
-    }
-
-    if parts.is_empty() {
-        "unknown".to_string()
-    } else {
-        shell_words::join(parts)
-    }
-}
-
-fn build_exec_session_command_display(session: &VTCodeExecSession) -> String {
-    build_session_command_display_parts(&session.command, &session.args)
-}
-
-fn is_pty_exec_session(session: &VTCodeExecSession) -> bool {
-    session.backend == "pty"
-}
-
-fn attach_exec_response_context(
-    response: &mut Value,
-    session: &VTCodeExecSession,
-    command: &str,
-    is_exited: bool,
-) {
-    response["session_id"] = json!(session.id.as_str());
-    response["command"] = json!(command);
-    if let Some(value) = session.working_dir.as_deref() {
-        response["working_directory"] = json!(value);
-    }
-    response["backend"] = json!(session.backend);
-    if let Some(rows) = session.rows {
-        response["rows"] = json!(rows);
-    }
-    if let Some(cols) = session.cols {
-        response["cols"] = json!(cols);
-    }
-    response["is_exited"] = json!(is_exited);
-}
-
-fn extract_run_session_id_from_tool_output_path(path: &str) -> Option<String> {
-    let file_name = Path::new(path).file_name()?.to_str()?;
-    let session_id = file_name.strip_suffix(".txt")?;
-    if session_id.starts_with("run-") && is_valid_pty_session_id(session_id) {
-        Some(session_id.to_string())
-    } else {
-        None
-    }
-}
-
-fn extract_run_session_id_from_read_file_error(error_message: &str) -> Option<String> {
-    let marker = "session_id=\"";
-    let start = error_message.find(marker)? + marker.len();
-    let rest = &error_message[start..];
-    let end = rest.find('"')?;
-    let session_id = &rest[..end];
-    if session_id.starts_with("run-") && is_valid_pty_session_id(session_id) {
-        Some(session_id.to_string())
-    } else {
-        None
-    }
-}
-
-fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Value> {
-    let session_id = args
-        .get("path")
-        .or_else(|| args.get("file_path"))
-        .or_else(|| args.get("filepath"))
-        .or_else(|| args.get("target_path"))
-        .and_then(Value::as_str)
-        .and_then(extract_run_session_id_from_tool_output_path)
-        .or_else(|| extract_run_session_id_from_read_file_error(error_message))?;
-
-    let mut payload = serde_json::Map::new();
-    payload.insert("session_id".to_string(), json!(session_id));
-
-    if let Some(yield_time_ms) = args.get("yield_time_ms").cloned() {
-        payload.insert("yield_time_ms".to_string(), yield_time_ms);
-    }
-
-    Some(Value::Object(payload))
-}
-
-const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
-const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
-const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
-const MIN_EXEC_YIELD_MS: u64 = 250;
-const MAX_EXEC_YIELD_MS: u64 = 30_000;
-const EXEC_OUTPUT_TRUNCATED_SENTINEL: &str = "\n[Output truncated]";
-
-struct ExecOutputPreview {
-    raw_output: String,
-    output: String,
-    truncated: bool,
-}
-
-struct ExecRunOutputConfig {
-    max_tokens: usize,
-    inspect_query: Option<String>,
-    inspect_literal: bool,
-    inspect_max_matches: usize,
-}
-
-struct PreparedExecCommand {
-    command: Vec<String>,
-    requested_command: Vec<String>,
-    display_command: String,
-    requested_command_display: String,
-}
-
-fn attach_pty_continuation(response: &mut Value, session_id: &str) {
-    response["next_continue_args"] = PtyContinuationArgs::new(session_id).to_value();
-}
-
-fn clamp_exec_yield_ms(value: Option<u64>, default: u64) -> u64 {
-    value
-        .unwrap_or(default)
-        .clamp(MIN_EXEC_YIELD_MS, MAX_EXEC_YIELD_MS)
-}
-
-fn clamp_peek_yield_ms(value: Option<u64>) -> u64 {
-    value.unwrap_or(0).min(MAX_EXEC_YIELD_MS)
-}
-
-fn max_output_tokens_from_payload(payload: &serde_json::Map<String, Value>) -> Option<usize> {
-    payload
-        .get("max_output_tokens")
-        .or_else(|| payload.get("max_tokens"))
-        .and_then(Value::as_u64)
-        .map(|value| value as usize)
-}
-
-fn floor_exec_char_boundary(text: &str, index: usize) -> usize {
-    if index >= text.len() {
-        return text.len();
-    }
-
-    let mut boundary = index;
-    while boundary > 0 && !text.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    boundary
-}
-
-fn build_exec_output_preview(raw_output: String, max_tokens: usize) -> ExecOutputPreview {
-    let max_output_len = max_tokens.saturating_mul(4);
-    if max_tokens == 0 || raw_output.len() <= max_output_len {
-        return ExecOutputPreview {
-            output: raw_output.clone(),
-            raw_output,
-            truncated: false,
-        };
-    }
-
-    let preview_end = floor_exec_char_boundary(&raw_output, max_output_len);
-    let mut output = raw_output[..preview_end].to_string();
-    output.push_str(EXEC_OUTPUT_TRUNCATED_SENTINEL);
-
-    ExecOutputPreview {
-        raw_output,
-        output,
-        truncated: true,
-    }
-}
-
-fn build_exec_response(
-    session: &VTCodeExecSession,
-    command: &str,
-    capture: &PtyEphemeralCapture,
-    output_preview: ExecOutputPreview,
-    matched_count: Option<usize>,
-    query_truncated: bool,
-    running_process_id: Option<&str>,
-) -> Value {
-    let ExecOutputPreview {
-        raw_output,
-        output,
-        truncated,
-    } = output_preview;
-    let cargo_test_diagnostics =
-        cargo_test_failure_diagnostics(command, &raw_output, capture.exit_code);
-    let mut response = json!({
-        "success": true,
-        "output": output,
-        "raw_output": raw_output,
-        "wall_time": capture.duration.as_secs_f64(),
-    });
-    if let Some(count) = matched_count {
-        response["matched_count"] = json!(count);
-        response["query_truncated"] = json!(query_truncated);
-    }
-
-    attach_exec_response_context(&mut response, session, command, capture.exit_code.is_some());
-
-    if let Some(code) = capture.exit_code {
-        response["exit_code"] = json!(code);
-    } else if let Some(process_id) = running_process_id {
-        response["process_id"] = json!(process_id);
-    }
-
-    if truncated {
-        response["truncated"] = json!(true);
-    }
-    if capture.exit_code.is_none() {
-        attach_pty_continuation(&mut response, session.id.as_str());
-    }
-
-    attach_exec_recovery_guidance(&mut response, command, capture.exit_code);
-    if let Some(diagnostics) = cargo_test_diagnostics {
-        attach_failure_diagnostics_metadata(&mut response, &diagnostics);
-    }
-    response
-}
-
-fn exec_run_output_config(
-    payload: &serde_json::Map<String, Value>,
-    display_command: &str,
-) -> ExecRunOutputConfig {
-    ExecRunOutputConfig {
-        max_tokens: max_output_tokens_from_payload(payload)
-            .or_else(|| suggest_max_tokens_for_command(display_command))
-            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS),
-        inspect_query: payload
-            .get("query")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned),
-        inspect_literal: payload
-            .get("literal")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        inspect_max_matches: clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64)),
-    }
-}
-
-fn build_exec_filtered_response(
-    session_metadata: &VTCodeExecSession,
-    command_display: &str,
-    capture: &PtyEphemeralCapture,
-    output_config: &ExecRunOutputConfig,
-    running_process_id: Option<&str>,
-) -> Result<Value> {
-    let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-    let mut matched_count = None;
-    let mut query_truncated = false;
-    let filtered_output = if let Some(query) = output_config.inspect_query.as_deref() {
-        let (filtered, count, truncated_matches) = filter_lines(
-            &raw_output,
-            query,
-            output_config.inspect_literal,
-            output_config.inspect_max_matches,
-        )?;
-        matched_count = Some(count);
-        query_truncated = truncated_matches;
-        filtered
-    } else {
-        raw_output.clone()
-    };
-    let preview = build_exec_output_preview(filtered_output, output_config.max_tokens);
-
-    Ok(build_exec_response(
-        session_metadata,
-        command_display,
-        capture,
-        ExecOutputPreview {
-            raw_output,
-            output: preview.output,
-            truncated: preview.truncated,
-        },
-        matched_count,
-        query_truncated,
-        running_process_id,
-    ))
-}
-
-fn build_exec_passthrough_response(
-    session_metadata: &VTCodeExecSession,
-    command_display: &str,
-    capture: &PtyEphemeralCapture,
-    max_tokens: Option<usize>,
-) -> Value {
-    let raw_output = filter_pty_output(&strip_ansi(&capture.output));
-    let output_preview = if let Some(limit) = max_tokens {
-        let preview = build_exec_output_preview(raw_output.clone(), limit);
-        ExecOutputPreview {
-            raw_output,
-            output: preview.output,
-            truncated: preview.truncated,
-        }
-    } else {
-        ExecOutputPreview {
-            raw_output: raw_output.clone(),
-            output: raw_output,
-            truncated: false,
-        }
-    };
-
-    build_exec_response(
-        session_metadata,
-        command_display,
-        capture,
-        output_preview,
-        None,
-        false,
-        None,
-    )
-}
-
-fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
-    value.map(|v| v as usize).unwrap_or(default).min(5_000)
-}
-
-fn clamp_max_matches(value: Option<u64>) -> usize {
-    value
-        .map(|v| v as usize)
-        .unwrap_or(DEFAULT_INSPECT_MAX_MATCHES)
-        .clamp(1, 10_000)
-}
-
-fn build_head_tail_preview(content: &str, head_lines: usize, tail_lines: usize) -> (String, bool) {
-    let preview = excerpt_text_lines(content, head_lines.max(1), tail_lines.max(1));
-    if preview.total == 0 {
-        return (String::new(), false);
-    }
-
-    if preview.hidden_count == 0 {
-        return (preview.head.join("\n"), false);
-    }
-
-    let mut lines = Vec::with_capacity(preview.head.len() + preview.tail.len() + 1);
-    lines.extend(preview.head.into_iter().map(String::from));
-    lines.push(format!("[... omitted {} lines ...]", preview.hidden_count));
-    lines.extend(preview.tail.into_iter().map(String::from));
-    (lines.join("\n"), true)
-}
-
-fn filter_lines(
-    content: &str,
-    query: &str,
-    literal: bool,
-    max_matches: usize,
-) -> Result<(String, usize, bool)> {
-    let matcher = if literal {
-        None
-    } else {
-        Some(Regex::new(query).with_context(|| format!("Invalid regex query: {}", query))?)
-    };
-
-    let mut matches = Vec::new();
-    let mut total_matches = 0usize;
-
-    for (idx, line) in content.lines().enumerate() {
-        let is_match = if literal {
-            line.contains(query)
-        } else {
-            matcher
-                .as_ref()
-                .map(|regex| regex.is_match(line))
-                .unwrap_or(false)
-        };
-        if !is_match {
-            continue;
-        }
-
-        total_matches = total_matches.saturating_add(1);
-        if matches.len() < max_matches {
-            matches.push(format!("{}: {}", idx + 1, line));
-        }
-    }
-
-    let truncated = total_matches > max_matches;
-    Ok((matches.join("\n"), total_matches, truncated))
-}
-
-fn resolve_workspace_scoped_path(workspace_root: &Path, raw_path: &str) -> Result<PathBuf> {
-    let path = Path::new(raw_path.trim());
-    if path.as_os_str().is_empty() {
-        return Err(anyhow!("spool_path cannot be empty"));
-    }
-
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace_root.join(path)
-    };
-    let normalized = crate::utils::path::normalize_path(&absolute);
-    let normalized_workspace = crate::utils::path::normalize_path(workspace_root);
-    if !normalized.starts_with(&normalized_workspace) {
-        return Err(anyhow!(
-            "spool_path must stay within workspace: {}",
-            raw_path
-        ));
-    }
-
-    Ok(normalized)
-}
-
-fn path_is_tool_accessible_from_workspace(workspace_root: &Path, raw_path: &str) -> bool {
-    let path = Path::new(raw_path.trim());
-    if path.as_os_str().is_empty() {
-        return false;
-    }
-
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace_root.join(path)
-    };
-    let normalized = crate::utils::path::normalize_path(&absolute);
-    let normalized_workspace = crate::utils::path::normalize_path(workspace_root);
-    normalized.starts_with(&normalized_workspace)
-}
-
-fn sanitize_subagent_tool_output_paths(workspace_root: &Path, value: &mut Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-
-    if let Some(raw_path) = object.get("transcript_path").and_then(Value::as_str)
-        && !path_is_tool_accessible_from_workspace(workspace_root, raw_path)
-    {
-        object.remove("transcript_path");
-    }
-
-    if let Some(entry) = object.get_mut("entry") {
-        sanitize_subagent_tool_output_paths(workspace_root, entry);
-    }
-}
-
-enum PlannedPatchWrite {
-    Text { path: PathBuf, content: String },
-    Removal { path: PathBuf },
+fn acquire_executor_rate_limit(bucket: &str, multiplier: f64) -> Result<()> {
+    let mut guard = crate::tools::rate_limiter::PER_TOOL_RATE_LIMITER
+        .lock()
+        .map_err(|err| anyhow!("per-tool rate limiter poisoned: {}", err))?;
+    guard
+        .try_acquire_for_scaled(bucket, multiplier)
+        .map_err(|_| anyhow!("tool rate limit exceeded for {}", bucket))
 }
 
 impl ToolRegistry {
@@ -1517,87 +220,100 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_unified_search(args).await })
     }
 
-    pub(super) fn spawn_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let controller = self
-                .subagent_controller()
-                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
-            let request = serde_json::from_value::<crate::subagents::SpawnAgentRequest>(args)
-                .context("Invalid spawn_agent arguments")?;
-            let entry = controller.spawn(request).await?;
-            let mut value = json!(entry);
-            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
-            Ok(value)
-        })
-    }
+    async fn prepare_exec_run_request(
+        &self,
+        args: &Value,
+        backend: ExecRunBackendKind,
+        missing_error: &str,
+        empty_error: &str,
+    ) -> Result<PreparedExecRunRequest> {
+        acquire_executor_rate_limit("unified_exec:run", 2.0)?;
 
-    pub(super) fn send_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let controller = self
-                .subagent_controller()
-                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
-            let request = serde_json::from_value::<crate::subagents::SendInputRequest>(args)
-                .context("Invalid send_input arguments")?;
-            let entry = controller.send_input(request).await?;
-            let mut value = json!(entry);
-            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
-            Ok(value)
-        })
-    }
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
 
-    pub(super) fn wait_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let controller = self
-                .subagent_controller()
-                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
-            let targets = args
-                .get("targets")
-                .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("wait_agent requires a targets array"))?
-                .iter()
-                .filter_map(Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>();
-            let timeout_ms = args.get("timeout_ms").and_then(Value::as_u64);
-            let entry = controller.wait(&targets, timeout_ms).await?;
-            let mut value = json!({
-                "completed": entry.is_some(),
-                "entry": entry,
-            });
-            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
-            Ok(value)
-        })
-    }
+        let (command, auto_raw_command) = parse_command_parts(payload, missing_error, empty_error)?;
+        let shell_program = match backend {
+            ExecRunBackendKind::Pty => resolve_shell_preference_with_zsh_fork(
+                payload.get("shell").and_then(|value| value.as_str()),
+                self.pty_config(),
+            )?,
+            ExecRunBackendKind::Pipe => resolve_shell_preference(
+                payload.get("shell").and_then(|value| value.as_str()),
+                self.pty_config(),
+            ),
+        };
+        let login_shell = payload
+            .get("login")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let confirm = payload
+            .get("confirm")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
 
-    pub(super) fn resume_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let controller = self
-                .subagent_controller()
-                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
-            let target = args
-                .get("id")
-                .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("resume_agent requires id"))?;
-            let entry = controller.resume(target).await?;
-            let mut value = json!(entry);
-            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
-            Ok(value)
-        })
-    }
+        let mut prepared_command = prepare_exec_command(
+            payload,
+            &shell_program,
+            login_shell,
+            command,
+            auto_raw_command,
+        );
+        let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
 
-    pub(super) fn close_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let controller = self
-                .subagent_controller()
-                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
-            let target = args
-                .get("target")
-                .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("close_agent requires target"))?;
-            let entry = controller.close(target).await?;
-            let mut value = json!(entry);
-            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
-            Ok(value)
+        let working_dir_path = self
+            .pty_manager()
+            .resolve_working_dir(shell_working_dir_value(payload))
+            .await?;
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+        let output_config = exec_run_output_config(payload, &prepared_command.display_command);
+
+        enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
+        let sandbox_config = self.sandbox_config();
+        prepared_command.command = apply_runtime_sandbox_to_command(
+            prepared_command.command,
+            &prepared_command.requested_command,
+            &sandbox_config,
+            self.workspace_root(),
+            &working_dir_path,
+            sandbox_permissions,
+            additional_permissions.as_ref(),
+        )?;
+
+        let rows = match backend {
+            ExecRunBackendKind::Pty => Some(parse_pty_dimension(
+                "rows",
+                payload.get("rows"),
+                self.pty_config().default_rows,
+            )?),
+            ExecRunBackendKind::Pipe => None,
+        };
+        let cols = match backend {
+            ExecRunBackendKind::Pty => Some(parse_pty_dimension(
+                "cols",
+                payload.get("cols"),
+                self.pty_config().default_cols,
+            )?),
+            ExecRunBackendKind::Pipe => None,
+        };
+
+        Ok(PreparedExecRunRequest {
+            prepared_command,
+            working_dir_path,
+            output_config,
+            yield_duration: Duration::from_millis(clamp_exec_yield_ms(
+                payload.get("yield_time_ms").and_then(Value::as_u64),
+                10_000,
+            )),
+            session_id: resolve_exec_run_session_id(payload)?,
+            shell_program,
+            env_overrides: parse_exec_env_overrides(payload)?,
+            is_git_diff,
+            confirm,
+            rows,
+            cols,
         })
     }
 
@@ -1610,17 +326,37 @@ impl ToolRegistry {
         &self,
         args: Value,
     ) -> Result<Value> {
-        let mut args = crate::tools::command_args::normalize_shell_args(&args)
-            .map_err(|error| anyhow!(error))?;
-        if let Some(payload) = args.as_object_mut() {
-            payload
-                .entry("action".to_string())
-                .or_insert_with(|| json!("run"));
-            payload
-                .entry("tty".to_string())
-                .or_insert_with(|| json!(true));
-        }
+        let args = normalize_unified_exec_run_alias_args(&args, true)?;
         self.execute_command_session_run_pty(args, true).await
+    }
+
+    fn dispatch_unified_exec_alias(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
+    }
+
+    fn dispatch_unified_exec_run_alias(
+        &self,
+        args: Value,
+        tty: bool,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let args = normalize_unified_exec_run_alias_args(&args, tty)?;
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
+    }
+
+    fn dispatch_unified_exec_action_alias(
+        &self,
+        args: Value,
+        action: &'static str,
+    ) -> BoxFuture<'_, Result<Value>> {
+        self.dispatch_unified_exec_alias(with_unified_exec_action_default(args, action))
     }
 
     pub(super) async fn execute_unified_exec_internal(
@@ -1838,6 +574,8 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_web_fetch(&self, args: Value) -> Result<Value> {
+        acquire_executor_rate_limit("unified_search:web", 1.0)?;
+
         let url = args
             .get("url")
             .and_then(|v| v.as_str())
@@ -2018,89 +756,27 @@ impl ToolRegistry {
     }
 
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mut args = crate::tools::command_args::normalize_shell_args(&args)
-                .map_err(|error| anyhow!(error))?;
-            if let Some(payload) = args.as_object_mut() {
-                payload
-                    .entry("action".to_string())
-                    .or_insert_with(|| json!("run"));
-                payload
-                    .entry("tty".to_string())
-                    .or_insert_with(|| json!(true));
-            }
-            self.execute_unified_exec(args)
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_run_alias(args, true)
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mut args = args;
-            if let Some(payload) = args.as_object_mut() {
-                payload
-                    .entry("action".to_string())
-                    .or_insert_with(|| json!("write"));
-            }
-            self.execute_unified_exec(args)
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_action_alias(args, "write")
     }
 
     pub(super) fn read_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mut args = args;
-            if let Some(payload) = args.as_object_mut() {
-                payload
-                    .entry("action".to_string())
-                    .or_insert_with(|| json!("poll"));
-            }
-            self.execute_unified_exec(args)
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_action_alias(args, "poll")
     }
 
     pub(super) fn create_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mut args = crate::tools::command_args::normalize_shell_args(&args)
-                .map_err(|error| anyhow!(error))?;
-            if let Some(payload) = args.as_object_mut() {
-                payload
-                    .entry("action".to_string())
-                    .or_insert_with(|| json!("run"));
-                payload
-                    .entry("tty".to_string())
-                    .or_insert_with(|| json!(true));
-            }
-            self.execute_unified_exec(args)
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_run_alias(args, true)
     }
 
     pub(super) fn list_pty_sessions_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            self.execute_unified_exec(json!({"action": "list"}))
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_alias(json!({"action": "list"}))
     }
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mut args = args;
-            if let Some(payload) = args.as_object_mut() {
-                payload
-                    .entry("action".to_string())
-                    .or_insert_with(|| json!("close"));
-            }
-            self.execute_unified_exec(args)
-                .await
-                .map(super::normalize_tool_output)
-        })
+        self.dispatch_unified_exec_action_alias(args, "close")
     }
 
     pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -2120,89 +796,33 @@ impl ToolRegistry {
         args: Value,
         retain_completed_session: bool,
     ) -> Result<Value> {
-        let payload = args
-            .as_object()
-            .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
-
-        let (command, auto_raw_command) = parse_command_parts(
-            payload,
-            "command execution requires a 'command' value",
-            "PTY command cannot be empty",
-        )?;
-
-        let shell_program = resolve_shell_preference_with_zsh_fork(
-            payload.get("shell").and_then(|value| value.as_str()),
-            self.pty_config(),
-        )?;
-        let login_shell = payload
-            .get("login")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        let confirm = payload
-            .get("confirm")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-
-        let mut prepared_command = prepare_exec_command(
-            payload,
-            &shell_program,
-            login_shell,
-            command,
-            auto_raw_command,
-        );
-        let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
-
-        let rows =
-            parse_pty_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?;
-        let cols =
-            parse_pty_dimension("cols", payload.get("cols"), self.pty_config().default_cols)?;
-
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(shell_working_dir_value(payload))
+        let request = self
+            .prepare_exec_run_request(
+                &args,
+                ExecRunBackendKind::Pty,
+                "command execution requires a 'command' value",
+                "PTY command cannot be empty",
+            )
             .await?;
-        let (sandbox_permissions, additional_permissions) =
-            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
-
-        let output_config = exec_run_output_config(payload, &prepared_command.display_command);
-
-        enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
-        let sandbox_config = self.sandbox_config();
-        prepared_command.command = apply_runtime_sandbox_to_command(
-            prepared_command.command,
-            &prepared_command.requested_command,
-            &sandbox_config,
-            self.workspace_root(),
-            &working_dir_path,
-            sandbox_permissions,
-            additional_permissions.as_ref(),
-        )?;
-
-        let yield_duration = Duration::from_millis(clamp_exec_yield_ms(
-            payload.get("yield_time_ms").and_then(Value::as_u64),
-            10_000,
-        ));
-
-        let session_id = resolve_exec_run_session_id(payload)?;
         let mut session_env = HashMap::new();
         let mut zsh_exec_bridge = None;
         if self.pty_config().shell_zsh_fork {
             let wrapper_executable = std::env::current_exe()
                 .context("resolve current executable for zsh exec bridge")?;
-            let bridge = ZshExecBridgeSession::spawn(confirm)
+            let bridge = ZshExecBridgeSession::spawn(request.confirm)
                 .context("initialize zsh exec bridge session")?;
             session_env = bridge.env_vars(&wrapper_executable);
             zsh_exec_bridge = Some(bridge);
         }
-        session_env.extend(parse_exec_env_overrides(payload)?);
+        session_env.extend(request.env_overrides);
         self.exec_sessions
             .create_pty_session(
-                session_id.clone().into(),
-                prepared_command.command,
-                working_dir_path,
+                request.session_id.clone().into(),
+                request.prepared_command.command,
+                request.working_dir_path,
                 crate::tools::pty::PtySize {
-                    rows,
-                    cols,
+                    rows: request.rows.unwrap_or(self.pty_config().default_rows),
+                    cols: request.cols.unwrap_or(self.pty_config().default_cols),
                     pixel_width: 0,
                     pixel_height: 0,
                 },
@@ -2215,28 +835,26 @@ impl ToolRegistry {
 
         let capture = self
             .wait_for_exec_yield(
-                &session_id,
-                yield_duration,
+                &request.session_id,
+                request.yield_duration,
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
                 true,
             )
             .await;
-        let session_metadata = self.exec_session_metadata(&session_id).await?;
+        let session_metadata = self.exec_session_metadata(&request.session_id).await?;
         let mut response = build_exec_filtered_response(
             &session_metadata,
-            &prepared_command.requested_command_display,
+            &request.prepared_command.requested_command_display,
             &capture,
-            &output_config,
-            Some(&session_id),
+            &request.output_config,
+            Some(&request.session_id),
         )?;
 
         if capture.exit_code.is_some() && !retain_completed_session {
-            self.prune_completed_exec_session(&session_id).await?;
+            self.prune_completed_exec_session(&request.session_id)
+                .await?;
         }
-        if is_git_diff {
-            response["no_spool"] = json!(true);
-            response["content_type"] = json!("git_diff");
-        }
+        annotate_exec_run_response(&mut response, request.is_git_diff);
 
         Ok(response)
     }
@@ -2246,105 +864,54 @@ impl ToolRegistry {
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        let payload = args
-            .as_object()
-            .ok_or_else(|| anyhow!("unified_exec run requires a JSON object"))?;
-
-        let (command, auto_raw_command) = parse_command_parts(
-            payload,
-            "unified_exec run requires a 'command' value",
-            "Command cannot be empty",
-        )?;
-
-        let shell_program = resolve_shell_preference(
-            payload.get("shell").and_then(|value| value.as_str()),
-            self.pty_config(),
-        );
-        let login_shell = payload
-            .get("login")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        let confirm = payload
-            .get("confirm")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-
-        let mut prepared_command = prepare_exec_command(
-            payload,
-            &shell_program,
-            login_shell,
-            command,
-            auto_raw_command,
-        );
-        let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
-
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(shell_working_dir_value(payload))
+        let request = self
+            .prepare_exec_run_request(
+                &args,
+                ExecRunBackendKind::Pipe,
+                "unified_exec run requires a 'command' value",
+                "Command cannot be empty",
+            )
             .await?;
-        let (sandbox_permissions, additional_permissions) =
-            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
-
-        let output_config = exec_run_output_config(payload, &prepared_command.display_command);
-
-        enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
-        let sandbox_config = self.sandbox_config();
-        prepared_command.command = apply_runtime_sandbox_to_command(
-            prepared_command.command,
-            &prepared_command.requested_command,
-            &sandbox_config,
-            self.workspace_root(),
-            &working_dir_path,
-            sandbox_permissions,
-            additional_permissions.as_ref(),
-        )?;
-
-        let yield_duration = Duration::from_millis(clamp_exec_yield_ms(
-            payload.get("yield_time_ms").and_then(Value::as_u64),
-            10_000,
-        ));
-
-        let session_id = resolve_exec_run_session_id(payload)?;
         let session_env =
-            self.build_pipe_session_env(&shell_program, parse_exec_env_overrides(payload)?);
+            self.build_pipe_session_env(&request.shell_program, request.env_overrides);
         let session_metadata = self
             .exec_sessions
             .create_pipe_session(
-                session_id.clone().into(),
-                prepared_command.command,
-                working_dir_path,
+                request.session_id.clone().into(),
+                request.prepared_command.command,
+                request.working_dir_path,
                 session_env,
             )
             .await?;
 
         let capture = self
             .capture_exec_session_output(
-                &session_id,
-                yield_duration,
+                &request.session_id,
+                request.yield_duration,
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
                 exec_settlement_mode.settle_noninteractive(),
             )
             .await?;
         let mut response = build_exec_filtered_response(
             &session_metadata,
-            &prepared_command.requested_command_display,
+            &request.prepared_command.requested_command_display,
             &capture,
-            &output_config,
-            Some(&session_id),
+            &request.output_config,
+            Some(&request.session_id),
         )?;
 
         if capture.exit_code.is_some() {
-            self.prune_completed_exec_session(&session_id).await?;
+            self.prune_completed_exec_session(&request.session_id)
+                .await?;
         }
-        if is_git_diff {
-            response["no_spool"] = json!(true);
-            response["content_type"] = json!("git_diff");
-        }
+        annotate_exec_run_response(&mut response, request.is_git_diff);
 
         Ok(response)
     }
 
     async fn execute_command_session_write(&self, args: Value) -> Result<Value> {
+        acquire_executor_rate_limit("unified_exec:write", 3.0)?;
+
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session write requires a JSON object"))?;
@@ -2400,6 +967,8 @@ impl ToolRegistry {
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
+        acquire_executor_rate_limit("unified_exec:poll", 4.0)?;
+
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session read requires a JSON object"))?;
@@ -2771,245 +1340,6 @@ impl ToolRegistry {
         Ok(json!({ "tools": results }))
     }
 
-    async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
-        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
-            .ok_or_else(|| anyhow!("Missing patch input (use 'input' or 'patch' parameter)"))?;
-        let override_snapshot = conflict_override_snapshot(&args);
-
-        let patch = crate::tools::editing::Patch::parse(&patch_input.text)?;
-        let _mutation_leases = self.acquire_patch_mutations(&patch).await?;
-        let planned_writes = self.planned_patch_writes(&patch).await?;
-        for operation in patch.operations() {
-            if let Some(conflict) = self
-                .detect_patch_operation_conflict(operation, override_snapshot.clone())
-                .await?
-            {
-                return Ok(conflict.to_tool_output(self.workspace_root()));
-            }
-        }
-        let results = patch.apply(&self.workspace_root_owned()).await?;
-        for write in planned_writes {
-            let (path, result) = match write {
-                PlannedPatchWrite::Text { path, content } => {
-                    let result = self
-                        .edited_file_monitor()
-                        .record_agent_write_text(&path, &content);
-                    (path, result)
-                }
-                PlannedPatchWrite::Removal { path } => {
-                    let result = self.edited_file_monitor().record_agent_removal(&path);
-                    (path, result)
-                }
-            };
-
-            if let Err(err) = result {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %err,
-                    "Failed to refresh edited-file snapshot after apply_patch"
-                );
-            }
-        }
-
-        Ok(json!({
-            "success": true,
-            "applied": results,
-        }))
-    }
-
-    async fn patch_mutation_paths(
-        &self,
-        patch: &crate::tools::editing::Patch,
-    ) -> Result<Vec<PathBuf>> {
-        let mut paths = Vec::new();
-        for operation in patch.operations() {
-            match operation {
-                crate::tools::editing::PatchOperation::AddFile { path, .. }
-                | crate::tools::editing::PatchOperation::DeleteFile { path } => {
-                    paths.push(self.file_ops_tool().normalize_user_path(path).await?);
-                }
-                crate::tools::editing::PatchOperation::UpdateFile { path, new_path, .. } => {
-                    paths.push(self.file_ops_tool().normalize_user_path(path).await?);
-                    if let Some(destination) = new_path
-                        .as_ref()
-                        .filter(|candidate| candidate.as_str() != path.as_str())
-                    {
-                        paths.push(
-                            self.file_ops_tool()
-                                .normalize_user_path(destination)
-                                .await?,
-                        );
-                    }
-                }
-            }
-        }
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
-    }
-
-    async fn planned_patch_writes(
-        &self,
-        patch: &crate::tools::editing::Patch,
-    ) -> Result<Vec<PlannedPatchWrite>> {
-        let mut writes = Vec::new();
-        for operation in patch.operations() {
-            writes.extend(self.planned_patch_writes_for_operation(operation).await?);
-        }
-        Ok(writes)
-    }
-
-    async fn acquire_patch_mutations(
-        &self,
-        patch: &crate::tools::editing::Patch,
-    ) -> Result<Vec<MutationLease>> {
-        let mut leases = Vec::new();
-        for path in self.patch_mutation_paths(patch).await? {
-            leases.push(self.edited_file_monitor().acquire_mutation(&path).await);
-        }
-        Ok(leases)
-    }
-
-    async fn detect_patch_operation_conflict(
-        &self,
-        operation: &crate::tools::editing::PatchOperation,
-        override_snapshot: Option<crate::tools::edited_file_monitor::FileSnapshot>,
-    ) -> Result<Option<crate::tools::edited_file_monitor::FileConflict>> {
-        let monitor = self.edited_file_monitor();
-        match operation {
-            crate::tools::editing::PatchOperation::AddFile { path, content } => {
-                let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                monitor
-                    .detect_conflict(&canonical_path, Some(content.clone()), override_snapshot)
-                    .await
-            }
-            crate::tools::editing::PatchOperation::DeleteFile { path } => {
-                let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                monitor
-                    .detect_conflict(&canonical_path, Some(String::new()), override_snapshot)
-                    .await
-            }
-            crate::tools::editing::PatchOperation::UpdateFile { path, chunks, .. } => {
-                let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let intended_content =
-                    if let Some(content) = monitor.tracked_read_text(&canonical_path).await {
-                        match crate::tools::editing::patch::render_patch_update_content(
-                            &canonical_path,
-                            &content,
-                            chunks,
-                            path,
-                        )
-                        .await
-                        {
-                            Ok(rendered) => Some(rendered),
-                            Err(err) => {
-                                tracing::debug!(
-                                    path = %canonical_path.display(),
-                                    error = %err,
-                                    "Failed to render patch conflict preview content"
-                                );
-                                None
-                            }
-                        }
-                    } else {
-                        None
-                    };
-
-                monitor
-                    .detect_conflict(&canonical_path, intended_content, override_snapshot)
-                    .await
-            }
-        }
-    }
-
-    async fn planned_patch_writes_for_operation(
-        &self,
-        operation: &crate::tools::editing::PatchOperation,
-    ) -> Result<Vec<PlannedPatchWrite>> {
-        match operation {
-            crate::tools::editing::PatchOperation::AddFile { path, content } => {
-                Ok(vec![PlannedPatchWrite::Text {
-                    path: self.file_ops_tool().normalize_user_path(path).await?,
-                    content: content.clone(),
-                }])
-            }
-            crate::tools::editing::PatchOperation::DeleteFile { path } => {
-                Ok(vec![PlannedPatchWrite::Removal {
-                    path: self.file_ops_tool().normalize_user_path(path).await?,
-                }])
-            }
-            crate::tools::editing::PatchOperation::UpdateFile {
-                path,
-                new_path,
-                chunks,
-            } => {
-                let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let source_content = if let Some(content) = self
-                    .edited_file_monitor()
-                    .tracked_read_text(&canonical_path)
-                    .await
-                {
-                    content
-                } else {
-                    match fs::read_to_string(&canonical_path).await {
-                        Ok(content) => content,
-                        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                            return Err(anyhow!(crate::tools::editing::PatchError::MissingFile {
-                                path: canonical_path.display().to_string(),
-                            }));
-                        }
-                        Err(err) => {
-                            return Err(err).with_context(|| {
-                                format!(
-                                    "Failed to read patch source content for {}",
-                                    canonical_path.display()
-                                )
-                            });
-                        }
-                    }
-                };
-
-                let rendered = crate::tools::editing::patch::render_patch_update_content(
-                    &canonical_path,
-                    &source_content,
-                    chunks,
-                    path,
-                )
-                .await
-                .map_err(|err| {
-                    anyhow!(
-                        "Failed to plan patch output for {}: {err}",
-                        canonical_path.display()
-                    )
-                })?;
-
-                let mut writes = Vec::new();
-                if let Some(destination) = new_path
-                    .as_ref()
-                    .filter(|candidate| candidate.as_str() != path.as_str())
-                {
-                    writes.push(PlannedPatchWrite::Removal {
-                        path: canonical_path,
-                    });
-                    writes.push(PlannedPatchWrite::Text {
-                        path: self
-                            .file_ops_tool()
-                            .normalize_user_path(destination)
-                            .await?,
-                        content: rendered,
-                    });
-                } else {
-                    writes.push(PlannedPatchWrite::Text {
-                        path: canonical_path,
-                        content: rendered,
-                    });
-                }
-
-                Ok(writes)
-            }
-        }
-    }
-
     async fn wait_for_exec_yield(
         &self,
         session_id: &str,
@@ -3232,273 +1562,6 @@ impl ToolRegistry {
     }
 }
 
-// Helper functions and structs for PTY execution
-
-struct PtyEphemeralCapture {
-    output: String,
-    exit_code: Option<i32>,
-    duration: Duration,
-}
-
-fn parse_command_parts(
-    payload: &serde_json::Map<String, Value>,
-    missing_error: &str,
-    empty_error: &str,
-) -> Result<(Vec<String>, Option<String>)> {
-    let normalized_payload = (!payload.contains_key("command")
-        && (payload.contains_key("cmd")
-            || payload.contains_key("raw_command")
-            || payload.contains_key("command.0")
-            || payload.contains_key("command.1")))
-    .then(|| {
-        crate::tools::command_args::normalize_shell_args(&Value::Object(payload.clone()))
-            .map_err(|error| anyhow!(error))
-    })
-    .transpose()?;
-    let payload = normalized_payload
-        .as_ref()
-        .and_then(Value::as_object)
-        .unwrap_or(payload);
-
-    let (mut parts, raw_command) = match payload.get("command") {
-        Some(Value::String(command)) => {
-            // Preserve the original command string to avoid splitting shell operators
-            let parts = shell_words::split(command).context("Failed to parse command string")?;
-            (parts, Some(command.to_string()))
-        }
-        Some(Value::Array(values)) => {
-            let parts = values
-                .iter()
-                .map(|value| {
-                    value
-                        .as_str()
-                        .map(|part| part.to_string())
-                        .ok_or_else(|| anyhow!("command array must contain only strings"))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            (parts, None)
-        }
-        _ => match crate::tools::command_args::parse_indexed_command_parts(payload)
-            .map_err(|error| anyhow!(error))?
-        {
-            Some(indexed_parts) => (indexed_parts, None),
-            None => return Err(anyhow!("{}", missing_error)),
-        },
-    };
-
-    if let Some(args_value) = payload.get("args")
-        && let Some(args_array) = args_value.as_array()
-    {
-        for value in args_array {
-            if let Some(part) = value.as_str() {
-                parts.push(part.to_string());
-            }
-        }
-    }
-
-    if parts.is_empty() {
-        return Err(anyhow!("{}", empty_error));
-    }
-
-    Ok((parts, raw_command))
-}
-
-fn parse_exec_env_overrides(
-    payload: &serde_json::Map<String, Value>,
-) -> Result<HashMap<String, String>> {
-    let Some(env_value) = payload.get("env") else {
-        return Ok(HashMap::new());
-    };
-
-    match env_value {
-        Value::Object(map) => map
-            .iter()
-            .map(|(key, value)| {
-                let value = value
-                    .as_str()
-                    .ok_or_else(|| anyhow!("env values must be strings"))?;
-                Ok((key.clone(), value.to_string()))
-            })
-            .collect(),
-        Value::Array(entries) => {
-            let mut env = HashMap::new();
-            for entry in entries {
-                let object = entry
-                    .as_object()
-                    .ok_or_else(|| anyhow!("env entries must be objects"))?;
-                let name = object
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .ok_or_else(|| anyhow!("env entries must include a non-empty name"))?;
-                let value = object
-                    .get("value")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| anyhow!("env entries must include a string value"))?;
-                env.insert(name.to_string(), value.to_string());
-            }
-            Ok(env)
-        }
-        _ => Err(anyhow!(
-            "env must be an object or array of {{name, value}} entries"
-        )),
-    }
-}
-
-fn is_git_diff_command(parts: &[String]) -> bool {
-    let Some(first) = parts.first() else {
-        return false;
-    };
-    let basename = Path::new(first)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(first.as_str())
-        .to_ascii_lowercase();
-    if basename != "git" && basename != "git.exe" {
-        return false;
-    }
-    parts.iter().skip(1).any(|part| part == "diff")
-}
-
-fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
-    pref.map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .or_else(|| {
-            config
-                .preferred_shell
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-        })
-        .unwrap_or_else(resolve_fallback_shell)
-}
-
-fn resolve_shell_preference_with_zsh_fork(
-    pref: Option<&str>,
-    config: &crate::config::PtyConfig,
-) -> Result<String> {
-    if let Some(zsh_path) = config.zsh_fork_shell_path()? {
-        return Ok(zsh_path.to_string());
-    }
-
-    Ok(resolve_shell_preference(pref, config))
-}
-
-fn normalized_shell_name(shell: &str) -> String {
-    PathBuf::from(shell)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or(shell)
-        .to_lowercase()
-}
-
-fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
-    let fallback = || shell_words::join(parts.iter().map(|s| s.as_str()));
-
-    let Some(raw) = raw else {
-        return fallback();
-    };
-
-    // Preserve original shell syntax from `command` (operators, quoting), while still
-    // appending any separate `args` entries that were merged into `parts`.
-    let Ok(raw_parts) = shell_words::split(raw) else {
-        return fallback();
-    };
-
-    if parts.len() <= raw_parts.len() || !parts.starts_with(&raw_parts) {
-        return raw.to_string();
-    }
-
-    let suffix = shell_words::join(parts[raw_parts.len()..].iter().map(|s| s.as_str()));
-    if suffix.is_empty() {
-        raw.to_string()
-    } else {
-        format!("{} {}", raw, suffix)
-    }
-}
-
-fn shell_command_flag(shell_program: &str, normalized_shell: &str) -> String {
-    if should_use_windows_command_tokenizer(Some(shell_program)) {
-        match normalized_shell {
-            "cmd" | "cmd.exe" => "/C".to_string(),
-            "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
-            _ => "-c".to_string(),
-        }
-    } else {
-        "-c".to_string()
-    }
-}
-
-fn command_display_for_shell(parts: &[String], shell_program: &str) -> String {
-    if should_use_windows_command_tokenizer(Some(shell_program)) {
-        join_windows_command(parts)
-    } else {
-        shell_words::join(parts.iter().map(|part| part.as_str()))
-    }
-}
-
-fn prepare_exec_command(
-    payload: &serde_json::Map<String, Value>,
-    shell_program: &str,
-    login_shell: bool,
-    mut command: Vec<String>,
-    auto_raw_command: Option<String>,
-) -> PreparedExecCommand {
-    let requested_command = command.clone();
-
-    let normalized_shell = normalized_shell_name(shell_program);
-    let existing_shell = command
-        .first()
-        .map(|existing| normalized_shell_name(existing));
-
-    if existing_shell != Some(normalized_shell.clone()) {
-        // Prefer explicit raw_command, fallback to auto-detected from string command
-        let raw_command = payload
-            .get("raw_command")
-            .and_then(|value| value.as_str())
-            .map(|value| value.to_string())
-            .or(auto_raw_command);
-
-        let command_string =
-            build_shell_command_string(raw_command.as_deref(), &command, shell_program);
-
-        let mut shell_invocation = Vec::with_capacity(4);
-        shell_invocation.push(shell_program.to_string());
-
-        if login_shell && !should_use_windows_command_tokenizer(Some(shell_program)) {
-            shell_invocation.push("-l".to_string());
-        }
-
-        shell_invocation.push(shell_command_flag(shell_program, &normalized_shell));
-        shell_invocation.push(command_string);
-        command = shell_invocation;
-    }
-
-    PreparedExecCommand {
-        display_command: command_display_for_shell(&command, shell_program),
-        requested_command_display: command_display_for_shell(&requested_command, shell_program),
-        command,
-        requested_command,
-    }
-}
-
-fn code_language_from_args(args: &Value) -> Language {
-    let language_str = args
-        .get("language")
-        .or_else(|| args.get("lang"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("python3");
-
-    match language_str {
-        "python3" | "python" => Language::Python3,
-        "javascript" | "js" => Language::JavaScript,
-        _ => Language::Python3,
-    }
-}
-
 #[cfg(test)]
 mod execute_code_tests {
     use super::code_language_from_args;
@@ -3659,137 +1722,6 @@ mod shell_preference_tests {
         assert_eq!(resolved, expected);
         Ok(())
     }
-}
-
-/// Check if a command is a file display command that should have limited output.
-/// Returns suggested max_tokens if the command is a file display command without explicit limits.
-pub fn suggest_max_tokens_for_command(cmd: &str) -> Option<usize> {
-    let trimmed = cmd.trim().to_lowercase();
-
-    // Skip if command already has output limiting
-    if trimmed.contains("head") || trimmed.contains("tail") || trimmed.contains("| ") {
-        return None;
-    }
-
-    // File display commands that benefit from token limits
-    let file_display_cmds = ["cat ", "bat ", "type "]; // type for Windows
-
-    for prefix in &file_display_cmds {
-        if trimmed.starts_with(prefix) {
-            // Suggest 250 tokens (~1000 chars) for file preview
-            return Some(250);
-        }
-    }
-
-    None
-}
-
-fn should_use_windows_command_tokenizer(shell: Option<&str>) -> bool {
-    if cfg!(windows) {
-        if let Some(s) = shell {
-            let lower = s.to_lowercase();
-            return lower.contains("cmd") || lower.contains("powershell") || lower.contains("pwsh");
-        }
-        return true;
-    }
-    false
-}
-
-fn join_windows_command(parts: &[String]) -> String {
-    parts.join(" ")
-}
-
-fn parse_pty_dimension(name: &str, value: Option<&Value>, default: u16) -> Result<u16> {
-    match value {
-        Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| anyhow!("{} must be a number", name))?;
-            Ok(n as u16)
-        }
-        None => Ok(default),
-    }
-}
-
-fn generate_session_id(prefix: &str) -> String {
-    format!("{}-{}", prefix, &uuid::Uuid::new_v4().to_string()[..8])
-}
-
-fn resolve_exec_run_session_id(payload: &serde_json::Map<String, Value>) -> Result<String> {
-    crate::tools::command_args::session_id_text_from_payload(payload)
-        .map(|session_id| validate_exec_session_id(session_id, "unified_exec run"))
-        .transpose()?
-        .map(str::to_string)
-        .map_or_else(|| Ok(generate_session_id("run")), Ok)
-}
-
-fn strip_ansi(text: &str) -> String {
-    crate::utils::ansi_parser::strip_ansi(text)
-}
-
-fn filter_pty_output(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
-}
-
-// Conservative PTY command policy inspired by bash allow/deny defaults.
-const PTY_DENY_PREFIXES: &[&str] = &[
-    "bash -i",
-    "sh -i",
-    "zsh -i",
-    "fish -i",
-    "python -i",
-    "python3 -i",
-    "ipython",
-    "nano",
-    "vim",
-    "vi",
-    "emacs",
-    "top",
-    "htop",
-    "less",
-    "more",
-    "screen",
-    "tmux",
-];
-
-const PTY_DENY_STANDALONE: &[&str] = &["python", "python3", "bash", "sh", "zsh", "fish"];
-
-#[allow(dead_code)]
-const PTY_ALLOW_PREFIXES: &[&str] = &[
-    "pwd",
-    "whoami",
-    "ls",
-    "git status",
-    "git diff",
-    "git log",
-    "stat",
-    "which",
-    "echo",
-    "cat",
-];
-
-fn enforce_pty_command_policy(display_command: &str, confirm: bool) -> Result<()> {
-    let lower = display_command.to_ascii_lowercase();
-    let trimmed = lower.trim();
-    let is_standalone = trimmed.split_whitespace().count() == 1;
-
-    let deny_match = PTY_DENY_PREFIXES
-        .iter()
-        .any(|prefix| trimmed.starts_with(prefix));
-    let standalone_denied = is_standalone && PTY_DENY_STANDALONE.contains(&trimmed);
-
-    if deny_match || standalone_denied {
-        if confirm {
-            return Ok(());
-        }
-        return Err(anyhow!(
-            "Command '{}' is blocked by PTY safety policy. Set confirm=true to force execution.",
-            display_command
-        ));
-    }
-
-    // Allowlisted commands are simply allowed; we rely on general policy for others.
-    Ok(())
 }
 
 #[cfg(test)]
