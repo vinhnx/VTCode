@@ -2,7 +2,7 @@
   "name": "vtcode-companion",
   "displayName": "VT Code",
   "description": "VS Code extension for VT Code, a Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support. Provides deep integration with the VT Code AI coding assistant for enhanced productivity.",
-  "version": "0.50.11",
+  "version": "0.50.12",
   "publisher": "nguyenxuanvinh",
   "repository": {
     "type": "git",
@@ -63,9 +63,7 @@
     "onCommand:vtcode.launchAgentTerminal",
     "onCommand:vtcode.runAnalyze",
     "onCommand:vtcode.runTaskTrackerTask",
-    "onCommand:vtcode.refreshQuickActions",
-    "onCommand:vtcode.openChat",
-    "onView:vtcodeChatView"
+    "onCommand:vtcode.refreshQuickActions"
   ],
   "main": "./dist/extension.js",
   "capabilities": {
@@ -275,12 +273,6 @@
         "title": "Configure MCP Providers",
         "category": "VT Code",
         "icon": "$(plug)"
-      },
-      {
-        "command": "vtcode.openChat",
-        "title": "Open Chat with VT Code",
-        "category": "VT Code",
-        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
@@ -337,10 +329,6 @@
         {
           "command": "vtcode.configureMcpProviders",
           "when": "vtcode.configAvailable && vtcode.workspaceTrusted"
-        },
-        {
-          "command": "vtcode.openChat",
-          "when": "vtcode.workspaceTrusted"
         }
       ],
       "view/title": [
@@ -368,11 +356,6 @@
           "command": "vtcode.runAnalyze",
           "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
           "group": "navigation@25"
-        },
-        {
-          "command": "vtcode.openChat",
-          "when": "view == vtcodeQuickActionsView && vtcode.workspaceTrusted",
-          "group": "navigation@22"
         },
         {
           "command": "vtcode.runTaskTrackerTask",
@@ -420,12 +403,6 @@
           "id": "vtcodeQuickActionsView",
           "name": "Quick Actions",
           "when": "workbenchState != 'empty'"
-        },
-        {
-          "id": "vtcodeChatView",
-          "name": "Chat",
-          "type": "webview",
-          "icon": "media/vtcode-icon.svg"
         }
       ]
     },
