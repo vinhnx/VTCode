@@ -45,6 +45,7 @@ use vtcode_core::core::agent::error_recovery::ErrorType;
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 320;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
+const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "I couldn't complete the final recovery synthesis, but the latest validated tool outputs in this turn are still usable. Reuse them directly.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PostToolFailureRecovery {
@@ -436,6 +437,39 @@ fn maybe_recover_after_post_tool_llm_failure(
     Ok(action)
 }
 
+fn complete_turn_after_failed_tool_free_recovery(
+    working_history: &mut Vec<uni::Message>,
+    failure_stage: &'static str,
+    err: Option<&anyhow::Error>,
+) -> TurnLoopResult {
+    let has_recent_fallback = working_history.iter().rev().take(3).any(|message| {
+        message.role == uni::MessageRole::Assistant
+            && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+            && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+    });
+    if !has_recent_fallback {
+        working_history.push(
+            uni::Message::assistant(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER.to_string())
+                .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        );
+    }
+
+    if let Some(err) = err {
+        tracing::warn!(
+            stage = failure_stage,
+            error = %err,
+            "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
+        );
+    } else {
+        tracing::warn!(
+            stage = failure_stage,
+            "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
+        );
+    }
+
+    TurnLoopResult::Completed
+}
+
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
 pub(crate) async fn run_turn_loop(
@@ -607,12 +641,11 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
-                            result = TurnLoopResult::Blocked {
-                                reason: Some(
-                                    "Recovery mode could not complete the final synthesis pass."
-                                        .to_string(),
-                                ),
-                            };
+                            result = complete_turn_after_failed_tool_free_recovery(
+                                turn_processing_ctx.working_history,
+                                "execute_llm_request.stop_after_directive",
+                                Some(&err),
+                            );
                         } else {
                             result = TurnLoopResult::Completed;
                         }
@@ -621,12 +654,11 @@ pub(crate) async fn run_turn_loop(
                 }
 
                 if tool_free_recovery {
-                    result = TurnLoopResult::Blocked {
-                        reason: Some(
-                            "Recovery mode could not complete the final synthesis pass."
-                                .to_string(),
-                        ),
-                    };
+                    result = complete_turn_after_failed_tool_free_recovery(
+                        turn_processing_ctx.working_history,
+                        "execute_llm_request.direct_tool_free_failure",
+                        Some(&err),
+                    );
                     break;
                 }
 
@@ -792,12 +824,11 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
-                            result = TurnLoopResult::Blocked {
-                                reason: Some(
-                                    "Recovery mode could not complete the final synthesis pass."
-                                        .to_string(),
-                                ),
-                            };
+                            result = complete_turn_after_failed_tool_free_recovery(
+                                turn_processing_ctx.working_history,
+                                "process_llm_response.stop_after_directive",
+                                Some(&err),
+                            );
                         } else {
                             result = TurnLoopResult::Completed;
                         }
@@ -896,12 +927,11 @@ pub(crate) async fn run_turn_loop(
                     }
                     PostToolFailureRecovery::StopAfterDirective => {
                         if tool_free_recovery {
-                            result = TurnLoopResult::Blocked {
-                                reason: Some(
-                                    "Recovery mode could not complete the final synthesis pass."
-                                        .to_string(),
-                                ),
-                            };
+                            result = complete_turn_after_failed_tool_free_recovery(
+                                working_history,
+                                "handle_turn_processing_result.stop_after_directive",
+                                Some(&err),
+                            );
                         } else {
                             result = TurnLoopResult::Completed;
                         }
@@ -1100,11 +1130,13 @@ async fn maybe_run_external_turn_complete_notify(
 mod tests {
     use super::{
         HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-        POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, accumulate_turn_usage,
-        ensure_post_tool_resume_directive, has_tool_response_since, has_turn_usage,
-        maybe_recover_after_post_tool_llm_failure, prepare_post_tool_tool_free_recovery,
-        run_turn_loop,
+        POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery,
+        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
+        complete_turn_after_failed_tool_free_recovery, ensure_post_tool_resume_directive,
+        has_tool_response_since, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+        prepare_post_tool_tool_free_recovery, run_turn_loop,
     };
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use anyhow::anyhow;
     use serde_json::json;
@@ -1277,6 +1309,39 @@ mod tests {
             message.role == uni::MessageRole::System
                 && message.content.as_text() == POST_TOOL_RECOVERY_REASON
         }));
+    }
+
+    #[test]
+    fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
+        let mut history = vec![uni::Message::user("summarize".to_string())];
+        let outcome = complete_turn_after_failed_tool_free_recovery(
+            &mut history,
+            "test.stage",
+            Some(&anyhow!("Network error")),
+        );
+        assert!(matches!(outcome, TurnLoopResult::Completed));
+        let fallback_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::Assistant
+                    && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+                    && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+            })
+            .count();
+        assert_eq!(fallback_count, 1);
+
+        let outcome_again =
+            complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None);
+        assert!(matches!(outcome_again, TurnLoopResult::Completed));
+        let fallback_count_again = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::Assistant
+                    && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+                    && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+            })
+            .count();
+        assert_eq!(fallback_count_again, 1);
     }
 
     #[test]

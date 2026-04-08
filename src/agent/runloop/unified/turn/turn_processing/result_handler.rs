@@ -367,9 +367,12 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     Some(uni::AssistantPhase::FinalAnswer),
                 )?;
                 params.ctx.finish_recovery_pass();
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(recovery_reason.to_string()),
-                }));
+                tracing::warn!(
+                    mode = ?recovery_mode,
+                    reason = recovery_reason,
+                    "Recovery pass returned no content; emitted deterministic fallback answer."
+                );
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed));
             }
 
             let recovery_mode = empty_response_recovery_mode(params.ctx.working_history);
@@ -530,7 +533,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recovery_empty_response_breaks_turn_as_blocked() {
+    async fn recovery_empty_response_emits_fallback_and_completes_turn() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
         ctx.activate_recovery("loop detector");
@@ -554,8 +557,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
-            if reason.contains("returned no answer")
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(backing.last_history_message_contains(
             "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
@@ -563,7 +565,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recovery_retry_empty_response_emits_fallback_message_before_blocking() {
+    async fn recovery_retry_empty_response_emits_fallback_and_completes_turn() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
         ctx.push_system_message("prior context");
@@ -588,8 +590,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
-            if reason.contains("still returned no answer")
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(backing.last_history_message_contains(
             "I couldn't continue because the model returned no answer twice in a row."
