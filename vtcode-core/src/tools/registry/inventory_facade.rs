@@ -60,7 +60,7 @@ impl ToolRegistry {
         self.inventory.workspace_root().clone()
     }
 
-    /// Get workspace root as Cow<str> to avoid allocations when possible
+    /// Get workspace root as `Cow<str>` to avoid allocations when possible.
     pub(crate) fn workspace_root_str(&self) -> Cow<'_, str> {
         self.workspace_root().to_string_lossy()
     }

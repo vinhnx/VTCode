@@ -303,7 +303,7 @@ impl TerminalAppLauncher {
     ///
     /// This is the unified method for launching external applications while
     /// properly managing terminal state. It follows the Ratatui recipe:
-    /// https://ratatui.rs/recipes/apps/spawn-vim/
+    /// <https://ratatui.rs/recipes/apps/spawn-vim/>
     ///
     /// The sequence ensures:
     /// 1. Event handler is stopped (if applicable)

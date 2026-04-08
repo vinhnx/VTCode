@@ -146,7 +146,7 @@ impl CachedToolExecutor {
     }
 
     /// Execute a tool but return a shared (Arc) response to avoid clones.
-    /// Accepts a shared Arc<Value> to avoid cloning arg contents when caller
+    /// Accepts a shared `Arc<Value>` to avoid cloning arg contents when caller
     /// already holds a shared reference.
     pub async fn execute_shared(
         &self,
