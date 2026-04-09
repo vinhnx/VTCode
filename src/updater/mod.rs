@@ -149,13 +149,16 @@ impl Updater {
             install_source::get_target_triple().context("Unsupported platform for auto-update")?;
 
         let status = tokio::task::spawn_blocking(move || {
+            // Use .tar.gz as identifier to specifically match tarball archives
+            // and avoid .sha256 checksum files that have the same target triple
+            let identifier = format!("{target}.tar.gz");
             let mut builder = self_update::backends::github::Update::configure();
             builder
                 .repo_owner(github::REPO_OWNER)
                 .repo_name(github::REPO_NAME)
                 .bin_name("vtcode")
                 .target(target)
-                .identifier(".tar.gz")
+                .identifier(&identifier)
                 .show_download_progress(true)
                 .no_confirm(true);
 
@@ -237,6 +240,53 @@ impl Updater {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn test_identifier_selects_tarball_not_checksum() {
+        // Verify that our identifier correctly picks .tar.gz over .sha256 files
+        let target = "aarch64-apple-darwin";
+        let identifier = format!("{target}.tar.gz");
+        
+        // Simulate the asset selection logic from self_update
+        let assets = vec![
+            "checksums.txt",
+            "vtcode-0.98.1-aarch64-apple-darwin.sha256",
+            "vtcode-0.98.1-aarch64-apple-darwin.tar.gz",
+            "vtcode-0.98.1-x86_64-apple-darwin.sha256",
+            "vtcode-0.98.1-x86_64-apple-darwin.tar.gz",
+        ];
+        
+        let selected = assets.iter().find(|asset| {
+            asset.contains(target) && asset.contains(&identifier)
+        });
+        
+        assert_eq!(
+            selected,
+            Some(&"vtcode-0.98.1-aarch64-apple-darwin.tar.gz"),
+            "Should select the .tar.gz archive, not the .sha256 checksum file"
+        );
+    }
+
+    #[test]
+    fn test_identifier_prevents_wrong_target_selection() {
+        // Verify identifier doesn't accidentally pick assets for wrong target
+        let target = "aarch64-apple-darwin";
+        let identifier = format!("{target}.tar.gz");
+        
+        let assets = vec![
+            "vtcode-0.98.1-x86_64-apple-darwin.sha256",
+            "vtcode-0.98.1-x86_64-apple-darwin.tar.gz",
+        ];
+        
+        let selected = assets.iter().find(|asset| {
+            asset.contains(target) && asset.contains(&identifier)
+        });
+        
+        assert!(
+            selected.is_none(),
+            "Should not select x86_64 assets when target is aarch64"
+        );
+    }
 
     #[test]
     fn test_version_parsing() {
