@@ -35,6 +35,23 @@ pub fn long_version() -> String {
     )
 }
 
+fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
+    let candidate = PathBuf::from(raw);
+    if !candidate.exists() {
+        return Err(format!(
+            "Workspace path does not exist: {}",
+            candidate.display()
+        ));
+    }
+    if !candidate.is_dir() {
+        return Err(format!(
+            "Workspace path is not a directory: {}",
+            candidate.display()
+        ));
+    }
+    Ok(candidate)
+}
+
 /// Main CLI structure for vtcode with advanced features
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -52,6 +69,7 @@ pub struct Cli {
     #[arg(
         value_name = "WORKSPACE",
         value_hint = ValueHint::DirPath,
+        value_parser = parse_workspace_directory,
         global = true
     )]
     pub workspace_path: Option<PathBuf>,
@@ -74,7 +92,8 @@ pub struct Cli {
         global = true,
         alias = "workspace-dir",
         value_name = "PATH",
-        value_hint = ValueHint::DirPath
+        value_hint = ValueHint::DirPath,
+        value_parser = parse_workspace_directory
     )]
     pub workspace: Option<PathBuf>,
 
@@ -564,7 +583,11 @@ pub enum Commands {
     },
 
     /// Create complete Rust project
-    CreateProject { name: String, features: Vec<String> },
+    CreateProject {
+        name: String,
+        #[arg(long = "feature", value_name = "FEATURE", action = ArgAction::Append)]
+        features: Vec<String>,
+    },
 
     /// Revert agent to a previous snapshot
     Revert {
@@ -572,7 +595,7 @@ pub enum Commands {
         #[arg(short, long)]
         turn: usize,
         /// Scope of revert operation: conversation, code, full
-        #[arg(short, long)]
+        #[arg(long)]
         partial: Option<String>,
     },
 
@@ -1717,5 +1740,37 @@ mod tests {
             Cli::try_parse_from(["vtcode", "--codex-experimental", "--no-codex-experimental"]);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parses_create_project_feature_flags() {
+        let cli = Cli::parse_from([
+            "vtcode",
+            "create-project",
+            "demo",
+            "--feature",
+            "web",
+            "--feature",
+            "db",
+        ]);
+
+        assert!(matches!(
+            cli.command,
+            Some(super::Commands::CreateProject { ref name, ref features })
+                if name == "demo" && features == &vec!["web".to_string(), "db".to_string()]
+        ));
+    }
+
+    #[test]
+    fn parses_revert_partial_long_flag() {
+        let cli = Cli::parse_from(["vtcode", "revert", "--turn", "3", "--partial", "code"]);
+
+        assert!(matches!(
+            cli.command,
+            Some(super::Commands::Revert {
+                turn: 3,
+                partial: Some(ref scope)
+            }) if scope == "code"
+        ));
     }
 }

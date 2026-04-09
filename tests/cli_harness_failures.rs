@@ -61,8 +61,9 @@ fn unknown_positional_token_fails_without_forwarding_prompt_to_llm() {
     cmd.arg("hellp");
 
     cmd.assert().failure().stderr(
-        predicate::str::contains("failed to initialize VT Code startup context")
-            .and(predicate::str::contains("Workspace"))
+        predicate::str::contains("invalid value")
+            .and(predicate::str::contains("Workspace path does not exist"))
+            .and(predicate::str::contains("try '--help'"))
             .and(predicate::str::contains("Sending prompt to").not()),
     );
 }

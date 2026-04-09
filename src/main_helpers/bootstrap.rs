@@ -82,20 +82,31 @@ pub(crate) async fn resolve_startup_context(args: &Cli) -> Result<StartupContext
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_startup_context;
+    use super::build_augmented_cli_command;
     use clap::Parser;
     use vtcode_core::cli::args::Cli;
 
-    #[tokio::test]
-    async fn invalid_positional_workspace_is_not_treated_as_prompt() {
-        let args = Cli::parse_from(["vtcode", "hellp"]);
-        let err = resolve_startup_context(&args)
-            .await
-            .expect_err("invalid positional workspace should fail");
-        let err_text = format!("{err:#}");
+    #[test]
+    fn invalid_positional_workspace_fails_during_cli_parse() {
+        let mut command = build_augmented_cli_command();
+        let err = command
+            .try_get_matches_from_mut(["vtcode", "hellp"])
+            .expect_err("invalid positional workspace should fail at clap parsing");
+        let err_text = err.to_string();
         assert!(
-            err_text.contains("Workspace"),
-            "unexpected error: {err_text}"
+            err_text.contains("Workspace path does not exist"),
+            "unexpected clap error: {err_text}"
+        );
+    }
+
+    #[test]
+    fn invalid_positional_workspace_fails_with_derive_parser_too() {
+        let err = Cli::try_parse_from(["vtcode", "hellp"])
+            .expect_err("invalid positional workspace should fail at derive parser");
+        let err_text = err.to_string();
+        assert!(
+            err_text.contains("Workspace path does not exist"),
+            "unexpected clap error: {err_text}"
         );
     }
 }
