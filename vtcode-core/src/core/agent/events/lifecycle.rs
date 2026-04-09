@@ -39,6 +39,16 @@ fn trimmed_string_field<'a>(output: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|text| !text.is_empty())
 }
 
+fn trimmed_error_message(output: &Value) -> Option<&str> {
+    match output.get("error") {
+        Some(Value::String(message)) => Some(message.as_str()),
+        Some(Value::Object(error)) => error.get("message").and_then(Value::as_str),
+        _ => None,
+    }
+    .map(str::trim)
+    .filter(|text| !text.is_empty())
+}
+
 fn sample_strings_from_objects(items: &[Value], keys: &[&str], limit: usize) -> Vec<String> {
     let mut samples = Vec::new();
 
@@ -241,7 +251,10 @@ pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
     if let Some(summary) = structured_summary.as_deref() {
         append_unique_line(&mut parts, summary);
     }
-    for key in ["message", "hint"] {
+    if let Some(text) = trimmed_error_message(output) {
+        append_unique_line(&mut parts, text);
+    }
+    for key in ["message", "critical_note", "hint", "next_action"] {
         if let Some(text) = trimmed_string_field(output, key) {
             append_unique_line(&mut parts, text);
         }
@@ -925,5 +938,27 @@ mod tests {
 
         assert_eq!(payload.aggregated_output, "No matches found");
         assert_eq!(payload.spool_path, None);
+    }
+
+    #[test]
+    fn tool_output_payload_includes_structured_recovery_guidance() {
+        let payload = tool_output_payload_from_value(&json!({
+            "matches": [],
+            "path": "src/agent",
+            "hint": "Pattern looks like a code fragment.",
+            "next_action": "Retry with a larger parseable pattern."
+        }));
+
+        assert!(payload.aggregated_output.contains("No matches found"));
+        assert!(
+            payload
+                .aggregated_output
+                .contains("Pattern looks like a code fragment.")
+        );
+        assert!(
+            payload
+                .aggregated_output
+                .contains("Retry with a larger parseable pattern.")
+        );
     }
 }

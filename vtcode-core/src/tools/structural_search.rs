@@ -4,7 +4,7 @@ use regex::Regex;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tokio::process::Command;
 
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
@@ -801,12 +801,16 @@ fn build_fragment_result(
     display_path: &str,
     hint: String,
 ) -> Value {
+    let next_action = "Retry `unified_search` with `action='structural'` using a larger parseable pattern and `selector` when the real target is a subnode inside that pattern. Do not rerun the same fragment unchanged.";
+
     json!({
         "backend": "ast-grep",
         "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "matches": [],
         "truncated": false,
+        "is_recoverable": true,
+        "next_action": next_action,
         "hint": hint,
     })
 }
@@ -990,7 +994,18 @@ struct ResolvedSearchPath {
 }
 
 fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<ResolvedSearchPath> {
-    let resolved = resolve_workspace_path(workspace_root, PathBuf::from(requested_path).as_path())
+    let requested = PathBuf::from(requested_path);
+    let resolved = resolve_workspace_path(workspace_root, requested.as_path())
+        .or_else(|original_error| {
+            let Some(remapped) =
+                remap_legacy_crates_search_path(workspace_root, requested.as_path())
+            else {
+                return Err(original_error);
+            };
+            resolve_workspace_path(workspace_root, remapped.as_path()).with_context(|| {
+                format!("Failed to resolve structural search path: {requested_path}")
+            })
+        })
         .with_context(|| format!("Failed to resolve structural search path: {requested_path}"))?;
     let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
         format!(
@@ -1021,6 +1036,30 @@ fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<Re
         command_arg,
         display_path,
     })
+}
+
+fn remap_legacy_crates_search_path(
+    workspace_root: &Path,
+    requested_path: &Path,
+) -> Option<PathBuf> {
+    let relative = if requested_path.is_absolute() {
+        requested_path.strip_prefix(workspace_root).ok()?
+    } else {
+        requested_path
+    };
+
+    let mut components = relative.components();
+    match components.next()? {
+        Component::Normal(component) if component == "crates" => {}
+        _ => return None,
+    }
+
+    let remapped: PathBuf = components.collect();
+    if remapped.as_os_str().is_empty() {
+        return None;
+    }
+
+    workspace_root.join(&remapped).exists().then_some(remapped)
 }
 
 async fn resolve_config_path(
@@ -1666,6 +1705,13 @@ mod tests {
         .expect("fragment guidance should be returned");
 
         assert_eq!(result["matches"], json!([]));
+        assert_eq!(result["is_recoverable"], json!(true));
+        assert!(
+            result["next_action"]
+                .as_str()
+                .expect("next_action")
+                .contains("larger parseable pattern")
+        );
         let hint = result["hint"].as_str().expect("hint");
         assert!(hint.contains("Result return-type queries"), "{hint}");
         assert!(
@@ -1704,6 +1750,7 @@ mod tests {
         .await
         .expect("fragment guidance should be returned");
 
+        assert_eq!(result["is_recoverable"], json!(true));
         let hint = result["hint"].as_str().expect("hint");
         assert!(hint.contains("Result return-type queries"), "{hint}");
         assert!(
@@ -1712,6 +1759,38 @@ mod tests {
         );
         assert!(!hint.contains("load_skill"), "{hint}");
         assert!(!invoked_marker.exists(), "ast-grep should not be invoked");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_remaps_legacy_crates_paths_to_workspace_crates() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let crate_src = temp.path().join("vtcode-core").join("src");
+        fs::create_dir_all(&crate_src).expect("create remapped crate src");
+        let args_path = temp.path().join("sg_args.txt");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+            args_path.display()
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let legacy_path = temp.path().join("crates").join("vtcode-core").join("src");
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "fn $NAME() {}",
+                "lang": "rust",
+                "path": legacy_path.to_string_lossy().to_string()
+            }),
+        )
+        .await
+        .expect("search should remap legacy crates path");
+
+        assert_eq!(result["path"], json!("vtcode-core/src"));
+        let args = fs::read_to_string(args_path).expect("read sg args");
+        assert!(args.lines().any(|line| line == "vtcode-core/src"), "{args}");
     }
 
     #[tokio::test]

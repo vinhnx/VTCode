@@ -171,6 +171,21 @@ pub(super) fn preflight_validation_fallback(
         return None;
     }
 
+    if tool_intent::unified_file_action_is(args_val, "list") {
+        let path = args_val
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or(".");
+        return Some((
+            tool_names::UNIFIED_SEARCH.to_string(),
+            json!({
+                "action": "list",
+                "path": path,
+            }),
+        ));
+    }
+
     tool_intent::remap_unified_file_command_args_to_unified_exec(args_val)
         .map(|args| (tool_names::UNIFIED_EXEC.to_string(), args))
 }

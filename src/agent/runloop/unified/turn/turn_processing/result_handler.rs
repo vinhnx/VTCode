@@ -145,53 +145,9 @@ fn recovery_empty_response_fallback_guidance(mode: RecoveryMode) -> &'static str
     match mode {
         RecoveryMode::ToolEnabledRetry => "Retry the turn from the current context.",
         RecoveryMode::ToolFreeSynthesis => {
-            "Reuse the latest tool outputs already collected in this turn before retrying."
+            "Reuse the latest tool outputs already collected in this turn before retrying, and follow any `hint`, `next_action`, `fallback_tool`, or `fallback_tool_args` they already provide."
         }
     }
-}
-
-fn truncate_recovery_preview(text: &str, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-
-    let end = text
-        .char_indices()
-        .nth(max_chars)
-        .map_or(text.len(), |(idx, _)| idx);
-    let mut truncated = text[..end].trim_end().to_string();
-    truncated.push_str("...");
-    truncated
-}
-
-fn collapse_recovery_preview_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn latest_recovery_context_preview(history: &[uni::Message]) -> Option<String> {
-    const MAX_PREVIEW_CHARS: usize = 220;
-
-    let preview_for_role = |role: uni::MessageRole, label: &str| {
-        history.iter().rev().find_map(|message| {
-            if message.role != role {
-                return None;
-            }
-
-            let text = collapse_recovery_preview_whitespace(message.content.as_text().trim());
-            if text.is_empty() {
-                return None;
-            }
-
-            Some(format!(
-                "{label}: {}",
-                truncate_recovery_preview(&text, MAX_PREVIEW_CHARS)
-            ))
-        })
-    };
-
-    preview_for_role(uni::MessageRole::Tool, "Latest tool output")
-        .or_else(|| preview_for_role(uni::MessageRole::Assistant, "Latest assistant text"))
-        .or_else(|| preview_for_role(uni::MessageRole::User, "Latest user request"))
 }
 
 fn recovery_empty_response_fallback_message(
@@ -201,10 +157,14 @@ fn recovery_empty_response_fallback_message(
     let intro = recovery_empty_response_fallback_intro(mode);
     let guidance = recovery_empty_response_fallback_guidance(mode);
 
-    if let Some(preview) = latest_recovery_context_preview(history) {
-        format!("{intro}\n\n{preview}\n\n{guidance}")
-    } else {
+    let previews =
+        crate::agent::runloop::unified::turn::compaction::build_recovery_context_previews(history);
+    if previews.is_empty() {
         format!("{intro}\n\n{guidance}")
+    } else if previews.len() == 1 {
+        format!("{intro}\n\n{}\n\n{guidance}", previews[0])
+    } else {
+        format!("{intro}\n\n{}\n\n{guidance}", previews.join("\n"))
     }
 }
 
@@ -562,6 +522,48 @@ mod tests {
         assert!(backing.last_history_message_contains(
             "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
         ));
+    }
+
+    #[tokio::test]
+    async fn recovery_empty_response_fallback_includes_user_request_and_recent_tool_outputs() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history
+            .push(uni::Message::user("tell me more".to_string()));
+        ctx.working_history.push(uni::Message::tool_response(
+            "call_1".to_string(),
+            "first tool output".to_string(),
+        ));
+        ctx.working_history.push(uni::Message::tool_response(
+            "call_2".to_string(),
+            "second tool output".to_string(),
+        ));
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::Empty,
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery empty response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+        ));
+        assert!(backing.last_history_message_contains("Latest user request: tell me more"));
+        assert!(backing.last_history_message_contains("Tool output 1: second tool output"));
+        assert!(backing.last_history_message_contains("Tool output 2: first tool output"));
     }
 
     #[tokio::test]

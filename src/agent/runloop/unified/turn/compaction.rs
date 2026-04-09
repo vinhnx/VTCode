@@ -30,6 +30,11 @@ const MEMORY_ENVELOPE_SUFFIX: &str = ".memory.json";
 const SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION: u32 = 2;
 const MEMORY_LIST_LIMIT: usize = 5;
 const DEDUPED_FILE_READ_NOTE: &str = "Older duplicate file read omitted during local compaction; a newer read of the same target slice is retained later in history.";
+const RECOVERY_PREVIEW_MAX_CHARS: usize = 220;
+const RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS: usize = 3;
+const RECOVERY_PREVIEW_USER_LABEL: &str = "Latest user request";
+const RECOVERY_PREVIEW_TOOL_LABEL: &str = "Latest tool output";
+const RECOVERY_PREVIEW_ASSISTANT_LABEL: &str = "Latest assistant text";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MemoryEnvelopePersistence {
@@ -646,6 +651,202 @@ fn derive_continuity_summary(
     } else {
         format!("Recent session context: {}", recent.join(" | "))
     }
+}
+
+pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String> {
+    fn truncate_preview(text: &str) -> String {
+        if text.chars().count() <= RECOVERY_PREVIEW_MAX_CHARS {
+            return text.to_string();
+        }
+
+        let end = text
+            .char_indices()
+            .nth(RECOVERY_PREVIEW_MAX_CHARS)
+            .map_or(text.len(), |(idx, _)| idx);
+        let mut truncated = text[..end].trim_end().to_string();
+        truncated.push_str("...");
+        truncated
+    }
+
+    fn preview_line(label: &str, text: &str) -> String {
+        format!("{label}: {}", truncate_preview(text))
+    }
+
+    fn trimmed_json_string_field(
+        obj: &serde_json::Map<String, Value>,
+        key: &str,
+    ) -> Option<String> {
+        obj.get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(normalize_whitespace)
+    }
+
+    fn error_preview_text(obj: &serde_json::Map<String, Value>) -> Option<String> {
+        match obj.get("error") {
+            Some(Value::String(text)) => {
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| normalize_whitespace(trimmed))
+            }
+            Some(Value::Object(error)) => error
+                .get("message")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(normalize_whitespace),
+            _ => None,
+        }
+    }
+
+    fn compact_json_preview(value: &Value) -> Option<String> {
+        let serialized = serde_json::to_string(value).ok()?;
+        let normalized = normalize_whitespace(&serialized);
+        (!normalized.is_empty()).then_some(normalized)
+    }
+
+    fn push_unique_preview_part(parts: &mut Vec<String>, text: Option<String>) {
+        let Some(text) = text else {
+            return;
+        };
+        if !parts.iter().any(|existing| existing == &text) {
+            parts.push(text);
+        }
+    }
+
+    fn structured_tool_preview(raw_text: &str) -> Option<String> {
+        let value = serde_json::from_str::<Value>(raw_text).ok()?;
+        let obj = value.as_object()?;
+        let mut parts = Vec::new();
+
+        if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
+            let path = trimmed_json_string_field(obj, "path");
+            let summary = if matches.is_empty() {
+                path.map_or_else(
+                    || "No matches found".to_string(),
+                    |path| format!("No matches found in {path}"),
+                )
+            } else {
+                let total = obj
+                    .get("total_match_count")
+                    .or_else(|| obj.get("matched_count"))
+                    .or_else(|| obj.get("count"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(matches.len() as u64);
+                path.map_or_else(
+                    || format!("Found {total} matches"),
+                    |path| format!("Found {total} matches in {path}"),
+                )
+            };
+            push_unique_preview_part(&mut parts, Some(summary));
+        } else if let Some(items) = obj.get("items").and_then(Value::as_array) {
+            let total = obj
+                .get("total")
+                .or_else(|| obj.get("count"))
+                .and_then(Value::as_u64)
+                .unwrap_or(items.len() as u64);
+            push_unique_preview_part(&mut parts, Some(format!("Listed {total} items")));
+        } else if let Some(files) = obj.get("files").and_then(Value::as_array) {
+            let total = obj
+                .get("total")
+                .and_then(Value::as_u64)
+                .unwrap_or(files.len() as u64);
+            push_unique_preview_part(&mut parts, Some(format!("Listed {total} files")));
+        }
+
+        push_unique_preview_part(&mut parts, error_preview_text(obj));
+        for key in ["critical_note", "message", "hint"] {
+            push_unique_preview_part(&mut parts, trimmed_json_string_field(obj, key));
+        }
+        push_unique_preview_part(
+            &mut parts,
+            trimmed_json_string_field(obj, "next_action")
+                .map(|next_action| format!("Next action: {next_action}")),
+        );
+
+        if let Some(tool) = trimmed_json_string_field(obj, "fallback_tool") {
+            let fallback = obj
+                .get("fallback_tool_args")
+                .and_then(compact_json_preview)
+                .map(|args| format!("Fallback tool: {tool} {args}"))
+                .unwrap_or_else(|| format!("Fallback tool: {tool}"));
+            push_unique_preview_part(&mut parts, Some(fallback));
+        }
+
+        if parts.is_empty() {
+            for key in ["output", "content", "stdout", "stderr"] {
+                push_unique_preview_part(&mut parts, trimmed_json_string_field(obj, key));
+                if !parts.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        (!parts.is_empty()).then(|| parts.join(" | "))
+    }
+
+    let latest_user_request = history.iter().rev().find_map(|message| {
+        if message.role != MessageRole::User {
+            return None;
+        }
+
+        let text = normalize_whitespace(message.content.as_text().trim());
+        if text.is_empty() {
+            return None;
+        }
+
+        Some(preview_line(RECOVERY_PREVIEW_USER_LABEL, &text))
+    });
+
+    let mut tool_previews = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for message in history.iter().rev() {
+        if message.role != MessageRole::Tool {
+            continue;
+        }
+
+        let raw_text = message.content.as_text();
+        let text = structured_tool_preview(raw_text.as_ref())
+            .unwrap_or_else(|| normalize_whitespace(raw_text.trim()));
+        if text.is_empty() || !seen.insert(text.clone()) {
+            continue;
+        }
+
+        tool_previews.push(format!(
+            "Tool output {}: {}",
+            tool_previews.len() + 1,
+            truncate_preview(&text)
+        ));
+        if tool_previews.len() >= RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS {
+            break;
+        }
+    }
+
+    let mut previews = Vec::new();
+    if let Some(user_request) = latest_user_request {
+        previews.push(user_request);
+    }
+    previews.extend(tool_previews);
+
+    if previews.is_empty()
+        && let Some(text) = history.iter().rev().find_map(|message| {
+            let text = normalize_whitespace(message.content.as_text().trim());
+            if text.is_empty() {
+                return None;
+            }
+            let label = match message.role {
+                MessageRole::Tool => RECOVERY_PREVIEW_TOOL_LABEL,
+                MessageRole::Assistant => RECOVERY_PREVIEW_ASSISTANT_LABEL,
+                MessageRole::User => RECOVERY_PREVIEW_USER_LABEL,
+                _ => return None,
+            };
+            Some(preview_line(label, &text))
+        })
+    {
+        previews.push(text);
+    }
+
+    previews
 }
 
 fn is_read_file_tool_name(tool_name: &str) -> bool {
@@ -2433,6 +2634,62 @@ mod tests {
     }
 
     #[test]
+    fn recovery_context_previews_include_latest_user_request_and_recent_distinct_tool_outputs() {
+        let history = vec![
+            Message::user("first request".to_string()),
+            Message::tool_response("call-1".to_string(), "duplicate output".to_string()),
+            Message::tool_response("call-2".to_string(), "distinct output".to_string()),
+            Message::tool_response("call-3".to_string(), "duplicate output".to_string()),
+            Message::user("latest request".to_string()),
+        ];
+
+        let previews = super::build_recovery_context_previews(&history);
+
+        assert_eq!(previews[0], "Latest user request: latest request");
+        assert_eq!(previews[1], "Tool output 1: duplicate output");
+        assert_eq!(previews[2], "Tool output 2: distinct output");
+        assert_eq!(previews.len(), 3);
+    }
+
+    #[test]
+    fn recovery_context_previews_fall_back_to_latest_assistant_text_when_needed() {
+        let history = vec![Message::assistant("assistant summary".to_string())];
+
+        let previews = super::build_recovery_context_previews(&history);
+
+        assert_eq!(previews, vec!["Latest assistant text: assistant summary"]);
+    }
+
+    #[test]
+    fn recovery_context_previews_extract_structured_tool_guidance() {
+        let history = vec![
+            Message::user("use structured search".to_string()),
+            Message::tool_response(
+                "call-1".to_string(),
+                json!({
+                    "backend": "ast-grep",
+                    "matches": [],
+                    "path": "src/agent",
+                    "is_recoverable": true,
+                    "hint": "Pattern looks like a code fragment.",
+                    "next_action": "Retry with a larger parseable pattern.",
+                    "fallback_tool": "unified_search",
+                    "fallback_tool_args": {"action": "structural", "path": "src/agent"}
+                })
+                .to_string(),
+            ),
+        ];
+
+        let previews = super::build_recovery_context_previews(&history);
+
+        assert_eq!(previews[0], "Latest user request: use structured search");
+        assert!(previews[1].contains("No matches found in src/agent"));
+        assert!(previews[1].contains("Pattern looks like a code fragment."));
+        assert!(previews[1].contains("Next action: Retry with a larger parseable pattern."));
+        assert!(previews[1].contains("Fallback tool: unified_search"));
+    }
+
+    #[test]
     fn legacy_memory_envelope_deserializes_with_new_fields_defaulted() {
         let envelope: super::SessionMemoryEnvelope = serde_json::from_value(json!({
             "session_id": "session-alpha",
@@ -2737,7 +2994,7 @@ mod tests {
         let harness_path = temp.path().join("recovery-harness.jsonl");
         let harness_emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
         let mut history = test_history();
-        history.push(Message::system("Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.".to_string()));
+        history.push(Message::system("Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `hint`, `next_action`, `fallback_tool`, `fallback_tool_args`, or `rerun_hint`, follow that guidance first.".to_string()));
         history.push(Message::system("Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.".to_string()));
         history.push(Message::user("current-turn".to_string()));
         history.push(Message::assistant("".to_string()));

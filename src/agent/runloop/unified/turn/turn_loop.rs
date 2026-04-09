@@ -351,7 +351,7 @@ fn estimate_session_cost_usd(provider: &str, model: &str, usage: &HarnessUsage) 
     ModelResolver::estimate_cost(pricing, &usage)
 }
 
-pub(crate) const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
+pub(crate) const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `hint`, `next_action`, `fallback_tool`, `fallback_tool_args`, or `rerun_hint`, follow that guidance first.";
 
 fn ensure_recent_system_message(working_history: &mut Vec<uni::Message>, content: &str) {
     let already_present = working_history.iter().rev().take(3).any(|message| {

@@ -97,6 +97,19 @@ fn output_has_empty_search_matches(output: &serde_json::Value) -> bool {
         .get("matches")
         .and_then(serde_json::Value::as_array)
         .is_some_and(|matches| matches.is_empty())
+        && !output_has_actionable_recovery_guidance(output)
+}
+
+fn output_has_actionable_recovery_guidance(output: &serde_json::Value) -> bool {
+    ["hint", "next_action", "critical_note"].iter().any(|key| {
+        output
+            .get(*key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+    }) || output
+        .get("fallback_tool")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn output_reuses_recent_result(output: &serde_json::Value) -> bool {
@@ -731,6 +744,31 @@ mod tests {
         );
 
         assert_eq!(tracker.max_low_signal_count(), 3);
+    }
+
+    #[test]
+    fn low_signal_tracker_ignores_empty_search_results_with_recovery_guidance() {
+        let mut tracker = LoopTracker::new();
+        let guided = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({
+                "matches": [],
+                "hint": "Pattern looks like a code fragment.",
+                "is_recoverable": true,
+                "next_action": "Retry with a larger parseable pattern."
+            }),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &guided,
+            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            &json!({"action":"structural","pattern":"async fn $NAME($$$ARGS)", "lang":"rust", "path":"src/agent"}),
+        );
+
+        assert_eq!(tracker.max_low_signal_count(), 0);
     }
 
     #[test]

@@ -468,6 +468,20 @@ fn preflight_fallback_remaps_unified_file_command_payload_to_unified_exec() {
 }
 
 #[test]
+fn preflight_fallback_remaps_unified_file_list_to_unified_search_list() {
+    let error = anyhow!("Invalid arguments for tool 'unified_file': unknown variant `list`");
+    let args = json!({
+        "action": "list",
+        "path": "src"
+    });
+    let fallback = preflight_validation_fallback(tool_names::UNIFIED_FILE, &args, &error)
+        .expect("fallback expected for unified_file list payload");
+    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
+    assert_eq!(fallback.1["action"], "list");
+    assert_eq!(fallback.1["path"], "src");
+}
+
+#[test]
 fn preflight_fallback_normalizes_request_user_input_single_question_shape() {
     let error = anyhow!(
         "Invalid arguments for tool 'request_user_input': \"questions\" is a required property"

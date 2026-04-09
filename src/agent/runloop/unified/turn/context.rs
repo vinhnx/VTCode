@@ -1105,25 +1105,7 @@ fn is_interim_progress_update(text: &str) -> bool {
     }
 
     let lower = trimmed.to_ascii_lowercase();
-    let intent_prefixes = [
-        "let me ",
-        "i'll ",
-        "i will ",
-        "i need to ",
-        "i am going to ",
-        "i'm going to ",
-        "now i need to ",
-        "continuing ",
-        "next i need to ",
-        "next, i'll ",
-        "now i'll ",
-        "let us ",
-    ];
-    let starts_with_intent = intent_prefixes
-        .iter()
-        .any(|prefix| lower.starts_with(prefix))
-        || starts_with_present_progress_update(&lower);
-    if !starts_with_intent {
+    if !has_interim_intent_clause(&lower) {
         return false;
     }
 
@@ -1164,6 +1146,45 @@ fn is_interim_progress_update(text: &str) -> bool {
     !conclusive_markers
         .iter()
         .any(|marker| lower.contains(marker))
+}
+
+fn has_interim_intent_clause(lower: &str) -> bool {
+    if starts_with_interim_intent(lower) {
+        return true;
+    }
+
+    for (idx, ch) in lower.char_indices() {
+        if matches!(ch, '.' | '!' | '?' | ':' | ';' | '\n') {
+            let remainder = lower[idx + ch.len_utf8()..].trim_start();
+            if !remainder.is_empty() && starts_with_interim_intent(remainder) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn starts_with_interim_intent(lower: &str) -> bool {
+    let intent_prefixes = [
+        "let me ",
+        "i'll ",
+        "i will ",
+        "i need to ",
+        "i am going to ",
+        "i'm going to ",
+        "now i need to ",
+        "continuing ",
+        "next i need to ",
+        "next, i'll ",
+        "now i'll ",
+        "let us ",
+    ];
+
+    intent_prefixes
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+        || starts_with_present_progress_update(lower)
 }
 
 fn starts_with_present_progress_update(lower: &str) -> bool {
@@ -1359,6 +1380,9 @@ mod tests {
         assert!(is_interim_progress_update(
             "Running formatter now, then I'll do a quick follow-up check (`cargo check`) to confirm nothing regressed."
         ));
+        assert!(is_interim_progress_update(
+            "The structural search keeps returning empty results. Let me verify the indexer is working and try with a simpler known pattern:"
+        ));
         assert!(!is_interim_progress_update(
             "I need you to choose which option to apply."
         ));
@@ -1476,6 +1500,31 @@ mod tests {
         let outcome = ctx
             .handle_text_response(
                 "Let me try a narrower search next.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("recovery response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+        ));
+        assert!(!ctx.is_recovery_active());
+    }
+
+    #[tokio::test]
+    async fn recovery_pass_diagnostic_then_next_step_text_breaks_turn() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("turn balancer");
+        assert!(ctx.consume_recovery_pass());
+
+        let outcome = ctx
+            .handle_text_response(
+                "The structural search keeps returning empty results. Let me verify the indexer is working and try with a simpler known pattern:".to_string(),
                 Vec::new(),
                 None,
                 None,

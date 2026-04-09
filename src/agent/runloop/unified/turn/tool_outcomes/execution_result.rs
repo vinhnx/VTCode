@@ -952,7 +952,8 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             .is_some_and(|content_type| matches!(content_type, "exec_inspect" | "git_diff"));
     let keep_exec_success_critical_note = should_keep_exec_success_critical_note(obj, is_exec_like);
     let keep_next_action = should_keep_exec_success_next_action(obj, is_exec_like)
-        || should_keep_recoverable_failure_next_action(obj);
+        || should_keep_recoverable_failure_next_action(obj)
+        || should_keep_search_recovery_success_next_action(obj);
     let has_stderr = obj
         .get("stderr")
         .and_then(serde_json::Value::as_str)
@@ -1374,6 +1375,23 @@ fn should_keep_recoverable_failure_next_action(
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> bool {
     is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
+}
+
+fn should_keep_search_recovery_success_next_action(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    !has_error_payload(obj)
+        && obj.get("backend").and_then(serde_json::Value::as_str) == Some("ast-grep")
+        && obj
+            .get("is_recoverable")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+        && obj
+            .get("matches")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|matches| matches.is_empty())
+        && has_non_empty_string_field(obj, "hint")
+        && has_non_empty_string_field(obj, "next_action")
 }
 
 async fn auto_mode_probe_warning(
@@ -2373,6 +2391,31 @@ mod tests {
         assert_eq!(
             parsed.get("fallback_tool"),
             Some(&serde_json::json!(tool_names::UNIFIED_SEARCH))
+        );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_keeps_structural_recovery_success_next_action() {
+        let serialized = maybe_inline_spooled(
+            tool_names::UNIFIED_SEARCH,
+            &serde_json::json!({
+                "backend": "ast-grep",
+                "matches": [],
+                "is_recoverable": true,
+                "hint": "Pattern looks like a code fragment.",
+                "next_action": "Retry with a larger parseable pattern."
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(
+            parsed.get("next_action"),
+            Some(&serde_json::json!("Retry with a larger parseable pattern."))
+        );
+        assert_eq!(
+            parsed.get("hint"),
+            Some(&serde_json::json!("Pattern looks like a code fragment."))
         );
     }
 
