@@ -32,26 +32,6 @@ fn capitalize_first_letter(s: &str) -> String {
     }
 }
 
-fn compact_tools_format(tools_str: &str) -> String {
-    // Input format: "allow X · prompt Y · deny Z"
-    // Output format: "N" where N is the number of allowed (currently running) tools
-
-    let parts = tools_str.split(" · ");
-    let mut allow_count = 0;
-
-    for part in parts {
-        let trimmed = part.trim();
-        if let Some(num_str) = trimmed.strip_prefix("allow ")
-            && let Ok(num) = num_str.parse::<i32>()
-        {
-            allow_count = num;
-            break; // We found the allow count, no need to continue
-        }
-    }
-
-    allow_count.to_string()
-}
-
 fn compact_context_window_label(context_window_size: usize) -> String {
     if context_window_size >= 1_000_000 {
         format!("{}M", context_window_size / 1_000_000)
@@ -360,38 +340,34 @@ impl Session {
     }
 
     pub fn header_chain_values(&self) -> Vec<String> {
-        let defaults = InlineHeaderContext::default();
         let mut values = Vec::new();
 
-        for (value, fallback) in [
-            (&self.header_context.tools, defaults.tools),
-            (&self.header_context.git, defaults.git),
+        for value in [
+            &self.header_context.tools,
+            &self.header_context.git,
+            &self.header_context.mcp,
         ] {
-            let selected = if value.trim().is_empty() {
-                fallback
-            } else {
-                value.clone()
-            };
-            let trimmed = selected.trim();
+            let trimmed = value.trim();
             if trimmed.is_empty() {
                 continue;
             }
 
-            if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
-                let compact_tools = compact_tools_format(body.trim());
-                values.push(format!("Tools: {}", compact_tools));
+            if trimmed.starts_with(ui::HEADER_TOOLS_PREFIX)
+                || trimmed.starts_with(ui::HEADER_GIT_PREFIX)
+            {
                 continue;
             }
 
-            if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_MCP_PREFIX) {
                 let body = body.trim();
-                if !body.is_empty() {
-                    values.push(format!("⎇ {}", body));
+                if body.is_empty() || body.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER) {
+                    continue;
                 }
+                values.push(format!("MCP: {}", body));
                 continue;
             }
 
-            values.push(selected);
+            values.push(trimmed.to_owned());
         }
 
         values
@@ -663,6 +639,10 @@ impl Session {
             Span::styled("/help", key),
             dot.clone(),
             Span::styled("/model", key),
+            dot.clone(),
+            Span::styled("/config", key),
+            dot.clone(),
+            Span::styled("/clear", key),
             Span::styled("  │  ", dim),
             Span::styled("↑↓", key),
             Span::styled(" nav", label),
@@ -678,11 +658,6 @@ impl Session {
             spans.push(dot.clone());
             spans.push(Span::styled("Ctrl+B", key));
             spans.push(Span::styled(" background", label));
-        }
-
-        if self.header_context.persistent_memory.is_some() {
-            spans.push(Span::styled("  │  ", dim));
-            spans.push(Span::styled("/memory", key));
         }
 
         Some(Line::from(spans))

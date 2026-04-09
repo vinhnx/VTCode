@@ -302,7 +302,6 @@ struct ExitHeaderDisplay {
     reasoning_label: String,
     context_window_size: usize,
     mode_label: String,
-    tools_count: usize,
     editing_mode: vtcode_tui::app::EditingMode,
     autonomous_mode: bool,
     full_auto: bool,
@@ -338,16 +337,12 @@ fn build_exit_header_context_fast(
         persistent_memory: None,
         pr_review: None,
         editor_context: None,
-        git: format!(
-            "{}{}",
-            ui::HEADER_GIT_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        ),
+        git: String::new(),
         mode: display.mode_label,
         reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, display.reasoning_label),
         reasoning_stage: None,
         workspace_trust: format!("{}{}", ui::HEADER_TRUST_PREFIX, trust_label),
-        tools: format!("{}{}", ui::HEADER_TOOLS_PREFIX, display.tools_count),
+        tools: String::new(),
         mcp: format!(
             "{}{}",
             ui::HEADER_MCP_PREFIX,
@@ -1609,7 +1604,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
             (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
         };
-        let tools_count = tools.read().await.len();
         let provider_label = {
             let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
                 &config,
@@ -1629,7 +1623,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 reasoning_label,
                 context_window_size: provider_client.effective_context_size(&config.model),
                 mode_label,
-                tools_count,
                 editing_mode: if session_stats.is_plan_mode() {
                     vtcode_tui::app::EditingMode::Plan
                 } else {

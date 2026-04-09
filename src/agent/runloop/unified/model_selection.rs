@@ -129,6 +129,7 @@ pub(crate) async fn finalize_model_selection(
     };
     let next_header_context = build_inline_header_context(
         config,
+        vt_cfg.as_ref(),
         session_bootstrap,
         runtime_provider_label(&selection, using_chatgpt_auth),
         selection.model.clone(),

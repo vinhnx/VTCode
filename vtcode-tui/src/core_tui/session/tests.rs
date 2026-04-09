@@ -5628,7 +5628,7 @@ fn header_highlight_summary_hides_truncated_command_segments() {
 }
 
 #[test]
-fn header_suggestions_show_memory_shortcut_when_enabled() {
+fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.persistent_memory = Some(InlineHeaderStatusBadge {
         text: "Memory: auto".to_string(),
@@ -5640,7 +5640,7 @@ fn header_suggestions_show_memory_shortcut_when_enabled() {
         .expect("header suggestions line");
     let summary = line_text(&line);
 
-    assert!(summary.contains("/memory"));
+    assert!(!summary.contains("/memory"));
 }
 
 #[test]

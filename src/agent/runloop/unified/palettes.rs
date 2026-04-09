@@ -442,6 +442,7 @@ pub(crate) async fn refresh_runtime_config_from_manager(
         };
         if let Ok(header_context) = build_inline_header_context(
             config,
+            Some(&runtime_config),
             session_bootstrap,
             provider_label,
             config.model.clone(),

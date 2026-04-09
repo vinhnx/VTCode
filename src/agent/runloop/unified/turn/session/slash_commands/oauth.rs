@@ -1161,6 +1161,7 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
     };
     let next_header_context = build_inline_header_context(
         ctx.config,
+        ctx.vt_cfg.as_ref(),
         ctx.session_bootstrap,
         provider_label,
         ctx.config.model.clone(),
@@ -1210,6 +1211,7 @@ async fn sync_copilot_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Re
     };
     let next_header_context = build_inline_header_context(
         ctx.config,
+        ctx.vt_cfg.as_ref(),
         ctx.session_bootstrap,
         "GitHub Copilot".to_string(),
         ctx.config.model.clone(),

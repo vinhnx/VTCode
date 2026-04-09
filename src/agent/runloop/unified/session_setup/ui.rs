@@ -379,6 +379,7 @@ pub(crate) async fn initialize_session_ui(
     };
     let mut header_context = build_inline_header_context(
         config,
+        vt_cfg,
         &session_state.session_bootstrap,
         header_provider_label,
         config.model.clone(),
@@ -889,11 +890,10 @@ fn persistent_memory_guide_lines(memory_status: &PersistentMemoryStatus) -> Vec<
     let mut lines = Vec::with_capacity(3);
     if memory_status.cleanup_status.needed {
         lines.push(
-            "Run `/memory` to inspect status and finish one-time cleanup before memory updates."
-                .to_string(),
+            "Memory is enabled, but one-time cleanup is required before updates.".to_string(),
         );
     } else {
-        lines.push("Use `/memory` to inspect notes, status, and quick actions.".to_string());
+        lines.push("Memory is enabled for this workspace.".to_string());
     }
     lines.push("Use `remember ...` to save a note or `forget ...` to remove one.".to_string());
     lines.push(if memory_status.auto_write {
@@ -924,20 +924,18 @@ fn persistent_memory_header_badge(
 ) -> InlineHeaderStatusBadge {
     if memory_status.cleanup_status.needed {
         return InlineHeaderStatusBadge {
-            text: "Memory: cleanup".to_string(),
+            text: "Memory: Needs cleanup".to_string(),
             tone: InlineHeaderStatusTone::Warning,
         };
     }
 
     let text = if memory_status.pending_rollout_summaries > 0 {
         format!(
-            "Memory: {} pending",
+            "Memory: On ({} pending)",
             memory_status.pending_rollout_summaries
         )
-    } else if memory_status.auto_write {
-        "Memory: auto".to_string()
     } else {
-        "Memory: manual".to_string()
+        "Memory: On".to_string()
     };
     InlineHeaderStatusBadge {
         text,
@@ -1442,7 +1440,7 @@ mod tests {
     fn persistent_memory_guide_lines_show_standard_actions() {
         let lines = persistent_memory_guide_lines(&sample_memory_status());
         assert_eq!(lines.len(), 3);
-        assert!(lines[0].contains("/memory"));
+        assert!(lines[0].contains("Memory is enabled"));
         assert!(lines[1].contains("remember"));
         assert!(lines[2].contains("Auto-write is on"));
     }
@@ -1462,7 +1460,7 @@ mod tests {
     #[test]
     fn persistent_memory_header_badge_reflects_memory_mode() {
         let badge = persistent_memory_header_badge(&sample_memory_status());
-        assert_eq!(badge.text, "Memory: auto");
+        assert_eq!(badge.text, "Memory: On");
         assert_eq!(badge.tone, InlineHeaderStatusTone::Ready);
     }
 
@@ -1472,7 +1470,7 @@ mod tests {
         status.cleanup_status.needed = true;
 
         let badge = persistent_memory_header_badge(&status);
-        assert_eq!(badge.text, "Memory: cleanup");
+        assert_eq!(badge.text, "Memory: Needs cleanup");
         assert_eq!(badge.tone, InlineHeaderStatusTone::Warning);
     }
 
@@ -1487,7 +1485,7 @@ mod tests {
                 .persistent_memory
                 .as_ref()
                 .map(|badge| badge.text.as_str()),
-            Some("Memory: auto")
+            Some("Memory: On")
         );
         assert!(
             header_context

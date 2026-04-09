@@ -8,45 +8,6 @@ it seems markdown systax higlight is wrong
 
 ---
 
-1. fix `vtcode resume` should use cli `vtcode --resume`, don't send raw transcript to llm.
-
-currently:
-
-```
-~/Developer/learn-by-doing/vtcode main* ⇡
-15:56:34 ❯ vtcode resume
-Clarify what you mean:
-
-1. **Your resume** - paste a resume and I'll help with it
-2. **My resume** - you're asking about my capabilities
-3. **Resume a task** - you had an interrupted conversation
-4. **Something else** - describe what you need
-
-Which?
-```
-
-expected:
-
-```
-
-~/Developer/learn-by-doing/vtcode main* ⇡ 7s
-15:56:51 ❯ vtcode --resume
-✔ Select a session to resume
-```
-
----
-
-CRITICAL: don't accept raw cli repl arugment like this. every commands are being used as prompt and send to llm, which is not what we want. we should handle some command in the cli level, and only send relevant information to llm if needed. for example, for `vtcode resume`, we should handle the session selection in the cli, and then only send the selected session information to llm if necessary, instead of sending the entire command as a prompt.
-
-```
-vtcode hellp
-How can I help? Describe what you're working on or what you need.
-```
-
-THIS IS CRITICAL because it can lead to unintended consequences, such as sending sensitive information to the LLM or causing confusion in the conversation. By properly handling commands at the CLI level, we can ensure a better user experience and maintain the integrity of the interactions with the LLM.
-
-Double check clap command arg parser to make sure we are not sending raw command inputs to the LLM and that we are properly handling commands at the CLI level.
-
 ---
 
 implement `resume --last` command. This command will allow users to quickly resume their last session without having to specify the session ID. It will check for the most recent session and automatically load it, providing a seamless experience for users who want to continue their work without interruption. This feature will enhance productivity and convenience for users, allowing them to easily pick up where they left off without having to navigate through multiple sessions or remember specific session IDs.
@@ -54,44 +15,6 @@ implement `resume --last` command. This command will allow users to quickly resu
 ---
 
 fix copy, yank text is broken block on scroll. for example: when user already select some text, then scroll the trascript up and down in the terminal, the highlight block is broken and becomes unaligned with the text, making it difficult for users to see what they have selected. This issue can be frustrating for users who rely on the copy and yank functionality to quickly capture important information from the transcript. To fix this, we need to ensure that the highlight block remains properly aligned with the selected text even when the user scrolls through the transcript. This may involve adjusting the way the terminal handles text rendering and selection, ensuring that the highlight block is dynamically updated as the user scrolls, and testing across different terminal environments to ensure consistent behavior. By addressing this issue, we can improve the overall user experience and make it easier for users to interact with the transcript effectively.
-
----
-
----
-
-remove branch and tools count.
-
-            if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
-                let compact_tools = compact_tools_format(body.trim());
-                values.push(format!("Tools: {}", compact_tools));
-                continue;
-            }
-
-            if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
-                let body = body.trim();
-                if !body.is_empty() {
-                    values.push(format!("⎇ {}", body));
-                }
-                continue;
-            }
-
-from header
-
----
-
-revamp and cleanup input placeholder text hint:
-
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files, /commands, Alt+P: suggest, Shift+Tab: choose Edit/Auto/Plan, Enter: queue, Tab: accept/queue, Ctrl+Enter: run/steer now, /stop: stop task";
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue, or @files, /commands, Alt+P: suggest, Shift+Tab: choose Edit/Auto/Plan, Enter: queue, Tab: accept/queue, Ctrl+Enter: run/steer now, /stop: stop task";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Enter queue • Tab accept/queue • Ctrl+Enter run/steer • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
-
----
-
-in header. if memory is on -> show status on header instead of "/memory"
-
----
-
-check for vtcode.toml, any special fields is enabled, and show in header. For example, if [memory] is enabled, show "Memory: On" in header. If [optimization] is enabled, show "Optimization: Bandit" or "Optimization: Actor-Critic" based on the strategy. Make it concise and clean. also looks for any custom hint and tips for users in the config and show in header if exists. Also show useful commands and hints in the header for user reference.
 
 ---
 

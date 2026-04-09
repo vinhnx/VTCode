@@ -1,12 +1,13 @@
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::constants::ui;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::subagents::SubagentStatusEntry;
-use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
 use vtcode_core::tools::search_tool_bundle_status;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_tui::app::{
@@ -15,24 +16,11 @@ use vtcode_tui::app::{
 };
 use vtcode_tui::core::ThemeConfigParser;
 
-use tracing::warn;
-
-use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
 use dirs::home_dir;
 
 const MAX_VISIBLE_SUBAGENT_BADGES: usize = 3;
 const SUBAGENT_BADGE_FALLBACK_COLOR: &str = "blue";
-
-#[derive(Clone, Debug)]
-enum ToolStatusSummary {
-    Available {
-        allow: usize,
-        prompt: usize,
-        deny: usize,
-    },
-    Unavailable,
-}
 
 #[derive(Clone, Debug)]
 enum McpStatusSummary {
@@ -48,7 +36,6 @@ enum McpStatusSummary {
 #[derive(Clone, Debug)]
 struct InlineStatusDetails {
     workspace_trust: Option<WorkspaceTrustLevel>,
-    tool_status: ToolStatusSummary,
     mcp_status: McpStatusSummary,
 }
 
@@ -62,31 +49,6 @@ async fn gather_inline_status_details(
         load_workspace_trust_level(&config.workspace)
             .await
             .context("Failed to determine workspace trust level for banner")?
-    };
-
-    let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace).await {
-        Ok(manager) => {
-            let summary = manager.get_policy_summary();
-            let mut allow = 0usize;
-            let mut prompt = 0usize;
-            let mut deny = 0usize;
-            for policy in summary.values() {
-                match policy {
-                    ToolPolicy::Allow => allow += 1,
-                    ToolPolicy::Prompt => prompt += 1,
-                    ToolPolicy::Deny => deny += 1,
-                }
-            }
-            ToolStatusSummary::Available {
-                allow,
-                prompt,
-                deny,
-            }
-        }
-        Err(err) => {
-            warn!("failed to load tool policy summary: {err:#}");
-            ToolStatusSummary::Unavailable
-        }
     };
 
     let mcp_status = if let Some(error) = &session_bootstrap.mcp_error {
@@ -118,9 +80,171 @@ async fn gather_inline_status_details(
 
     Ok(InlineStatusDetails {
         workspace_trust,
-        tool_status,
         mcp_status,
     })
+}
+
+#[derive(Debug, Default)]
+struct WorkspaceHeaderSignals {
+    memory_enabled: Option<bool>,
+    optimization_label: Option<String>,
+    custom_hint: Option<String>,
+}
+
+fn parse_workspace_header_signals(workspace: &Path) -> WorkspaceHeaderSignals {
+    let config_path = workspace.join("vtcode.toml");
+    let Ok(content) = fs::read_to_string(config_path) else {
+        return WorkspaceHeaderSignals::default();
+    };
+
+    let Ok(root) = toml::from_str::<toml::Value>(&content) else {
+        return WorkspaceHeaderSignals::default();
+    };
+
+    extract_workspace_header_signals(&root)
+}
+
+fn extract_workspace_header_signals(root: &toml::Value) -> WorkspaceHeaderSignals {
+    let memory_enabled = root
+        .get("memory")
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("enabled"))
+        .and_then(toml::Value::as_bool)
+        .or_else(|| {
+            root.get("agent")
+                .and_then(toml::Value::as_table)
+                .and_then(|agent| agent.get("persistent_memory"))
+                .and_then(toml::Value::as_table)
+                .and_then(|memory| memory.get("enabled"))
+                .and_then(toml::Value::as_bool)
+        });
+
+    let optimization_label = root
+        .get("optimization")
+        .and_then(toml::Value::as_table)
+        .and_then(|table| {
+            let enabled = table
+                .get("enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(true);
+            if !enabled {
+                return None;
+            }
+
+            let strategy = table
+                .get("strategy")
+                .and_then(toml::Value::as_str)
+                .or_else(|| {
+                    table
+                        .get("agent_execution")
+                        .and_then(toml::Value::as_table)
+                        .and_then(|agent_execution| agent_execution.get("strategy"))
+                        .and_then(toml::Value::as_str)
+                });
+
+            Some(match strategy {
+                Some(raw) => format!("Optimization: {}", format_strategy_label(raw)),
+                None => "Optimization: On".to_string(),
+            })
+        });
+
+    let custom_hint = root
+        .get("header")
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("hint"))
+        .and_then(toml::Value::as_str)
+        .and_then(non_empty_trimmed)
+        .or_else(|| {
+            root.get("hint")
+                .and_then(toml::Value::as_str)
+                .and_then(non_empty_trimmed)
+        })
+        .or_else(|| first_non_empty_array_entry(root.get("tips")))
+        .or_else(|| first_non_empty_array_entry(root.get("hints")))
+        .or_else(|| {
+            root.get("agent")
+                .and_then(toml::Value::as_table)
+                .and_then(|agent| agent.get("onboarding"))
+                .and_then(toml::Value::as_table)
+                .and_then(|onboarding| first_non_empty_array_entry(onboarding.get("usage_tips")))
+        })
+        .or_else(|| {
+            root.get("agent")
+                .and_then(toml::Value::as_table)
+                .and_then(|agent| agent.get("onboarding"))
+                .and_then(toml::Value::as_table)
+                .and_then(|onboarding| onboarding.get("chat_placeholder"))
+                .and_then(toml::Value::as_str)
+                .and_then(non_empty_trimmed)
+        })
+        .map(|tip| truncate_header_text(&tip, 64));
+
+    WorkspaceHeaderSignals {
+        memory_enabled,
+        optimization_label,
+        custom_hint,
+    }
+}
+
+fn first_non_empty_array_entry(value: Option<&toml::Value>) -> Option<String> {
+    value.and_then(toml::Value::as_array).and_then(|items| {
+        items
+            .iter()
+            .find_map(|item| item.as_str().and_then(non_empty_trimmed))
+    })
+}
+
+fn non_empty_trimmed(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn format_strategy_label(raw: &str) -> String {
+    let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
+    if normalized.contains("actor-critic")
+        || (normalized.contains("actor") && normalized.contains("critic"))
+    {
+        return "Actor-Critic".to_string();
+    }
+    if normalized.contains("bandit") {
+        return "Bandit".to_string();
+    }
+
+    raw.split(['-', '_', ' '])
+        .filter(|segment| !segment.trim().is_empty())
+        .map(|segment| {
+            let mut chars = segment.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut word = first.to_uppercase().collect::<String>();
+                    word.push_str(&chars.as_str().to_ascii_lowercase());
+                    word
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn truncate_header_text(text: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+
+    let mut out = String::new();
+    for c in text.chars().take(max_chars.saturating_sub(1)) {
+        out.push(c);
+    }
+    out.push('…');
+    out
 }
 
 fn is_home_directory(workspace_path: &Path) -> bool {
@@ -148,6 +272,7 @@ pub(crate) fn build_search_tools_badge(workspace: &Path) -> InlineHeaderStatusBa
 
 pub(crate) async fn build_inline_header_context(
     config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     session_bootstrap: &SessionBootstrap,
     provider_label: String,
     model_label: String,
@@ -157,9 +282,9 @@ pub(crate) async fn build_inline_header_context(
 ) -> Result<InlineHeaderContext> {
     let InlineStatusDetails {
         workspace_trust,
-        tool_status,
         mcp_status,
     } = gather_inline_status_details(config, session_bootstrap).await?;
+    let workspace_signals = parse_workspace_header_signals(&config.workspace);
 
     // Check if we're running in the home directory and add a warning if so
     let mut highlights = session_bootstrap.header_highlights.clone();
@@ -172,34 +297,6 @@ pub(crate) async fn build_inline_header_context(
             ],
         });
     }
-
-    let git_value = match git_status_summary(&config.workspace) {
-        Ok(Some(summary)) => {
-            let suffix = if summary.dirty {
-                ui::HEADER_GIT_DIRTY_SUFFIX
-            } else {
-                ui::HEADER_GIT_CLEAN_SUFFIX
-            };
-            format!("{}{}{}", ui::HEADER_GIT_PREFIX, summary.branch, suffix)
-        }
-        Ok(None) => format!(
-            "{}{}",
-            ui::HEADER_GIT_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        ),
-        Err(error) => {
-            warn!(
-                workspace = %config.workspace.display(),
-                error = ?error,
-                "Failed to read git status for inline header"
-            );
-            format!(
-                "{}{}",
-                ui::HEADER_GIT_PREFIX,
-                ui::HEADER_UNKNOWN_PLACEHOLDER
-            )
-        }
-    };
 
     let version = env!("CARGO_PKG_VERSION").to_string();
     let provider_value = if provider_label.trim().is_empty() {
@@ -259,25 +356,6 @@ pub(crate) async fn build_inline_header_context(
         },
     };
 
-    let tools_value = match tool_status {
-        ToolStatusSummary::Available {
-            allow,
-            prompt,
-            deny,
-        } => format!(
-            "{}allow {} · prompt {} · deny {}",
-            ui::HEADER_TOOLS_PREFIX,
-            allow,
-            prompt,
-            deny
-        ),
-        ToolStatusSummary::Unavailable => format!(
-            "{}{}",
-            ui::HEADER_TOOLS_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        ),
-    };
-
     let mcp_value = match mcp_status {
         McpStatusSummary::Error(message) => {
             format!("{}error - {}", ui::HEADER_MCP_PREFIX, message)
@@ -306,6 +384,24 @@ pub(crate) async fn build_inline_header_context(
         ),
     };
 
+    let memory_enabled = workspace_signals.memory_enabled.unwrap_or_else(|| {
+        vt_cfg
+            .map(|cfg| cfg.agent.persistent_memory.enabled)
+            .unwrap_or(false)
+    });
+    let persistent_memory = memory_enabled.then_some(InlineHeaderStatusBadge {
+        text: "Memory: On".to_string(),
+        tone: InlineHeaderStatusTone::Ready,
+    });
+
+    let mut chain_entries = Vec::new();
+    if let Some(label) = workspace_signals.optimization_label {
+        chain_entries.push(label);
+    }
+    if let Some(tip) = workspace_signals.custom_hint {
+        chain_entries.push(format!("Tip: {}", tip));
+    }
+
     let context = InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: provider_value,
@@ -313,14 +409,14 @@ pub(crate) async fn build_inline_header_context(
         context_window_size: Some(context_window_size),
         version,
         search_tools: Some(build_search_tools_badge(&config.workspace)),
-        persistent_memory: None,
+        persistent_memory,
         pr_review: None,
         editor_context: None,
-        git: git_value,
+        git: chain_entries.get(1).cloned().unwrap_or_default(),
         mode,
         reasoning,
         workspace_trust: trust_value,
-        tools: tools_value,
+        tools: chain_entries.first().cloned().unwrap_or_default(),
         mcp: mcp_value,
         highlights, // Use the modified highlights that may include the home directory warning
         subagent_badges: Vec::new(),
@@ -448,7 +544,10 @@ fn relative_luminance(rgb: RgbColor) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_active_subagent_badges, build_subagent_badge_style};
+    use super::{
+        build_active_subagent_badges, build_subagent_badge_style, extract_workspace_header_signals,
+        format_strategy_label,
+    };
     use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
     use chrono::Utc;
     use vtcode_core::subagents::{SubagentStatus, SubagentStatusEntry};
@@ -511,5 +610,41 @@ mod tests {
             Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8)))
         );
         assert_eq!(style.color, Some(AnsiColor::White.into()));
+    }
+
+    #[test]
+    fn workspace_header_signals_extract_memory_optimization_and_tip() {
+        let config = toml::from_str::<toml::Value>(
+            r#"
+[agent.persistent_memory]
+enabled = true
+
+[optimization]
+enabled = true
+strategy = "actor_critic"
+
+[agent.onboarding]
+usage_tips = ["Keep requests focused"]
+"#,
+        )
+        .expect("valid toml");
+
+        let signals = extract_workspace_header_signals(&config);
+        assert_eq!(signals.memory_enabled, Some(true));
+        assert_eq!(
+            signals.optimization_label.as_deref(),
+            Some("Optimization: Actor-Critic")
+        );
+        assert_eq!(
+            signals.custom_hint.as_deref(),
+            Some("Keep requests focused")
+        );
+    }
+
+    #[test]
+    fn format_strategy_label_normalizes_common_aliases() {
+        assert_eq!(format_strategy_label("bandit"), "Bandit");
+        assert_eq!(format_strategy_label("actor-critic"), "Actor-Critic");
+        assert_eq!(format_strategy_label("ACTOR_CRITIC"), "Actor-Critic");
     }
 }

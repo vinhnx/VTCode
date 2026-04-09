@@ -97,11 +97,11 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files, /commands, Shift+Tab: cycle Edit/Auto/Plan, Enter/Tab: queue, Ctrl+Enter: run/steer now, /stop: stop task";
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue, or @files, /commands, Shift+Tab: cycle Edit/Auto/Plan, Enter/Tab: queue, Ctrl+Enter: run/steer now, /stop: stop task";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type a request… @files /commands • Alt+P suggest • Shift+Tab mode (Edit/Auto/Plan) • Enter queue • Tab accept/queue • Ctrl+Enter run now • /stop stop task";
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue… @files /commands • Alt+P suggest • Shift+Tab mode (Edit/Auto/Plan) • Enter queue • Tab accept/queue • Ctrl+Enter run now • /stop stop task";
 pub const CHAT_INPUT_PLACEHOLDER_INTERRUPTED: &str =
     "Interrupted · What should VT Code do instead?";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter/Tab queue • Ctrl+Enter run/steer • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Shift+Tab mode • Enter queue • Tab accept/queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
