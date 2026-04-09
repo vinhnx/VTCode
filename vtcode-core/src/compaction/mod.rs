@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fmt::Write;
-use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
+use vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO;
 
 use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole};
 use crate::llm::utils::truncate_to_token_limit;
@@ -36,7 +36,7 @@ pub struct CompactionConfig {
 impl Default for CompactionConfig {
     fn default() -> Self {
         Self {
-            trigger_threshold: TOKEN_BUDGET_HIGH_THRESHOLD,
+            trigger_threshold: DEFAULT_COMPACTION_TRIGGER_RATIO,
             target_threshold: DEFAULT_COMPACTION_TARGET_THRESHOLD,
             summary_prompt: "Summarize the conversation so far using this exact structure:\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Always preserve the current task objective and acceptance criteria, file paths that were read or modified, test results and error messages, and decisions with their reasoning."
                 .to_string(),

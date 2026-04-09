@@ -74,7 +74,6 @@ pub(super) struct TurnRequestSnapshot {
 }
 
 struct PromptAssemblyInput<'a> {
-    step_count: usize,
     turn: &'a TurnRequestSnapshot,
 }
 
@@ -87,6 +86,7 @@ pub(super) struct TurnRequestBuildResult {
     pub request: uni::LLMRequest,
     pub has_tools: bool,
     pub runtime_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
+    pub continuation_messages: Vec<uni::Message>,
 }
 
 fn uses_out_of_band_copilot_tools(provider_name: &str) -> bool {
@@ -156,15 +156,10 @@ async fn assemble_prompt(
     let mut system_prompt = ctx
         .context_manager
         .build_system_prompt(
-            ctx.working_history,
-            input.step_count,
             crate::agent::runloop::unified::context_manager::SystemPromptParams {
                 full_auto: input.turn.full_auto,
                 auto_mode: input.turn.auto_mode,
                 plan_mode: input.turn.plan_mode,
-                supports_context_awareness: input.turn.capabilities.context_awareness,
-                context_window_size: Some(input.turn.context_window_size),
-                prompt_cache_shaping_mode: input.turn.prompt_cache_shaping_mode,
             },
         )
         .await?;
@@ -239,7 +234,7 @@ fn resolve_context_management(
     active_model: &str,
 ) -> Option<serde_json::Value> {
     let Some(vt_cfg) = ctx.vt_cfg else {
-        return resolve_server_compaction_context_management(turn, None, None, active_model);
+        return resolve_server_compaction_context_management(turn, None, None);
     };
 
     if turn.provider_name.eq_ignore_ascii_case("anthropic") {
@@ -249,26 +244,21 @@ fn resolve_context_management(
     resolve_server_compaction_context_management(
         turn,
         Some(vt_cfg),
-        Some(vt_cfg.agent.harness.auto_compaction_threshold_tokens),
-        active_model,
+        vt_cfg.agent.harness.auto_compaction_threshold_tokens,
     )
 }
 
 fn resolve_server_compaction_context_management(
     turn: &TurnRequestSnapshot,
     vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
-    configured_threshold: Option<Option<u64>>,
-    _active_model: &str,
+    configured_threshold: Option<u64>,
 ) -> Option<serde_json::Value> {
     let features = FeatureSet::from_config(vt_cfg);
     if !features.auto_compaction_enabled(turn.capabilities.responses_compaction) {
         return None;
     }
 
-    build_server_compaction_context_management(
-        configured_threshold.flatten(),
-        turn.context_window_size,
-    )
+    build_server_compaction_context_management(configured_threshold, turn.context_window_size)
 }
 
 fn build_anthropic_context_management(
@@ -399,6 +389,20 @@ fn prepare_responses_request_history(
     (prepared.messages, prepared.previous_response_id)
 }
 
+fn prepend_request_context_message(
+    mut messages: Vec<uni::Message>,
+    context_message: Option<uni::Message>,
+) -> Vec<uni::Message> {
+    let Some(context_message) = context_message else {
+        return messages;
+    };
+
+    let mut request_messages = Vec::with_capacity(messages.len() + 1);
+    request_messages.push(context_message);
+    request_messages.append(&mut messages);
+    request_messages
+}
+
 pub(super) async fn build_turn_request(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
@@ -411,7 +415,6 @@ pub(super) async fn build_turn_request(
     let prompt_output = assemble_prompt(
         ctx,
         PromptAssemblyInput {
-            step_count,
             turn: turn_snapshot,
         },
     )
@@ -487,7 +490,7 @@ pub(super) async fn build_turn_request(
         },
     );
     let context_management = resolve_context_management(ctx, turn_snapshot, active_model);
-    let normalized_messages = ctx
+    let continuation_messages = ctx
         .context_manager
         .normalize_history_for_request(ctx.working_history);
     let (request_messages, previous_response_id) = prepare_responses_request_history(
@@ -495,7 +498,11 @@ pub(super) async fn build_turn_request(
         &turn_snapshot.provider_name,
         turn_snapshot.capabilities.responses_compaction,
         active_model,
-        normalized_messages,
+        continuation_messages.clone(),
+    );
+    let request_messages = prepend_request_context_message(
+        request_messages,
+        ctx.context_manager.request_editor_context_message(),
     );
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: request_messages,
@@ -524,16 +531,23 @@ pub(super) async fn build_turn_request(
         request: request_plan.request,
         has_tools: prompt_output.tool_snapshot.has_tools(),
         runtime_tools: prompt_output.tool_snapshot.snapshot,
+        continuation_messages,
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use serde_json::json;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
+    use vtcode_core::{EditorContextSnapshot, EditorFileContext};
 
-    use super::{build_turn_request, capture_turn_request_snapshot, stable_system_prefix_hash};
+    use super::{
+        build_turn_request, capture_turn_request_snapshot, stable_system_prefix_hash,
+        update_previous_response_chain_after_success,
+    };
     use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
@@ -557,7 +571,6 @@ mod tests {
         ctx.activate_recovery("loop detector");
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", true);
-        assert!(!snapshot.capabilities.context_awareness);
         let built =
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -770,6 +783,165 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn request_build_moves_editor_context_out_of_system_prompt() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.context_manager.set_workspace_root(workspace.path());
+        ctx.context_manager.set_editor_context_snapshot(
+            Some(EditorContextSnapshot {
+                workspace_root: Some(PathBuf::from(workspace.path())),
+                active_file: Some(EditorFileContext {
+                    path: workspace.path().join("src/main.rs").display().to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: None,
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                }),
+                ..EditorContextSnapshot::default()
+            }),
+            Some(&vtcode_config::IdeContextConfig::default()),
+        );
+        ctx.working_history
+            .push(uni::Message::user("hello".to_string()));
+
+        let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build");
+
+        let system_prompt = built
+            .request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str();
+        assert!(!system_prompt.contains("## Active Editor Context"));
+        assert_eq!(built.request.messages.len(), 2);
+        assert_eq!(built.request.messages[0].role, uni::MessageRole::User);
+        assert!(
+            built.request.messages[0]
+                .content
+                .as_text()
+                .contains("## Active Editor Context")
+        );
+        assert!(
+            built.request.messages[0]
+                .content
+                .as_text()
+                .contains("- Active file: src/main.rs")
+        );
+        assert!(
+            built.request.messages[0]
+                .content
+                .as_text()
+                .contains("- Language: Rust")
+        );
+        assert_eq!(
+            built.request.messages[1],
+            uni::Message::user("hello".to_string())
+        );
+        assert_eq!(
+            built.continuation_messages,
+            vec![uni::Message::user("hello".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn editor_context_does_not_stale_openai_response_chains() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.context_manager.set_workspace_root(workspace.path());
+        ctx.context_manager.set_editor_context_snapshot(
+            Some(EditorContextSnapshot {
+                workspace_root: Some(PathBuf::from(workspace.path())),
+                active_file: Some(EditorFileContext {
+                    path: workspace.path().join("src/main.rs").display().to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: None,
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                }),
+                ..EditorContextSnapshot::default()
+            }),
+            Some(&vtcode_config::IdeContextConfig::default()),
+        );
+        ctx.working_history
+            .push(uni::Message::user("hello".to_string()));
+
+        let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        let first =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("first request should build");
+        update_previous_response_chain_after_success(
+            ctx.session_stats,
+            "openai",
+            false,
+            "noop-model",
+            Some("resp_123"),
+            &first.continuation_messages,
+        );
+
+        ctx.working_history
+            .push(uni::Message::user("continue".to_string()));
+        ctx.context_manager.set_editor_context_snapshot(
+            Some(EditorContextSnapshot {
+                workspace_root: Some(PathBuf::from(workspace.path())),
+                active_file: Some(EditorFileContext {
+                    path: workspace.path().join("src/lib.rs").display().to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: None,
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                }),
+                ..EditorContextSnapshot::default()
+            }),
+            Some(&vtcode_config::IdeContextConfig::default()),
+        );
+
+        let second =
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("second request should build");
+
+        assert_eq!(
+            second.request.previous_response_id.as_deref(),
+            Some("resp_123")
+        );
+        assert_eq!(second.request.messages.len(), 2);
+        assert_eq!(second.request.messages[0].role, uni::MessageRole::User);
+        assert!(
+            second.request.messages[0]
+                .content
+                .as_text()
+                .contains("## Active Editor Context")
+        );
+        assert!(
+            second.request.messages[0]
+                .content
+                .as_text()
+                .contains("- Active file: src/lib.rs")
+        );
+        assert_eq!(
+            second.request.messages[1],
+            uni::Message::user("continue".to_string())
+        );
+        assert_eq!(
+            second.continuation_messages,
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::user("continue".to_string()),
+            ]
+        );
+    }
+
     #[test]
     fn server_supported_request_build_keeps_context_management_payload() {
         let mut cfg = VTCodeConfig::default();
@@ -913,17 +1085,6 @@ mod tests {
     fn stable_prefix_hash_ignores_runtime_only_changes() {
         let first = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-22T00:00:00Z\n- retries: 1";
         let second = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-23T00:00:00Z\n- retries: 4";
-
-        assert_eq!(
-            stable_system_prefix_hash(first),
-            stable_system_prefix_hash(second)
-        );
-    }
-
-    #[test]
-    fn stable_prefix_hash_ignores_editor_context_runtime_tail_changes() {
-        let first = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust";
-        let second = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n## Active Editor Context\n- Active file: src/lib.rs\n- Language: Rust";
 
         assert_eq!(
             stable_system_prefix_hash(first),

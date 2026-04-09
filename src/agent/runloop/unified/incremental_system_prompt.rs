@@ -16,15 +16,6 @@ fn append_auto_mode_notice(prompt: &mut String) {
     prompt.push('\n');
 }
 
-fn append_temporal_context_runtime(prompt: &mut String, use_utc: bool) {
-    use std::fmt::Write;
-
-    let time_line = vtcode_core::prompts::generate_temporal_context(use_utc)
-        .trim()
-        .replacen("Current date and time", "- Time", 1);
-    let _ = writeln!(prompt, "{}", time_line);
-}
-
 fn append_plan_mode_notice(prompt: &mut String) {
     if prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER) {
         return;
@@ -61,42 +52,13 @@ fn append_full_auto_notice(prompt: &mut String, plan_mode: bool) {
     }
 }
 
-fn append_token_warning_if_any(prompt: &mut String, context: &SystemPromptContext) {
-    use std::fmt::Write;
-    if context.supports_context_awareness
-        && let (Some(context_size), Some(used)) =
-            (context.context_window_size, context.current_token_usage)
-    {
-        let remaining = context_size.saturating_sub(used);
-        let guidance = context.token_budget_guidance;
-        if guidance.is_empty() {
-            let _ = writeln!(
-                prompt,
-                "<system_warning>Token usage: {}/{}; {} remaining.</system_warning>",
-                used, context_size, remaining
-            );
-        } else {
-            let _ = writeln!(
-                prompt,
-                "<system_warning>Token usage: {}/{}; {} remaining. {}</system_warning>",
-                used, context_size, remaining, guidance
-            );
-        }
-    }
-}
+pub(crate) fn hash_base_system_prompt(base_prompt: &str) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
-fn append_context_metrics(prompt: &mut String, context: &SystemPromptContext) {
-    use std::fmt::Write;
-    let _ = writeln!(prompt, "- turns: {}", context.conversation_length);
-    let _ = writeln!(prompt, "- tool_calls: {}", context.tool_usage_count);
-    let _ = writeln!(prompt, "- errors: {}", context.error_count);
-    let _ = writeln!(
-        prompt,
-        "- token_usage: {:.2}%",
-        context.token_usage_ratio * 100.0
-    );
-    let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
-    append_token_warning_if_any(prompt, context);
+    let mut hasher = DefaultHasher::new();
+    base_prompt.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Cached system prompt that avoids redundant rebuilding
@@ -124,12 +86,10 @@ impl PromptCacheShapingMode {
 struct CachedPrompt {
     /// The actual prompt content
     content: String,
-    /// Hash of the configuration that generated this prompt
-    config_hash: u64,
+    /// Hash of the base prompt that generated this prompt.
+    base_prompt_hash: u64,
     /// Hash of the context that generated this prompt
     context_hash: u64,
-    /// Number of retry attempts this prompt was built for
-    retry_attempts: usize,
 }
 
 impl IncrementalSystemPrompt {
@@ -137,9 +97,8 @@ impl IncrementalSystemPrompt {
         Self {
             cached_prompt: Arc::new(RwLock::new(CachedPrompt {
                 content: String::new(),
-                config_hash: 0,
+                base_prompt_hash: 0,
                 context_hash: 0,
-                retry_attempts: usize::MAX, // Force rebuild on first use
             })),
         }
     }
@@ -148,18 +107,16 @@ impl IncrementalSystemPrompt {
     pub(crate) async fn get_system_prompt(
         &self,
         base_system_prompt: &str,
-        config_hash: u64,
+        base_prompt_hash: u64,
         context_hash: u64,
-        retry_attempts: usize,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let read_guard = self.cached_prompt.read().await;
 
         // Check if we can use the cached version
-        if read_guard.config_hash == config_hash
+        if read_guard.base_prompt_hash == base_prompt_hash
             && read_guard.context_hash == context_hash
-            && read_guard.retry_attempts == retry_attempts
             && !read_guard.content.is_empty()
         {
             return read_guard.content.clone();
@@ -171,9 +128,8 @@ impl IncrementalSystemPrompt {
         // Rebuild the prompt
         self.rebuild_prompt(
             base_system_prompt,
-            config_hash,
+            base_prompt_hash,
             context_hash,
-            retry_attempts,
             context,
             agent_config,
         )
@@ -185,18 +141,16 @@ impl IncrementalSystemPrompt {
     pub(crate) async fn rebuild_prompt(
         &self,
         base_system_prompt: &str,
-        config_hash: u64,
+        base_prompt_hash: u64,
         context_hash: u64,
-        retry_attempts: usize,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let mut write_guard = self.cached_prompt.write().await;
 
         // Double-check after acquiring write lock
-        if write_guard.config_hash == config_hash
+        if write_guard.base_prompt_hash == base_prompt_hash
             && write_guard.context_hash == context_hash
-            && write_guard.retry_attempts == retry_attempts
             && !write_guard.content.is_empty()
         {
             return write_guard.content.clone();
@@ -204,14 +158,13 @@ impl IncrementalSystemPrompt {
 
         // Build the new prompt
         let new_content = self
-            .build_prompt_content(base_system_prompt, retry_attempts, context, agent_config)
+            .build_prompt_content(base_system_prompt, context, agent_config)
             .await;
 
         // Update cache
         write_guard.content = new_content.clone();
-        write_guard.config_hash = config_hash;
+        write_guard.base_prompt_hash = base_prompt_hash;
         write_guard.context_hash = context_hash;
-        write_guard.retry_attempts = retry_attempts;
 
         new_content
     }
@@ -220,7 +173,6 @@ impl IncrementalSystemPrompt {
     async fn build_prompt_content(
         &self,
         base_system_prompt: &str,
-        retry_attempts: usize,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -229,122 +181,6 @@ impl IncrementalSystemPrompt {
 
         let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
-
-        // Inject context budget for models with context awareness (Claude 4.5+)
-        if context.supports_context_awareness
-            && let Some(context_size) = context.context_window_size
-        {
-            let _ = writeln!(
-                prompt,
-                "\n<budget:token_budget>{}</budget:token_budget>",
-                context_size
-            );
-        }
-
-        let cache_friendly_mode = context.prompt_cache_shaping_mode.is_enabled();
-        let mut runtime_tail = String::new();
-        if cache_friendly_mode {
-            let has_runtime_context = retry_attempts > 0
-                || context.error_count > 0
-                || context.conversation_length > 0
-                || context.tool_usage_count > 0
-                || context.token_usage_ratio > 0.0;
-            let has_editor_context = context.editor_context_block.is_some();
-            if has_runtime_context
-                || context.full_auto
-                || context.auto_mode
-                || context.plan_mode
-                || has_editor_context
-            {
-                let _ = writeln!(runtime_tail, "\n[Runtime Context]");
-                if let Some(editor_context_block) = context.editor_context_block.as_deref() {
-                    let _ = writeln!(runtime_tail, "{}", editor_context_block);
-                }
-                if retry_attempts > 0 {
-                    let _ = writeln!(
-                        runtime_tail,
-                        "# Retry #{}: Try a different strategy, not the same steps.",
-                        retry_attempts
-                    );
-                    let _ = writeln!(
-                        runtime_tail,
-                        "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
-                    );
-                }
-                if context.error_count > 0 {
-                    let _ = writeln!(
-                        runtime_tail,
-                        "# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
-                        context.error_count
-                    );
-                }
-                if has_runtime_context {
-                    append_context_metrics(&mut runtime_tail, context);
-                }
-                if agent_config.is_some_and(|cfg| cfg.include_temporal_context) {
-                    append_temporal_context_runtime(
-                        &mut runtime_tail,
-                        agent_config.is_some_and(|cfg| cfg.temporal_context_use_utc),
-                    );
-                }
-                if context.full_auto {
-                    append_full_auto_notice(&mut runtime_tail, context.plan_mode);
-                }
-                if context.auto_mode && !context.plan_mode {
-                    append_auto_mode_notice(&mut runtime_tail);
-                }
-                if context.plan_mode {
-                    append_plan_mode_notice(&mut runtime_tail);
-                }
-            }
-        } else {
-            if let Some(editor_context_block) = context.editor_context_block.as_deref() {
-                let _ = writeln!(prompt, "\n{}", editor_context_block);
-            }
-            if retry_attempts > 0 {
-                let _ = writeln!(
-                    runtime_tail,
-                    "\n# Retry #{}: Try a different strategy, not the same steps.",
-                    retry_attempts
-                );
-                let _ = writeln!(
-                    runtime_tail,
-                    "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
-                );
-            }
-            if context.error_count > 0 {
-                let _ = writeln!(
-                    runtime_tail,
-                    "\n# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
-                    context.error_count
-                );
-            }
-
-            let has_context = context.conversation_length > 0
-                || context.tool_usage_count > 0
-                || context.error_count > 0
-                || context.token_usage_ratio > 0.0
-                || context.full_auto
-                || context.auto_mode
-                || context.plan_mode;
-
-            if has_context {
-                let _ = writeln!(runtime_tail, "\n[Context]");
-                append_context_metrics(&mut runtime_tail, context);
-
-                if context.full_auto {
-                    append_full_auto_notice(&mut runtime_tail, context.plan_mode);
-                }
-
-                if context.auto_mode && !context.plan_mode {
-                    append_auto_mode_notice(&mut runtime_tail);
-                }
-
-                if context.plan_mode {
-                    append_plan_mode_notice(&mut runtime_tail);
-                }
-            }
-        }
 
         if let Some(cfg) = agent_config {
             if let Some(active_dir) = context.active_instruction_directory.as_deref()
@@ -364,8 +200,16 @@ impl IncrementalSystemPrompt {
             );
         }
 
-        if !runtime_tail.trim().is_empty() {
-            let _ = writeln!(prompt, "\n{}", runtime_tail.trim_start_matches('\n'));
+        if context.full_auto {
+            append_full_auto_notice(&mut prompt, context.plan_mode);
+        }
+
+        if context.auto_mode && !context.plan_mode {
+            append_auto_mode_notice(&mut prompt);
+        }
+
+        if context.plan_mode {
+            append_plan_mode_notice(&mut prompt);
         }
 
         prompt
@@ -385,77 +229,15 @@ impl Default for IncrementalSystemPrompt {
     }
 }
 
-/// Configuration that affects system prompt building
-/// Uses pre-computed hash of base_prompt to avoid cloning the full string
-#[derive(Debug, Clone, Hash)]
-pub(crate) struct SystemPromptConfig {
-    /// Pre-computed hash of the base prompt (avoids storing full string)
-    pub(crate) base_prompt_hash: u64,
-    pub(crate) enable_retry_context: bool,
-    pub(crate) enable_token_tracking: bool,
-    pub(crate) max_retry_attempts: usize,
-}
-
-impl SystemPromptConfig {
-    /// Create a new config with a pre-computed hash of the base prompt
-    pub(crate) fn new(
-        base_prompt: &str,
-        enable_retry_context: bool,
-        enable_token_tracking: bool,
-        max_retry_attempts: usize,
-    ) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        base_prompt.hash(&mut hasher);
-
-        Self {
-            base_prompt_hash: hasher.finish(),
-            enable_retry_context,
-            enable_token_tracking,
-            max_retry_attempts,
-        }
-    }
-
-    pub(crate) fn hash(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        self.base_prompt_hash.hash(&mut hasher);
-        self.enable_retry_context.hash(&mut hasher);
-        self.enable_token_tracking.hash(&mut hasher);
-        self.max_retry_attempts.hash(&mut hasher);
-        hasher.finish()
-    }
-}
-
 /// Context that affects system prompt building
 #[derive(Debug, Clone)]
 pub(crate) struct SystemPromptContext {
-    pub(crate) conversation_length: usize,
-    pub(crate) tool_usage_count: usize,
-    pub(crate) error_count: usize,
-    pub(crate) token_usage_ratio: f64,
     pub(crate) full_auto: bool,
     pub(crate) auto_mode: bool,
     /// Plan mode: read-only mode for exploration and planning.
     pub(crate) plan_mode: bool,
     /// Discovered skills for immediate awareness
     pub(crate) discovered_skills: Vec<vtcode_core::skills::types::Skill>,
-    /// Total context window size for the current model (e.g., 200000, 1000000)
-    pub(crate) context_window_size: Option<usize>,
-    /// Current tokens used in the conversation
-    pub(crate) current_token_usage: Option<usize>,
-    /// Whether the model supports context awareness (Claude 4.5+)
-    pub(crate) supports_context_awareness: bool,
-    /// Actionable guidance based on token budget status
-    pub(crate) token_budget_guidance: &'static str,
-    /// Runtime context shaping strategy used to improve prompt prefix cache locality.
-    pub(crate) prompt_cache_shaping_mode: PromptCacheShapingMode,
-    /// Structured active editor context injected at request time.
-    pub(crate) editor_context_block: Option<String>,
     /// Explicit scope root for AGENTS.md and instruction discovery.
     pub(crate) active_instruction_directory: Option<PathBuf>,
     /// Files and directories used to activate path-scoped instruction rules.
@@ -468,19 +250,9 @@ impl SystemPromptContext {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        self.conversation_length.hash(&mut hasher);
-        self.tool_usage_count.hash(&mut hasher);
-        self.error_count.hash(&mut hasher);
-        ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
         self.auto_mode.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
-        self.context_window_size.hash(&mut hasher);
-        self.current_token_usage.hash(&mut hasher);
-        self.supports_context_awareness.hash(&mut hasher);
-        self.token_budget_guidance.hash(&mut hasher);
-        self.prompt_cache_shaping_mode.hash(&mut hasher);
-        self.editor_context_block.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
         for path in &self.instruction_context_paths {
             path.hash(&mut hasher);

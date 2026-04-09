@@ -52,6 +52,7 @@ pub struct IdeContextProvidersConfig {
 pub struct IdeContextConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Inject active editor context into request-time model input.
     #[serde(default = "default_inject_into_prompt")]
     pub inject_into_prompt: bool,
     #[serde(default = "default_show_in_tui")]

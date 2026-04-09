@@ -134,41 +134,6 @@ fn normalize_history_for_request_removes_orphan_outputs() {
     assert!(normalized.is_empty());
 }
 
-#[test]
-fn test_token_budget_status_thresholds() {
-    let manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Context window of 200K tokens
-    let context_size = 200_000;
-
-    // Zero usage should be Normal
-    assert_eq!(
-        manager.get_token_budget_status(context_size),
-        TokenBudgetStatus::Normal
-    );
-}
-
-#[test]
-fn test_token_budget_status_with_zero_context() {
-    let manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Zero context window should return Normal (avoid division by zero)
-    assert_eq!(
-        manager.get_token_budget_status(0),
-        TokenBudgetStatus::Normal
-    );
-}
-
 #[tokio::test]
 async fn build_system_prompt_with_empty_base_prompt_fails() {
     let mut manager = ContextManager::new(
@@ -182,18 +147,15 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
         full_auto: false,
         auto_mode: false,
         plan_mode: false,
-        supports_context_awareness: false,
-        context_window_size: None,
-        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
-    let result = manager.build_system_prompt(&[], 0, params).await;
+    let result = manager.build_system_prompt(params).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("empty"));
 }
 
 #[tokio::test]
-async fn build_system_prompt_includes_active_editor_context_block() {
+async fn request_editor_context_message_includes_active_editor_context_block() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
     let mut manager = ContextManager::new(
         "System prompt".to_string(),
@@ -236,30 +198,39 @@ async fn build_system_prompt_includes_active_editor_context_block() {
         Some(&vtcode_config::IdeContextConfig::default()),
     );
     let prompt = manager
-        .build_system_prompt(
-            &[],
-            0,
-            SystemPromptParams {
-                full_auto: false,
-                auto_mode: false,
-                plan_mode: false,
-                supports_context_awareness: false,
-                context_window_size: None,
-                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
-            },
-        )
+        .build_system_prompt(SystemPromptParams {
+            full_auto: false,
+            auto_mode: false,
+            plan_mode: false,
+        })
         .await
         .expect("system prompt");
 
-    assert!(prompt.contains("## Active Editor Context"));
-    assert!(prompt.contains("- Active file: src/main.rs"));
-    assert!(prompt.contains("- Selection: 48:1-52:8"));
-    assert!(prompt.contains("- Open files:"));
-    assert!(prompt.contains("  - src/lib.rs"));
+    let message = manager
+        .request_editor_context_message()
+        .expect("editor context message");
+
+    assert!(!prompt.contains("## Active Editor Context"));
+    assert_eq!(message.role, uni::MessageRole::User);
+    assert!(
+        message
+            .content
+            .as_text()
+            .contains("## Active Editor Context")
+    );
+    assert!(
+        message
+            .content
+            .as_text()
+            .contains("- Active file: src/main.rs")
+    );
+    assert!(message.content.as_text().contains("- Selection: 48:1-52:8"));
+    assert!(message.content.as_text().contains("- Open files:"));
+    assert!(message.content.as_text().contains("  - src/lib.rs"));
 }
 
 #[tokio::test]
-async fn build_system_prompt_skips_disallowed_provider_family() {
+async fn request_editor_context_message_skips_disallowed_provider_family() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
     let mut manager = ContextManager::new(
         "System prompt".to_string(),
@@ -288,26 +259,20 @@ async fn build_system_prompt_skips_disallowed_provider_family() {
 
     manager.set_editor_context_snapshot(Some(snapshot), Some(&config));
     let prompt = manager
-        .build_system_prompt(
-            &[],
-            0,
-            SystemPromptParams {
-                full_auto: false,
-                auto_mode: false,
-                plan_mode: false,
-                supports_context_awareness: false,
-                context_window_size: None,
-                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
-            },
-        )
+        .build_system_prompt(SystemPromptParams {
+            full_auto: false,
+            auto_mode: false,
+            plan_mode: false,
+        })
         .await
         .expect("system prompt");
 
     assert!(!prompt.contains("## Active Editor Context"));
+    assert!(manager.request_editor_context_message().is_none());
 }
 
 #[tokio::test]
-async fn build_system_prompt_respects_session_local_ide_toggle() {
+async fn request_editor_context_message_respects_session_local_ide_toggle() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
     let mut manager = ContextManager::new(
         "System prompt".to_string(),
@@ -335,176 +300,55 @@ async fn build_system_prompt_respects_session_local_ide_toggle() {
     );
 
     let enabled_prompt = manager
-        .build_system_prompt(
-            &[],
-            0,
-            SystemPromptParams {
-                full_auto: false,
-                auto_mode: false,
-                plan_mode: false,
-                supports_context_awareness: false,
-                context_window_size: None,
-                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
-            },
-        )
+        .build_system_prompt(SystemPromptParams {
+            full_auto: false,
+            auto_mode: false,
+            plan_mode: false,
+        })
         .await
         .expect("enabled prompt");
-    assert!(enabled_prompt.contains("## Active Editor Context"));
+    let enabled_message = manager
+        .request_editor_context_message()
+        .expect("enabled editor context");
+    assert!(!enabled_prompt.contains("## Active Editor Context"));
+    assert!(
+        enabled_message
+            .content
+            .as_text()
+            .contains("## Active Editor Context")
+    );
 
     assert!(!manager.toggle_session_ide_context());
     let disabled_prompt = manager
-        .build_system_prompt(
-            &[],
-            0,
-            SystemPromptParams {
-                full_auto: false,
-                auto_mode: false,
-                plan_mode: false,
-                supports_context_awareness: false,
-                context_window_size: None,
-                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
-            },
-        )
+        .build_system_prompt(SystemPromptParams {
+            full_auto: false,
+            auto_mode: false,
+            plan_mode: false,
+        })
         .await
         .expect("disabled prompt");
     assert!(!disabled_prompt.contains("## Active Editor Context"));
+    assert!(manager.request_editor_context_message().is_none());
 
     assert!(manager.toggle_session_ide_context());
     let reenabled_prompt = manager
-        .build_system_prompt(
-            &[],
-            0,
-            SystemPromptParams {
-                full_auto: false,
-                auto_mode: false,
-                plan_mode: false,
-                supports_context_awareness: false,
-                context_window_size: None,
-                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
-            },
-        )
+        .build_system_prompt(SystemPromptParams {
+            full_auto: false,
+            auto_mode: false,
+            plan_mode: false,
+        })
         .await
         .expect("reenabled prompt");
-    assert!(reenabled_prompt.contains("## Active Editor Context"));
-}
-
-#[test]
-fn test_token_budget_status_warning_threshold() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
+    let reenabled_message = manager
+        .request_editor_context_message()
+        .expect("reenabled editor context");
+    assert!(!reenabled_prompt.contains("## Active Editor Context"));
+    assert!(
+        reenabled_message
+            .content
+            .as_text()
+            .contains("## Active Editor Context")
     );
-
-    // Set token usage to 70% (140000/200000)
-    manager.cached_stats.total_token_usage = 140_000;
-
-    assert_eq!(
-        manager.get_token_budget_status(200_000),
-        TokenBudgetStatus::Warning
-    );
-    assert_eq!(
-        manager.get_token_budget_guidance(200_000),
-        "WARNING: Update progress docs to preserve context."
-    );
-}
-
-#[test]
-fn test_token_budget_status_high_threshold() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Set token usage to 90% (180000/200000)
-    manager.cached_stats.total_token_usage = 180_000;
-
-    assert_eq!(
-        manager.get_token_budget_status(200_000),
-        TokenBudgetStatus::High
-    );
-    assert_eq!(
-        manager.get_token_budget_guidance(200_000),
-        "HIGH: Summarize key findings and prepare a handoff."
-    );
-}
-
-#[test]
-fn test_token_budget_status_critical_threshold() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Set token usage to 95% (190000/200000)
-    manager.cached_stats.total_token_usage = 190_000;
-
-    assert_eq!(
-        manager.get_token_budget_status(200_000),
-        TokenBudgetStatus::Critical
-    );
-    assert_eq!(
-        manager.get_token_budget_guidance(200_000),
-        "CRITICAL: Update artifacts and consider a new session."
-    );
-}
-
-#[test]
-fn test_token_budget_status_normal() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Set token usage to 50% (100000/200000)
-    manager.cached_stats.total_token_usage = 100_000;
-
-    assert_eq!(
-        manager.get_token_budget_status(200_000),
-        TokenBudgetStatus::Normal
-    );
-    assert_eq!(manager.get_token_budget_guidance(200_000), "");
-}
-
-#[test]
-fn test_token_budget_status_and_guidance_together() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    // Test critical threshold
-    manager.cached_stats.total_token_usage = 195_000;
-    let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
-    assert_eq!(status, TokenBudgetStatus::Critical);
-    assert!(guidance.contains("CRITICAL"));
-
-    // Test high threshold
-    manager.cached_stats.total_token_usage = 185_000;
-    let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
-    assert_eq!(status, TokenBudgetStatus::High);
-    assert!(guidance.contains("HIGH"));
-
-    // Test warning threshold
-    manager.cached_stats.total_token_usage = 145_000;
-    let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
-    assert_eq!(status, TokenBudgetStatus::Warning);
-    assert!(guidance.contains("WARNING"));
-
-    // Test normal
-    manager.cached_stats.total_token_usage = 50_000;
-    let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
-    assert_eq!(status, TokenBudgetStatus::Normal);
-    assert!(guidance.is_empty());
 }
 
 #[test]
@@ -562,4 +406,45 @@ fn test_update_token_usage_falls_back_when_prompt_missing() {
 
     // Fallback estimate = total - completion.
     assert_eq!(manager.current_token_usage(), 2500);
+}
+
+#[tokio::test]
+async fn build_system_prompt_ignores_token_usage_updates() {
+    let mut manager = ContextManager::new(
+        "System prompt".to_string(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+
+    let params = SystemPromptParams {
+        full_auto: false,
+        auto_mode: false,
+        plan_mode: false,
+    };
+
+    let prompt_before = manager
+        .build_system_prompt(params.clone())
+        .await
+        .expect("prompt before token update");
+
+    manager.update_token_usage(&Some(uni::Usage {
+        prompt_tokens: 180_000,
+        completion_tokens: 2_000,
+        total_tokens: 182_000,
+        cached_prompt_tokens: None,
+        cache_creation_tokens: None,
+        cache_read_tokens: None,
+    }));
+
+    let prompt_after = manager
+        .build_system_prompt(params)
+        .await
+        .expect("prompt after token update");
+
+    assert_eq!(prompt_before, prompt_after);
+    assert!(!prompt_after.contains("<budget:token_budget>"));
+    assert!(!prompt_after.contains("token_usage:"));
+    assert!(!prompt_after.contains("[Context]"));
+    assert!(!prompt_after.contains("[Runtime Context]"));
 }

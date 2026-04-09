@@ -20,20 +20,11 @@ pub const EXTENDED_CONTEXT_WINDOW: usize = 1_000_000;
 pub const ENTERPRISE_CONTEXT_WINDOW: usize = 500_000;
 
 // =========================================================================
-// Token Budget Thresholds (for proactive context management)
+// Compaction Trigger Ratios
 // =========================================================================
 
-/// First warning threshold - start preparing for context handoff
-/// At 70% usage: Consider updating key artifacts to persist context
-pub const TOKEN_BUDGET_WARNING_THRESHOLD: f64 = 0.70;
-
-/// Second warning threshold - active context management needed
-/// At 90% usage: Actively summarize and persist state
-pub const TOKEN_BUDGET_HIGH_THRESHOLD: f64 = 0.90;
-
-/// Critical threshold - immediate action required
-/// At 95% usage: Force context handoff or summary
-pub const TOKEN_BUDGET_CRITICAL_THRESHOLD: f64 = 0.95;
+/// Default auto-compaction trigger ratio - at 90% prompt pressure, compaction fires.
+pub const DEFAULT_COMPACTION_TRIGGER_RATIO: f64 = 0.90;
 
 // =========================================================================
 // Extended Thinking Token Management
@@ -63,24 +54,6 @@ pub const MAX_THINKING_BUDGET_32K: u32 = 31_999;
 /// Beta header for 1M token context window
 /// Include in requests to enable extended context for Sonnet 4/4.5
 pub const BETA_CONTEXT_1M: &str = "context-1m-2025-08-07";
-
-// =========================================================================
-// Context-Aware Model Detection
-// =========================================================================
-
-/// Models that support context awareness (budget tracking in prompts)
-/// Context awareness: model tracks remaining token budget throughout conversation
-/// Currently: Claude Sonnet 4.6, Claude Haiku 4.5
-pub const CONTEXT_AWARE_MODELS: &[&str] = &[
-    crate::constants::models::anthropic::CLAUDE_SONNET_4_6,
-    crate::constants::models::anthropic::CLAUDE_HAIKU_4_5,
-    crate::constants::models::anthropic::CLAUDE_HAIKU_4_5_20251001,
-];
-
-/// Check if a model supports context awareness
-pub fn supports_context_awareness(model: &str) -> bool {
-    CONTEXT_AWARE_MODELS.iter().any(|m| model.contains(m))
-}
 
 /// Models eligible for 1M context window (beta)
 /// Requires usage tier 4 or custom rate limits

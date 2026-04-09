@@ -15,7 +15,6 @@
     "unified_search"
   ],
   "policies": {
-    "unified_search": "allow",
     "apply_patch": "prompt",
     "cron_create": "prompt",
     "cron_delete": "prompt",
@@ -27,6 +26,7 @@
     "task_tracker": "prompt",
     "unified_exec": "prompt",
     "unified_file": "prompt",
+    "unified_search": "allow",
     "list_files": "allow",
     "memory": "allow",
     "read_file": "allow"
