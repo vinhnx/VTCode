@@ -133,26 +133,33 @@ pub(crate) async fn launch_editor_from_context(
     };
 
     let opening_existing_file = file_target.is_some();
-    let wait_for_editor = should_wait_for_editor(opening_existing_file, editor_config.suspend_tui);
+    let wait_for_editor = should_wait_for_editor(opening_existing_file, &editor_config);
+    let is_transient_open = opening_existing_file && !wait_for_editor;
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        if opening_existing_file && !wait_for_editor {
-            "Opening file in external editor..."
-        } else if opening_existing_file {
-            "Launching editor, with the existing file, close the tab or editor to continue on the VT Code session..."
-        } else {
-            "Launching editor with current input..."
-        },
-    )?;
+    if !is_transient_open {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            if opening_existing_file {
+                "Launching editor, with the existing file, close the tab or editor to continue on the VT Code session..."
+            } else {
+                "Launching editor with current input..."
+            },
+        )?;
+    }
 
     let launch_config = launch_config_from_settings(&editor_config, wait_for_editor);
 
-    let launch_result =
-        run_with_event_loop_suspended(ctx.handle, editor_config.suspend_tui, || {
-            launcher.launch_editor_target_with_config(file_target, launch_config)
-        })
-        .await;
+    let launch_result = run_with_event_loop_suspended(
+        ctx.handle,
+        editor_config.suspend_tui && wait_for_editor,
+        || launcher.launch_editor_target_with_config(file_target, launch_config),
+    )
+    .await;
+
+    if launch_result.is_ok() && is_transient_open {
+        ctx.handle.force_redraw();
+        return Ok(SlashCommandControl::Continue);
+    }
 
     let (message_style, message) = match launch_result {
         Ok(Some(edited_content)) => {
@@ -162,10 +169,6 @@ pub(crate) async fn launch_editor_from_context(
                 "Editor closed. Input updated with edited content.".to_owned(),
             )
         }
-        Ok(None) if opening_existing_file && !wait_for_editor => (
-            MessageStyle::Info,
-            "Opened file in external editor.".to_owned(),
-        ),
         Ok(None) => (MessageStyle::Info, "Editor closed.".to_owned()),
         Err(err) => (
             MessageStyle::Error,
@@ -304,8 +307,49 @@ where
     result
 }
 
-fn should_wait_for_editor(opening_existing_file: bool, suspend_tui: bool) -> bool {
-    !opening_existing_file || suspend_tui
+fn should_wait_for_editor(opening_existing_file: bool, editor_config: &EditorToolConfig) -> bool {
+    if !opening_existing_file {
+        return true;
+    }
+
+    editor_config.suspend_tui && editor_likely_requires_terminal(editor_config)
+}
+
+fn editor_likely_requires_terminal(editor_config: &EditorToolConfig) -> bool {
+    editor_command_from_settings(editor_config)
+        .as_deref()
+        .is_some_and(editor_command_requires_terminal)
+}
+
+fn editor_command_from_settings(editor_config: &EditorToolConfig) -> Option<String> {
+    if !editor_config.preferred_editor.trim().is_empty() {
+        return Some(editor_config.preferred_editor.trim().to_string());
+    }
+
+    ["VISUAL", "EDITOR"]
+        .into_iter()
+        .find_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn editor_command_requires_terminal(command: &str) -> bool {
+    let Some(program) = shell_words::split(command)
+        .ok()
+        .and_then(|tokens| tokens.first().cloned())
+    else {
+        return false;
+    };
+    let normalized = Path::new(&program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&program)
+        .to_ascii_lowercase();
+
+    matches!(
+        normalized.as_str(),
+        "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix"
+    )
 }
 
 fn launch_config_from_settings(
@@ -819,11 +863,32 @@ mod tests {
     }
 
     #[test]
-    fn should_wait_for_editor_only_skips_waiting_for_live_file_opens() {
-        assert!(should_wait_for_editor(false, false));
-        assert!(should_wait_for_editor(false, true));
-        assert!(!should_wait_for_editor(true, false));
-        assert!(should_wait_for_editor(true, true));
+    fn should_wait_for_editor_only_blocks_live_file_opens_for_terminal_editors() {
+        let mut config = EditorToolConfig {
+            suspend_tui: true,
+            preferred_editor: "nvim".to_string(),
+            ..EditorToolConfig::default()
+        };
+
+        assert!(should_wait_for_editor(false, &config));
+        assert!(should_wait_for_editor(true, &config));
+
+        config.preferred_editor = "code --wait".to_string();
+        assert!(!should_wait_for_editor(true, &config));
+
+        config.suspend_tui = false;
+        config.preferred_editor = "nvim".to_string();
+        assert!(!should_wait_for_editor(true, &config));
+    }
+
+    #[test]
+    fn editor_command_requires_terminal_detects_known_terminal_editors() {
+        assert!(editor_command_requires_terminal("nvim"));
+        assert!(editor_command_requires_terminal("/usr/bin/vim"));
+        assert!(editor_command_requires_terminal("helix"));
+        assert!(!editor_command_requires_terminal("code --wait"));
+        assert!(!editor_command_requires_terminal("zed"));
+        assert!(!editor_command_requires_terminal(""));
     }
 
     #[test]

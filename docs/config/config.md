@@ -304,7 +304,7 @@ preferred_editor = ""
 suspend_tui = true
 ```
 
-When `suspend_tui = false`, VT Code keeps the TUI live for real file opens and returns immediately after launching the external editor. Temporary-file `/edit` flows still wait for the editor to close so VT Code can read the edited content back into the composer.
+For real file opens, VT Code launches GUI editors immediately and returns to the session without waiting. If the selected editor is terminal-based (for example `vim`/`nvim`) and `suspend_tui = true`, VT Code suspends the TUI and waits for the editor to close. Temporary-file `/edit` flows still wait so VT Code can read edited content back into the composer.
 
 ### Interactive controls
 

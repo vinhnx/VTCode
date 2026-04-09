@@ -106,7 +106,7 @@ impl TerminalAppLauncher {
             (EditorTarget::new(path, None), true)
         };
         let file_path = target.path().to_path_buf();
-        let wait_for_editor = is_temp || config.wait_for_editor;
+        let mut wait_for_editor = is_temp || config.wait_for_editor;
         let preferred_editor = config
             .preferred_editor
             .as_deref()
@@ -141,6 +141,17 @@ impl TerminalAppLauncher {
                  or set EDITOR/VISUAL, or install an editor in PATH",
             )?
         };
+
+        if !wait_for_editor {
+            let program = cmd.get_program().to_string_lossy().to_string();
+            if Self::program_requires_terminal(&program) {
+                debug!(
+                    program = %program,
+                    "forcing synchronous launch for terminal-based editor"
+                );
+                wait_for_editor = true;
+            }
+        }
 
         if wait_for_editor {
             self.suspend_terminal_for_command(|| {
@@ -271,6 +282,19 @@ impl TerminalAppLauncher {
             .find_map(|key| std::env::var(key).ok())
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
+    }
+
+    fn program_requires_terminal(program: &str) -> bool {
+        let normalized = Path::new(program)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(program)
+            .to_ascii_lowercase();
+
+        matches!(
+            normalized.as_str(),
+            "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix"
+        )
     }
 
     fn append_editor_target_args(cmd: &mut Command, program: &str, target: &EditorTarget) {
@@ -669,5 +693,16 @@ mod tests {
             .collect();
 
         assert_eq!(args, vec!["/tmp/test.rs".to_string()]);
+    }
+
+    #[test]
+    fn test_program_requires_terminal_detects_terminal_editors() {
+        assert!(TerminalAppLauncher::program_requires_terminal("nvim"));
+        assert!(TerminalAppLauncher::program_requires_terminal(
+            "/usr/bin/vim"
+        ));
+        assert!(TerminalAppLauncher::program_requires_terminal("helix"));
+        assert!(!TerminalAppLauncher::program_requires_terminal("code"));
+        assert!(!TerminalAppLauncher::program_requires_terminal("zed"));
     }
 }
