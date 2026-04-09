@@ -659,13 +659,11 @@ mod tests {
             .as_str()
             .expect("partial run should expose session_id")
             .to_string();
+        let initial_output = initial["output"].as_str().unwrap_or_default().to_string();
         if initial.get("next_continue_args").is_none() {
             assert_eq!(initial["exit_code"], 0);
-            let output = initial["output"]
-                .as_str()
-                .expect("settled exec output should be text");
-            assert!(output.contains("first"));
-            assert!(output.contains("second"));
+            assert!(initial_output.contains("first"));
+            assert!(initial_output.contains("second"));
             return Ok(());
         }
         assert!(initial.get("exit_code").is_none());
@@ -683,12 +681,10 @@ mod tests {
             .await?;
 
         assert_eq!(response["exit_code"], 0);
-        assert!(
-            response["output"]
-                .as_str()
-                .expect("settled poll output should be text")
-                .contains("second")
-        );
+        let settled_output = response["output"]
+            .as_str()
+            .expect("settled poll output should be text");
+        assert!(initial_output.contains("second") || settled_output.contains("second"));
         assert!(response.get("next_continue_args").is_none());
 
         Ok(())

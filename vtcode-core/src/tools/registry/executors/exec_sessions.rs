@@ -372,6 +372,10 @@ impl ToolRegistry {
         self.exec_sessions.activity_receiver(session_id).await
     }
 
+    async fn exec_session_output_drained(&self, session_id: &str) -> Result<bool> {
+        self.exec_sessions.is_output_drained(session_id).await
+    }
+
     fn handle_closed_exec_session(&self, session_metadata: &VTCodeExecSession) {
         if is_pty_exec_session(session_metadata) {
             self.decrement_active_pty_sessions();
@@ -456,7 +460,13 @@ impl ToolRegistry {
                             last_output_at = Instant::now();
                         }
                         Ok(None) | Err(_) => {
-                            if Instant::now().duration_since(last_output_at) >= quiet_window {
+                            let output_drained = self
+                                .exec_session_output_drained(session_id)
+                                .await
+                                .unwrap_or(true);
+                            if output_drained
+                                && Instant::now().duration_since(last_output_at) >= quiet_window
+                            {
                                 break;
                             }
                             tokio::time::sleep(Duration::from_millis(15)).await;
@@ -495,6 +505,30 @@ impl ToolRegistry {
             }
 
             if start.elapsed() >= yield_duration {
+                if activity_rx.is_some()
+                    && self
+                        .exec_session_output_drained(session_id)
+                        .await
+                        .unwrap_or(false)
+                {
+                    let exit_grace_deadline = Instant::now() + Duration::from_millis(250);
+                    while Instant::now() < exit_grace_deadline {
+                        if let Ok(Some(code)) = self.exec_session_completed(session_id).await {
+                            if let Some(tool_name) = tool_name
+                                && let Some(ref callback) = progress_callback
+                                && !pending_lines.is_empty()
+                            {
+                                callback(tool_name, &pending_lines);
+                            }
+                            return PtyEphemeralCapture {
+                                output,
+                                exit_code: Some(code),
+                                duration: start.elapsed(),
+                            };
+                        }
+                        tokio::time::sleep(Duration::from_millis(15)).await;
+                    }
+                }
                 if let Some(tool_name) = tool_name
                     && let Some(ref callback) = progress_callback
                     && !pending_lines.is_empty()

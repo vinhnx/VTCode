@@ -10,6 +10,13 @@ use super::ToolRegistry;
 use crate::config::constants::tools;
 
 impl ToolRegistry {
+    async fn process_harness_unified_exec_output(&self, value: Value) -> Result<Value> {
+        let processed = self
+            .process_tool_output(tools::UNIFIED_EXEC, value, false)
+            .await;
+        Ok(super::normalize_tool_output(processed))
+    }
+
     /// Update harness session identifier used for structured tool telemetry
     pub fn set_harness_session(&self, session_id: impl Into<String>) {
         self.harness_context.set_session_id(session_id);
@@ -50,10 +57,7 @@ impl ToolRegistry {
     /// model-facing full-auto allow-list gate.
     pub async fn execute_harness_unified_exec(&self, args: Value) -> Result<Value> {
         let value = self.execute_unified_exec(args).await?;
-        let processed = self
-            .process_tool_output(tools::UNIFIED_EXEC, value, false)
-            .await;
-        Ok(super::normalize_tool_output(processed))
+        self.process_harness_unified_exec_output(value).await
     }
 
     /// Start a harness-owned PTY command session while retaining the session metadata even when
@@ -62,10 +66,7 @@ impl ToolRegistry {
         let value = self
             .execute_harness_unified_exec_terminal_run_raw(args)
             .await?;
-        let processed = self
-            .process_tool_output(tools::UNIFIED_EXEC, value, false)
-            .await;
-        Ok(super::normalize_tool_output(processed))
+        self.process_harness_unified_exec_output(value).await
     }
 
     pub async fn read_harness_exec_session_output(

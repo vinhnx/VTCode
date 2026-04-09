@@ -4,15 +4,13 @@ use anyhow::Result;
 use hashbrown::HashSet;
 use indexmap::IndexMap;
 
+use super::{ToolPermissionDecision, ToolRegistry};
 use crate::config::ToolsConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::mcp::{
     is_legacy_mcp_tool_name, legacy_mcp_tool_name, parse_canonical_mcp_tool_name,
 };
 use crate::tools::names::canonical_tool_name;
-use crate::ui::is_tui_mode;
-
-use super::{ToolPermissionDecision, ToolRegistry};
 
 fn more_restrictive_policy(
     left: vtcode_config::ToolPolicy,
@@ -318,30 +316,13 @@ impl ToolRegistry {
         }
     }
 
-    /// Mark a tool as pre-approved.
-    ///
-    /// In TUI mode we already showed the inline approval modal, so we allow preapproval for
-    /// any tool to avoid re-prompting in the CLI layer. In CLI mode we keep the legacy
-    /// allowlist restriction.
+    /// Mark a tool as pre-approved for a single execution after the permission
+    /// flow already granted it.
     pub async fn mark_tool_preapproved(&self, name: &str) {
         let normalized_name = self.resolve_runtime_policy_name(name);
         let mut gateway = self.policy_gateway.lock().await;
-        if is_tui_mode() {
-            gateway.preapprove(&normalized_name);
-            tracing::trace!(tool = %normalized_name, "Preapproved tool in TUI mode");
-            return;
-        }
-
-        const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
-
-        if PREAPPROVABLE_TOOLS.contains(&normalized_name.as_str()) {
-            gateway.preapprove(&normalized_name);
-        } else {
-            tracing::warn!(
-                tool = %normalized_name,
-                "Attempted to preapprove non-whitelisted tool. Use permission pipeline instead."
-            );
-        }
+        gateway.preapprove(&normalized_name);
+        tracing::trace!(tool = %normalized_name, "Preapproved tool after explicit approval");
     }
 
     pub async fn persist_mcp_tool_policy(&self, name: &str, policy: ToolPolicy) -> Result<()> {
