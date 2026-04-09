@@ -470,6 +470,30 @@ fn complete_turn_after_failed_tool_free_recovery(
     TurnLoopResult::Completed
 }
 
+fn normalize_tool_free_recovery_break_outcome(
+    working_history: &mut Vec<uni::Message>,
+    outcome_result: TurnLoopResult,
+    tool_free_recovery: bool,
+) -> TurnLoopResult {
+    let should_fallback = tool_free_recovery
+        && matches!(
+            outcome_result,
+            TurnLoopResult::Blocked {
+                reason: Some(ref reason)
+            } if reason.contains("tool-free synthesis pass")
+        );
+
+    if should_fallback {
+        return complete_turn_after_failed_tool_free_recovery(
+            working_history,
+            "handle_turn_processing_result.tool_free_recovery_contract_violation",
+            None,
+        );
+    }
+
+    outcome_result
+}
+
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
 pub(crate) async fn run_turn_loop(
@@ -954,7 +978,11 @@ pub(crate) async fn run_turn_loop(
                 ctx.context_manager.update_token_usage(&response_usage);
                 #[cfg(debug_assertions)]
                 ctx.context_manager.validate_token_tracking(&response_usage);
-                result = outcome_result;
+                result = normalize_tool_free_recovery_break_outcome(
+                    working_history,
+                    outcome_result,
+                    tool_free_recovery,
+                );
                 break;
             }
         }
@@ -1134,7 +1162,8 @@ mod tests {
         RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
         complete_turn_after_failed_tool_free_recovery, ensure_post_tool_resume_directive,
         has_tool_response_since, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
-        prepare_post_tool_tool_free_recovery, run_turn_loop,
+        normalize_tool_free_recovery_break_outcome, prepare_post_tool_tool_free_recovery,
+        run_turn_loop,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -1342,6 +1371,52 @@ mod tests {
             })
             .count();
         assert_eq!(fallback_count_again, 1);
+    }
+
+    #[test]
+    fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_completed() {
+        let mut history = vec![uni::Message::user("summarize".to_string())];
+        let outcome = normalize_tool_free_recovery_break_outcome(
+            &mut history,
+            TurnLoopResult::Blocked {
+                reason: Some(
+                    "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
+                        .to_string(),
+                ),
+            },
+            true,
+        );
+
+        assert!(matches!(outcome, TurnLoopResult::Completed));
+        assert!(history.iter().any(|message| {
+            message.role == uni::MessageRole::Assistant
+                && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+                && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+        }));
+    }
+
+    #[test]
+    fn normalize_tool_free_recovery_break_outcome_keeps_non_recovery_blocked_result() {
+        let mut history = vec![uni::Message::user("summarize".to_string())];
+        let outcome = normalize_tool_free_recovery_break_outcome(
+            &mut history,
+            TurnLoopResult::Blocked {
+                reason: Some("Stopped after reaching budget limit.".to_string()),
+            },
+            true,
+        );
+
+        assert!(matches!(
+            outcome,
+            TurnLoopResult::Blocked {
+                reason: Some(ref reason)
+            } if reason == "Stopped after reaching budget limit."
+        ));
+        assert!(!history.iter().any(|message| {
+            message.role == uni::MessageRole::Assistant
+                && message.phase == Some(uni::AssistantPhase::FinalAnswer)
+                && message.content.as_text() == RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
+        }));
     }
 
     #[test]
