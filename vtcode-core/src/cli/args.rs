@@ -147,7 +147,7 @@ pub struct Cli {
     #[arg(long, global = true, default_value = "info")]
     pub log_level: String,
 
-    /// Disable color output (for log files, CI/CD)
+    /// Disable color output (equivalent to `--color never`)
     #[arg(long, global = true)]
     pub no_color: bool,
 
@@ -730,7 +730,7 @@ pub enum Commands {
     Skills(SkillsSubcommand),
 
     /// List available skills (alias for `vtcode skills list`)
-    #[command(name = "list-skills")]
+    #[command(name = "list-skills", hide = true)]
     ListSkills {},
 
     /// Manage optional VT Code dependencies
