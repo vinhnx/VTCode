@@ -21,12 +21,6 @@ fn supports_native_1m_context(model: &str) -> bool {
     model.contains("claude-sonnet-4-6") || model.contains("claude-opus-4-6")
 }
 
-fn supports_context_awareness_model(model: &str) -> bool {
-    model.contains("claude-sonnet-4-6")
-        || model.contains("claude-sonnet-4-5")
-        || model.contains("claude-haiku-4-5")
-}
-
 pub fn supports_reasoning(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
     models::minimax::SUPPORTED_MODELS.contains(&requested)
@@ -50,10 +44,6 @@ pub fn supports_effort(model: &str, default_model: &str) -> bool {
 
 pub fn supports_parallel_tool_config(_model: &str) -> bool {
     true
-}
-
-pub fn supports_context_awareness(model: &str, default_model: &str) -> bool {
-    supports_context_awareness_model(resolve_model_name(model, default_model))
 }
 
 pub fn effective_context_size(model: &str) -> usize {

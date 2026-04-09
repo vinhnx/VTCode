@@ -77,30 +77,6 @@ mod capabilities_tests {
     }
 
     #[test]
-    fn test_supports_context_awareness() {
-        assert!(supports_context_awareness(
-            models::CLAUDE_SONNET_4_6,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_context_awareness(
-            "claude-sonnet-4-5-20250929",
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_context_awareness(
-            models::CLAUDE_HAIKU_4_5,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(!supports_context_awareness(
-            models::CLAUDE_OPUS_4_6,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(!supports_context_awareness(
-            "claude-3-opus",
-            models::anthropic::DEFAULT_MODEL
-        ));
-    }
-
-    #[test]
     fn test_supported_models() {
         let models = supported_models();
         assert!(!models.is_empty());

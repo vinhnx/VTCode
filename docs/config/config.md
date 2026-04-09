@@ -775,7 +775,7 @@ enabled = true
 enabled = true
 ```
 
-- `inject_into_prompt` adds a compact `Active Editor Context` block with file, language, line range, and selection metadata.
+- `inject_into_prompt` injects a compact `Active Editor Context` block into request-time model input, outside the static system prompt.
 - `show_in_tui` mirrors the same active editor summary in the inline header.
 - `include_selection_text` only sends text when there is an explicit selection.
 - `provider_mode` can force one family: `auto`, `vscode_compatible`, `zed`, or `generic`.

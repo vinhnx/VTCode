@@ -136,6 +136,7 @@ pub(crate) async fn execute_llm_request(
     let mut request = initial_request.request;
     let has_tools = initial_request.has_tools;
     let runtime_tools = initial_request.runtime_tools;
+    let continuation_messages = initial_request.continuation_messages;
     if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
         return Err(anyhow::Error::new(err));
     }
@@ -443,7 +444,7 @@ pub(crate) async fn execute_llm_request(
                     turn_snapshot.capabilities.responses_compaction,
                     active_model,
                     response.request_id.as_deref(),
-                    &request.messages,
+                    &continuation_messages,
                 );
                 llm_result = Ok((response, response_streamed));
                 _spinner.finish();

@@ -532,10 +532,6 @@ impl LLMProvider for AnthropicProvider {
         true
     }
 
-    fn supports_context_awareness(&self, model: &str) -> bool {
-        capabilities::supports_context_awareness(model, &self.model)
-    }
-
     fn effective_context_size(&self, model: &str) -> usize {
         capabilities::effective_context_size(model)
     }

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
+use vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO;
 use vtcode_core::compaction::CompactionConfig;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -189,7 +189,7 @@ pub(crate) fn resolve_compaction_threshold(
 ) -> Option<u64> {
     let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
     let derived_threshold = if context_size > 0 {
-        Some(((context_size as f64) * TOKEN_BUDGET_HIGH_THRESHOLD).round() as u64)
+        Some(((context_size as f64) * DEFAULT_COMPACTION_TRIGGER_RATIO).round() as u64)
     } else {
         None
     };
@@ -215,7 +215,7 @@ pub(crate) fn build_server_compaction_context_management(
     })
 }
 
-fn configured_compaction_threshold(
+fn effective_compaction_threshold(
     vt_cfg: Option<&VTCodeConfig>,
     provider: &dyn LLMProvider,
     model: &str,
@@ -1393,7 +1393,7 @@ async fn apply_compacted_history(
     *history = compacted;
     session_stats.clear_previous_response_chain_for(provider.name(), model);
     context_manager
-        .cap_token_usage_after_compaction(configured_compaction_threshold(vt_cfg, provider, model));
+        .cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
     if let Some(ref envelope) = envelope {
         tracing::info!(
             provider = %provider.name(),
@@ -1608,7 +1608,7 @@ pub(crate) async fn maybe_auto_compact_history(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
 ) -> Result<Option<CompactionOutcome>> {
-    let current_token_usage = state.context_manager.current_token_usage();
+    let current_prompt_pressure_tokens = state.context_manager.current_token_usage();
     let CompactionContext {
         provider,
         model,
@@ -1625,12 +1625,12 @@ pub(crate) async fn maybe_auto_compact_history(
         return Ok(None);
     }
 
-    let Some(compact_threshold) = configured_compaction_threshold(Some(vt_cfg), provider, model)
+    let Some(compact_threshold) = effective_compaction_threshold(Some(vt_cfg), provider, model)
     else {
         return Ok(None);
     };
 
-    if current_token_usage < compact_threshold {
+    if current_prompt_pressure_tokens < compact_threshold {
         return Ok(None);
     }
 

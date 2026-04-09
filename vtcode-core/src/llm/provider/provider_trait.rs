@@ -24,7 +24,6 @@ pub struct ProviderCapabilities {
     pub context_caching: bool,
     pub responses_compaction: bool,
     pub context_edits: bool,
-    pub context_awareness: bool,
     pub vision: bool,
     pub context_size: usize,
 }
@@ -43,7 +42,6 @@ impl ProviderCapabilities {
             context_caching: provider.supports_context_caching(model),
             responses_compaction: provider.supports_responses_compaction(model),
             context_edits: provider.supports_context_edits(model),
-            context_awareness: provider.supports_context_awareness(model),
             vision: provider.supports_vision(model),
             context_size: provider.effective_context_size(model),
         }
@@ -197,11 +195,6 @@ pub trait LLMProvider: Send + Sync {
             self.name(),
             model,
         )
-    }
-
-    /// Whether the provider exposes native context-awareness / token-budget prompts.
-    fn supports_context_awareness(&self, _model: &str) -> bool {
-        false
     }
 
     /// Get the effective context window size for a model

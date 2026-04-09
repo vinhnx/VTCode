@@ -6,14 +6,11 @@ use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
 use vtcode_config::IdeContextConfig;
-use vtcode_config::constants::context::{
-    TOKEN_BUDGET_CRITICAL_THRESHOLD, TOKEN_BUDGET_HIGH_THRESHOLD, TOKEN_BUDGET_WARNING_THRESHOLD,
-};
 use vtcode_core::EditorContextSnapshot;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
-    IncrementalSystemPrompt, PromptCacheShapingMode, SystemPromptConfig, SystemPromptContext,
+    IncrementalSystemPrompt, SystemPromptContext, hash_base_system_prompt,
 };
 
 /// Parameters for building system prompts
@@ -22,32 +19,13 @@ pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
     pub auto_mode: bool,
     pub plan_mode: bool,
-    pub supports_context_awareness: bool,
-    pub context_window_size: Option<usize>,
-    pub prompt_cache_shaping_mode: PromptCacheShapingMode,
 }
 
-/// Statistics tracked incrementally to avoid re-scanning history
+/// Context state tracked outside the prompt builder.
 #[derive(Default, Clone)]
 struct ContextStats {
-    tool_usage_count: usize,
-    error_count: usize,
-    last_history_len: usize,
     /// Current prompt-side token pressure used for compaction checks.
     total_token_usage: usize,
-}
-
-/// Token budget status for proactive context management
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum TokenBudgetStatus {
-    /// Below 70% - normal operation
-    Normal,
-    /// 70-90% - start preparing for context handoff
-    Warning,
-    /// 90-95% - active context management needed
-    High,
-    /// Above 95% - immediate action required
-    Critical,
 }
 
 /// Simplified ContextManager without context trim and compaction functionality
@@ -155,27 +133,6 @@ impl ContextManager {
         self.active_instruction_directory()
     }
 
-    fn update_stats(&mut self, history: &[uni::Message]) {
-        let new_len = history.len();
-        if new_len < self.cached_stats.last_history_len {
-            // History was truncated or reset, full rescan
-            self.cached_stats = ContextStats::default();
-        } else if new_len == self.cached_stats.last_history_len {
-            return;
-        }
-
-        // Only scan new messages
-        for msg in &history[self.cached_stats.last_history_len..] {
-            if msg.tool_calls.is_some() || msg.tool_call_id.is_some() {
-                self.cached_stats.tool_usage_count += 1;
-            }
-            if msg.content.as_text().contains("error") || msg.content.as_text().contains("failed") {
-                self.cached_stats.error_count += 1;
-            }
-        }
-        self.cached_stats.last_history_len = new_len;
-    }
-
     /// Update token usage from the latest LLM response.
     ///
     /// We prioritize prompt-side pressure as the compaction signal:
@@ -232,61 +189,6 @@ impl ContextManager {
         }
     }
 
-    /// Compute usage ratio once, avoiding repeated division
-    #[inline]
-    fn usage_ratio(&self, context_window_size: usize) -> f64 {
-        if context_window_size == 0 {
-            0.0
-        } else {
-            self.cached_stats.total_token_usage as f64 / context_window_size as f64
-        }
-    }
-
-    /// Get token budget status and guidance together (single computation)
-    /// Uses thresholds from Anthropic context window documentation:
-    /// - 70%: Warning - prepare for handoff
-    /// - 90%: High - active management needed
-    /// - 95%: Critical - immediate action required
-    pub(crate) fn get_token_budget_status_and_guidance(
-        &self,
-        context_window_size: usize,
-    ) -> (TokenBudgetStatus, &'static str) {
-        let usage_ratio = self.usage_ratio(context_window_size);
-
-        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
-            (
-                TokenBudgetStatus::Critical,
-                "CRITICAL: Update artifacts and consider a new session.",
-            )
-        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
-            (
-                TokenBudgetStatus::High,
-                "HIGH: Summarize key findings and prepare a handoff.",
-            )
-        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
-            (
-                TokenBudgetStatus::Warning,
-                "WARNING: Update progress docs to preserve context.",
-            )
-        } else {
-            (TokenBudgetStatus::Normal, "")
-        }
-    }
-
-    /// Get guidance message based on token budget status
-    /// Returns actionable guidance for context management
-    pub(crate) fn get_token_budget_guidance(&self, context_window_size: usize) -> &'static str {
-        self.get_token_budget_status_and_guidance(context_window_size)
-            .1
-    }
-
-    /// Get current token budget status based on usage ratio
-    #[cfg(test)]
-    pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
-        self.get_token_budget_status_and_guidance(context_window_size)
-            .0
-    }
-
     /// Get current token usage
     pub(crate) fn current_token_usage(&self) -> usize {
         self.cached_stats.total_token_usage
@@ -302,64 +204,17 @@ impl ContextManager {
 
     pub(crate) async fn build_system_prompt(
         &mut self,
-        attempt_history: &[uni::Message],
-        retry_attempts: usize,
         params: SystemPromptParams,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
         }
 
-        // Update statistics incrementally
-        self.update_stats(attempt_history);
-
-        // Create configuration with pre-computed hash (avoids cloning base_prompt)
-        let config = SystemPromptConfig::new(
-            &self.base_system_prompt,
-            retry_attempts > 0,
-            false,
-            3, // This could be configurable
-        );
-
-        // Determine if the provider/model exposes native context-awareness signals.
-        let supports_context_awareness = params.supports_context_awareness;
-
-        // Get token budget guidance if context awareness is supported
-        let token_budget_guidance = if supports_context_awareness {
-            params
-                .context_window_size
-                .map(|context_size| self.get_token_budget_guidance(context_size))
-                .unwrap_or("")
-        } else {
-            ""
-        };
-
-        // Compute token usage ratio from ContextManager's cached stats (single source of truth)
-        let token_usage_ratio = if let Some(context_size) = params.context_window_size {
-            self.usage_ratio(context_size)
-        } else {
-            0.0
-        };
-
         let context = SystemPromptContext {
-            conversation_length: attempt_history.len(),
-            tool_usage_count: self.cached_stats.tool_usage_count,
-            error_count: self.cached_stats.error_count,
-            token_usage_ratio,
             full_auto: params.full_auto,
             auto_mode: params.auto_mode,
             plan_mode: params.plan_mode,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
-            context_window_size: params.context_window_size,
-            current_token_usage: if supports_context_awareness {
-                Some(self.cached_stats.total_token_usage)
-            } else {
-                None
-            },
-            supports_context_awareness,
-            token_budget_guidance,
-            prompt_cache_shaping_mode: params.prompt_cache_shaping_mode,
-            editor_context_block: self.editor_context_prompt_block(),
             active_instruction_directory: self.active_instruction_directory(),
             instruction_context_paths: self.instruction_context_paths(),
         };
@@ -369,9 +224,8 @@ impl ContextManager {
             .incremental_prompt_builder
             .get_system_prompt(
                 &self.base_system_prompt,
-                config.hash(),
+                hash_base_system_prompt(&self.base_system_prompt),
                 context.hash(),
-                retry_attempts,
                 &context,
                 self.agent_config.as_ref(),
             )
@@ -418,19 +272,22 @@ impl ContextManager {
         }
     }
 
-    fn editor_context_prompt_block(&self) -> Option<String> {
+    pub(crate) fn request_editor_context_message(&self) -> Option<uni::Message> {
         let ide_context_config = self.effective_ide_context_config();
         if !ide_context_config.enabled || !ide_context_config.inject_into_prompt {
             return None;
         }
 
         let workspace = self.workspace_root.as_deref()?;
-        self.editor_context_snapshot
+        let block = self
+            .editor_context_snapshot
             .as_ref()
             .filter(|snapshot| ide_context_config.allows_provider_family(snapshot.provider_family))
             .and_then(|snapshot| {
                 snapshot.prompt_block(workspace, ide_context_config.include_selection_text)
-            })
+            })?;
+
+        Some(uni::Message::user(block))
     }
 
     fn active_instruction_directory(&self) -> Option<PathBuf> {
