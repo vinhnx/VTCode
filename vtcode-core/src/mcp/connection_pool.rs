@@ -137,7 +137,7 @@ impl McpConnectionPool {
 
         // Refresh tools
         if let Err(err) = provider
-            .refresh_tools(&allowlist_snapshot, tool_timeout_opt)
+            .cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt)
             .await
         {
             warn!(

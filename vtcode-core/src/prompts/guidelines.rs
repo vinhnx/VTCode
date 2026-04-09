@@ -104,20 +104,22 @@ fn capability_mode_line(
 
 /// Infer capability level from available tools.
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
-    let has_search = available_tools
-        .iter()
-        .any(|t| t == TOOL_UNIFIED_SEARCH || t == TOOL_LIST_FILES);
-    let has_file = available_tools
-        .iter()
-        .any(|t| t == TOOL_UNIFIED_FILE || t == TOOL_READ_FILE);
+    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
+    let has_edit = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
+    let has_read = has_edit || available_tools.iter().any(|t| t == TOOL_READ_FILE);
+    let has_list = has_search || available_tools.iter().any(|t| t == TOOL_LIST_FILES);
     let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
 
     if has_search {
         CapabilityLevel::CodeSearch
-    } else if has_file {
+    } else if has_edit {
         CapabilityLevel::Editing
     } else if has_exec {
         CapabilityLevel::Bash
+    } else if has_list {
+        CapabilityLevel::FileListing
+    } else if has_read {
+        CapabilityLevel::FileReading
     } else {
         CapabilityLevel::Basic
     }
@@ -228,6 +230,12 @@ mod tests {
 
         let tools = vec!["unified_search".to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::CodeSearch);
+
+        let tools = vec!["list_files".to_string()];
+        assert_eq!(infer_capability_level(&tools), CapabilityLevel::FileListing);
+
+        let tools = vec!["read_file".to_string()];
+        assert_eq!(infer_capability_level(&tools), CapabilityLevel::FileReading);
 
         let tools = vec!["unknown_tool".to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::Basic);

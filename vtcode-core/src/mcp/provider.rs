@@ -509,6 +509,18 @@ impl McpProvider {
             .map(|tools| tools.as_ref().clone())
     }
 
+    pub(super) async fn cached_tools_or_refresh(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpToolInfo>> {
+        if let Some(tools) = self.cached_tools().await {
+            return Ok(tools);
+        }
+
+        self.refresh_tools(allowlist, timeout).await
+    }
+
     pub(super) async fn shutdown(&self) -> Result<()> {
         let client = self.client.load_full();
         client.shutdown().await

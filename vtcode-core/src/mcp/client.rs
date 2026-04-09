@@ -108,32 +108,16 @@ impl McpClient {
                 continue;
             }
 
-            match McpProvider::connect(provider_config.clone(), self.elicitation_handler.clone())
+            match self
+                .connect_and_initialize_provider(provider_config, &allowlist_snapshot, tool_timeout)
                 .await
             {
                 Ok(provider) => {
-                    let provider_startup_timeout = self.resolve_startup_timeout(provider_config);
                     if let Err(err) = provider
-                        .initialize(
-                            self.build_initialize_params(&provider),
-                            provider_startup_timeout,
-                            tool_timeout,
-                            &allowlist_snapshot,
-                        )
+                        .cached_tools_or_refresh(&allowlist_snapshot, tool_timeout)
                         .await
                     {
                         error!(
-                            "Failed to initialize MCP provider '{}': {err}",
-                            provider_config.name
-                        );
-                        continue;
-                    }
-
-                    if let Err(err) = provider
-                        .refresh_tools(&allowlist_snapshot, tool_timeout)
-                        .await
-                    {
-                        warn!(
                             "Failed to fetch tools for provider '{}': {err}",
                             provider_config.name
                         );
@@ -861,6 +845,86 @@ impl McpClient {
         }
     }
 
+    async fn connect_and_initialize_provider(
+        &self,
+        provider_config: &McpProviderConfig,
+        allowlist_snapshot: &McpAllowListConfig,
+        tool_timeout: Option<Duration>,
+    ) -> Result<McpProvider> {
+        let total_attempts = self.provider_retry_attempts();
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for attempt_idx in 0..total_attempts {
+            let attempt_number = attempt_idx + 1;
+            match self
+                .connect_and_initialize_provider_once(
+                    provider_config,
+                    allowlist_snapshot,
+                    tool_timeout,
+                )
+                .await
+            {
+                Ok(provider) => return Ok(provider),
+                Err(err) => {
+                    if attempt_number == total_attempts {
+                        return Err(err);
+                    }
+
+                    let retries_remaining = total_attempts - attempt_number;
+                    warn!(
+                        provider = provider_config.name.as_str(),
+                        attempt = attempt_number,
+                        retries_remaining,
+                        error = %err,
+                        "MCP provider initialization failed; retrying"
+                    );
+                    last_error = Some(err);
+                    tokio::time::sleep(Self::provider_retry_delay(attempt_idx)).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            anyhow!(
+                "Failed to initialize MCP provider '{}'",
+                provider_config.name
+            )
+        }))
+    }
+
+    async fn connect_and_initialize_provider_once(
+        &self,
+        provider_config: &McpProviderConfig,
+        allowlist_snapshot: &McpAllowListConfig,
+        tool_timeout: Option<Duration>,
+    ) -> Result<McpProvider> {
+        let provider =
+            McpProvider::connect(provider_config.clone(), self.elicitation_handler.clone())
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to connect to MCP provider '{}'",
+                        provider_config.name
+                    )
+                })?;
+        let provider_startup_timeout = self.resolve_startup_timeout(provider_config);
+        provider
+            .initialize(
+                self.build_initialize_params(&provider),
+                provider_startup_timeout,
+                tool_timeout,
+                allowlist_snapshot,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to initialize MCP provider '{}'",
+                    provider_config.name
+                )
+            })?;
+        Ok(provider)
+    }
+
     fn startup_timeout(&self) -> Option<Duration> {
         match self.config.startup_timeout_seconds {
             Some(0) => None,
@@ -917,6 +981,21 @@ impl McpClient {
         } else {
             self.startup_timeout()
         }
+    }
+
+    fn provider_retry_attempts(&self) -> usize {
+        self.config
+            .retry_attempts
+            .try_into()
+            .unwrap_or(usize::MAX)
+            .saturating_add(1)
+    }
+
+    fn provider_retry_delay(attempt_idx: usize) -> Duration {
+        let step = u64::try_from(attempt_idx)
+            .unwrap_or(u64::MAX)
+            .saturating_add(1);
+        Duration::from_millis((step * 250).min(1_000))
     }
 
     fn tool_timeout(&self) -> Option<Duration> {

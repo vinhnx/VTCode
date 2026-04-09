@@ -211,12 +211,7 @@ impl ToolRegistry {
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        if args
-            .get("input")
-            .or_else(|| args.get("chars"))
-            .or_else(|| args.get("text"))
-            .is_some()
-        {
+        if crate::tools::command_args::interactive_input_text(&args).is_some() {
             self.execute_command_session_write(args).await
         } else {
             self.execute_command_session_poll_internal(args, exec_settlement_mode)

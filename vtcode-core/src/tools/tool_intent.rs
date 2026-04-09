@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use crate::config::constants::tools;
+use crate::tools::command_args::interactive_input_text;
 use crate::tools::names::canonical_tool_name;
 
 pub type ToolIntentClassifier = fn(&Value) -> ToolIntent;
@@ -497,7 +498,7 @@ pub fn unified_search_action_in(args: &Value, expected: &[&str]) -> bool {
 }
 
 fn unified_exec_has_input(args: &Value) -> bool {
-    args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some()
+    interactive_input_text(args).is_some()
 }
 
 fn get_field_case_insensitive<'a>(
@@ -848,6 +849,17 @@ mod tests {
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_continue_with_empty_input_stays_retry_safe() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "continue", "session_id": "run-1", "input": ""}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
     }
 
     #[test]
