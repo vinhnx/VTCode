@@ -70,6 +70,16 @@ fn test_should_accept_refinement_rejects_role_play() {
     assert!(should_accept_refinement(technical_raw, technical_refined));
 }
 
+#[test]
+fn test_finalize_refined_prompt_uses_canonical_diagnostic_tools() {
+    let refined = finalize_refined_prompt("debug the failing command".to_string());
+
+    assert!(refined.contains("`unified_search`"));
+    assert!(refined.contains("`unified_exec`"));
+    assert!(!refined.contains("debug_agent"));
+    assert!(!refined.contains("search_tools"));
+}
+
 // Vibe coding tests
 #[test]
 fn test_detect_vague_references() {

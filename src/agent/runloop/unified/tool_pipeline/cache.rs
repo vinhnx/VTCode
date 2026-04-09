@@ -7,17 +7,11 @@ use vtcode_core::tools::tool_intent;
 
 /// Determine if a tool is cacheable based on tool type and arguments.
 pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
-    // Always cache these read-only tools (original set)
-    if matches!(
-        tool_name,
-        "read_file" | "list_files" | "grep_search" | "find_files"
-    ) {
+    if is_readonly_repo_browsing_tool(tool_name, args) {
         return true;
     }
 
-    // Cache search tools with stable arguments
-    if matches!(tool_name, "search_tools" | "get_errors" | "agent_info") {
-        // These tools typically have stable results within a session
+    if is_stable_tool_catalog_lookup(tool_name, args) {
         return true;
     }
 
@@ -27,6 +21,21 @@ pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
     }
 
     false
+}
+
+fn is_readonly_repo_browsing_tool(tool_name: &str, args: &Value) -> bool {
+    matches!(
+        tool_name,
+        "read_file" | "list_files" | "grep_search" | "find_files"
+    ) || (tool_name == tools::UNIFIED_FILE && tool_intent::unified_file_action_is(args, "read"))
+        || (tool_name == tools::UNIFIED_SEARCH
+            && tool_intent::unified_search_action_in(args, &["grep", "list"]))
+}
+
+fn is_stable_tool_catalog_lookup(tool_name: &str, args: &Value) -> bool {
+    matches!(tool_name, "search_tools" | "get_errors" | "agent_info")
+        || (tool_name == tools::UNIFIED_SEARCH
+            && tool_intent::unified_search_action_in(args, &["tools", "errors", "agent"]))
 }
 
 /// Enhanced cache key creation that includes workspace context in the target path
@@ -317,5 +326,37 @@ mod tests {
         });
 
         assert_eq!(stream_command_parts(tools::UNIFIED_EXEC, &args), None);
+    }
+
+    #[test]
+    fn caches_unified_file_read_calls() {
+        let args = json!({
+            "action": "read",
+            "path": "src/main.rs"
+        });
+
+        assert!(is_tool_cacheable(tools::UNIFIED_FILE, &args));
+        assert_eq!(cache_target_path(tools::UNIFIED_FILE, &args), "src/main.rs");
+    }
+
+    #[test]
+    fn caches_unified_search_list_calls() {
+        let args = json!({
+            "action": "list",
+            "path": "src"
+        });
+
+        assert!(is_tool_cacheable(tools::UNIFIED_SEARCH, &args));
+        assert_eq!(cache_target_path(tools::UNIFIED_SEARCH, &args), "src");
+    }
+
+    #[test]
+    fn caches_unified_search_tools_metadata_calls() {
+        let args = json!({
+            "action": "tools",
+            "keyword": "patch"
+        });
+
+        assert!(is_tool_cacheable(tools::UNIFIED_SEARCH, &args));
     }
 }

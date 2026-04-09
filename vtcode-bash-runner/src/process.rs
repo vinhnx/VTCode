@@ -132,6 +132,15 @@ impl ProcessHandle {
         self.exit_code.lock().ok().and_then(|guard| *guard)
     }
 
+    /// True once the stdout/stderr reader task has drained the child streams.
+    pub fn is_output_drained(&self) -> bool {
+        self.reader_handle
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(JoinHandle::is_finished))
+            .unwrap_or(true)
+    }
+
     /// Attempts to kill the child and abort helper tasks.
     ///
     /// This is idempotent and safe to call multiple times.

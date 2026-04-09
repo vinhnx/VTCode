@@ -492,6 +492,10 @@ pub fn unified_search_action_is(args: &Value, expected: &str) -> bool {
     action_matches(unified_search_action(args), expected)
 }
 
+pub fn unified_search_action_in(args: &Value, expected: &[&str]) -> bool {
+    action_matches_any(unified_search_action(args), expected)
+}
+
 fn unified_exec_has_input(args: &Value) -> bool {
     args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some()
 }

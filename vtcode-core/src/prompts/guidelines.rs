@@ -25,11 +25,10 @@ pub fn generate_tool_guidelines(
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_file) {
         lines.push(mode_line.to_string());
     }
-    if has_search || has_list_files || has_read_file {
-        lines.push(
-            "- Prefer `unified_search`, `list_files`, and `read_file` over shell browsing."
-                .to_string(),
-        );
+    if let Some(browse_guidance) =
+        browse_tool_guidance(has_search, has_file, has_list_files, has_read_file)
+    {
+        lines.push(browse_guidance);
     }
     if has_file || has_apply_patch {
         lines.push("- Read before edit and keep patches small.".to_string());
@@ -55,6 +54,33 @@ pub fn generate_tool_guidelines(
     }
 
     format!("\n\n## Active Tools\n{}", lines.join("\n"))
+}
+
+fn browse_tool_guidance(
+    has_search: bool,
+    has_file: bool,
+    has_list_files: bool,
+    has_read_file: bool,
+) -> Option<String> {
+    let mut tool_names = Vec::new();
+    if has_search {
+        tool_names.push("`unified_search`");
+    } else if has_list_files {
+        tool_names.push("`list_files`");
+    }
+    if has_file {
+        tool_names.push("`unified_file`");
+    } else if has_read_file {
+        tool_names.push("`read_file`");
+    }
+    if tool_names.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "- Prefer {} over shell browsing.",
+        tool_names.join(" and ")
+    ))
 }
 
 fn capability_mode_line(
@@ -129,9 +155,22 @@ mod tests {
     fn test_harness_browse_tool_guidance() {
         let tools = vec!["list_files".to_string(), "read_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
-        assert!(guidelines.contains("Prefer `unified_search`, `list_files`, and `read_file`"));
+        assert!(guidelines.contains("Prefer `list_files` and `read_file`"));
         assert!(!guidelines.contains("offset"));
         assert!(!guidelines.contains("per_page"));
+    }
+
+    #[test]
+    fn test_canonical_browse_tool_guidance_prefers_public_tools() {
+        let tools = vec![
+            "unified_search".to_string(),
+            "unified_file".to_string(),
+            "list_files".to_string(),
+            "read_file".to_string(),
+        ];
+        let guidelines = generate_tool_guidelines(&tools, None);
+        assert!(guidelines.contains("Prefer `unified_search` and `unified_file`"));
+        assert!(!guidelines.contains("Prefer `list_files` and `read_file`"));
     }
 
     #[test]

@@ -147,7 +147,7 @@ fn finalize_refined_prompt(text: String) -> String {
     ];
     if debug_triggers.iter().any(|token| lower.contains(token)) {
         format!(
-            "{}\n\nNote: For diagnostics, prefer using tools: debug_agent, analyze_agent, search_tools.",
+            "{}\n\nNote: For diagnostics, prefer `unified_search` for inspection and `unified_exec` for verification commands.",
             text
         )
     } else {

@@ -109,22 +109,30 @@ impl PipeSessionManager {
             exit_code: None,
         };
 
+        let handle = Arc::new(spawned.session);
         let output = Arc::new(Mutex::new(String::new()));
         let output_clone = Arc::clone(&output);
         let mut output_rx = spawned.output_rx;
+        let output_handle = Arc::clone(&handle);
         let (activity_tx, _) = watch::channel(0u64);
         let output_activity_tx = activity_tx.clone();
         let output_task = tokio::spawn(async move {
             loop {
-                match output_rx.recv().await {
-                    Ok(chunk) => {
+                match tokio::time::timeout(tokio::time::Duration::from_millis(15), output_rx.recv())
+                    .await
+                {
+                    Ok(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk);
                         let mut guard = output_clone.lock().await;
                         guard.push_str(&text);
                         output_activity_tx.send_modify(|version| *version += 1);
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
+                    Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+                    Err(_) if output_handle.has_exited() && output_handle.is_output_drained() => {
+                        break;
+                    }
+                    Err(_) => continue,
                 }
             }
         });
@@ -134,8 +142,6 @@ impl PipeSessionManager {
             let _ = exit_rx.await;
             exit_activity_tx.send_modify(|version| *version += 1);
         });
-
-        let handle = Arc::new(spawned.session);
         let record = Arc::new(PipeSessionRecord::new(
             metadata.clone(),
             handle,
@@ -238,6 +244,16 @@ impl PipeSessionManager {
     async fn activity_receiver(&self, session_id: &str) -> Result<watch::Receiver<u64>> {
         let record = self.session_record(session_id).await?;
         Ok(record.activity_tx.subscribe())
+    }
+
+    async fn is_output_drained(&self, session_id: &str) -> Result<bool> {
+        let record = self.session_record(session_id).await?;
+        let output_task = record.output_task.lock().await;
+        let output_task_finished = match output_task.as_ref() {
+            Some(task) => task.is_finished(),
+            None => true,
+        };
+        Ok(record.handle.is_output_drained() && output_task_finished)
     }
 
     async fn terminate_all_sessions(&self) -> Result<()> {
@@ -464,6 +480,14 @@ impl ExecSessionManager {
                 .await
                 .map(Some),
             ExecSessionBackend::Pty => Ok(None),
+        }
+    }
+
+    pub(crate) async fn is_output_drained(&self, session_id: &str) -> Result<bool> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => self.pipe_sessions.is_output_drained(session_id).await,
+            ExecSessionBackend::Pty => Ok(true),
         }
     }
 

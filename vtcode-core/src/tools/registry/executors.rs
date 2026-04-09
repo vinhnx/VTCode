@@ -12,6 +12,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use chrono;
 use futures::future::BoxFuture;
 use hashbrown::HashMap;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::{
     path::PathBuf,
@@ -56,6 +57,12 @@ struct PreparedExecRunRequest {
     cols: Option<u16>,
 }
 
+struct ResolvedExecSandboxRequest {
+    working_dir_path: PathBuf,
+    sandbox_permissions: crate::sandboxing::SandboxPermissions,
+    additional_permissions: Option<crate::sandboxing::AdditionalPermissions>,
+}
+
 fn set_payload_default(payload: &mut serde_json::Map<String, Value>, key: &str, value: Value) {
     payload.entry(key.to_string()).or_insert(value);
 }
@@ -93,6 +100,14 @@ fn acquire_executor_rate_limit(bucket: &str, multiplier: f64) -> Result<()> {
     guard
         .try_acquire_for_scaled(bucket, multiplier)
         .map_err(|_| anyhow!("tool rate limit exceeded for {}", bucket))
+}
+
+fn parse_action<T>(action_str: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    serde_json::from_value(json!(action_str))
+        .with_context(|| format!("Invalid action: {}", action_str))
 }
 
 impl ToolRegistry {
@@ -188,19 +203,14 @@ impl ToolRegistry {
             "shell run request requires a command",
             "shell run request command cannot be empty",
         )?;
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(shell_working_dir_value(payload))
-            .await?;
-        let (sandbox_permissions, additional_permissions) =
-            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+        let sandbox_request = self.resolve_exec_sandbox_request(payload).await?;
         let sandbox_config = self.sandbox_config();
         let plan = build_shell_execution_plan(
             &sandbox_config,
             self.workspace_root(),
             &requested_command,
-            sandbox_permissions,
-            additional_permissions.as_ref(),
+            sandbox_request.sandbox_permissions,
+            sandbox_request.additional_permissions.as_ref(),
         )?;
 
         Ok(plan.approval_reason)
@@ -260,12 +270,7 @@ impl ToolRegistry {
         );
         let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
 
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(shell_working_dir_value(payload))
-            .await?;
-        let (sandbox_permissions, additional_permissions) =
-            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+        let sandbox_request = self.resolve_exec_sandbox_request(payload).await?;
         let output_config = exec_run_output_config(payload, &prepared_command.display_command);
 
         enforce_pty_command_policy(&prepared_command.display_command, confirm)?;
@@ -275,9 +280,9 @@ impl ToolRegistry {
             &prepared_command.requested_command,
             &sandbox_config,
             self.workspace_root(),
-            &working_dir_path,
-            sandbox_permissions,
-            additional_permissions.as_ref(),
+            &sandbox_request.working_dir_path,
+            sandbox_request.sandbox_permissions,
+            sandbox_request.additional_permissions.as_ref(),
         )?;
 
         let rows = match backend {
@@ -299,7 +304,7 @@ impl ToolRegistry {
 
         Ok(PreparedExecRunRequest {
             prepared_command,
-            working_dir_path,
+            working_dir_path: sandbox_request.working_dir_path,
             output_config,
             yield_duration: Duration::from_millis(clamp_exec_yield_ms(
                 payload.get("yield_time_ms").and_then(Value::as_u64),
@@ -367,8 +372,7 @@ impl ToolRegistry {
 
         let action_str = tool_intent::unified_exec_action(&args)
             .ok_or_else(|| missing_unified_exec_action_error(&args))?;
-        let action: UnifiedExecAction = serde_json::from_value(json!(action_str))
-            .with_context(|| format!("Invalid action: {}", action_str))?;
+        let action: UnifiedExecAction = parse_action(action_str)?;
 
         match action {
             UnifiedExecAction::Run => {
@@ -408,8 +412,7 @@ impl ToolRegistry {
         let action_str = tool_intent::unified_file_action(&args)
             .ok_or_else(|| missing_unified_file_action_error(&args))?;
 
-        let action: UnifiedFileAction = serde_json::from_value(json!(action_str))
-            .with_context(|| format!("Invalid action: {}", action_str))?;
+        let action: UnifiedFileAction = parse_action(action_str)?;
         self.log_unified_file_payload_diagnostics(action_str, &args);
         let tool = self.inventory.file_ops_tool().clone();
 
@@ -479,8 +482,7 @@ impl ToolRegistry {
         let action_str = tool_intent::unified_search_action(&args)
             .ok_or_else(|| missing_unified_search_action_error(&args))?;
 
-        let action: UnifiedSearchAction = serde_json::from_value(json!(action_str))
-            .with_context(|| format!("Invalid action: {}", action_str))?;
+        let action: UnifiedSearchAction = parse_action(action_str)?;
 
         // Default to workspace root when path is omitted for list/grep actions to reduce friction
         if matches!(
@@ -579,8 +581,6 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing url in web_fetch"))?;
 
-        let raw = args.get("raw").and_then(|v| v.as_bool()).unwrap_or(false);
-
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent("VT Code/1.0")
@@ -593,14 +593,8 @@ impl ToolRegistry {
             return Err(anyhow!("Web fetch failed with status: {}", status));
         }
 
-        if raw {
-            let body = response.text().await?;
-            Ok(json!({ "success": true, "content": body, "url": url }))
-        } else {
-            let body = response.text().await?;
-            // Fallback to raw content if html2md is not available
-            Ok(json!({ "success": true, "content": body, "url": url }))
-        }
+        let body = response.text().await?;
+        Ok(json!({ "success": true, "content": body, "url": url }))
     }
 
     pub(super) async fn execute_skill(&self, args: Value) -> Result<Value> {
@@ -729,6 +723,24 @@ impl ToolRegistry {
             task_id = %context.task_id.as_deref().unwrap_or(""),
             "Captured unified_file payload diagnostics"
         );
+    }
+
+    async fn resolve_exec_sandbox_request(
+        &self,
+        payload: &serde_json::Map<String, Value>,
+    ) -> Result<ResolvedExecSandboxRequest> {
+        let working_dir_path = self
+            .pty_manager()
+            .resolve_working_dir(shell_working_dir_value(payload))
+            .await?;
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+
+        Ok(ResolvedExecSandboxRequest {
+            working_dir_path,
+            sandbox_permissions,
+            additional_permissions,
+        })
     }
 
     // ============================================================
