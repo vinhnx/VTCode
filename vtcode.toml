@@ -1,7 +1,7 @@
 [agent]
-api_key_env = "OLLAMA_API_KEY"
-default_model = "minimax-m2.7:cloud"
-provider = "ollama"
+api_key_env = "ZAI_API_KEY"
+default_model = "glm-5.1"
+provider = "zai"
 reasoning_effort = "low"
 theme = "ansi-classic"
 

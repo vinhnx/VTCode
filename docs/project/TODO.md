@@ -5426,3 +5426,39 @@ CRITICAL: fix file external editor is being deferred and not seemless and silent
   }
 }
 ````
+
+---
+
+remove branch and tools count.
+
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
+                let compact_tools = compact_tools_format(body.trim());
+                values.push(format!("Tools: {}", compact_tools));
+                continue;
+            }
+
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
+                let body = body.trim();
+                if !body.is_empty() {
+                    values.push(format!("⎇ {}", body));
+                }
+                continue;
+            }
+
+from header
+
+---
+
+revamp and cleanup input placeholder text hint:
+
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files, /commands, Alt+P: suggest, Shift+Tab: choose Edit/Auto/Plan, Enter: queue, Tab: accept/queue, Ctrl+Enter: run/steer now, /stop: stop task";
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue, or @files, /commands, Alt+P: suggest, Shift+Tab: choose Edit/Auto/Plan, Enter: queue, Tab: accept/queue, Ctrl+Enter: run/steer now, /stop: stop task";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Enter queue • Tab accept/queue • Ctrl+Enter run/steer • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
+
+---
+
+in header. if memory is on -> show status on header instead of "/memory"
+
+---
+
+check for vtcode.toml, any special fields is enabled, and show in header. For example, if [memory] is enabled, show "Memory: On" in header. If [optimization] is enabled, show "Optimization: Bandit" or "Optimization: Actor-Critic" based on the strategy. Make it concise and clean. also looks for any custom hint and tips for users in the config and show in header if exists. Also show useful commands and hints in the header for user reference.

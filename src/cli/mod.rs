@@ -53,7 +53,6 @@ pub async fn dispatch(
     args: &Cli,
     startup: &StartupContext,
     print_mode: Option<String>,
-    potential_prompt: Option<String>,
 ) -> Result<()> {
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;
@@ -66,7 +65,7 @@ pub async fn dispatch(
         return Ok(());
     }
 
-    match resolve_action(args, startup, print_mode, potential_prompt)? {
+    match resolve_action(args, startup, print_mode)? {
         ResolvedCliAction::Ask { prompt, options } => {
             handle_ask_single_command(
                 core_cfg.clone(),
@@ -182,13 +181,8 @@ mod tests {
         startup.automation_prompt = Some("auto prompt".to_string());
         startup.session_resume = Some(SessionResumeMode::Latest);
 
-        let action = resolve_action(
-            &args,
-            &startup,
-            Some("summarize this".to_string()),
-            Some("workspace prompt".to_string()),
-        )
-        .expect("print mode should resolve");
+        let action = resolve_action(&args, &startup, Some("summarize this".to_string()))
+            .expect("print mode should resolve");
 
         match action {
             ResolvedCliAction::Ask { prompt, .. } => {
@@ -205,31 +199,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_action_prefers_workspace_prompt_over_auto_and_resume() {
-        let args = parse_cli(&["vtcode", "chat"]);
-        let mut startup = startup_context();
-        startup.automation_prompt = Some("auto prompt".to_string());
-        startup.session_resume = Some(SessionResumeMode::Latest);
-
-        let action = resolve_action(&args, &startup, None, Some("workspace prompt".to_string()))
-            .expect("workspace prompt should resolve");
-
-        match action {
-            ResolvedCliAction::Ask { prompt, .. } => {
-                assert_eq!(prompt.as_deref(), Some("workspace prompt"));
-            }
-            other => panic!("expected ask action, got {other:?}"),
-        }
-    }
-
-    #[test]
     fn resolve_action_prefers_auto_over_resume_and_command() {
         let args = parse_cli(&["vtcode", "chat"]);
         let mut startup = startup_context();
         startup.automation_prompt = Some("auto prompt".to_string());
         startup.session_resume = Some(SessionResumeMode::Latest);
 
-        let action = resolve_action(&args, &startup, None, None).expect("auto should resolve");
+        let action = resolve_action(&args, &startup, None).expect("auto should resolve");
 
         match action {
             ResolvedCliAction::FullAuto { prompt } => assert_eq!(prompt, "auto prompt"),
@@ -243,7 +219,7 @@ mod tests {
         let mut startup = startup_context();
         startup.session_resume = Some(SessionResumeMode::Specific("session-123".to_string()));
 
-        let action = resolve_action(&args, &startup, None, None).expect("resume should resolve");
+        let action = resolve_action(&args, &startup, None).expect("resume should resolve");
 
         match action {
             ResolvedCliAction::Resume {
@@ -258,7 +234,7 @@ mod tests {
         let args = parse_cli(&["vtcode", "chat"]);
         let startup = startup_context();
 
-        let action = resolve_action(&args, &startup, None, None).expect("command should resolve");
+        let action = resolve_action(&args, &startup, None).expect("command should resolve");
 
         match action {
             ResolvedCliAction::Command(Commands::Chat) => {}
@@ -271,7 +247,7 @@ mod tests {
         let args = parse_cli(&["vtcode"]);
         let startup = startup_context();
 
-        let action = resolve_action(&args, &startup, None, None).expect("chat should resolve");
+        let action = resolve_action(&args, &startup, None).expect("chat should resolve");
 
         assert!(matches!(action, ResolvedCliAction::Chat));
     }

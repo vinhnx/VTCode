@@ -31,7 +31,6 @@ struct PreparedRun {
     args: Cli,
     startup: startup::StartupContext,
     print_mode: Option<String>,
-    potential_prompt: Option<String>,
 }
 
 enum BootstrapOutcome {
@@ -151,13 +150,12 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
         .enable_all()
         .build()
         .context("failed to build startup Tokio runtime")?;
-    let (startup, potential_prompt) = startup_runtime.block_on(resolve_startup_context(&args))?;
+    let startup = startup_runtime.block_on(resolve_startup_context(&args))?;
 
     Ok(BootstrapOutcome::Ready(Box::new(PreparedRun {
         args,
         startup,
         print_mode,
-        potential_prompt,
     })))
 }
 
@@ -166,10 +164,9 @@ async fn run(prepared: PreparedRun) -> Result<()> {
         args,
         startup,
         print_mode,
-        potential_prompt,
     } = prepared;
 
-    configure_debug_session_routing(&args, &startup, &print_mode, &potential_prompt).await;
+    configure_debug_session_routing(&args, &startup, &print_mode).await;
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = initialize_tracing().await.unwrap_or_default();
@@ -189,7 +186,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // Sync global diagnostics flag so TuiLogLayer respects ui.show_diagnostics_in_transcript
     panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
-    let dispatch_result = cli::dispatch(&args, &startup, print_mode, potential_prompt).await;
+    let dispatch_result = cli::dispatch(&args, &startup, print_mode).await;
     perform_queued_runtime_relaunch();
     vtcode_core::utils::trace_writer::flush_trace_log();
     dispatch_result?;

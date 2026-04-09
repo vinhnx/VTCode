@@ -49,3 +49,20 @@ fn config_override_failure_is_reported() {
             .and(predicate::str::contains(missing_config.to_string_lossy())),
     );
 }
+
+#[test]
+fn unknown_positional_token_fails_without_forwarding_prompt_to_llm() {
+    let harness = TestHarness::new().expect("failed to init harness workspace");
+    harness
+        .write_file(".vtcode/.keep", "")
+        .expect("failed to mark workspace initialized");
+
+    let mut cmd = base_command(&harness);
+    cmd.arg("hellp");
+
+    cmd.assert().failure().stderr(
+        predicate::str::contains("failed to initialize VT Code startup context")
+            .and(predicate::str::contains("Workspace"))
+            .and(predicate::str::contains("Sending prompt to").not()),
+    );
+}

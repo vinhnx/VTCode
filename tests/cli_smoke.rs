@@ -32,3 +32,13 @@ fn vtcode_tool_policy_help_succeeds() {
     cmd.arg("tool-policy").arg("--help");
     cmd.assert().success();
 }
+
+#[test]
+fn vtcode_positional_workspace_with_tool_policy_status_succeeds() {
+    let (home, mut cmd) = isolated_vtcode_command();
+    let workspace = home.path().join("workspace");
+    std::fs::create_dir(&workspace).expect("create workspace");
+
+    cmd.arg("workspace").arg("tool-policy").arg("status");
+    cmd.assert().success();
+}

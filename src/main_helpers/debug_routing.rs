@@ -12,11 +12,10 @@ fn resolve_mode_hint(
     args: &Cli,
     startup: &StartupContext,
     print_mode: &Option<String>,
-    potential_prompt: &Option<String>,
 ) -> &'static str {
     if startup.session_resume.is_some() {
         "resume"
-    } else if print_mode.is_some() || potential_prompt.is_some() {
+    } else if print_mode.is_some() {
         "ask"
     } else if startup.automation_prompt.is_some() {
         "auto"
@@ -43,17 +42,13 @@ fn interactive_archive_backed_session(
     args: &Cli,
     startup: &StartupContext,
     print_mode: &Option<String>,
-    potential_prompt: &Option<String>,
 ) -> bool {
     startup.session_resume.is_some()
         || matches!(
             args.command,
             Some(Commands::Chat) | Some(Commands::ChatVerbose)
         )
-        || (args.command.is_none()
-            && print_mode.is_none()
-            && potential_prompt.is_none()
-            && startup.automation_prompt.is_none())
+        || (args.command.is_none() && print_mode.is_none() && startup.automation_prompt.is_none())
 }
 
 fn workspace_archive_label(workspace: &std::path::Path) -> String {
@@ -79,9 +74,8 @@ async fn resolve_archive_session_id(
     args: &Cli,
     startup: &StartupContext,
     print_mode: &Option<String>,
-    potential_prompt: &Option<String>,
 ) -> Option<String> {
-    if interactive_archive_backed_session(args, startup, print_mode, potential_prompt) {
+    if interactive_archive_backed_session(args, startup, print_mode) {
         if let Some(mode) = startup.session_resume.as_ref() {
             match mode {
                 SessionResumeMode::Specific(identifier) if startup.custom_session_id.is_none() => {
@@ -138,18 +132,11 @@ pub(crate) async fn configure_debug_session_routing(
     args: &Cli,
     startup: &StartupContext,
     print_mode: &Option<String>,
-    potential_prompt: &Option<String>,
 ) {
-    let command_debug_session_id = build_command_debug_session_id(resolve_mode_hint(
-        args,
-        startup,
-        print_mode,
-        potential_prompt,
-    ));
+    let command_debug_session_id =
+        build_command_debug_session_id(resolve_mode_hint(args, startup, print_mode));
 
-    if let Some(session_id) =
-        resolve_archive_session_id(args, startup, print_mode, potential_prompt).await
-    {
+    if let Some(session_id) = resolve_archive_session_id(args, startup, print_mode).await {
         configure_runtime_debug_context(session_id.clone(), Some(session_id));
     } else {
         configure_runtime_debug_context(command_debug_session_id, None);
@@ -224,9 +211,7 @@ mod tests {
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        runtime.block_on(configure_debug_session_routing(
-            &args, &startup, &None, &None,
-        ));
+        runtime.block_on(configure_debug_session_routing(&args, &startup, &None));
 
         assert_eq!(runtime_archive_session_id().as_deref(), Some("session-123"));
     }
@@ -255,9 +240,7 @@ mod tests {
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        runtime.block_on(configure_debug_session_routing(
-            &args, &startup, &None, &None,
-        ));
+        runtime.block_on(configure_debug_session_routing(&args, &startup, &None));
 
         assert_eq!(runtime_archive_session_id().as_deref(), Some("session-456"));
     }

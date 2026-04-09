@@ -143,9 +143,9 @@ impl Session {
         } else {
             self.header_context.app_name.trim()
         };
-        let prompt = format!("{}{} ", ui::HEADER_VERSION_PROMPT, app_name);
+        let prompt = format!("{}{}", ui::HEADER_VERSION_PROMPT, app_name);
         let version_text = format!(
-            "{}{}{}",
+            " {}{}{}",
             ui::HEADER_VERSION_LEFT_DELIMITER,
             version.trim(),
             ui::HEADER_VERSION_RIGHT_DELIMITER
@@ -386,7 +386,7 @@ impl Session {
             if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
                 let body = body.trim();
                 if !body.is_empty() {
-                    values.push(body.to_owned());
+                    values.push(format!("⎇ {}", body));
                 }
                 continue;
             }
@@ -417,14 +417,14 @@ impl Session {
                 *first = false;
             };
 
-        // Show editing mode badge with color coding
+        // Show editing mode badge
         if self.header_context.editing_mode == EditingMode::Plan {
             let badge_style = Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
-                "Plan mode on".to_string(),
+                "Plan".to_string(),
                 badge_style,
                 &mut first_section,
             );
@@ -443,7 +443,7 @@ impl Session {
             );
         }
 
-        // Show trust level badge with color coding
+        // Show trust level badge
         let trust_value = self.header_context.workspace_trust.to_lowercase();
         if trust_value.contains("full auto") || trust_value.contains("full_auto") {
             let badge_style = Style::default()
@@ -451,7 +451,7 @@ impl Session {
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
-                "Full-auto trust".to_string(),
+                "Full-auto".to_string(),
                 badge_style,
                 &mut first_section,
             );
@@ -461,27 +461,10 @@ impl Session {
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
-                "[SAFE]".to_string(),
+                "Safe".to_string(),
                 badge_style,
                 &mut first_section,
             );
-        }
-
-        if let Some(badge) = self
-            .header_context
-            .search_tools
-            .as_ref()
-            .filter(|badge| !badge.text.trim().is_empty())
-        {
-            if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            let style = header_status_badge_style(badge, self.header_primary_style());
-            spans.push(Span::styled(badge.text.clone(), style));
-            first_section = false;
         }
 
         if let Some(badge) = self
@@ -671,63 +654,35 @@ impl Session {
 
     /// Generate header line with slash command and keyboard shortcut suggestions
     pub(crate) fn header_suggestions_line(&self) -> Option<Line<'static>> {
+        let dim = self.header_secondary_style().add_modifier(Modifier::DIM);
+        let key = self.header_primary_style().add_modifier(Modifier::BOLD);
+        let label = self.header_secondary_style();
+        let dot = Span::styled(" · ", dim);
+
         let mut spans = vec![
-            Span::styled(
-                "/help",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " · ",
-                self.header_secondary_style().add_modifier(Modifier::DIM),
-            ),
-            Span::styled(
-                "/model",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "  |  ",
-                self.header_secondary_style().add_modifier(Modifier::DIM),
-            ),
-            Span::styled(
-                "↑↓",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Nav · ", self.header_secondary_style()),
-            Span::styled(
-                "Tab",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Complete", self.header_secondary_style()),
+            Span::styled("/help", key),
+            dot.clone(),
+            Span::styled("/model", key),
+            Span::styled("  │  ", dim),
+            Span::styled("↑↓", key),
+            Span::styled(" nav", label),
+            dot.clone(),
+            Span::styled("Tab", key),
+            Span::styled(" complete", label),
         ];
 
         if self.has_delegated_local_agents() {
-            spans.push(Span::styled(
-                "  |  ",
-                self.header_secondary_style().add_modifier(Modifier::DIM),
-            ));
-            spans.push(Span::styled(
-                "Alt+S",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::styled(" Agents", self.header_secondary_style()));
-            spans.push(Span::styled(" · ", self.header_secondary_style()));
-            spans.push(Span::styled(
-                "Ctrl+B",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::styled(" Background", self.header_secondary_style()));
+            spans.push(Span::styled("  │  ", dim));
+            spans.push(Span::styled("Alt+S", key));
+            spans.push(Span::styled(" agents", label));
+            spans.push(dot.clone());
+            spans.push(Span::styled("Ctrl+B", key));
+            spans.push(Span::styled(" background", label));
         }
 
         if self.header_context.persistent_memory.is_some() {
-            spans.push(Span::styled(
-                "  |  ",
-                self.header_secondary_style().add_modifier(Modifier::DIM),
-            ));
-            spans.push(Span::styled(
-                "/memory",
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::styled(" Memory", self.header_secondary_style()));
+            spans.push(Span::styled("  │  ", dim));
+            spans.push(Span::styled("/memory", key));
         }
 
         Some(Line::from(spans))

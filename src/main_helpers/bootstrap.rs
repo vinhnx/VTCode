@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
-use std::path::PathBuf;
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::Cli;
 
@@ -74,24 +73,29 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
     )
 }
 
-pub(crate) async fn resolve_startup_context(
-    args: &Cli,
-) -> Result<(StartupContext, Option<String>)> {
-    if let Some(workspace_path) = &args.workspace_path
-        && (!workspace_path.exists() || !workspace_path.is_dir())
-    {
-        let prompt_text = workspace_path.to_string_lossy().to_string();
-        let mut modified_args = args.clone();
-        modified_args.workspace_path =
-            Some(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        let startup = StartupContext::from_cli_args(&modified_args)
-            .await
-            .context("failed to initialize VT Code startup context")?;
-        return Ok((startup, Some(prompt_text)));
-    }
-
+pub(crate) async fn resolve_startup_context(args: &Cli) -> Result<StartupContext> {
     let startup = StartupContext::from_cli_args(args)
         .await
         .context("failed to initialize VT Code startup context")?;
-    Ok((startup, None))
+    Ok(startup)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_startup_context;
+    use clap::Parser;
+    use vtcode_core::cli::args::Cli;
+
+    #[tokio::test]
+    async fn invalid_positional_workspace_is_not_treated_as_prompt() {
+        let args = Cli::parse_from(["vtcode", "hellp"]);
+        let err = resolve_startup_context(&args)
+            .await
+            .expect_err("invalid positional workspace should fail");
+        let err_text = format!("{err:#}");
+        assert!(
+            err_text.contains("Workspace"),
+            "unexpected error: {err_text}"
+        );
+    }
 }
