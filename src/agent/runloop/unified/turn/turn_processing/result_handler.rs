@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -152,13 +152,16 @@ fn recovery_empty_response_fallback_guidance(mode: RecoveryMode) -> &'static str
 
 fn recovery_empty_response_fallback_message(
     history: &[uni::Message],
+    workspace_root: &Path,
     mode: RecoveryMode,
 ) -> String {
     let intro = recovery_empty_response_fallback_intro(mode);
     let guidance = recovery_empty_response_fallback_guidance(mode);
 
-    let previews =
-        crate::agent::runloop::unified::turn::compaction::build_recovery_context_previews(history);
+    let previews = crate::agent::runloop::unified::turn::compaction::build_recovery_context_previews_with_workspace(
+        history,
+        Some(workspace_root),
+    );
     if previews.is_empty() {
         format!("{intro}\n\n{guidance}")
     } else if previews.len() == 1 {
@@ -317,6 +320,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 };
                 let fallback_message = recovery_empty_response_fallback_message(
                     params.ctx.working_history,
+                    params.ctx.tool_registry.workspace_root().as_path(),
                     recovery_mode,
                 );
                 params.ctx.handle_assistant_response(
@@ -564,6 +568,62 @@ mod tests {
         assert!(backing.last_history_message_contains("Latest user request: tell me more"));
         assert!(backing.last_history_message_contains("Tool output 1: second tool output"));
         assert!(backing.last_history_message_contains("Tool output 2: first tool output"));
+    }
+
+    #[tokio::test]
+    async fn recovery_empty_response_fallback_uses_spool_excerpt_when_available() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        let spool_dir = ctx
+            .tool_registry
+            .workspace_root()
+            .join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).expect("spool dir");
+        std::fs::write(
+            spool_dir.join("read_1.txt"),
+            (1..=30)
+                .map(|idx| format!("fallback-line-{idx}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .expect("spool file");
+
+        ctx.working_history
+            .push(uni::Message::user("summarize the failed read".to_string()));
+        ctx.working_history.push(uni::Message::tool_response(
+            "call_1".to_string(),
+            serde_json::json!({
+                "path": "src/main.rs",
+                "spool_path": ".vtcode/context/tool_outputs/read_1.txt"
+            })
+            .to_string(),
+        ));
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::Empty,
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery empty response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+        ));
+        assert!(backing.last_history_message_contains("source_path: src/main.rs"));
+        assert!(backing.last_history_message_contains("fallback-line-1"));
+        assert!(backing.last_history_message_contains("Spool excerpt:"));
     }
 
     #[tokio::test]

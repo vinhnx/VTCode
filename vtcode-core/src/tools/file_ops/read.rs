@@ -8,7 +8,7 @@ use crate::telemetry::perf::PerfSpan;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
 use crate::tools::continuation::{DEFAULT_NEXT_READ_LIMIT, ReadChunkContinuationArgs};
-use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
+use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler, ReadFileOutcome};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{Input, PathArgs};
 use anyhow::{Context, Result, anyhow};
@@ -462,12 +462,11 @@ impl FileOpsTool {
                     Ok(read_args) => {
                         let requested_path = self.workspace_relative_display(&canonical);
                         let handler = ReadFileHandler;
-                        let content = handler.handle(read_args).await?;
-                        let lines_returned = if content.is_empty() {
-                            0usize
-                        } else {
-                            content.lines().count()
-                        };
+                        let ReadFileOutcome {
+                            content,
+                            lines_read: lines_returned,
+                            has_more,
+                        } = handler.handle_detailed(read_args).await?;
                         let full_text_read = is_full_text_read(&args, is_spool_output);
 
                         let mut builder = ToolResponseBuilder::new("read_file")
@@ -483,7 +482,6 @@ impl FileOpsTool {
                             .data("encoding", json!("utf8"));
 
                         if let Some(plan) = spool_plan {
-                            let has_more = lines_returned >= plan.limit;
                             let next_offset = plan.offset.saturating_add(lines_returned);
 
                             builder = builder
@@ -1153,6 +1151,36 @@ mod read_tests {
     }
 
     #[tokio::test]
+    async fn test_spool_file_exact_limit_at_eof_omits_continuation_fields() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
+        fs::create_dir_all(&spool_dir).unwrap();
+        let spool_file = spool_dir.join("unified_exec_exact.txt");
+        let spool_content = (1..=SPOOL_CHUNK_DEFAULT_LIMIT_LINES)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&spool_file, spool_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let result = file_ops
+            .read_file(json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_exact.txt"
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["success"], true);
+        assert_eq!(result["spool_chunked"], true);
+        assert_eq!(result["lines_returned"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
+        assert!(result.get("has_more").is_none());
+        assert!(result.get("next_read_args").is_none());
+    }
+
+    #[tokio::test]
     async fn test_read_file_accepts_compact_spool_continuation_args() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
@@ -1188,13 +1216,7 @@ mod read_tests {
             result["content"].as_str().unwrap().lines().next(),
             Some("line81")
         );
-        assert_eq!(
-            result["next_read_args"],
-            json!({
-                "path": ".vtcode/context/tool_outputs/unified_exec_456.txt",
-                "offset": 121,
-                "limit": 40
-            })
-        );
+        assert!(result.get("has_more").is_none());
+        assert!(result.get("next_read_args").is_none());
     }
 }

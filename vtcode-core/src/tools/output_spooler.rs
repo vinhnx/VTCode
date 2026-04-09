@@ -23,10 +23,10 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 
-/// Default threshold for spooling tool output to files (200KB)
-/// Matches the byte fuse in output_processing.rs and avoids unnecessary spooling
-/// for modern context windows.
-pub const DEFAULT_SPOOL_THRESHOLD_BYTES: usize = 200_000;
+/// Default threshold for spooling tool output to files (8KB).
+/// Keep this aligned with `DynamicContextConfig::default().tool_output_threshold`
+/// so invalid workspace config falls back to the same runtime behavior.
+pub const DEFAULT_SPOOL_THRESHOLD_BYTES: usize = 8_192;
 
 const CONDENSE_HEAD_BYTES: usize = 8_000;
 const CONDENSE_TAIL_BYTES: usize = 4_000;

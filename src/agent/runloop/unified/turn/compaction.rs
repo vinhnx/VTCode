@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO;
 use vtcode_core::compaction::CompactionConfig;
 use vtcode_core::config::constants::tools as tool_names;
@@ -35,6 +36,10 @@ const RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS: usize = 3;
 const RECOVERY_PREVIEW_USER_LABEL: &str = "Latest user request";
 const RECOVERY_PREVIEW_TOOL_LABEL: &str = "Latest tool output";
 const RECOVERY_PREVIEW_ASSISTANT_LABEL: &str = "Latest assistant text";
+const RECOVERY_PREVIEW_SPOOL_READ_HEAD_BYTES: usize = 2_000;
+const RECOVERY_PREVIEW_SPOOL_READ_TAIL_BYTES: usize = 1_500;
+const RECOVERY_PREVIEW_SPOOL_EXEC_TAIL_BYTES: usize = 4_000;
+const RECOVERY_PREVIEW_SPOOL_EXEC_MAX_LINES: usize = 80;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MemoryEnvelopePersistence {
@@ -653,7 +658,95 @@ fn derive_continuity_summary(
     }
 }
 
-pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String> {
+fn resolve_workspace_spool_path(workspace_root: &Path, raw_path: &str) -> Option<PathBuf> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let path = Path::new(trimmed);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
+    };
+    let normalized = vtcode_core::utils::path::normalize_path(&absolute);
+    let normalized_workspace = vtcode_core::utils::path::normalize_path(workspace_root);
+    normalized
+        .starts_with(&normalized_workspace)
+        .then_some(normalized)
+}
+
+fn structured_tool_preview_from_spool(
+    obj: &serde_json::Map<String, Value>,
+    workspace_root: &Path,
+) -> Option<String> {
+    let spool_path = obj.get("spool_path")?.as_str()?.trim();
+    let resolved = resolve_workspace_spool_path(workspace_root, spool_path)?;
+    let spool_bytes = fs::read(&resolved).ok()?;
+    let spool_content = String::from_utf8_lossy(&spool_bytes);
+
+    let mut parts = Vec::new();
+    if let Some(stderr_preview) = obj
+        .get("stderr_preview")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(normalize_whitespace)
+    {
+        parts.push(stderr_preview);
+    }
+
+    let is_exec_like = obj.get("exit_code").is_some()
+        || obj.get("stderr_preview").is_some()
+        || obj.get("result_ref_only").and_then(Value::as_bool) == Some(true)
+        || obj.get("spool_ref_only").and_then(Value::as_bool) == Some(true);
+
+    if is_exec_like {
+        parts.push(format!(
+            "Spool excerpt: {}",
+            normalize_whitespace(&tail_preview_text(
+                &spool_content,
+                RECOVERY_PREVIEW_SPOOL_EXEC_TAIL_BYTES,
+                RECOVERY_PREVIEW_SPOOL_EXEC_MAX_LINES,
+            ))
+        ));
+    } else {
+        let mut excerpt_parts = Vec::new();
+        if let Some(path) = obj
+            .get("source_path")
+            .and_then(Value::as_str)
+            .or_else(|| obj.get("path").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            excerpt_parts.push(format!("source_path: {path}"));
+        }
+        excerpt_parts.push(format!(
+            "Spool excerpt: {}",
+            normalize_whitespace(&condense_text_bytes(
+                &spool_content,
+                RECOVERY_PREVIEW_SPOOL_READ_HEAD_BYTES,
+                RECOVERY_PREVIEW_SPOOL_READ_TAIL_BYTES,
+            ))
+        ));
+        parts.push(excerpt_parts.join(" | "));
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" | "))
+}
+
+pub(crate) fn build_recovery_context_previews_with_workspace(
+    history: &[Message],
+    workspace_root: Option<&Path>,
+) -> Vec<String> {
+    #[derive(Debug)]
+    struct ToolPreviewCandidate {
+        text: String,
+        priority: u8,
+        recency_rank: usize,
+    }
+
     fn truncate_preview(text: &str) -> String {
         if text.chars().count() <= RECOVERY_PREVIEW_MAX_CHARS {
             return text.to_string();
@@ -699,6 +792,12 @@ pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String
         }
     }
 
+    fn nested_error_object(
+        obj: &serde_json::Map<String, Value>,
+    ) -> Option<&serde_json::Map<String, Value>> {
+        obj.get("error").and_then(Value::as_object)
+    }
+
     fn compact_json_preview(value: &Value) -> Option<String> {
         let serialized = serde_json::to_string(value).ok()?;
         let normalized = normalize_whitespace(&serialized);
@@ -714,10 +813,15 @@ pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String
         }
     }
 
-    fn structured_tool_preview(raw_text: &str) -> Option<String> {
+    fn structured_tool_preview(
+        raw_text: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<(String, u8)> {
         let value = serde_json::from_str::<Value>(raw_text).ok()?;
         let obj = value.as_object()?;
         let mut parts = Vec::new();
+        let guidance_obj = nested_error_object(obj).unwrap_or(obj);
+        let mut priority = 0u8;
 
         if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
             let path = trimmed_json_string_field(obj, "path");
@@ -739,6 +843,7 @@ pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String
                 )
             };
             push_unique_preview_part(&mut parts, Some(summary));
+            priority = priority.max(20);
         } else if let Some(items) = obj.get("items").and_then(Value::as_array) {
             let total = obj
                 .get("total")
@@ -746,43 +851,73 @@ pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String
                 .and_then(Value::as_u64)
                 .unwrap_or(items.len() as u64);
             push_unique_preview_part(&mut parts, Some(format!("Listed {total} items")));
+            priority = priority.max(10);
         } else if let Some(files) = obj.get("files").and_then(Value::as_array) {
             let total = obj
                 .get("total")
                 .and_then(Value::as_u64)
                 .unwrap_or(files.len() as u64);
             push_unique_preview_part(&mut parts, Some(format!("Listed {total} files")));
+            priority = priority.max(10);
         }
 
         push_unique_preview_part(&mut parts, error_preview_text(obj));
         for key in ["critical_note", "message", "hint"] {
-            push_unique_preview_part(&mut parts, trimmed_json_string_field(obj, key));
+            push_unique_preview_part(
+                &mut parts,
+                trimmed_json_string_field(obj, key)
+                    .or_else(|| trimmed_json_string_field(guidance_obj, key)),
+            );
+        }
+        if parts.iter().any(|part| {
+            !(part.starts_with("Listed ")
+                || part.starts_with("Found ")
+                || part.starts_with("No matches found"))
+        }) {
+            priority = priority.max(55);
         }
         push_unique_preview_part(
             &mut parts,
             trimmed_json_string_field(obj, "next_action")
+                .or_else(|| trimmed_json_string_field(guidance_obj, "next_action"))
                 .map(|next_action| format!("Next action: {next_action}")),
         );
+        if parts.iter().any(|part| part.starts_with("Next action: ")) {
+            priority = priority.max(60);
+        }
 
-        if let Some(tool) = trimmed_json_string_field(obj, "fallback_tool") {
+        if let Some(tool) = trimmed_json_string_field(obj, "fallback_tool")
+            .or_else(|| trimmed_json_string_field(guidance_obj, "fallback_tool"))
+        {
             let fallback = obj
                 .get("fallback_tool_args")
+                .or_else(|| guidance_obj.get("fallback_tool_args"))
                 .and_then(compact_json_preview)
                 .map(|args| format!("Fallback tool: {tool} {args}"))
                 .unwrap_or_else(|| format!("Fallback tool: {tool}"));
             push_unique_preview_part(&mut parts, Some(fallback));
+            priority = priority.max(60);
+        }
+
+        if let Some(workspace_root) = workspace_root {
+            let spool_preview = structured_tool_preview_from_spool(obj, workspace_root);
+            if spool_preview.is_some() {
+                priority = priority.max(100);
+            }
+            push_unique_preview_part(&mut parts, spool_preview);
         }
 
         if parts.is_empty() {
             for key in ["output", "content", "stdout", "stderr"] {
                 push_unique_preview_part(&mut parts, trimmed_json_string_field(obj, key));
                 if !parts.is_empty() {
+                    priority = priority.max(90);
                     break;
                 }
             }
         }
 
-        (!parts.is_empty()).then(|| parts.join(" | "))
+        (!parts.is_empty()).then(|| (parts.join(" | "), priority.max(1)))
     }
 
     let latest_user_request = history.iter().rev().find_map(|message| {
@@ -800,33 +935,48 @@ pub(crate) fn build_recovery_context_previews(history: &[Message]) -> Vec<String
 
     let mut tool_previews = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
-    for message in history.iter().rev() {
+    for (recency_rank, message) in history.iter().rev().enumerate() {
         if message.role != MessageRole::Tool {
             continue;
         }
 
         let raw_text = message.content.as_text();
-        let text = structured_tool_preview(raw_text.as_ref())
-            .unwrap_or_else(|| normalize_whitespace(raw_text.trim()));
+        let (text, priority) = structured_tool_preview(raw_text.as_ref(), workspace_root)
+            .unwrap_or_else(|| (normalize_whitespace(raw_text.trim()), 50));
         if text.is_empty() || !seen.insert(text.clone()) {
             continue;
         }
 
-        tool_previews.push(format!(
-            "Tool output {}: {}",
-            tool_previews.len() + 1,
-            truncate_preview(&text)
-        ));
-        if tool_previews.len() >= RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS {
-            break;
-        }
+        tool_previews.push(ToolPreviewCandidate {
+            text,
+            priority,
+            recency_rank,
+        });
     }
+    tool_previews.sort_by(|left, right| {
+        right
+            .priority
+            .cmp(&left.priority)
+            .then_with(|| left.recency_rank.cmp(&right.recency_rank))
+    });
+    tool_previews.truncate(RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS);
 
     let mut previews = Vec::new();
     if let Some(user_request) = latest_user_request {
         previews.push(user_request);
     }
-    previews.extend(tool_previews);
+    previews.extend(
+        tool_previews
+            .into_iter()
+            .enumerate()
+            .map(|(idx, candidate)| {
+                format!(
+                    "Tool output {}: {}",
+                    idx + 1,
+                    truncate_preview(&candidate.text)
+                )
+            }),
+    );
 
     if previews.is_empty()
         && let Some(text) = history.iter().rev().find_map(|message| {
@@ -2643,7 +2793,7 @@ mod tests {
             Message::user("latest request".to_string()),
         ];
 
-        let previews = super::build_recovery_context_previews(&history);
+        let previews = super::build_recovery_context_previews_with_workspace(&history, None);
 
         assert_eq!(previews[0], "Latest user request: latest request");
         assert_eq!(previews[1], "Tool output 1: duplicate output");
@@ -2655,7 +2805,7 @@ mod tests {
     fn recovery_context_previews_fall_back_to_latest_assistant_text_when_needed() {
         let history = vec![Message::assistant("assistant summary".to_string())];
 
-        let previews = super::build_recovery_context_previews(&history);
+        let previews = super::build_recovery_context_previews_with_workspace(&history, None);
 
         assert_eq!(previews, vec!["Latest assistant text: assistant summary"]);
     }
@@ -2680,13 +2830,109 @@ mod tests {
             ),
         ];
 
-        let previews = super::build_recovery_context_previews(&history);
+        let previews = super::build_recovery_context_previews_with_workspace(&history, None);
 
         assert_eq!(previews[0], "Latest user request: use structured search");
         assert!(previews[1].contains("No matches found in src/agent"));
         assert!(previews[1].contains("Pattern looks like a code fragment."));
         assert!(previews[1].contains("Next action: Retry with a larger parseable pattern."));
         assert!(previews[1].contains("Fallback tool: unified_search"));
+    }
+
+    #[test]
+    fn recovery_context_previews_extract_nested_error_guidance_and_spool_excerpt() {
+        let temp = tempdir().expect("tempdir");
+        let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
+        fs::create_dir_all(&spool_dir).expect("spool dir");
+        let spool_path = spool_dir.join("read_1.txt");
+        fs::write(
+            &spool_path,
+            (1..=40)
+                .map(|idx| format!("spooled-line-{idx}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .expect("spool file");
+
+        let history = vec![
+            Message::user("review the read failure".to_string()),
+            Message::tool_response(
+                "call-1".to_string(),
+                json!({
+                    "path": "src/main.rs",
+                    "spool_path": ".vtcode/context/tool_outputs/read_1.txt",
+                    "error": {
+                        "message": "Read failed",
+                        "hint": "Inspect the spooled content.",
+                        "next_action": "Retry with a smaller slice."
+                    }
+                })
+                .to_string(),
+            ),
+        ];
+
+        let previews =
+            super::build_recovery_context_previews_with_workspace(&history, Some(temp.path()));
+
+        assert_eq!(previews[0], "Latest user request: review the read failure");
+        assert!(previews[1].contains("Read failed"));
+        assert!(previews[1].contains("Inspect the spooled content."));
+        assert!(previews[1].contains("Next action: Retry with a smaller slice."));
+        assert!(previews[1].contains("source_path: src/main.rs"));
+        assert!(previews[1].contains("Spool excerpt:"));
+        assert!(previews[1].contains("spooled-line-1"));
+    }
+
+    #[test]
+    fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_outputs() {
+        let history = vec![
+            Message::user("tell me more".to_string()),
+            Message::tool_response(
+                "call-1".to_string(),
+                json!({
+                    "path": "README.md",
+                    "content": "VT Code is an open-source coding agent with LLM-native code understanding."
+                })
+                .to_string(),
+            ),
+            Message::tool_response(
+                "call-2".to_string(),
+                json!({
+                    "path": "docs/ARCHITECTURE.md",
+                    "content": "VT Code follows a modular architecture designed for maintainability and extensibility."
+                })
+                .to_string(),
+            ),
+            Message::tool_response(
+                "call-3".to_string(),
+                json!({
+                    "count": 20,
+                    "items": [{"path": "docs/ide"}]
+                })
+                .to_string(),
+            ),
+            Message::tool_response(
+                "call-4".to_string(),
+                json!({
+                    "error": "Repeated reads of 'docs/ARCHITECTURE.md' with limited progress detected.",
+                    "next_action": "Try an alternative tool or narrower scope."
+                })
+                .to_string(),
+            ),
+        ];
+
+        let previews = super::build_recovery_context_previews_with_workspace(&history, None);
+
+        assert_eq!(previews[0], "Latest user request: tell me more");
+        assert!(previews[1].contains("VT Code follows a modular architecture"));
+        assert!(previews[2].contains("VT Code is an open-source coding agent"));
+        assert!(previews[3].contains("Repeated reads of 'docs/ARCHITECTURE.md'"));
+        assert!(
+            previews
+                .iter()
+                .all(|preview| !preview.contains("Listed 20 items")),
+            "low-signal listing should be dropped when richer previews exist: {previews:?}"
+        );
     }
 
     #[test]

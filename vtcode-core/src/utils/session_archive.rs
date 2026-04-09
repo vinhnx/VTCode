@@ -10,6 +10,7 @@ use crate::utils::file_utils::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -602,23 +603,237 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
         {
             transcript.push(content.to_string());
         }
+    }
 
-        if matches!(message.role, MessageRole::Assistant)
-            && let Some(reasoning) = message.reasoning.as_deref()
-        {
-            let reasoning = reasoning.trim();
-            if !reasoning.is_empty()
-                && reasoning != content
-                && transcript
-                    .last()
-                    .is_none_or(|last: &String| last.as_str() != reasoning)
+    clean_transcript_lines(&transcript)
+}
+
+fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
+    let mut cleaned = Vec::new();
+    let mut seen_tool_blocks: HashMap<String, (usize, usize, String)> = HashMap::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index].trim_end();
+
+        if should_reset_tool_dedupe_scope(line) {
+            seen_tool_blocks.clear();
+        }
+
+        if let Some(replacement) = normalize_recovery_line(line) {
+            push_clean_transcript_line(&mut cleaned, replacement);
+            index += 1;
+            continue;
+        }
+
+        if should_drop_transcript_line(line) {
+            index += 1;
+            continue;
+        }
+
+        if line.trim_start().starts_with("• ") {
+            let (summary, next_index) = summarize_tool_block(lines, index);
+            let signature = normalized_transcript_key(&summary);
+
+            if let Some((first_index, repeats, original_line)) =
+                seen_tool_blocks.get_mut(&signature)
             {
-                transcript.push(reasoning.to_string());
+                *repeats += 1;
+                if let Some(existing) = cleaned.get_mut(*first_index) {
+                    *existing = format_repeated_summary(original_line, *repeats);
+                }
+            } else {
+                let insertion_index = cleaned.len();
+                push_clean_transcript_line(&mut cleaned, summary);
+                if cleaned.len() > insertion_index {
+                    seen_tool_blocks.insert(
+                        signature,
+                        (insertion_index, 1, cleaned[insertion_index].clone()),
+                    );
+                }
             }
+            index = next_index;
+            continue;
+        }
+
+        push_clean_transcript_line(&mut cleaned, line.to_string());
+        index += 1;
+    }
+
+    while cleaned.last().is_some_and(|line: &String| line.is_empty()) {
+        cleaned.pop();
+    }
+
+    cleaned
+}
+
+fn should_reset_tool_dedupe_scope(line: &str) -> bool {
+    let trimmed = line.trim();
+    !trimmed.is_empty()
+        && !line.starts_with(' ')
+        && !trimmed.starts_with("• ")
+        && !trimmed.starts_with("[!]")
+}
+
+fn should_drop_transcript_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("Latest tool output:")
+        || trimmed.starts_with("Latest user request:")
+        || trimmed.starts_with("Tool output 1:")
+        || trimmed.starts_with("Structured result with fields:")
+        || trimmed.starts_with("Reuse the latest tool outputs already collected in this turn")
+        || trimmed.starts_with("Interrupt received. Stopping task...")
+}
+
+fn normalize_recovery_line(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("[!] Turn balancer:")
+        || trimmed.starts_with("[!] Navigation Loop:")
+        || trimmed.starts_with("[!] Navigation loop:")
+    {
+        return Some("Repeated low-signal tool churn triggered recovery.".to_string());
+    }
+
+    if trimmed.contains("I couldn't produce a final synthesis because the model returned no answer on the recovery pass.")
+    {
+        return Some("Recovery pass failed to produce a final synthesis.".to_string());
+    }
+
+    None
+}
+
+fn summarize_tool_block(lines: &[String], start: usize) -> (String, usize) {
+    let header = lines[start].trim().to_string();
+    let mut command_continuations = Vec::new();
+    let mut metadata = Vec::new();
+    let mut metadata_seen = HashSet::new();
+    let mut index = start + 1;
+
+    while index < lines.len() {
+        let raw = lines[index].trim_end();
+        let trimmed = raw.trim_start();
+        if trimmed.starts_with("• ") || trimmed.starts_with("[!]") || !is_tool_detail_line(trimmed)
+        {
+            break;
+        }
+
+        if let Some(continuation) = trimmed.strip_prefix("│ ") {
+            let continuation = continuation.trim();
+            if !continuation.is_empty() {
+                command_continuations.push(continuation.to_string());
+            }
+        } else if let Some(extra) = summarize_tool_detail(trimmed)
+            && metadata_seen.insert(extra.clone())
+        {
+            metadata.push(extra);
+        }
+
+        index += 1;
+    }
+
+    let mut summary = header;
+    if !command_continuations.is_empty() {
+        summary.push(' ');
+        summary.push_str(&command_continuations.join(" "));
+    }
+    if !metadata.is_empty() {
+        summary.push_str(" [");
+        summary.push_str(&metadata.join(", "));
+        summary.push(']');
+    }
+
+    (collapse_whitespace(&summary), index)
+}
+
+fn is_tool_detail_line(line: &str) -> bool {
+    line.starts_with("│ ")
+        || line.starts_with("└ ")
+        || line.starts_with("✓ ")
+        || line.starts_with("✗ ")
+        || line.starts_with("… +")
+        || line.starts_with("Large output was spooled")
+        || line == "(no output)"
+}
+
+fn summarize_tool_detail(line: &str) -> Option<String> {
+    let path = line
+        .strip_prefix("└ Path:")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("path {value}"));
+    if path.is_some() {
+        return path;
+    }
+
+    let pattern = line
+        .strip_prefix("└ Pattern:")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("pattern {value}"));
+    if pattern.is_some() {
+        return pattern;
+    }
+
+    let filter = line
+        .strip_prefix("└ Filter:")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("filter {value}"));
+    if filter.is_some() {
+        return filter;
+    }
+
+    let glob = line
+        .strip_prefix("└ Glob:")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("glob {value}"));
+    if glob.is_some() {
+        return glob;
+    }
+
+    if let Some(status) = line.strip_prefix("✗ ") {
+        let status = status.trim();
+        if !status.is_empty() {
+            return Some(status.to_string());
         }
     }
 
-    transcript
+    None
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn normalized_transcript_key(text: &str) -> String {
+    collapse_whitespace(text).to_ascii_lowercase()
+}
+
+fn format_repeated_summary(line: &str, repeats: usize) -> String {
+    if repeats <= 1 {
+        return line.to_string();
+    }
+    format!("{line} (repeated x{repeats})")
+}
+
+fn push_clean_transcript_line(target: &mut Vec<String>, line: String) {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        if target.last().is_none_or(|last| !last.is_empty()) {
+            target.push(String::new());
+        }
+        return;
+    }
+
+    if target
+        .last()
+        .is_some_and(|last| normalized_transcript_key(last) == normalized_transcript_key(trimmed))
+    {
+        return;
+    }
+
+    target.push(line);
 }
 
 fn normalize_session_tool_name(name: &str) -> String {
@@ -746,7 +961,7 @@ impl SessionArchive {
             ended_at: Utc::now(),
             total_messages,
             distinct_tools,
-            transcript,
+            transcript: clean_transcript_lines(&transcript),
             messages,
             progress: None,
             error_logs: drain_error_logs(),
@@ -1825,13 +2040,84 @@ mod tests {
 
         assert_eq!(
             snapshot.transcript,
-            vec![
-                "run cargo check".to_string(),
-                "done".to_string(),
-                "reasoned".to_string()
-            ]
+            vec!["run cargo check".to_string(), "done".to_string()]
         );
         Ok(())
+    }
+
+    #[test]
+    fn archive_transcript_cleaner_filters_recovery_noise_and_duplicate_tool_blocks() {
+        let lines = vec![
+            "hello".to_string(),
+            "  Hello, Vinh.".to_string(),
+            "tell me more".to_string(),
+            "  Let me dig deeper into the project structure.".to_string(),
+            "• Ran cd /tmp/project &&".to_string(),
+            "  │ ls -1 src/".to_string(),
+            "    ✓ exit 0".to_string(),
+            "• Ran cd /tmp/project &&".to_string(),
+            "  │ ls -1 src/".to_string(),
+            "    ✓ exit 0".to_string(),
+            "• List files Use Unified search".to_string(),
+            "  └ Action: list".to_string(),
+            "  └ Path: /tmp/project/src".to_string(),
+            "  └ Filter: files".to_string(),
+            "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass."
+                .to_string(),
+            "  I couldn't produce a final synthesis because the model returned no answer on the recovery pass.".to_string(),
+            "  Latest tool output: {\"output\":\"...\"}".to_string(),
+            "  Reuse the latest tool outputs already collected in this turn before retrying."
+                .to_string(),
+            "run cargo fmt and report me".to_string(),
+            "• Ran cd /tmp/project &&".to_string(),
+            "  │ cargo fmt 2>&1".to_string(),
+            "    (no output)".to_string(),
+            "  cargo fmt ran successfully with no output.".to_string(),
+        ];
+
+        let cleaned = clean_transcript_lines(&lines);
+
+        assert_eq!(
+            cleaned,
+            vec![
+                "hello".to_string(),
+                "  Hello, Vinh.".to_string(),
+                "tell me more".to_string(),
+                "  Let me dig deeper into the project structure.".to_string(),
+                "• Ran cd /tmp/project && ls -1 src/ (repeated x2)".to_string(),
+                "• List files Use Unified search [path /tmp/project/src, filter files]".to_string(),
+                "Repeated low-signal tool churn triggered recovery.".to_string(),
+                "Recovery pass failed to produce a final synthesis.".to_string(),
+                "run cargo fmt and report me".to_string(),
+                "• Ran cd /tmp/project && cargo fmt 2>&1".to_string(),
+                "  cargo fmt ran successfully with no output.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_transcript_cleaner_preserves_paragraph_spacing_and_drops_structured_result_noise() {
+        let lines = vec![
+            "Project summary:".to_string(),
+            "".to_string(),
+            "  VT Code is a Rust-based coding agent.".to_string(),
+            "".to_string(),
+            "Structured result with fields: output, exit_code, wall_time, session_id".to_string(),
+            "Next step.".to_string(),
+        ];
+
+        let cleaned = clean_transcript_lines(&lines);
+
+        assert_eq!(
+            cleaned,
+            vec![
+                "Project summary:".to_string(),
+                "".to_string(),
+                "  VT Code is a Rust-based coding agent.".to_string(),
+                "".to_string(),
+                "Next step.".to_string(),
+            ]
+        );
     }
 
     #[tokio::test]

@@ -25,6 +25,13 @@ const MIN_BATCH_LIMIT: usize = 200;
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
 const BATCH_CONDENSED_THRESHOLD: usize = 30;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ReadFileOutcome {
+    pub content: String,
+    pub lines_read: usize,
+    pub has_more: bool,
+}
+
 /// JSON arguments accepted by the `read_file` tool handler.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ReadFileArgs {
@@ -416,7 +423,7 @@ impl ReadFileHandler {
         let limit = range.limit.max(1);
 
         let mut collected = match range.mode {
-            ReadMode::Slice => slice::read(path, offset, limit).await?,
+            ReadMode::Slice => slice::read(path, offset, limit).await?.lines,
             ReadMode::Indentation => {
                 let indentation = range.indentation.clone().unwrap_or_default();
                 indentation::read_block(path, offset, limit, indentation).await?
@@ -435,8 +442,7 @@ impl ReadFileHandler {
         })
     }
 
-    /// Legacy handle method for backward compatibility with file_ops.rs
-    pub async fn handle(&self, args: ReadFileArgs) -> Result<String> {
+    pub(crate) async fn handle_detailed(&self, args: ReadFileArgs) -> Result<ReadFileOutcome> {
         let ReadFileArgs {
             file_path,
             offset,
@@ -460,20 +466,36 @@ impl ReadFileHandler {
                 limit
             };
 
-        let mut collected = match mode {
-            ReadMode::Slice => slice::read(&path, offset, effective_limit).await?,
+        let (mut collected, has_more) = match mode {
+            ReadMode::Slice => {
+                let result = slice::read(&path, offset, effective_limit).await?;
+                (result.lines, result.has_more)
+            }
             ReadMode::Indentation => {
                 let indentation = indentation.unwrap_or_default();
-                indentation::read_block(&path, offset, limit, indentation).await?
+                (
+                    indentation::read_block(&path, offset, limit, indentation).await?,
+                    false,
+                )
             }
         };
+        let lines_read = collected.len();
 
         if condense {
             // Condense large outputs (>100 lines) to head + tail
             condense_collected_lines(&mut collected);
         }
 
-        Ok(collected.join("\n"))
+        Ok(ReadFileOutcome {
+            content: collected.join("\n"),
+            lines_read,
+            has_more,
+        })
+    }
+
+    /// Legacy handle method for backward compatibility with file_ops.rs
+    pub async fn handle(&self, args: ReadFileArgs) -> Result<String> {
+        Ok(self.handle_detailed(args).await?.content)
     }
 }
 
@@ -492,7 +514,7 @@ impl Tool for ReadFileHandler {
             serde_json::from_value(args).context("failed to parse read_file arguments")?;
 
         let file_path = args.file_path.clone();
-        let content = self.handle(args).await?;
+        let content = self.handle_detailed(args).await?.content;
 
         Ok(json!({
             "content": content,
@@ -627,7 +649,13 @@ impl Tool for ReadFileHandler {
 mod slice {
     use super::*;
 
-    pub async fn read(path: &Path, offset: usize, limit: usize) -> Result<Vec<String>> {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub(super) struct SliceReadResult {
+        pub lines: Vec<String>,
+        pub has_more: bool,
+    }
+
+    pub async fn read(path: &Path, offset: usize, limit: usize) -> Result<SliceReadResult> {
         let file = File::open(path)
             .await
             .context(format!("failed to open file: {}", path.display()))?;
@@ -636,6 +664,7 @@ mod slice {
         let mut collected = Vec::new();
         let mut seen = 0usize;
         let mut buffer = Vec::new();
+        let mut reached_eof = false;
 
         loop {
             buffer.clear();
@@ -645,6 +674,7 @@ mod slice {
                 .context("failed to read file")?;
 
             if bytes_read == 0 {
+                reached_eof = true;
                 break;
             }
 
@@ -674,7 +704,10 @@ mod slice {
             anyhow::bail!("offset exceeds file length");
         }
 
-        Ok(collected)
+        Ok(SliceReadResult {
+            lines: collected,
+            has_more: !reached_eof,
+        })
     }
 }
 
@@ -1019,7 +1052,7 @@ mod tests {
         writeln!(temp, "beta")?;
         writeln!(temp, "gamma")?;
 
-        let lines = read(temp.path(), 2, 2).await?;
+        let lines = read(temp.path(), 2, 2).await?.lines;
         assert_eq!(lines, vec!["beta".to_string(), "gamma".to_string()]);
         Ok(())
     }
@@ -1099,7 +1132,7 @@ mod tests {
         let mut temp = NamedTempFile::new()?;
         temp.as_file_mut().write_all(b"\xff\xfe\nplain\n")?;
 
-        let lines = read(temp.path(), 1, 2).await?;
+        let lines = read(temp.path(), 1, 2).await?.lines;
         let expected_first = format!("{}{}", '\u{FFFD}', '\u{FFFD}');
         assert_eq!(lines, vec![expected_first, "plain".to_string()]);
         Ok(())
@@ -1110,7 +1143,7 @@ mod tests {
         let mut temp = NamedTempFile::new()?;
         write!(temp, "one\r\ntwo\r\n")?;
 
-        let lines = read(temp.path(), 1, 2).await?;
+        let lines = read(temp.path(), 1, 2).await?.lines;
         assert_eq!(lines, vec!["one".to_string(), "two".to_string()]);
         Ok(())
     }
@@ -1122,8 +1155,27 @@ mod tests {
         writeln!(temp, "second")?;
         writeln!(temp, "third")?;
 
-        let lines = read(temp.path(), 1, 2).await?;
-        assert_eq!(lines, vec!["first".to_string(), "second".to_string()]);
+        let result = read(temp.path(), 1, 2).await?;
+        assert_eq!(
+            result.lines,
+            vec!["first".to_string(), "second".to_string()]
+        );
+        assert!(result.has_more);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reads_exact_limit_without_continuation_at_eof() -> Result<()> {
+        let mut temp = NamedTempFile::new()?;
+        writeln!(temp, "first")?;
+        writeln!(temp, "second")?;
+
+        let result = read(temp.path(), 1, 2).await?;
+        assert_eq!(
+            result.lines,
+            vec!["first".to_string(), "second".to_string()]
+        );
+        assert!(!result.has_more);
         Ok(())
     }
 
@@ -1133,7 +1185,7 @@ mod tests {
         let long_line = "x".repeat(MAX_LINE_LENGTH + 50);
         writeln!(temp, "{long_line}")?;
 
-        let lines = read(temp.path(), 1, 1).await?;
+        let lines = read(temp.path(), 1, 1).await?.lines;
         let expected = "x".repeat(MAX_LINE_LENGTH);
         assert_eq!(lines, vec![expected]);
         Ok(())

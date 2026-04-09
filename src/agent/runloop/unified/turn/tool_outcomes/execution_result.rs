@@ -1,7 +1,9 @@
 //! Tool execution result handling for turn flow.
 
 use anyhow::{Context, Result};
+use std::path::Path;
 use vtcode_commons::ErrorCategory;
+use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
 use vtcode_core::llm::{
@@ -14,6 +16,7 @@ use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuatio
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
+use vtcode_core::tools::validation::unified_path::validate_and_resolve_path;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
@@ -93,6 +96,12 @@ const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
 const TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS: usize = 12_000;
 const TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS: u32 = 400;
 const TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT: &str = "You summarize tool outputs for VT Code before they are added to the model context. Preserve actionable facts, concrete errors, file paths, commands, and next steps. Keep it concise, faithful, and specific. Do not invent details.";
+const TOOL_OUTPUT_SUMMARY_READ_HEAD_BYTES: usize = 6_000;
+const TOOL_OUTPUT_SUMMARY_READ_TAIL_BYTES: usize = 4_000;
+const TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES: usize = 10_000;
+const TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES: usize = 120;
+const TOOL_OUTPUT_SUMMARY_GENERIC_HEAD_BYTES: usize = 4_000;
+const TOOL_OUTPUT_SUMMARY_GENERIC_TAIL_BYTES: usize = 4_000;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct ParsedSubagentSummary {
@@ -1089,6 +1098,128 @@ pub(super) fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) 
     serialize_output(&compacted)
 }
 
+fn read_summary_source_path(output: &serde_json::Value) -> Option<&str> {
+    output
+        .get("source_path")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| output.get("path").and_then(serde_json::Value::as_str))
+        .filter(|path| !path.trim().is_empty())
+}
+
+fn is_large_read_summary_output(tool_name: &str, output: &serde_json::Value) -> bool {
+    matches!(tool_name, tool_names::READ_FILE)
+        || (tool_name == tool_names::UNIFIED_FILE && read_summary_source_path(output).is_some())
+}
+
+fn build_spooled_tool_summary_excerpt(
+    tool_name: &str,
+    output: &serde_json::Value,
+    spool_content: &str,
+) -> String {
+    let mut sections = Vec::new();
+
+    if should_prefer_spool_reference_only(tool_name, output) {
+        if let Some(stderr_preview) = output
+            .get("stderr_preview")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            sections.push(format!("stderr_preview:\n{stderr_preview}"));
+        }
+        sections.push(format!(
+            "tail_excerpt:\n{}",
+            tail_preview_text(
+                spool_content,
+                TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES,
+                TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES,
+            )
+        ));
+        return sections.join("\n\n");
+    }
+
+    if is_large_read_summary_output(tool_name, output) {
+        if let Some(path) = read_summary_source_path(output) {
+            sections.push(format!("source_path: {path}"));
+        }
+        sections.push(format!(
+            "content_excerpt:\n{}",
+            condense_text_bytes(
+                spool_content,
+                TOOL_OUTPUT_SUMMARY_READ_HEAD_BYTES,
+                TOOL_OUTPUT_SUMMARY_READ_TAIL_BYTES,
+            )
+        ));
+        return sections.join("\n\n");
+    }
+
+    format!(
+        "content_excerpt:\n{}",
+        condense_text_bytes(
+            spool_content,
+            TOOL_OUTPUT_SUMMARY_GENERIC_HEAD_BYTES,
+            TOOL_OUTPUT_SUMMARY_GENERIC_TAIL_BYTES,
+        )
+    )
+}
+
+fn build_spooled_tool_summary_input(
+    tool_name: &str,
+    output: &serde_json::Value,
+    spool_content: &str,
+) -> String {
+    let metadata = maybe_inline_spooled(tool_name, output);
+    let excerpt = build_spooled_tool_summary_excerpt(tool_name, output, spool_content);
+    if excerpt.trim().is_empty() {
+        metadata
+    } else {
+        format!("Tool payload:\n{metadata}\n\nSpooled content excerpt:\n{excerpt}")
+    }
+}
+
+async fn tool_output_summary_input_or_serialized(
+    workspace_root: &Path,
+    tool_name: &str,
+    output: &serde_json::Value,
+    serialized_output: &str,
+) -> String {
+    let Some(spool_path) = output
+        .get("spool_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+    else {
+        return serialized_output.to_string();
+    };
+
+    let resolved = match validate_and_resolve_path(workspace_root, spool_path).await {
+        Ok(path) => path,
+        Err(err) => {
+            tracing::warn!(
+                tool = %tool_name,
+                spool_path,
+                error = %err,
+                "Failed to validate spool path for tool output summary; using compact fallback"
+            );
+            return serialized_output.to_string();
+        }
+    };
+
+    match tokio::fs::read(&resolved).await {
+        Ok(spool_bytes) => {
+            let spool_content = String::from_utf8_lossy(&spool_bytes);
+            build_spooled_tool_summary_input(tool_name, output, &spool_content)
+        }
+        Err(err) => {
+            tracing::warn!(
+                tool = %tool_name,
+                spool_path = %resolved.display(),
+                error = %err,
+                "Failed to read spool file for tool output summary; using compact fallback"
+            );
+            serialized_output.to_string()
+        }
+    }
+}
+
 fn tool_output_summary_feature(
     tool_name: &str,
     args_val: &serde_json::Value,
@@ -1221,6 +1352,13 @@ async fn prepare_tool_response_content(
 ) -> String {
     let fallback = maybe_inline_spooled(tool_name, output);
     let serialized_output = serialize_json_for_model(output);
+    let summary_input = tool_output_summary_input_or_serialized(
+        ctx.tool_registry.workspace_root().as_path(),
+        tool_name,
+        output,
+        &serialized_output,
+    )
+    .await;
     let Some(feature) =
         tool_output_summary_feature(tool_name, args_val, output, serialized_output.len())
     else {
@@ -1232,7 +1370,7 @@ async fn prepare_tool_response_content(
         tracing::warn!(warning = %warning, tool = %tool_name, "tool output route adjusted");
     }
 
-    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &serialized_output)
+    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &summary_input)
         .await
     {
         Ok(summary) if !summary.trim().is_empty() => {
@@ -1252,7 +1390,7 @@ async fn prepare_tool_response_content(
                     ctx,
                     fallback_route,
                     tool_name,
-                    &serialized_output,
+                    &summary_input,
                 )
                 .await
                 {
@@ -1823,6 +1961,7 @@ pub(super) fn record_mcp_event_to_panel(
 mod tests {
     use super::*;
     use std::borrow::Cow;
+    use tempfile::tempdir;
     use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 
     #[test]
@@ -2451,6 +2590,125 @@ mod tests {
         assert_eq!(parsed.get("output"), Some(&serde_json::json!("ok")));
         assert!(parsed.get("critical_note").is_none());
         assert!(parsed.get("next_action").is_none());
+    }
+
+    #[tokio::test]
+    async fn tool_output_summary_input_uses_spool_file_tail_for_exec_output() {
+        let temp = tempdir().unwrap();
+        let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).unwrap();
+        let spool_path = spool_dir.join("unified_exec_1.txt");
+        let spool_content = (1..=150)
+            .map(|idx| format!("line-{idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&spool_path, spool_content).unwrap();
+
+        let output = serde_json::json!({
+            "output": "preview text",
+            "stderr_preview": "warning text",
+            "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+            "exit_code": 0,
+            "is_exited": true
+        });
+        let serialized = serialize_json_for_model(&output);
+
+        let input = tool_output_summary_input_or_serialized(
+            temp.path(),
+            tool_names::UNIFIED_EXEC,
+            &output,
+            &serialized,
+        )
+        .await;
+
+        assert!(input.contains("Tool payload:"));
+        assert!(input.contains("stderr_preview:\nwarning text"));
+        assert!(input.contains("tail_excerpt:"));
+        assert!(input.contains("line-150"));
+        assert!(!input.contains("line-1\nline-2\nline-3"));
+    }
+
+    #[tokio::test]
+    async fn tool_output_summary_input_uses_spool_file_excerpt_for_large_reads() {
+        let temp = tempdir().unwrap();
+        let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).unwrap();
+        let spool_path = spool_dir.join("read_1.txt");
+        let spool_content = (1..=200)
+            .map(|idx| format!("read-line-{idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&spool_path, spool_content).unwrap();
+
+        let output = serde_json::json!({
+            "path": "src/main.rs",
+            "spool_path": ".vtcode/context/tool_outputs/read_1.txt"
+        });
+        let serialized = serialize_json_for_model(&output);
+
+        let input = tool_output_summary_input_or_serialized(
+            temp.path(),
+            tool_names::READ_FILE,
+            &output,
+            &serialized,
+        )
+        .await;
+
+        assert!(input.contains("source_path: src/main.rs"));
+        assert!(input.contains("content_excerpt:"));
+        assert!(input.contains("read-line-1"));
+        assert!(input.contains("read-line-200"));
+    }
+
+    #[tokio::test]
+    async fn tool_output_summary_input_falls_back_to_serialized_output_when_spool_missing() {
+        let temp = tempdir().unwrap();
+        let output = serde_json::json!({
+            "spool_path": ".vtcode/context/tool_outputs/missing.txt",
+            "exit_code": 0,
+            "is_exited": true
+        });
+        let serialized = serialize_json_for_model(&output);
+
+        let input = tool_output_summary_input_or_serialized(
+            temp.path(),
+            tool_names::UNIFIED_EXEC,
+            &output,
+            &serialized,
+        )
+        .await;
+
+        assert_eq!(input, serialized);
+    }
+
+    #[tokio::test]
+    async fn tool_output_summary_input_decodes_invalid_utf8_spool_lossily() {
+        let temp = tempdir().unwrap();
+        let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).unwrap();
+        let spool_path = spool_dir.join("unified_exec_invalid.txt");
+        std::fs::write(&spool_path, b"ok\n\xff\xfe\nlast line\n").unwrap();
+
+        let output = serde_json::json!({
+            "output": "preview text",
+            "stderr_preview": "warning text",
+            "spool_path": ".vtcode/context/tool_outputs/unified_exec_invalid.txt",
+            "exit_code": 0,
+            "is_exited": true
+        });
+        let serialized = serialize_json_for_model(&output);
+
+        let input = tool_output_summary_input_or_serialized(
+            temp.path(),
+            tool_names::UNIFIED_EXEC,
+            &output,
+            &serialized,
+        )
+        .await;
+
+        assert!(input.contains("warning text"));
+        assert!(input.contains("last line"));
+        assert_ne!(input, serialized);
     }
 
     #[test]
