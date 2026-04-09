@@ -2,6 +2,42 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.98.1 - 2026-04-09
+
+### Highlights
+#### Bug Fixes
+
+- Prevent blocked handoff on tool-free recovery tool calls (f3d5a7ee) 
+- Make external editor opens transient and suppress escape leaks (1e8bd327) 
+- Update theme configuration to use homebrew style (4205a879) 
+- Update agent configuration and tool policies for improved functionality (f9cdc03d) 
+#### Features
+
+- Enhance tool policies and workspace header signals for improved user experience (07910f3c) 
+### Other Changes
+#### Other
+
+- Refactor slash command messages and update guidance for installation (09028a6a) 
+- Implement status line setup and configuration, deduplicate terminal title items, and update task tracker permission in config (c4b7cb48) 
+- Implement fallback handling for failed tool-free recovery and adjust turn completion logic (4e58ac64) 
+- Implement structured timeout error handling and add tests for timeout scenarios (c214f667) 
+- Update tool policies, enhance exec command preparation, and improve documentation clarity (43c048e4) 
+- Commit (8ed8fb87) 
+- Bump version to 0.50.12 and remove chat-related commands and references (8a8efa6c) 
+- Bump version to 0.50.13 (337fe1ab) 
+- Implement subagent executors and enhance tool intent handling (c550faa2) 
+- Refactor exec session handling and add error reporting and tool search functionality (dc9e150f) 
+- Refactor tool handling and enhance session management for improved output processing (8d8c47ab) 
+- Refactor MCP provider initialization and enhance tool fetching logic (ecff001a) 
+- Refactor compaction thresholds and remove context awareness support from LLM providers (31b771d0) 
+- Update TODO (203ec0f3) 
+- Update tool policies, enhance recovery context previews, and improve structural search handling (a5db2b86) 
+- Enhance tool output handling and summary generation (c10d90fd) 
+- Refactor CLI action resolution and improve header display logic (61f15e54) 
+- Enhance CLI argument parsing and error reporting for workspace validation (77c3efbe) 
+#### Refactors
+
+- Clean up tool policies and improve CLI help output (b32129ff) 
 ## 0.98.0 - 2026-04-07
 
 ### Highlights
