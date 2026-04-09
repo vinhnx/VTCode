@@ -93,13 +93,24 @@ impl Session {
     }
 
     pub(crate) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
+        let mut border_style = Style::default();
+        if let Some(accent) = self
+            .theme
+            .tool_accent
+            .or(self.theme.primary)
+            .or(self.theme.foreground)
+        {
+            border_style = border_style.fg(ratatui_color_from_ansi(accent));
+        }
+        let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
         let block = Block::bordered()
             .title(self.header_block_title())
             .border_type(terminal_capabilities::get_border_type())
+            .border_style(border_style)
             .style(self.styles.default_style());
 
         Paragraph::new(lines.to_vec())
-            .style(self.styles.default_style())
+            .style(text_style)
             .wrap(Wrap { trim: true })
             .block(block)
     }
@@ -664,7 +675,10 @@ impl Session {
     }
 
     pub(crate) fn section_title_style(&self) -> Style {
-        let mut style = self.styles.default_style().add_modifier(Modifier::BOLD);
+        let mut style = self
+            .styles
+            .default_style()
+            .add_modifier(Modifier::BOLD | Modifier::DIM);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }
@@ -672,7 +686,7 @@ impl Session {
     }
 
     fn header_primary_style(&self) -> Style {
-        let mut style = self.styles.default_style();
+        let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }
@@ -680,7 +694,7 @@ impl Session {
     }
 
     pub(crate) fn header_secondary_style(&self) -> Style {
-        let mut style = self.styles.default_style();
+        let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
         if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(secondary));
         }

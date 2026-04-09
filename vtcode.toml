@@ -3,7 +3,7 @@ api_key_env = "ZAI_API_KEY"
 default_model = "glm-5.1"
 provider = "zai"
 reasoning_effort = "low"
-theme = "ansi-classic"
+theme = "homebrew"
 
 [agent.persistent_memory]
 enabled = true
