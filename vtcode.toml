@@ -1,7 +1,7 @@
 [agent]
-api_key_env = ""
-default_model = "claude-haiku-4.5"
-provider = "copilot"
+api_key_env = "OLLAMA_API_KEY"
+default_model = "gpt-oss:120b-cloud"
+provider = "ollama"
 reasoning_effort = "low"
 theme = "homebrew"
 

@@ -1,14 +1,40 @@
 #!/bin/bash
 
-# VT Code Code Quality Check Script
-# This script runs local quality checks with nextest-first test execution
+# VT Code Full Quality Gate Script
+# This script runs COMPREHENSIVE quality checks intended for:
+#   - Pre-release validation
+#   - Final PR review before merging
+#   - CI/CD pipeline integration
+#
+# For daily development iterations, use ./scripts/check-dev.sh instead (10-30s vs 2-5m)
 
 set -e
 
 # Source common utilities
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-echo "Running VT Code Quality Checks..."
+# Configuration
+SCRIPT_START=$(date +%s)
+
+# Timing helper
+print_timing() {
+    local end=$(date +%s)
+    local duration=$((end - SCRIPT_START))
+    if [ $duration -lt 60 ]; then
+        echo ""
+        print_status "Completed in ${duration}s"
+    else
+        local minutes=$((duration / 60))
+        local seconds=$((duration % 60))
+        echo ""
+        print_status "Completed in ${minutes}m ${seconds}s"
+    fi
+}
+
+echo "Running VT Code Full Quality Gate..."
+echo "========================================"
+echo "NOTE: This is the comprehensive check for release/PR review."
+echo "      For daily development, use: ./scripts/check-dev.sh"
 echo "========================================"
 
 # Check rustfmt availability
@@ -259,9 +285,10 @@ main() {
 
     echo ""
     echo "========================================"
+    print_timing
 
     if [ $failed_checks -eq 0 ]; then
-        print_success "All checks passed! Your code is ready for commit."
+        print_success "All checks passed! Your code is ready for release/merge."
         echo ""
         echo "Tips:"
         echo "  • Run 'cargo fmt --all' to auto-format your code"

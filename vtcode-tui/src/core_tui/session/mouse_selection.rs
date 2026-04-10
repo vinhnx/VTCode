@@ -78,6 +78,47 @@ impl MouseSelectionState {
         }
     }
 
+    /// Adjust selection row coordinates after a scroll event.
+    ///
+    /// `row_delta` is positive when content moves down on screen (scroll up / showing
+    /// older content) and negative when content moves up (scroll down / showing newer
+    /// content).  If the adjustment pushes the selection completely off-screen the
+    /// selection is cleared.
+    pub fn adjust_for_scroll(&mut self, row_delta: i32) {
+        if !self.has_selection && !self.is_selecting {
+            return;
+        }
+        if row_delta == 0 {
+            return;
+        }
+
+        let new_start_row = self.start.1 as i32 + row_delta;
+        let new_end_row = self.end.1 as i32 + row_delta;
+
+        // If both ends are completely off-screen in the same direction, clear.
+        // Clamp to screen bounds (0..=viewport_height, roughly 0..=u16::MAX).
+        // If after clamping both are the same and off-screen, or both are off-screen
+        // in a way that suggests selection is gone, clear.
+
+        let clamped_start = new_start_row.clamp(0, i32::from(u16::MAX));
+        let clamped_end = new_end_row.clamp(0, i32::from(u16::MAX));
+
+        // If the selection is now completely off-screen in a way that means
+        // the original selection range was entirely off-screen, clear.
+        if (new_start_row < 0 && new_end_row < 0)
+            || (new_start_row > i32::from(u16::MAX) && new_end_row > i32::from(u16::MAX))
+        {
+            self.is_selecting = false;
+            self.has_selection = false;
+            self.copied = false;
+            self.copy_requested = false;
+            return;
+        }
+
+        self.start.1 = clamped_start as u16;
+        self.end.1 = clamped_end as u16;
+    }
+
     /// Clear any active selection.
     #[allow(dead_code)]
     pub fn clear(&mut self) {
@@ -441,6 +482,44 @@ mod tests {
     #[test]
     fn word_selection_range_returns_none_for_whitespace() {
         assert_eq!(word_selection_range("hello world", 5), None);
+    }
+
+    #[test]
+    fn adjust_for_scroll_shifts_rows() {
+        let mut sel = MouseSelectionState::new();
+        sel.set_selection((2, 5), (10, 8));
+
+        sel.adjust_for_scroll(3);
+        assert_eq!(sel.start, (2, 8));
+        assert_eq!(sel.end, (10, 11));
+        assert!(sel.has_selection);
+    }
+
+    #[test]
+    fn adjust_for_scroll_negative() {
+        let mut sel = MouseSelectionState::new();
+        sel.set_selection((0, 10), (5, 15));
+
+        sel.adjust_for_scroll(-4);
+        assert_eq!(sel.start, (0, 6));
+        assert_eq!(sel.end, (5, 11));
+    }
+
+    #[test]
+    fn adjust_for_scroll_clears_when_offscreen() {
+        let mut sel = MouseSelectionState::new();
+        sel.set_selection((0, 2), (5, 4));
+
+        sel.adjust_for_scroll(-10);
+        assert!(!sel.has_selection);
+        assert!(!sel.is_selecting);
+    }
+
+    #[test]
+    fn adjust_for_scroll_noop_without_selection() {
+        let mut sel = MouseSelectionState::new();
+        sel.adjust_for_scroll(5);
+        assert!(!sel.has_selection);
     }
 
     #[test]

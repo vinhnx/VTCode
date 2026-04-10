@@ -558,6 +558,8 @@ impl Session {
         if self.scroll_manager.offset() != previous_offset {
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
+            // Content moves down on screen; shift selection to match.
+            self.mouse_selection.adjust_for_scroll(1);
         }
     }
 
@@ -569,6 +571,8 @@ impl Session {
         if self.scroll_manager.offset() != previous_offset {
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
+            // Content moves up on screen; shift selection to match.
+            self.mouse_selection.adjust_for_scroll(-1);
         }
     }
 
@@ -576,11 +580,13 @@ impl Session {
         self.mark_scrolling();
         self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager
-            .scroll_down(self.viewport_height().max(1));
+        let page = self.viewport_height().max(1);
+        self.scroll_manager.scroll_down(page);
         if self.scroll_manager.offset() != previous_offset {
+            let actual_delta = self.scroll_manager.offset() - previous_offset;
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
+            self.mouse_selection.adjust_for_scroll(actual_delta as i32);
         }
     }
 
@@ -591,8 +597,11 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(page);
         if self.scroll_manager.offset() != previous_offset {
+            let actual_delta = previous_offset - self.scroll_manager.offset();
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
+            self.mouse_selection
+                .adjust_for_scroll(-(actual_delta as i32));
         }
     }
 
@@ -633,6 +642,10 @@ impl Session {
         // Invalidate visible lines cache if offset actually changed
         if self.scroll_manager.offset() != previous_offset {
             self.invalidate_transcript_viewport();
+            // Compute actual row delta for selection adjustment.
+            // Inverted model: increasing offset → content moves down → positive row delta.
+            let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
+            self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         }
     }
 
