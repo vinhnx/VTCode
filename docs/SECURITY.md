@@ -62,6 +62,18 @@ VT Code includes several built-in security features:
 - **PII Protection**: Automatic tokenization of sensitive data in code execution
 - **Token Management**: Secure handling of API keys and authentication tokens
 
+## CI/CD Security Controls
+
+VT Code enforces the following CI/CD security controls for GitHub Actions:
+
+- **Forbidden trigger policy**: `pull_request_target` and `workflow_run` are blocked by policy checks.
+- **Immutable action pinning**: every third-party and first-party action in workflows is pinned to a full 40-character commit SHA.
+- **Workflow policy check in CI**: `scripts/check_workflow_security.sh` runs in CI and can be run locally via `./scripts/check.sh workflow-security`.
+- **Least-privilege token permissions**: workflows default to `permissions: {}` and grant only job-level minimum permissions.
+- **Checkout credential hardening**: all `actions/checkout` usage sets `persist-credentials: false` unless explicitly required.
+- **Release credential isolation**: publishing runs in the dedicated `release` deployment environment (with reviewer gate), rather than broad repository-level credential exposure.
+- **No release-path cache**: release workflows do not use dependency/build cache restore to reduce cache-poisoning exposure on publish paths.
+
 ## Security Architecture
 
 For information about VT Code's security architecture, please see our documentation on:

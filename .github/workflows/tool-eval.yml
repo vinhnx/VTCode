@@ -1,6 +1,5 @@
 name: tool-eval
-permissions:
-  contents: read
+permissions: {}
 
 on:
   push:
@@ -32,18 +31,22 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
       - name: Install ripgrep (for grep_search)
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
       - name: Build
         run: cargo build --locked --workspace --quiet
@@ -55,7 +58,7 @@ jobs:
           bash scripts/test_pty_tools.sh | tee -a tool-eval.log
 
       - name: Upload eval artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: tool-eval-artifacts
           path: |

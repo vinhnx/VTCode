@@ -152,6 +152,17 @@ run_structured_logging_lint() {
     fi
 }
 
+run_workflow_security_lint() {
+    print_status "Running workflow security policy checks..."
+    if ./scripts/check_workflow_security.sh; then
+        print_success "Workflow security policy checks passed!"
+        return 0
+    else
+        print_error "Workflow security policy checks failed."
+        return 1
+    fi
+}
+
 run_ast_grep_scan() {
     local require_binary="${1:-optional}"
     if [ "$require_binary" != "required" ]; then
@@ -236,6 +247,7 @@ main() {
 
     # Run all checks
     run_rustfmt || ((failed_checks++))
+    run_workflow_security_lint || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
@@ -302,6 +314,7 @@ case "${1:-}" in
         echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
+        echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  miri    - Run Miri to detect Undefined Behavior (slow)"
         echo "  help    - Show this help message"
@@ -313,6 +326,9 @@ case "${1:-}" in
         ;;
     "ast-grep"|"astgrep")
         run_ast_grep_scan required
+        ;;
+    "workflow-security")
+        run_workflow_security_lint
         ;;
     "miri")
         run_miri

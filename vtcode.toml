@@ -1,7 +1,7 @@
 [agent]
-api_key_env = "OLLAMA_API_KEY"
-default_model = "minimax-m2.7:cloud"
-provider = "ollama"
+api_key_env = ""
+default_model = "claude-haiku-4.5"
+provider = "copilot"
 reasoning_effort = "low"
 theme = "homebrew"
 
@@ -10,6 +10,9 @@ enabled = true
 
 [provider.openai]
 service_tier = "flex"
+
+[permissions]
+default_mode = "auto"
 
 [telemetry]
 atif_enabled = true

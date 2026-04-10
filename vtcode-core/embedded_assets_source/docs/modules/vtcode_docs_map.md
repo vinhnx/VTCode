@@ -203,7 +203,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/SECURITY.md`
   - **Content**: Security Policy
-  - **Topics**: Reporting a Vulnerability, Security Best Practices for Users, Supported Versions, Security Features, Security Architecture
+  - **Topics**: Reporting a Vulnerability, Security Best Practices for Users, Supported Versions, Security Features, CI/CD Security Controls
   - **User Questions**: "What can you tell me about Security Policy?", "How does Reporting a Vulnerability work?", "How does Security Best Practices for Users work?"
 
 - **File**: `docs/user-guide/subagents.md`

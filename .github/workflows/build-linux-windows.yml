@@ -24,9 +24,7 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
-  actions: read
+permissions: {}
 
 # Cost optimization:
 # - Linux builds run on ubuntu-latest using Cross (lower cost)
@@ -38,6 +36,8 @@ jobs:
   build-linux:
     name: Build (${{ matrix.target }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -46,30 +46,25 @@ jobs:
           - x86_64-unknown-linux-musl
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
           components: rustfmt
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          key: ${{ matrix.target }}
-
       - name: Install Zig
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.15.2
 
       - name: Install Cross
-        run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
+        run: cargo install cross --git https://github.com/cross-rs/cross.git --rev f8151ae777290430cf2108efacf3976d9528500b --locked
 
       - name: Build (${{ matrix.target }})
         run: cross build --release --target ${{ matrix.target }}
@@ -121,7 +116,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: vtcode-${{ inputs.tag }}-${{ matrix.target }}
           path: |
@@ -135,23 +130,20 @@ jobs:
     if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: x86_64-pc-windows-msvc
           components: rustfmt
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          key: x86_64-pc-windows-msvc
 
       - name: Build (x86_64-pc-windows-msvc)
         run: cargo build --release --target x86_64-pc-windows-msvc
@@ -175,7 +167,7 @@ jobs:
           Set-Content -Path "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256" -Value $hash -NoNewline
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc
           path: |

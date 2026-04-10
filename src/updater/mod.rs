@@ -246,7 +246,7 @@ mod tests {
         // Verify that our identifier correctly picks .tar.gz over .sha256 files
         let target = "aarch64-apple-darwin";
         let identifier = format!("{target}.tar.gz");
-        
+
         // Simulate the asset selection logic from self_update
         let assets = vec![
             "checksums.txt",
@@ -255,11 +255,11 @@ mod tests {
             "vtcode-0.98.1-x86_64-apple-darwin.sha256",
             "vtcode-0.98.1-x86_64-apple-darwin.tar.gz",
         ];
-        
-        let selected = assets.iter().find(|asset| {
-            asset.contains(target) && asset.contains(&identifier)
-        });
-        
+
+        let selected = assets
+            .iter()
+            .find(|asset| asset.contains(target) && asset.contains(&identifier));
+
         assert_eq!(
             selected,
             Some(&"vtcode-0.98.1-aarch64-apple-darwin.tar.gz"),
@@ -272,16 +272,16 @@ mod tests {
         // Verify identifier doesn't accidentally pick assets for wrong target
         let target = "aarch64-apple-darwin";
         let identifier = format!("{target}.tar.gz");
-        
+
         let assets = vec![
             "vtcode-0.98.1-x86_64-apple-darwin.sha256",
             "vtcode-0.98.1-x86_64-apple-darwin.tar.gz",
         ];
-        
-        let selected = assets.iter().find(|asset| {
-            asset.contains(target) && asset.contains(&identifier)
-        });
-        
+
+        let selected = assets
+            .iter()
+            .find(|asset| asset.contains(target) && asset.contains(&identifier));
+
         assert!(
             selected.is_none(),
             "Should not select x86_64 assets when target is aarch64"

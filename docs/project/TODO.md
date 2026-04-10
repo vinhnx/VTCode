@@ -2,11 +2,9 @@ scan for large monolithic files and functions and break them down into smaller, 
 
 ---
 
-it seems markdown systax higlight is wrong
+it seems markdown syntax highlight is wrong
 
 '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-04-09 at 12.09.03 PM.png'
-
----
 
 ---
 
@@ -18,6 +16,14 @@ fix copy, yank text is broken block on scroll. for example: when user already se
 
 ---
 
-apply to protect vtcode repo (https://github.com/vinhnx/VTCode)
+Advisor tool
 
-https://astral.sh/blog/open-source-security-at-astral
+https://claude.com/blog/the-advisor-strategy
+
+https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool#suggested-system-prompt-for-coding-tasks
+
+---
+
+https://zed.dev/blog/agent-metrics
+
+https://zed.dev/agent-metrics
