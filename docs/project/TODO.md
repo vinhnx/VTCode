@@ -2,19 +2,11 @@ scan for large monolithic files and functions and break them down into smaller, 
 
 ---
 
-fix copy, yank text is broken block on scroll. for example: when user already select some text, then scroll the trascript up and down in the terminal, the highlight block is broken and becomes unaligned with the text, making it difficult for users to see what they have selected. This issue can be frustrating for users who rely on the copy and yank functionality to quickly capture important information from the transcript. To fix this, we need to ensure that the highlight block remains properly aligned with the selected text even when the user scrolls through the transcript. This may involve adjusting the way the terminal handles text rendering and selection, ensuring that the highlight block is dynamically updated as the user scrolls, and testing across different terminal environments to ensure consistent behavior. By addressing this issue, we can improve the overall user experience and make it easier for users to interact with the transcript effectively.
-
----
-
 Advisor tool
 
 https://claude.com/blog/the-advisor-strategy
 
 https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool#suggested-system-prompt-for-coding-tasks
-
----
-
-https://x.com/bcherny/status/2042352728094245016
 
 ---
 
