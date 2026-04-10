@@ -5,12 +5,13 @@
 - Start with `docs/ARCHITECTURE.md` when repo orientation matters.
 - Use Conventional Commits (`type(scope): subject`).
 - Prefer `cargo check`, `cargo nextest run`, `cargo fmt`, and `cargo clippy` for local verification.
+- **During development: ALWAYS use `./scripts/check-dev.sh`** — never `./scripts/check.sh` (too slow for daily coding).
 
 ## Development Workflow
 
-### During development (fast, ~10-30s)
+### Active Development (use this 95% of the time)
 
-Skip `./scripts/check.sh` entirely during active coding. Use:
+**Use `./scripts/check-dev.sh` for all daily coding tasks.** This is fast (~10-30s) and covers what you need:
 
 ```bash
 # Quick check: fmt + clippy + compilation (default-members only)
@@ -26,18 +27,18 @@ Skip `./scripts/check.sh` entirely during active coding. Use:
 ./scripts/check-dev.sh --lints
 ```
 
-### Before release or PR merge (comprehensive, ~2-5m)
+### Release/PR Validation (rare, ~2-5m)
 
-Run the full quality gate **only** when:
-- Preparing a release
+**ONLY run `./scripts/check.sh` when:**
+- Preparing a release tag
 - Final PR review before merge
-- Explicitly requested by reviewer
+- Explicitly requested by reviewer or CI
 
 ```bash
 ./scripts/check.sh
 ```
 
-**Note:** CI already runs all checks in parallel across separate jobs, so `check.sh` is primarily for local pre-release validation.
+**Why?** `check.sh` runs the full comprehensive quality gate across the entire workspace. CI already runs these checks in parallel, so local `check.sh` is only for pre-release validation.
 
 ## Repository shape
 

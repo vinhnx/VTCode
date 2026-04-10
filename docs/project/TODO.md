@@ -46,7 +46,3 @@ Top 25 longest tracked Rust files:
 | 1846 | src/agent/runloop/unified/turn/session/slash_commands/ui.rs |
 | 1830 | vtcode-core/src/tools/handlers/plan_mode.rs |
 | 1824 | vtcode-core/src/skills/executor.rs |
-
----
-
-./scripts/check.sh taking too long for development time, maybe skip it and only run on release build?
