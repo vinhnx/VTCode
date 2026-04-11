@@ -9,12 +9,14 @@ use crate::utils::file_utils::{
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -233,6 +235,24 @@ impl SessionArchiveMetadata {
     pub fn with_fork_mode(mut self, fork_mode: SessionForkMode) -> Self {
         self.fork_mode = Some(fork_mode);
         self
+    }
+
+    fn fork_seed(&self) -> Self {
+        Self {
+            workspace_label: self.workspace_label.clone(),
+            workspace_path: self.workspace_path.clone(),
+            model: self.model.clone(),
+            provider: self.provider.clone(),
+            theme: self.theme.clone(),
+            reasoning_effort: self.reasoning_effort.clone(),
+            session_mode: self.session_mode.clone(),
+            debug_log_path: self.debug_log_path.clone(),
+            loaded_skills: self.loaded_skills.clone(),
+            prompt_cache_lineage_id: self.prompt_cache_lineage_id.clone(),
+            external_thread_id: self.external_thread_id.clone(),
+            parent_session_id: None,
+            fork_mode: None,
+        }
     }
 }
 
@@ -566,6 +586,46 @@ fn is_valid_session_identifier(value: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
 }
 
+fn validate_session_identifier(session_identifier: &str) -> Result<()> {
+    if is_valid_session_identifier(session_identifier) {
+        return Ok(());
+    }
+
+    Err(anyhow::anyhow!(
+        "Invalid session identifier '{}': only ASCII letters, digits, '-' and '_' are allowed",
+        session_identifier
+    ))
+}
+
+fn session_archive_path_for_identifier(
+    sessions_dir: &Path,
+    session_identifier: &str,
+) -> Result<PathBuf> {
+    validate_session_identifier(session_identifier)?;
+    Ok(sessions_dir.join(format!("{}.{}", session_identifier, SESSION_FILE_EXTENSION)))
+}
+
+fn reserve_new_session_archive_path(
+    sessions_dir: &Path,
+    session_identifier: &str,
+) -> Result<PathBuf> {
+    let path = session_archive_path_for_identifier(sessions_dir, session_identifier)?;
+    if path.exists() {
+        return Err(anyhow::anyhow!(
+            "Session archive identifier '{}' already exists",
+            session_identifier
+        ));
+    }
+
+    Ok(path)
+}
+
+async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf> {
+    let sessions_dir = resolve_sessions_dir().await?;
+    apply_session_retention_best_effort(&sessions_dir);
+    Ok(sessions_dir)
+}
+
 /// Reserve a unique session archive identifier for the current process.
 ///
 /// The returned identifier is the JSON file stem (without `.json`) and can be reused
@@ -574,8 +634,7 @@ pub async fn reserve_session_archive_identifier(
     workspace_label: &str,
     custom_suffix: Option<String>,
 ) -> Result<String> {
-    let sessions_dir = resolve_sessions_dir().await?;
-    apply_session_retention_best_effort(&sessions_dir);
+    let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
     let started_at = Utc::now();
     let path = generate_unique_archive_path_for_label(
         &sessions_dir,
@@ -898,12 +957,82 @@ impl SessionArchive {
         }
     }
 
+    fn build_snapshot(
+        &self,
+        total_messages: usize,
+        distinct_tools: Vec<String>,
+        transcript: Vec<String>,
+        messages: Vec<SessionMessage>,
+        progress: Option<SessionProgress>,
+    ) -> SessionSnapshot {
+        use crate::utils::error_log_collector::drain_error_logs;
+
+        SessionSnapshot {
+            metadata: self.metadata.clone(),
+            started_at: self.started_at,
+            ended_at: Utc::now(),
+            total_messages,
+            distinct_tools,
+            transcript,
+            messages,
+            progress,
+            error_logs: drain_error_logs(),
+        }
+    }
+
+    fn build_final_snapshot(
+        &self,
+        transcript: Vec<String>,
+        total_messages: usize,
+        distinct_tools: Vec<String>,
+        messages: Vec<SessionMessage>,
+    ) -> SessionSnapshot {
+        self.build_snapshot(
+            total_messages,
+            normalize_distinct_tools_for_summary(&distinct_tools),
+            clean_transcript_lines(&transcript),
+            messages,
+            None,
+        )
+    }
+
+    fn build_progress_snapshot(&self, args: SessionProgressArgs) -> SessionSnapshot {
+        let SessionProgressArgs {
+            total_messages,
+            distinct_tools,
+            recent_messages,
+            turn_number,
+            token_usage,
+            max_context_tokens,
+            loaded_skills,
+        } = args;
+
+        let transcript = progress_transcript_from_recent_messages(&recent_messages);
+        let distinct_tools = normalize_distinct_tools_for_summary(&distinct_tools);
+        let tool_summaries = distinct_tools.clone();
+        let messages = recent_messages.clone();
+
+        self.build_snapshot(
+            total_messages,
+            distinct_tools,
+            transcript,
+            messages,
+            Some(SessionProgress {
+                turn_number,
+                recent_messages,
+                tool_summaries,
+                token_usage,
+                max_context_tokens,
+                loaded_skills: loaded_skills.unwrap_or_default(),
+            }),
+        )
+    }
+
     pub async fn new(
         metadata: SessionArchiveMetadata,
         custom_suffix: Option<String>,
     ) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir().await?;
-        apply_session_retention_best_effort(&sessions_dir);
+        let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
         let started_at = Utc::now();
         let path = generate_unique_archive_path(
             &sessions_dir,
@@ -920,22 +1049,8 @@ impl SessionArchive {
         metadata: SessionArchiveMetadata,
         session_identifier: String,
     ) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir().await?;
-        apply_session_retention_best_effort(&sessions_dir);
-        if !is_valid_session_identifier(&session_identifier) {
-            return Err(anyhow::anyhow!(
-                "Invalid session identifier '{}': only ASCII letters, digits, '-' and '_' are allowed",
-                session_identifier
-            ));
-        }
-
-        let path = sessions_dir.join(format!("{}.{}", session_identifier, SESSION_FILE_EXTENSION));
-        if path.exists() {
-            return Err(anyhow::anyhow!(
-                "Session archive identifier '{}' already exists",
-                session_identifier
-            ));
-        }
+        let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
+        let path = reserve_new_session_archive_path(&sessions_dir, &session_identifier)?;
 
         Ok(Self::from_path(path, metadata, Utc::now()))
     }
@@ -952,20 +1067,8 @@ impl SessionArchive {
         distinct_tools: Vec<String>,
         messages: Vec<SessionMessage>,
     ) -> Result<PathBuf> {
-        use crate::utils::error_log_collector::drain_error_logs;
-
-        let distinct_tools = normalize_distinct_tools_for_summary(&distinct_tools);
-        let snapshot = SessionSnapshot {
-            metadata: self.metadata.clone(),
-            started_at: self.started_at,
-            ended_at: Utc::now(),
-            total_messages,
-            distinct_tools,
-            transcript: clean_transcript_lines(&transcript),
-            messages,
-            progress: None,
-            error_logs: drain_error_logs(),
-        };
+        let snapshot =
+            self.build_final_snapshot(transcript, total_messages, distinct_tools, messages);
 
         let path = self.write_snapshot(snapshot)?;
         if let Some(parent) = path.parent() {
@@ -975,39 +1078,15 @@ impl SessionArchive {
     }
 
     pub fn persist_progress(&self, args: SessionProgressArgs) -> Result<PathBuf> {
-        use crate::utils::error_log_collector::drain_error_logs;
-
         let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
         perf.tag("mode", "sync");
 
-        let progress_transcript = progress_transcript_from_recent_messages(&args.recent_messages);
-        let distinct_tools = normalize_distinct_tools_for_summary(&args.distinct_tools);
-        let tool_summaries = distinct_tools.clone();
-        let snapshot = SessionSnapshot {
-            metadata: self.metadata.clone(),
-            started_at: self.started_at,
-            ended_at: Utc::now(),
-            total_messages: args.total_messages,
-            distinct_tools,
-            transcript: progress_transcript,
-            messages: args.recent_messages.clone(),
-            progress: Some(SessionProgress {
-                turn_number: args.turn_number,
-                recent_messages: args.recent_messages,
-                tool_summaries,
-                token_usage: args.token_usage,
-                max_context_tokens: args.max_context_tokens,
-                loaded_skills: args.loaded_skills.unwrap_or_default(),
-            }),
-            error_logs: drain_error_logs(),
-        };
+        let snapshot = self.build_progress_snapshot(args);
 
         self.write_snapshot(snapshot)
     }
 
     pub async fn persist_progress_async(&self, args: SessionProgressArgs) -> Result<PathBuf> {
-        use crate::utils::error_log_collector::drain_error_logs;
-
         let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
         perf.tag("mode", "async");
 
@@ -1015,56 +1094,26 @@ impl SessionArchive {
             return Ok(self.path.clone());
         }
 
-        let progress_transcript = progress_transcript_from_recent_messages(&args.recent_messages);
-        let distinct_tools = normalize_distinct_tools_for_summary(&args.distinct_tools);
-        let tool_summaries = distinct_tools.clone();
-        let snapshot = SessionSnapshot {
-            metadata: self.metadata.clone(),
-            started_at: self.started_at,
-            ended_at: Utc::now(),
-            total_messages: args.total_messages,
-            distinct_tools,
-            transcript: progress_transcript,
-            messages: args.recent_messages.clone(),
-            progress: Some(SessionProgress {
-                turn_number: args.turn_number,
-                recent_messages: args.recent_messages,
-                tool_summaries,
-                token_usage: args.token_usage,
-                max_context_tokens: args.max_context_tokens,
-                loaded_skills: args.loaded_skills.unwrap_or_default(),
-            }),
-            error_logs: drain_error_logs(),
-        };
+        let snapshot = self.build_progress_snapshot(args);
 
         self.write_snapshot_async(snapshot).await
     }
 
     fn write_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        if !history_persistence_enabled() {
+        let Some(snapshot) = prepare_snapshot_for_write(snapshot)? else {
             return Ok(self.path.clone());
-        }
+        };
 
-        if let Some(max_bytes) = session_history_settings().max_bytes {
-            let snapshot = compact_snapshot_to_max_bytes(snapshot, max_bytes)?;
-            write_json_file_sync(&self.path, &snapshot)?;
-        } else {
-            write_json_file_sync(&self.path, &snapshot)?;
-        }
+        write_json_file_sync(&self.path, &snapshot)?;
         Ok(self.path.clone())
     }
 
     async fn write_snapshot_async(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        if !history_persistence_enabled() {
+        let Some(snapshot) = prepare_snapshot_for_write(snapshot)? else {
             return Ok(self.path.clone());
-        }
+        };
 
-        if let Some(max_bytes) = session_history_settings().max_bytes {
-            let snapshot = compact_snapshot_to_max_bytes(snapshot, max_bytes)?;
-            write_json_file(&self.path, &snapshot).await?;
-        } else {
-            write_json_file(&self.path, &snapshot).await?;
-        }
+        write_json_file(&self.path, &snapshot).await?;
         Ok(self.path.clone())
     }
 
@@ -1125,43 +1174,13 @@ async fn create_fork_archive(
     custom_suffix: Option<String>,
     explicit_identifier: Option<String>,
 ) -> Result<SessionArchive> {
-    let sessions_dir = resolve_sessions_dir().await?;
-    apply_session_retention_best_effort(&sessions_dir);
+    let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
     let started_at = Utc::now();
 
-    let forked_metadata = SessionArchiveMetadata {
-        workspace_label: source_snapshot.metadata.workspace_label.clone(),
-        workspace_path: source_snapshot.metadata.workspace_path.clone(),
-        model: source_snapshot.metadata.model.clone(),
-        provider: source_snapshot.metadata.provider.clone(),
-        theme: source_snapshot.metadata.theme.clone(),
-        reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
-        session_mode: source_snapshot.metadata.session_mode.clone(),
-        debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
-        loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
-        prompt_cache_lineage_id: source_snapshot.metadata.prompt_cache_lineage_id.clone(),
-        external_thread_id: source_snapshot.metadata.external_thread_id.clone(),
-        parent_session_id: None,
-        fork_mode: None,
-    };
+    let forked_metadata = source_snapshot.metadata.fork_seed();
 
     let path = if let Some(session_identifier) = explicit_identifier {
-        if !is_valid_session_identifier(&session_identifier) {
-            return Err(anyhow::anyhow!(
-                "Invalid session identifier '{}': only ASCII letters, digits, '-' and '_' are allowed",
-                session_identifier
-            ));
-        }
-
-        let candidate =
-            sessions_dir.join(format!("{}.{}", session_identifier, SESSION_FILE_EXTENSION));
-        if candidate.exists() {
-            return Err(anyhow::anyhow!(
-                "Session archive identifier '{}' already exists",
-                session_identifier
-            ));
-        }
-        candidate
+        reserve_new_session_archive_path(&sessions_dir, &session_identifier)?
     } else {
         generate_unique_archive_path(
             &sessions_dir,
@@ -1248,34 +1267,16 @@ pub async fn find_session_by_identifier(identifier: &str) -> Result<Option<Sessi
         return Ok(None);
     }
 
-    for entry in fs::read_dir(&sessions_dir).with_context(|| {
-        format!(
-            "failed to read session directory: {}",
-            sessions_dir.display()
-        )
-    })? {
-        let entry = entry.with_context(|| {
-            format!("failed to read session entry in {}", sessions_dir.display())
-        })?;
-        let path = entry.path();
-        if !is_session_file(&path) {
-            continue;
-        }
-
-        let stem_matches = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .map(|stem| stem == identifier)
-            .unwrap_or(false);
-        if !stem_matches {
-            continue;
-        }
-
-        let snapshot: SessionSnapshot = read_json_file_sync(&path)?;
-        return Ok(Some(SessionListing { path, snapshot }));
+    let path = match session_archive_path_for_identifier(&sessions_dir, identifier) {
+        Ok(path) => path,
+        Err(_) => return Ok(None),
+    };
+    if !path.exists() {
+        return Ok(None);
     }
 
-    Ok(None)
+    let snapshot: SessionSnapshot = read_json_file_sync(&path)?;
+    Ok(Some(SessionListing { path, snapshot }))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1296,32 +1297,35 @@ pub async fn search_sessions(
     session_limit: usize,
     max_results: usize,
 ) -> Result<Vec<SearchResult>> {
+    if query.trim().is_empty() || max_results == 0 {
+        return Ok(Vec::new());
+    }
+
     let listings = list_recent_sessions(session_limit).await?;
-    let query_lower = query.to_lowercase();
+    let matcher = RegexBuilder::new(&regex::escape(query))
+        .case_insensitive(true)
+        .build()
+        .context("failed to compile session search query")?;
     let mut results = Vec::new();
 
-    // Naive search implementation
     for listing in listings {
         for (idx, msg) in listing.snapshot.messages.iter().enumerate() {
             let content = match &msg.content {
                 MessageContent::Text(t) => t.as_str(),
-                MessageContent::Parts(_) => continue, // Skip parts for simple text search for now
+                MessageContent::Parts(_) => continue,
             };
 
-            if let Some(pos) = content.to_lowercase().find(&query_lower) {
-                // Create a snippet around the match
-                let start = pos.saturating_sub(50);
-                let end = (pos + query_lower.len() + 50).min(content.len());
-                let snippet = format!("...{}...", &content[start..end].replace('\n', " "));
+            if let Some(matched) = matcher.find(content) {
+                let snippet = search_result_snippet(content, matched.start(), matched.end());
 
                 results.push(SearchResult {
                     session_id: listing.identifier(),
                     session_path: listing.path.clone(),
-                    timestamp: listing.snapshot.started_at, // Use session start time
+                    timestamp: listing.snapshot.started_at,
                     message_index: idx,
                     role: msg.role.clone(),
                     content_snippet: snippet,
-                    score: 1.0, // Baseline score
+                    score: 1.0,
                 });
 
                 if results.len() >= max_results {
@@ -1335,6 +1339,37 @@ pub async fn search_sessions(
     }
 
     Ok(results)
+}
+
+fn search_result_snippet(content: &str, match_start: usize, match_end: usize) -> String {
+    const CONTEXT_BYTES: usize = 50;
+
+    let start = floor_char_boundary(content, match_start.saturating_sub(CONTEXT_BYTES));
+    let end = ceil_char_boundary(content, (match_end + CONTEXT_BYTES).min(content.len()));
+
+    let mut snippet = String::new();
+    if start > 0 {
+        snippet.push_str("...");
+    }
+    snippet.push_str(&content[start..end].replace('\n', " "));
+    if end < content.len() {
+        snippet.push_str("...");
+    }
+    snippet
+}
+
+fn floor_char_boundary(content: &str, mut index: usize) -> usize {
+    while index > 0 && !content.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}
+
+fn ceil_char_boundary(content: &str, mut index: usize) -> usize {
+    while index < content.len() && !content.is_char_boundary(index) {
+        index += 1;
+    }
+    index
 }
 
 async fn resolve_sessions_dir() -> Result<PathBuf> {
@@ -1378,23 +1413,29 @@ impl Default for SessionRetentionLimits {
     }
 }
 
-fn parse_env_usize(key: &str) -> Option<usize> {
-    read_env_var(key)?.trim().parse::<usize>().ok()
-}
-
-fn parse_env_u64(key: &str) -> Option<u64> {
-    read_env_var(key)?.trim().parse::<u64>().ok()
+impl SessionRetentionLimits {
+    fn from_env() -> Self {
+        let defaults = Self::default();
+        Self {
+            max_files: parse_env_value(SESSION_MAX_FILES_ENV).unwrap_or(defaults.max_files),
+            max_age_days: parse_env_value(SESSION_MAX_AGE_DAYS_ENV)
+                .unwrap_or(defaults.max_age_days),
+            max_total_size_bytes: parse_env_value::<u64>(SESSION_MAX_SIZE_MB_ENV)
+                .map(|value| value.saturating_mul(BYTES_PER_MB))
+                .unwrap_or(defaults.max_total_size_bytes),
+        }
+    }
 }
 
 fn session_retention_limits() -> SessionRetentionLimits {
-    let defaults = SessionRetentionLimits::default();
-    SessionRetentionLimits {
-        max_files: parse_env_usize(SESSION_MAX_FILES_ENV).unwrap_or(defaults.max_files),
-        max_age_days: parse_env_u64(SESSION_MAX_AGE_DAYS_ENV).unwrap_or(defaults.max_age_days),
-        max_total_size_bytes: parse_env_u64(SESSION_MAX_SIZE_MB_ENV)
-            .map(|value| value.saturating_mul(BYTES_PER_MB))
-            .unwrap_or(defaults.max_total_size_bytes),
-    }
+    SessionRetentionLimits::from_env()
+}
+
+fn parse_env_value<T>(key: &str) -> Option<T>
+where
+    T: FromStr,
+{
+    read_env_var(key)?.trim().parse().ok()
 }
 
 fn apply_session_retention_best_effort(sessions_dir: &Path) {
@@ -1565,7 +1606,26 @@ fn compact_snapshot_to_max_bytes(
         break;
     }
 
+    if serde_json::to_vec(&snapshot)?.len() > max_bytes {
+        minimize_snapshot_payload(&mut snapshot);
+        let _ = shrink_snapshot_strings(&mut snapshot);
+    }
+
     Ok(snapshot)
+}
+
+fn prepare_snapshot_for_write(snapshot: SessionSnapshot) -> Result<Option<SessionSnapshot>> {
+    if !history_persistence_enabled() {
+        return Ok(None);
+    }
+
+    let max_bytes = session_history_settings().max_bytes;
+    let snapshot = match max_bytes {
+        Some(max_bytes) => compact_snapshot_to_max_bytes(snapshot, max_bytes)?,
+        None => snapshot,
+    };
+
+    Ok(Some(snapshot))
 }
 
 fn minimize_snapshot_payload(snapshot: &mut SessionSnapshot) {
@@ -1642,7 +1702,7 @@ fn strip_snapshot_overhead(snapshot: &mut SessionSnapshot) -> bool {
 }
 
 fn shrink_snapshot_strings(snapshot: &mut SessionSnapshot) -> bool {
-    let mut changed = false;
+    let mut changed = shrink_snapshot_metadata(&mut snapshot.metadata);
 
     for transcript in &mut snapshot.transcript {
         changed |= shrink_string(transcript);
@@ -1675,6 +1735,12 @@ fn shrink_session_message(message: &mut SessionMessage) -> bool {
     if let Some(reasoning) = message.reasoning.as_mut() {
         changed |= shrink_string(reasoning);
     }
+    if let Some(reasoning_details) = message.reasoning_details.as_mut()
+        && !reasoning_details.is_empty()
+    {
+        reasoning_details.clear();
+        changed = true;
+    }
     if let Some(tool_call_id) = message.tool_call_id.as_mut() {
         changed |= shrink_string(tool_call_id);
     }
@@ -1696,6 +1762,28 @@ fn shrink_session_message(message: &mut SessionMessage) -> bool {
                 changed |= shrink_string(thought_signature);
             }
         }
+    }
+
+    changed
+}
+
+fn shrink_snapshot_metadata(metadata: &mut SessionArchiveMetadata) -> bool {
+    let mut changed = false;
+
+    changed |= shrink_string(&mut metadata.workspace_label);
+    changed |= shrink_string(&mut metadata.workspace_path);
+    changed |= shrink_string(&mut metadata.model);
+    changed |= shrink_string(&mut metadata.provider);
+    changed |= shrink_string(&mut metadata.theme);
+    changed |= shrink_string(&mut metadata.reasoning_effort);
+    changed |= shrink_optional_string(&mut metadata.session_mode);
+    changed |= shrink_optional_string(&mut metadata.debug_log_path);
+    changed |= shrink_optional_string(&mut metadata.prompt_cache_lineage_id);
+    changed |= shrink_optional_string(&mut metadata.external_thread_id);
+    changed |= shrink_optional_string(&mut metadata.parent_session_id);
+
+    for skill in &mut metadata.loaded_skills {
+        changed |= shrink_string(skill);
     }
 
     changed
@@ -1787,882 +1875,5 @@ fn is_session_file(path: &Path) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::constants::tools as tool_names;
-    use crate::llm::provider::{ContentPart, ToolCall};
-    use anyhow::anyhow;
-    use chrono::{TimeZone, Timelike};
-    use std::sync::LazyLock;
-    use std::time::Duration;
-
-    static SESSION_HISTORY_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
-        LazyLock::new(|| tokio::sync::Mutex::new(()));
-
-    struct EnvGuard {
-        key: &'static str,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: &Path) -> Self {
-            set_test_env_override_path(key, value);
-            Self { key }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            clear_test_env_override(self.key);
-        }
-    }
-
-    struct HistorySettingsGuard {
-        previous: SessionHistorySettings,
-    }
-
-    impl HistorySettingsGuard {
-        fn set(persistence: HistoryPersistence, max_bytes: Option<usize>) -> Self {
-            let previous = session_history_settings();
-            let mut config = VTCodeConfig::default();
-            config.history.persistence = persistence;
-            config.history.max_bytes = max_bytes;
-            apply_session_history_config_from_vtcode(&config);
-            Self { previous }
-        }
-    }
-
-    impl Drop for HistorySettingsGuard {
-        fn drop(&mut self) {
-            let mut config = VTCodeConfig::default();
-            config.history.persistence = self.previous.persistence;
-            config.history.max_bytes = self.previous.max_bytes;
-            apply_session_history_config_from_vtcode(&config);
-        }
-    }
-
-    async fn lock_history_test_guard() -> tokio::sync::MutexGuard<'static, ()> {
-        SESSION_HISTORY_TEST_LOCK.lock().await
-    }
-
-    #[tokio::test]
-    async fn session_archive_persists_snapshot() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        )
-        .with_external_thread_id("thread-123");
-        let archive = SessionArchive::new(metadata.clone(), None).await?;
-        let transcript = vec!["line one".to_owned(), "line two".to_owned()];
-        let messages = vec![
-            SessionMessage::new(MessageRole::User, "Hello world"),
-            SessionMessage::new(MessageRole::Assistant, "Hi there"),
-        ];
-        let path = archive.finalize(
-            transcript.clone(),
-            4,
-            vec!["tool_a".to_owned()],
-            messages.clone(),
-        )?;
-
-        let stored = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-
-        assert_eq!(snapshot.metadata, metadata);
-        assert_eq!(snapshot.transcript, transcript);
-        assert_eq!(snapshot.total_messages, 4);
-        assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_owned()]);
-        assert_eq!(snapshot.messages, messages);
-        Ok(())
-    }
-
-    #[test]
-    fn session_message_converts_back_and_forth() {
-        let mut original = Message::assistant("Test response".to_owned());
-        original.reasoning = Some("Model thoughts".to_owned());
-        original.phase = Some(AssistantPhase::FinalAnswer);
-        let stored = SessionMessage::from(&original);
-        let restored = Message::from(&stored);
-
-        assert_eq!(original.role, restored.role);
-        assert_eq!(original.content, restored.content);
-        assert_eq!(original.reasoning, stored.reasoning);
-        assert_eq!(original.reasoning, restored.reasoning);
-        assert_eq!(original.tool_call_id, restored.tool_call_id);
-        assert_eq!(original.phase, stored.phase);
-        assert_eq!(original.phase, restored.phase);
-    }
-
-    #[test]
-    fn session_message_roundtrip_preserves_commentary_phase() {
-        let original =
-            Message::assistant("Working".to_owned()).with_phase(Some(AssistantPhase::Commentary));
-        let stored = SessionMessage::from(&original);
-        let restored = Message::from(&stored);
-
-        assert_eq!(stored.phase, Some(AssistantPhase::Commentary));
-        assert_eq!(restored.phase, Some(AssistantPhase::Commentary));
-    }
-
-    #[test]
-    fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
-        let mut original = Message::assistant("Calling a tool".to_owned());
-        original.reasoning_details = Some(vec![serde_json::json!({
-            "summary": "tool call planning"
-        })]);
-        original.tool_calls = Some(vec![ToolCall::function(
-            "call_1".to_string(),
-            "unified_exec".to_string(),
-            "{\"cmd\":\"cargo fmt\"}".to_string(),
-        )]);
-        original.origin_tool = Some("unified_exec".to_string());
-
-        let stored = SessionMessage::from(&original);
-        let restored = Message::from(&stored);
-
-        assert_eq!(stored.reasoning_details, original.reasoning_details);
-        assert_eq!(stored.tool_calls, original.tool_calls);
-        assert_eq!(stored.origin_tool, original.origin_tool);
-        assert_eq!(restored.reasoning_details, original.reasoning_details);
-        assert_eq!(restored.tool_calls, original.tool_calls);
-        assert_eq!(restored.origin_tool, original.origin_tool);
-    }
-
-    #[test]
-    fn session_message_preserves_parts() {
-        let original = Message::assistant_with_parts(vec![
-            ContentPart::text("See attached image".to_owned()),
-            ContentPart::text("See attached image".to_owned()),
-            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
-            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
-            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
-        ]);
-        let stored = SessionMessage::from(&original);
-
-        assert_eq!(stored.content, original.content);
-
-        let restored = Message::from(&stored);
-        assert_eq!(restored.content, original.content);
-    }
-
-    #[tokio::test]
-    async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-        let archive = SessionArchive::new(metadata, None).await?;
-        let recent = vec![SessionMessage::new(MessageRole::Assistant, "recent")];
-
-        let path = archive.persist_progress(SessionProgressArgs {
-            total_messages: 1,
-            distinct_tools: vec!["tool_a".to_owned()],
-            recent_messages: recent.clone(),
-            turn_number: 2,
-            token_usage: Some("10 tokens".to_string()),
-            max_context_tokens: Some(128),
-            loaded_skills: None, // loaded_skills
-        })?;
-
-        let stored = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-
-        let progress = snapshot.progress.expect("progress should exist");
-        assert_eq!(progress.turn_number, 2);
-        assert_eq!(progress.recent_messages, recent);
-        assert_eq!(progress.token_usage, Some("10 tokens".to_string()));
-        assert_eq!(progress.tool_summaries, vec!["tool_a".to_string()]);
-        assert_eq!(progress.max_context_tokens, Some(128));
-        assert_eq!(snapshot.transcript, vec!["recent".to_string()]);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-        let archive = SessionArchive::new(metadata, None).await?;
-        let mut assistant = SessionMessage::new(MessageRole::Assistant, "done");
-        assistant.reasoning = Some("reasoned".to_string());
-        let recent = vec![
-            SessionMessage::new(MessageRole::User, "run cargo check"),
-            SessionMessage::new(MessageRole::Tool, "{\"output\":\"...\"}"),
-            SessionMessage::new(MessageRole::Assistant, "done"),
-            assistant,
-        ];
-
-        let path = archive.persist_progress(SessionProgressArgs {
-            total_messages: recent.len(),
-            distinct_tools: vec!["unified_exec".to_owned()],
-            recent_messages: recent,
-            turn_number: 2,
-            token_usage: Some("10 tokens".to_string()),
-            max_context_tokens: Some(128),
-            loaded_skills: None,
-        })?;
-
-        let stored = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-
-        assert_eq!(
-            snapshot.transcript,
-            vec!["run cargo check".to_string(), "done".to_string()]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn archive_transcript_cleaner_filters_recovery_noise_and_duplicate_tool_blocks() {
-        let lines = vec![
-            "hello".to_string(),
-            "  Hello, Vinh.".to_string(),
-            "tell me more".to_string(),
-            "  Let me dig deeper into the project structure.".to_string(),
-            "• Ran cd /tmp/project &&".to_string(),
-            "  │ ls -1 src/".to_string(),
-            "    ✓ exit 0".to_string(),
-            "• Ran cd /tmp/project &&".to_string(),
-            "  │ ls -1 src/".to_string(),
-            "    ✓ exit 0".to_string(),
-            "• List files Use Unified search".to_string(),
-            "  └ Action: list".to_string(),
-            "  └ Path: /tmp/project/src".to_string(),
-            "  └ Filter: files".to_string(),
-            "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass."
-                .to_string(),
-            "  I couldn't produce a final synthesis because the model returned no answer on the recovery pass.".to_string(),
-            "  Latest tool output: {\"output\":\"...\"}".to_string(),
-            "  Reuse the latest tool outputs already collected in this turn before retrying."
-                .to_string(),
-            "run cargo fmt and report me".to_string(),
-            "• Ran cd /tmp/project &&".to_string(),
-            "  │ cargo fmt 2>&1".to_string(),
-            "    (no output)".to_string(),
-            "  cargo fmt ran successfully with no output.".to_string(),
-        ];
-
-        let cleaned = clean_transcript_lines(&lines);
-
-        assert_eq!(
-            cleaned,
-            vec![
-                "hello".to_string(),
-                "  Hello, Vinh.".to_string(),
-                "tell me more".to_string(),
-                "  Let me dig deeper into the project structure.".to_string(),
-                "• Ran cd /tmp/project && ls -1 src/ (repeated x2)".to_string(),
-                "• List files Use Unified search [path /tmp/project/src, filter files]".to_string(),
-                "Repeated low-signal tool churn triggered recovery.".to_string(),
-                "Recovery pass failed to produce a final synthesis.".to_string(),
-                "run cargo fmt and report me".to_string(),
-                "• Ran cd /tmp/project && cargo fmt 2>&1".to_string(),
-                "  cargo fmt ran successfully with no output.".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn archive_transcript_cleaner_preserves_paragraph_spacing_and_drops_structured_result_noise() {
-        let lines = vec![
-            "Project summary:".to_string(),
-            "".to_string(),
-            "  VT Code is a Rust-based coding agent.".to_string(),
-            "".to_string(),
-            "Structured result with fields: output, exit_code, wall_time, session_id".to_string(),
-            "Next step.".to_string(),
-        ];
-
-        let cleaned = clean_transcript_lines(&lines);
-
-        assert_eq!(
-            cleaned,
-            vec![
-                "Project summary:".to_string(),
-                "".to_string(),
-                "  VT Code is a Rust-based coding agent.".to_string(),
-                "".to_string(),
-                "Next step.".to_string(),
-            ]
-        );
-    }
-
-    #[tokio::test]
-    async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-        let archive = SessionArchive::new(metadata, None).await?;
-        let recent = vec![SessionMessage::new(MessageRole::Assistant, "done")];
-
-        let path = archive.persist_progress(SessionProgressArgs {
-            total_messages: 1,
-            distinct_tools: vec![
-                tool_names::UNIFIED_EXEC.to_string(),
-                tool_names::RUN_PTY_CMD.to_string(),
-                tool_names::SEND_PTY_INPUT.to_string(),
-                tool_names::READ_PTY_SESSION.to_string(),
-                tool_names::LIST_PTY_SESSIONS.to_string(),
-                tool_names::CLOSE_PTY_SESSION.to_string(),
-                tool_names::EXECUTE_CODE.to_string(),
-                tool_names::EXEC_COMMAND.to_string(),
-                tool_names::WRITE_STDIN.to_string(),
-                "shell".to_string(),
-                "exec_pty_cmd".to_string(),
-                "exec".to_string(),
-                "container.exec".to_string(),
-            ],
-            recent_messages: recent,
-            turn_number: 2,
-            token_usage: Some("10 tokens".to_string()),
-            max_context_tokens: Some(128),
-            loaded_skills: None,
-        })?;
-
-        let stored = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-
-        assert_eq!(
-            snapshot.distinct_tools,
-            vec![tool_names::UNIFIED_EXEC.to_string()]
-        );
-        let progress = snapshot.progress.expect("progress should exist");
-        assert_eq!(
-            progress.tool_summaries,
-            vec![tool_names::UNIFIED_EXEC.to_string()]
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn find_session_by_identifier_returns_match() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "Sample",
-            "/tmp/sample",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-        let archive = SessionArchive::new(metadata.clone(), None).await?;
-        let messages = vec![
-            SessionMessage::new(MessageRole::User, "Hi"),
-            SessionMessage::new(MessageRole::Assistant, "Hello"),
-        ];
-        let path = archive.finalize(Vec::new(), messages.len(), Vec::new(), messages)?;
-        let identifier = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .ok_or_else(|| anyhow!("missing file stem"))?
-            .to_string();
-
-        let listing = find_session_by_identifier(&identifier)
-            .await?
-            .ok_or_else(|| anyhow!("expected session to be found"))?;
-        assert_eq!(listing.identifier(), identifier);
-        assert_eq!(listing.snapshot.metadata, metadata);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn session_archive_path_collision_adds_suffix() -> Result<()> {
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-
-        let started_at = Utc
-            .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
-            .unwrap()
-            .with_nanosecond(123_456_000)
-            .unwrap();
-
-        let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
-        fs::write(&first_path, "{}").context("failed to create sentinel file")?;
-
-        let second_path =
-            generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
-
-        assert_ne!(first_path, second_path);
-        let second_name = second_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("file name");
-        assert!(second_name.contains("-01"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn session_archive_filename_includes_microseconds_and_pid() -> Result<()> {
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-
-        let started_at = Utc
-            .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
-            .unwrap()
-            .with_nanosecond(654_321_000)
-            .expect("nanosecond set");
-
-        let path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
-        let name = path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .expect("file name string");
-
-        assert!(name.contains("20250925T101530Z_654321"));
-        let pid_fragment = format!("{:05}", process::id());
-        assert!(name.contains(&pid_fragment));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let session_id = reserve_session_archive_identifier("ExampleWorkspace", None).await?;
-        assert!(session_id.starts_with("session-exampleworkspace-"));
-
-        let metadata = SessionArchiveMetadata::new(
-            "ExampleWorkspace",
-            "/tmp/example",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        )
-        .with_debug_log_path(Some("/tmp/debug-session.log".to_string()));
-        let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
-            .await
-            .context("failed to create archive with reserved session id")?;
-        let path = archive.finalize(
-            vec!["line one".to_owned()],
-            1,
-            vec![],
-            vec![SessionMessage::new(MessageRole::User, "hello")],
-        )?;
-        let stored = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-
-        let stem = path
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| anyhow!("missing file stem"))?;
-        assert_eq!(stem, session_id);
-        assert_eq!(
-            snapshot.metadata.debug_log_path,
-            Some("/tmp/debug-session.log".to_string())
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn generated_session_identifier_includes_workspace_and_custom_suffix() {
-        let generated =
-            generate_session_archive_identifier("Example Workspace", Some("branch".to_string()));
-
-        assert!(generated.starts_with("session-example-workspace-"));
-        assert!(generated.ends_with("-branch"));
-    }
-
-    #[tokio::test]
-    async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let session_id = reserve_session_archive_identifier("ResumeWorkspace", None).await?;
-        let metadata = SessionArchiveMetadata::new(
-            "ResumeWorkspace",
-            "/tmp/resume-workspace",
-            "model-a",
-            "provider-a",
-            "light",
-            "medium",
-        );
-        let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
-            .await
-            .context("failed to create initial archive")?;
-        let original_path = archive.finalize(
-            vec!["user: first".to_string()],
-            1,
-            vec!["read_file".to_string()],
-            vec![SessionMessage::new(MessageRole::User, "first")],
-        )?;
-
-        let listing = find_session_by_identifier(&session_id)
-            .await?
-            .context("expected archived session listing")?;
-        let resumed = SessionArchive::resume_from_listing(&listing, metadata);
-        let resumed_path = resumed.finalize(
-            vec!["user: second".to_string()],
-            2,
-            vec!["read_file".to_string()],
-            vec![
-                SessionMessage::new(MessageRole::User, "first"),
-                SessionMessage::new(MessageRole::Assistant, "second"),
-            ],
-        )?;
-
-        assert_eq!(resumed_path, original_path);
-        let stored = fs::read_to_string(&resumed_path).with_context(|| {
-            format!("failed to read stored session: {}", resumed_path.display())
-        })?;
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
-        assert_eq!(snapshot.total_messages, 2);
-        assert_eq!(snapshot.messages.len(), 2);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn list_recent_sessions_orders_entries() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let first_metadata = SessionArchiveMetadata::new(
-            "First",
-            "/tmp/first",
-            "model-a",
-            "provider-a",
-            "light",
-            "medium",
-        );
-        let first_archive = SessionArchive::new(first_metadata.clone(), None).await?;
-        first_archive.finalize(
-            vec!["first".to_owned()],
-            1,
-            Vec::new(),
-            vec![SessionMessage::new(MessageRole::User, "First")],
-        )?;
-
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
-        let second_metadata = SessionArchiveMetadata::new(
-            "Second",
-            "/tmp/second",
-            "model-b",
-            "provider-b",
-            "dark",
-            "high",
-        );
-        let second_archive = SessionArchive::new(second_metadata.clone(), None).await?;
-        second_archive.finalize(
-            vec!["second".to_owned()],
-            2,
-            vec!["tool_b".to_owned()],
-            vec![SessionMessage::new(MessageRole::User, "Second")],
-        )?;
-
-        let listings = list_recent_sessions(10).await?;
-        assert_eq!(listings.len(), 2);
-        assert_eq!(listings[0].snapshot.metadata, second_metadata);
-        assert_eq!(listings[1].snapshot.metadata, first_metadata);
-        Ok(())
-    }
-
-    #[test]
-    fn session_archive_retention_prunes_oldest_by_count() -> Result<()> {
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        for idx in 0..3 {
-            let path = temp_dir.path().join(format!("session-{idx}.json"));
-            fs::write(&path, format!("{{\"idx\":{idx}}}"))
-                .with_context(|| format!("failed to write {}", path.display()))?;
-            std::thread::sleep(Duration::from_millis(5));
-        }
-
-        apply_session_retention_with_limits(
-            temp_dir.path(),
-            SessionRetentionLimits {
-                max_files: 2,
-                max_age_days: 365,
-                max_total_size_bytes: 10 * BYTES_PER_MB,
-            },
-        )?;
-
-        let mut remaining = fs::read_dir(temp_dir.path())
-            .context("failed to list retained session files")?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-            .filter_map(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.to_string())
-            })
-            .collect::<Vec<_>>();
-        remaining.sort();
-
-        assert_eq!(remaining.len(), 2);
-        assert!(!remaining.iter().any(|name| name == "session-0.json"));
-        Ok(())
-    }
-
-    #[test]
-    fn session_archive_retention_prunes_by_total_size() -> Result<()> {
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        for idx in 0..2 {
-            let path = temp_dir.path().join(format!("session-{idx}.json"));
-            fs::write(&path, "x".repeat(800_000))
-                .with_context(|| format!("failed to write {}", path.display()))?;
-            std::thread::sleep(Duration::from_millis(5));
-        }
-
-        apply_session_retention_with_limits(
-            temp_dir.path(),
-            SessionRetentionLimits {
-                max_files: 10,
-                max_age_days: 365,
-                max_total_size_bytes: BYTES_PER_MB,
-            },
-        )?;
-
-        let remaining = fs::read_dir(temp_dir.path())
-            .context("failed to list retained session files")?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-            .collect::<Vec<_>>();
-
-        assert_eq!(remaining.len(), 1);
-        let remaining_name = remaining[0]
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default();
-        assert_eq!(remaining_name, "session-1.json");
-        Ok(())
-    }
-
-    #[test]
-    fn listing_previews_return_first_non_empty_lines() {
-        let metadata = SessionArchiveMetadata::new(
-            "Workspace",
-            "/tmp/ws",
-            "model",
-            "provider",
-            "dark",
-            "medium",
-        );
-        let long_response = "response snippet ".repeat(6);
-        let snapshot = SessionSnapshot {
-            metadata,
-            started_at: Utc::now(),
-            ended_at: Utc::now(),
-            total_messages: 2,
-            distinct_tools: Vec::new(),
-            transcript: Vec::new(),
-            messages: vec![
-                SessionMessage::new(MessageRole::System, ""),
-                SessionMessage::new(MessageRole::User, "  prompt line\nsecond"),
-                SessionMessage::new(MessageRole::Assistant, long_response.clone()),
-            ],
-            progress: None,
-            error_logs: Vec::new(),
-        };
-        let listing = SessionListing {
-            path: PathBuf::from("session-workspace.json"),
-            snapshot,
-        };
-
-        assert_eq!(
-            listing.first_prompt_preview(),
-            Some("prompt line".to_owned())
-        );
-        let expected = truncate_preview(&long_response, 80);
-        assert_eq!(listing.first_reply_preview(), Some(expected));
-    }
-
-    #[tokio::test]
-    async fn search_sessions_finds_keyword() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new("SearchWS", "/tmp/s", "mod", "prov", "d", "m");
-        let archive = SessionArchive::new(metadata, None).await?;
-
-        let messages = vec![
-            SessionMessage::new(MessageRole::User, "Where is the secret API key?"),
-            SessionMessage::new(
-                MessageRole::Assistant,
-                "The secret key is defined in .env.local",
-            ),
-        ];
-        archive.finalize(vec![], 2, vec![], messages)?;
-
-        // Search
-        let results = search_sessions("secret key", 10, 5).await?;
-        assert!(!results.is_empty());
-        assert!(results[0].content_snippet.contains("secret key"));
-        assert_eq!(results[0].role, MessageRole::Assistant);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> Result<()> {
-        let _settings_lock = lock_history_test_guard().await;
-        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::None, None);
-        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
-
-        let metadata = SessionArchiveMetadata::new(
-            "NoHistory",
-            "/tmp/no-history",
-            "model-x",
-            "provider-y",
-            "dark",
-            "medium",
-        );
-        let archive = SessionArchive::new(metadata, None).await?;
-        let path = archive.finalize(
-            vec!["line one".to_owned()],
-            1,
-            Vec::new(),
-            vec![SessionMessage::new(MessageRole::User, "hello")],
-        )?;
-
-        assert_eq!(path, archive.path());
-        assert!(
-            !path.exists(),
-            "history disabled should not write archive files"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
-        let snapshot = SessionSnapshot {
-            metadata: SessionArchiveMetadata::new(
-                "Workspace",
-                "/tmp/workspace",
-                "model",
-                "provider",
-                "dark",
-                "medium",
-            ),
-            started_at: Utc::now(),
-            ended_at: Utc::now(),
-            total_messages: 1,
-            distinct_tools: vec!["very-large-tool-name".repeat(20)],
-            transcript: vec!["transcript ".repeat(400)],
-            messages: vec![SessionMessage {
-                role: MessageRole::Assistant,
-                content: MessageContent::Parts(vec![
-                    ContentPart::text("text ".repeat(800)),
-                    ContentPart::image("a".repeat(4000), "image/png".to_string()),
-                ]),
-                reasoning: Some("reasoning ".repeat(300)),
-                reasoning_details: None,
-                tool_calls: Some(vec![ToolCall::function(
-                    "call_1".to_string(),
-                    "unified_exec".to_string(),
-                    "{\"cmd\":\"echo giant payload\"}".repeat(100),
-                )]),
-                tool_call_id: None,
-                phase: None,
-                origin_tool: Some("unified_exec".repeat(50)),
-            }],
-            progress: Some(SessionProgress {
-                turn_number: 1,
-                recent_messages: vec![SessionMessage::new(
-                    MessageRole::Assistant,
-                    "recent ".repeat(500),
-                )],
-                tool_summaries: vec!["summary ".repeat(100)],
-                token_usage: Some("token ".repeat(200)),
-                max_context_tokens: Some(128_000),
-                loaded_skills: vec!["skill ".repeat(50)],
-            }),
-            error_logs: vec![ErrorLogEntry {
-                timestamp: Utc::now().to_rfc3339(),
-                level: "ERROR".to_string(),
-                target: "vtcode_test".to_string(),
-                message: "error ".repeat(400),
-            }],
-        };
-
-        let compacted = compact_snapshot_to_max_bytes(snapshot, 2_048)?;
-
-        assert!(serde_json::to_vec(&compacted)?.len() <= 2_048);
-        assert_eq!(compacted.messages.len(), 1);
-        Ok(())
-    }
-}
+#[path = "session_archive_tests.rs"]
+mod tests;
