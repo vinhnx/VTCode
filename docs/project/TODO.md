@@ -16,23 +16,6 @@ Top 25 longest tracked Rust files:
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/target/package/vtcode-0.98.0/src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs
 
-| 2446 | vtcode-core/src/tools/skills/mod.rs |
-| 2363 | vtcode-core/src/components.rs |
-| 2332 | vtcode-core/src/copilot/acp_client.rs |
-| 2253 | vtcode-core/src/scheduler/mod.rs |
-| 2236 | src/agent/runloop/unified/tool_routing/mod.rs |
-| 2204 | vtcode-core/src/tools/structural_search.rs |
-| 2173 | src/agent/runloop/unified/turn/session_loop_runner/mod.rs |
-| 2076 | src/agent/runloop/unified/turn/session/slash_commands/agents.rs |
-| 2056 | vtcode-core/src/core/agent/runner/tests.rs |
-| 2055 | vtcode-core/src/tools/registry/executors.rs |
-| 1968 | vtcode-core/src/commands/init.rs |
-| 1939 | vtcode-core/src/utils/ansi.rs |
-| 1938 | vtcode-core/src/open_responses/bridge.rs |
-| 1863 | vtcode-core/src/llm/providers/gemini/tests.rs |
-| 1846 | src/agent/runloop/unified/turn/session/slash_commands/ui.rs |
-| 1830 | vtcode-core/src/tools/handlers/plan_mode.rs |
-| 1824 | vtcode-core/src/skills/executor.rs |
 
 1/ Execute a comprehensive, line-by-line audit of the `file` to systematically identify and resolve optimization opportunities, prioritizing efficiency, scalability, and maintainability. Rigorously enforce the DRY (Don't Repeat Yourself) principle by detecting and eliminating all duplicated or redundant logic, consolidating patterns into reusable, modular components. Validate strict alignment between agent loops, tool calls, and system prompts, ensuring consistency in logic flow, error handling, and state management. Refactor the agent harness and core execution logic to enforce autonomous yet safe tool execution, incorporating robust validation, fallback mechanisms, and rate-limiting. Adhere to best practices regarding modular design, separation of concerns, and minimal dependency overhead. Exclude all non-code deliverables—such as summaries or documentation—and output only the fully optimized, refactored code.
 

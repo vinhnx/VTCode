@@ -55,6 +55,7 @@
 //! ```
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -72,6 +73,9 @@ use crate::tools::handlers::tool_handler::{
 };
 use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::traits::Tool;
+
+const MAX_RETRY_ATTEMPTS: u32 = 16;
+const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 // ============================================================================
 // Core wiring trait
@@ -159,7 +163,6 @@ pub trait ApprovalProvider<Ctx: Send + Sync>: Send + Sync {
 }
 
 /// Provider trait for sandbox policy resolution.
-#[async_trait]
 pub trait SandboxProvider<Ctx: Send + Sync>: Send + Sync {
     /// Resolve the sandbox policy for the given context.
     fn sandbox_enabled(ctx: &Ctx) -> bool;
@@ -491,12 +494,15 @@ pub trait HasExecutionCaches: Send + Sync {
 fn build_execution_cache_key(tool_name: &str, args: &Value) -> ToolExecutionCacheKey {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     hasher.write(tool_name.as_bytes());
-    hasher.write(
-        serde_json::to_string(args)
-            .unwrap_or_else(|_| args.to_string())
-            .as_bytes(),
-    );
-    ToolExecutionCacheKey(format!("{tool_name}::{}", hasher.finish()))
+    let encoded_args = serde_json::to_string(args).unwrap_or_else(|_| args.to_string());
+    hasher.write(encoded_args.as_bytes());
+
+    let mut cache_key = String::with_capacity(tool_name.len() + 22);
+    cache_key.push_str(tool_name);
+    cache_key.push_str("::");
+    let _ = write!(&mut cache_key, "{}", hasher.finish());
+
+    ToolExecutionCacheKey(cache_key)
 }
 
 /// Cache provider backed by `UnifiedCache`.
@@ -531,61 +537,61 @@ impl<Ctx: HasExecutionCaches> CacheProvider<Ctx> for CachedResults {
 /// Metadata provider that delegates to an inner `Tool`.
 pub struct PassthroughMetadata;
 
-impl<Ctx: HasInnerTool> MetadataProvider<Ctx> for PassthroughMetadata {
+impl<Ctx: HasToolRef> MetadataProvider<Ctx> for PassthroughMetadata {
     fn tool_name(ctx: &Ctx) -> &'static str {
-        ctx.inner_tool().name()
+        ctx.tool().name()
     }
 
     fn tool_description(ctx: &Ctx) -> &'static str {
-        ctx.inner_tool().description()
+        ctx.tool().description()
     }
 
     fn parameter_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.inner_tool().parameter_schema()
+        ctx.tool().parameter_schema()
     }
 
     fn config_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.inner_tool().config_schema()
+        ctx.tool().config_schema()
     }
 
     fn state_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.inner_tool().state_schema()
+        ctx.tool().state_schema()
     }
 
     fn prompt_path(ctx: &Ctx) -> Option<Cow<'static, str>> {
-        ctx.inner_tool().prompt_path()
+        ctx.tool().prompt_path()
     }
 
     fn default_permission(ctx: &Ctx) -> ToolPolicy {
-        ctx.inner_tool().default_permission()
+        ctx.tool().default_permission()
     }
 
     fn allow_patterns(ctx: &Ctx) -> Option<&'static [&'static str]> {
-        ctx.inner_tool().allow_patterns()
+        ctx.tool().allow_patterns()
     }
 
     fn deny_patterns(ctx: &Ctx) -> Option<&'static [&'static str]> {
-        ctx.inner_tool().deny_patterns()
+        ctx.tool().deny_patterns()
     }
 
     fn is_mutating(ctx: &Ctx) -> bool {
-        ctx.inner_tool().is_mutating()
+        ctx.tool().is_mutating()
     }
 
     fn is_parallel_safe(ctx: &Ctx) -> bool {
-        ctx.inner_tool().is_parallel_safe()
+        ctx.tool().is_parallel_safe()
     }
 
     fn tool_kind(ctx: &Ctx) -> &'static str {
-        ctx.inner_tool().kind()
+        ctx.tool().kind()
     }
 
     fn resource_hints(ctx: &Ctx, args: &Value) -> Vec<String> {
-        ctx.inner_tool().resource_hints(args)
+        ctx.tool().resource_hints(args)
     }
 
     fn execution_cost(ctx: &Ctx) -> u8 {
-        ctx.inner_tool().execution_cost()
+        ctx.tool().execution_cost()
     }
 }
 
@@ -598,6 +604,181 @@ fn value_to_text(value: &Value) -> String {
         value.as_str().unwrap_or("").to_string()
     } else {
         serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+    }
+}
+
+#[async_trait]
+trait ExecutionMode<Ctx>
+where
+    Ctx: HasComponent<ExecuteComponent> + HasComponent<CacheComponent> + Send + Sync,
+    ComponentProvider<Ctx, ExecuteComponent>: ExecuteProvider<Ctx>,
+    ComponentProvider<Ctx, CacheComponent>: CacheProvider<Ctx>,
+{
+    type Output: Send;
+
+    fn get_cached(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Self::Output>;
+
+    fn put_cached(ctx: &Ctx, tool_name: &str, args: &Value, result: &Self::Output);
+
+    async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output>;
+}
+
+struct JsonExecution;
+
+#[async_trait]
+impl<Ctx> ExecutionMode<Ctx> for JsonExecution
+where
+    Ctx: HasComponent<ExecuteComponent> + HasComponent<CacheComponent> + Send + Sync,
+    ComponentProvider<Ctx, ExecuteComponent>: ExecuteProvider<Ctx>,
+    ComponentProvider<Ctx, CacheComponent>: CacheProvider<Ctx>,
+{
+    type Output = Value;
+
+    fn get_cached(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Self::Output> {
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_json(
+            ctx, tool_name, args,
+        )
+    }
+
+    fn put_cached(ctx: &Ctx, tool_name: &str, args: &Value, result: &Self::Output) {
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_json(
+            ctx, tool_name, args, result,
+        );
+    }
+
+    async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output> {
+        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute(ctx, args)
+            .await
+    }
+}
+
+struct DualExecution;
+
+#[async_trait]
+impl<Ctx> ExecutionMode<Ctx> for DualExecution
+where
+    Ctx: HasComponent<ExecuteComponent> + HasComponent<CacheComponent> + Send + Sync,
+    ComponentProvider<Ctx, ExecuteComponent>: ExecuteProvider<Ctx>,
+    ComponentProvider<Ctx, CacheComponent>: CacheProvider<Ctx>,
+{
+    type Output = SplitToolResult;
+
+    fn get_cached(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Self::Output> {
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_dual(
+            ctx, tool_name, args,
+        )
+    }
+
+    fn put_cached(ctx: &Ctx, tool_name: &str, args: &Value, result: &Self::Output) {
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_dual(
+            ctx, tool_name, args, result,
+        );
+    }
+
+    async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output> {
+        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute_dual(ctx, args)
+            .await
+    }
+}
+
+fn retry_backoff<Ctx>(ctx: &Ctx, tool_name: &str, attempt: u32) -> Duration
+where
+    Ctx: HasComponent<RetryComponent> + Send + Sync,
+    ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
+{
+    <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::backoff_duration(
+        ctx, tool_name, attempt,
+    )
+    .min(MAX_RETRY_BACKOFF)
+}
+
+async fn execute_tool_with_mode<Ctx, Mode>(
+    ctx: &Ctx,
+    tool_name: &str,
+    args: Value,
+) -> Result<Mode::Output>
+where
+    Ctx: HasComponent<ExecuteComponent>
+        + HasComponent<LoggingComponent>
+        + HasComponent<CacheComponent>
+        + HasComponent<RetryComponent>
+        + Send
+        + Sync,
+    ComponentProvider<Ctx, ExecuteComponent>: ExecuteProvider<Ctx>,
+    ComponentProvider<Ctx, LoggingComponent>: LoggingProvider<Ctx>,
+    ComponentProvider<Ctx, CacheComponent>: CacheProvider<Ctx>,
+    ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
+    Mode: ExecutionMode<Ctx>,
+{
+    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
+        ctx, tool_name, &args,
+    );
+
+    if let Some(result) = Mode::get_cached(ctx, tool_name, &args) {
+        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
+            ctx, tool_name, &args,
+        );
+        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
+            ctx,
+            tool_name,
+            Duration::ZERO,
+            1,
+            true,
+        );
+        return Ok(result);
+    }
+
+    let started = Instant::now();
+    let max_attempts = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
+        ctx, tool_name, &args,
+    )
+    .clamp(1, MAX_RETRY_ATTEMPTS);
+
+    let mut attempt = 1;
+    loop {
+        match Mode::execute(ctx, args.clone()).await {
+            Ok(result) => {
+                Mode::put_cached(ctx, tool_name, &args, &result);
+                <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
+                    ctx,
+                    tool_name,
+                    started.elapsed(),
+                    attempt,
+                    false,
+                );
+                return Ok(result);
+            }
+            Err(error) => {
+                let should_retry = attempt < max_attempts
+                    && <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::should_retry(
+                        ctx, tool_name, attempt, &error,
+                    );
+
+                if !should_retry {
+                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_failure(
+                        ctx,
+                        tool_name,
+                        started.elapsed(),
+                        attempt,
+                        &error,
+                    );
+                    return Err(error);
+                }
+
+                let backoff = retry_backoff(ctx, tool_name, attempt);
+                <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_retry(
+                    ctx,
+                    tool_name,
+                    attempt + 1,
+                    backoff,
+                    &error,
+                );
+                if !backoff.is_zero() {
+                    tokio::time::sleep(backoff).await;
+                }
+                attempt += 1;
+            }
+        }
     }
 }
 
@@ -760,183 +941,11 @@ where
     ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
 {
     async fn execute_tool_json(&self, tool_name: &str, args: Value) -> Result<Value> {
-        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
-            self, tool_name, &args,
-        );
-
-        if let Some(result) =
-            <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_json(
-                self, tool_name, &args,
-            )
-        {
-            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
-                self, tool_name, &args,
-            );
-            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
-                self,
-                tool_name,
-                Duration::ZERO,
-                1,
-                true,
-            );
-            return Ok(result);
-        }
-
-        let started = Instant::now();
-        let max_attempts =
-            <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
-                self, tool_name, &args,
-            )
-            .max(1);
-
-        for attempt_index in 0..max_attempts {
-            let attempt = attempt_index + 1;
-            match <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute(
-                self,
-                args.clone(),
-            )
-            .await
-            {
-                Ok(result) => {
-                    <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_json(
-                        self, tool_name, &args, &result,
-                    );
-                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
-                        self,
-                        tool_name,
-                        started.elapsed(),
-                        attempt,
-                        false,
-                    );
-                    return Ok(result);
-                }
-                Err(error) => {
-                    let should_retry = attempt < max_attempts
-                        && <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::should_retry(
-                            self, tool_name, attempt, &error,
-                        );
-                    if should_retry {
-                        let backoff = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<
-                            Ctx,
-                        >>::backoff_duration(
-                            self, tool_name, attempt
-                        );
-                        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_retry(
-                            self,
-                            tool_name,
-                            attempt + 1,
-                            backoff,
-                            &error,
-                        );
-                        if !backoff.is_zero() {
-                            tokio::time::sleep(backoff).await;
-                        }
-                        continue;
-                    }
-
-                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_failure(
-                        self,
-                        tool_name,
-                        started.elapsed(),
-                        attempt,
-                        &error,
-                    );
-                    return Err(error);
-                }
-            }
-        }
-
-        unreachable!("retry loop always returns or continues")
+        execute_tool_with_mode::<Ctx, JsonExecution>(self, tool_name, args).await
     }
 
     async fn execute_tool_dual(&self, tool_name: &str, args: Value) -> Result<SplitToolResult> {
-        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
-            self, tool_name, &args,
-        );
-
-        if let Some(result) =
-            <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_dual(
-                self, tool_name, &args,
-            )
-        {
-            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
-                self, tool_name, &args,
-            );
-            <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
-                self,
-                tool_name,
-                Duration::ZERO,
-                1,
-                true,
-            );
-            return Ok(result);
-        }
-
-        let started = Instant::now();
-        let max_attempts =
-            <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
-                self, tool_name, &args,
-            )
-            .max(1);
-
-        for attempt_index in 0..max_attempts {
-            let attempt = attempt_index + 1;
-            match <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute_dual(
-                self,
-                args.clone(),
-            )
-            .await
-            {
-                Ok(result) => {
-                    <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_dual(
-                        self, tool_name, &args, &result,
-                    );
-                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
-                        self,
-                        tool_name,
-                        started.elapsed(),
-                        attempt,
-                        false,
-                    );
-                    return Ok(result);
-                }
-                Err(error) => {
-                    let should_retry = attempt < max_attempts
-                        && <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::should_retry(
-                            self, tool_name, attempt, &error,
-                        );
-                    if should_retry {
-                        let backoff = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<
-                            Ctx,
-                        >>::backoff_duration(
-                            self, tool_name, attempt
-                        );
-                        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_retry(
-                            self,
-                            tool_name,
-                            attempt + 1,
-                            backoff,
-                            &error,
-                        );
-                        if !backoff.is_zero() {
-                            tokio::time::sleep(backoff).await;
-                        }
-                        continue;
-                    }
-
-                    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_failure(
-                        self,
-                        tool_name,
-                        started.elapsed(),
-                        attempt,
-                        &error,
-                    );
-                    return Err(error);
-                }
-            }
-        }
-
-        unreachable!("retry loop always returns or continues")
+        execute_tool_with_mode::<Ctx, DualExecution>(self, tool_name, args).await
     }
 }
 
@@ -1217,20 +1226,7 @@ impl HasWorkspaceRoot for CiCtx {
 }
 
 /// Strict sandbox that enforces workspace boundaries in CI.
-/// Reuses `WorkspaceSandbox` since the `HasWorkspaceRoot` trait
-/// makes it generic over any context with a workspace root.
-pub struct StrictWorkspaceSandbox;
-
-#[async_trait]
-impl<Ctx: HasWorkspaceRoot> SandboxProvider<Ctx> for StrictWorkspaceSandbox {
-    fn sandbox_enabled(_ctx: &Ctx) -> bool {
-        true
-    }
-
-    fn workspace_root(ctx: &Ctx) -> Option<&PathBuf> {
-        Some(HasWorkspaceRoot::workspace_root(ctx))
-    }
-}
+pub type StrictWorkspaceSandbox = WorkspaceSandbox;
 
 delegate_components!(CiCtx {
     ApprovalComponent => AutoApproval,
@@ -1262,19 +1258,38 @@ delegate_components!(BenchCtx {
 /// CGP approval/sandbox/logging/cache/retry without rewriting them.
 pub struct PassthroughExecutor;
 
+/// Trait for contexts that can expose a tool reference for delegated metadata,
+/// validation, and execution.
+pub trait HasToolRef: Send + Sync {
+    fn tool(&self) -> &dyn Tool;
+}
+
 /// Trait for contexts that carry an inner `Tool` reference for passthrough.
 pub trait HasInnerTool: Send + Sync {
     fn inner_tool(&self) -> &Arc<dyn Tool>;
 }
 
+impl<Ctx> HasToolRef for Ctx
+where
+    Ctx: HasInnerTool + Send + Sync,
+{
+    fn tool(&self) -> &dyn Tool {
+        self.inner_tool().as_ref()
+    }
+}
+
 #[async_trait]
-impl<Ctx: HasInnerTool> ExecuteProvider<Ctx> for PassthroughExecutor {
+impl<Ctx: HasToolRef> ExecuteProvider<Ctx> for PassthroughExecutor {
     async fn execute(ctx: &Ctx, args: Value) -> Result<Value> {
-        ctx.inner_tool().execute(args).await
+        let tool = ctx.tool();
+        tool.validate_args(&args)?;
+        tool.execute(args).await
     }
 
     async fn execute_dual(ctx: &Ctx, args: Value) -> Result<SplitToolResult> {
-        ctx.inner_tool().execute_dual(args).await
+        let tool = ctx.tool();
+        tool.validate_args(&args)?;
+        tool.execute_dual(args).await
     }
 }
 
@@ -1356,15 +1371,15 @@ pub struct TypedToolExecutor<T>(PhantomData<T>);
 #[async_trait]
 impl<Ctx, T> ExecuteProvider<Ctx> for TypedToolExecutor<T>
 where
-    Ctx: HasToolInstance<T> + Send + Sync,
+    Ctx: HasToolRef + Send + Sync,
     T: Tool + Send + Sync,
 {
     async fn execute(ctx: &Ctx, args: Value) -> Result<Value> {
-        ctx.tool_instance().execute(args).await
+        <PassthroughExecutor as ExecuteProvider<Ctx>>::execute(ctx, args).await
     }
 
     async fn execute_dual(ctx: &Ctx, args: Value) -> Result<SplitToolResult> {
-        ctx.tool_instance().execute_dual(args).await
+        <PassthroughExecutor as ExecuteProvider<Ctx>>::execute_dual(ctx, args).await
     }
 }
 
@@ -1373,63 +1388,63 @@ pub struct TypedToolMetadata<T>(PhantomData<T>);
 
 impl<Ctx, T> MetadataProvider<Ctx> for TypedToolMetadata<T>
 where
-    Ctx: HasToolInstance<T>,
+    Ctx: HasToolRef,
     T: Tool + Send + Sync,
 {
     fn tool_name(ctx: &Ctx) -> &'static str {
-        ctx.tool_instance().name()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::tool_name(ctx)
     }
 
     fn tool_description(ctx: &Ctx) -> &'static str {
-        ctx.tool_instance().description()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::tool_description(ctx)
     }
 
     fn parameter_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.tool_instance().parameter_schema()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::parameter_schema(ctx)
     }
 
     fn config_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.tool_instance().config_schema()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::config_schema(ctx)
     }
 
     fn state_schema(ctx: &Ctx) -> Option<Value> {
-        ctx.tool_instance().state_schema()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::state_schema(ctx)
     }
 
     fn prompt_path(ctx: &Ctx) -> Option<Cow<'static, str>> {
-        ctx.tool_instance().prompt_path()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::prompt_path(ctx)
     }
 
     fn default_permission(ctx: &Ctx) -> ToolPolicy {
-        ctx.tool_instance().default_permission()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::default_permission(ctx)
     }
 
     fn allow_patterns(ctx: &Ctx) -> Option<&'static [&'static str]> {
-        ctx.tool_instance().allow_patterns()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::allow_patterns(ctx)
     }
 
     fn deny_patterns(ctx: &Ctx) -> Option<&'static [&'static str]> {
-        ctx.tool_instance().deny_patterns()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::deny_patterns(ctx)
     }
 
     fn is_mutating(ctx: &Ctx) -> bool {
-        ctx.tool_instance().is_mutating()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::is_mutating(ctx)
     }
 
     fn is_parallel_safe(ctx: &Ctx) -> bool {
-        ctx.tool_instance().is_parallel_safe()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::is_parallel_safe(ctx)
     }
 
     fn tool_kind(ctx: &Ctx) -> &'static str {
-        ctx.tool_instance().kind()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::tool_kind(ctx)
     }
 
     fn resource_hints(ctx: &Ctx, args: &Value) -> Vec<String> {
-        ctx.tool_instance().resource_hints(args)
+        <PassthroughMetadata as MetadataProvider<Ctx>>::resource_hints(ctx, args)
     }
 
     fn execution_cost(ctx: &Ctx) -> u8 {
-        ctx.tool_instance().execution_cost()
+        <PassthroughMetadata as MetadataProvider<Ctx>>::execution_cost(ctx)
     }
 }
 
@@ -1459,54 +1474,37 @@ impl<Runtime: Send + Sync, T: Send + Sync> HasToolInstance<T> for TypedToolCtx<R
     }
 }
 
-impl<Runtime, T> HasComponent<ApprovalComponent> for TypedToolCtx<Runtime, T>
+impl<Runtime: Send + Sync, T> HasToolRef for TypedToolCtx<Runtime, T>
 where
-    Runtime: HasComponent<ApprovalComponent>,
+    T: Tool + Send + Sync,
 {
-    type Provider = ComponentProvider<Runtime, ApprovalComponent>;
+    fn tool(&self) -> &dyn Tool {
+        &self.tool
+    }
 }
 
-impl<Runtime, T> HasComponent<SandboxComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<SandboxComponent>,
-{
-    type Provider = ComponentProvider<Runtime, SandboxComponent>;
+macro_rules! delegate_runtime_components_for_typed_ctx {
+    ($($component:ty),+ $(,)?) => {
+        $(
+            impl<Runtime, T> HasComponent<$component> for TypedToolCtx<Runtime, T>
+            where
+                Runtime: HasComponent<$component>,
+            {
+                type Provider = ComponentProvider<Runtime, $component>;
+            }
+        )+
+    };
 }
 
-impl<Runtime, T> HasComponent<SessionComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<SessionComponent>,
-{
-    type Provider = ComponentProvider<Runtime, SessionComponent>;
-}
-
-impl<Runtime, T> HasComponent<OutputMapComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<OutputMapComponent>,
-{
-    type Provider = ComponentProvider<Runtime, OutputMapComponent>;
-}
-
-impl<Runtime, T> HasComponent<LoggingComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<LoggingComponent>,
-{
-    type Provider = ComponentProvider<Runtime, LoggingComponent>;
-}
-
-impl<Runtime, T> HasComponent<CacheComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<CacheComponent>,
-{
-    type Provider = ComponentProvider<Runtime, CacheComponent>;
-}
-
-impl<Runtime, T> HasComponent<RetryComponent> for TypedToolCtx<Runtime, T>
-where
-    Runtime: HasComponent<RetryComponent>,
-{
-    type Provider = ComponentProvider<Runtime, RetryComponent>;
-}
+delegate_runtime_components_for_typed_ctx!(
+    ApprovalComponent,
+    SandboxComponent,
+    SessionComponent,
+    OutputMapComponent,
+    LoggingComponent,
+    CacheComponent,
+    RetryComponent,
+);
 
 impl<Runtime, T> HasComponent<ExecuteComponent> for TypedToolCtx<Runtime, T>
 where
@@ -1548,816 +1546,5 @@ where
     ToolFacade::new(TypedToolCtx::new(tool, CiCtx::new(workspace_root)))
 }
 
-// ============================================================================
-// Tests
-// ============================================================================
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cache::EvictionPolicy;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    // ================================================================
-    // Test executor provider
-    // ================================================================
-
-    struct EchoExecutor;
-
-    #[async_trait]
-    impl<Ctx: Send + Sync> ExecuteProvider<Ctx> for EchoExecutor {
-        async fn execute(_ctx: &Ctx, args: Value) -> Result<Value> {
-            Ok(serde_json::json!({
-                "tool_name": "echo",
-                "echoed": args,
-            }))
-        }
-    }
-
-    // ================================================================
-    // Test contexts with different component wiring
-    // ================================================================
-
-    struct TestAutoCtx;
-
-    struct EchoMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for EchoMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "echo"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "Echo tool"
-        }
-    }
-
-    delegate_components!(TestAutoCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => EchoExecutor,
-        MetadataComponent => EchoMetadata,
-        LoggingComponent  => NoLogging,
-        CacheComponent    => NoCache,
-        RetryComponent    => NoRetry,
-    });
-
-    struct TestDenyCtx;
-
-    struct ExecMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for ExecMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "exec"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "Exec tool"
-        }
-    }
-
-    delegate_components!(TestDenyCtx {
-        ApprovalComponent => DenyAllApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => EchoExecutor,
-        MetadataComponent => ExecMetadata,
-        LoggingComponent  => NoLogging,
-        CacheComponent    => NoCache,
-        RetryComponent    => NoRetry,
-    });
-
-    struct TestTracingCtx;
-
-    struct TracedToolMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for TracedToolMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "traced_tool"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "A traced tool"
-        }
-    }
-
-    delegate_components!(TestTracingCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => EchoExecutor,
-        MetadataComponent => TracedToolMetadata,
-        LoggingComponent  => TracingLogging,
-        CacheComponent    => NoCache,
-        RetryComponent    => NoRetry,
-    });
-
-    struct NamedToolCtx;
-
-    struct NamedToolMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for NamedToolMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "my_tool"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "My description"
-        }
-    }
-
-    delegate_components!(NamedToolCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => EchoExecutor,
-        MetadataComponent => NamedToolMetadata,
-        LoggingComponent  => NoLogging,
-        CacheComponent    => NoCache,
-        RetryComponent    => NoRetry,
-    });
-
-    trait HasExecutionCount: Send + Sync {
-        fn execution_count(&self) -> &AtomicUsize;
-    }
-
-    struct CountingExecutor;
-
-    #[async_trait]
-    impl<Ctx: HasExecutionCount + Send + Sync> ExecuteProvider<Ctx> for CountingExecutor {
-        async fn execute(ctx: &Ctx, args: Value) -> Result<Value> {
-            let count = ctx.execution_count().fetch_add(1, Ordering::SeqCst) + 1;
-            Ok(serde_json::json!({
-                "tool_name": "counting",
-                "attempt": count,
-                "args": args,
-            }))
-        }
-    }
-
-    struct TestCachingCtx {
-        executions: Arc<AtomicUsize>,
-        json_cache: UnifiedCache<ToolExecutionCacheKey, Value>,
-        dual_cache: UnifiedCache<ToolExecutionCacheKey, SplitToolResult>,
-    }
-
-    impl TestCachingCtx {
-        fn new(executions: Arc<AtomicUsize>) -> Self {
-            Self {
-                executions,
-                json_cache: UnifiedCache::new(8, Duration::from_secs(60), EvictionPolicy::Lru),
-                dual_cache: UnifiedCache::new(8, Duration::from_secs(60), EvictionPolicy::Lru),
-            }
-        }
-    }
-
-    impl HasExecutionCount for TestCachingCtx {
-        fn execution_count(&self) -> &AtomicUsize {
-            self.executions.as_ref()
-        }
-    }
-
-    impl HasExecutionCaches for TestCachingCtx {
-        fn json_cache(&self) -> &UnifiedCache<ToolExecutionCacheKey, Value> {
-            &self.json_cache
-        }
-
-        fn dual_cache(&self) -> &UnifiedCache<ToolExecutionCacheKey, SplitToolResult> {
-            &self.dual_cache
-        }
-    }
-
-    struct CachedToolMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for CachedToolMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "cached_tool"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "A cached tool"
-        }
-    }
-
-    delegate_components!(TestCachingCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => CountingExecutor,
-        MetadataComponent => CachedToolMetadata,
-        LoggingComponent  => NoLogging,
-        CacheComponent    => CachedResults,
-        RetryComponent    => NoRetry,
-    });
-
-    struct FlakyExecutor;
-
-    #[async_trait]
-    impl<Ctx: HasExecutionCount + Send + Sync> ExecuteProvider<Ctx> for FlakyExecutor {
-        async fn execute(ctx: &Ctx, args: Value) -> Result<Value> {
-            let attempt = ctx.execution_count().fetch_add(1, Ordering::SeqCst) + 1;
-            if attempt == 1 {
-                anyhow::bail!("transient failure")
-            }
-
-            Ok(serde_json::json!({
-                "tool_name": "flaky",
-                "attempt": attempt,
-                "args": args,
-            }))
-        }
-    }
-
-    struct TestRetryCtx {
-        executions: Arc<AtomicUsize>,
-        retry_policy: RetryPolicy,
-    }
-
-    impl TestRetryCtx {
-        fn new(executions: Arc<AtomicUsize>, retry_policy: RetryPolicy) -> Self {
-            Self {
-                executions,
-                retry_policy,
-            }
-        }
-    }
-
-    impl HasExecutionCount for TestRetryCtx {
-        fn execution_count(&self) -> &AtomicUsize {
-            self.executions.as_ref()
-        }
-    }
-
-    impl HasRetryPolicy for TestRetryCtx {
-        fn retry_policy(&self) -> RetryPolicy {
-            self.retry_policy
-        }
-    }
-
-    struct FlakyToolMetadata;
-
-    impl<Ctx> MetadataProvider<Ctx> for FlakyToolMetadata {
-        fn tool_name(_ctx: &Ctx) -> &'static str {
-            "flaky_tool"
-        }
-
-        fn tool_description(_ctx: &Ctx) -> &'static str {
-            "A flaky tool"
-        }
-    }
-
-    delegate_components!(TestRetryCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => NoSandbox,
-        ExecuteComponent  => FlakyExecutor,
-        MetadataComponent => FlakyToolMetadata,
-        LoggingComponent  => NoLogging,
-        CacheComponent    => NoCache,
-        RetryComponent    => ExponentialBackoffRetry,
-    });
-
-    // ================================================================
-    // Phase 1 tests: approval + sandbox
-    // ================================================================
-
-    #[tokio::test]
-    async fn auto_ctx_approves() {
-        let ctx = TestAutoCtx;
-        let result = ComposableRuntime::run(&ctx, "grep", "search files").await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn consumer_trait_executes_directly_on_context() {
-        let ctx = TestAutoCtx;
-        let result = ctx
-            .execute_tool_json("echo", serde_json::json!({"via": "consumer"}))
-            .await
-            .expect("context capability should execute");
-
-        assert_eq!(
-            result
-                .get("echoed")
-                .and_then(|value| value.get("via"))
-                .and_then(|value| value.as_str()),
-            Some("consumer")
-        );
-    }
-
-    #[tokio::test]
-    async fn deny_ctx_rejects() {
-        let ctx = TestDenyCtx;
-        let result = ComposableRuntime::run(&ctx, "exec", "run command").await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("operation denied"));
-    }
-
-    #[tokio::test]
-    async fn sandbox_check_returns_policy() {
-        let ctx = TestAutoCtx;
-        let sandboxed = ComposableRuntime::run_with_sandbox(&ctx, "file_write", "write file")
-            .await
-            .expect("should succeed");
-        assert!(!sandboxed); // NoSandbox wired
-    }
-
-    struct StrictSandbox;
-
-    #[async_trait]
-    impl<Ctx: Send + Sync> SandboxProvider<Ctx> for StrictSandbox {
-        fn sandbox_enabled(_ctx: &Ctx) -> bool {
-            true
-        }
-
-        fn workspace_root(_ctx: &Ctx) -> Option<&PathBuf> {
-            None
-        }
-    }
-
-    struct StrictCtx;
-
-    delegate_components!(StrictCtx {
-        ApprovalComponent => AutoApproval,
-        SandboxComponent  => StrictSandbox,
-    });
-
-    #[tokio::test]
-    async fn strict_ctx_enables_sandbox() {
-        let ctx = StrictCtx;
-        let sandboxed = ComposableRuntime::run_with_sandbox(&ctx, "exec", "run cmd")
-            .await
-            .expect("should succeed");
-        assert!(sandboxed);
-    }
-
-    // ================================================================
-    // Phase 2 tests: ToolFacade — same context projected as Tool
-    // ================================================================
-
-    #[tokio::test]
-    async fn tool_facade_executes_via_cgp() {
-        let facade = ToolFacade::new(TestAutoCtx);
-        let result = facade
-            .execute(serde_json::json!({"msg": "hello"}))
-            .await
-            .expect("should succeed");
-
-        assert_eq!(
-            result
-                .get("echoed")
-                .and_then(|v| v.get("msg"))
-                .and_then(|v| v.as_str()),
-            Some("hello")
-        );
-    }
-
-    #[tokio::test]
-    async fn tool_facade_denied_by_ctx() {
-        let facade = ToolFacade::new(TestDenyCtx);
-        let result = facade.execute(serde_json::json!({})).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("operation denied"));
-    }
-
-    #[tokio::test]
-    async fn tool_facade_name_and_description() {
-        let facade = ToolFacade::new(NamedToolCtx);
-        assert_eq!(facade.name(), "my_tool");
-        assert_eq!(facade.description(), "My description");
-    }
-
-    #[tokio::test]
-    async fn tool_facade_dual_output() {
-        let facade = ToolFacade::new(TestAutoCtx);
-        let result = facade
-            .execute_dual(serde_json::json!({"key": "value"}))
-            .await
-            .expect("should succeed");
-
-        assert!(result.success);
-    }
-
-    // ================================================================
-    // Phase 2 tests: HandlerFacade — same context projected as ToolHandler
-    // ================================================================
-
-    #[tokio::test]
-    async fn handler_facade_executes_via_cgp() {
-        let facade = HandlerFacade::new(TestAutoCtx);
-        let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-            crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-        );
-        let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
-            cwd: PathBuf::from("/tmp"),
-            turn_id: "test".to_string(),
-            sub_id: None,
-            shell_environment_policy:
-                crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
-            approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
-            ),
-            codex_linux_sandbox_exe: None,
-            sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                Default::default(),
-            ),
-        });
-        let invocation = ToolInvocation {
-            session,
-            turn,
-            tracker: None,
-            call_id: "test-call".to_string(),
-            tool_name: "echo".to_string(),
-            payload: ToolPayload::Function {
-                arguments: r#"{"msg":"handler"}"#.to_string(),
-            },
-        };
-
-        let output = facade.handle(invocation).await.expect("should succeed");
-        assert!(output.is_success());
-        let content = output.content().expect("should have content");
-        assert!(content.contains("handler"));
-    }
-
-    #[tokio::test]
-    async fn handler_facade_denied_by_ctx() {
-        let facade = HandlerFacade::new(TestDenyCtx);
-        let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-            crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-        );
-        let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
-            cwd: PathBuf::from("/tmp"),
-            turn_id: "test".to_string(),
-            sub_id: None,
-            shell_environment_policy:
-                crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
-            approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
-            ),
-            codex_linux_sandbox_exe: None,
-            sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                Default::default(),
-            ),
-        });
-        let invocation = ToolInvocation {
-            session,
-            turn,
-            tracker: None,
-            call_id: "test-call".to_string(),
-            tool_name: "exec".to_string(),
-            payload: ToolPayload::Function {
-                arguments: "{}".to_string(),
-            },
-        };
-
-        let result = facade.handle(invocation).await;
-        assert!(result.is_err());
-    }
-
-    // ================================================================
-    // Phase 2 tests: same context, two facades — unification proof
-    // ================================================================
-
-    #[tokio::test]
-    async fn same_context_both_facades() {
-        // ToolFacade
-        let tool = ToolFacade::new(TestAutoCtx);
-        let tool_result = tool
-            .execute(serde_json::json!({"via": "tool"}))
-            .await
-            .expect("tool facade should succeed");
-        assert!(tool_result.get("echoed").is_some());
-
-        // HandlerFacade — same wiring, different projection
-        let handler = HandlerFacade::new(TestAutoCtx);
-        let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-            crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-        );
-        let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
-            cwd: PathBuf::from("/tmp"),
-            turn_id: "test".to_string(),
-            sub_id: None,
-            shell_environment_policy:
-                crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
-            approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
-            ),
-            codex_linux_sandbox_exe: None,
-            sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                Default::default(),
-            ),
-        });
-        let invocation = ToolInvocation {
-            session,
-            turn,
-            tracker: None,
-            call_id: "test-call".to_string(),
-            tool_name: "echo".to_string(),
-            payload: ToolPayload::Function {
-                arguments: r#"{"via":"handler"}"#.to_string(),
-            },
-        };
-
-        let handler_output = handler
-            .handle(invocation)
-            .await
-            .expect("handler facade should succeed");
-        assert!(handler_output.is_success());
-        let content = handler_output.content().expect("should have content");
-        assert!(content.contains("handler"));
-    }
-
-    // ================================================================
-    // Phase 6 tests: static logging, cache, and retry providers
-    // ================================================================
-
-    #[tokio::test]
-    async fn tracing_logging_executes() {
-        let facade = ToolFacade::new(TestTracingCtx);
-        let result = facade
-            .execute(serde_json::json!({"test": true}))
-            .await
-            .expect("should succeed with tracing logging");
-
-        assert!(result.get("echoed").is_some());
-    }
-
-    #[tokio::test]
-    async fn cached_results_short_circuit_second_execute() {
-        let executions = Arc::new(AtomicUsize::new(0));
-        let facade = ToolFacade::new(TestCachingCtx::new(executions.clone()));
-
-        let first = facade
-            .execute(serde_json::json!({"query": "same"}))
-            .await
-            .expect("first execution should succeed");
-        let second = facade
-            .execute(serde_json::json!({"query": "same"}))
-            .await
-            .expect("second execution should succeed");
-
-        assert_eq!(executions.load(Ordering::SeqCst), 1);
-        assert_eq!(first, second);
-    }
-
-    #[tokio::test]
-    async fn cached_results_short_circuit_dual_output() {
-        let executions = Arc::new(AtomicUsize::new(0));
-        let facade = ToolFacade::new(TestCachingCtx::new(executions.clone()));
-
-        let first = facade
-            .execute_dual(serde_json::json!({"query": "same"}))
-            .await
-            .expect("first dual execution should succeed");
-        let second = facade
-            .execute_dual(serde_json::json!({"query": "same"}))
-            .await
-            .expect("second dual execution should succeed");
-
-        assert_eq!(executions.load(Ordering::SeqCst), 1);
-        assert_eq!(first.ui_content, second.ui_content);
-        assert_eq!(first.llm_content, second.llm_content);
-    }
-
-    #[tokio::test]
-    async fn retry_provider_retries_failed_execute() {
-        let executions = Arc::new(AtomicUsize::new(0));
-        let retry_policy = RetryPolicy {
-            max_attempts: 2,
-            initial_backoff: Duration::ZERO,
-            max_backoff: Duration::ZERO,
-        };
-        let facade = ToolFacade::new(TestRetryCtx::new(executions.clone(), retry_policy));
-
-        let result = facade
-            .execute(serde_json::json!({"retry": true}))
-            .await
-            .expect("retry should recover the transient failure");
-
-        assert_eq!(executions.load(Ordering::SeqCst), 2);
-        assert_eq!(
-            result.get("attempt").and_then(|value| value.as_u64()),
-            Some(2)
-        );
-    }
-
-    // ================================================================
-    // Phase 3 tests: concrete runtime contexts
-    // ================================================================
-
-    #[tokio::test]
-    async fn interactive_ctx_enables_sandbox() {
-        let ctx = InteractiveCtx::new(PathBuf::from("/workspace"));
-        let sandboxed = ComposableRuntime::run_with_sandbox(&ctx, "exec", "run cmd")
-            .await
-            .expect("should succeed");
-        assert!(sandboxed);
-    }
-
-    #[tokio::test]
-    async fn ci_ctx_auto_approves_with_sandbox() {
-        let ctx = CiCtx::new(PathBuf::from("/ci/workspace"));
-        let sandboxed = ComposableRuntime::run_with_sandbox(&ctx, "exec", "run cmd")
-            .await
-            .expect("should succeed");
-        assert!(sandboxed);
-    }
-
-    #[tokio::test]
-    async fn bench_ctx_no_sandbox() {
-        let sandboxed = ComposableRuntime::run_with_sandbox(&BenchCtx, "exec", "run cmd")
-            .await
-            .expect("should succeed");
-        assert!(!sandboxed);
-    }
-
-    // ================================================================
-    // Phase 3 tests: ToolBridgeCtx + PassthroughExecutor
-    // ================================================================
-
-    /// A minimal concrete Tool for testing the bridge pattern.
-    struct SimpleTool;
-
-    #[async_trait]
-    impl Tool for SimpleTool {
-        async fn execute(&self, args: Value) -> Result<Value> {
-            Ok(serde_json::json!({
-                "tool_name": "simple",
-                "input": args,
-                "result": "ok"
-            }))
-        }
-
-        fn name(&self) -> &'static str {
-            "simple"
-        }
-
-        fn description(&self) -> &'static str {
-            "A simple test tool"
-        }
-
-        fn parameter_schema(&self) -> Option<Value> {
-            Some(serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "query": { "type": "string" }
-                }
-            }))
-        }
-
-        fn default_permission(&self) -> ToolPolicy {
-            ToolPolicy::Allow
-        }
-
-        fn is_mutating(&self) -> bool {
-            false
-        }
-
-        fn kind(&self) -> &'static str {
-            "test"
-        }
-    }
-
-    #[tokio::test]
-    async fn bridge_interactive_passthrough() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let facade = wrap_tool_interactive(tool, PathBuf::from("/workspace"));
-
-        assert_eq!(facade.name(), "simple");
-        assert_eq!(facade.description(), "A simple test tool");
-
-        let result = facade
-            .execute(serde_json::json!({"query": "test"}))
-            .await
-            .expect("should succeed");
-
-        assert_eq!(result.get("result").and_then(|v| v.as_str()), Some("ok"));
-        assert_eq!(
-            result
-                .get("input")
-                .and_then(|v| v.get("query"))
-                .and_then(|v| v.as_str()),
-            Some("test")
-        );
-    }
-
-    #[tokio::test]
-    async fn bridge_ci_passthrough() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let facade = wrap_tool_ci(tool, PathBuf::from("/ci"));
-
-        let result = facade
-            .execute(serde_json::json!({"key": "value"}))
-            .await
-            .expect("should succeed");
-
-        assert_eq!(result.get("result").and_then(|v| v.as_str()), Some("ok"));
-    }
-
-    #[tokio::test]
-    async fn bridge_passthrough_metadata_is_preserved() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let facade = wrap_tool_interactive(tool, PathBuf::from("/workspace"));
-
-        assert!(facade.parameter_schema().is_some());
-        assert_eq!(facade.default_permission(), ToolPolicy::Allow);
-        assert!(!facade.is_mutating());
-        assert_eq!(facade.kind(), "test");
-    }
-
-    #[tokio::test]
-    async fn native_typed_tool_preserves_metadata_and_execution() {
-        let facade = wrap_native_tool_interactive(SimpleTool, PathBuf::from("/workspace"));
-
-        assert_eq!(facade.name(), "simple");
-        assert_eq!(facade.description(), "A simple test tool");
-        assert!(facade.parameter_schema().is_some());
-        assert_eq!(facade.default_permission(), ToolPolicy::Allow);
-        assert!(!facade.is_mutating());
-        assert_eq!(facade.kind(), "test");
-
-        let result = facade
-            .execute(serde_json::json!({"query": "native"}))
-            .await
-            .expect("should succeed");
-        assert_eq!(
-            result
-                .get("input")
-                .and_then(|v| v.get("query"))
-                .and_then(|v| v.as_str()),
-            Some("native")
-        );
-    }
-
-    #[tokio::test]
-    async fn bridge_dual_output() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let facade = wrap_tool_interactive(tool, PathBuf::from("/workspace"));
-
-        let result = facade
-            .execute_dual(serde_json::json!({"x": 1}))
-            .await
-            .expect("should succeed");
-
-        assert!(result.success);
-        assert_eq!(result.tool_name, "simple");
-    }
-
-    #[tokio::test]
-    async fn bridge_handler_facade() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let bridge_ctx = ToolBridgeCtx {
-            inner: tool,
-            runtime: InteractiveCtx::new(PathBuf::from("/workspace")),
-        };
-        let handler = HandlerFacade::new(bridge_ctx);
-
-        let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-            crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-        );
-        let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
-            cwd: PathBuf::from("/tmp"),
-            turn_id: "test".to_string(),
-            sub_id: None,
-            shell_environment_policy:
-                crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
-            approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
-            ),
-            codex_linux_sandbox_exe: None,
-            sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-                Default::default(),
-            ),
-        });
-        let invocation = ToolInvocation {
-            session,
-            turn,
-            tracker: None,
-            call_id: "bridge-test".to_string(),
-            tool_name: "simple".to_string(),
-            payload: ToolPayload::Function {
-                arguments: r#"{"via":"bridge"}"#.to_string(),
-            },
-        };
-
-        let output = handler.handle(invocation).await.expect("should succeed");
-        assert!(output.is_success());
-        let content = output.content().expect("should have content");
-        assert!(content.contains("bridge"));
-    }
-
-    // ================================================================
-    // Phase 3 tests: HasComponent delegation through ToolBridgeCtx
-    // ================================================================
-
-    #[tokio::test]
-    async fn bridge_ctx_delegates_components() {
-        let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
-        let bridge = ToolBridgeCtx {
-            inner: tool,
-            runtime: InteractiveCtx::new(PathBuf::from("/workspace")),
-        };
-
-        // Verify sandbox is enabled (delegated through InteractiveCtx → WorkspaceSandbox)
-        let sandboxed = ComposableRuntime::run_with_sandbox(&bridge, "exec", "test")
-            .await
-            .expect("should succeed");
-        assert!(sandboxed);
-    }
-}
+mod tests;
