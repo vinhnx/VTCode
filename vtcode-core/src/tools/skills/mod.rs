@@ -384,8 +384,7 @@ fn unsupported_activation_error(skill_name: &str, skill: EnhancedSkill) -> anyho
         EnhancedSkill::BuiltInCommand(_) => {
             format!(
                 "Skill '{}' is a built-in command skill and cannot be activated via load_skill; use /skills use {} instead",
-                skill_name,
-                skill_name
+                skill_name, skill_name
             )
         }
         EnhancedSkill::NativePlugin(_) => {
@@ -546,8 +545,11 @@ impl Tool for LoadSkillTool {
             return Ok(build_skill_response(&skill, SKILL_ALREADY_ACTIVE_STATUS));
         }
 
-        let (codex_home, metadata) =
-            discover_skill_catalog(&self.workspace_root, self.codex_home.as_deref(), "load_skill");
+        let (codex_home, metadata) = discover_skill_catalog(
+            &self.workspace_root,
+            self.codex_home.as_deref(),
+            "load_skill",
+        );
 
         let mut loader =
             EnhancedSkillLoader::with_codex_home(self.workspace_root.clone(), codex_home.clone());
@@ -666,7 +668,8 @@ impl Tool for ListSkillsTool {
             .map(|s| s.to_lowercase());
         let variety_filter = args.get("variety").and_then(|v| v.as_str());
 
-        let active_names: HashSet<String> = self.active_skills.read().await.keys().cloned().collect();
+        let active_names: HashSet<String> =
+            self.active_skills.read().await.keys().cloned().collect();
         let (codex_home, discovery) = discover_skill_catalog(
             &self.workspace_root,
             self.codex_home.as_deref(),

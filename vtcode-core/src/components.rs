@@ -647,8 +647,7 @@ where
     }
 
     async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output> {
-        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute(ctx, args)
-            .await
+        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute(ctx, args).await
     }
 }
 
@@ -729,10 +728,11 @@ where
     }
 
     let started = Instant::now();
-    let max_attempts = <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
-        ctx, tool_name, &args,
-    )
-    .clamp(1, MAX_RETRY_ATTEMPTS);
+    let max_attempts =
+        <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
+            ctx, tool_name, &args,
+        )
+        .clamp(1, MAX_RETRY_ATTEMPTS);
 
     let mut attempt = 1;
     loop {
