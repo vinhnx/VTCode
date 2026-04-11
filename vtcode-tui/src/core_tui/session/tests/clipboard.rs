@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn double_click_selects_transcript_word_and_copies_it() {
@@ -219,4 +219,3 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
     let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
     assert_eq!(clipboard_contents, "world");
 }
-

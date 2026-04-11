@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn shift_enter_inserts_newline() {
@@ -247,7 +247,10 @@ fn alt_up_edits_latest_queued_input() {
     with_terminal_env(None, Some("xterm-256color"), || {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-        set_queued_inputs(&mut session, vec!["first".to_string(), "second".to_string()]);
+        set_queued_inputs(
+            &mut session,
+            vec!["first".to_string(), "second".to_string()],
+        );
 
         let event = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(matches!(event, Some(InlineEvent::EditQueue)));
@@ -263,7 +266,10 @@ fn shift_left_edits_latest_queued_input_in_tmux() {
         || {
             let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-            set_queued_inputs(&mut session, vec!["first".to_string(), "second".to_string()]);
+            set_queued_inputs(
+                &mut session,
+                vec!["first".to_string(), "second".to_string()],
+            );
 
             let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
             assert!(matches!(event, Some(InlineEvent::EditQueue)));

@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn input_compact_preview_for_image_path() {
@@ -310,4 +310,3 @@ fn top_level_task_tree_tail_line_is_dimmed_in_tool_blocks() {
         "top-level task rows should render dimmed"
     );
 }
-

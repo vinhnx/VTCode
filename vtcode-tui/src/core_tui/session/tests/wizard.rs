@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
@@ -169,4 +169,3 @@ fn wizard_tabbed_submit_closes_modal_immediately() {
     ));
     assert!(session.wizard_overlay().is_none());
 }
-

@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn vim_mode_does_not_consume_control_shortcuts() {
@@ -96,4 +96,3 @@ fn appearance_updates_do_not_reset_session_local_vim_mode() {
 
     assert!(session.vim_state.enabled());
 }
-

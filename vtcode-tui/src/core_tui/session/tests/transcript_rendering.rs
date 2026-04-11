@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 // ---------------------------------------------------------------------------
 // Common test helpers extracted from repeated patterns
@@ -396,7 +396,10 @@ fn pty_block_skips_status_only_sequence() {
 #[test]
 fn pty_wrapped_lines_keep_hanging_left_padding() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    push_pty_line(&mut session, "  └ this PTY output line wraps on narrow widths");
+    push_pty_line(
+        &mut session,
+        "  └ this PTY output line wraps on narrow widths",
+    );
 
     let rendered = session.reflow_pty_lines(0, 18);
     assert!(
@@ -418,7 +421,10 @@ fn pty_wrapped_lines_keep_hanging_left_padding() {
 #[test]
 fn pty_wrapped_lines_do_not_exceed_viewport_width() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    push_pty_line(&mut session, "  └ this PTY output line wraps on narrow widths");
+    push_pty_line(
+        &mut session,
+        "  └ this PTY output line wraps on narrow widths",
+    );
 
     let width = 18usize;
     let rendered = session.reflow_pty_lines(0, width as u16);
@@ -753,4 +759,3 @@ fn empty_agent_segments_dont_trigger_streaming_state() {
 
     assert!(!session.is_streaming_final_answer);
 }
-

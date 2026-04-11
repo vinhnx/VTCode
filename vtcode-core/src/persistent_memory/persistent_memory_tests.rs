@@ -48,10 +48,7 @@ impl LLMProvider for StaticProvider {
         "static"
     }
 
-    async fn generate(
-        &self,
-        request: LLMRequest,
-    ) -> std::result::Result<LLMResponse, LLMError> {
+    async fn generate(&self, request: LLMRequest) -> std::result::Result<LLMResponse, LLMError> {
         *self.last_request.lock().expect("request lock") = Some(request);
         Ok(LLMResponse::new("stub-model", self.response))
     }
@@ -182,8 +179,7 @@ fn maybe_extract_user_fact_ignores_memory_prompts_and_questions() {
         .is_none()
     );
     assert!(
-        maybe_extract_user_fact(&Message::user("do you remember my name?".to_string()))
-            .is_none()
+        maybe_extract_user_fact(&Message::user("do you remember my name?".to_string())).is_none()
     );
     assert!(
         maybe_extract_user_fact(&Message::user(
@@ -457,10 +453,7 @@ impl LLMProvider for StreamingOnlyMemoryProvider {
         false
     }
 
-    async fn generate(
-        &self,
-        _request: LLMRequest,
-    ) -> std::result::Result<LLMResponse, LLMError> {
+    async fn generate(&self, _request: LLMRequest) -> std::result::Result<LLMResponse, LLMError> {
         panic!("generate should not be called for streaming-only provider")
     }
 
@@ -691,11 +684,10 @@ async fn remember_plan_persists_normalized_manual_memory_update() {
             .expect("report");
 
     assert_eq!(report.added_facts, 1);
-    let excerpt =
-        read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
-            .await
-            .expect("excerpt")
-            .expect("present");
+    let excerpt = read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
+        .await
+        .expect("excerpt")
+        .expect("present");
     assert!(excerpt.contents.contains("Prefer pnpm"));
 }
 
@@ -723,14 +715,11 @@ async fn forget_planned_matches_remove_notes_from_memory_files() {
         .expect("remember plan")
         .expect("report");
 
-    let matches = find_persistent_memory_matches(
-        &vt_cfg.agent.persistent_memory,
-        workspace.path(),
-        "pnpm",
-    )
-    .await
-    .expect("find matches")
-    .expect("enabled");
+    let matches =
+        find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
+            .await
+            .expect("find matches")
+            .expect("enabled");
     assert!(!matches.is_empty());
 
     let candidates =
@@ -761,21 +750,17 @@ async fn forget_planned_matches_remove_notes_from_memory_files() {
             .expect("report");
     assert!(report.removed_facts >= 1);
 
-    let matches = find_persistent_memory_matches(
-        &vt_cfg.agent.persistent_memory,
-        workspace.path(),
-        "pnpm",
-    )
-    .await
-    .expect("find matches")
-    .expect("enabled");
+    let matches =
+        find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
+            .await
+            .expect("find matches")
+            .expect("enabled");
     assert!(matches.is_empty());
 
-    let excerpt =
-        read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
-            .await
-            .expect("excerpt")
-            .expect("present");
+    let excerpt = read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
+        .await
+        .expect("excerpt")
+        .expect("present");
     assert!(!excerpt.contents.contains("Prefer pnpm"));
 }
 
@@ -937,10 +922,7 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
             MemoryTopic::RepositoryFacts,
             &[GroundedFactRecord {
                 fact: "Tests live under vtcode-core/tests".to_string(),
-                source: encode_topic_source(
-                    MemoryTopic::RepositoryFacts,
-                    "tool:unified_search",
-                ),
+                source: encode_topic_source(MemoryTopic::RepositoryFacts, "tool:unified_search"),
             }],
         ),
     )
@@ -971,7 +953,7 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
     migrate_legacy_memory_dir(&legacy_dir, &target_dir).expect("migrate");
 
     assert!(!legacy_dir.exists());
-    let migrated = std::fs::read_to_string(target_dir.join(REPOSITORY_FACTS_FILENAME))
-        .expect("target facts");
+    let migrated =
+        std::fs::read_to_string(target_dir.join(REPOSITORY_FACTS_FILENAME)).expect("target facts");
     assert!(migrated.contains("Tests live under vtcode-core/tests"));
 }

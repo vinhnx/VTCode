@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn file_palette_insertion_uses_at_alias_in_input() {
@@ -141,4 +141,3 @@ fn file_palette_keeps_base_input_and_cursor_active() {
             .cursor_should_be_visible
     );
 }
-

@@ -191,7 +191,12 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [],
+    "allowed": [
+      "unified_exec",
+      "bash -lc 'cargo fmt -- --check'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt -- --check '2>&1'|sandbox_permissions=\"use_default\"|additional_permissions=null"
+    ],
     "prefixes": [],
     "regexes": []
   }

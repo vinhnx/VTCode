@@ -1,10 +1,12 @@
-use super::*;
 pub use super::super::Session;
 use super::super::TranscriptLine;
+use super::*;
 pub use crate::config::constants::ui;
 pub use crate::core_tui::app::session::AppSession;
 pub use crate::core_tui::app::types as app_types;
 pub use crate::core_tui::session::terminal_capabilities;
+use crate::core_tui::session::transcript_links::{TranscriptFileLinkTarget, TranscriptLinkTarget};
+pub use crate::core_tui::types::{InlineCommand, InlineEvent};
 pub use crate::core_tui::types::{
     InlineHeaderBadge, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget,
     InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle,
@@ -12,21 +14,18 @@ pub use crate::core_tui::types::{
     OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, WizardModalMode,
     WizardOverlayRequest, WizardStep,
 };
-pub use crate::core_tui::types::{InlineCommand, InlineEvent};
-pub use crate::ui::tui::session::message::RenderedTranscriptLink;
-use crate::core_tui::session::transcript_links::{TranscriptFileLinkTarget, TranscriptLinkTarget};
-pub use crate::ui::tui::style::ratatui_style_from_inline;
 pub use crate::core_tui::widgets::TranscriptWidget;
-pub use vtcode_commons::ui_protocol::InlineMessageKind;
+pub use crate::ui::tui::session::message::RenderedTranscriptLink;
+pub use crate::ui::tui::style::ratatui_style_from_inline;
 pub use anstyle::Color as AnsiColorEnum;
 pub use anstyle::RgbColor;
-pub use ratatui::text::Text;
 pub use ratatui::crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
     MouseEventKind,
 };
 #[cfg(target_os = "macos")]
 pub use ratatui::crossterm::event::{KeyEventKind, ModifierKeyCode};
+pub use ratatui::text::Text;
 pub use ratatui::{
     Terminal,
     backend::TestBackend,
@@ -38,14 +37,15 @@ pub use ratatui::{
 };
 pub use std::fs;
 pub use std::path::PathBuf;
+pub use std::sync::Arc;
 pub use std::sync::{
     LazyLock, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
-pub use std::sync::Arc;
 pub use std::time::{Duration, Instant};
 pub use tokio::sync::mpsc;
 pub use tokio::sync::mpsc::UnboundedSender;
+pub use vtcode_commons::ui_protocol::InlineMessageKind;
 
 pub const VIEW_ROWS: u16 = 14;
 pub const VIEW_WIDTH: u16 = 100;
@@ -351,7 +351,11 @@ pub fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
         .collect()
 }
 
-pub fn rendered_transcript_widget_lines(session: &mut Session, width: u16, height: u16) -> Vec<String> {
+pub fn rendered_transcript_widget_lines(
+    session: &mut Session,
+    width: u16,
+    height: u16,
+) -> Vec<String> {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
     TranscriptWidget::new(session).render(area, &mut buf);
@@ -490,19 +494,12 @@ pub fn meta_modifier_press_event() -> KeyEvent {
 }
 
 #[cfg(target_os = "macos")]
-
 #[cfg(target_os = "macos")]
-
 #[cfg(target_os = "macos")]
-
 #[cfg(target_os = "macos")]
-
 #[cfg(target_os = "macos")]
-
 #[cfg(unix)]
-
 #[cfg(unix)]
-
 #[cfg(unix)]
 
 pub fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
@@ -742,7 +739,12 @@ pub fn set_app_session_queued_inputs(session: &mut AppSession, entries: Vec<Stri
 
 pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
     let view = visible_transcript(session);
-    let footer: Vec<String> = view.iter().rev().take(take_from_bottom as usize).cloned().collect();
+    let footer: Vec<String> = view
+        .iter()
+        .rev()
+        .take(take_from_bottom as usize)
+        .cloned()
+        .collect();
     assert!(
         footer.iter().any(|line| line.contains(needle)),
         "expected footer to contain: {needle}"
@@ -751,7 +753,12 @@ pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, need
 
 pub fn assert_footer_not_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
     let view = visible_transcript(session);
-    let footer: Vec<String> = view.iter().rev().take(take_from_bottom as usize).cloned().collect();
+    let footer: Vec<String> = view
+        .iter()
+        .rev()
+        .take(take_from_bottom as usize)
+        .cloned()
+        .collect();
     assert!(
         !footer.iter().any(|line| line.contains(needle)),
         "expected footer NOT to contain: {needle}"

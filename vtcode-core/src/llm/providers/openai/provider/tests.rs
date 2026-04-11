@@ -66,7 +66,9 @@ mv tokens.next tokens.txt
 "#,
         )
         .expect("write script");
-        let mut perms = std::fs::metadata(&script_path).expect("metadata").permissions();
+        let mut perms = std::fs::metadata(&script_path)
+            .expect("metadata")
+            .permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&script_path, perms).expect("set permissions");
         return CustomProviderCommandAuthConfig {
@@ -169,8 +171,10 @@ fn shell_request(model: &str) -> provider::LLMRequest {
 }
 
 fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
-    let http_client =
-        reqwest::Client::builder().no_proxy().build().expect("test client should build");
+    let http_client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("test client should build");
     OpenAIProvider::new_with_client(
         "test-key".to_string(),
         None,
@@ -182,7 +186,9 @@ fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
 }
 
 fn native_openai_mock_base_url(server: &MockServer) -> String {
-    server.uri().replacen("http://", "http://api.openai.com@", 1)
+    server
+        .uri()
+        .replacen("http://", "http://api.openai.com@", 1)
 }
 
 fn chatgpt_mock_base_url(server: &MockServer) -> String {
@@ -210,11 +216,17 @@ fn sample_chatgpt_auth_handle() -> OpenAIChatGptAuthHandle {
 
 // ─── Config builders ─────────────────────────────────────────────────────────
 fn priority_openai_config() -> OpenAIConfig {
-    OpenAIConfig { service_tier: Some(OpenAIServiceTier::Priority), ..Default::default() }
+    OpenAIConfig {
+        service_tier: Some(OpenAIServiceTier::Priority),
+        ..Default::default()
+    }
 }
 
 fn flex_openai_config() -> OpenAIConfig {
-    OpenAIConfig { service_tier: Some(OpenAIServiceTier::Flex), ..Default::default() }
+    OpenAIConfig {
+        service_tier: Some(OpenAIServiceTier::Flex),
+        ..Default::default()
+    }
 }
 
 fn hosted_shell_openai_config() -> OpenAIConfig {
@@ -268,11 +280,19 @@ fn compatible_endpoint_provider(model: &str, base_url: &str) -> OpenAIProvider {
 // ─── Assertion helpers ───────────────────────────────────────────────────────
 
 fn assert_str_field(value: &Value, key: &str, expected: &str) {
-    assert_eq!(value.get(key).and_then(Value::as_str), Some(expected), "field '{key}' mismatch");
+    assert_eq!(
+        value.get(key).and_then(Value::as_str),
+        Some(expected),
+        "field '{key}' mismatch"
+    );
 }
 
 fn assert_str_field_obj(obj: &serde_json::Map<String, Value>, key: &str, expected: &str) {
-    assert_eq!(obj.get(key).and_then(Value::as_str), Some(expected), "field '{key}' mismatch");
+    assert_eq!(
+        obj.get(key).and_then(Value::as_str),
+        Some(expected),
+        "field '{key}' mismatch"
+    );
 }
 
 fn assert_absent(value: &Value, key: &str) {
@@ -280,19 +300,31 @@ fn assert_absent(value: &Value, key: &str) {
 }
 
 fn get_input_array(payload: &Value) -> &[Value] {
-    payload.get("input").and_then(Value::as_array).expect("input array should exist")
+    payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input array should exist")
 }
 
 fn input_role_at(payload: &Value, index: usize) -> Option<&str> {
-    get_input_array(payload).get(index).and_then(|v| v.get("role")).and_then(Value::as_str)
+    get_input_array(payload)
+        .get(index)
+        .and_then(|v| v.get("role"))
+        .and_then(Value::as_str)
 }
 
 fn input_type_at(payload: &Value, index: usize) -> Option<&str> {
-    get_input_array(payload).get(index).and_then(|v| v.get("type")).and_then(Value::as_str)
+    get_input_array(payload)
+        .get(index)
+        .and_then(|v| v.get("type"))
+        .and_then(Value::as_str)
 }
 
 fn input_call_id_at(payload: &Value, index: usize) -> Option<&str> {
-    get_input_array(payload).get(index).and_then(|v| v.get("call_id")).and_then(Value::as_str)
+    get_input_array(payload)
+        .get(index)
+        .and_then(|v| v.get("call_id"))
+        .and_then(Value::as_str)
 }
 
 fn responses_payload_for(model: &str, provider: &OpenAIProvider) -> Value {
@@ -333,7 +365,10 @@ fn mock_service_tier_fallback(
 ) -> impl Fn(&wiremock::Request) -> ResponseTemplate {
     move |request: &wiremock::Request| {
         let payload: Value = serde_json::from_slice(&request.body).expect("valid json body");
-        let tier = payload.get("service_tier").and_then(Value::as_str).map(ToOwned::to_owned);
+        let tier = payload
+            .get("service_tier")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
         seen.lock().expect("mutex not poisoned").push(tier.clone());
         match tier.as_deref() {
             Some("flex") => ResponseTemplate::new(400).set_body_json(json!({
@@ -356,15 +391,17 @@ fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<S
                 }
             }
             for (key, nested) in map {
-                if let Some(found) = schema_keyword_path(nested, keywords, &format!("{path}.{key}")) {
+                if let Some(found) = schema_keyword_path(nested, keywords, &format!("{path}.{key}"))
+                {
                     return Some(found);
                 }
             }
             None
         }
-        Value::Array(items) => items.iter().enumerate().find_map(|(i, nested)| {
-            schema_keyword_path(nested, keywords, &format!("{path}[{i}]"))
-        }),
+        Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .find_map(|(i, nested)| schema_keyword_path(nested, keywords, &format!("{path}[{i}]"))),
         _ => None,
     }
 }
@@ -373,12 +410,17 @@ fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<S
 
 #[tokio::test]
 async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::new_with_client(
         "api-key".to_string(),
         Some(sample_chatgpt_auth_handle()),
         models::openai::GPT_5.to_string(),
-        reqwest::Client::builder().no_proxy().build().expect("test client"),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client"),
         chatgpt_mock_base_url(&server),
         TimeoutsConfig::default(),
     );
@@ -403,18 +445,26 @@ async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
         .build()
         .expect("request should build");
     assert_eq!(
-        request.headers().get("authorization").and_then(|v| v.to_str().ok()),
+        request
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok()),
         Some("Bearer oauth-access")
     );
     assert_eq!(
-        request.headers().get("ChatGPT-Account-Id").and_then(|v| v.to_str().ok()),
+        request
+            .headers()
+            .get("ChatGPT-Account-Id")
+            .and_then(|v| v.to_str().ok()),
         Some("acc_123")
     );
 }
 
 #[tokio::test]
 async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let refresh_calls = Arc::new(Mutex::new(0usize));
     let seen_bearer_tokens = Arc::new(Mutex::new(Vec::new()));
 
@@ -441,10 +491,15 @@ async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
                 expires_at: None,
             },
             true,
-            Arc::new(ExternalSessionRefresher { calls: Arc::clone(&refresh_calls) }),
+            Arc::new(ExternalSessionRefresher {
+                calls: Arc::clone(&refresh_calls),
+            }),
         )),
         models::openai::GPT_5.to_string(),
-        reqwest::Client::builder().no_proxy().build().expect("test client"),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client"),
         chatgpt_mock_base_url(&server),
         TimeoutsConfig::default(),
     );
@@ -452,7 +507,9 @@ async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
     let response = provider
         .send_authorized(|auth| {
             provider.authorize_with_api_key(
-                provider.http_client.get(format!("{}{}", server.uri(), "/auth-retry")),
+                provider
+                    .http_client
+                    .get(format!("{}{}", server.uri(), "/auth-retry")),
                 auth,
             )
         })
@@ -461,15 +518,23 @@ async fn external_chatgpt_auth_retries_with_refreshed_tokens_after_401() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        seen_bearer_tokens.lock().expect("mutex not poisoned").as_slice(),
-        &["Bearer oauth-access".to_string(), "Bearer oauth-access-refreshed".to_string()]
+        seen_bearer_tokens
+            .lock()
+            .expect("mutex not poisoned")
+            .as_slice(),
+        &[
+            "Bearer oauth-access".to_string(),
+            "Bearer oauth-access-refreshed".to_string()
+        ]
     );
     assert_eq!(*refresh_calls.lock().expect("mutex not poisoned"), 1);
 }
 
 #[tokio::test]
 async fn custom_provider_auth_retries_with_refreshed_tokens_after_401() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let tempdir = TempDir::new().expect("tempdir");
     let seen_bearer_tokens = Arc::new(Mutex::new(Vec::new()));
 
@@ -499,7 +564,9 @@ async fn custom_provider_auth_retries_with_refreshed_tokens_after_401() {
     let response = provider
         .send_authorized(|auth| {
             provider.authorize_with_api_key(
-                provider.http_client.get(format!("{}{}", server.uri(), "/custom-auth-retry")),
+                provider
+                    .http_client
+                    .get(format!("{}{}", server.uri(), "/custom-auth-retry")),
                 auth,
             )
         })
@@ -508,8 +575,14 @@ async fn custom_provider_auth_retries_with_refreshed_tokens_after_401() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        seen_bearer_tokens.lock().expect("mutex not poisoned").as_slice(),
-        &["Bearer first-token".to_string(), "Bearer second-token".to_string()]
+        seen_bearer_tokens
+            .lock()
+            .expect("mutex not poisoned")
+            .as_slice(),
+        &[
+            "Bearer first-token".to_string(),
+            "Bearer second-token".to_string()
+        ]
     );
 }
 
@@ -520,16 +593,23 @@ fn serialize_tools_wraps_function_definition() {
     let serialized =
         tool_serialization::serialize_tools(&[sample_tool()], models::openai::DEFAULT_MODEL)
             .expect("tools should serialize");
-    let tool = serialized.as_array().expect("array")[0].as_object().expect("object");
+    let tool = serialized.as_array().expect("array")[0]
+        .as_object()
+        .expect("object");
     assert_eq!(tool.get("type").and_then(Value::as_str), Some("function"));
     assert!(tool.contains_key("function"));
     assert_str_field_obj(tool, "name", "search_workspace");
     assert_eq!(
-        tool.get("description").and_then(Value::as_str).unwrap_or_default(),
+        tool.get("description")
+            .and_then(Value::as_str)
+            .unwrap_or_default(),
         "Search project files"
     );
 
-    let func = tool.get("function").and_then(Value::as_object).expect("function payload missing");
+    let func = tool
+        .get("function")
+        .and_then(Value::as_object)
+        .expect("function payload missing");
     assert_str_field_obj(func, "name", "search_workspace");
     assert!(func.contains_key("parameters"));
     assert_eq!(
@@ -570,7 +650,10 @@ fn responses_tools_dedupes_apply_patch_and_function() {
     let arr = serialized.as_array().expect("array");
     assert_eq!(arr.len(), 1, "apply_patch should be deduped");
     assert_eq!(arr[0].get("type").and_then(Value::as_str), Some("function"));
-    assert_eq!(arr[0].get("name").and_then(Value::as_str), Some("apply_patch"));
+    assert_eq!(
+        arr[0].get("name").and_then(Value::as_str),
+        Some("apply_patch")
+    );
 }
 
 #[test]
@@ -586,7 +669,10 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
     let payload = tool_serialization::serialize_tools_for_responses(&tools, None)
         .expect("tools should serialize for responses");
     let arr = payload.as_array().expect("tool array");
-    assert!(arr.iter().any(|t| t.get("type").and_then(Value::as_str) == Some("tool_search")));
+    assert!(
+        arr.iter()
+            .any(|t| t.get("type").and_then(Value::as_str) == Some("tool_search"))
+    );
     let deferred = arr
         .iter()
         .find(|t| t.get("name").and_then(Value::as_str) == Some("search_docs"))
@@ -601,10 +687,12 @@ fn chat_payload_serializes_deferred_function_for_tool_search() {
         "Search internal docs".to_owned(),
         json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}),
     ).with_defer_loading(true);
-    let payload =
-        tool_serialization::serialize_tools(&[deferred], models::openai::GPT_5_4)
-            .expect("tools should serialize");
-    assert_eq!(payload.as_array().expect("array")[0]["defer_loading"], json!(true));
+    let payload = tool_serialization::serialize_tools(&[deferred], models::openai::GPT_5_4)
+        .expect("tools should serialize");
+    assert_eq!(
+        payload.as_array().expect("array")[0]["defer_loading"],
+        json!(true)
+    );
 }
 
 // ─── Chat Completions Payload Tests ──────────────────────────────────────────
@@ -613,10 +701,16 @@ fn chat_payload_serializes_deferred_function_for_tool_search() {
 fn chat_completions_payload_uses_function_wrapper() {
     let provider = native_openai_provider(models::openai::DEFAULT_MODEL);
     let payload = chat_payload_for(models::openai::DEFAULT_MODEL, &provider);
-    let tools = payload.get("tools").and_then(Value::as_array).expect("tools should exist");
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist");
     let tool = tools[0].as_object().expect("tool entry should be object");
     assert!(tool.contains_key("function"));
-    assert_eq!(tool.get("name").and_then(Value::as_str), Some("search_workspace"));
+    assert_eq!(
+        tool.get("name").and_then(Value::as_str),
+        Some("search_workspace")
+    );
 }
 
 #[test]
@@ -625,8 +719,13 @@ fn chat_completions_uses_max_completion_tokens_field() {
         compatible_endpoint_provider(models::openai::DEFAULT_MODEL, "https://api.openai.com/v1");
     let mut request = sample_request(models::openai::DEFAULT_MODEL);
     request.max_tokens = Some(512);
-    let payload = provider.convert_to_openai_format(&request).expect("conversion should succeed");
-    assert_eq!(payload.get("max_completion_tokens").and_then(Value::as_u64), Some(512));
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    assert_eq!(
+        payload.get("max_completion_tokens").and_then(Value::as_u64),
+        Some(512)
+    );
     assert!(payload.get("max_tokens").is_none());
 }
 
@@ -635,7 +734,9 @@ fn chat_completions_applies_temperature_independent_of_max_tokens() {
     let provider = native_openai_provider(models::openai::GPT_5_2);
     let mut request = sample_request(models::openai::GPT_5_2);
     request.temperature = Some(0.4);
-    let payload = provider.convert_to_openai_format(&request).expect("conversion should succeed");
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
     assert!(payload.get("max_completion_tokens").is_none());
     let temp = payload
         .get("temperature")
@@ -656,8 +757,13 @@ fn chat_payload_omits_assistant_phase_metadata() {
         model: models::openai::DEFAULT_MODEL.to_string(),
         ..Default::default()
     };
-    let payload = provider.convert_to_openai_format(&request).expect("conversion should succeed");
-    let messages = payload.get("messages").and_then(Value::as_array).expect("messages should exist");
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    let messages = payload
+        .get("messages")
+        .and_then(Value::as_array)
+        .expect("messages should exist");
     assert!(messages[1].get("phase").is_none());
 }
 
@@ -671,8 +777,9 @@ fn chat_payload_rejects_file_url_content_parts() {
         model: models::openai::DEFAULT_MODEL.to_string(),
         ..Default::default()
     };
-    let err =
-        provider.convert_to_openai_format(&request).expect_err("chat payload should reject file_url");
+    let err = provider
+        .convert_to_openai_format(&request)
+        .expect_err("chat payload should reject file_url");
     match err {
         provider::LLMError::InvalidRequest { message, .. } => {
             assert!(message.contains("does not support file_url"));
@@ -686,7 +793,9 @@ fn chat_payload_includes_prompt_cache_key_for_native_openai() {
     let provider = native_openai_provider(models::openai::DEFAULT_MODEL);
     let mut request = sample_request(models::openai::DEFAULT_MODEL);
     request.prompt_cache_key = Some("vtcode:openai:session-abc".to_string());
-    let payload = provider.convert_to_openai_format(&request).expect("conversion should succeed");
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
     assert_eq!(
         payload.get("prompt_cache_key").and_then(Value::as_str),
         Some("vtcode:openai:session-abc")
@@ -707,7 +816,10 @@ fn chat_payload_uses_provider_level_service_tier_for_native_openai() {
         None,
     );
     let payload = chat_payload_for(models::openai::DEFAULT_MODEL, &provider);
-    assert_eq!(payload.get("service_tier").and_then(Value::as_str), Some("priority"));
+    assert_eq!(
+        payload.get("service_tier").and_then(Value::as_str),
+        Some("priority")
+    );
 }
 
 #[test]
@@ -724,7 +836,10 @@ fn chat_payload_uses_flex_service_tier_for_native_openai() {
         None,
     );
     let payload = chat_payload_for(models::openai::DEFAULT_MODEL, &provider);
-    assert_eq!(payload.get("service_tier").and_then(Value::as_str), Some("flex"));
+    assert_eq!(
+        payload.get("service_tier").and_then(Value::as_str),
+        Some("flex")
+    );
 }
 
 #[test]
@@ -767,10 +882,16 @@ fn chat_payload_omits_service_tier_for_non_native_openai_base_url() {
 fn responses_payload_uses_function_wrapper() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let payload = responses_payload_for(models::openai::GPT_5, &provider);
-    let tools = payload.get("tools").and_then(Value::as_array).expect("tools should exist");
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist");
     let tool = tools[0].as_object().expect("tool entry should be object");
     assert_eq!(tool.get("type").and_then(Value::as_str), Some("function"));
-    assert_eq!(tool.get("name").and_then(Value::as_str), Some("search_workspace"));
+    assert_eq!(
+        tool.get("name").and_then(Value::as_str),
+        Some("search_workspace")
+    );
     assert!(tool.contains_key("parameters"));
 }
 
@@ -797,7 +918,10 @@ fn responses_payload_defaults_low_verbosity_for_gpt_5_3_codex() {
     let provider = native_openai_provider(models::openai::GPT_5_3_CODEX);
     let payload = responses_payload_for(models::openai::GPT_5_3_CODEX, &provider);
     assert_eq!(
-        payload.get("text").and_then(|t| t.get("verbosity")).and_then(Value::as_str),
+        payload
+            .get("text")
+            .and_then(|t| t.get("verbosity"))
+            .and_then(Value::as_str),
         Some("low")
     );
 }
@@ -811,7 +935,10 @@ fn responses_payload_keeps_configured_verbosity_for_gpt_5_4() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
     assert_eq!(
-        payload.get("text").and_then(|t| t.get("verbosity")).and_then(Value::as_str),
+        payload
+            .get("text")
+            .and_then(|t| t.get("verbosity"))
+            .and_then(Value::as_str),
         Some("high")
     );
 }
@@ -820,8 +947,7 @@ fn responses_payload_keeps_configured_verbosity_for_gpt_5_4() {
 fn responses_payload_passes_context_management() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let mut request = sample_request(models::openai::GPT_5);
-    request.context_management =
-        Some(json!([{"type": "compaction", "compact_threshold": 200000}]));
+    request.context_management = Some(json!([{"type": "compaction", "compact_threshold": 200000}]));
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
@@ -830,7 +956,10 @@ fn responses_payload_passes_context_management() {
         .and_then(Value::as_array)
         .expect("context_management should be present");
     assert_eq!(mgmt.len(), 1);
-    assert_eq!(mgmt[0].get("type").and_then(Value::as_str), Some("compaction"));
+    assert_eq!(
+        mgmt[0].get("type").and_then(Value::as_str),
+        Some("compaction")
+    );
 }
 
 #[test]
@@ -843,7 +972,13 @@ fn responses_payload_sets_instructions_from_system_prompt() {
         .expect("conversion should succeed");
     assert_str_field(&payload, "instructions", "You are a helpful assistant.");
     let input = get_input_array(&payload);
-    assert_eq!(input.first().and_then(|v| v.get("role")).and_then(Value::as_str), Some("user"));
+    assert_eq!(
+        input
+            .first()
+            .and_then(|v| v.get("role"))
+            .and_then(Value::as_str),
+        Some("user")
+    );
 }
 
 #[test]
@@ -852,16 +987,27 @@ fn responses_payload_includes_previous_response_and_optional_fields() {
     let mut request = sample_request(models::openai::GPT_5);
     request.previous_response_id = Some("resp_previous_123".to_string());
     request.response_store = Some(false);
-    request.responses_include =
-        Some(vec!["reasoning.encrypted_content".to_string(), "output_text.annotations".to_string()]);
+    request.responses_include = Some(vec![
+        "reasoning.encrypted_content".to_string(),
+        "output_text.annotations".to_string(),
+    ]);
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    assert_eq!(payload.get("previous_response_id").and_then(Value::as_str), Some("resp_previous_123"));
+    assert_eq!(
+        payload.get("previous_response_id").and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
-    let include = payload.get("include").and_then(Value::as_array).expect("include should be present");
+    let include = payload
+        .get("include")
+        .and_then(Value::as_array)
+        .expect("include should be present");
     assert_eq!(include.len(), 2);
-    assert_eq!(include.first().and_then(Value::as_str), Some("reasoning.encrypted_content"));
+    assert_eq!(
+        include.first().and_then(Value::as_str),
+        Some("reasoning.encrypted_content")
+    );
 }
 
 #[test]
@@ -872,7 +1018,10 @@ fn compatible_responses_payload_includes_previous_response_id() {
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    assert_eq!(payload.get("previous_response_id").and_then(Value::as_str), Some("resp_previous_123"));
+    assert_eq!(
+        payload.get("previous_response_id").and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
 }
 
 #[test]
@@ -890,7 +1039,10 @@ fn responses_payload_serializes_user_input_file_by_id() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
     let input = get_input_array(&payload);
-    let content = input[0].get("content").and_then(Value::as_array).expect("user content should be an array");
+    let content = input[0]
+        .get("content")
+        .and_then(Value::as_array)
+        .expect("user content should be an array");
     assert!(content.iter().any(|part| {
         part.get("type").and_then(Value::as_str) == Some("input_file")
             && part.get("file_id").and_then(Value::as_str) == Some("file-abc123")
@@ -912,7 +1064,10 @@ fn responses_payload_serializes_user_input_file_data() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
     let input = get_input_array(&payload);
-    let content = input[0].get("content").and_then(Value::as_array).expect("user content should be an array");
+    let content = input[0]
+        .get("content")
+        .and_then(Value::as_array)
+        .expect("user content should be an array");
     assert!(content.iter().any(|part| {
         part.get("type").and_then(Value::as_str) == Some("input_file")
             && part.get("filename").and_then(Value::as_str) == Some("report.pdf")
@@ -939,23 +1094,44 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    let tool = payload["tools"][0].as_object().expect("tool entry should be object");
+    let tool = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
     assert_str_field_obj(tool, "type", "shell");
     assert_eq!(tool["environment"]["type"].as_str(), Some("container_auto"));
-    assert_eq!(tool["environment"]["network_policy"]["type"].as_str(), Some("disabled"));
-    assert_eq!(tool["environment"]["file_ids"][0].as_str(), Some("file_123"));
-    assert_eq!(tool["environment"]["skills"][0]["type"].as_str(), Some("skill_reference"));
+    assert_eq!(
+        tool["environment"]["network_policy"]["type"].as_str(),
+        Some("disabled")
+    );
+    assert_eq!(
+        tool["environment"]["file_ids"][0].as_str(),
+        Some("file_123")
+    );
+    assert_eq!(
+        tool["environment"]["skills"][0]["type"].as_str(),
+        Some("skill_reference")
+    );
     assert!(tool["environment"]["skills"][0].get("version").is_none());
-    let output_types = payload["output_types"].as_array().expect("output types should be present");
-    assert!(output_types.iter().any(|v| v.as_str() == Some("shell_call")));
+    let output_types = payload["output_types"]
+        .as_array()
+        .expect("output types should be present");
+    assert!(
+        output_types
+            .iter()
+            .any(|v| v.as_str() == Some("shell_call"))
+    );
 }
 
 #[test]
 fn responses_payload_serializes_hosted_shell_allowlist_and_domain_secrets() {
     let provider = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
-        None, None, None,
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
                 enabled: true,
@@ -978,25 +1154,39 @@ fn responses_payload_serializes_hosted_shell_allowlist_and_domain_secrets() {
         None,
     );
     let request = shell_request(models::openai::GPT_5);
-    let payload = provider.convert_to_openai_responses_format(&request).expect("should succeed");
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
     let np = &payload["tools"][0]["environment"]["network_policy"];
     assert_eq!(np["type"].as_str(), Some("allowlist"));
     assert_eq!(np["allowed_domains"][0].as_str(), Some("httpbin.org"));
-    assert_eq!(np["domain_secrets"][0]["domain"].as_str(), Some("httpbin.org"));
+    assert_eq!(
+        np["domain_secrets"][0]["domain"].as_str(),
+        Some("httpbin.org")
+    );
     assert_eq!(np["domain_secrets"][0]["name"].as_str(), Some("API_KEY"));
-    assert_eq!(np["domain_secrets"][0]["value"].as_str(), Some("debug-secret-123"));
+    assert_eq!(
+        np["domain_secrets"][0]["value"].as_str(),
+        Some("debug-secret-123")
+    );
 }
 
 #[test]
 fn responses_payload_omits_explicit_latest_version_and_uses_container_reference() {
     let provider = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
-        None, None, None,
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
-                enabled: true, environment: OpenAIHostedShellEnvironment::ContainerAuto,
-                container_id: None, file_ids: Vec::new(),
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
                 skills: vec![OpenAIHostedSkill::SkillReference {
                     skill_id: "skill_123".to_string(),
                     version: OpenAIHostedSkillVersion::String(" latest ".to_string()),
@@ -1008,17 +1198,28 @@ fn responses_payload_omits_explicit_latest_version_and_uses_container_reference(
         None,
     );
     let request = shell_request(models::openai::GPT_5);
-    let payload = provider.convert_to_openai_responses_format(&request).expect("should succeed");
-    assert!(payload["tools"][0]["environment"]["skills"][0].get("version").is_none());
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
+    assert!(
+        payload["tools"][0]["environment"]["skills"][0]
+            .get("version")
+            .is_none()
+    );
 
     // Container reference should use container_id, omit file_ids/skills
     let provider2 = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
-        None, None, None,
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
-                enabled: true, environment: OpenAIHostedShellEnvironment::ContainerReference,
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerReference,
                 container_id: Some("cntr_123".to_string()),
                 file_ids: vec!["file_ignored".to_string()],
                 skills: vec![OpenAIHostedSkill::SkillReference {
@@ -1032,7 +1233,9 @@ fn responses_payload_omits_explicit_latest_version_and_uses_container_reference(
         None,
     );
     let request2 = shell_request(models::openai::GPT_5);
-    let payload2 = provider2.convert_to_openai_responses_format(&request2).expect("should succeed");
+    let payload2 = provider2
+        .convert_to_openai_responses_format(&request2)
+        .expect("should succeed");
     let env = &payload2["tools"][0]["environment"];
     assert_eq!(env["type"].as_str(), Some("container_reference"));
     assert_eq!(env["container_id"].as_str(), Some("cntr_123"));
@@ -1044,69 +1247,120 @@ fn responses_payload_omits_explicit_latest_version_and_uses_container_reference(
 fn hosted_shell_keeps_local_tool_when_conditions_not_met() {
     // Non-native URL
     let p1 = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
-        Some("https://example.com/v1".to_string()), None, None, None,
-        Some(hosted_shell_openai_config()), None,
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://example.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(hosted_shell_openai_config()),
+        None,
     );
-    let payload1 = p1.convert_to_openai_responses_format(&shell_request(models::openai::GPT_5)).expect("should succeed");
+    let payload1 = p1
+        .convert_to_openai_responses_format(&shell_request(models::openai::GPT_5))
+        .expect("should succeed");
     let t1 = payload1["tools"][0].as_object().expect("tool");
     assert_str_field_obj(t1, "type", "function");
     assert_str_field_obj(t1, "name", "shell");
 
     // Blank container reference
     let p2 = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
-        Some("https://api.openai.com/v1".to_string()), None, None, None,
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
-                enabled: true, environment: OpenAIHostedShellEnvironment::ContainerReference,
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerReference,
                 container_id: Some("   ".to_string()),
-                file_ids: Vec::new(), skills: Vec::new(),
+                file_ids: Vec::new(),
+                skills: Vec::new(),
                 network_policy: OpenAIHostedShellNetworkPolicy::default(),
-            }, ..Default::default()
-        }), None,
+            },
+            ..Default::default()
+        }),
+        None,
     );
-    let payload2 = p2.convert_to_openai_responses_format(&shell_request(models::openai::GPT_5)).expect("should succeed");
+    let payload2 = p2
+        .convert_to_openai_responses_format(&shell_request(models::openai::GPT_5))
+        .expect("should succeed");
     let t2 = payload2["tools"][0].as_object().expect("tool");
     assert_str_field_obj(t2, "type", "function");
     assert_str_field_obj(t2, "name", "shell");
 
     // Blank skill ID
     let p3 = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
-        Some("https://api.openai.com/v1".to_string()), None, None, None,
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
-                enabled: true, environment: OpenAIHostedShellEnvironment::ContainerAuto,
-                container_id: None, file_ids: Vec::new(),
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
                 skills: vec![OpenAIHostedSkill::SkillReference {
                     skill_id: "   ".to_string(),
                     version: OpenAIHostedSkillVersion::default(),
                 }],
                 network_policy: OpenAIHostedShellNetworkPolicy::default(),
-            }, ..Default::default()
-        }), None,
+            },
+            ..Default::default()
+        }),
+        None,
     );
-    let payload3 = p3.convert_to_openai_responses_format(&shell_request(models::openai::GPT_5)).expect("should succeed");
-    assert_str_field_obj(payload3["tools"][0].as_object().expect("tool"), "type", "function");
+    let payload3 = p3
+        .convert_to_openai_responses_format(&shell_request(models::openai::GPT_5))
+        .expect("should succeed");
+    assert_str_field_obj(
+        payload3["tools"][0].as_object().expect("tool"),
+        "type",
+        "function",
+    );
 
     // Empty allowlist
     let p4 = OpenAIProvider::from_config(
-        Some(String::new()), None, Some(models::openai::GPT_5.to_string()),
-        Some("https://api.openai.com/v1".to_string()), None, None, None,
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
         Some(OpenAIConfig {
             hosted_shell: OpenAIHostedShellConfig {
-                enabled: true, environment: OpenAIHostedShellEnvironment::ContainerAuto,
-                container_id: None, file_ids: Vec::new(), skills: Vec::new(),
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: Vec::new(),
                 network_policy: OpenAIHostedShellNetworkPolicy {
                     policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
-                    allowed_domains: Vec::new(), domain_secrets: Vec::new(),
+                    allowed_domains: Vec::new(),
+                    domain_secrets: Vec::new(),
                 },
-            }, ..Default::default()
-        }), None,
+            },
+            ..Default::default()
+        }),
+        None,
     );
-    let payload4 = p4.convert_to_openai_responses_format(&shell_request(models::openai::GPT_5)).expect("should succeed");
-    assert_str_field_obj(payload4["tools"][0].as_object().expect("tool"), "type", "function");
+    let payload4 = p4
+        .convert_to_openai_responses_format(&shell_request(models::openai::GPT_5))
+        .expect("should succeed");
+    assert_str_field_obj(
+        payload4["tools"][0].as_object().expect("tool"),
+        "type",
+        "function",
+    );
 }
 
 // ─── Validation & Schema Tests ───────────────────────────────────────────────
@@ -1235,13 +1489,21 @@ fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools()
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
     for tool in payload["tools"].as_array().expect("tool array") {
-        let params = tool.get("parameters").expect("tool parameters should be present");
+        let params = tool
+            .get("parameters")
+            .expect("tool parameters should be present");
         let found = schema_keyword_path(
             params,
-            &["allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format"],
+            &[
+                "allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format",
+            ],
             "$",
         );
-        assert!(found.is_none(), "Unsupported keyword found at: {}", found.unwrap_or_default());
+        assert!(
+            found.is_none(),
+            "Unsupported keyword found at: {}",
+            found.unwrap_or_default()
+        );
     }
 }
 
@@ -1278,7 +1540,9 @@ fn responses_function_tools_add_empty_properties_for_bare_object_schema() {
 fn responses_payload_serializes_hosted_web_search_tool() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Find the latest VT Code news".to_owned())],
+        messages: vec![provider::Message::user(
+            "Find the latest VT Code news".to_owned(),
+        )],
         tools: Some(Arc::new(vec![provider::ToolDefinition::web_search(
             json!({"search_context_size": "medium"}),
         )])),
@@ -1288,17 +1552,28 @@ fn responses_payload_serializes_hosted_web_search_tool() {
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    let tools = payload.get("tools").and_then(Value::as_array).expect("tools should exist");
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist");
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].get("type").and_then(Value::as_str), Some("web_search"));
-    assert_eq!(tools[0].get("search_context_size").and_then(Value::as_str), Some("medium"));
+    assert_eq!(
+        tools[0].get("type").and_then(Value::as_str),
+        Some("web_search")
+    );
+    assert_eq!(
+        tools[0].get("search_context_size").and_then(Value::as_str),
+        Some("medium")
+    );
 }
 
 #[test]
 fn responses_payload_serializes_file_search_tool() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let request = provider::LLMRequest {
-        messages: vec![provider::Message::user("Search the docs vector store".to_owned())],
+        messages: vec![provider::Message::user(
+            "Search the docs vector store".to_owned(),
+        )],
         tools: Some(Arc::new(vec![provider::ToolDefinition::file_search(
             json!({"vector_store_ids": ["vs_docs"]}),
         )])),
@@ -1308,9 +1583,15 @@ fn responses_payload_serializes_file_search_tool() {
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    let tools = payload.get("tools").and_then(Value::as_array).expect("tools should exist");
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist");
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].get("type").and_then(Value::as_str), Some("file_search"));
+    assert_eq!(
+        tools[0].get("type").and_then(Value::as_str),
+        Some("file_search")
+    );
     assert_eq!(
         tools[0]
             .get("vector_store_ids")
@@ -1344,10 +1625,21 @@ fn responses_payload_keeps_distinct_remote_mcp_tools() {
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
-    let tools = payload.get("tools").and_then(Value::as_array).expect("tools should exist");
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist");
     assert_eq!(tools.len(), 2);
-    assert!(tools.iter().any(|t| t.get("server_label").and_then(Value::as_str) == Some("dmcp")));
-    assert!(tools.iter().any(|t| t.get("server_label").and_then(Value::as_str) == Some("docs")));
+    assert!(
+        tools
+            .iter()
+            .any(|t| t.get("server_label").and_then(Value::as_str) == Some("dmcp"))
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|t| t.get("server_label").and_then(Value::as_str) == Some("docs"))
+    );
 }
 
 // ─── ChatGPT Backend History Tests ───────────────────────────────────────────
@@ -1366,8 +1658,14 @@ fn chatgpt_backend_omits_previous_response_id_from_responses_payload() {
 // Helper to build ChatGPT backend history payload
 fn chatgpt_codex_payload(messages: Vec<provider::Message>, model: &str) -> Value {
     let provider = chatgpt_backend_provider(model);
-    let request = provider::LLMRequest { messages, model: model.to_string(), ..Default::default() };
-    provider.convert_to_openai_responses_format(&request).expect("conversion should succeed")
+    let request = provider::LLMRequest {
+        messages,
+        model: model.to_string(),
+        ..Default::default()
+    };
+    provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed")
 }
 
 #[test]
@@ -1387,7 +1685,12 @@ fn chatgpt_backend_keeps_plain_assistant_history_structured_for_codex() {
     assert_eq!(input_role_at(&payload, 1), Some("assistant"));
     assert_absent(&input[1], "phase");
     assert_eq!(input_role_at(&payload, 2), Some("user"));
-    assert!(payload["instructions"].as_str().unwrap().contains("You are Codex, based on GPT-5."));
+    assert!(
+        payload["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("You are Codex, based on GPT-5.")
+    );
 }
 
 #[test]
@@ -1418,12 +1721,18 @@ fn chatgpt_backend_keeps_tool_turn_history_structured_for_codex() {
     let payload = chatgpt_codex_payload(
         vec![
             provider::Message::user("run cargo check".to_owned()),
-            provider::Message::assistant_with_tools(String::new(), vec![provider::ToolCall::function(
-                "call_1".to_string(), "unified_exec".to_string(),
-                "{\"command\":\"cargo check\"}".to_string(),
-            )]),
-            provider::Message::tool_response("call_1".to_string(),
-                "{\"output\":\"Finished `dev` profile\",\"exit_code\":0}".to_string()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"cargo check\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "call_1".to_string(),
+                "{\"output\":\"Finished `dev` profile\",\"exit_code\":0}".to_string(),
+            ),
             provider::Message::assistant("cargo check completed successfully.".to_owned())
                 .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
             provider::Message::user("who are you".to_owned()),
@@ -1477,7 +1786,8 @@ fn chatgpt_backend_preserves_structured_tool_turns_with_paired_function_calls() 
                         "unified_exec".to_string(),
                         "{\"command\":\"cargo check -p vtcode-core\"}".to_string(),
                     )],
-                ).with_phase(Some(provider::AssistantPhase::Commentary)),
+                )
+                .with_phase(Some(provider::AssistantPhase::Commentary)),
                 provider::Message::tool_response(
                     "call_1".to_string(),
                     "{\"output\":\"warning: example\",\"exit_code\":0}".to_string(),
@@ -1508,12 +1818,18 @@ fn chatgpt_backend_replays_prior_direct_tool_turns() {
     let payload = chatgpt_codex_payload(
         vec![
             provider::Message::user("run cargo fmt".to_owned()),
-            provider::Message::assistant_with_tools(String::new(), vec![provider::ToolCall::function(
-                "direct_unified_exec_1".to_string(), "unified_exec".to_string(),
-                "{\"command\":\"cargo fmt\"}".to_string(),
-            )]),
-            provider::Message::tool_response("direct_unified_exec_1".to_string(),
-                "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "direct_unified_exec_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"cargo fmt\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
+            ),
             provider::Message::assistant("cargo fmt completed successfully.".to_owned())
                 .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
             provider::Message::user("continue".to_owned()),
@@ -1537,16 +1853,26 @@ fn chatgpt_backend_synthesizes_missing_function_call_outputs_for_orphan_calls() 
     let payload = chatgpt_codex_payload(
         vec![
             provider::Message::user("Run commands".to_owned()),
-            provider::Message::assistant_with_tools(String::new(), vec![provider::ToolCall::function(
-                "call_orphan".to_string(), "unified_exec".to_string(),
-                "{\"command\":\"echo orphan\"}".to_string(),
-            )]),
-            provider::Message::assistant_with_tools(String::new(), vec![provider::ToolCall::function(
-                "call_paired".to_string(), "unified_exec".to_string(),
-                "{\"command\":\"echo paired\"}".to_string(),
-            )]),
-            provider::Message::tool_response("call_paired".to_string(),
-                "{\"output\":\"paired\",\"exit_code\":0}".to_string()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_orphan".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"echo orphan\"}".to_string(),
+                )],
+            ),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_paired".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"echo paired\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "call_paired".to_string(),
+                "{\"output\":\"paired\",\"exit_code\":0}".to_string(),
+            ),
             provider::Message::user("continue".to_owned()),
         ],
         models::openai::GPT_5_3_CODEX,
@@ -1578,24 +1904,39 @@ fn responses_payload_phase_behavior() {
                 .with_phase(Some(provider::AssistantPhase::Commentary)),
             provider::Message::assistant("Checking.".to_owned())
                 .with_phase(Some(provider::AssistantPhase::Commentary)),
-            provider::Message::assistant_with_tools("Looking up.".to_owned(), vec![provider::ToolCall::function(
-                "call_1".to_string(), "search_workspace".to_string(), r#"{"query":"x"}"#.to_string(),
-            )]).with_phase(Some(provider::AssistantPhase::Commentary)),
+            provider::Message::assistant_with_tools(
+                "Looking up.".to_owned(),
+                vec![provider::ToolCall::function(
+                    "call_1".to_string(),
+                    "search_workspace".to_string(),
+                    r#"{"query":"x"}"#.to_string(),
+                )],
+            )
+            .with_phase(Some(provider::AssistantPhase::Commentary)),
             provider::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string())
                 .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
         ],
         model: models::openai::GPT_5_4.to_string(),
         ..Default::default()
     };
-    let payload = native.convert_to_openai_responses_format(&request).expect("should succeed");
+    let payload = native
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
     let input = get_input_array(&payload);
     assert!(input[0].get("phase").is_none(), "user omits phase");
-    assert_eq!(input[1].get("phase").and_then(Value::as_str), Some("commentary"));
-    assert_eq!(input[2].get("phase").and_then(Value::as_str), Some("commentary"));
+    assert_eq!(
+        input[1].get("phase").and_then(Value::as_str),
+        Some("commentary")
+    );
+    assert_eq!(
+        input[2].get("phase").and_then(Value::as_str),
+        Some("commentary")
+    );
     assert!(input[3].get("phase").is_none(), "tool response omits phase");
 
     // Non-native: omits phase entirely
-    let non_native = compatible_endpoint_provider(models::openai::GPT_5_4, "https://example.local/v1");
+    let non_native =
+        compatible_endpoint_provider(models::openai::GPT_5_4, "https://example.local/v1");
     let request2 = provider::LLMRequest {
         messages: vec![
             provider::Message::user("Start".to_owned()),
@@ -1605,7 +1946,9 @@ fn responses_payload_phase_behavior() {
         model: models::openai::GPT_5_4.to_string(),
         ..Default::default()
     };
-    let payload2 = non_native.convert_to_openai_responses_format(&request2).expect("should succeed");
+    let payload2 = non_native
+        .convert_to_openai_responses_format(&request2)
+        .expect("should succeed");
     assert!(get_input_array(&payload2)[1].get("phase").is_none());
 }
 
@@ -1614,9 +1957,18 @@ fn responses_payload_phase_behavior() {
 #[test]
 fn chatgpt_backend_forces_store_false_and_omits_output_sampling_cache() {
     let provider = OpenAIProvider::from_config(
-        Some(String::new()), Some(sample_chatgpt_auth_handle()),
-        Some(models::openai::GPT_5_2.to_string()), None, None, None, None,
-        Some(OpenAIConfig { responses_store: Some(true), ..Default::default() }), None,
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            responses_store: Some(true),
+            ..Default::default()
+        }),
+        None,
     );
     let payload = responses_payload_for(models::openai::GPT_5_2, &provider);
     assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
@@ -1628,7 +1980,9 @@ fn chatgpt_backend_forces_store_false_and_omits_output_sampling_cache() {
     let mut request = sample_request(models::openai::GPT_5_2);
     request.temperature = Some(0.4);
     request.top_p = Some(0.8);
-    let payload2 = provider.convert_to_openai_responses_format(&request).expect("should succeed");
+    let payload2 = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
     assert_absent(&payload2, "sampling_parameters");
 }
 
@@ -1645,7 +1999,8 @@ fn chatgpt_backend_disables_chat_completions_fallback() {
 fn supports_responses_compaction_tracks_responses_api_availability() {
     let openai = native_openai_provider(models::openai::GPT_5);
     assert!(openai.supports_responses_compaction(models::openai::GPT_5));
-    let compatible = compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1");
+    let compatible =
+        compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1");
     assert!(compatible.supports_responses_compaction(models::openai::GPT_5));
     let xai = compatible_endpoint_provider(models::openai::GPT_5, "https://api.x.ai/v1");
     assert!(!xai.supports_responses_compaction(models::openai::GPT_5));
@@ -1655,9 +2010,29 @@ fn supports_responses_compaction_tracks_responses_api_availability() {
 fn supports_manual_openai_compaction_is_native_only() {
     let openai = native_openai_provider(models::openai::GPT_5);
     assert!(openai.supports_manual_openai_compaction(models::openai::GPT_5));
-    assert!(!compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1").supports_manual_openai_compaction(models::openai::GPT_5));
-    assert!(!OpenAIProvider::from_custom_config("custom".to_string(), "Custom".to_string(), Some(String::new()), Some(models::openai::GPT_5.to_string()), Some("https://api.openai.com/v1".to_string()), None, None, None, None, None).supports_manual_openai_compaction(models::openai::GPT_5));
-    assert!(!chatgpt_backend_provider(models::openai::GPT_5).supports_manual_openai_compaction(models::openai::GPT_5));
+    assert!(
+        !compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1")
+            .supports_manual_openai_compaction(models::openai::GPT_5)
+    );
+    assert!(
+        !OpenAIProvider::from_custom_config(
+            "custom".to_string(),
+            "Custom".to_string(),
+            Some(String::new()),
+            Some(models::openai::GPT_5.to_string()),
+            Some("https://api.openai.com/v1".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None
+        )
+        .supports_manual_openai_compaction(models::openai::GPT_5)
+    );
+    assert!(
+        !chatgpt_backend_provider(models::openai::GPT_5)
+            .supports_manual_openai_compaction(models::openai::GPT_5)
+    );
     assert!(!openai.supports_manual_openai_compaction("gpt-4.1"));
 }
 
@@ -1666,7 +2041,8 @@ fn manual_openai_compaction_unavailable_message_mentions_backend() {
     let chatgpt = chatgpt_backend_provider(models::openai::GPT_5);
     let msg = chatgpt.manual_openai_compaction_unavailable_message(models::openai::GPT_5);
     assert!(msg.contains("ChatGPT subscription auth via chatgpt.com backend"));
-    let compatible = compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1");
+    let compatible =
+        compatible_endpoint_provider(models::openai::GPT_5, "https://compat.example/v1");
     let msg2 = compatible.manual_openai_compaction_unavailable_message(models::openai::GPT_5);
     assert!(msg2.contains("configured OpenAI-compatible endpoint (https://compat.example/v1)"));
     let openai = native_openai_provider(models::openai::GPT_5);
@@ -1702,12 +2078,24 @@ fn responses_payload_includes_prompt_cache_retention_for_native_openai() {
     let mut pc = PromptCachingConfig::default();
     pc.providers.openai.prompt_cache_retention = Some("24h".to_owned());
     let provider = OpenAIProvider::from_config(
-        Some("key".to_owned()), None, Some(models::openai::GPT_5_2.to_string()),
-        None, Some(pc), None, None, None, None,
+        Some("key".to_owned()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        Some(pc),
+        None,
+        None,
+        None,
+        None,
     );
     // Responses API model
     let payload = responses_payload_for(models::openai::GPT_5_3_CODEX, &provider);
-    assert_eq!(payload.get("prompt_cache_retention").and_then(Value::as_str), Some("24h"));
+    assert_eq!(
+        payload
+            .get("prompt_cache_retention")
+            .and_then(Value::as_str),
+        Some("24h")
+    );
     // Chat Completions model - should NOT have it
     let chat_payload = chat_payload_for(models::openai::GPT_5, &provider);
     assert_absent(&chat_payload, "prompt_cache_retention");
@@ -1718,16 +2106,27 @@ fn responses_payload_includes_prompt_cache_key_for_native_openai() {
     let provider = native_openai_provider(models::openai::GPT_5_2);
     let mut request = sample_request(models::openai::GPT_5_2);
     request.prompt_cache_key = Some("vtcode:openai:session-123".to_string());
-    let payload = provider.convert_to_openai_responses_format(&request).expect("should succeed");
-    assert_eq!(payload.get("prompt_cache_key").and_then(Value::as_str), Some("vtcode:openai:session-123"));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
+    assert_eq!(
+        payload.get("prompt_cache_key").and_then(Value::as_str),
+        Some("vtcode:openai:session-123")
+    );
 }
 
 #[test]
 fn responses_payload_omits_prompt_cache_key_for_non_native() {
-    let provider = compatible_endpoint_provider(models::openai::GPT_5_2, "https://example.local/v1");
+    let provider =
+        compatible_endpoint_provider(models::openai::GPT_5_2, "https://example.local/v1");
     let mut request = sample_request(models::openai::GPT_5_2);
     request.prompt_cache_key = Some("vtcode:openai:session-xyz".to_string());
-    assert_absent(&provider.convert_to_openai_responses_format(&request).expect("should succeed"), "prompt_cache_key");
+    assert_absent(
+        &provider
+            .convert_to_openai_responses_format(&request)
+            .expect("should succeed"),
+        "prompt_cache_key",
+    );
 }
 
 #[test]
@@ -1735,21 +2134,43 @@ fn prompt_cache_retention_excluded_when_not_set_and_for_unsupported_models() {
     let mut pc = PromptCachingConfig::default();
     pc.providers.openai.prompt_cache_retention = None;
     let provider = OpenAIProvider::from_config(
-        Some("key".to_string()), None, Some(models::openai::GPT_5_2.to_string()),
-        None, Some(pc), None, None, None, None,
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        Some(pc),
+        None,
+        None,
+        None,
+        None,
     );
     let mut request = sample_request(models::openai::GPT_5_2);
     request.stream = true;
-    assert_absent(&provider.convert_to_openai_responses_format(&request).expect("should succeed"), "prompt_cache_retention");
+    assert_absent(
+        &provider
+            .convert_to_openai_responses_format(&request)
+            .expect("should succeed"),
+        "prompt_cache_retention",
+    );
 
     // Unsupported model also omits it
     let mut pc2 = PromptCachingConfig::default();
     pc2.providers.openai.prompt_cache_retention = Some("24h".to_string());
     let provider2 = OpenAIProvider::from_config(
-        Some("key".to_string()), None, Some(models::openai::GPT_OSS_20B.to_string()),
-        None, Some(pc2), None, None, None, None,
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_OSS_20B.to_string()),
+        None,
+        Some(pc2),
+        None,
+        None,
+        None,
+        None,
     );
-    assert_absent(&responses_payload_for(models::openai::GPT_OSS_20B, &provider2), "prompt_cache_retention");
+    assert_absent(
+        &responses_payload_for(models::openai::GPT_OSS_20B, &provider2),
+        "prompt_cache_retention",
+    );
 }
 
 #[test]
@@ -1757,14 +2178,34 @@ fn provider_from_config_respects_prompt_cache_and_websocket() {
     let mut pc = PromptCachingConfig::default();
     pc.providers.openai.prompt_cache_retention = Some("in_memory".to_owned());
     let provider = OpenAIProvider::from_config(
-        Some("key".to_string()), None, Some(models::openai::GPT_5_2.to_string()),
-        None, Some(pc.clone()), None, None, None, None,
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        Some(pc.clone()),
+        None,
+        None,
+        None,
+        None,
     );
-    assert_eq!(provider.prompt_cache_settings.prompt_cache_retention, Some("in_memory".to_owned()));
+    assert_eq!(
+        provider.prompt_cache_settings.prompt_cache_retention,
+        Some("in_memory".to_owned())
+    );
 
     let provider_ws = OpenAIProvider::from_config(
-        Some("key".to_string()), None, Some(models::openai::GPT_5_2.to_string()),
-        None, None, None, None, Some(OpenAIConfig { websocket_mode: true, ..Default::default() }), None,
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            websocket_mode: true,
+            ..Default::default()
+        }),
+        None,
     );
     assert!(provider_ws.websocket_mode_enabled(models::openai::GPT_5_2));
 }
@@ -1776,8 +2217,13 @@ fn responses_payload_uses_max_output_tokens_field() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let mut request = sample_request(models::openai::GPT_5);
     request.max_tokens = Some(512);
-    let payload = provider.convert_to_openai_responses_format(&request).expect("should succeed");
-    assert_eq!(payload.get("max_output_tokens").and_then(Value::as_u64), Some(512));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
+    assert_eq!(
+        payload.get("max_output_tokens").and_then(Value::as_u64),
+        Some(512)
+    );
     assert_absent(&payload, "max_completion_tokens");
 }
 
@@ -1786,18 +2232,37 @@ fn chatgpt_backend_omits_max_output_tokens_and_maps_minimal_reasoning() {
     let provider = chatgpt_backend_provider(models::openai::GPT_5_2_CODEX);
     let mut request = sample_request(models::openai::GPT_5_2_CODEX);
     request.max_tokens = Some(512);
-    assert_absent(&provider.convert_to_openai_responses_format(&request).expect("should succeed"), "max_output_tokens");
+    assert_absent(
+        &provider
+            .convert_to_openai_responses_format(&request)
+            .expect("should succeed"),
+        "max_output_tokens",
+    );
 
     request.max_tokens = None;
     request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::Minimal);
-    let payload = provider.convert_to_openai_responses_format(&request).expect("should succeed");
-    assert_eq!(payload["reasoning"].get("effort").and_then(Value::as_str), Some("low"));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("should succeed");
+    assert_eq!(
+        payload["reasoning"].get("effort").and_then(Value::as_str),
+        Some("low")
+    );
 }
 
 #[test]
 fn responses_payload_defaults_gpt_5_4_reasoning_to_none() {
-    let payload = responses_payload_for(models::openai::GPT_5_4, &native_openai_provider(models::openai::GPT_5_4));
-    assert_eq!(payload.get("reasoning").and_then(|r| r.get("effort")).and_then(Value::as_str), Some("none"));
+    let payload = responses_payload_for(
+        models::openai::GPT_5_4,
+        &native_openai_provider(models::openai::GPT_5_4),
+    );
+    assert_eq!(
+        payload
+            .get("reasoning")
+            .and_then(|r| r.get("effort"))
+            .and_then(Value::as_str),
+        Some("none")
+    );
 }
 
 #[test]
@@ -1807,25 +2272,46 @@ fn responses_payload_omits_sampling_parameters_for_gpt_5_4_high_reasoning() {
     request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::High);
     request.temperature = Some(0.4);
     request.top_p = Some(0.9);
-    assert_absent(&provider.convert_to_openai_responses_format(&request).expect("should succeed"), "sampling_parameters");
+    assert_absent(
+        &provider
+            .convert_to_openai_responses_format(&request)
+            .expect("should succeed"),
+        "sampling_parameters",
+    );
 }
 
 // ─── Streaming Tests ─────────────────────────────────────────────────────────
 
 #[test]
 fn openai_models_support_streaming() {
-    for model in [models::openai::GPT, models::openai::GPT_5, models::openai::GPT_5_4,
-                  models::openai::GPT_5_4_PRO, models::openai::GPT_5_MINI, models::openai::GPT_5_NANO] {
+    for model in [
+        models::openai::GPT,
+        models::openai::GPT_5,
+        models::openai::GPT_5_4,
+        models::openai::GPT_5_4_PRO,
+        models::openai::GPT_5_MINI,
+        models::openai::GPT_5_NANO,
+    ] {
         let provider = test_provider("http://test", model);
-        assert!(provider.supports_streaming(), "Model {model} should support streaming");
+        assert!(
+            provider.supports_streaming(),
+            "Model {model} should support streaming"
+        );
     }
 }
 
 #[test]
 fn native_gpt54_family_disables_non_streaming() {
-    for model in [models::openai::GPT, models::openai::GPT_5_4, models::openai::GPT_5_4_PRO] {
+    for model in [
+        models::openai::GPT,
+        models::openai::GPT_5_4,
+        models::openai::GPT_5_4_PRO,
+    ] {
         let provider = test_provider("http://test", model);
-        assert!(!provider.supports_non_streaming(model), "Model {model} should require streaming");
+        assert!(
+            !provider.supports_non_streaming(model),
+            "Model {model} should require streaming"
+        );
     }
 }
 
@@ -1840,28 +2326,43 @@ fn chatgpt_backend_keeps_streaming_for_codex_and_disables_non_streaming() {
 
 #[test]
 fn parse_harmony_tool_names_and_calls() {
-    assert_eq!(OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"), "list_files");
-    assert_eq!(OpenAIProvider::parse_harmony_tool_name("container.exec"), "unified_exec");
-    assert_eq!(OpenAIProvider::parse_harmony_tool_name("unknown.tool"), "tool");
+    assert_eq!(
+        OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"),
+        "list_files"
+    );
+    assert_eq!(
+        OpenAIProvider::parse_harmony_tool_name("container.exec"),
+        "unified_exec"
+    );
+    assert_eq!(
+        OpenAIProvider::parse_harmony_tool_name("unknown.tool"),
+        "tool"
+    );
     assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
 
     let (name, args) = OpenAIProvider::parse_harmony_tool_call_from_text(
-        r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#).expect("should parse");
+        r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#,
+    )
+    .expect("should parse");
     assert_eq!(name, "list_files");
     assert_eq!(args["path"], json!(""));
 
     let (name2, args2) = OpenAIProvider::parse_harmony_tool_call_from_text(
-        r#"to=container.exec {"cmd":["ls", "-la"]}"#).expect("should parse");
+        r#"to=container.exec {"cmd":["ls", "-la"]}"#,
+    )
+    .expect("should parse");
     assert_eq!(name2, "unified_exec");
     assert_eq!(args2["cmd"], json!(["ls", "-la"]));
 
     let text = r#"<|start|>assistant to=functions.lookup_weather<|channel|>commentary <|constrain|>json<|message|>{"location":"San Francisco"}<|call|>"#;
-    let (name3, args3) = OpenAIProvider::parse_harmony_tool_call_from_text(text).expect("should parse");
+    let (name3, args3) =
+        OpenAIProvider::parse_harmony_tool_call_from_text(text).expect("should parse");
     assert_eq!(name3, "lookup_weather");
     assert_eq!(args3["location"], json!("San Francisco"));
 
     let text2 = r#"<|start|>assistant to=functions.lookup_weather<|channel|>commentary <|constrain|>json<|message|>{'location':'San Francisco'}<|call|>"#;
-    let (name4, _) = OpenAIProvider::parse_harmony_tool_call_from_text(text2).expect("should parse");
+    let (name4, _) =
+        OpenAIProvider::parse_harmony_tool_call_from_text(text2).expect("should parse");
     assert_eq!(name4, "lookup_weather");
 }
 
@@ -1869,7 +2370,9 @@ fn parse_harmony_tool_names_and_calls() {
 
 #[tokio::test]
 async fn responses_request_retries_with_fallback_model_after_not_found() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
     let seen_models = Arc::new(Mutex::new(Vec::new()));
     let seen_for_mock = Arc::clone(&seen_models);
@@ -1889,22 +2392,39 @@ async fn responses_request_retries_with_fallback_model_after_not_found() {
             }
         }).expect(2).mount(&server).await;
 
-    let response = provider.generate(provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_string())],
-        model: models::openai::GPT_5_NANO.to_string(),
-        ..Default::default()
-    }).await.expect("fallback should succeed");
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_NANO.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("fallback should succeed");
     assert_eq!(response.content.as_deref(), Some("fallback response"));
-    assert_eq!(seen_models.lock().expect("not poisoned").as_slice(),
-        &[models::openai::GPT_5_NANO.to_string(), models::openai::GPT_5_MINI.to_string()]);
+    assert_eq!(
+        seen_models.lock().expect("not poisoned").as_slice(),
+        &[
+            models::openai::GPT_5_NANO.to_string(),
+            models::openai::GPT_5_MINI.to_string()
+        ]
+    );
 }
 
 #[tokio::test]
 async fn responses_request_retries_without_flex_service_tier() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = OpenAIProvider::from_config(
-        Some("key".to_owned()), None, Some(models::openai::GPT_5_CODEX.to_string()),
-        Some(native_openai_mock_base_url(&server)), None, None, None, Some(flex_openai_config()), None,
+        Some("key".to_owned()),
+        None,
+        Some(models::openai::GPT_5_CODEX.to_string()),
+        Some(native_openai_mock_base_url(&server)),
+        None,
+        None,
+        None,
+        Some(flex_openai_config()),
+        None,
     );
     let seen = Arc::new(Mutex::new(Vec::new()));
     let seen_for_mock = Arc::clone(&seen);
@@ -1915,20 +2435,31 @@ async fn responses_request_retries_without_flex_service_tier() {
             "output": [{"type":"message","role":"assistant","content":[{"type":"output_text","text":"retry without flex succeeded"}]}]
         }))).expect(2).mount(&server).await;
 
-    let response = provider.generate(provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_string())],
-        model: models::openai::GPT_5_CODEX.to_string(),
-        ..Default::default()
-    }).await.expect("retry without flex should succeed");
-    assert_eq!(response.content.as_deref(), Some("retry without flex succeeded"));
-    assert_eq!(seen.lock().expect("not poisoned").as_slice(), &[Some("flex".to_string()), None]);
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("retry without flex should succeed");
+    assert_eq!(
+        response.content.as_deref(),
+        Some("retry without flex succeeded")
+    );
+    assert_eq!(
+        seen.lock().expect("not poisoned").as_slice(),
+        &[Some("flex".to_string()), None]
+    );
 }
 
 // ─── Request Metadata & Content Type ─────────────────────────────────────────
 
 #[tokio::test]
 async fn responses_requests_include_client_request_id_and_debug_metadata() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
     let provider = test_provider(&server.uri(), models::openai::GPT_5);
     Mock::given(method("POST")).and(path("/responses"))
         .respond_with(|req: &wiremock::Request| {
@@ -1940,22 +2471,34 @@ async fn responses_requests_include_client_request_id_and_debug_metadata() {
                 .insert_header("retry-after", "15")
                 .set_body_string(r#"{"error":{"message":"Bad request","type":"invalid_request_error","param":"text.verbosity","code":"unsupported_parameter"}}"#)
         }).expect(1).mount(&server).await;
-    let err = provider.generate(provider::LLMRequest {
-        messages: vec![provider::Message::user("Hello".to_string())],
-        model: models::openai::GPT_5.to_string(),
-        ..Default::default()
-    }).await.expect_err("should surface error");
+    let err = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect_err("should surface error");
     let text = err.to_string();
-    assert!(text.contains("request_id=req_123") && text.contains("client_request_id=vtcode-")
-        && text.contains("retry_after=15") && text.contains("type=invalid_request_error"));
+    assert!(
+        text.contains("request_id=req_123")
+            && text.contains("client_request_id=vtcode-")
+            && text.contains("retry_after=15")
+            && text.contains("type=invalid_request_error")
+    );
 }
 
 // ─── Manual Compaction ───────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn manual_compaction_payload_includes_selected_fields_and_appends_instructions() {
-    let Some(server) = start_mock_server_or_skip().await else { return };
-    let provider = test_provider(&native_openai_mock_base_url(&server), models::openai::GPT_5_4);
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let provider = test_provider(
+        &native_openai_mock_base_url(&server),
+        models::openai::GPT_5_4,
+    );
     let captured = Arc::new(Mutex::new(None::<Value>));
     let captured_for_mock = Arc::clone(&captured);
     Mock::given(method("POST")).and(path("/responses/compact"))
@@ -1968,24 +2511,33 @@ async fn manual_compaction_payload_includes_selected_fields_and_appends_instruct
             }))
         }).expect(1).mount(&server).await;
 
-    let compacted = provider.compact_history_with_options(
-        models::openai::GPT_5_4,
-        &[provider::Message::system("Preserve decisions.".to_string()),
-          provider::Message::user("Summarize.".to_string())],
-        &provider::ResponsesCompactionOptions {
-            instructions: Some("Terse.".to_string()),
-            max_output_tokens: Some(321),
-            reasoning_effort: Some(crate::config::types::ReasoningEffortLevel::Minimal),
-            verbosity: Some(crate::config::types::VerbosityLevel::High),
-            responses_include: Some(vec!["reasoning.encrypted_content".to_string()]),
-            response_store: Some(true),
-            service_tier: Some("priority".to_string()),
-            prompt_cache_key: Some("lineage-key".to_string()),
-        },
-    ).await.expect("compaction should succeed");
+    let compacted = provider
+        .compact_history_with_options(
+            models::openai::GPT_5_4,
+            &[
+                provider::Message::system("Preserve decisions.".to_string()),
+                provider::Message::user("Summarize.".to_string()),
+            ],
+            &provider::ResponsesCompactionOptions {
+                instructions: Some("Terse.".to_string()),
+                max_output_tokens: Some(321),
+                reasoning_effort: Some(crate::config::types::ReasoningEffortLevel::Minimal),
+                verbosity: Some(crate::config::types::VerbosityLevel::High),
+                responses_include: Some(vec!["reasoning.encrypted_content".to_string()]),
+                response_store: Some(true),
+                service_tier: Some("priority".to_string()),
+                prompt_cache_key: Some("lineage-key".to_string()),
+            },
+        )
+        .await
+        .expect("compaction should succeed");
     assert_eq!(compacted.len(), 1);
 
-    let p = captured.lock().expect("not poisoned").clone().expect("payload captured");
+    let p = captured
+        .lock()
+        .expect("not poisoned")
+        .clone()
+        .expect("payload captured");
     assert_eq!(p["model"], json!(models::openai::GPT_5_4));
     assert_eq!(p["max_output_tokens"], json!(321));
     assert_eq!(p["service_tier"], json!("priority"));
@@ -1994,7 +2546,15 @@ async fn manual_compaction_payload_includes_selected_fields_and_appends_instruct
     assert_eq!(p["reasoning"]["effort"], json!("minimal"));
     assert_eq!(p["text"]["verbosity"], json!("high"));
     assert_eq!(p["prompt_cache_key"], json!("lineage-key"));
-    assert!(p.get("previous_response_id").is_none() && p.get("output_types").is_none() && p.get("stream").is_none());
+    assert!(
+        p.get("previous_response_id").is_none()
+            && p.get("output_types").is_none()
+            && p.get("stream").is_none()
+    );
     let instr = p["instructions"].as_str().expect("instructions required");
-    assert!(instr.contains("Preserve decisions.") && instr.contains("[Manual Compaction Instructions]") && instr.contains("Terse."));
+    assert!(
+        instr.contains("Preserve decisions.")
+            && instr.contains("[Manual Compaction Instructions]")
+            && instr.contains("Terse.")
+    );
 }

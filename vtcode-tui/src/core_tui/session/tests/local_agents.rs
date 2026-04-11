@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn down_opens_local_agents_drawer_when_input_is_empty() {
@@ -369,4 +369,3 @@ fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
 
     assert!(!summary.contains("/memory"));
 }
-

@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn diff_overlay_defaults_to_edit_approval_mode() {
@@ -168,4 +168,3 @@ fn diff_preview_suspends_task_panel_and_restores_it_on_close() {
         "task panel should resume after closing diff preview"
     );
 }
-

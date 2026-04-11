@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn move_left_word_from_end_moves_to_word_start() {
@@ -217,4 +217,3 @@ fn control_super_e_does_not_launch_editor() {
     // Should not launch editor when both Control and Super (Cmd) are pressed
     assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
 }
-

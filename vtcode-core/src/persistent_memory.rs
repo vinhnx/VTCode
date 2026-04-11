@@ -106,15 +106,27 @@ pub struct PersistentMemoryCleanupReport {
 }
 
 pub fn extract_memory_highlights(contents: &str, limit: usize) -> Vec<String> {
-    if limit == 0 { return Vec::new(); }
+    if limit == 0 {
+        return Vec::new();
+    }
     let mut highlights = Vec::with_capacity(limit);
     for line in contents.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') { continue; }
-        let normalized = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")).or_else(|| trimmed.strip_prefix("+ ")).unwrap_or(trimmed);
-        if normalized.is_empty() || highlights.iter().any(|e| e == normalized) { continue; }
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let normalized = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+            .unwrap_or(trimmed);
+        if normalized.is_empty() || highlights.iter().any(|e| e == normalized) {
+            continue;
+        }
         highlights.push(normalized.to_string());
-        if highlights.len() == limit { break; }
+        if highlights.len() >= limit {
+            break;
+        }
     }
     highlights
 }
@@ -170,31 +182,26 @@ pub struct MemoryOpPlan {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
 enum MemoryTopic {
-    Preferences,
-    RepositoryFacts,
+    Preferences = 0,
+    RepositoryFacts = 1,
 }
 
 impl MemoryTopic {
     fn title(self) -> &'static str {
-        match self {
-            Self::Preferences => "Preferences",
-            Self::RepositoryFacts => "Repository Facts",
-        }
+        ["Preferences", "Repository Facts"][self as usize]
     }
 
     fn description(self) -> &'static str {
-        match self {
-            Self::Preferences => "Durable user preferences and workflow notes.",
-            Self::RepositoryFacts => "Grounded repository facts and recurring tooling notes.",
-        }
+        [
+            "Durable user preferences and workflow notes.",
+            "Grounded repository facts and recurring tooling notes.",
+        ][self as usize]
     }
 
     fn slug(self) -> &'static str {
-        match self {
-            Self::Preferences => "preferences",
-            Self::RepositoryFacts => "repository_facts",
-        }
+        ["preferences", "repository_facts"][self as usize]
     }
 
     fn from_slug(value: &str) -> Option<Self> {
@@ -240,7 +247,9 @@ struct ClassifiedFacts {
 }
 
 impl ClassifiedFacts {
-    fn total(&self) -> usize { self.preferences.len() + self.repository_facts.len() }
+    fn total(&self) -> usize {
+        self.preferences.len() + self.repository_facts.len()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -286,16 +295,13 @@ pub fn truncate_for_fact(text: &str, max_chars: usize) -> String {
     if trimmed.chars().count() <= max_chars {
         return trimmed.to_string();
     }
-
-    let truncated = trimmed
-        .chars()
-        .take(max_chars.saturating_sub(3))
-        .collect::<String>();
-    format!("{truncated}...")
-}
-
-fn memory_supports_native_json(provider: &dyn LLMProvider, route: &MemoryModelRoute) -> bool {
-    provider.supports_structured_output(&route.model)
+    format!(
+        "{}...",
+        trimmed
+            .chars()
+            .take(max_chars.saturating_sub(3))
+            .collect::<String>()
+    )
 }
 
 fn build_memory_json_request(
@@ -305,7 +311,7 @@ fn build_memory_json_request(
     schema_name: &str,
     schema: &serde_json::Value,
 ) -> Result<LLMRequest> {
-    let supports_native_json = memory_supports_native_json(provider, route);
+    let supports_native_json = provider.supports_structured_output(&route.model);
     let prompt = if supports_native_json {
         prompt
     } else {
@@ -338,12 +344,15 @@ where
     T: DeserializeOwned,
 {
     let trimmed = text.trim();
-    if trimmed.is_empty() { bail!("{context} returned empty content"); }
-    if let Ok(parsed) = serde_json::from_str::<T>(trimmed) { return Ok(parsed); }
-    if let Some(json_block) = extract_first_json_block(trimmed) {
-        return serde_json::from_str::<T>(json_block).with_context(|| format!("failed to parse {context} response"));
+    if trimmed.is_empty() {
+        bail!("{context} returned empty content");
     }
-    serde_json::from_str::<T>(trimmed).with_context(|| format!("failed to parse {context} response"))
+    if let Ok(parsed) = serde_json::from_str::<T>(trimmed) {
+        return Ok(parsed);
+    }
+    extract_first_json_block(trimmed)
+        .and_then(|json_block| serde_json::from_str::<T>(json_block).ok())
+        .with_context(|| format!("failed to parse {context} response"))
 }
 
 fn extract_first_json_block(text: &str) -> Option<&str> {
@@ -395,60 +404,105 @@ fn extract_first_json_block(text: &str) -> Option<&str> {
 }
 
 pub fn maybe_extract_tool_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::Tool { return None; }
+    if message.role != MessageRole::Tool {
+        return None;
+    }
     let tool_name = message.origin_tool.as_deref().unwrap_or("tool");
     let text = message.content.as_text();
     let raw = text.trim();
-    if raw.is_empty() { return None; }
+    if raw.is_empty() {
+        return None;
+    }
 
-    let candidate = serde_json::from_str::<serde_json::Value>(raw).ok().and_then(|value| {
-        if value.get("error").is_some() || value.get("success") == Some(&serde_json::Value::Bool(false)) { return None; }
-        for key in ["summary", "message", "result", "output", "stdout"] {
-            if let Some(v) = value.get(key) {
-                if let Some(text) = v.as_str() {
-                    let normalized = normalize_whitespace(text);
-                    if !normalized.is_empty() { return Some(normalized); }
-                } else if !v.is_null() {
-                    let normalized = normalize_whitespace(&v.to_string());
-                    if !normalized.is_empty() { return Some(normalized); }
+    let candidate = serde_json::from_str::<serde_json::Value>(raw)
+        .ok()
+        .and_then(|value| {
+            if value.get("error").is_some()
+                || value.get("success") == Some(&serde_json::Value::Bool(false))
+            {
+                return None;
+            }
+            for key in ["summary", "message", "result", "output", "stdout"] {
+                if let Some(v) = value.get(key) {
+                    if let Some(text) = v.as_str() {
+                        let normalized = normalize_whitespace(text);
+                        if !normalized.is_empty() {
+                            return Some(normalized);
+                        }
+                    } else if !v.is_null() {
+                        let normalized = normalize_whitespace(&v.to_string());
+                        if !normalized.is_empty() {
+                            return Some(normalized);
+                        }
+                    }
                 }
             }
-        }
-        let compact = normalize_whitespace(&value.to_string());
-        (!compact.is_empty()).then_some(compact)
-    }).or_else(|| {
-        let lowered = raw.to_ascii_lowercase();
-        if lowered.contains("error") || lowered.contains("failed") || lowered.contains("denied") || lowered.contains("timeout") { return None; }
-        Some(normalize_whitespace(raw))
-    })?;
+            let compact = normalize_whitespace(&value.to_string());
+            (!compact.is_empty()).then_some(compact)
+        })
+        .or_else(|| {
+            let lowered = raw.to_ascii_lowercase();
+            if lowered.contains("error")
+                || lowered.contains("failed")
+                || lowered.contains("denied")
+                || lowered.contains("timeout")
+            {
+                return None;
+            }
+            Some(normalize_whitespace(raw))
+        })?;
 
-    Some(GroundedFactRecord { fact: truncate_for_fact(&candidate, 180), source: format!("tool:{tool_name}") })
+    Some(GroundedFactRecord {
+        fact: truncate_for_fact(&candidate, 180),
+        source: format!("tool:{tool_name}"),
+    })
 }
 
 pub fn maybe_extract_user_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::User { return None; }
+    if message.role != MessageRole::User {
+        return None;
+    }
     let text = normalize_whitespace(message.content.as_text().as_ref());
-    if text.is_empty() { return None; }
+    if text.is_empty() {
+        return None;
+    }
     let candidate_text = strip_user_memory_candidate_prefixes(&text);
-    let (candidate_text, looks_authored_note) = strip_user_memory_note_marker(candidate_text).map(|fact| (fact, true)).unwrap_or((candidate_text, false));
-    let looks_durable_self_fact = SELF_FACT_PREFIXES.iter().any(|p| candidate_text.to_ascii_lowercase().starts_with(*p));
-    let should_extract = looks_authored_note || looks_durable_self_fact;
-    should_extract.then(|| GroundedFactRecord { fact: truncate_for_fact(candidate_text, 180), source: "user_assertion".to_string() })
+    let (candidate_text, looks_authored_note) = strip_user_memory_note_marker(candidate_text)
+        .map(|fact| (fact, true))
+        .unwrap_or((candidate_text, false));
+    let looks_durable_self_fact = SELF_FACT_PREFIXES
+        .iter()
+        .any(|p| candidate_text.to_ascii_lowercase().starts_with(*p));
+    (looks_authored_note || looks_durable_self_fact).then(|| GroundedFactRecord {
+        fact: truncate_for_fact(candidate_text, 180),
+        source: "user_assertion".to_string(),
+    })
 }
 
 fn strip_user_memory_candidate_prefixes(text: &str) -> &str {
     let mut trimmed = text.trim();
     loop {
         let lowered = trimmed.to_ascii_lowercase();
-        let Some(prefix) = STRIP_PREFIXES.iter().find(|p| lowered.starts_with(**p)) else { return trimmed };
-        trimmed = trimmed.get(prefix.len()..).unwrap_or("").trim_start_matches([',', ':', '-', ' ']).trim_start();
+        let Some(prefix) = STRIP_PREFIXES.iter().find(|p| lowered.starts_with(**p)) else {
+            return trimmed;
+        };
+        trimmed = trimmed
+            .get(prefix.len()..)
+            .unwrap_or("")
+            .trim_start_matches([',', ':', '-', ' '])
+            .trim_start();
     }
 }
 
 fn strip_user_memory_note_marker(text: &str) -> Option<&str> {
     let lowered = text.to_ascii_lowercase();
     CLEANUP_NOTE_PREFIXES.iter().find_map(|prefix| {
-        lowered.starts_with(prefix).then(|| text.get(prefix.len()..).unwrap_or("").trim_start_matches([',', ':', '-', ' ']).trim_start())
+        lowered.starts_with(prefix).then(|| {
+            text.get(prefix.len()..)
+                .unwrap_or("")
+                .trim_start_matches([',', ':', '-', ' '])
+                .trim_start()
+        })
     })
 }
 
@@ -638,17 +692,66 @@ pub async fn scaffold_persistent_memory(
 }
 
 /// Write classified facts to all memory files (topic files, index, summary).
-async fn write_classified_memory(files: &PersistentMemoryFiles, classified: &ClassifiedFacts, runtime_config: Option<&RuntimeAgentConfig>, vt_cfg: Option<&VTCodeConfig>, workspace_root: &Path) -> Result<Vec<PathBuf>> {
+async fn write_classified_memory(
+    files: &PersistentMemoryFiles,
+    classified: &ClassifiedFacts,
+    runtime_config: Option<&RuntimeAgentConfig>,
+    vt_cfg: Option<&VTCodeConfig>,
+    workspace_root: &Path,
+) -> Result<Vec<PathBuf>> {
     let notes = read_note_summaries(&files.notes_dir).await?;
     let mut created_files = Vec::new();
-    async fn write_if_missing(path: &Path, contents: String, created_files: &mut Vec<PathBuf>) -> Result<()> {
-        if !path.exists() { created_files.push(path.to_path_buf()); }
-        tokio::fs::write(path, contents).await.with_context(|| format!("Failed to write {}", path.display()))
+    async fn write_if_missing(
+        path: &Path,
+        contents: String,
+        created_files: &mut Vec<PathBuf>,
+    ) -> Result<()> {
+        if !path.exists() {
+            created_files.push(path.to_path_buf());
+        }
+        tokio::fs::write(path, contents)
+            .await
+            .with_context(|| format!("Failed to write {}", path.display()))
     }
-    write_if_missing(&files.preferences_file, render_topic_file(MemoryTopic::Preferences, &classified.preferences), &mut created_files).await?;
-    write_if_missing(&files.repository_facts_file, render_topic_file(MemoryTopic::RepositoryFacts, &classified.repository_facts), &mut created_files).await?;
-    write_if_missing(&files.memory_file, render_memory_index(&classified.preferences, &classified.repository_facts, &notes, 0), &mut created_files).await?;
-    let summary = summarize_memory(runtime_config, vt_cfg, workspace_root, &classified.preferences, &classified.repository_facts, &notes).await.unwrap_or_else(|| render_memory_summary(&classified.preferences, &classified.repository_facts, &notes));
+    write_if_missing(
+        &files.preferences_file,
+        render_topic_file(MemoryTopic::Preferences, &classified.preferences),
+        &mut created_files,
+    )
+    .await?;
+    write_if_missing(
+        &files.repository_facts_file,
+        render_topic_file(MemoryTopic::RepositoryFacts, &classified.repository_facts),
+        &mut created_files,
+    )
+    .await?;
+    write_if_missing(
+        &files.memory_file,
+        render_memory_index(
+            &classified.preferences,
+            &classified.repository_facts,
+            &notes,
+            0,
+        ),
+        &mut created_files,
+    )
+    .await?;
+    let summary = summarize_memory(
+        runtime_config,
+        vt_cfg,
+        workspace_root,
+        &classified.preferences,
+        &classified.repository_facts,
+        &notes,
+    )
+    .await
+    .unwrap_or_else(|| {
+        render_memory_summary(
+            &classified.preferences,
+            &classified.repository_facts,
+            &notes,
+        )
+    });
     write_if_missing(&files.summary_file, summary, &mut created_files).await?;
     Ok(created_files)
 }
@@ -928,7 +1031,8 @@ async fn persist_memory_internal(
     write_rollout: bool,
     force_rebuild: bool,
 ) -> Result<Option<PersistentMemoryWriteReport>> {
-    let directory = resolve_persistent_memory_dir(config, workspace_root)?.expect("persistent memory directory should resolve when enabled");
+    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+        .expect("persistent memory directory should resolve when enabled");
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
@@ -940,34 +1044,60 @@ async fn persist_memory_internal(
 
     let _lock = MemoryLock::acquire(&files.lock_file).await?;
     let existing_lines = read_existing_memory_lines(&files.directory).await?;
-    let deduped_records: Vec<GroundedFactRecord> = facts_slice.iter()
+    let deduped_records: Vec<GroundedFactRecord> = facts_slice
+        .iter()
         .filter(|f| !existing_lines.contains(&normalize_whitespace(&f.fact).to_ascii_lowercase()))
-        .cloned().collect();
+        .cloned()
+        .collect();
 
     let classified = match facts_input {
         FactsInput::Preclassified(_) => classified_facts_from_records(&deduped_records),
-        FactsInput::Candidates(_) if deduped_records.is_empty() => ClassifiedFacts { preferences: Vec::new(), repository_facts: Vec::new() },
-        FactsInput::Candidates(_) => classify_facts_strict(runtime_config, vt_cfg, workspace_root, &deduped_records).await?,
+        FactsInput::Candidates(_) if deduped_records.is_empty() => ClassifiedFacts {
+            preferences: Vec::new(),
+            repository_facts: Vec::new(),
+        },
+        FactsInput::Candidates(_) => {
+            classify_facts_strict(runtime_config, vt_cfg, workspace_root, &deduped_records).await?
+        }
     };
 
     let staged_rollout = if write_rollout && classified.total() > 0 {
-        Some(write_rollout_summary_pending(&files.rollout_summaries_dir, &classified).await
-            .with_context(|| format!("Failed to write rollout summary under {}", files.rollout_summaries_dir.display()))?)
-    } else { None };
+        Some(
+            write_rollout_summary_pending(&files.rollout_summaries_dir, &classified)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to write rollout summary under {}",
+                        files.rollout_summaries_dir.display()
+                    )
+                })?,
+        )
+    } else {
+        None
+    };
 
     let pending_before = list_pending_rollout_files(&files.rollout_summaries_dir).await?;
-    let should_consolidate = force_rebuild || staged_rollout.is_some() || !pending_before.is_empty()
-        || !files.summary_file.exists() || !files.memory_file.exists();
-    if !should_consolidate { return Ok(None); }
+    let should_consolidate = force_rebuild
+        || staged_rollout.is_some()
+        || !pending_before.is_empty()
+        || !files.summary_file.exists()
+        || !files.memory_file.exists();
+    if !should_consolidate {
+        return Ok(None);
+    }
 
-    let consolidated = consolidate_memory_files(runtime_config, vt_cfg, workspace_root, &files).await?;
+    let consolidated =
+        consolidate_memory_files(runtime_config, vt_cfg, workspace_root, &files).await?;
     created_files.extend(consolidated.created_files);
     created_files.sort();
     created_files.dedup();
 
     Ok(Some(PersistentMemoryWriteReport {
-        directory: files.directory, summary_file: files.summary_file, memory_file: files.memory_file,
-        rollout_summary_file: staged_rollout.map(finalize_rollout_summary_path), created_files,
+        directory: files.directory,
+        summary_file: files.summary_file,
+        memory_file: files.memory_file,
+        rollout_summary_file: staged_rollout.map(finalize_rollout_summary_path),
+        created_files,
         added_facts: consolidated.added_facts,
         pending_rollout_summaries: count_pending_rollout_summaries(&files.rollout_summaries_dir)?,
     }))
@@ -977,91 +1107,194 @@ fn classified_facts_from_records(records: &[GroundedFactRecord]) -> ClassifiedFa
     let mut preferences = Vec::new();
     let mut repository_facts = Vec::new();
     for fact in records {
-        let topic = decode_topic_source(&fact.source).0.unwrap_or_else(|| classify_fact(fact));
+        let topic = decode_topic_source(&fact.source)
+            .0
+            .unwrap_or_else(|| classify_fact(fact));
         match topic {
             MemoryTopic::Preferences => preferences.push(fact.clone()),
             MemoryTopic::RepositoryFacts => repository_facts.push(fact.clone()),
         }
     }
-    ClassifiedFacts { preferences: merge_topic_facts(preferences), repository_facts: merge_topic_facts(repository_facts) }
+    ClassifiedFacts {
+        preferences: merge_topic_facts(preferences),
+        repository_facts: merge_topic_facts(repository_facts),
+    }
 }
 
-async fn ensure_memory_layout(files: &PersistentMemoryFiles, created_files: &mut Vec<PathBuf>) -> Result<()> {
-    async fn ensure_file(path: &Path, contents: String, created_files: &mut Vec<PathBuf>) -> Result<()> {
-        if path.exists() { return Ok(()); }
-        tokio::fs::write(path, contents).await.with_context(|| format!("Failed to write {}", path.display()))?;
+async fn ensure_memory_layout(
+    files: &PersistentMemoryFiles,
+    created_files: &mut Vec<PathBuf>,
+) -> Result<()> {
+    async fn ensure_file(
+        path: &Path,
+        contents: String,
+        created_files: &mut Vec<PathBuf>,
+    ) -> Result<()> {
+        if path.exists() {
+            return Ok(());
+        }
+        tokio::fs::write(path, contents)
+            .await
+            .with_context(|| format!("Failed to write {}", path.display()))?;
         created_files.push(path.to_path_buf());
         Ok(())
     }
-    for (dir, desc) in [(&files.directory, "persistent memory"), (&files.rollout_summaries_dir, "rollout summaries"), (&files.notes_dir, "notes")] {
-        tokio::fs::create_dir_all(dir).await.with_context(|| format!("Failed to create {desc} {}", dir.display()))?;
+    for (dir, desc) in [
+        (&files.directory, "persistent memory"),
+        (&files.rollout_summaries_dir, "rollout summaries"),
+        (&files.notes_dir, "notes"),
+    ] {
+        tokio::fs::create_dir_all(dir)
+            .await
+            .with_context(|| format!("Failed to create {desc} {}", dir.display()))?;
     }
-    ensure_file(&files.preferences_file, render_topic_file(MemoryTopic::Preferences, &[]), created_files).await?;
-    ensure_file(&files.repository_facts_file, render_topic_file(MemoryTopic::RepositoryFacts, &[]), created_files).await?;
-    ensure_file(&files.memory_file, render_memory_index(&[], &[], &[], 0), created_files).await?;
-    ensure_file(&files.summary_file, render_memory_summary(&[], &[], &[]), created_files).await?;
+    ensure_file(
+        &files.preferences_file,
+        render_topic_file(MemoryTopic::Preferences, &[]),
+        created_files,
+    )
+    .await?;
+    ensure_file(
+        &files.repository_facts_file,
+        render_topic_file(MemoryTopic::RepositoryFacts, &[]),
+        created_files,
+    )
+    .await?;
+    ensure_file(
+        &files.memory_file,
+        render_memory_index(&[], &[], &[], 0),
+        created_files,
+    )
+    .await?;
+    ensure_file(
+        &files.summary_file,
+        render_memory_summary(&[], &[], &[]),
+        created_files,
+    )
+    .await?;
     Ok(())
 }
 
 fn persistent_memory_base_dir(config: &PersistentMemoryConfig) -> Result<PathBuf> {
     if let Some(override_dir) = config.directory_override.as_deref() {
         if let Some(stripped) = override_dir.strip_prefix("~/") {
-            return Ok(dirs::home_dir().context("Could not resolve home directory")?.join(stripped));
+            return Ok(dirs::home_dir()
+                .context("Could not resolve home directory")?
+                .join(stripped));
         }
         return Ok(PathBuf::from(override_dir));
     }
-    dirs::home_dir().map(|home| home.join(".vtcode")).context("Could not resolve VT Code home directory")
+    dirs::home_dir()
+        .map(|home| home.join(".vtcode"))
+        .context("Could not resolve VT Code home directory")
 }
 
 fn persistent_memory_project_name(workspace_root: &Path) -> String {
     ConfigManager::current_project_name(workspace_root)
-        .or_else(|| workspace_root.file_name().and_then(|v| v.to_str()).map(|v| v.to_string()))
+        .or_else(|| {
+            workspace_root
+                .file_name()
+                .and_then(|v| v.to_str())
+                .map(|v| v.to_string())
+        })
         .unwrap_or_else(|| "workspace".to_string())
 }
 
-fn migrate_legacy_persistent_memory_dir_if_needed(config: &PersistentMemoryConfig, project_name: &str, target_dir: &Path) -> Result<()> {
-    if config.directory_override.is_some() { return Ok(()); }
-    let Some(legacy_dir) = legacy_persistent_memory_dir(project_name)? else { return Ok(()) };
-    if legacy_dir == target_dir || !legacy_dir.exists() { return Ok(()) }
+fn migrate_legacy_persistent_memory_dir_if_needed(
+    config: &PersistentMemoryConfig,
+    project_name: &str,
+    target_dir: &Path,
+) -> Result<()> {
+    if config.directory_override.is_some() {
+        return Ok(());
+    }
+    let Some(legacy_dir) = legacy_persistent_memory_dir(project_name)? else {
+        return Ok(());
+    };
+    if legacy_dir == target_dir || !legacy_dir.exists() {
+        return Ok(());
+    }
     migrate_legacy_memory_dir(&legacy_dir, target_dir)
 }
 
 fn migrate_legacy_memory_dir(legacy_dir: &Path, target_dir: &Path) -> Result<()> {
     if target_dir.exists() && memory_directory_has_stored_content(target_dir)? {
-        if !memory_directory_has_stored_content(legacy_dir)? { remove_empty_legacy_memory_hierarchy(legacy_dir)?; }
+        if !memory_directory_has_stored_content(legacy_dir)? {
+            remove_empty_legacy_memory_hierarchy(legacy_dir)?;
+        }
         return Ok(());
     }
     if target_dir.exists() {
-        std::fs::remove_dir_all(target_dir).with_context(|| format!("Failed to clear {}", target_dir.display()))?;
+        std::fs::remove_dir_all(target_dir)
+            .with_context(|| format!("Failed to clear {}", target_dir.display()))?;
     }
-    let target_parent = target_dir.parent().context("Persistent memory directory is missing a parent")?;
-    std::fs::create_dir_all(target_parent).with_context(|| format!("Failed to create {}", target_parent.display()))?;
-    std::fs::rename(legacy_dir, target_dir).with_context(|| format!("Failed to migrate persistent memory from {} to {}", legacy_dir.display(), target_dir.display()))?;
+    let target_parent = target_dir
+        .parent()
+        .context("Persistent memory directory is missing a parent")?;
+    std::fs::create_dir_all(target_parent)
+        .with_context(|| format!("Failed to create {}", target_parent.display()))?;
+    std::fs::rename(legacy_dir, target_dir).with_context(|| {
+        format!(
+            "Failed to migrate persistent memory from {} to {}",
+            legacy_dir.display(),
+            target_dir.display()
+        )
+    })?;
     remove_empty_legacy_memory_hierarchy(legacy_dir)?;
     Ok(())
 }
 
 fn legacy_persistent_memory_dir(project_name: &str) -> Result<Option<PathBuf>> {
-    let Some(legacy_base) = get_config_dir() else { return Ok(None) };
-    let current_base = dirs::home_dir().map(|home| home.join(".vtcode")).context("Could not resolve VT Code home directory")?;
-    if legacy_base == current_base { return Ok(None) }
-    Ok(Some(legacy_base.join("projects").join(sanitize_project_name(project_name)).join("memory")))
+    let Some(legacy_base) = get_config_dir() else {
+        return Ok(None);
+    };
+    let current_base = dirs::home_dir()
+        .map(|home| home.join(".vtcode"))
+        .context("Could not resolve VT Code home directory")?;
+    if legacy_base == current_base {
+        return Ok(None);
+    }
+    Ok(Some(
+        legacy_base
+            .join("projects")
+            .join(sanitize_project_name(project_name))
+            .join("memory"),
+    ))
 }
 
 fn memory_directory_has_stored_content(directory: &Path) -> Result<bool> {
-    if !directory.exists() { return Ok(false); }
-    for path in [directory.join(PREFERENCES_FILENAME), directory.join(REPOSITORY_FACTS_FILENAME)] {
-        if !path.exists() { continue; }
-        let contents = std::fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
-        if !parse_topic_file(&contents).is_empty() { return Ok(true); }
+    if !directory.exists() {
+        return Ok(false);
+    }
+    for path in [
+        directory.join(PREFERENCES_FILENAME),
+        directory.join(REPOSITORY_FACTS_FILENAME),
+    ] {
+        if !path.exists() {
+            continue;
+        }
+        let contents = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        if !parse_topic_file(&contents).is_empty() {
+            return Ok(true);
+        }
     }
     let rollout_dir = directory.join(ROLLOUT_SUMMARIES_DIRNAME);
-    if !rollout_dir.exists() { return Ok(false); }
-    for entry in std::fs::read_dir(&rollout_dir).with_context(|| format!("Failed to list {}", rollout_dir.display()))? {
+    if !rollout_dir.exists() {
+        return Ok(false);
+    }
+    for entry in std::fs::read_dir(&rollout_dir)
+        .with_context(|| format!("Failed to list {}", rollout_dir.display()))?
+    {
         let path = entry?.path();
-        if path.extension().and_then(|v| v.to_str()) != Some("md") { continue; }
-        let contents = std::fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
-        if !parse_topic_file(&contents).is_empty() { return Ok(true); }
+        if path.extension().and_then(|v| v.to_str()) != Some("md") {
+            continue;
+        }
+        let contents = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        if !parse_topic_file(&contents).is_empty() {
+            return Ok(true);
+        }
     }
     Ok(false)
 }
@@ -1074,50 +1307,88 @@ fn remove_empty_legacy_memory_hierarchy(legacy_memory_dir: &Path) -> Result<()> 
             Ok(()) => current = path.parent(),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => current = path.parent(),
             Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => break,
-            Err(err) => return Err(err).with_context(|| format!("Failed to remove {}", path.display())),
+            Err(err) => {
+                return Err(err).with_context(|| format!("Failed to remove {}", path.display()));
+            }
         }
     }
     Ok(())
 }
 
+#[cold]
 fn sanitize_project_name(project_name: &str) -> String {
-    let sanitized: String = project_name.chars().map(|ch| match ch { '/' | '\\' | ':' => '_', other => other }).collect();
+    let sanitized: String = project_name
+        .chars()
+        .map(|ch| match ch {
+            '/' | '\\' | ':' => '_',
+            other => other,
+        })
+        .collect();
     let trimmed = sanitized.trim();
-    if trimmed.is_empty() { "workspace".to_string() } else { trimmed.to_string() }
+    if trimmed.is_empty() {
+        "workspace".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
-fn truncate_memory_excerpt(contents: &str, line_limit: usize, byte_limit: usize) -> (String, bool, usize, usize) {
+fn truncate_memory_excerpt(
+    contents: &str,
+    line_limit: usize,
+    byte_limit: usize,
+) -> (String, bool, usize, usize) {
     let all_lines = contents.lines().collect::<Vec<_>>();
     let mut selected = String::new();
     let mut bytes_read = 0usize;
     let mut lines_read = 0usize;
     let mut truncated = false;
     for (index, line) in all_lines.iter().enumerate() {
-        if lines_read >= line_limit { truncated = true; break; }
+        if lines_read >= line_limit {
+            truncated = true;
+            break;
+        }
         let line_bytes = line.len();
         let trailing_newline = usize::from(index + 1 < all_lines.len());
-        if bytes_read + line_bytes + trailing_newline > byte_limit { truncated = true; break; }
+        if bytes_read + line_bytes + trailing_newline > byte_limit {
+            truncated = true;
+            break;
+        }
         selected.push_str(line);
         selected.push('\n');
         bytes_read += line_bytes + trailing_newline;
         lines_read += 1;
     }
-    if !truncated && contents.len() > bytes_read { truncated = true; }
-    (selected.trim_end().to_string(), truncated, bytes_read, lines_read)
+    if !truncated && contents.len() > bytes_read {
+        truncated = true;
+    }
+    (
+        selected.trim_end().to_string(),
+        truncated,
+        bytes_read,
+        lines_read,
+    )
 }
 
 async fn read_existing_memory_lines(directory: &Path) -> Result<BTreeSet<String>> {
     let mut lines = BTreeSet::new();
-    if !directory.exists() { return Ok(lines); }
+    if !directory.exists() {
+        return Ok(lines);
+    }
     let mut stack = vec![directory.to_path_buf()];
     while let Some(next_dir) = stack.pop() {
-        let mut entries = tokio::fs::read_dir(&next_dir).await
+        let mut entries = tokio::fs::read_dir(&next_dir)
+            .await
             .with_context(|| format!("Failed to list {}", next_dir.display()))?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if entry.metadata().await?.is_dir() { stack.push(path); continue; }
-            if path.extension().and_then(|v| v.to_str()) != Some("md") { continue; }
-            let content = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+            if entry.metadata().await?.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().and_then(|v| v.to_str()) != Some("md") {
+                continue;
+            }
+            let content = tokio::fs::read_to_string(&path).await?;
             for line in content.lines() {
                 if let Some((_, fact)) = parse_fact_line(line) {
                     lines.insert(normalize_whitespace(&fact).to_ascii_lowercase());
@@ -1128,18 +1399,47 @@ async fn read_existing_memory_lines(directory: &Path) -> Result<BTreeSet<String>
     Ok(lines)
 }
 
-const CLEANUP_REMEMBER_MARKERS: &[&str] = &["save to memory", "remember that", "remember my", "remember ", "add to memory", "store in memory"];
+const CLEANUP_REMEMBER_MARKERS: &[&str] = &[
+    "save to memory",
+    "remember that",
+    "remember my",
+    "remember ",
+    "add to memory",
+    "store in memory",
+];
 const CLEANUP_FORGET_MARKERS: &[&str] = &["forget ", "remove from memory", "delete from memory"];
-const STRIP_PREFIXES: &[&str] = &["please ", "please, ", "can you ", "could you ", "would you ", "vt code, ", "vt code "];
+const STRIP_PREFIXES: &[&str] = &[
+    "please ",
+    "please, ",
+    "can you ",
+    "could you ",
+    "would you ",
+    "vt code, ",
+    "vt code ",
+];
 const CLEANUP_NOTE_PREFIXES: &[&str] = &["note that ", "important:"];
-const SELF_FACT_PREFIXES: &[&str] = &["my name is ", "i prefer ", "my preferred ", "my pronouns are ", "my timezone is "];
+const SELF_FACT_PREFIXES: &[&str] = &[
+    "my name is ",
+    "i prefer ",
+    "my preferred ",
+    "my pronouns are ",
+    "my timezone is ",
+];
 
 fn detect_memory_cleanup_status(files: &PersistentMemoryFiles) -> Result<MemoryCleanupStatus> {
     if !files.directory.exists() {
-        return Ok(MemoryCleanupStatus { needed: false, suspicious_facts: 0, suspicious_summary_lines: 0 });
+        return Ok(MemoryCleanupStatus {
+            needed: false,
+            suspicious_facts: 0,
+            suspicious_summary_lines: 0,
+        });
     }
     let mut suspicious_facts = 0usize;
-    for path in [&files.preferences_file, &files.repository_facts_file, &files.memory_file] {
+    for path in [
+        &files.preferences_file,
+        &files.repository_facts_file,
+        &files.memory_file,
+    ] {
         suspicious_facts += count_suspicious_facts_in_file(path)?;
     }
     suspicious_facts += count_suspicious_rollout_facts(&files.rollout_summaries_dir)?;
@@ -1152,15 +1452,25 @@ fn detect_memory_cleanup_status(files: &PersistentMemoryFiles) -> Result<MemoryC
 }
 
 fn count_suspicious_facts_in_file(path: &Path) -> Result<usize> {
-    if !path.exists() { return Ok(0); }
-    let content = std::fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(parse_topic_file(&content).into_iter().filter(|f| is_legacy_polluted_fact(f)).count())
+    if !path.exists() {
+        return Ok(0);
+    }
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    Ok(parse_topic_file(&content)
+        .into_iter()
+        .filter(|f| is_legacy_polluted_fact(f))
+        .count())
 }
 
 fn count_suspicious_rollout_facts(rollout_dir: &Path) -> Result<usize> {
-    if !rollout_dir.exists() { return Ok(0); }
+    if !rollout_dir.exists() {
+        return Ok(0);
+    }
     let mut count = 0usize;
-    for entry in std::fs::read_dir(rollout_dir).with_context(|| format!("Failed to list {}", rollout_dir.display()))? {
+    for entry in std::fs::read_dir(rollout_dir)
+        .with_context(|| format!("Failed to list {}", rollout_dir.display()))?
+    {
         let path = entry?.path();
         if path.extension().and_then(|v| v.to_str()) == Some("md") {
             count += count_suspicious_facts_in_file(&path)?;
@@ -1170,28 +1480,46 @@ fn count_suspicious_rollout_facts(rollout_dir: &Path) -> Result<usize> {
 }
 
 fn count_suspicious_summary_lines(path: &Path) -> Result<usize> {
-    if !path.exists() { return Ok(0); }
-    let content = std::fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(content.lines().map(str::trim).filter(|l| l.starts_with("- ")).map(|l| l.trim_start_matches("- ").trim())
-        .filter(|l| looks_like_legacy_prompt(l) || looks_like_serialized_payload(l)).count())
+    if !path.exists() {
+        return Ok(0);
+    }
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    Ok(content
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("- "))
+        .map(|l| l.trim_start_matches("- ").trim())
+        .filter(|l| looks_like_legacy_prompt(l) || looks_like_serialized_payload(l))
+        .count())
 }
 
+#[cold]
 fn is_legacy_polluted_fact(fact: &GroundedFactRecord) -> bool {
     looks_like_legacy_prompt(&fact.fact) || looks_like_serialized_payload(&fact.fact)
 }
 
+#[cold]
 fn looks_like_legacy_prompt(text: &str) -> bool {
     let mut lowered = normalize_whitespace(text).to_ascii_lowercase();
     while let Some(stripped) = STRIP_PREFIXES.iter().find_map(|p| lowered.strip_prefix(p)) {
         lowered = stripped.trim_start().to_string();
     }
-    CLEANUP_REMEMBER_MARKERS.iter().chain(CLEANUP_FORGET_MARKERS.iter()).any(|m| lowered.starts_with(m))
+    CLEANUP_REMEMBER_MARKERS
+        .iter()
+        .chain(CLEANUP_FORGET_MARKERS.iter())
+        .any(|m| lowered.starts_with(m))
 }
 
+#[cold]
 fn looks_like_serialized_payload(text: &str) -> bool {
     let t = text.trim();
-    t.starts_with('{') || t.starts_with('[') || t.contains("\"query\":") || t.contains("\"matches\":")
-        || t.contains("\"path\":") || t.contains("</parameter>")
+    t.starts_with('{')
+        || t.starts_with('[')
+        || t.contains("\"query\":")
+        || t.contains("\"matches\":")
+        || t.contains("\"path\":")
+        || t.contains("</parameter>")
         || t.contains("</invoke>")
         || t.contains("<</invoke>")
 }
@@ -1201,36 +1529,58 @@ fn normalize_memory_query(query: &str) -> Option<String> {
     (!normalized.is_empty()).then_some(normalized)
 }
 
-async fn collect_memory_matches(files: &PersistentMemoryFiles, normalized_query: &str) -> Result<Vec<PersistentMemoryMatch>> {
-    Ok(collect_all_memory_matches(files).await?.into_iter()
+async fn collect_memory_matches(
+    files: &PersistentMemoryFiles,
+    normalized_query: &str,
+) -> Result<Vec<PersistentMemoryMatch>> {
+    Ok(collect_all_memory_matches(files)
+        .await?
+        .into_iter()
         .filter(|r| {
             let nf = normalize_whitespace(&r.fact).to_ascii_lowercase();
             let ns = normalize_whitespace(&r.source).to_ascii_lowercase();
             nf.contains(normalized_query) || ns.contains(normalized_query)
-        }).collect())
+        })
+        .collect())
 }
 
-async fn collect_all_memory_matches(files: &PersistentMemoryFiles) -> Result<Vec<PersistentMemoryMatch>> {
+async fn collect_all_memory_matches(
+    files: &PersistentMemoryFiles,
+) -> Result<Vec<PersistentMemoryMatch>> {
     let prefs = read_topic_records(&files.preferences_file, MemoryTopic::Preferences).await?;
-    let repo = read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
+    let repo =
+        read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout = read_rollout_records(&files.rollout_summaries_dir).await?;
     let notes = read_note_summaries(&files.notes_dir).await?;
 
     let mut matches = Vec::new();
-    for r in prefs.into_iter().chain(repo).chain(rollout.0).chain(rollout.1) {
+    for r in prefs
+        .into_iter()
+        .chain(repo)
+        .chain(rollout.0)
+        .chain(rollout.1)
+    {
         let (_, src) = decode_topic_source(&r.source);
-        matches.push(PersistentMemoryMatch { source: src, fact: r.fact });
+        matches.push(PersistentMemoryMatch {
+            source: src,
+            fact: r.fact,
+        });
     }
     for n in notes {
         for h in n.highlights {
-            matches.push(PersistentMemoryMatch { source: n.relative_path.clone(), fact: h });
+            matches.push(PersistentMemoryMatch {
+                source: n.relative_path.clone(),
+                fact: h,
+            });
         }
     }
 
     let mut deduped = Vec::new();
     for r in matches {
         let nf = normalize_whitespace(&r.fact).to_ascii_lowercase();
-        if let Some(i) = deduped.iter().position(|e: &PersistentMemoryMatch| normalize_whitespace(&e.fact).to_ascii_lowercase() == nf) {
+        if let Some(i) = deduped.iter().position(|e: &PersistentMemoryMatch| {
+            normalize_whitespace(&e.fact).to_ascii_lowercase() == nf
+        }) {
             deduped.remove(i);
         }
         deduped.push(r);
@@ -1238,17 +1588,32 @@ async fn collect_all_memory_matches(files: &PersistentMemoryFiles) -> Result<Vec
     Ok(deduped)
 }
 
-async fn collect_cleanup_candidates(files: &PersistentMemoryFiles) -> Result<Vec<GroundedFactRecord>> {
+async fn collect_cleanup_candidates(
+    files: &PersistentMemoryFiles,
+) -> Result<Vec<GroundedFactRecord>> {
     let prefs = read_topic_records(&files.preferences_file, MemoryTopic::Preferences).await?;
-    let repo = read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
+    let repo =
+        read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout = read_rollout_records(&files.rollout_summaries_dir).await?;
-    Ok(prefs.into_iter().chain(repo).chain(rollout.0).chain(rollout.1).collect())
+    Ok(prefs
+        .into_iter()
+        .chain(repo)
+        .chain(rollout.0)
+        .chain(rollout.1)
+        .collect())
 }
 
-async fn write_rollout_summary_pending(rollout_dir: &Path, classified: &ClassifiedFacts) -> Result<PathBuf> {
-    tokio::fs::create_dir_all(rollout_dir).await.with_context(|| format!("Failed to create {}", rollout_dir.display()))?;
+async fn write_rollout_summary_pending(
+    rollout_dir: &Path,
+    classified: &ClassifiedFacts,
+) -> Result<PathBuf> {
+    tokio::fs::create_dir_all(rollout_dir)
+        .await
+        .with_context(|| format!("Failed to create {}", rollout_dir.display()))?;
     let path = rollout_dir.join(format!("{}.pending.md", unique_rollout_id()));
-    tokio::fs::write(&path, render_rollout_summary(classified)).await.with_context(|| format!("Failed to write {}", path.display()))?;
+    tokio::fs::write(&path, render_rollout_summary(classified))
+        .await
+        .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(path)
 }
 
@@ -1262,11 +1627,18 @@ fn finalize_rollout_summary_path(path: PathBuf) -> PathBuf {
 /// List `.md` files under `dir`, optionally filtering by a predicate on the file name.
 fn list_md_files(dir: &Path, filter: impl Fn(&str) -> bool) -> Result<Vec<PathBuf>> {
     fn walk(dir: &Path, files: &mut Vec<PathBuf>, filter: &impl Fn(&str) -> bool) -> Result<()> {
-        if !dir.exists() { return Ok(()); }
-        for entry in std::fs::read_dir(dir).with_context(|| format!("Failed to list {}", dir.display()))? {
+        if !dir.exists() {
+            return Ok(());
+        }
+        for entry in
+            std::fs::read_dir(dir).with_context(|| format!("Failed to list {}", dir.display()))?
+        {
             let path = entry?.path();
-            if path.is_dir() { walk(&path, files, filter)?; }
-            else if path.extension().and_then(|v| v.to_str()) == Some("md") && filter(path.file_name().and_then(|v| v.to_str()).unwrap_or("")) {
+            if path.is_dir() {
+                walk(&path, files, filter)?;
+            } else if path.extension().and_then(|v| v.to_str()) == Some("md")
+                && filter(path.file_name().and_then(|v| v.to_str()).unwrap_or(""))
+            {
                 files.push(path);
             }
         }
@@ -1297,9 +1669,18 @@ fn count_pending_rollout_summaries(rollout_dir: &Path) -> Result<usize> {
 async fn read_note_summaries(notes_dir: &Path) -> Result<Vec<MemoryNoteSummary>> {
     let mut notes = Vec::new();
     for path in list_note_markdown_files(notes_dir)? {
-        let content = tokio::fs::read_to_string(&path).await.with_context(|| format!("Failed to read {}", path.display()))?;
-        let relative = path.strip_prefix(notes_dir).with_context(|| format!("Failed to relativize {}", path.display()))?.to_string_lossy().replace('\\', "/");
-        notes.push(MemoryNoteSummary { relative_path: format!("{NOTES_DIRNAME}/{relative}"), highlights: extract_memory_highlights(&content, 3) });
+        let content = tokio::fs::read_to_string(&path)
+            .await
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let relative = path
+            .strip_prefix(notes_dir)
+            .with_context(|| format!("Failed to relativize {}", path.display()))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        notes.push(MemoryNoteSummary {
+            relative_path: format!("{NOTES_DIRNAME}/{relative}"),
+            highlights: extract_memory_highlights(&content, 3),
+        });
     }
     Ok(notes)
 }
@@ -1315,44 +1696,83 @@ struct MemoryNoteSummary {
     highlights: Vec<String>,
 }
 
-async fn consolidate_memory_files(runtime_config: Option<&RuntimeAgentConfig>, vt_cfg: Option<&VTCodeConfig>, workspace_root: &Path, files: &PersistentMemoryFiles) -> Result<ConsolidationResult> {
+async fn consolidate_memory_files(
+    runtime_config: Option<&RuntimeAgentConfig>,
+    vt_cfg: Option<&VTCodeConfig>,
+    workspace_root: &Path,
+    files: &PersistentMemoryFiles,
+) -> Result<ConsolidationResult> {
     let pending_files = list_pending_rollout_files(&files.rollout_summaries_dir).await?;
-    let prefs_existing = read_topic_records(&files.preferences_file, MemoryTopic::Preferences).await?;
-    let repo_existing = read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
+    let prefs_existing =
+        read_topic_records(&files.preferences_file, MemoryTopic::Preferences).await?;
+    let repo_existing =
+        read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout = read_rollout_records(&files.rollout_summaries_dir).await?;
     let classified = ClassifiedFacts {
         preferences: merge_topic_facts(prefs_existing.into_iter().chain(rollout.0).collect()),
         repository_facts: merge_topic_facts(repo_existing.into_iter().chain(rollout.1).collect()),
     };
-    let created_files = write_classified_memory(&files, &classified, runtime_config, vt_cfg, workspace_root).await?;
-    let added_facts = pending_files.iter().filter_map(|p| std::fs::read_to_string(p).ok()).flat_map(|c| c.lines().filter_map(parse_fact_line).collect::<Vec<_>>()).count();
+    let created_files =
+        write_classified_memory(&files, &classified, runtime_config, vt_cfg, workspace_root)
+            .await?;
+    let added_facts = pending_files
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .flat_map(|c| c.lines().filter_map(parse_fact_line).collect::<Vec<_>>())
+        .count();
     for pending in &pending_files {
         let finalized = finalize_rollout_summary_path(pending.clone());
         if !finalized.exists() {
-            tokio::fs::rename(pending, &finalized).await.with_context(|| format!("Failed to finalize rollout summary {}", pending.display()))?;
+            tokio::fs::rename(pending, &finalized)
+                .await
+                .with_context(|| {
+                    format!("Failed to finalize rollout summary {}", pending.display())
+                })?;
         } else {
-            tokio::fs::remove_file(pending).await.with_context(|| format!("Failed to remove {}", pending.display()))?;
+            tokio::fs::remove_file(pending)
+                .await
+                .with_context(|| format!("Failed to remove {}", pending.display()))?;
         }
     }
-    Ok(ConsolidationResult { created_files, added_facts })
+    Ok(ConsolidationResult {
+        created_files,
+        added_facts,
+    })
 }
 
 async fn read_topic_records(path: &Path, topic: MemoryTopic) -> Result<Vec<GroundedFactRecord>> {
-    if !path.exists() { return Ok(Vec::new()); }
-    let contents = tokio::fs::read_to_string(path).await.with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(parse_topic_file(&contents).into_iter().map(|r| GroundedFactRecord { fact: r.fact, source: encode_topic_source(topic, &r.source) }).collect())
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = tokio::fs::read_to_string(path)
+        .await
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    Ok(parse_topic_file(&contents)
+        .into_iter()
+        .map(|r| GroundedFactRecord {
+            fact: r.fact,
+            source: encode_topic_source(topic, &r.source),
+        })
+        .collect())
 }
 
-async fn read_rollout_records(rollout_dir: &Path) -> Result<(Vec<GroundedFactRecord>, Vec<GroundedFactRecord>)> {
-    if !rollout_dir.exists() { return Ok((Vec::new(), Vec::new())); }
+async fn read_rollout_records(
+    rollout_dir: &Path,
+) -> Result<(Vec<GroundedFactRecord>, Vec<GroundedFactRecord>)> {
+    if !rollout_dir.exists() {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut prefs = Vec::new();
     let mut repo_facts = Vec::new();
-    let mut entries = tokio::fs::read_dir(rollout_dir).await
+    let mut entries = tokio::fs::read_dir(rollout_dir)
+        .await
         .with_context(|| format!("Failed to list {}", rollout_dir.display()))?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.extension().and_then(|v| v.to_str()) != Some("md") { continue; }
-        let contents = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+        if path.extension().and_then(|v| v.to_str()) != Some("md") {
+            continue;
+        }
+        let contents = tokio::fs::read_to_string(&path).await?;
         for record in parse_topic_file(&contents) {
             let (topic, _) = decode_topic_source(&record.source);
             match topic.unwrap_or_else(|| classify_fact(&record)) {
@@ -1368,7 +1788,9 @@ fn merge_topic_facts(records: Vec<GroundedFactRecord>) -> Vec<GroundedFactRecord
     let mut facts = Vec::new();
     for fact in records {
         let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
-        if let Some(i) = facts.iter().position(|e: &GroundedFactRecord| normalize_whitespace(&e.fact).to_ascii_lowercase() == normalized) {
+        if let Some(i) = facts.iter().position(|e: &GroundedFactRecord| {
+            normalize_whitespace(&e.fact).to_ascii_lowercase() == normalized
+        }) {
             facts.remove(i);
         }
         facts.push(fact);
@@ -1378,7 +1800,11 @@ fn merge_topic_facts(records: Vec<GroundedFactRecord>) -> Vec<GroundedFactRecord
 }
 
 fn normalized_selection_key(source: &str, fact: &str) -> String {
-    format!("{}::{}", normalize_whitespace(source).to_ascii_lowercase(), normalize_whitespace(fact).to_ascii_lowercase())
+    format!(
+        "{}::{}",
+        normalize_whitespace(source).to_ascii_lowercase(),
+        normalize_whitespace(fact).to_ascii_lowercase()
+    )
 }
 
 fn selection_key_for_record(record: &GroundedFactRecord) -> String {
@@ -1387,37 +1813,74 @@ fn selection_key_for_record(record: &GroundedFactRecord) -> String {
 }
 
 fn selection_keys(selected: &[MemoryOpCandidate]) -> BTreeSet<String> {
-    selected.iter().map(|e| normalized_selection_key(&e.source, &e.fact)).collect()
+    selected
+        .iter()
+        .map(|e| normalized_selection_key(&e.source, &e.fact))
+        .collect()
 }
 
-async fn rewrite_topic_without_selected(path: &Path, topic: MemoryTopic, selected: &[MemoryOpCandidate]) -> Result<usize> {
-    if !path.exists() { return Ok(0); }
+async fn rewrite_topic_without_selected(
+    path: &Path,
+    topic: MemoryTopic,
+    selected: &[MemoryOpCandidate],
+) -> Result<usize> {
+    if !path.exists() {
+        return Ok(0);
+    }
     let keys = selection_keys(selected);
     let facts = read_topic_records(path, topic).await?;
-    let removed = facts.iter().filter(|f| keys.contains(&selection_key_for_record(f))).count();
-    if removed == 0 { return Ok(0); }
-    let kept: Vec<_> = facts.into_iter().filter(|f| !keys.contains(&selection_key_for_record(f))).collect();
-    tokio::fs::write(path, render_topic_file(topic, &kept)).await.with_context(|| format!("Failed to write {}", path.display()))?;
+    let removed = facts
+        .iter()
+        .filter(|f| keys.contains(&selection_key_for_record(f)))
+        .count();
+    if removed == 0 {
+        return Ok(0);
+    }
+    let kept: Vec<_> = facts
+        .into_iter()
+        .filter(|f| !keys.contains(&selection_key_for_record(f)))
+        .collect();
+    tokio::fs::write(path, render_topic_file(topic, &kept))
+        .await
+        .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(removed)
 }
 
-async fn scrub_rollout_file_by_selection(path: &Path, selected: &[MemoryOpCandidate]) -> Result<usize> {
-    let contents = tokio::fs::read_to_string(path).await.with_context(|| format!("Failed to read {}", path.display()))?;
+async fn scrub_rollout_file_by_selection(
+    path: &Path,
+    selected: &[MemoryOpCandidate],
+) -> Result<usize> {
+    let contents = tokio::fs::read_to_string(path)
+        .await
+        .with_context(|| format!("Failed to read {}", path.display()))?;
     let keys = selection_keys(selected);
     let mut removed = 0usize;
     let mut filtered = Vec::new();
     for line in contents.lines() {
         let keep = parse_fact_line(line).is_none_or(|(source, fact)| {
-            let m = keys.contains(&selection_key_for_record(&GroundedFactRecord { source, fact }));
-            if m { removed += 1; }
+            let m = keys.contains(&selection_key_for_record(&GroundedFactRecord {
+                source,
+                fact,
+            }));
+            if m {
+                removed += 1;
+            }
             !m
         });
-        if keep { filtered.push(line); }
+        if keep {
+            filtered.push(line);
+        }
     }
-    if removed == 0 { return Ok(0); }
+    if removed == 0 {
+        return Ok(0);
+    }
     let mut rewritten = filtered.join("\n");
-    if contents.ends_with('\n') { rewritten.push('\n'); }
-    tokio::fs::write(path, rewritten).await.with_context(|| format!("Failed to write {}", path.display()))?;
+    if contents.ends_with('\n') {
+        rewritten.push('\n');
+    }
+    tokio::fs::write(path, rewritten)
+        .await
+        .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(removed)
 }
 
@@ -1425,7 +1888,9 @@ async fn remove_rollout_markdown_files(rollout_dir: &Path) -> Result<usize> {
     let files = list_rollout_markdown_files(rollout_dir).await?;
     let count = files.len();
     for p in files {
-        tokio::fs::remove_file(&p).await.with_context(|| format!("Failed to remove {}", p.display()))?;
+        tokio::fs::remove_file(&p)
+            .await
+            .with_context(|| format!("Failed to remove {}", p.display()))?;
     }
     Ok(count)
 }
@@ -1450,10 +1915,16 @@ fn parse_fact_line(line: &str) -> Option<(String, String)> {
 }
 
 fn classify_fact(fact: &GroundedFactRecord) -> MemoryTopic {
-    if fact.source == "user_assertion" { MemoryTopic::Preferences } else { MemoryTopic::RepositoryFacts }
+    if fact.source == "user_assertion" {
+        MemoryTopic::Preferences
+    } else {
+        MemoryTopic::RepositoryFacts
+    }
 }
 
-fn encode_topic_source(topic: MemoryTopic, source: &str) -> String { format!("{}:{}", topic.slug(), source) }
+fn encode_topic_source(topic: MemoryTopic, source: &str) -> String {
+    format!("{}:{}", topic.slug(), source)
+}
 
 fn decode_topic_source(source: &str) -> (Option<MemoryTopic>, String) {
     match source.split_once(':') {
@@ -1469,7 +1940,10 @@ async fn classify_facts_strict(
     candidates: &[GroundedFactRecord],
 ) -> Result<ClassifiedFacts> {
     if candidates.is_empty() {
-        return Ok(ClassifiedFacts { preferences: Vec::new(), repository_facts: Vec::new() });
+        return Ok(ClassifiedFacts {
+            preferences: Vec::new(),
+            repository_facts: Vec::new(),
+        });
     }
     classify_facts_with_llm(runtime_config, vt_cfg, workspace_root, candidates).await
 }
@@ -1511,10 +1985,12 @@ async fn classify_facts_with_llm(
     workspace_root: &Path,
     candidates: &[GroundedFactRecord],
 ) -> Result<ClassifiedFacts> {
-    let rt_cfg = runtime_config.ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
+    let rt_cfg = runtime_config
+        .ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
     try_with_memory_routes!(rt_cfg, vt_cfg, workspace_root, |provider, route| {
         classify_facts_with_provider(provider, route, workspace_root, candidates)
-    }).await
+    })
+    .await
 }
 
 async fn classify_facts_with_provider(
@@ -1804,88 +2280,199 @@ async fn plan_memory_operation_with_provider(
     Ok(plan)
 }
 
-fn validate_memory_op_plan(plan: &MemoryOpPlan, expected_kind: MemoryOpKind, candidates: &[MemoryOpCandidate]) -> Result<()> {
+fn validate_memory_op_plan(
+    plan: &MemoryOpPlan,
+    expected_kind: MemoryOpKind,
+    candidates: &[MemoryOpCandidate],
+) -> Result<()> {
     match plan.kind {
         MemoryOpKind::Remember => {
-            if expected_kind != MemoryOpKind::Remember { bail!("memory planner returned remember for a non-remember request"); }
-            if plan.facts.is_empty() { bail!("memory planner returned remember with no facts"); }
-            if plan.facts.iter().any(|f| normalize_whitespace(&f.fact).is_empty()) { bail!("memory planner returned an empty fact"); }
+            if expected_kind != MemoryOpKind::Remember {
+                bail!("memory planner returned remember for a non-remember request");
+            }
+            if plan.facts.is_empty() {
+                bail!("memory planner returned remember with no facts");
+            }
+            if plan
+                .facts
+                .iter()
+                .any(|f| normalize_whitespace(&f.fact).is_empty())
+            {
+                bail!("memory planner returned an empty fact");
+            }
         }
         MemoryOpKind::Forget => {
-            if expected_kind != MemoryOpKind::Forget { bail!("memory planner returned forget for a non-forget request"); }
+            if expected_kind != MemoryOpKind::Forget {
+                bail!("memory planner returned forget for a non-forget request");
+            }
             let valid_ids: BTreeSet<_> = candidates.iter().map(|c| c.id).collect();
-            if plan.selected_ids.iter().any(|id| !valid_ids.contains(id)) { bail!("memory planner selected an unknown memory candidate"); }
+            if plan.selected_ids.iter().any(|id| !valid_ids.contains(id)) {
+                bail!("memory planner selected an unknown memory candidate");
+            }
         }
         MemoryOpKind::AskMissing => {
-            let m = plan.missing.as_ref().ok_or_else(|| anyhow!("memory planner returned ask_missing without a prompt"))?;
-            if normalize_whitespace(&m.field).is_empty() || normalize_whitespace(&m.prompt).is_empty() {
+            let m = plan
+                .missing
+                .as_ref()
+                .ok_or_else(|| anyhow!("memory planner returned ask_missing without a prompt"))?;
+            if normalize_whitespace(&m.field).is_empty()
+                || normalize_whitespace(&m.prompt).is_empty()
+            {
                 bail!("memory planner returned an incomplete missing-field request");
             }
         }
         MemoryOpKind::Noop => {}
     }
-    if matches!(plan.kind, MemoryOpKind::AskMissing | MemoryOpKind::Noop) && (!plan.facts.is_empty() || !plan.selected_ids.is_empty()) {
+    if matches!(plan.kind, MemoryOpKind::AskMissing | MemoryOpKind::Noop)
+        && (!plan.facts.is_empty() || !plan.selected_ids.is_empty())
+    {
         bail!("memory planner returned extra mutations for a non-mutating plan");
     }
     Ok(())
 }
 
 fn memory_plan_facts(plan: &MemoryOpPlan) -> Result<Vec<GroundedFactRecord>> {
-    if plan.kind != MemoryOpKind::Remember { bail!("memory plan is not a remember operation"); }
-    Ok(plan.facts.iter().map(|f| {
-        let topic = match f.topic { MemoryPlannedTopic::Preferences => MemoryTopic::Preferences, MemoryPlannedTopic::RepositoryFacts => MemoryTopic::RepositoryFacts };
-        let source = if f.source.trim().is_empty() { "manual_memory".to_string() } else { normalize_whitespace(&f.source) };
-        GroundedFactRecord { fact: truncate_for_fact(&normalize_whitespace(&f.fact), 180), source: encode_topic_source(topic, &source) }
-    }).filter(|f| !f.fact.is_empty()).collect())
+    if plan.kind != MemoryOpKind::Remember {
+        bail!("memory plan is not a remember operation");
+    }
+    Ok(plan
+        .facts
+        .iter()
+        .map(|f| {
+            let topic = match f.topic {
+                MemoryPlannedTopic::Preferences => MemoryTopic::Preferences,
+                MemoryPlannedTopic::RepositoryFacts => MemoryTopic::RepositoryFacts,
+            };
+            let source = if f.source.trim().is_empty() {
+                "manual_memory".to_string()
+            } else {
+                normalize_whitespace(&f.source)
+            };
+            GroundedFactRecord {
+                fact: truncate_for_fact(&normalize_whitespace(&f.fact), 180),
+                source: encode_topic_source(topic, &source),
+            }
+        })
+        .filter(|f| !f.fact.is_empty())
+        .collect())
 }
 
-fn selected_memory_candidates(candidates: &[MemoryOpCandidate], selected_ids: &[usize]) -> Result<Vec<MemoryOpCandidate>> {
-    let selected: Vec<_> = selected_ids.iter().filter_map(|id| candidates.iter().find(|c| c.id == *id).cloned()).collect();
-    if selected_ids.len() != selected.len() { bail!("memory plan selected a missing candidate"); }
+fn selected_memory_candidates(
+    candidates: &[MemoryOpCandidate],
+    selected_ids: &[usize],
+) -> Result<Vec<MemoryOpCandidate>> {
+    let selected: Vec<_> = selected_ids
+        .iter()
+        .filter_map(|id| candidates.iter().find(|c| c.id == *id).cloned())
+        .collect();
+    if selected_ids.len() != selected.len() {
+        bail!("memory plan selected a missing candidate");
+    }
     Ok(selected)
 }
 
 fn facts_for_prompt(facts: &[GroundedFactRecord]) -> String {
-    if facts.is_empty() { return "- none".to_string(); }
-    facts.iter().map(|f| { let (_, s) = decode_topic_source(&f.source); format!("- [{}] {}", s, f.fact) }).collect::<Vec<_>>().join("\n")
+    if facts.is_empty() {
+        return "- none".to_string();
+    }
+    facts
+        .iter()
+        .map(|f| {
+            let (_, s) = decode_topic_source(&f.source);
+            format!("- [{}] {}", s, f.fact)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn notes_for_prompt(notes: &[MemoryNoteSummary]) -> String {
-    if notes.is_empty() { return "- none".to_string(); }
-    notes.iter().map(|n| {
-        let preview = if n.highlights.is_empty() { "no extracted highlights".to_string() } else { n.highlights.join("; ") };
-        format!("- [{}] {}", n.relative_path, preview)
-    }).collect::<Vec<_>>().join("\n")
+    if notes.is_empty() {
+        return "- none".to_string();
+    }
+    notes
+        .iter()
+        .map(|n| {
+            let preview = if n.highlights.is_empty() {
+                "no extracted highlights".to_string()
+            } else {
+                n.highlights.join("; ")
+            };
+            format!("- [{}] {}", n.relative_path, preview)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-fn resolve_memory_model_routes(runtime_config: &RuntimeAgentConfig, vt_cfg: Option<&VTCodeConfig>) -> ResolvedMemoryRoutes {
-    let resolution = resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
+fn resolve_memory_model_routes(
+    runtime_config: &RuntimeAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> ResolvedMemoryRoutes {
+    let resolution =
+        resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
     let primary = memory_model_route_from_resolution(&resolution.primary, runtime_config, vt_cfg);
-    let fallback = resolution.fallback.as_ref().map(|r| memory_model_route_from_resolution(r, runtime_config, vt_cfg));
-    ResolvedMemoryRoutes { primary, fallback, warning: resolution.warning }
+    let fallback = resolution
+        .fallback
+        .as_ref()
+        .map(|r| memory_model_route_from_resolution(r, runtime_config, vt_cfg));
+    ResolvedMemoryRoutes {
+        primary,
+        fallback,
+        warning: resolution.warning,
+    }
 }
 
-fn memory_model_route_from_resolution(route: &crate::llm::ModelRoute, runtime_config: &RuntimeAgentConfig, vt_cfg: Option<&VTCodeConfig>) -> MemoryModelRoute {
-    let temperature = if route.model == runtime_config.model && route.provider_name.eq_ignore_ascii_case(&runtime_provider_name(runtime_config)) {
+fn memory_model_route_from_resolution(
+    route: &crate::llm::ModelRoute,
+    runtime_config: &RuntimeAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> MemoryModelRoute {
+    let temperature = if route.model == runtime_config.model
+        && route
+            .provider_name
+            .eq_ignore_ascii_case(&runtime_provider_name(runtime_config))
+    {
         0.0
     } else {
-        vt_cfg.map(|cfg| cfg.agent.small_model.temperature).unwrap_or(0.0)
+        vt_cfg
+            .map(|cfg| cfg.agent.small_model.temperature)
+            .unwrap_or(0.0)
     };
-    MemoryModelRoute { provider_name: route.provider_name.clone(), model: route.model.clone(), temperature }
+    MemoryModelRoute {
+        provider_name: route.provider_name.clone(),
+        model: route.model.clone(),
+        temperature,
+    }
 }
 
 fn log_memory_route_warning(routes: &ResolvedMemoryRoutes) {
-    if let Some(warning) = &routes.warning { tracing::warn!(warning = %warning, "persistent memory route adjusted"); }
+    if let Some(warning) = &routes.warning {
+        tracing::warn!(warning = %warning, "persistent memory route adjusted");
+    }
 }
 
-fn create_memory_provider(route: &MemoryModelRoute, runtime_config: &RuntimeAgentConfig, vt_cfg: Option<&VTCodeConfig>) -> Result<Box<dyn LLMProvider>> {
-    create_provider_for_model_route(&crate::llm::ModelRoute { provider_name: route.provider_name.clone(), model: route.model.clone() }, runtime_config, vt_cfg)
-        .context("Failed to initialize persistent memory LLM provider")
+fn create_memory_provider(
+    route: &MemoryModelRoute,
+    runtime_config: &RuntimeAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<Box<dyn LLMProvider>> {
+    create_provider_for_model_route(
+        &crate::llm::ModelRoute {
+            provider_name: route.provider_name.clone(),
+            model: route.model.clone(),
+        },
+        runtime_config,
+        vt_cfg,
+    )
+    .context("Failed to initialize persistent memory LLM provider")
 }
 
 fn runtime_provider_name(runtime_config: &RuntimeAgentConfig) -> String {
-    if !runtime_config.provider.trim().is_empty() { return runtime_config.provider.to_lowercase(); }
-    infer_provider_from_model(&runtime_config.model).map(|p| p.to_string().to_lowercase()).unwrap_or_else(|| "gemini".to_string())
+    if !runtime_config.provider.trim().is_empty() {
+        return runtime_config.provider.to_lowercase();
+    }
+    infer_provider_from_model(&runtime_config.model)
+        .map(|p| p.to_string().to_lowercase())
+        .unwrap_or_else(|| "gemini".to_string())
 }
 
 fn render_topic_file(topic: MemoryTopic, facts: &[GroundedFactRecord]) -> String {
@@ -1902,17 +2489,30 @@ fn render_topic_file(topic: MemoryTopic, facts: &[GroundedFactRecord]) -> String
     out
 }
 
-fn render_memory_index(preferences: &[GroundedFactRecord], repository_facts: &[GroundedFactRecord], notes: &[MemoryNoteSummary], pending_rollouts: usize) -> String {
-    let mut highlights: Vec<_> = preferences.iter().chain(repository_facts.iter()).cloned().collect();
+fn render_memory_index(
+    preferences: &[GroundedFactRecord],
+    repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
+    pending_rollouts: usize,
+) -> String {
+    let mut highlights: Vec<_> = preferences
+        .iter()
+        .chain(repository_facts.iter())
+        .cloned()
+        .collect();
     let skip = highlights.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     highlights = highlights.into_iter().skip(skip).collect();
     let mut out = String::from("# VT Code Memory Registry\n\n## Files\n");
     out.push_str("- `memory_summary.md`: Startup-injected summary for future sessions.\n");
     out.push_str("- `preferences.md`: Durable user preferences and workflow notes.\n");
-    out.push_str("- `repository-facts.md`: Grounded repository facts and recurring tooling notes.\n");
+    out.push_str(
+        "- `repository-facts.md`: Grounded repository facts and recurring tooling notes.\n",
+    );
     out.push_str("- `notes/`: User-authored durable notes available to the native memory tool.\n");
     out.push_str("- `rollout_summaries/`: Per-session evidence summaries.\n");
-    out.push_str(&format!("\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n"));
+    out.push_str(&format!(
+        "\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n"
+    ));
     out.push_str("\n## Highlights\n");
     if highlights.is_empty() {
         out.push_str("- No persistent notes yet.\n");
@@ -1926,35 +2526,60 @@ fn render_memory_index(preferences: &[GroundedFactRecord], repository_facts: &[G
         out.push_str("\n## Note Files\n");
         for n in notes {
             out.push_str(&format!("- `{}`", n.relative_path));
-            if let Some(first) = n.highlights.first() { out.push_str(&format!(": {first}")); }
+            if let Some(first) = n.highlights.first() {
+                out.push_str(&format!(": {first}"));
+            }
             out.push('\n');
         }
     }
     out
 }
 
-fn render_memory_summary(preferences: &[GroundedFactRecord], repository_facts: &[GroundedFactRecord], notes: &[MemoryNoteSummary]) -> String {
-    let mut bullets: Vec<_> = preferences.iter().chain(repository_facts.iter()).map(|f| f.fact.clone()).collect();
-    bullets.extend(notes.iter().filter_map(|n| n.highlights.first().map(|h| format!("Note ({}): {}", n.relative_path, h))));
+fn render_memory_summary(
+    preferences: &[GroundedFactRecord],
+    repository_facts: &[GroundedFactRecord],
+    notes: &[MemoryNoteSummary],
+) -> String {
+    let mut bullets: Vec<_> = preferences
+        .iter()
+        .chain(repository_facts.iter())
+        .map(|f| f.fact.clone())
+        .collect();
+    bullets.extend(notes.iter().filter_map(|n| {
+        n.highlights
+            .first()
+            .map(|h| format!("Note ({}): {}", n.relative_path, h))
+    }));
     let skip = bullets.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     bullets = bullets.into_iter().skip(skip).collect();
-    if bullets.is_empty() { bullets.push("No durable memory notes have been consolidated yet.".to_string()); }
+    if bullets.is_empty() {
+        bullets.push("No durable memory notes have been consolidated yet.".to_string());
+    }
     render_memory_summary_bullets(&bullets)
 }
 
 fn render_memory_summary_bullets(bullets: &[String]) -> String {
     let mut out = String::from("# VT Code Memory Summary\n");
-    for b in bullets { out.push_str(&format!("- {}\n", b.trim())); }
+    for b in bullets {
+        out.push_str(&format!("- {}\n", b.trim()));
+    }
     out
 }
 
 fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
-    let mut out = format!("# Rollout Summary\n\n- Generated: {}\n", chrono::Utc::now().to_rfc3339());
+    let mut out = format!(
+        "# Rollout Summary\n\n- Generated: {}\n",
+        chrono::Utc::now().to_rfc3339()
+    );
     if classified.total() == 0 {
         out.push_str("\n- No durable facts captured.\n");
     } else {
         out.push('\n');
-        for f in classified.preferences.iter().chain(&classified.repository_facts) {
+        for f in classified
+            .preferences
+            .iter()
+            .chain(&classified.repository_facts)
+        {
             out.push_str(&format!("- [{}] {}\n", f.source, f.fact));
         }
     }
@@ -1962,27 +2587,51 @@ fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
 }
 
 fn unique_rollout_id() -> String {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
     format!("rollout-{millis}")
 }
 
-struct MemoryLock { path: PathBuf }
+struct MemoryLock {
+    path: PathBuf,
+}
 
 impl MemoryLock {
     async fn acquire(path: &Path) -> Result<Self> {
         for _ in 0..LOCK_RETRY_ATTEMPTS {
-            match tokio::fs::OpenOptions::new().create_new(true).write(true).open(path).await {
-                Ok(_) => return Ok(Self { path: path.to_path_buf() }),
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => sleep(Duration::from_millis(LOCK_RETRY_DELAY_MS)).await,
-                Err(err) => return Err(err).with_context(|| format!("Failed to acquire {}", path.display())),
+            match tokio::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(path)
+                .await
+            {
+                Ok(_) => {
+                    return Ok(Self {
+                        path: path.to_path_buf(),
+                    });
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                    sleep(Duration::from_millis(LOCK_RETRY_DELAY_MS)).await
+                }
+                Err(err) => {
+                    return Err(err)
+                        .with_context(|| format!("Failed to acquire {}", path.display()));
+                }
             }
         }
-        Err(anyhow::anyhow!("Timed out waiting for persistent memory lock {}", path.display()))
+        Err(anyhow::anyhow!(
+            "Timed out waiting for persistent memory lock {}",
+            path.display()
+        ))
     }
 }
 
 impl Drop for MemoryLock {
-    fn drop(&mut self) { let _ = std::fs::remove_file(&self.path); }
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 #[cfg(test)]

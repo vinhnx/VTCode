@@ -244,7 +244,11 @@ fn should_persist_memory_envelope(vt_cfg: Option<&VTCodeConfig>) -> bool {
 
 fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     let mut sections = Vec::new();
-    sections.push(format!("{}\nSummary:\n{}", MEMORY_ENVELOPE_HEADER, envelope.summary.trim()));
+    sections.push(format!(
+        "{}\nSummary:\n{}",
+        MEMORY_ENVELOPE_HEADER,
+        envelope.summary.trim()
+    ));
 
     fn maybe_section(prefix: &str, content: Option<&str>) -> Option<String> {
         content
@@ -256,22 +260,48 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
         (!items.is_empty()).then(|| format!("{prefix}\n- {}", items.join("\n- ")))
     }
 
-    if let Some(s) = maybe_section("Objective", envelope.objective.as_deref()) { sections.push(s); }
-    if let Some(s) = maybe_section("Task Tracker", envelope.task_summary.as_deref()) { sections.push(s); }
-    if let Some(s) = maybe_section("Spec Summary", envelope.spec_summary.as_deref()) { sections.push(s); }
-    if let Some(s) = maybe_section("Evaluation Summary", envelope.evaluation_summary.as_deref()) { sections.push(s); }
-    if let Some(s) = list_section("Constraints", &envelope.constraints) { sections.push(s); }
-    if let Some(s) = list_section("Touched Files", &envelope.touched_files) { sections.push(s); }
+    if let Some(s) = maybe_section("Objective", envelope.objective.as_deref()) {
+        sections.push(s);
+    }
+    if let Some(s) = maybe_section("Task Tracker", envelope.task_summary.as_deref()) {
+        sections.push(s);
+    }
+    if let Some(s) = maybe_section("Spec Summary", envelope.spec_summary.as_deref()) {
+        sections.push(s);
+    }
+    if let Some(s) = maybe_section("Evaluation Summary", envelope.evaluation_summary.as_deref()) {
+        sections.push(s);
+    }
+    if let Some(s) = list_section("Constraints", &envelope.constraints) {
+        sections.push(s);
+    }
+    if let Some(s) = list_section("Touched Files", &envelope.touched_files) {
+        sections.push(s);
+    }
 
     if !envelope.grounded_facts.is_empty() {
-        let facts: Vec<_> = envelope.grounded_facts.iter()
-            .map(|f| format!("[{}] {}", f.source, f.fact.trim())).collect();
+        let facts: Vec<_> = envelope
+            .grounded_facts
+            .iter()
+            .map(|f| format!("[{}] {}", f.source, f.fact.trim()))
+            .collect();
         sections.push(format!("Grounded Facts:\n{}", facts.join("\n")));
     }
-    if let Some(s) = list_section("Open Questions", &envelope.open_questions) { sections.push(s); }
-    if let Some(s) = list_section("Verification Todo", &envelope.verification_todo) { sections.push(s); }
-    if let Some(s) = list_section("Delegation Notes", &envelope.delegation_notes) { sections.push(s); }
-    if let Some(s) = maybe_section("History Artifact", envelope.history_artifact_path.as_deref()) { sections.push(s); }
+    if let Some(s) = list_section("Open Questions", &envelope.open_questions) {
+        sections.push(s);
+    }
+    if let Some(s) = list_section("Verification Todo", &envelope.verification_todo) {
+        sections.push(s);
+    }
+    if let Some(s) = list_section("Delegation Notes", &envelope.delegation_notes) {
+        sections.push(s);
+    }
+    if let Some(s) = maybe_section(
+        "History Artifact",
+        envelope.history_artifact_path.as_deref(),
+    ) {
+        sections.push(s);
+    }
 
     Message::system(sections.join("\n\n"))
 }
@@ -517,7 +547,12 @@ pub(crate) fn inject_latest_memory_envelope(
     true
 }
 
-fn merge_dedup_push<T, K, F>(prior: &[T], updates: impl IntoIterator<Item = T>, limit: usize, key_fn: F) -> Vec<T>
+fn merge_dedup_push<T, K, F>(
+    prior: &[T],
+    updates: impl IntoIterator<Item = T>,
+    limit: usize,
+    key_fn: F,
+) -> Vec<T>
 where
     K: PartialEq,
     F: Fn(&T) -> K,
@@ -541,7 +576,9 @@ fn merge_touched_files(
     let prior = prior_envelope
         .map(|e| e.touched_files.as_slice())
         .unwrap_or(&[]);
-    merge_dedup_push(prior, touched_files.iter().cloned(), usize::MAX, |s| s.clone())
+    merge_dedup_push(prior, touched_files.iter().cloned(), usize::MAX, |s| {
+        s.clone()
+    })
 }
 
 fn merge_recent_strings(prior: &[String], updates: &[String], limit: usize) -> Vec<String> {
@@ -555,7 +592,9 @@ fn merge_recent_strings(prior: &[String], updates: &[String], limit: usize) -> V
         .map(|v| normalize_whitespace(v))
         .filter(|v| !v.is_empty())
         .collect();
-    merge_dedup_push(&prior_normalized, updates_normalized, limit, |s| s.to_ascii_lowercase())
+    merge_dedup_push(&prior_normalized, updates_normalized, limit, |s| {
+        s.to_ascii_lowercase()
+    })
 }
 
 fn extract_constraints_from_summary(text: Option<&str>) -> Vec<String> {
@@ -636,22 +675,48 @@ fn structured_tool_preview_from_spool(
     let spool_content = String::from_utf8_lossy(&fs::read(&resolved).ok()?).into_owned();
 
     let mut parts = Vec::new();
-    if let Some(stderr) = obj.get("stderr_preview").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(stderr) = obj
+        .get("stderr_preview")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         parts.push(normalize_whitespace(stderr));
     }
 
-    let is_exec_like = obj.get("exit_code").is_some() || obj.get("stderr_preview").is_some()
+    let is_exec_like = obj.get("exit_code").is_some()
+        || obj.get("stderr_preview").is_some()
         || obj.get("result_ref_only").and_then(Value::as_bool) == Some(true)
         || obj.get("spool_ref_only").and_then(Value::as_bool) == Some(true);
 
     if is_exec_like {
-        parts.push(format!("Spool excerpt: {}", normalize_whitespace(&tail_preview_text(&spool_content, RECOVERY_PREVIEW_SPOOL_EXEC_TAIL_BYTES, RECOVERY_PREVIEW_SPOOL_EXEC_MAX_LINES))));
+        parts.push(format!(
+            "Spool excerpt: {}",
+            normalize_whitespace(&tail_preview_text(
+                &spool_content,
+                RECOVERY_PREVIEW_SPOOL_EXEC_TAIL_BYTES,
+                RECOVERY_PREVIEW_SPOOL_EXEC_MAX_LINES
+            ))
+        ));
     } else {
         let mut excerpt_parts = Vec::new();
-        if let Some(path) = obj.get("source_path").and_then(Value::as_str).or_else(|| obj.get("path").and_then(Value::as_str)).map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(path) = obj
+            .get("source_path")
+            .and_then(Value::as_str)
+            .or_else(|| obj.get("path").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             excerpt_parts.push(format!("source_path: {path}"));
         }
-        excerpt_parts.push(format!("Spool excerpt: {}", normalize_whitespace(&condense_text_bytes(&spool_content, RECOVERY_PREVIEW_SPOOL_READ_HEAD_BYTES, RECOVERY_PREVIEW_SPOOL_READ_TAIL_BYTES))));
+        excerpt_parts.push(format!(
+            "Spool excerpt: {}",
+            normalize_whitespace(&condense_text_bytes(
+                &spool_content,
+                RECOVERY_PREVIEW_SPOOL_READ_HEAD_BYTES,
+                RECOVERY_PREVIEW_SPOOL_READ_TAIL_BYTES
+            ))
+        ));
         parts.push(excerpt_parts.join(" | "));
     }
     (!parts.is_empty()).then(|| parts.join(" | "))
@@ -665,7 +730,10 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         if text.chars().count() <= RECOVERY_PREVIEW_MAX_CHARS {
             return text.to_string();
         }
-        let end = text.char_indices().nth(RECOVERY_PREVIEW_MAX_CHARS).map_or(text.len(), |(i, _)| i);
+        let end = text
+            .char_indices()
+            .nth(RECOVERY_PREVIEW_MAX_CHARS)
+            .map_or(text.len(), |(i, _)| i);
         let mut t = text[..end].trim_end().to_string();
         t.push_str("...");
         t
@@ -674,104 +742,186 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         format!("{label}: {}", truncate_preview(text))
     }
     fn trimmed_json_str(obj: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
-        obj.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(normalize_whitespace)
+        obj.get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(normalize_whitespace)
     }
     fn error_preview_text(obj: &serde_json::Map<String, Value>) -> Option<String> {
         match obj.get("error") {
-            Some(Value::String(t)) => { let t = t.trim(); (!t.is_empty()).then(|| normalize_whitespace(t)) }
-            Some(Value::Object(e)) => e.get("message").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(normalize_whitespace),
+            Some(Value::String(t)) => {
+                let t = t.trim();
+                (!t.is_empty()).then(|| normalize_whitespace(t))
+            }
+            Some(Value::Object(e)) => e
+                .get("message")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(normalize_whitespace),
             _ => None,
         }
     }
     fn push_unique(parts: &mut Vec<String>, text: Option<String>) {
-        if let Some(t) = text { if !parts.iter().any(|e| e == &t) { parts.push(t); } }
+        if let Some(t) = text {
+            if !parts.iter().any(|e| e == &t) {
+                parts.push(t);
+            }
+        }
     }
     fn compact_json_preview(v: &Value) -> Option<String> {
         let s = serde_json::to_string(v).ok()?;
         let n = normalize_whitespace(&s);
         (!n.is_empty()).then_some(n)
     }
-    fn structured_tool_preview(raw_text: &str, workspace_root: Option<&Path>) -> Option<(String, u8)> {
-        let obj = serde_json::from_str::<Value>(raw_text).ok()?.as_object()?.clone();
+    fn structured_tool_preview(
+        raw_text: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<(String, u8)> {
+        let obj = serde_json::from_str::<Value>(raw_text)
+            .ok()?
+            .as_object()?
+            .clone();
         let guidance = obj.get("error").and_then(Value::as_object).unwrap_or(&obj);
         let mut parts = Vec::new();
         let mut priority = 0u8;
         if let Some(matches) = obj.get("matches").and_then(Value::as_array) {
             let path = trimmed_json_str(&obj, "path");
             let summary = if matches.is_empty() {
-                path.map_or_else(|| "No matches found".to_string(), |p| format!("No matches found in {p}"))
+                path.map_or_else(
+                    || "No matches found".to_string(),
+                    |p| format!("No matches found in {p}"),
+                )
             } else {
-                let total = obj.get("total_match_count").or_else(|| obj.get("matched_count")).or_else(|| obj.get("count")).and_then(Value::as_u64).unwrap_or(matches.len() as u64);
-                path.map_or_else(|| format!("Found {total} matches"), |p| format!("Found {total} matches in {p}"))
+                let total = obj
+                    .get("total_match_count")
+                    .or_else(|| obj.get("matched_count"))
+                    .or_else(|| obj.get("count"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(matches.len() as u64);
+                path.map_or_else(
+                    || format!("Found {total} matches"),
+                    |p| format!("Found {total} matches in {p}"),
+                )
             };
             push_unique(&mut parts, Some(summary));
             priority = priority.max(20);
         } else if let Some(items) = obj.get("items").and_then(Value::as_array) {
-            let total = obj.get("total").or_else(|| obj.get("count")).and_then(Value::as_u64).unwrap_or(items.len() as u64);
+            let total = obj
+                .get("total")
+                .or_else(|| obj.get("count"))
+                .and_then(Value::as_u64)
+                .unwrap_or(items.len() as u64);
             push_unique(&mut parts, Some(format!("Listed {total} items")));
             priority = priority.max(10);
         } else if let Some(files) = obj.get("files").and_then(Value::as_array) {
-            let total = obj.get("total").and_then(Value::as_u64).unwrap_or(files.len() as u64);
+            let total = obj
+                .get("total")
+                .and_then(Value::as_u64)
+                .unwrap_or(files.len() as u64);
             push_unique(&mut parts, Some(format!("Listed {total} files")));
             priority = priority.max(10);
         }
         push_unique(&mut parts, error_preview_text(&obj));
         for key in ["critical_note", "message", "hint"] {
-            push_unique(&mut parts, trimmed_json_str(&obj, key).or_else(|| trimmed_json_str(guidance, key)));
+            push_unique(
+                &mut parts,
+                trimmed_json_str(&obj, key).or_else(|| trimmed_json_str(guidance, key)),
+            );
         }
-        if parts.iter().any(|p| !(p.starts_with("Listed ") || p.starts_with("Found ") || p.starts_with("No matches found"))) {
+        if parts.iter().any(|p| {
+            !(p.starts_with("Listed ")
+                || p.starts_with("Found ")
+                || p.starts_with("No matches found"))
+        }) {
             priority = priority.max(55);
         }
-        push_unique(&mut parts, trimmed_json_str(&obj, "next_action").or_else(|| trimmed_json_str(guidance, "next_action")).map(|n| format!("Next action: {n}")));
-        if parts.iter().any(|p| p.starts_with("Next action: ")) { priority = priority.max(60); }
-        if let Some(tool) = trimmed_json_str(&obj, "fallback_tool").or_else(|| trimmed_json_str(guidance, "fallback_tool")) {
-            let fallback = obj.get("fallback_tool_args").or_else(|| guidance.get("fallback_tool_args")).and_then(compact_json_preview)
-                .map(|a| format!("Fallback tool: {tool} {a}")).unwrap_or_else(|| format!("Fallback tool: {tool}"));
+        push_unique(
+            &mut parts,
+            trimmed_json_str(&obj, "next_action")
+                .or_else(|| trimmed_json_str(guidance, "next_action"))
+                .map(|n| format!("Next action: {n}")),
+        );
+        if parts.iter().any(|p| p.starts_with("Next action: ")) {
+            priority = priority.max(60);
+        }
+        if let Some(tool) = trimmed_json_str(&obj, "fallback_tool")
+            .or_else(|| trimmed_json_str(guidance, "fallback_tool"))
+        {
+            let fallback = obj
+                .get("fallback_tool_args")
+                .or_else(|| guidance.get("fallback_tool_args"))
+                .and_then(compact_json_preview)
+                .map(|a| format!("Fallback tool: {tool} {a}"))
+                .unwrap_or_else(|| format!("Fallback tool: {tool}"));
             push_unique(&mut parts, Some(fallback));
             priority = priority.max(60);
         }
         if let Some(ws) = workspace_root {
             let spool = structured_tool_preview_from_spool(&obj, ws);
-            if spool.is_some() { priority = priority.max(100); }
+            if spool.is_some() {
+                priority = priority.max(100);
+            }
             push_unique(&mut parts, spool);
         }
         if parts.is_empty() {
             for key in ["output", "content", "stdout", "stderr"] {
                 push_unique(&mut parts, trimmed_json_str(&obj, key));
-                if !parts.is_empty() { priority = priority.max(90); break; }
+                if !parts.is_empty() {
+                    priority = priority.max(90);
+                    break;
+                }
             }
         }
         (!parts.is_empty()).then(|| (parts.join(" | "), priority.max(1)))
     }
 
     let latest_user_request = history.iter().rev().find_map(|m| {
-        if m.role != MessageRole::User { return None; }
+        if m.role != MessageRole::User {
+            return None;
+        }
         let text = normalize_whitespace(m.content.as_text().trim());
-        if text.is_empty() { return None; }
+        if text.is_empty() {
+            return None;
+        }
         Some(preview_line(RECOVERY_PREVIEW_USER_LABEL, &text))
     });
 
     let mut tool_previews = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for (recency_rank, message) in history.iter().rev().enumerate() {
-        if message.role != MessageRole::Tool { continue; }
+        if message.role != MessageRole::Tool {
+            continue;
+        }
         let raw_text = message.content.as_text();
         let (text, priority) = structured_tool_preview(raw_text.as_ref(), workspace_root)
             .unwrap_or_else(|| (normalize_whitespace(raw_text.trim()), 50));
-        if text.is_empty() || !seen.insert(text.clone()) { continue; }
+        if text.is_empty() || !seen.insert(text.clone()) {
+            continue;
+        }
         tool_previews.push((text, priority, recency_rank));
     }
     tool_previews.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
     tool_previews.truncate(RECOVERY_PREVIEW_MAX_TOOL_OUTPUTS);
 
     let mut previews = Vec::new();
-    if let Some(ur) = latest_user_request { previews.push(ur); }
-    previews.extend(tool_previews.into_iter().enumerate().map(|(i, (t, _, _))| format!("Tool output {}: {}", i + 1, truncate_preview(&t))));
+    if let Some(ur) = latest_user_request {
+        previews.push(ur);
+    }
+    previews.extend(
+        tool_previews
+            .into_iter()
+            .enumerate()
+            .map(|(i, (t, _, _))| format!("Tool output {}: {}", i + 1, truncate_preview(&t))),
+    );
 
     if previews.is_empty() {
         if let Some(text) = history.iter().rev().find_map(|m| {
             let text = normalize_whitespace(m.content.as_text().trim());
-            if text.is_empty() { return None; }
+            if text.is_empty() {
+                return None;
+            }
             let label = match m.role {
                 MessageRole::Tool => RECOVERY_PREVIEW_TOOL_LABEL,
                 MessageRole::Assistant => RECOVERY_PREVIEW_ASSISTANT_LABEL,
@@ -793,17 +943,28 @@ fn is_read_file_tool_name(tool_name: &str) -> bool {
 fn collect_file_read_tool_kinds(history: &[Message]) -> HashMap<String, FileReadToolKind> {
     let mut kinds = HashMap::new();
     for message in history {
-        let Some(tool_calls) = message.tool_calls.as_ref() else { continue; };
+        let Some(tool_calls) = message.tool_calls.as_ref() else {
+            continue;
+        };
         for tc in tool_calls {
-            let Some(tn) = tc.tool_name() else { continue; };
+            let Some(tn) = tc.tool_name() else {
+                continue;
+            };
             let kind = if is_read_file_tool_name(tn) {
                 Some(FileReadToolKind::ReadFile)
             } else if tn == tool_names::UNIFIED_FILE {
                 tc.execution_arguments().ok().and_then(|args| {
-                    args.get("action").and_then(Value::as_str).filter(|a| *a == "read").map(|_| FileReadToolKind::UnifiedFileRead)
+                    args.get("action")
+                        .and_then(Value::as_str)
+                        .filter(|a| *a == "read")
+                        .map(|_| FileReadToolKind::UnifiedFileRead)
                 })
-            } else { None };
-            if let Some(k) = kind { kinds.insert(tc.id.clone(), k); }
+            } else {
+                None
+            };
+            if let Some(k) = kind {
+                kinds.insert(tc.id.clone(), k);
+            }
         }
     }
     kinds
@@ -816,36 +977,63 @@ fn normalize_file_read_target(value: &str) -> Option<String> {
 
 fn build_file_read_dedup_key(payload: &Value) -> Option<FileReadDedupKey> {
     let obj = payload.as_object()?;
-    if obj.get("items").is_some() || obj.get("error").is_some()
-        || obj.get("spool_chunked").and_then(Value::as_bool).unwrap_or(false)
-        || obj.get("has_more").and_then(Value::as_bool).unwrap_or(false) {
+    if obj.get("items").is_some()
+        || obj.get("error").is_some()
+        || obj
+            .get("spool_chunked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        || obj
+            .get("has_more")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
         return None;
     }
-    let target = obj.get("file_path").and_then(Value::as_str)
+    let target = obj
+        .get("file_path")
+        .and_then(Value::as_str)
         .or_else(|| obj.get("path").and_then(Value::as_str))
         .and_then(normalize_file_read_target)?;
     Some(FileReadDedupKey {
         target,
         start_line: obj.get("start_line").and_then(Value::as_u64),
         end_line: obj.get("end_line").and_then(Value::as_u64),
-        spool_path: obj.get("spool_path").and_then(Value::as_str).and_then(normalize_file_read_target),
+        spool_path: obj
+            .get("spool_path")
+            .and_then(Value::as_str)
+            .and_then(normalize_file_read_target),
     })
 }
 
 fn build_file_read_placeholder_content(payload: &Value, key: &FileReadDedupKey) -> String {
     let mut p = serde_json::Map::new();
     p.insert("deduped_read".into(), Value::Bool(true));
-    p.insert("note".into(), Value::String(DEDUPED_FILE_READ_NOTE.to_string()));
+    p.insert(
+        "note".into(),
+        Value::String(DEDUPED_FILE_READ_NOTE.to_string()),
+    );
     fn maybe_str(p: &mut serde_json::Map<String, Value>, payload: &Value, key: &str) {
-        if let Some(s) = payload.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(s) = payload
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             p.insert(key.into(), Value::String(s.to_string()));
         }
     }
     maybe_str(&mut p, payload, "file_path");
     maybe_str(&mut p, payload, "path");
-    if let Some(sl) = key.start_line { p.insert("start_line".into(), json!(sl)); }
-    if let Some(el) = key.end_line { p.insert("end_line".into(), json!(el)); }
-    if let Some(sp) = key.spool_path.as_deref() { p.insert("spool_path".into(), json!(sp)); }
+    if let Some(sl) = key.start_line {
+        p.insert("start_line".into(), json!(sl));
+    }
+    if let Some(el) = key.end_line {
+        p.insert("end_line".into(), json!(el));
+    }
+    if let Some(sp) = key.spool_path.as_deref() {
+        p.insert("spool_path".into(), json!(sp));
+    }
     Value::Object(p).to_string()
 }
 
@@ -888,15 +1076,22 @@ fn dedup_repeated_file_reads_for_local_compaction(history: &[Message]) -> Vec<Me
     let mut last_idx = HashMap::new();
     let mut candidates = Vec::new();
     for (i, msg) in history.iter().enumerate() {
-        let Some(c) = file_read_dedup_candidate(msg, &tool_kinds) else { continue; };
+        let Some(c) = file_read_dedup_candidate(msg, &tool_kinds) else {
+            continue;
+        };
         last_idx.insert(c.key.clone(), i);
         candidates.push((i, c));
     }
     let mut deduped = history.to_vec();
     let mut changed = false;
     for (idx, c) in candidates {
-        if last_idx.get(&c.key).copied() == Some(idx) { continue; }
-        if let Some(msg) = deduped.get_mut(idx) { msg.content = c.placeholder_content.into(); changed = true; }
+        if last_idx.get(&c.key).copied() == Some(idx) {
+            continue;
+        }
+        if let Some(msg) = deduped.get_mut(idx) {
+            msg.content = c.placeholder_content.into();
+            changed = true;
+        }
     }
     if changed { deduped } else { history.to_vec() }
 }
@@ -948,28 +1143,69 @@ fn build_session_memory_envelope(
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> SessionMemoryEnvelope {
     let pe = prior_envelope;
-    let spec_summary = read_spec_summary(workspace_root).or_else(|| pe.and_then(|e| e.spec_summary.clone()));
-    let evaluation_summary = read_evaluation_summary(workspace_root).or_else(|| pe.and_then(|e| e.evaluation_summary.clone()));
-    let merge = |prior: &[String], updates: &[String]| merge_recent_strings(prior, updates, MEMORY_LIST_LIMIT);
-    let constraints = merge(pe.map(|e| e.constraints.as_slice()).unwrap_or(&[]), &extract_constraints_from_summary(spec_summary.as_deref()));
-    let constraints = merge(&constraints, &extract_constraints_from_summary(evaluation_summary.as_deref()));
+    let spec_summary =
+        read_spec_summary(workspace_root).or_else(|| pe.and_then(|e| e.spec_summary.clone()));
+    let evaluation_summary = read_evaluation_summary(workspace_root)
+        .or_else(|| pe.and_then(|e| e.evaluation_summary.clone()));
+    let merge = |prior: &[String], updates: &[String]| {
+        merge_recent_strings(prior, updates, MEMORY_LIST_LIMIT)
+    };
+    let constraints = merge(
+        pe.map(|e| e.constraints.as_slice()).unwrap_or(&[]),
+        &extract_constraints_from_summary(spec_summary.as_deref()),
+    );
+    let constraints = merge(
+        &constraints,
+        &extract_constraints_from_summary(evaluation_summary.as_deref()),
+    );
     let update = envelope_update.cloned().unwrap_or_default();
 
     SessionMemoryEnvelope {
         session_id: session_id.to_string(),
         schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary,
-        objective: update.objective.or_else(|| task_snapshot.objective.clone().or_else(|| pe.and_then(|e| e.objective.clone()))),
-        task_summary: task_snapshot.summary.clone().or_else(|| pe.and_then(|e| e.task_summary.clone())),
+        objective: update.objective.or_else(|| {
+            task_snapshot
+                .objective
+                .clone()
+                .or_else(|| pe.and_then(|e| e.objective.clone()))
+        }),
+        task_summary: task_snapshot
+            .summary
+            .clone()
+            .or_else(|| pe.and_then(|e| e.task_summary.clone())),
         spec_summary,
         evaluation_summary,
         constraints: merge(&constraints, &update.constraints),
         grounded_facts: merge_grounded_facts(pe, original_history, &update.grounded_facts),
-        touched_files: merge_touched_files(pe, &touched_files.iter().cloned().chain(update.touched_files).collect::<Vec<_>>()),
-        open_questions: merge(pe.map(|e| e.open_questions.as_slice()).unwrap_or(&[]), &update.open_questions),
-        verification_todo: merge(pe.map(|e| e.verification_todo.as_slice()).unwrap_or(&[]), &task_snapshot.verification_todo.iter().cloned().chain(update.verification_todo).collect::<Vec<_>>()),
-        delegation_notes: merge(pe.map(|e| e.delegation_notes.as_slice()).unwrap_or(&[]), &update.delegation_notes),
-        history_artifact_path: history_artifact_path.map(|p| p.display().to_string()).or_else(|| pe.and_then(|e| e.history_artifact_path.clone())),
+        touched_files: merge_touched_files(
+            pe,
+            &touched_files
+                .iter()
+                .cloned()
+                .chain(update.touched_files)
+                .collect::<Vec<_>>(),
+        ),
+        open_questions: merge(
+            pe.map(|e| e.open_questions.as_slice()).unwrap_or(&[]),
+            &update.open_questions,
+        ),
+        verification_todo: merge(
+            pe.map(|e| e.verification_todo.as_slice()).unwrap_or(&[]),
+            &task_snapshot
+                .verification_todo
+                .iter()
+                .cloned()
+                .chain(update.verification_todo)
+                .collect::<Vec<_>>(),
+        ),
+        delegation_notes: merge(
+            pe.map(|e| e.delegation_notes.as_slice()).unwrap_or(&[]),
+            &update.delegation_notes,
+        ),
+        history_artifact_path: history_artifact_path
+            .map(|p| p.display().to_string())
+            .or_else(|| pe.and_then(|e| e.history_artifact_path.clone())),
         generated_at: Utc::now().to_rfc3339(),
     }
 }
@@ -997,26 +1233,53 @@ fn persist_memory_envelope(
     seed_envelope: Option<&SessionMemoryEnvelope>,
 ) -> Result<Option<SessionMemoryEnvelope>> {
     let should_persist = should_persist_memory_envelope(vt_cfg);
-    if original_history.is_empty() || (!should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk) {
+    if original_history.is_empty()
+        || (!should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk)
+    {
         return Ok(None);
     }
 
     let task_snapshot = read_task_tracker_snapshot(workspace_root);
-    let history_artifact_path = if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
-        let mut hm = HistoryFileManager::new(workspace_root, session_id);
-        let hm2 = messages_to_history_messages(original_history, 0);
-        let hr = hm.write_history_sync(&hm2, original_history.len(), "compaction", touched_files, &[]).context("write compaction history artifact")?;
-        Some(hr.file_path)
+    let history_artifact_path =
+        if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
+            let mut hm = HistoryFileManager::new(workspace_root, session_id);
+            let hm2 = messages_to_history_messages(original_history, 0);
+            let hr = hm
+                .write_history_sync(
+                    &hm2,
+                    original_history.len(),
+                    "compaction",
+                    touched_files,
+                    &[],
+                )
+                .context("write compaction history artifact")?;
+            Some(hr.file_path)
+        } else {
+            None
+        };
+    let loaded = if seed_envelope.is_none() {
+        load_latest_memory_envelope(workspace_root, session_id)
     } else {
         None
     };
-    let loaded = if seed_envelope.is_none() { load_latest_memory_envelope(workspace_root, session_id) } else { None };
     let prior = seed_envelope.or(loaded.as_ref());
-    let envelope = build_session_memory_envelope(session_id, workspace_root, original_history, touched_files,
-        extract_compaction_summary(compacted, original_history), history_artifact_path.as_ref(), prior, &task_snapshot, None);
+    let envelope = build_session_memory_envelope(
+        session_id,
+        workspace_root,
+        original_history,
+        touched_files,
+        extract_compaction_summary(compacted, original_history),
+        history_artifact_path.as_ref(),
+        prior,
+        &task_snapshot,
+        None,
+    );
 
     if let Some(hap) = history_artifact_path.as_ref() {
-        write_memory_envelope_to_path(&memory_envelope_path_from_history_path(workspace_root, hap), &envelope)?;
+        write_memory_envelope_to_path(
+            &memory_envelope_path_from_history_path(workspace_root, hap),
+            &envelope,
+        )?;
     }
     apply_memory_envelope(compacted, &envelope, placement);
     Ok(Some(envelope))
@@ -1047,13 +1310,24 @@ pub(crate) fn refresh_session_memory_envelope(
     session_stats: &SessionStats,
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> Result<Option<SessionMemoryEnvelope>> {
-    if history.is_empty() || !should_persist_memory_envelope(vt_cfg) { return Ok(None); }
+    if history.is_empty() || !should_persist_memory_envelope(vt_cfg) {
+        return Ok(None);
+    }
 
     let prior = load_latest_memory_envelope(workspace_root, session_id);
     let task_snapshot = read_task_tracker_snapshot(workspace_root);
     let touched_files = session_stats.recent_touched_files();
-    let envelope = build_session_memory_envelope(session_id, workspace_root, history, &touched_files,
-        derive_continuity_summary(history, prior.as_ref()), None, prior.as_ref(), &task_snapshot, envelope_update);
+    let envelope = build_session_memory_envelope(
+        session_id,
+        workspace_root,
+        history,
+        &touched_files,
+        derive_continuity_summary(history, prior.as_ref()),
+        None,
+        prior.as_ref(),
+        &task_snapshot,
+        envelope_update,
+    );
     let path = latest_memory_envelope_path_for_session(workspace_root, session_id)
         .unwrap_or_else(|| default_memory_envelope_path_for_session(workspace_root, session_id));
     write_memory_envelope_to_path(&path, &envelope)?;

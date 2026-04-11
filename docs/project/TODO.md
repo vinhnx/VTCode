@@ -14,7 +14,6 @@ Top 25 longest tracked Rust files:
 | Lines | Path |
 | ---: | --- |
 
-| 3801 | src/agent/runloop/unified/turn/compaction.rs |
 | 2851 | src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs |
 | 2668 | vtcode-core/src/utils/session_archive.rs |
 | 2563 | src/agent/runloop/unified/turn/turn_processing/llm_request/copilot_runtime.rs |
@@ -45,3 +44,11 @@ Top 25 longest tracked Rust files:
 ===
 
 Ctrl+O now copies the last agent response as markdown - works everywhere, even over SSH. I've been using it nonstop to grab plans for review. https://github.com/openai/codex/pull/16966
+
+===
+
+https://deepwiki.com/search/how-does-tree-work-and-how-pi_13a0d64b-8d67-4c6a-bfd7-41de92a7261c?mode=fast
+
+===
+
+https://deepwiki.com/search/how-does-load-works-and-how-pi_1713c944-fe9f-4863-a3c0-3d695d5ca7ae?mode=fast

@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 fn make_list_item(title: &str, cmd: &str) -> InlineListItem {
     InlineListItem {
@@ -12,7 +12,12 @@ fn make_list_item(title: &str, cmd: &str) -> InlineListItem {
     }
 }
 
-fn show_list_modal(session: &mut AppSession, title: &str, lines: Vec<&str>, items: Vec<InlineListItem>) {
+fn show_list_modal(
+    session: &mut AppSession,
+    title: &str,
+    lines: Vec<&str>,
+    items: Vec<InlineListItem>,
+) {
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::List(
             app_types::ListOverlayRequest {
@@ -46,7 +51,13 @@ fn render_session_to_terminal_app(session: &mut Session, rows: u16) -> Terminal<
     terminal
 }
 
-fn show_overlay(session: &mut Session, title: &str, lines: Vec<&str>, items: Vec<InlineListItem>, selected: Option<InlineListSelection>) {
+fn show_overlay(
+    session: &mut Session,
+    title: &str,
+    lines: Vec<&str>,
+    items: Vec<InlineListItem>,
+    selected: Option<InlineListSelection>,
+) {
     session.handle_command(InlineCommand::ShowOverlay {
         request: Box::new(OverlayRequest::List(ListOverlayRequest {
             title: title.to_string(),
@@ -63,7 +74,12 @@ fn show_overlay(session: &mut Session, title: &str, lines: Vec<&str>, items: Vec
 #[test]
 fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
+    show_list_modal(
+        &mut session,
+        "Pick one",
+        vec!["Choose an option"],
+        vec![make_list_item("Option A", "a")],
+    );
 
     let _terminal = render_session_to_terminal(&mut session, 30);
 
@@ -80,7 +96,12 @@ fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
 #[test]
 fn show_list_modal_uses_bottom_half_of_terminal() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
+    show_list_modal(
+        &mut session,
+        "Pick one",
+        vec!["Choose an option"],
+        vec![make_list_item("Option A", "a")],
+    );
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(
@@ -99,7 +120,12 @@ fn show_list_modal_uses_bottom_half_of_terminal() {
 #[test]
 fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
+    show_list_modal(
+        &mut session,
+        "Pick one",
+        vec!["Choose an option"],
+        vec![make_list_item("Option A", "a")],
+    );
 
     let terminal = render_session_to_terminal(&mut session, 30);
 
@@ -134,14 +160,19 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
         ..InlineTheme::default()
     };
     let mut session = AppSession::new(theme, None, 30);
-    show_list_modal(&mut session, "Theme", vec!["Choose a theme"], vec![InlineListItem {
-        title: "Clapre".to_string(),
-        subtitle: None,
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
-        search_value: Some("Clapre".to_string()),
-    }]);
+    show_list_modal(
+        &mut session,
+        "Theme",
+        vec!["Choose a theme"],
+        vec![InlineListItem {
+            title: "Clapre".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
+            search_value: Some("Clapre".to_string()),
+        }],
+    );
 
     let backend = TestBackend::new(VIEW_WIDTH, 30);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -242,24 +273,29 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
         ..InlineTheme::default()
     };
     let mut session = AppSession::new(theme, None, 30);
-    show_list_modal(&mut session, "Theme", vec!["Choose a theme"], vec![
-        InlineListItem {
-            title: "Built-in themes".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: Some("Built-in themes".to_string()),
-        },
-        InlineListItem {
-            title: "Clapre".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
-            search_value: Some("Clapre".to_string()),
-        },
-    ]);
+    show_list_modal(
+        &mut session,
+        "Theme",
+        vec!["Choose a theme"],
+        vec![
+            InlineListItem {
+                title: "Built-in themes".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: None,
+                search_value: Some("Built-in themes".to_string()),
+            },
+            InlineListItem {
+                title: "Clapre".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
+                search_value: Some("Clapre".to_string()),
+            },
+        ],
+    );
 
     let terminal = render_session_to_terminal(&mut session, 30);
 
@@ -291,7 +327,12 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
 #[test]
 fn untitled_floating_modal_skips_title_chrome_rows() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(&mut session, "", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
+    show_list_modal(
+        &mut session,
+        "",
+        vec!["Choose an option"],
+        vec![make_list_item("Option A", "a")],
+    );
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(
@@ -320,7 +361,12 @@ fn closing_top_transient_restores_previous_bottom_panel() {
         "task panel should occupy the bottom panel when visible"
     );
 
-    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
+    show_list_modal(
+        &mut session,
+        "Pick one",
+        vec!["Choose an option"],
+        vec![make_list_item("Option A", "a")],
+    );
 
     terminal
         .draw(|frame| session.render(frame))
@@ -345,7 +391,16 @@ fn list_modal_keeps_last_selection_when_items_append() {
     let mut session = Session::new(InlineTheme::default(), None, 30);
 
     let selected = InlineListSelection::SlashCommand("second".to_string());
-    show_overlay(&mut session, "Pick", vec!["Choose"], vec![make_list_item("First", "first"), make_list_item("Second", "second")], Some(selected.clone()));
+    show_overlay(
+        &mut session,
+        "Pick",
+        vec!["Choose"],
+        vec![
+            make_list_item("First", "first"),
+            make_list_item("Second", "second"),
+        ],
+        Some(selected.clone()),
+    );
     session.handle_command(InlineCommand::CloseOverlay);
 
     show_overlay(
@@ -384,4 +439,3 @@ fn render_always_reserves_input_status_row() {
         "input should always reserve persistent status row"
     );
 }
-

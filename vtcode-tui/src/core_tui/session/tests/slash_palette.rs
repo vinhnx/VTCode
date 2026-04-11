@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn busy_slash_palette_stop_interrupts_immediately() {
@@ -239,4 +239,3 @@ fn slash_panel_height_stays_fixed_for_short_results() {
         "slash panel height should stay fixed regardless of result count"
     );
 }
-

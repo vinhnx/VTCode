@@ -1,11 +1,10 @@
 use super::{
-CompactionContext, CompactionState, GroundedFactRecord,
-build_server_compaction_context_management, build_summarized_fork_history,
-compact_history_for_recovery_in_place, compact_history_from_index_in_place,
-compact_history_in_place, compact_history_in_place_with_events,
-inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
-manual_openai_compact_history_in_place, maybe_auto_compact_history,
-resolve_compaction_threshold,
+    CompactionContext, CompactionState, GroundedFactRecord,
+    build_server_compaction_context_management, build_summarized_fork_history,
+    compact_history_for_recovery_in_place, compact_history_from_index_in_place,
+    compact_history_in_place, compact_history_in_place_with_events, inject_latest_memory_envelope,
+    latest_memory_envelope_path_for_session, manual_openai_compact_history_in_place,
+    maybe_auto_compact_history, resolve_compaction_threshold,
 };
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -462,12 +461,7 @@ async fn manual_openai_compaction_clears_previous_response_chain() {
     let provider = ProviderCompactionProvider;
     let mut history = test_history();
     let mut session_stats = SessionStats::default();
-    session_stats.set_previous_response_chain(
-        "provider-stub",
-        "stub-model",
-        Some("resp_123"),
-        &[],
-    );
+    session_stats.set_previous_response_chain("provider-stub", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
 
     let outcome = manual_openai_compact_history_in_place(

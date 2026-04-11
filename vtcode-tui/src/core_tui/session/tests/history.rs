@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 
 #[test]
 fn arrow_keys_navigate_input_history() {
@@ -125,4 +125,3 @@ fn history_picker_renders_search_field_above_results() {
 
     assert!(search_index < item_index);
 }
-

@@ -1,5 +1,5 @@
-use super::helpers::*;
 use super::super::*;
+use super::helpers::*;
 use crate::core_tui::session::transcript_links::TranscriptLinkTarget;
 
 #[test]
@@ -127,8 +127,20 @@ fn repeated_plain_click_on_same_transcript_file_link_is_throttled() {
     };
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
-    left_click_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
+    left_click_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
 
     assert!(matches!(
         rx.try_recv(),
@@ -215,8 +227,20 @@ fn double_click_emits_open_file_event_for_absolute_transcript_path() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     };
-    left_click_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
-    left_click_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
+    left_click_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
+    left_click_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
 
     assert!(matches!(
         rx.try_recv(),
@@ -865,7 +889,9 @@ fn meta_key_press_then_plain_click_emits_open_file_event_on_macos() {
     let (tx, mut rx) = mpsc::unbounded_channel();
     let area = fixture.target_area();
 
-    fixture.session.handle_event(CrosstermEvent::Key(meta_modifier_press_event()), &tx, None);
+    fixture
+        .session
+        .handle_event(CrosstermEvent::Key(meta_modifier_press_event()), &tx, None);
     left_click_session(
         &mut fixture.session,
         &tx,
@@ -898,7 +924,10 @@ fn app_session_modifier_click_emits_open_file_event_for_transcript_path() {
         rx.try_recv(),
         Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == fixture.path
     ));
-    assert_eq!(fixture.session.core.mouse_drag_target, MouseDragTarget::None);
+    assert_eq!(
+        fixture.session.core.mouse_drag_target,
+        MouseDragTarget::None
+    );
     assert!(!fixture.session.core.mouse_selection.is_selecting);
     assert!(!fixture.session.core.mouse_selection.has_selection);
 }
@@ -914,8 +943,20 @@ fn app_session_double_click_emits_open_file_event_for_transcript_path() {
         row: area.y,
         modifiers: KeyModifiers::NONE,
     };
-    left_click_app_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
-    left_click_app_session(&mut fixture.session, &tx, click.column, click.row, click.modifiers);
+    left_click_app_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
+    left_click_app_session(
+        &mut fixture.session,
+        &tx,
+        click.column,
+        click.row,
+        click.modifiers,
+    );
 
     assert!(matches!(
         rx.try_recv(),
@@ -997,7 +1038,10 @@ fn app_session_ctrl_click_on_link_is_consumed_without_selection() {
     );
 
     assert!(rx.try_recv().is_err());
-    assert_eq!(fixture.session.core.mouse_drag_target, MouseDragTarget::None);
+    assert_eq!(
+        fixture.session.core.mouse_drag_target,
+        MouseDragTarget::None
+    );
     assert!(!fixture.session.core.mouse_selection.is_selecting);
     assert!(!fixture.session.core.mouse_selection.has_selection);
 }
@@ -1491,4 +1535,3 @@ fn pty_busy_state_does_not_overlay_transcript_status() {
         "busy PTY state should not inject transcript status overlay"
     );
 }
-
