@@ -11,10 +11,23 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 type ResponsesSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+const WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX: &str =
+    "Conversation already has an active response in progress:";
 const OPENAI_BETA_RESPONSES_WEBSOCKET_V2: &str = "responses=v2";
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
 const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
+
+fn is_websocket_active_response_error(err: &LLMError) -> bool {
+    let message = match err {
+        LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
+        LLMError::Authentication { .. }
+        | LLMError::RateLimit { .. }
+        | LLMError::InvalidRequest { .. } => return false,
+    };
+
+    message.contains(WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX)
+}
 
 #[cfg(test)]
 pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
@@ -167,6 +180,7 @@ impl OpenAIProvider {
         request: &LLMRequest,
     ) -> Result<LLMResponse, LLMError> {
         let payload = self.convert_to_openai_responses_format(request)?;
+        let mut retried_active_response = false;
         let mut retried_reconnect = false;
         let mut retried_new_chain = false;
 
@@ -218,6 +232,14 @@ impl OpenAIProvider {
                 }
                 Err(err) => {
                     *session_guard = None;
+                    if !retried_active_response && is_websocket_active_response_error(&err) {
+                        tracing::warn!(
+                            model = %request.model,
+                            "OpenAI Responses websocket rejected response.create while another response was still active; reconnecting once"
+                        );
+                        retried_active_response = true;
+                        continue;
+                    }
                     if !retried_new_chain
                         && prepared.used_previous_response_id
                         && is_websocket_previous_response_not_found_error(&err)
@@ -552,8 +574,9 @@ fn format_network_error(message: String) -> LLMError {
 mod tests {
     use super::{
         OPENAI_BETA_RESPONSES_WEBSOCKET_V2, OpenAIResponsesWebSocketContinuationCache,
-        PREVIOUS_RESPONSE_NOT_FOUND_CODE, WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE,
-        apply_generate_mode, input_is_incremental, is_websocket_connection_limit_error,
+        PREVIOUS_RESPONSE_NOT_FOUND_CODE, WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX,
+        WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE, apply_generate_mode, input_is_incremental,
+        is_websocket_active_response_error, is_websocket_connection_limit_error,
         is_websocket_previous_response_not_found_error, prepare_websocket_event,
         responses_websocket_url,
     };
@@ -601,6 +624,26 @@ mod tests {
             metadata: None,
         };
         assert!(!is_websocket_connection_limit_error(&err));
+    }
+
+    #[test]
+    fn websocket_active_response_error_is_detected() {
+        let err = LLMError::Provider {
+            message: format!(
+                "OpenAI error: invalid_request_error: {WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX} resp_active"
+            ),
+            metadata: None,
+        };
+        assert!(is_websocket_active_response_error(&err));
+    }
+
+    #[test]
+    fn websocket_non_active_response_error_is_not_detected() {
+        let err = LLMError::Provider {
+            message: "OpenAI error: invalid_request_error: something else".to_string(),
+            metadata: None,
+        };
+        assert!(!is_websocket_active_response_error(&err));
     }
 
     #[test]
@@ -914,6 +957,50 @@ mod tests {
             .expect("websocket retry should succeed");
 
         assert_eq!(response.content.as_deref(), Some("ok"));
+        {
+            let recorded = recorded.lock().expect("recorded lock");
+            assert_eq!(recorded.len(), 2);
+            assert_eq!(
+                recorded[0]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_cached")
+            );
+            assert_eq!(
+                recorded[1]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_cached")
+            );
+        }
+        handle.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn websocket_reconnects_after_active_response_error() {
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
+            vec![ScriptedReply::Error {
+                code: "invalid_request_error",
+                message: "Conversation already has an active response in progress: resp_active.",
+            }],
+            vec![ScriptedReply::Completed {
+                response_id: "resp_after_active",
+                text: "retried ok",
+            }],
+        ])
+        .await
+        else {
+            return;
+        };
+        let provider = websocket_test_provider(base_url);
+        let request = websocket_test_request();
+        seed_continuation_cache(&provider, &request, "resp_cached", true);
+
+        let response = LLMProvider::generate(&provider, request)
+            .await
+            .expect("active-response retry should succeed");
+
+        assert_eq!(response.content.as_deref(), Some("retried ok"));
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 2);
