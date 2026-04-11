@@ -713,7 +713,7 @@ fn config_action_item(
     title: &str,
     subtitle: &str,
     badge: &str,
-    indent: usize,
+    indent: u8,
     action: impl Into<String>,
     search_value: impl Into<String>,
 ) -> InlineListItem {

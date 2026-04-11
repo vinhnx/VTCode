@@ -133,7 +133,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
             .to_string()
     } else {
         format!(
-            "{} local agent{} • Enter inspect • Ctrl+O transcript • Ctrl+K stop • Ctrl+X cancel • Esc close",
+            "{} local agent{} • Enter inspect • Alt+O transcript • Ctrl+K stop • Ctrl+X cancel • Esc close",
             entries.len(),
             if entries.len() == 1 { "" } else { "s" }
         )

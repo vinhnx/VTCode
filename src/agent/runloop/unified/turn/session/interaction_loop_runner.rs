@@ -55,7 +55,7 @@ const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
 const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
 const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const REVIEW_SCROLLBACK_EXIT_HINT: &str =
-    "[Native scrollback view. Press Esc, q, or Ctrl+O to return to fullscreen.]";
+    "[Native scrollback view. Press Esc, q, or Alt+O to return to fullscreen.]";
 
 #[derive(Debug, Deserialize)]
 struct ToolErrorPayloadHint {
@@ -236,7 +236,7 @@ fn show_transcript_review_in_scrollback(text: &str, mouse_capture: bool) -> Resu
                     && (matches!(
                         key.code,
                         KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q')
-                    ) || (key.modifiers.contains(KeyModifiers::CONTROL)
+                    ) || (key.modifiers.contains(KeyModifiers::ALT)
                         && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')))) =>
             {
                 break;

@@ -676,6 +676,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             None
         }
+        KeyCode::Char('o') | KeyCode::Char('O') if has_control && !has_alt && !has_command => {
+            // Ctrl+O: Copy last agent response as markdown to clipboard
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/copy".to_string()))
+        }
         KeyCode::Char('t') | KeyCode::Char('T') if has_control => {
             session.toggle_logs();
             None
@@ -807,7 +812,8 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),
         "Ctrl+Home / Ctrl+End: Jump transcript to top or bottom in fullscreen.".to_string(),
-        "Ctrl+O: Open fullscreen transcript review.".to_string(),
+        "Ctrl+O: Copy last agent response as markdown to clipboard.".to_string(),
+        "Alt+O: Open fullscreen transcript review.".to_string(),
         "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
         "Esc: Close this overlay.".to_string(),
     ]
@@ -826,8 +832,8 @@ fn handle_transcript_review_key(
     has_alt: bool,
     has_command: bool,
 ) -> TranscriptReviewKeyResult {
-    let open_shortcut = has_control
-        && !has_alt
+    let open_shortcut = has_alt
+        && !has_control
         && !has_command
         && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'));
     if session.transcript_review_state().is_none() {
@@ -973,6 +979,14 @@ fn handle_transcript_review_key(
             TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewInEditor(
                 review.export_text(),
             ))
+        }
+        // Let Ctrl+O (copy response) pass through to the main key handler
+        _ if has_control
+            && !has_alt
+            && !has_command
+            && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')) =>
+        {
+            TranscriptReviewKeyResult::NotHandled
         }
         _ => TranscriptReviewKeyResult::Handled,
     }
@@ -1211,7 +1225,21 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_o_opens_and_closes_transcript_review() {
+    fn ctrl_o_emits_copy_command() {
+        let mut session = build_session();
+        session
+            .core
+            .push_line(InlineMessageKind::Agent, vec![text_segment("agent reply")]);
+
+        let event = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+        assert!(
+            matches!(event, Some(InlineEvent::Submit(ref cmd)) if cmd == "/copy"),
+            "Ctrl+O should emit Submit(\"/copy\"), got {event:?}"
+        );
+    }
+
+    #[test]
+    fn alt_o_opens_and_closes_transcript_review() {
         let mut session = build_session();
         session
             .core
@@ -1221,14 +1249,14 @@ mod tests {
 
         assert!(
             session
-                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL))
+                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT))
                 .is_none()
         );
         assert!(session.transcript_review_state().is_some());
 
         assert!(
             session
-                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL))
+                .process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT))
                 .is_none()
         );
         assert!(session.transcript_review_state().is_none());
@@ -1266,7 +1294,7 @@ mod tests {
                 .push_line(InlineMessageKind::Agent, vec![text_segment(line)]);
         }
 
-        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT));
         let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
         for ch in ['a', 'l', 'p', 'h', 'a'] {
             let _ = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
@@ -1307,7 +1335,7 @@ mod tests {
             .core
             .append_pasted_message(InlineMessageKind::Tool, payload.clone(), line_total);
 
-        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+        let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT));
 
         match session.process_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE)) {
             Some(InlineEvent::OpenTranscriptReviewInEditor(text)) => {

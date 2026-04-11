@@ -380,7 +380,7 @@ VT Code can also run a background subagent as a managed child `vtcode` subproces
 - when local agents exist, the footer shows a compact badge such as `1 local agent | ↓ explore`
 - in wide layouts, the sidebar shows a single `Local Agents` section instead of separate live-agent and subprocess sections
 - with an empty composer, `Down` opens the Local Agents drawer; otherwise `Down` keeps its normal history behavior
-- inside the drawer, `Enter` inspects the selected item, `Ctrl+O` opens its transcript or archive, `Ctrl+K` requests a stop, and `Ctrl+X` force-cancels a background subprocess
+- inside the drawer, `Enter` inspects the selected item, `Alt+O` opens its transcript or archive, `Ctrl+K` requests a stop, and `Ctrl+X` force-cancels a background subprocess
 
 Background subprocess state is persisted under `.vtcode/state/background_subagents.json`. On restart, VT Code only respawns enabled background agents when both `subagents.background.enabled = true` and `subagents.background.auto_restore = true`.
 

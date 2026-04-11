@@ -124,7 +124,7 @@ This prevents terminal artifacts and ensures external apps get clean input/outpu
 
 ### How does fullscreen transcript review work?
 
-Press `Ctrl+O` while fullscreen rendering is active to open transcript review. VT Code builds a plain-text cache of the full transcript, including expanded collapsed tool payloads, then lets you:
+Press `Alt+O` while fullscreen rendering is active to open transcript review. VT Code builds a plain-text cache of the full transcript, including expanded collapsed tool payloads, then lets you:
 
 - search with `/`, `n`, and `N`
 - page through the conversation with `Ctrl+U`, `Ctrl+D`, `Ctrl+B`, and `Ctrl+F`

@@ -169,7 +169,7 @@ impl AppSession {
                 LocalAgentsKeyResult::Handled
             }
             KeyCode::Char('o') | KeyCode::Char('O')
-                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                if key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.selected_local_agent_transcript_event()
                     .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)

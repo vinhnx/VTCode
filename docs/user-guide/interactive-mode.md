@@ -14,7 +14,8 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+D` | Exit VT Code interactive mode. | Sends EOF to the shell integration. |
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
 | `Ctrl+T` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs without affecting the TODO panel. |
-| `Ctrl+O` | Open or close fullscreen transcript review. | Available when VT Code is using alternate-screen rendering. |
+| `Ctrl+O` | Copy last agent response as markdown to clipboard. | Available after the agent has produced at least one response. |
+| `Alt+O` | Open or close fullscreen transcript review. | Available when VT Code is using alternate-screen rendering. |
 | `Ctrl+A` | Move cursor to start of input line. | UNIX/readline-style editing. |
 | `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. Configure it with `/config tools.editor`. |
 | `Ctrl+Home` | Jump to the oldest visible transcript content. | Fullscreen rendering only. |
@@ -71,7 +72,7 @@ When VT Code is running in alternate-screen mode, the transcript and composer us
 
 ### Transcript Review Surface
 
-Press `Ctrl+O` to open the fullscreen transcript review surface. It builds a plain-text view of the full conversation, including expanded collapsed tool payloads, so search and export operate on the complete transcript rather than only the visible viewport.
+Press `Alt+O` to open the fullscreen transcript review surface. It builds a plain-text view of the full conversation, including expanded collapsed tool payloads, so search and export operate on the complete transcript rather than only the visible viewport.
 
 | Shortcut | Description |
 | :-- | :-- |
@@ -87,7 +88,7 @@ Press `Ctrl+O` to open the fullscreen transcript review surface. It builds a pla
 | `G` / `End` | Jump to the bottom. |
 | `[` | Hand the expanded transcript to the terminal's native scrollback until you return. |
 | `v` | Write the expanded transcript to a temporary file and open it in your configured editor. |
-| `q` or `Ctrl+O` | Close transcript review. |
+| `q` or `Alt+O` | Close transcript review. |
 
 ### Mouse Capture, Copy, and tmux
 
