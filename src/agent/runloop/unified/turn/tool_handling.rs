@@ -76,7 +76,7 @@ pub(crate) async fn handle_tool_execution_result(
             // Handle lifecycle hooks
             if let Some(hooks) = ctx.lifecycle_hooks {
                 match hooks
-                    .run_post_tool_use(tool_name, Some(args_val), output)
+                    .run_post_tool_use(tool_name, Some(args_val), output, Some(&tool_call_id))
                     .await
                 {
                     Ok(outcome) => {

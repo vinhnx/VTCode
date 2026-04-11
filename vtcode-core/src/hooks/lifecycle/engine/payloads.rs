@@ -148,12 +148,19 @@ impl LifecycleHookEngine {
         &self,
         tool_name: &str,
         tool_input: Option<&Value>,
+        tool_call_id: Option<&str>,
     ) -> Result<Value> {
         let mut payload = self.base_payload("PreToolUse").await?;
         payload.insert("tool_name".to_string(), Value::String(tool_name.to_owned()));
         payload.insert(
             "tool_input".to_string(),
             tool_input.cloned().unwrap_or(Value::Null),
+        );
+        payload.insert(
+            "tool_call_id".to_string(),
+            tool_call_id
+                .map(|id| Value::String(id.to_owned()))
+                .unwrap_or(Value::Null),
         );
         Ok(Value::Object(payload))
     }
@@ -163,6 +170,7 @@ impl LifecycleHookEngine {
         tool_name: &str,
         tool_input: Option<&Value>,
         tool_output: &Value,
+        tool_call_id: Option<&str>,
     ) -> Result<Value> {
         let mut payload = self.base_payload("PostToolUse").await?;
         payload.insert("tool_name".to_string(), Value::String(tool_name.to_owned()));
@@ -171,6 +179,12 @@ impl LifecycleHookEngine {
             tool_input.cloned().unwrap_or(Value::Null),
         );
         payload.insert("tool_response".to_string(), tool_output.clone());
+        payload.insert(
+            "tool_call_id".to_string(),
+            tool_call_id
+                .map(|id| Value::String(id.to_owned()))
+                .unwrap_or(Value::Null),
+        );
         Ok(Value::Object(payload))
     }
 

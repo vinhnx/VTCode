@@ -32,7 +32,7 @@ async fn test_pre_tool_use_hook_allows_by_default() {
     .unwrap();
 
     let outcome = engine
-        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
         .await
         .expect("Failed to run pre-tool use hook");
 
@@ -83,7 +83,7 @@ async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
     .unwrap();
 
     let outcome = engine
-        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
         .await
         .expect("Failed to run pre-tool use hook");
 
@@ -126,7 +126,7 @@ async fn test_pre_tool_use_hook_exit_code_2_requires_feedback() {
     .unwrap();
 
     let outcome = engine
-        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
         .await
         .expect("Failed to run pre-tool use hook");
 
@@ -167,7 +167,7 @@ async fn test_pre_tool_use_hook_allows_with_json_response() {
     .unwrap();
 
     let outcome = engine
-        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
         .await
         .expect("Failed to run pre-tool use hook");
 
@@ -208,6 +208,7 @@ async fn test_post_tool_use_hook_execution() {
             "TestTool",
             Some(&json!({"param": "value"})),
             &json!({"result": "success"}),
+            None,
         )
         .await
         .expect("Failed to run post-tool use hook");
@@ -256,6 +257,7 @@ async fn test_post_tool_use_json_like_stdout_failure_is_reported() {
             "TestTool",
             Some(&json!({"param": "value"})),
             &json!({"result": "success"}),
+            None,
         )
         .await
         .expect("Failed to run post-tool use hook");
@@ -303,6 +305,7 @@ async fn test_post_tool_use_block_requires_reason() {
             "TestTool",
             Some(&json!({"param": "value"})),
             &json!({"result": "success"}),
+            None,
         )
         .await
         .expect("Failed to run post-tool use hook");
@@ -351,6 +354,7 @@ async fn test_quiet_success_output_suppresses_plain_stdout() {
             "TestTool",
             Some(&json!({"param": "value"})),
             &json!({"result": "success"}),
+            None,
         )
         .await
         .expect("Failed to run post-tool use hook");
@@ -484,7 +488,7 @@ async fn test_hook_matcher_functionality() {
     .unwrap();
 
     let outcome = engine
-        .run_pre_tool_use("Write", Some(&json!({"path": "/test"})))
+        .run_pre_tool_use("Write", Some(&json!({"path": "/test"})), None)
         .await
         .expect("Failed to run pre-tool use hook for Write");
 
@@ -496,7 +500,7 @@ async fn test_hook_matcher_functionality() {
     );
 
     let outcome = engine
-        .run_pre_tool_use("Bash", Some(&json!({"command": "ls"})))
+        .run_pre_tool_use("Bash", Some(&json!({"command": "ls"})), None)
         .await
         .expect("Failed to run pre-tool use hook for Bash");
 

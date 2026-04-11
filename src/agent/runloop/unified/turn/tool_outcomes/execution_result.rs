@@ -313,8 +313,13 @@ async fn handle_success<'a>(
     t_ctx.ctx.reset_blocked_tool_call_streak();
     let content_for_model =
         prepare_tool_response_content(t_ctx.ctx, tool_name, args_val, output).await;
-    push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, content_for_model)
-        .await?;
+    push_tool_response_with_auto_mode_probe(
+        t_ctx,
+        tool_call_id.clone(),
+        tool_name,
+        content_for_model,
+    )
+    .await?;
     if !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {
         let signature = signature_key_for(tool_name, args_val);
         t_ctx
@@ -347,7 +352,7 @@ async fn handle_success<'a>(
     merge_subagent_completion_into_memory(t_ctx.ctx, tool_name, output)?;
 
     // Run post-tool hooks
-    run_post_tool_hooks(t_ctx.ctx, tool_name, args_val, output).await?;
+    run_post_tool_hooks(t_ctx.ctx, &tool_call_id, tool_name, args_val, output).await?;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, Some(output));
 
@@ -508,6 +513,7 @@ async fn handle_cancelled(
 
 async fn run_post_tool_hooks<'a>(
     ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: &str,
     tool_name: &str,
     args_val: &serde_json::Value,
     output: &serde_json::Value,
@@ -516,7 +522,7 @@ async fn run_post_tool_hooks<'a>(
 
     if let Some(hooks) = hooks {
         match hooks
-            .run_post_tool_use(tool_name, Some(args_val), output)
+            .run_post_tool_use(tool_name, Some(args_val), output, Some(tool_call_id))
             .await
         {
             Ok(outcome) => {

@@ -11,7 +11,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_routing::{
-    ensure_tool_permission, prompt_session_limit_increase,
+    ensure_tool_permission_with_call_id, prompt_session_limit_increase,
 };
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
@@ -471,10 +471,11 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Ensure tool permission
-    let permission_result = ensure_tool_permission(
+    let permission_result = ensure_tool_permission_with_call_id(
         build_tool_permissions_context(ctx),
         &canonical_tool_name,
         Some(effective_args),
+        Some(tool_call_id),
     )
     .await;
 

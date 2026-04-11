@@ -380,6 +380,7 @@ impl LifecycleHookEngine {
         &self,
         tool_name: &str,
         tool_input: Option<&Value>,
+        tool_call_id: Option<&str>,
     ) -> Result<PreToolHookOutcome> {
         let mut outcome = PreToolHookOutcome::default();
 
@@ -387,7 +388,9 @@ impl LifecycleHookEngine {
             return Ok(outcome);
         }
 
-        let payload = self.build_pre_tool_payload(tool_name, tool_input).await?;
+        let payload = self
+            .build_pre_tool_payload(tool_name, tool_input, tool_call_id)
+            .await?;
 
         for group in &self.inner.hooks.pre_tool_use {
             if !group.matcher.matches(tool_name) {
@@ -426,6 +429,7 @@ impl LifecycleHookEngine {
         tool_name: &str,
         tool_input: Option<&Value>,
         tool_output: &Value,
+        tool_call_id: Option<&str>,
     ) -> Result<PostToolHookOutcome> {
         let mut outcome = PostToolHookOutcome::default();
 
@@ -434,7 +438,7 @@ impl LifecycleHookEngine {
         }
 
         let payload = self
-            .build_post_tool_payload(tool_name, tool_input, tool_output)
+            .build_post_tool_payload(tool_name, tool_input, tool_output, tool_call_id)
             .await?;
 
         for group in &self.inner.hooks.post_tool_use {

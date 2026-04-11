@@ -1,5 +1,6 @@
 use super::*;
 
+use serde_json::json;
 use tempfile::TempDir;
 use tokio;
 
@@ -474,6 +475,83 @@ async fn test_user_prompt_submit_payload_includes_turn_id() {
     assert_eq!(payload["turn_id"], "turn-42");
     assert_eq!(payload["hook_event_name"], "UserPromptSubmit");
     assert_eq!(payload["prompt"], "Test prompt");
+}
+
+#[tokio::test]
+async fn test_pre_tool_use_hook_receives_tool_call_id_in_payload() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let config = HooksConfig {
+        lifecycle: LifecycleHooksConfig {
+            pre_tool_use: vec![HookGroupConfig {
+                matcher: Some("read_file".into()),
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "python3 -c 'import json,sys; print(json.load(sys.stdin).get(\"tool_call_id\"))'".into(),
+                    timeout_seconds: None,
+                }],
+            }],
+            ..Default::default()
+        },
+    };
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let outcome = engine
+        .run_pre_tool_use(
+            "read_file",
+            Some(&json!({"path": "src/main.rs"})),
+            Some("tool_call_7"),
+        )
+        .await
+        .expect("run pre-tool hook");
+
+    assert!(outcome.messages.iter().any(|msg| msg.text == "tool_call_7"));
+}
+
+#[tokio::test]
+async fn test_post_tool_use_hook_receives_tool_call_id_in_payload() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let config = HooksConfig {
+        lifecycle: LifecycleHooksConfig {
+            post_tool_use: vec![HookGroupConfig {
+                matcher: Some("read_file".into()),
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "python3 -c 'import json,sys; print(json.load(sys.stdin).get(\"tool_call_id\"))'".into(),
+                    timeout_seconds: None,
+                }],
+            }],
+            ..Default::default()
+        },
+    };
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let outcome = engine
+        .run_post_tool_use(
+            "read_file",
+            Some(&json!({"path": "src/main.rs"})),
+            &json!({"content": "fn main() {}"}),
+            Some("tool_call_7"),
+        )
+        .await
+        .expect("run post-tool hook");
+
+    assert!(outcome.messages.iter().any(|msg| msg.text == "tool_call_7"));
 }
 
 #[tokio::test]

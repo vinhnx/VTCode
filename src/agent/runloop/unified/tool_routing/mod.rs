@@ -890,6 +890,15 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     tool_name: &str,
     tool_args: Option<&Value>,
 ) -> Result<ToolPermissionFlow> {
+    ensure_tool_permission_with_call_id(ctx, tool_name, tool_args, None).await
+}
+
+pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
+    ctx: ToolPermissionsContext<'_, S>,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    tool_call_id: Option<&str>,
+) -> Result<ToolPermissionFlow> {
     let ToolPermissionsContext {
         tool_registry,
         renderer,
@@ -927,7 +936,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     let mut hook_requires_prompt = false;
 
     if let Some(hooks) = hooks {
-        match hooks.run_pre_tool_use(tool_name, tool_args).await {
+        match hooks
+            .run_pre_tool_use(tool_name, tool_args, tool_call_id)
+            .await
+        {
             Ok(outcome) => {
                 render_hook_messages(renderer, &outcome.messages)?;
                 match outcome.decision {

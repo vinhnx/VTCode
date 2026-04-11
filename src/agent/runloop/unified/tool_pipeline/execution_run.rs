@@ -21,8 +21,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
-use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
