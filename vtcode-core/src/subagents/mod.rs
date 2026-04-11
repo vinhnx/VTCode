@@ -1,287 +1,73 @@
-use crate::tools::pty::PtySize;
+// ─── Module Structure ───────────────────────────────────────────────────────
+
+mod background;
+mod config;
+mod constants;
+mod discovery;
+mod model;
+mod prompt;
+mod types;
+
+// ─── Re-exports ─────────────────────────────────────────────────────────────
+
+pub use background::{
+    background_record_id, build_background_subagent_command, extract_tail_lines,
+    load_archive_preview, subagent_display_label,
+};
+pub use config::{
+    build_child_config, compose_subagent_instructions, filter_child_tools,
+    normalize_child_max_turns, prepare_child_runtime_config,
+};
+pub use model::{agent_type_for_spec, load_memory_appendix};
+pub use prompt::{
+    contains_explicit_delegation_request, contains_explicit_model_request,
+    delegated_task_requires_clarification, extract_explicit_agent_mentions,
+    normalize_requested_model_override, request_prompt, sanitize_subagent_input_items,
+};
+pub use types::{
+    BackgroundRecord, BackgroundSubprocessEntry, BackgroundSubprocessSnapshot,
+    BackgroundSubprocessStatus, ChildRecord, ChildRunResult, ControllerState,
+    PersistedBackgroundRecord, PersistedBackgroundState, SendInputRequest, SpawnAgentRequest,
+    StatusEntryBuilder, SubagentInputItem, SubagentStatus, SubagentStatusEntry,
+    SubagentThreadSnapshot, TurnDelegationHints,
+};
+
+// ─── Public Utilities ───────────────────────────────────────────────────────
+
+pub fn is_subagent_tool(name: &str) -> bool {
+    SUBAGENT_TOOL_NAMES.contains(&name)
+}
+
+// ─── Controller ─────────────────────────────────────────────────────────────
+
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use futures::future::select_all;
-use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::collections::{BTreeMap, VecDeque};
-use std::path::{Path, PathBuf};
+use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
-use tokio::task::JoinHandle;
 
 use crate::config::VTCodeConfig;
-use crate::config::constants::models;
-use crate::config::constants::tools;
-use crate::config::models::{ModelId, Provider};
 use crate::config::types::ReasoningEffortLevel;
 use crate::core::agent::runner::{AgentRunner, RunnerSettings};
-use crate::core::agent::task::{Task, TaskOutcome};
-use crate::core::agent::types::AgentType;
-use crate::core::threads::{
-    ThreadBootstrap, ThreadId, ThreadRuntimeHandle, ThreadSnapshot, build_thread_archive_metadata,
-};
-use crate::exec::events::ThreadEvent;
-use crate::hooks::LifecycleHookEngine;
-use crate::llm::auto_lightweight_model;
-use crate::llm::factory::{infer_provider, infer_provider_from_model};
-use crate::llm::provider::{Message, ToolDefinition};
-use crate::persistent_memory::extract_memory_highlights;
-use crate::plugins::components::AgentsHandler;
-use crate::plugins::manifest::PluginManifest;
+use crate::core::agent::task::Task;
+use crate::core::threads::{ThreadBootstrap, ThreadId, ThreadRuntimeHandle, ThreadSnapshot};
+use crate::hooks::{LifecycleHookEngine, SessionStartTrigger};
+use crate::llm::provider::Message;
 use crate::tools::exec_session::ExecSessionManager;
-use crate::tools::pty::PtyManager;
-use crate::utils::file_utils::ensure_dir_exists;
-use crate::utils::session_archive::{
-    SessionArchive, SessionArchiveMetadata, SessionForkMode, SessionListing, SessionMessage,
-    SessionSnapshot, find_session_by_identifier,
-};
+use crate::tools::pty::{PtyManager, PtySize};
+use crate::utils::session_archive::{SessionArchive, find_session_by_identifier};
+use vtcode_config::SubagentSpec;
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
-use vtcode_config::{
-    DiscoveredSubagents, HooksConfig, McpProviderConfig, PermissionMode, SubagentDiscoveryInput,
-    SubagentMcpServer, SubagentMemoryScope, SubagentSpec, discover_subagents,
-};
 
-const SUBAGENT_TRANSCRIPT_LINE_LIMIT: usize = 200;
-const SUBAGENT_MEMORY_BYTES_LIMIT: usize = 25 * 1024;
-const SUBAGENT_MEMORY_LINE_LIMIT: usize = 200;
-const SUBAGENT_MEMORY_HIGHLIGHT_LIMIT: usize = 4;
-const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 3;
-const SUBAGENT_MIN_MAX_TURNS: usize = 2;
-const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
-    "analyze",
-    "analyse",
-    "check",
-    "current state",
-    "explore",
-    "help",
-    "inspect",
-    "inspect current state",
-    "look",
-    "look around",
-    "report",
-    "report findings",
-    "report status",
-    "review",
-    "status",
-    "summarise",
-    "summarize",
-    "summary",
-];
+use self::background::*;
+use self::config::*;
+use self::constants::*;
+use self::discovery::discover_controller_subagents;
+use self::model::*;
 
-const SUBAGENT_TOOL_NAMES: &[&str] = &[
-    tools::SPAWN_AGENT,
-    tools::SEND_INPUT,
-    tools::WAIT_AGENT,
-    tools::RESUME_AGENT,
-    tools::CLOSE_AGENT,
-];
-
-const NON_MUTATING_TOOL_PREFIXES: &[&str] = &[
-    tools::UNIFIED_SEARCH,
-    tools::READ_FILE,
-    tools::LIST_SKILLS,
-    tools::LOAD_SKILL,
-    tools::LOAD_SKILL_RESOURCE,
-];
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SubagentStatus {
-    Queued,
-    Running,
-    Waiting,
-    Completed,
-    Failed,
-    Closed,
-}
-
-impl SubagentStatus {
-    #[must_use]
-    pub const fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed | Self::Closed)
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Queued => "queued",
-            Self::Running => "running",
-            Self::Waiting => "waiting",
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Closed => "closed",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubagentStatusEntry {
-    pub id: String,
-    pub session_id: String,
-    pub parent_thread_id: String,
-    pub agent_name: String,
-    pub display_label: String,
-    pub description: String,
-    pub source: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    pub status: SubagentStatus,
-    pub background: bool,
-    pub depth: usize,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub completed_at: Option<DateTime<Utc>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transcript_path: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nickname: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BackgroundSubprocessStatus {
-    Starting,
-    Running,
-    Stopped,
-    Error,
-}
-
-impl BackgroundSubprocessStatus {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Starting => "starting",
-            Self::Running => "running",
-            Self::Stopped => "stopped",
-            Self::Error => "error",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackgroundSubprocessEntry {
-    pub id: String,
-    pub session_id: String,
-    pub exec_session_id: String,
-    pub agent_name: String,
-    pub display_label: String,
-    pub description: String,
-    pub source: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    pub status: BackgroundSubprocessStatus,
-    pub desired_enabled: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub started_at: Option<DateTime<Utc>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ended_at: Option<DateTime<Utc>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pid: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub archive_path: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transcript_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackgroundSubprocessSnapshot {
-    pub entry: BackgroundSubprocessEntry,
-    #[serde(default)]
-    pub preview: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct SubagentThreadSnapshot {
-    pub id: String,
-    pub session_id: String,
-    pub parent_thread_id: String,
-    pub agent_name: String,
-    pub display_label: String,
-    pub status: SubagentStatus,
-    pub background: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub archive_path: Option<PathBuf>,
-    pub transcript_path: Option<PathBuf>,
-    pub effective_config: VTCodeConfig,
-    pub snapshot: ThreadSnapshot,
-    pub recent_events: Vec<ThreadEvent>,
-}
-
-#[must_use]
-pub fn delegated_task_requires_clarification(prompt: &str) -> bool {
-    let normalized = prompt
-        .trim()
-        .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '.' | ',' | '!' | '?' | ':' | ';'))
-        .to_ascii_lowercase();
-    if normalized.is_empty() {
-        return true;
-    }
-    if VAGUE_SUBAGENT_PROMPTS
-        .iter()
-        .any(|candidate| normalized == *candidate)
-    {
-        return true;
-    }
-    normalized.split_whitespace().count() == 1
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubagentInputItem {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub item_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub image_url: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SpawnAgentRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default)]
-    pub items: Vec<SubagentInputItem>,
-    #[serde(default)]
-    pub fork_context: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
-    #[serde(default)]
-    pub background: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_turns: Option<usize>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SendInputRequest {
-    pub target: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default)]
-    pub items: Vec<SubagentInputItem>,
-    #[serde(default)]
-    pub interrupt: bool,
-}
+// ─── Controller Config ─────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub struct SubagentControllerConfig {
@@ -298,188 +84,6 @@ pub struct SubagentControllerConfig {
     pub pty_manager: PtyManager,
 }
 
-struct ChildRecord {
-    id: String,
-    session_id: String,
-    parent_thread_id: String,
-    spec: SubagentSpec,
-    display_label: String,
-    status: SubagentStatus,
-    background: bool,
-    depth: usize,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
-    summary: Option<String>,
-    error: Option<String>,
-    archive_metadata: Option<SessionArchiveMetadata>,
-    archive_path: Option<PathBuf>,
-    transcript_path: Option<PathBuf>,
-    effective_config: Option<VTCodeConfig>,
-    stored_messages: Vec<Message>,
-    last_prompt: Option<String>,
-    queued_prompts: VecDeque<String>,
-    thread_handle: Option<ThreadRuntimeHandle>,
-    handle: Option<JoinHandle<()>>,
-    notify: Arc<Notify>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct PersistedBackgroundRecord {
-    id: String,
-    agent_name: String,
-    display_label: String,
-    description: String,
-    source: String,
-    color: Option<String>,
-    session_id: String,
-    exec_session_id: String,
-    desired_enabled: bool,
-    status: BackgroundSubprocessStatus,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    started_at: Option<DateTime<Utc>>,
-    ended_at: Option<DateTime<Utc>>,
-    pid: Option<u32>,
-    prompt: String,
-    summary: Option<String>,
-    error: Option<String>,
-    archive_path: Option<PathBuf>,
-    transcript_path: Option<PathBuf>,
-    max_turns: Option<usize>,
-    model_override: Option<String>,
-    reasoning_override: Option<String>,
-    restart_attempts: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PersistedBackgroundState {
-    #[serde(default)]
-    records: Vec<PersistedBackgroundRecord>,
-}
-
-struct BackgroundRecord {
-    id: String,
-    agent_name: String,
-    display_label: String,
-    description: String,
-    source: String,
-    color: Option<String>,
-    session_id: String,
-    exec_session_id: String,
-    desired_enabled: bool,
-    status: BackgroundSubprocessStatus,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    started_at: Option<DateTime<Utc>>,
-    ended_at: Option<DateTime<Utc>>,
-    pid: Option<u32>,
-    prompt: String,
-    summary: Option<String>,
-    error: Option<String>,
-    archive_path: Option<PathBuf>,
-    transcript_path: Option<PathBuf>,
-    max_turns: Option<usize>,
-    model_override: Option<String>,
-    reasoning_override: Option<String>,
-    restart_attempts: u8,
-}
-
-impl BackgroundRecord {
-    fn status_entry(&self) -> BackgroundSubprocessEntry {
-        BackgroundSubprocessEntry {
-            id: self.id.clone(),
-            session_id: self.session_id.clone(),
-            exec_session_id: self.exec_session_id.clone(),
-            agent_name: self.agent_name.clone(),
-            display_label: self.display_label.clone(),
-            description: self.description.clone(),
-            source: self.source.clone(),
-            color: self.color.clone(),
-            status: self.status,
-            desired_enabled: self.desired_enabled,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            started_at: self.started_at,
-            ended_at: self.ended_at,
-            pid: self.pid,
-            summary: self.summary.clone(),
-            error: self.error.clone(),
-            archive_path: self.archive_path.clone(),
-            transcript_path: self.transcript_path.clone(),
-        }
-    }
-
-    fn persisted(&self) -> PersistedBackgroundRecord {
-        PersistedBackgroundRecord {
-            id: self.id.clone(),
-            agent_name: self.agent_name.clone(),
-            display_label: self.display_label.clone(),
-            description: self.description.clone(),
-            source: self.source.clone(),
-            color: self.color.clone(),
-            session_id: self.session_id.clone(),
-            exec_session_id: self.exec_session_id.clone(),
-            desired_enabled: self.desired_enabled,
-            status: self.status,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            started_at: self.started_at,
-            ended_at: self.ended_at,
-            pid: self.pid,
-            prompt: self.prompt.clone(),
-            summary: self.summary.clone(),
-            error: self.error.clone(),
-            archive_path: self.archive_path.clone(),
-            transcript_path: self.transcript_path.clone(),
-            max_turns: self.max_turns,
-            model_override: self.model_override.clone(),
-            reasoning_override: self.reasoning_override.clone(),
-            restart_attempts: self.restart_attempts,
-        }
-    }
-}
-
-impl ChildRecord {
-    fn status_entry(&self) -> SubagentStatusEntry {
-        SubagentStatusEntry {
-            id: self.id.clone(),
-            session_id: self.session_id.clone(),
-            parent_thread_id: self.parent_thread_id.clone(),
-            agent_name: self.spec.name.clone(),
-            display_label: self.display_label.clone(),
-            description: self.spec.description.clone(),
-            source: self.spec.source.label(),
-            color: self.spec.color.clone(),
-            status: self.status,
-            background: self.background,
-            depth: self.depth,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            completed_at: self.completed_at,
-            summary: self.summary.clone(),
-            error: self.error.clone(),
-            transcript_path: self.transcript_path.clone(),
-            nickname: self.spec.nickname_candidates.first().cloned(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct TurnDelegationHints {
-    explicit_mentions: Vec<String>,
-    explicit_request: bool,
-    current_input: String,
-}
-
-struct ControllerState {
-    discovered: DiscoveredSubagents,
-    parent_messages: Vec<Message>,
-    turn_hints: TurnDelegationHints,
-    children: BTreeMap<String, ChildRecord>,
-    background_children: BTreeMap<String, BackgroundRecord>,
-}
-
 #[derive(Clone)]
 pub struct SubagentController {
     config: Arc<SubagentControllerConfig>,
@@ -494,44 +98,14 @@ impl SubagentController {
         let lifecycle_hooks = LifecycleHookEngine::new_with_session(
             config.workspace_root.clone(),
             &config.vt_cfg.hooks,
-            crate::hooks::SessionStartTrigger::Startup,
+            SessionStartTrigger::Startup,
             config.parent_session_id.clone(),
             config.vt_cfg.permissions.default_mode,
         )?;
         let background_children = load_background_state(&config.workspace_root)?
             .records
             .into_iter()
-            .map(|record| {
-                (
-                    record.id.clone(),
-                    BackgroundRecord {
-                        id: record.id,
-                        agent_name: record.agent_name,
-                        display_label: record.display_label,
-                        description: record.description,
-                        source: record.source,
-                        color: record.color,
-                        session_id: record.session_id,
-                        exec_session_id: record.exec_session_id,
-                        desired_enabled: record.desired_enabled,
-                        status: record.status,
-                        created_at: record.created_at,
-                        updated_at: record.updated_at,
-                        started_at: record.started_at,
-                        ended_at: record.ended_at,
-                        pid: record.pid,
-                        prompt: record.prompt,
-                        summary: record.summary,
-                        error: record.error,
-                        archive_path: record.archive_path,
-                        transcript_path: record.transcript_path,
-                        max_turns: record.max_turns,
-                        model_override: record.model_override,
-                        reasoning_override: record.reasoning_override,
-                        restart_attempts: record.restart_attempts,
-                    },
-                )
-            })
+            .map(|record| (record.id.clone(), BackgroundRecord::from_persisted(record)))
             .collect();
         Ok(Self {
             parent_session_id: Arc::new(RwLock::new(config.parent_session_id.clone())),
@@ -541,7 +115,7 @@ impl SubagentController {
                 discovered,
                 parent_messages: Vec::new(),
                 turn_hints: TurnDelegationHints::default(),
-                children: BTreeMap::new(),
+                children: std::collections::BTreeMap::new(),
                 background_children,
             })),
         })
@@ -554,7 +128,8 @@ impl SubagentController {
     }
 
     pub async fn set_parent_messages(&self, messages: &[Message]) {
-        self.state.write().await.parent_messages = messages.to_vec();
+        let cloned = messages.to_vec();
+        self.state.write().await.parent_messages = cloned;
     }
 
     pub async fn set_turn_delegation_hints_from_input(&self, input: &str) -> Vec<String> {
@@ -592,7 +167,7 @@ impl SubagentController {
         state
             .children
             .values()
-            .map(ChildRecord::status_entry)
+            .map(ChildRecord::build_status_entry)
             .collect()
     }
 
@@ -601,7 +176,7 @@ impl SubagentController {
         state
             .background_children
             .values()
-            .map(BackgroundRecord::status_entry)
+            .map(BackgroundRecord::build_status_entry)
             .collect()
     }
 
@@ -614,7 +189,7 @@ impl SubagentController {
                 .background_children
                 .get(target)
                 .ok_or_else(|| anyhow!("Unknown background subprocess {}", target))?
-                .status_entry()
+                .build_status_entry()
         };
 
         let preview = if entry.exec_session_id.is_empty() {
@@ -626,7 +201,7 @@ impl SubagentController {
                 .read_session_output(&entry.exec_session_id, false)
                 .await
             {
-                Ok(Some(output)) => summarize_background_preview(&output),
+                Ok(Some(output)) => extract_tail_lines(&output, SUBAGENT_PREVIEW_LINES),
                 Ok(None) | Err(_) => {
                     if let Some(path) = entry
                         .transcript_path
@@ -676,14 +251,7 @@ impl SubagentController {
             state
                 .background_children
                 .get(&target_id)
-                .is_some_and(|record| {
-                    record.desired_enabled
-                        && matches!(
-                            record.status,
-                            BackgroundSubprocessStatus::Starting
-                                | BackgroundSubprocessStatus::Running
-                        )
-                })
+                .is_some_and(|record| record.desired_enabled && record.status.is_active())
         };
 
         if should_stop {
@@ -713,16 +281,15 @@ impl SubagentController {
         };
 
         for (record_id, agent_name, exec_session_id, restart_attempts) in desired_records {
-            let is_live = if exec_session_id.is_empty() {
-                false
-            } else {
-                self.config
+            let is_live = !exec_session_id.is_empty()
+                && self
+                    .config
                     .exec_sessions
                     .snapshot_session(&exec_session_id)
                     .await
                     .ok()
-                    .is_some_and(|snapshot| exec_session_is_running(&snapshot))
-            };
+                    .is_some_and(|snapshot| exec_session_is_running(&snapshot));
+
             if is_live || !self.config.vt_cfg.subagents.background.auto_restore {
                 continue;
             }
@@ -773,88 +340,9 @@ impl SubagentController {
                 None
             };
 
-            let mut respawn = None;
-            {
-                let mut state = self.state.write().await;
-                let Some(record) = state.background_children.get_mut(&record_id) else {
-                    continue;
-                };
-                record.updated_at = Utc::now();
-
-                if let Some(snapshot) = snapshot {
-                    record.pid = snapshot.child_pid;
-                    record.started_at = snapshot.started_at.or(record.started_at);
-
-                    match snapshot.lifecycle_state {
-                        Some(crate::tools::types::VTCodeSessionLifecycleState::Running) => {
-                            record.status = BackgroundSubprocessStatus::Running;
-                            record.ended_at = None;
-                            record.error = None;
-                        }
-                        Some(crate::tools::types::VTCodeSessionLifecycleState::Exited) | None => {
-                            record.ended_at.get_or_insert(Utc::now());
-                            if record.desired_enabled
-                                && self.config.vt_cfg.subagents.background.auto_restore
-                                && record.restart_attempts < 1
-                            {
-                                let next_restart_attempt =
-                                    record.restart_attempts.saturating_add(1);
-                                record.restart_attempts = next_restart_attempt;
-                                record.status = BackgroundSubprocessStatus::Starting;
-                                tracing::warn!(
-                                    agent_name = record.agent_name.as_str(),
-                                    record_id = record.id.as_str(),
-                                    attempt = next_restart_attempt,
-                                    "Background subprocess exited unexpectedly; scheduling restart"
-                                );
-                                respawn = Some((
-                                    record.agent_name.clone(),
-                                    record.id.clone(),
-                                    next_restart_attempt,
-                                ));
-                            } else if record.desired_enabled {
-                                record.status = BackgroundSubprocessStatus::Error;
-                                record.error = Some(match snapshot.exit_code {
-                                    Some(exit_code) => {
-                                        format!(
-                                            "Background subprocess exited with code {exit_code}"
-                                        )
-                                    }
-                                    None => "Background subprocess exited unexpectedly".to_string(),
-                                });
-                            } else {
-                                record.status = BackgroundSubprocessStatus::Stopped;
-                            }
-                        }
-                    }
-                } else if record.desired_enabled
-                    && self.config.vt_cfg.subagents.background.auto_restore
-                {
-                    if record.restart_attempts < 1 {
-                        let next_restart_attempt = record.restart_attempts.saturating_add(1);
-                        record.restart_attempts = next_restart_attempt;
-                        record.status = BackgroundSubprocessStatus::Starting;
-                        tracing::warn!(
-                            agent_name = record.agent_name.as_str(),
-                            record_id = record.id.as_str(),
-                            attempt = next_restart_attempt,
-                            "Background subprocess is missing; scheduling restart"
-                        );
-                        respawn = Some((
-                            record.agent_name.clone(),
-                            record.id.clone(),
-                            next_restart_attempt,
-                        ));
-                    } else {
-                        record.status = BackgroundSubprocessStatus::Error;
-                        record.error = Some("Background subprocess is not running".to_string());
-                        record.ended_at.get_or_insert(Utc::now());
-                    }
-                } else if !record.desired_enabled {
-                    record.status = BackgroundSubprocessStatus::Stopped;
-                    record.ended_at.get_or_insert(Utc::now());
-                }
-            }
+            let respawn = self
+                .update_background_record_state(&record_id, snapshot)
+                .await?;
 
             if let Some((agent_name, stable_id, restart_attempts)) = respawn {
                 self.ensure_background_record_running(
@@ -870,6 +358,105 @@ impl SubagentController {
 
         self.save_background_state().await?;
         Ok(self.background_status_entries().await)
+    }
+
+    async fn update_background_record_state(
+        &self,
+        record_id: &str,
+        snapshot: Option<crate::tools::types::VTCodeExecSession>,
+    ) -> Result<Option<(String, String, u8)>> {
+        let mut state = self.state.write().await;
+        let Some(record) = state.background_children.get_mut(record_id) else {
+            return Ok(None);
+        };
+        record.updated_at = Utc::now();
+
+        let Some(snapshot) = snapshot else {
+            return Self::handle_missing_background_snapshot(record, &self.config);
+        };
+
+        record.pid = snapshot.child_pid;
+        record.started_at = snapshot.started_at.or(record.started_at);
+
+        match snapshot.lifecycle_state {
+            Some(crate::tools::types::VTCodeSessionLifecycleState::Running) => {
+                record.status = BackgroundSubprocessStatus::Running;
+                record.ended_at = None;
+                record.error = None;
+            }
+            Some(crate::tools::types::VTCodeSessionLifecycleState::Exited) | None => {
+                record.ended_at.get_or_insert(Utc::now());
+                if record.desired_enabled
+                    && self.config.vt_cfg.subagents.background.auto_restore
+                    && record.restart_attempts < 1
+                {
+                    let next_restart_attempt = record.restart_attempts.saturating_add(1);
+                    record.restart_attempts = next_restart_attempt;
+                    record.status = BackgroundSubprocessStatus::Starting;
+                    tracing::warn!(
+                        agent_name = record.agent_name.as_str(),
+                        record_id = record.id.as_str(),
+                        attempt = next_restart_attempt,
+                        "Background subprocess exited unexpectedly; scheduling restart"
+                    );
+                    return Ok(Some((
+                        record.agent_name.clone(),
+                        record.id.clone(),
+                        next_restart_attempt,
+                    )));
+                }
+                Self::mark_background_record_stopped_or_error(record, &snapshot, &self.config);
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn handle_missing_background_snapshot(
+        record: &mut BackgroundRecord,
+        config: &SubagentControllerConfig,
+    ) -> Result<Option<(String, String, u8)>> {
+        if record.desired_enabled && config.vt_cfg.subagents.background.auto_restore {
+            if record.restart_attempts < 1 {
+                let next_restart_attempt = record.restart_attempts.saturating_add(1);
+                record.restart_attempts = next_restart_attempt;
+                record.status = BackgroundSubprocessStatus::Starting;
+                tracing::warn!(
+                    agent_name = record.agent_name.as_str(),
+                    record_id = record.id.as_str(),
+                    attempt = next_restart_attempt,
+                    "Background subprocess is missing; scheduling restart"
+                );
+                return Ok(Some((
+                    record.agent_name.clone(),
+                    record.id.clone(),
+                    next_restart_attempt,
+                )));
+            }
+            record.status = BackgroundSubprocessStatus::Error;
+            record.error = Some("Background subprocess is not running".to_string());
+            record.ended_at.get_or_insert(Utc::now());
+        } else if !record.desired_enabled {
+            record.status = BackgroundSubprocessStatus::Stopped;
+            record.ended_at.get_or_insert(Utc::now());
+        }
+        Ok(None)
+    }
+
+    fn mark_background_record_stopped_or_error(
+        record: &mut BackgroundRecord,
+        snapshot: &crate::tools::types::VTCodeExecSession,
+        _config: &SubagentControllerConfig,
+    ) {
+        if record.desired_enabled {
+            record.status = BackgroundSubprocessStatus::Error;
+            record.error = Some(match snapshot.exit_code {
+                Some(exit_code) => format!("Background subprocess exited with code {exit_code}"),
+                None => "Background subprocess exited unexpectedly".to_string(),
+            });
+        } else {
+            record.status = BackgroundSubprocessStatus::Stopped;
+        }
     }
 
     pub async fn graceful_stop_background(
@@ -1014,7 +601,7 @@ impl SubagentController {
                     .map(|listing| listing.snapshot.metadata.clone())
                     .or(archive_metadata)
                     .or_else(|| {
-                        Some(build_thread_archive_metadata(
+                        Some(crate::core::threads::build_thread_archive_metadata(
                             &self.config.workspace_root,
                             effective_config.agent.default_model.as_str(),
                             effective_config.agent.provider.as_str(),
@@ -1053,7 +640,7 @@ impl SubagentController {
 
     pub async fn spawn(&self, request: SpawnAgentRequest) -> Result<SubagentStatusEntry> {
         let mut request = request;
-        let (requested_agent, hints) = {
+        let (requested_agent, explicit_mentions, explicit_request, current_input) = {
             let state = self.state.read().await;
             sanitize_subagent_input_items(&mut request.items);
             request.model = normalize_requested_model_override(
@@ -1074,13 +661,18 @@ impl SubagentController {
                     }
                 }
             };
-            (requested_agent, state.turn_hints.clone())
+            (
+                requested_agent,
+                state.turn_hints.explicit_mentions.clone(),
+                state.turn_hints.explicit_request,
+                state.turn_hints.current_input.clone(),
+            )
         };
         let spec = self
             .resolve_requested_spec(requested_agent.as_deref())
             .await?;
-        if let Some(explicit) = hints.explicit_mentions.as_slice().first()
-            && hints.explicit_mentions.len() == 1
+        if let Some(explicit) = explicit_mentions.first()
+            && explicit_mentions.len() == 1
             && !spec.matches_name(explicit)
         {
             bail!(
@@ -1089,7 +681,7 @@ impl SubagentController {
                 explicit
             );
         }
-        if !spec.is_read_only() && !hints.explicit_request {
+        if !spec.is_read_only() && !explicit_request {
             bail!(
                 "spawn_agent cannot launch write-capable agent '{}' without an explicit delegation signal from the current user turn. Ask the user to mention the agent, say 'delegate'/'spawn', or request parallel work.",
                 spec.name
@@ -1097,7 +689,7 @@ impl SubagentController {
         }
         if spec.is_read_only()
             && !self.config.vt_cfg.subagents.auto_delegate_read_only
-            && !hints.explicit_request
+            && !explicit_request
         {
             bail!(
                 "spawn_agent cannot proactively launch read-only agent '{}' because `subagents.auto_delegate_read_only` is disabled and the current user turn did not explicitly request delegation.",
@@ -1105,7 +697,7 @@ impl SubagentController {
             );
         }
         if let Some(requested_model) = request.model.as_deref()
-            && !contains_explicit_model_request(&hints.current_input, requested_model)
+            && !contains_explicit_model_request(&current_input, requested_model)
         {
             tracing::warn!(
                 agent_name = spec.name.as_str(),
@@ -1315,7 +907,7 @@ impl SubagentController {
             .children
             .get(target)
             .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
-        Ok(record.status_entry())
+        Ok(record.build_status_entry())
     }
 
     async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
@@ -1357,7 +949,6 @@ impl SubagentController {
         ) {
             return Ok(false);
         }
-
         let prompt = record.last_prompt.clone().unwrap_or_else(|| {
             "Continue the delegated task from the existing context.".to_string()
         });
@@ -1377,7 +968,7 @@ impl SubagentController {
             .get_mut(target)
             .ok_or_else(|| anyhow!("Unknown subagent id {}", target))?;
         if record.status == SubagentStatus::Closed {
-            return Ok(record.status_entry());
+            return Ok(record.build_status_entry());
         }
         if let Some(handle) = record.handle.take() {
             handle.abort();
@@ -1386,7 +977,7 @@ impl SubagentController {
         record.updated_at = Utc::now();
         record.completed_at = Some(Utc::now());
         record.notify.notify_waiters();
-        Ok(record.status_entry())
+        Ok(record.build_status_entry())
     }
 
     async fn background_status_for(&self, target: &str) -> Result<BackgroundSubprocessEntry> {
@@ -1395,7 +986,7 @@ impl SubagentController {
             .background_children
             .get(target)
             .ok_or_else(|| anyhow!("Unknown background subprocess {}", target))?;
-        Ok(record.status_entry())
+        Ok(record.build_status_entry())
     }
 
     async fn ensure_background_record_running(
@@ -1575,19 +1166,11 @@ impl SubagentController {
             state
                 .background_children
                 .values()
-                .map(BackgroundRecord::persisted)
-                .collect::<Vec<_>>()
+                .cloned()
+                .map(BackgroundRecord::into_persisted)
+                .collect()
         };
-        let path = background_state_path(&self.config.workspace_root);
-        if let Some(parent) = path.parent() {
-            ensure_dir_exists(parent)
-                .await
-                .with_context(|| format!("Failed to create {}", parent.display()))?;
-        }
-        let payload = serde_json::to_string_pretty(&PersistedBackgroundState { records })?;
-        std::fs::write(&path, payload)
-            .with_context(|| format!("Failed to write {}", path.display()))?;
-        Ok(())
+        persist_background_state(&self.config.workspace_root, records)
     }
 
     async fn find_spec(&self, candidate: &str) -> Option<SubagentSpec> {
@@ -1666,6 +1249,7 @@ impl SubagentController {
             child_max_turns,
             model_override.as_deref(),
             reasoning_override.as_deref(),
+            resolve_effective_subagent_model,
         )?;
 
         let id = format!(
@@ -1796,59 +1380,14 @@ impl SubagentController {
                 )
                 .await;
 
-            let next_prompt = {
+            let (next_prompt, hook_payload) = {
                 let mut state = self.state.write().await;
                 let Some(record) = state.children.get_mut(child_id) else {
                     return;
                 };
                 record.updated_at = Utc::now();
-
-                match execute {
-                    Ok(result) => {
-                        record.status = if result.outcome.is_success() {
-                            SubagentStatus::Completed
-                        } else {
-                            SubagentStatus::Failed
-                        };
-                        record.summary = Some(result.summary.clone());
-                        record.error = match result.outcome {
-                            TaskOutcome::Failed { reason } => Some(reason),
-                            _ => None,
-                        };
-                        record.transcript_path = result.transcript_path.clone();
-                        record.stored_messages = result.messages;
-                    }
-                    Err(error) => {
-                        record.status = SubagentStatus::Failed;
-                        record.summary = None;
-                        record.error = Some(error.to_string());
-                    }
-                }
-
-                let next_prompt = record.queued_prompts.pop_front();
-                let hook_payload = if next_prompt.is_none() {
-                    Some((
-                        record.parent_thread_id.clone(),
-                        record.session_id.clone(),
-                        record.spec.name.clone(),
-                        record.display_label.clone(),
-                        record.background,
-                        record.status.as_str().to_string(),
-                        record
-                            .transcript_path
-                            .clone()
-                            .or_else(|| record.archive_path.clone()),
-                    ))
-                } else {
-                    None
-                };
-                if next_prompt.is_some() {
-                    record.status = SubagentStatus::Queued;
-                    record.completed_at = None;
-                } else if record.status.is_terminal() {
-                    record.completed_at = Some(Utc::now());
-                }
-                record.notify.notify_waiters();
+                let next_prompt = record.apply_result(execute);
+                let hook_payload = next_prompt.is_none().then(|| record.build_hook_payload());
                 (next_prompt, hook_payload)
             };
 
@@ -1860,7 +1399,7 @@ impl SubagentController {
                 background,
                 status,
                 transcript_path,
-            )) = next_prompt.1
+            )) = hook_payload
                 && let Some(hooks) = self.lifecycle_hooks.as_ref()
                 && let Err(err) = hooks
                     .run_subagent_stop(
@@ -1881,8 +1420,8 @@ impl SubagentController {
                 );
             }
 
-            if let Some(next_prompt) = next_prompt.0 {
-                prompt = next_prompt;
+            if let Some(next) = next_prompt {
+                prompt = next;
                 continue;
             } else {
                 let mut state = self.state.write().await;
@@ -1929,6 +1468,7 @@ impl SubagentController {
             max_turns,
             model_override.as_deref(),
             reasoning_override.as_deref(),
+            resolve_effective_subagent_model,
         )?;
         let parent_session_id = self.parent_session_id.read().await.clone();
 
@@ -2040,27 +1580,40 @@ impl SubagentController {
     }
 }
 
-async fn discover_controller_subagents(workspace_root: &Path) -> Result<DiscoveredSubagents> {
-    let plugin_agent_files = discover_plugin_agent_files(workspace_root).await?;
-    discover_subagents(&SubagentDiscoveryInput {
-        workspace_root: workspace_root.to_path_buf(),
-        cli_agents: None,
-        plugin_agent_files,
-    })
+fn sanitize_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
 }
 
-#[derive(Debug)]
-struct ChildRunResult {
-    messages: Vec<Message>,
-    summary: String,
-    outcome: TaskOutcome,
-    transcript_path: Option<PathBuf>,
+fn load_session_listing(
+    path: &std::path::Path,
+) -> Result<crate::utils::session_archive::SessionListing> {
+    use anyhow::Context;
+    let raw = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read session archive {}", path.display()))?;
+    let snapshot: crate::utils::session_archive::SessionSnapshot = serde_json::from_str(&raw)
+        .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
+    Ok(crate::utils::session_archive::SessionListing {
+        path: path.to_path_buf(),
+        snapshot,
+    })
 }
 
 async fn checkpoint_subagent_archive_start(
     archive: &SessionArchive,
     messages: &[Message],
 ) -> Result<()> {
+    use crate::utils::session_archive::SessionMessage;
     let recent_messages = messages
         .iter()
         .map(SessionMessage::from)
@@ -2079,296 +1632,12 @@ async fn checkpoint_subagent_archive_start(
     Ok(())
 }
 
-fn build_child_config(
-    parent: &VTCodeConfig,
-    spec: &SubagentSpec,
-    model: &str,
-    max_turns: Option<usize>,
-) -> VTCodeConfig {
-    let mut child = parent.clone();
-    child.agent.default_model = model.to_string();
-    if let Some(mode) = spec.permission_mode {
-        child.permissions.default_mode =
-            clamp_permission_mode(parent.permissions.default_mode, mode);
-    }
-    if let Some(max_turns) = normalize_child_max_turns(max_turns) {
-        child.automation.full_auto.max_turns = max_turns;
-    }
-
-    let mut allowed_tools = spec.tools.clone().unwrap_or_default();
-    if !allowed_tools.is_empty() {
-        allowed_tools.retain(|tool| !SUBAGENT_TOOL_NAMES.iter().any(|blocked| blocked == tool));
-        child.permissions.allow =
-            intersect_allowed_tools(&parent.permissions.allow, &allowed_tools);
-    }
-
-    let mut disallowed_tools = parent.permissions.deny.clone();
-    disallowed_tools.extend(spec.disallowed_tools.clone());
-    for tool in SUBAGENT_TOOL_NAMES {
-        if !disallowed_tools.iter().any(|entry| entry == tool) {
-            disallowed_tools.push((*tool).to_string());
-        }
-    }
-    child.permissions.deny = disallowed_tools;
-    merge_child_hooks(&mut child, spec.hooks.as_ref());
-    merge_child_mcp_servers(&mut child, spec.mcp_servers.as_slice());
-    child
-}
-
-fn normalize_child_max_turns(max_turns: Option<usize>) -> Option<usize> {
-    max_turns.map(|value| value.max(SUBAGENT_MIN_MAX_TURNS))
-}
-
-fn prepare_child_runtime_config(
-    parent: &VTCodeConfig,
-    spec: &SubagentSpec,
-    parent_model: &str,
-    parent_provider: &str,
-    parent_reasoning_effort: ReasoningEffortLevel,
-    max_turns: Option<usize>,
-    model_override: Option<&str>,
-    reasoning_override: Option<&str>,
-) -> Result<(ModelId, ReasoningEffortLevel, VTCodeConfig)> {
-    let resolved_model = resolve_effective_subagent_model(
-        parent,
-        parent_model,
-        parent_provider,
-        model_override,
-        spec.model.as_deref(),
-        spec.name.as_str(),
-    )?;
-    let mut child_cfg = build_child_config(parent, spec, resolved_model.as_str(), max_turns);
-    let child_reasoning_effort = reasoning_override
-        .and_then(ReasoningEffortLevel::parse)
-        .or_else(|| {
-            spec.reasoning_effort
-                .as_deref()
-                .and_then(ReasoningEffortLevel::parse)
-        })
-        .unwrap_or(parent_reasoning_effort);
-    child_cfg.agent.default_model = resolved_model.to_string();
-    child_cfg.agent.reasoning_effort = child_reasoning_effort;
-    Ok((resolved_model, child_reasoning_effort, child_cfg))
-}
-
-fn clamp_permission_mode(parent: PermissionMode, requested: PermissionMode) -> PermissionMode {
-    if matches!(
-        parent,
-        PermissionMode::Auto | PermissionMode::BypassPermissions
-    ) {
-        return parent;
-    }
-
-    if permission_rank(requested) <= permission_rank(parent) {
-        requested
-    } else {
-        parent
-    }
-}
-
-fn permission_rank(mode: PermissionMode) -> u8 {
-    match mode {
-        PermissionMode::DontAsk => 0,
-        PermissionMode::Plan => 1,
-        PermissionMode::Default => 2,
-        PermissionMode::AcceptEdits => 3,
-        PermissionMode::Auto => 4,
-        PermissionMode::BypassPermissions => 5,
-    }
-}
-
-fn intersect_allowed_tools(parent_allowed: &[String], spec_allowed: &[String]) -> Vec<String> {
-    let parent_exact_tools: Vec<&str> = parent_allowed
-        .iter()
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|entry| is_exact_tool_id(entry))
-        .collect();
-
-    if parent_exact_tools.is_empty() {
-        return spec_allowed.to_vec();
-    }
-
-    spec_allowed
-        .iter()
-        .filter(|candidate| {
-            let candidate = candidate.trim();
-            parent_exact_tools.contains(&candidate)
-        })
-        .cloned()
-        .collect()
-}
-
-fn is_exact_tool_id(entry: &str) -> bool {
-    let entry = entry.trim();
-    !entry.is_empty()
-        && !entry.contains(['(', ')', '*'])
-        && !matches!(
-            entry.to_ascii_lowercase().as_str(),
-            "bash" | "read" | "edit" | "write" | "webfetch"
-        )
-}
-
-fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
-    let Some(hooks) = hooks else {
-        return;
-    };
-
-    child.hooks.lifecycle.quiet_success_output |= hooks.lifecycle.quiet_success_output;
-    child
-        .hooks
-        .lifecycle
-        .session_start
-        .extend(hooks.lifecycle.session_start.clone());
-    child
-        .hooks
-        .lifecycle
-        .session_end
-        .extend(hooks.lifecycle.session_end.clone());
-    child
-        .hooks
-        .lifecycle
-        .user_prompt_submit
-        .extend(hooks.lifecycle.user_prompt_submit.clone());
-    child
-        .hooks
-        .lifecycle
-        .pre_tool_use
-        .extend(hooks.lifecycle.pre_tool_use.clone());
-    child
-        .hooks
-        .lifecycle
-        .post_tool_use
-        .extend(hooks.lifecycle.post_tool_use.clone());
-    child
-        .hooks
-        .lifecycle
-        .permission_request
-        .extend(hooks.lifecycle.permission_request.clone());
-    child
-        .hooks
-        .lifecycle
-        .pre_compact
-        .extend(hooks.lifecycle.pre_compact.clone());
-    child
-        .hooks
-        .lifecycle
-        .stop
-        .extend(hooks.lifecycle.stop.clone());
-    child.hooks.lifecycle.stop.extend(
-        hooks
-            .lifecycle
-            .task_completion
-            .iter()
-            .chain(hooks.lifecycle.task_completed.iter())
-            .cloned(),
-    );
-    child
-        .hooks
-        .lifecycle
-        .notification
-        .extend(hooks.lifecycle.notification.clone());
-}
-
-fn merge_child_mcp_servers(child: &mut VTCodeConfig, servers: &[SubagentMcpServer]) {
-    for server in servers {
-        match server {
-            SubagentMcpServer::Named(name) => {
-                if child
-                    .mcp
-                    .providers
-                    .iter()
-                    .any(|provider| provider.name == *name)
-                {
-                    continue;
-                }
-            }
-            SubagentMcpServer::Inline(definition) => {
-                for (name, value) in definition {
-                    let provider = inline_mcp_provider(name, value);
-                    if let Some(provider) = provider {
-                        child
-                            .mcp
-                            .providers
-                            .retain(|existing| existing.name != provider.name);
-                        child.mcp.providers.push(provider);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
-    let object = value.as_object()?;
-    let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
-    payload.insert(
-        "name".to_string(),
-        serde_json::Value::String(name.to_string()),
-    );
-    for (key, value) in object {
-        payload.insert(key.clone(), value.clone());
-    }
-    serde_json::from_value(serde_json::Value::Object(payload)).ok()
-}
-
-fn compose_subagent_instructions(spec: &SubagentSpec, memory_appendix: Option<String>) -> String {
-    let mut sections = Vec::new();
-    if !spec.prompt.trim().is_empty() {
-        sections.push(spec.prompt.trim().to_string());
-    }
-    sections.push(
-        "Return your final response using this exact Markdown contract:\n\n## Summary\n- [Concise outcome]\n\n## Facts\n- [Grounded fact]\n\n## Touched Files\n- [Relative path]\n\n## Verification\n- [Check performed or still needed]\n\n## Open Questions\n- [Any unresolved question]\n\nUse `- None` for empty sections. Keep it concise and grounded in the work you actually performed.".to_string(),
-    );
-    if spec.is_read_only() {
-        sections.push(
-            "Tool reminder: stay inside the exposed read-only tool set for this child. Do not guess hidden or legacy helpers such as `list_files`, `read_file`, `unified_file`, or `unified_exec` when they are not visible. For workspace discovery here, prefer `unified_search`; if that is insufficient, report the blocker instead of retrying denied calls.".to_string(),
-        );
-        sections.push(
-            "This delegated agent already runs with a read-only tool surface. Do not try to enter or exit plan mode, do not call hidden mutating tools, and do not retry the same denied tool call; adjust strategy or report the blocker instead.".to_string(),
-        );
-    } else {
-        sections.push(
-            "Tool reminder: `list_files` on the workspace root (`.`) is blocked, and `list_files` already uses search internally. Do not pair `list_files` with `unified_search` in the same batch. Use a specific subdirectory, `unified_search` for workspace-wide discovery, or `unified_exec` with `git diff --name-only` / `git diff --stat` when reviewing current changes.".to_string(),
-        );
-    }
-    if !spec.skills.is_empty() {
-        sections.push(format!(
-            "Preloaded skill names: {}. Use their established repository conventions.",
-            spec.skills.join(", ")
-        ));
-    }
-    if let Some(memory_appendix) = memory_appendix
-        && !memory_appendix.trim().is_empty()
-    {
-        sections.push(memory_appendix);
-    }
-    sections.join("\n\n")
-}
-
-fn build_subagent_archive_metadata(
-    workspace_root: &Path,
-    model: &str,
-    provider: &str,
-    theme: &str,
-    reasoning_effort: &str,
-    parent_session_id: &str,
-    forked: bool,
-) -> SessionArchiveMetadata {
-    build_thread_archive_metadata(workspace_root, model, provider, theme, reasoning_effort)
-        .with_parent_session_id(parent_session_id.to_string())
-        .with_fork_mode(if forked {
-            SessionForkMode::FullCopy
-        } else {
-            SessionForkMode::Summarized
-        })
-}
-
 async fn persist_child_archive(
     archive: &SessionArchive,
     messages: &[Message],
     agent_name: &str,
 ) -> Result<Option<PathBuf>> {
+    use crate::utils::session_archive::SessionMessage;
     let transcript = messages
         .iter()
         .filter_map(transcript_line_from_message)
@@ -2387,223 +1656,8 @@ async fn persist_child_archive(
     Ok(Some(path))
 }
 
-fn subagent_display_label(spec: &SubagentSpec) -> String {
-    spec.nickname_candidates
-        .first()
-        .cloned()
-        .unwrap_or_else(|| spec.name.clone())
-}
-
-fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> Vec<String> {
-    let mut mentions = Vec::new();
-    for direct in extract_direct_agent_mentions(input) {
-        let canonical = specs
-            .iter()
-            .find(|spec| spec.matches_name(direct.as_str()))
-            .map(|spec| spec.name.clone())
-            .unwrap_or(direct);
-        push_unique_agent_mention(&mut mentions, canonical);
-    }
-
-    let lower = input.to_ascii_lowercase();
-    for spec in specs {
-        if !matches_explicit_named_agent_selection(lower.as_str(), spec) {
-            continue;
-        }
-        push_unique_agent_mention(&mut mentions, spec.name.clone());
-    }
-
-    mentions
-}
-
-fn extract_direct_agent_mentions(input: &str) -> Vec<String> {
-    input
-        .split_whitespace()
-        .filter_map(|token| {
-            let trimmed = token.trim_matches(|ch: char| {
-                matches!(
-                    ch,
-                    '"' | '\'' | ',' | '.' | ':' | ';' | '!' | '?' | ')' | '('
-                )
-            });
-            trimmed
-                .strip_prefix("@agent-")
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-        })
-        .collect()
-}
-
-fn push_unique_agent_mention(mentions: &mut Vec<String>, candidate: String) {
-    if mentions
-        .iter()
-        .any(|existing| existing.eq_ignore_ascii_case(candidate.as_str()))
-    {
-        return;
-    }
-    mentions.push(candidate);
-}
-
-fn matches_explicit_named_agent_selection(input: &str, spec: &SubagentSpec) -> bool {
-    std::iter::once(spec.name.as_str())
-        .chain(spec.aliases.iter().map(String::as_str))
-        .any(|candidate| contains_explicit_named_agent_selection(input, candidate))
-}
-
-fn contains_explicit_named_agent_selection(input: &str, candidate: &str) -> bool {
-    let candidate = candidate.trim().to_ascii_lowercase();
-    if candidate.is_empty() {
-        return false;
-    }
-
-    let direct_match = [
-        format!("use {candidate} agent"),
-        format!("use the {candidate} agent"),
-        format!("use {candidate} subagent"),
-        format!("use the {candidate} subagent"),
-        format!("run {candidate} agent"),
-        format!("run the {candidate} agent"),
-        format!("run {candidate} subagent"),
-        format!("run the {candidate} subagent"),
-        format!("delegate to {candidate}"),
-        format!("delegate this to {candidate}"),
-        format!("delegate the task to {candidate}"),
-        format!("spawn {candidate}"),
-        format!("spawn the {candidate}"),
-        format!("ask {candidate} to"),
-    ]
-    .iter()
-    .any(|pattern| input.contains(pattern.as_str()));
-    if direct_match {
-        return true;
-    }
-
-    [
-        format!("use {candidate} and"),
-        format!("use the {candidate} and"),
-    ]
-    .iter()
-    .any(|pattern| input.contains(pattern.as_str()))
-        && (input.contains(" agent") || input.contains(" subagent"))
-}
-
-fn contains_explicit_delegation_request(input: &str, explicit_mentions: &[String]) -> bool {
-    let lower = input.to_ascii_lowercase();
-    !explicit_mentions.is_empty()
-        || lower.contains(" run in parallel")
-        || lower.contains(" spawn ")
-        || lower.starts_with("spawn ")
-        || lower.contains(" delegate ")
-        || lower.starts_with("delegate ")
-        || lower.contains(" background subagent")
-        || lower.contains(" background agent")
-        || (lower.contains(" use the ")
-            && (lower.contains(" agent") || lower.contains(" subagent")))
-        || (lower.starts_with("use ") && (lower.contains(" agent") || lower.contains(" subagent")))
-}
-
-fn contains_explicit_model_request(input: &str, requested_model: &str) -> bool {
-    let requested = requested_model.trim();
-    if requested.is_empty() {
-        return false;
-    }
-
-    let lower_input = input.to_ascii_lowercase();
-    let lower_requested = requested.to_ascii_lowercase();
-
-    match lower_requested.as_str() {
-        "small" => {
-            lower_input.contains("small model")
-                || lower_input.contains("smaller model")
-                || lower_input.contains("lightweight model")
-                || lower_input.contains("cheap model")
-        }
-        "haiku" | "sonnet" | "opus" | "inherit" => {
-            contains_bounded_term(&lower_input, &lower_requested)
-                || lower_input.contains(&format!("use {lower_requested}"))
-                || lower_input.contains(&format!("using {lower_requested}"))
-                || lower_input.contains(&format!("with {lower_requested}"))
-                || lower_input.contains(&format!("run on {lower_requested}"))
-                || lower_input.contains(&format!("{lower_requested} model"))
-                || lower_input.contains(&format!("model {lower_requested}"))
-        }
-        _ => contains_bounded_term(&lower_input, &lower_requested),
-    }
-}
-
-fn normalize_requested_model_override(raw: Option<String>, current_input: &str) -> Option<String> {
-    let requested = raw?.trim().to_string();
-    if requested.is_empty() || requested.eq_ignore_ascii_case("default") {
-        return None;
-    }
-    if requested.eq_ignore_ascii_case("inherit")
-        && !contains_explicit_model_request(current_input, requested.as_str())
-    {
-        return None;
-    }
-    Some(requested)
-}
-
-fn sanitize_subagent_input_items(items: &mut Vec<SubagentInputItem>) {
-    let mut sanitized = Vec::with_capacity(items.len());
-    for mut item in items.drain(..) {
-        item.item_type = trim_optional_field(item.item_type.take());
-        item.text = trim_optional_field(item.text.take());
-        item.path = trim_optional_field(item.path.take());
-        item.name = trim_optional_field(item.name.take());
-        item.image_url = trim_optional_field(item.image_url.take());
-        if item.text.is_none()
-            && item.path.is_none()
-            && item.name.is_none()
-            && item.image_url.is_none()
-        {
-            continue;
-        }
-        sanitized.push(item);
-    }
-    *items = sanitized;
-}
-
-fn trim_optional_field(value: Option<String>) -> Option<String> {
-    let trimmed = value?.trim().to_string();
-    (!trimmed.is_empty()).then_some(trimmed)
-}
-
-fn contains_bounded_term(input: &str, needle: &str) -> bool {
-    if needle.is_empty() {
-        return false;
-    }
-
-    input.match_indices(needle).any(|(start, matched)| {
-        let end = start + matched.len();
-        let leading_ok = start == 0
-            || !input[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|ch| ch.is_ascii_alphanumeric());
-        let trailing_ok = end == input.len()
-            || !input[end..]
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_alphanumeric());
-        leading_ok && trailing_ok
-    })
-}
-
-fn load_session_listing(path: &Path) -> Result<SessionListing> {
-    let raw = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read session archive {}", path.display()))?;
-    let snapshot: SessionSnapshot = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
-    Ok(SessionListing {
-        path: path.to_path_buf(),
-        snapshot,
-    })
-}
-
 fn transcript_line_from_message(message: &Message) -> Option<String> {
-    let role = format!("{:?}", message.role).to_lowercase();
+    let role = message.role.to_string();
     let content = message.content.trim();
     if content.is_empty() {
         return None;
@@ -2611,547 +1665,19 @@ fn transcript_line_from_message(message: &Message) -> Option<String> {
     Some(format!("{role}: {content}"))
 }
 
-fn filter_child_tools(
-    spec: &SubagentSpec,
-    definitions: Vec<ToolDefinition>,
-    read_only: bool,
-) -> Vec<ToolDefinition> {
-    let allowed = spec.tools.as_ref().map(|tools| {
-        tools
-            .iter()
-            .map(|tool| tool.to_ascii_lowercase())
-            .collect::<Vec<_>>()
-    });
-    let denied = spec
-        .disallowed_tools
-        .iter()
-        .map(|tool| tool.to_ascii_lowercase())
-        .collect::<Vec<_>>();
-
-    definitions
-        .into_iter()
-        .filter(|tool| {
-            let name = tool.function_name().to_ascii_lowercase();
-            if SUBAGENT_TOOL_NAMES.iter().any(|blocked| *blocked == name) {
-                return false;
-            }
-            if denied.iter().any(|entry| entry == &name) {
-                return false;
-            }
-            if let Some(allowed) = allowed.as_ref()
-                && !allowed.iter().any(|entry| entry == &name)
-            {
-                return false;
-            }
-            if read_only {
-                return NON_MUTATING_TOOL_PREFIXES
-                    .iter()
-                    .any(|candidate| *candidate == name);
-            }
-            true
-        })
-        .collect()
-}
-
-fn request_prompt(message: &Option<String>, items: &[SubagentInputItem]) -> Option<String> {
-    if let Some(message) = message
-        && !message.trim().is_empty()
-    {
-        return Some(message.trim().to_string());
-    }
-
-    let segments = items
-        .iter()
-        .filter_map(item_prompt_segment)
-        .collect::<Vec<_>>();
-    if segments.is_empty() {
-        None
-    } else {
-        Some(segments.join("\n"))
-    }
-}
-
-fn item_prompt_segment(item: &SubagentInputItem) -> Option<String> {
-    if let Some(text) = item.text.as_ref()
-        && !text.trim().is_empty()
-    {
-        return Some(text.trim().to_string());
-    }
-    if let Some(path) = item.path.as_ref()
-        && !path.trim().is_empty()
-    {
-        return Some(format!("Reference: {}", path.trim()));
-    }
-    if let Some(name) = item.name.as_ref()
-        && !name.trim().is_empty()
-    {
-        return Some(name.trim().to_string());
-    }
-    if let Some(image_url) = item.image_url.as_ref()
-        && !image_url.trim().is_empty()
-    {
-        return Some(format!("Image: {}", image_url.trim()));
-    }
-    None
-}
-
-fn resolve_subagent_model(
-    vt_cfg: &VTCodeConfig,
-    parent_model: &str,
-    parent_provider: &str,
-    requested: Option<&str>,
-    agent_name: &str,
-) -> Result<ModelId> {
-    let requested = requested.unwrap_or("inherit").trim();
-    if requested.eq_ignore_ascii_case("inherit") || requested.is_empty() {
-        if let Ok(model) = parent_model.parse::<ModelId>() {
-            return Ok(model);
-        }
-        if parent_provider.eq_ignore_ascii_case("copilot") {
-            let fallback = ModelId::default_orchestrator_for_provider(Provider::Copilot);
-            tracing::warn!(
-                agent_name,
-                parent_model = parent_model.trim(),
-                parent_provider = parent_provider.trim(),
-                fallback_model = fallback.as_str(),
-                "Falling back to the default Copilot subagent model because the inherited parent model identifier is not supported internally"
-            );
-            return Ok(fallback);
-        }
-
-        let normalized_parent_model = normalize_subagent_model_alias(parent_model);
-        return normalized_parent_model.parse::<ModelId>().with_context(|| {
-            format!(
-                "Failed to resolve model '{}' for subagent {}",
-                normalized_parent_model, agent_name
-            )
-        });
-    }
-
-    let resolved = if requested.eq_ignore_ascii_case("small") {
-        if !vt_cfg.agent.small_model.model.trim().is_empty() {
-            let configured = vt_cfg.agent.small_model.model.trim();
-            let active_provider = infer_provider(Some(parent_provider), parent_model);
-            let configured_provider =
-                infer_provider_from_model(configured).or_else(|| infer_provider(None, configured));
-            if configured_provider.is_some() && configured_provider != active_provider {
-                tracing::warn!(
-                    agent_name,
-                    configured_model = configured,
-                    active_provider = active_provider
-                        .map(|provider| provider.to_string())
-                        .unwrap_or_else(|| parent_provider.to_string()),
-                    "Ignoring cross-provider lightweight subagent model; using same-provider automatic route"
-                );
-                auto_lightweight_model(parent_provider, parent_model)
-            } else {
-                configured.to_string()
-            }
-        } else {
-            auto_lightweight_model(parent_provider, parent_model)
-        }
-    } else if requested.eq_ignore_ascii_case("haiku")
-        || requested.eq_ignore_ascii_case("sonnet")
-        || requested.eq_ignore_ascii_case("opus")
-    {
-        alias_model_for_provider(parent_provider, requested, parent_model)
-    } else {
-        requested.to_string()
-    };
-
-    let normalized_resolved = normalize_subagent_model_alias(resolved.as_str());
-    normalized_resolved.parse::<ModelId>().with_context(|| {
-        format!(
-            "Failed to resolve model '{}' for subagent {}",
-            normalized_resolved, agent_name
-        )
-    })
-}
-
-fn normalize_subagent_model_alias(model: &str) -> Cow<'_, str> {
-    match model.trim() {
-        "claude-haiku-4.5" => Cow::Borrowed(models::anthropic::CLAUDE_HAIKU_4_5),
-        "claude-sonnet-4.6" => Cow::Borrowed(models::anthropic::CLAUDE_SONNET_4_6),
-        "claude-opus-4.6" => Cow::Borrowed(models::anthropic::CLAUDE_OPUS_4_6),
-        other => Cow::Borrowed(other),
-    }
-}
-
-fn resolve_effective_subagent_model(
-    vt_cfg: &VTCodeConfig,
-    parent_model: &str,
-    parent_provider: &str,
-    model_override: Option<&str>,
-    spec_model: Option<&str>,
-    agent_name: &str,
-) -> Result<ModelId> {
-    if let Some(requested_model) = model_override {
-        match resolve_subagent_model(
-            vt_cfg,
-            parent_model,
-            parent_provider,
-            Some(requested_model),
-            agent_name,
-        ) {
-            Ok(model) => return Ok(model),
-            Err(err) => {
-                if requested_model.trim().eq_ignore_ascii_case("small") {
-                    tracing::warn!(
-                        agent_name,
-                        requested_model = requested_model.trim(),
-                        error = %err,
-                        "Failed to bootstrap lightweight subagent model; falling back to parent model"
-                    );
-                    return resolve_subagent_model(
-                        vt_cfg,
-                        parent_model,
-                        parent_provider,
-                        Some("inherit"),
-                        agent_name,
-                    );
-                }
-                let fallback_model = spec_model
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("inherit");
-                tracing::warn!(
-                    agent_name,
-                    requested_model = requested_model.trim(),
-                    fallback_model,
-                    error = %err,
-                    "Failed to resolve subagent model override; falling back"
-                );
-            }
-        }
-    }
-
-    match resolve_subagent_model(
-        vt_cfg,
-        parent_model,
-        parent_provider,
-        spec_model,
-        agent_name,
-    ) {
-        Ok(model) => Ok(model),
-        Err(err)
-            if spec_model
-                .map(str::trim)
-                .is_some_and(|value| value.eq_ignore_ascii_case("small")) =>
-        {
-            tracing::warn!(
-                agent_name,
-                error = %err,
-                "Failed to resolve lightweight subagent model from spec; falling back to parent model"
-            );
-            resolve_subagent_model(
-                vt_cfg,
-                parent_model,
-                parent_provider,
-                Some("inherit"),
-                agent_name,
-            )
-        }
-        Err(err) => Err(err),
-    }
-}
-
-fn alias_model_for_provider(parent_provider: &str, alias: &str, parent_model: &str) -> String {
-    match infer_provider(Some(parent_provider), parent_model) {
-        Some(Provider::Anthropic) => match alias.to_ascii_lowercase().as_str() {
-            "haiku" => models::anthropic::CLAUDE_HAIKU_4_5.to_string(),
-            "opus" => models::anthropic::CLAUDE_OPUS_4_6.to_string(),
-            _ => models::anthropic::CLAUDE_SONNET_4_6.to_string(),
-        },
-        Some(Provider::OpenAI) => match alias.to_ascii_lowercase().as_str() {
-            "haiku" => models::openai::GPT_5_4_MINI.to_string(),
-            "opus" => models::openai::GPT_5_4.to_string(),
-            _ => models::openai::GPT_5_4.to_string(),
-        },
-        Some(Provider::Gemini) => match alias.to_ascii_lowercase().as_str() {
-            "haiku" => models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
-            _ => models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
-        },
-        _ => parent_model.to_string(),
-    }
-}
-
-fn agent_type_for_spec(spec: &SubagentSpec) -> AgentType {
-    match spec.name.as_str() {
-        "explorer" | "explore" => AgentType::Explore,
-        "plan" => AgentType::Plan,
-        "worker" | "general" | "general-purpose" | "default" => AgentType::General,
-        _ => AgentType::Custom(spec.name.clone()),
-    }
-}
-
-fn load_memory_appendix(
-    workspace_root: &Path,
-    agent_name: &str,
-    scope: Option<SubagentMemoryScope>,
-) -> Result<Option<String>> {
-    let Some(scope) = scope else {
-        return Ok(None);
-    };
-
-    let memory_dir = match scope {
-        SubagentMemoryScope::Project => {
-            workspace_root.join(".vtcode/agent-memory").join(agent_name)
-        }
-        SubagentMemoryScope::Local => workspace_root
-            .join(".vtcode/agent-memory-local")
-            .join(agent_name),
-        SubagentMemoryScope::User => dirs::home_dir()
-            .unwrap_or_default()
-            .join(".vtcode/agent-memory")
-            .join(agent_name),
-    };
-    std::fs::create_dir_all(&memory_dir).with_context(|| {
-        format!(
-            "Failed to create subagent memory directory {}",
-            memory_dir.display()
-        )
-    })?;
-    let memory_file = memory_dir.join("MEMORY.md");
-    if !memory_file.exists() {
-        return Ok(Some(format!(
-            "Persistent memory file: {}. Create or update `MEMORY.md` with concise reusable notes when you discover stable repository conventions.",
-            memory_file.display()
-        )));
-    }
-
-    let content = std::fs::read_to_string(&memory_file)
-        .with_context(|| format!("Failed to read {}", memory_file.display()))?;
-    let total_lines = content.lines().count();
-    let mut bytes = 0usize;
-    let mut excerpt_lines = Vec::new();
-    for line in content.lines().take(SUBAGENT_MEMORY_LINE_LIMIT) {
-        let next_bytes = bytes.saturating_add(line.len() + 1);
-        if next_bytes > SUBAGENT_MEMORY_BYTES_LIMIT {
-            break;
-        }
-
-        bytes = next_bytes;
-        excerpt_lines.push(line);
-    }
-
-    let excerpt = excerpt_lines.join("\n");
-    let truncated = excerpt_lines.len() < total_lines;
-    let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
-    let mut appendix = String::new();
-    appendix.push_str(&format!(
-        "Persistent memory file: {}.\nRead and maintain `MEMORY.md` for durable learnings.",
-        memory_file.display()
-    ));
-
-    if !highlights.is_empty() {
-        appendix.push_str("\n\nKey points:\n");
-        for highlight in highlights {
-            appendix.push_str("- ");
-            appendix.push_str(&highlight);
-            appendix.push('\n');
-        }
-    }
-
-    appendix.push_str("\nOpen `MEMORY.md` when exact wording or more detail matters.");
-    if truncated {
-        appendix.push_str("\nMemory indexing stopped after the configured startup budget.");
-    }
-
-    Ok(Some(appendix))
-}
-
-async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(String, PathBuf)>> {
-    let mut files = Vec::new();
-    for plugin_root in trusted_plugin_roots(workspace_root) {
-        if !plugin_root.exists() || !plugin_root.is_dir() {
-            continue;
-        }
-
-        for entry in std::fs::read_dir(&plugin_root)
-            .with_context(|| format!("Failed to read plugin directory {}", plugin_root.display()))?
-        {
-            let path = entry?.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let manifest_path = path.join(".vtcode-plugin/plugin.json");
-            if !manifest_path.exists() {
-                continue;
-            }
-
-            let manifest: PluginManifest =
-                serde_json::from_str(&std::fs::read_to_string(&manifest_path).with_context(
-                    || format!("Failed to read plugin manifest {}", manifest_path.display()),
-                )?)
-                .with_context(|| {
-                    format!(
-                        "Failed to parse plugin manifest {}",
-                        manifest_path.display()
-                    )
-                })?;
-            for agent_path in AgentsHandler::process_agents(&path, manifest.agents.clone()).await? {
-                files.push((manifest.name.clone(), agent_path));
-            }
-        }
-    }
-    Ok(files)
-}
-
-fn trusted_plugin_roots(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(codex_home) = std::env::var_os("CODEX_HOME").map(PathBuf::from) {
-        roots.push(codex_home.join("plugins"));
-    } else if let Some(home) = dirs::home_dir() {
-        roots.push(home.join(".vtcode/plugins"));
-    }
-    roots.push(workspace_root.join(".vtcode/plugins"));
-    roots.push(workspace_root.join(".agents/plugins"));
-    roots
-}
-
-fn sanitize_component(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
-}
-
-fn background_record_id(agent_name: &str) -> String {
-    format!("background-{}", sanitize_component(agent_name))
-}
-
-fn background_state_path(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join(".vtcode")
-        .join("state")
-        .join("background_subagents.json")
-}
-
-fn load_background_state(workspace_root: &Path) -> Result<PersistedBackgroundState> {
-    let path = background_state_path(workspace_root);
-    if !path.exists() {
-        return Ok(PersistedBackgroundState::default());
-    }
-
-    let raw = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    serde_json::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))
-}
-
-fn summarize_background_preview(output: &str) -> String {
-    output
-        .lines()
-        .rev()
-        .take(24)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn load_archive_preview(path: &Path) -> Result<String> {
-    let listing = load_session_listing(path)?;
-    Ok(listing
-        .snapshot
-        .transcript
-        .into_iter()
-        .rev()
-        .take(24)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n"))
-}
-
-fn exec_session_is_running(session: &crate::tools::types::VTCodeExecSession) -> bool {
-    matches!(
-        session.lifecycle_state,
-        Some(crate::tools::types::VTCodeSessionLifecycleState::Running)
-    )
-}
-
-fn build_background_subagent_command(
-    workspace_root: &Path,
-    agent_name: &str,
-    parent_session_id: &str,
-    session_id: &str,
-    prompt: &str,
-    max_turns: Option<usize>,
-    model_override: Option<&str>,
-    reasoning_override: Option<&str>,
-) -> Result<Vec<String>> {
-    let executable = std::env::current_exe().context("Failed to resolve current vtcode binary")?;
-    let mut command = vec![
-        executable.to_string_lossy().into_owned(),
-        "background-subagent".to_string(),
-        "--workspace".to_string(),
-        workspace_root.to_string_lossy().into_owned(),
-        "--agent-name".to_string(),
-        agent_name.to_string(),
-        "--parent-session-id".to_string(),
-        parent_session_id.to_string(),
-        "--session-id".to_string(),
-        session_id.to_string(),
-        "--prompt".to_string(),
-        prompt.to_string(),
-    ];
-
-    if let Some(max_turns) = max_turns {
-        command.push("--max-turns".to_string());
-        command.push(max_turns.to_string());
-    }
-    if let Some(model_override) = model_override
-        && !model_override.trim().is_empty()
-    {
-        command.push("--model-override".to_string());
-        command.push(model_override.to_string());
-    }
-    if let Some(reasoning_override) = reasoning_override
-        && !reasoning_override.trim().is_empty()
-    {
-        command.push("--reasoning-override".to_string());
-        command.push(reasoning_override.to_string());
-    }
-
-    Ok(command)
-}
-
-pub fn is_subagent_tool(name: &str) -> bool {
-    SUBAGENT_TOOL_NAMES.contains(&name)
-}
+// ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        SUBAGENT_HARD_CONCURRENCY_LIMIT, SUBAGENT_MIN_MAX_TURNS, SpawnAgentRequest,
-        SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
-        background_record_id, build_background_subagent_command, build_child_config,
-        contains_explicit_delegation_request, contains_explicit_model_request,
-        delegated_task_requires_clarification, extract_explicit_agent_mentions, filter_child_tools,
-        load_memory_appendix, normalize_requested_model_override, request_prompt,
-        resolve_effective_subagent_model, resolve_subagent_model, sanitize_subagent_input_items,
-    };
+    use super::*;
     use crate::config::PermissionMode;
-    use crate::config::VTCodeConfig;
     use crate::config::constants::models;
     use crate::config::constants::tools;
     use crate::config::models::{ModelId, Provider};
-    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::ToolDefinition;
     use crate::tools::exec_session::ExecSessionManager;
     use crate::tools::registry::PtySessionManager;
     use anyhow::{Result, anyhow};
-    use chrono::Utc;
     use std::collections::BTreeMap;
     use std::collections::VecDeque;
     use std::sync::Arc;
@@ -3187,13 +1713,13 @@ mod tests {
         spec: &SubagentSpec,
         status: SubagentStatus,
         depth: usize,
-    ) -> super::ChildRecord {
-        super::ChildRecord {
+    ) -> ChildRecord {
+        ChildRecord {
             id: id.to_string(),
             session_id: format!("session-{id}"),
             parent_thread_id: parent_thread_id.to_string(),
             spec: spec.clone(),
-            display_label: super::subagent_display_label(spec),
+            display_label: subagent_display_label(spec),
             status,
             background: false,
             depth,
@@ -4357,12 +2883,12 @@ mod tests {
                 let id = format!("active-{idx}");
                 state.children.insert(
                     id.clone(),
-                    super::ChildRecord {
+                    ChildRecord {
                         id: id.clone(),
                         session_id: format!("session-{id}"),
                         parent_thread_id: "parent-session".to_string(),
                         spec: spec.clone(),
-                        display_label: super::subagent_display_label(&spec),
+                        display_label: subagent_display_label(&spec),
                         status: SubagentStatus::Running,
                         background: false,
                         depth: 1,
@@ -4420,12 +2946,12 @@ mod tests {
             for id in ["first", "second"] {
                 state.children.insert(
                     id.to_string(),
-                    super::ChildRecord {
+                    ChildRecord {
                         id: id.to_string(),
                         session_id: format!("session-{id}"),
                         parent_thread_id: "parent-session".to_string(),
                         spec: spec.clone(),
-                        display_label: super::subagent_display_label(&spec),
+                        display_label: subagent_display_label(&spec),
                         status: SubagentStatus::Running,
                         background: false,
                         depth: 1,
