@@ -16,7 +16,6 @@ Top 25 longest tracked Rust files:
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/target/package/vtcode-0.98.0/src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs
 
-| 2563 | src/agent/runloop/unified/turn/turn_processing/llm_request/copilot_runtime.rs |
 | 2446 | vtcode-core/src/tools/skills/mod.rs |
 | 2363 | vtcode-core/src/components.rs |
 | 2332 | vtcode-core/src/copilot/acp_client.rs |
