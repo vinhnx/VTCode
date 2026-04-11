@@ -14,7 +14,6 @@ Top 25 longest tracked Rust files:
 | Lines | Path |
 | ---: | --- |
 
-| 4010 | vtcode-core/src/persistent_memory.rs |
 | 3801 | src/agent/runloop/unified/turn/compaction.rs |
 | 2851 | src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs |
 | 2668 | vtcode-core/src/utils/session_archive.rs |
@@ -41,4 +40,8 @@ Top 25 longest tracked Rust files:
 
 2/ reduce, extract simplify < 2000 lines
 
-3/ Use /rust-skills and enhance implementation. Review overall changes again carefully. Can you do better? Continue with your careful recommendations; proceed with the outcome. KISS and DRY, but focus on main logic; no need for DRY for tests. Do it repeatedly until all is done; don't stop. 
+3/ Use /rust-skills and enhance implementation. Review overall changes again carefully. Can you do better? Continue with your careful recommendations; proceed with the outcome. KISS and DRY, but focus on main logic; no need for DRY for tests. Do it repeatedly until all is done; don't stop.
+
+===
+
+Ctrl+O now copies the last agent response as markdown - works everywhere, even over SSH. I've been using it nonstop to grab plans for review. https://github.com/openai/codex/pull/16966

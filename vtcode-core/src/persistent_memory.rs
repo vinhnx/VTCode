@@ -240,9 +240,7 @@ struct ClassifiedFacts {
 }
 
 impl ClassifiedFacts {
-    fn total(&self) -> usize {
-        self.preferences.len() + self.repository_facts.len()
-    }
+    fn total(&self) -> usize { self.preferences.len() + self.repository_facts.len() }
 }
 
 #[derive(Debug, Deserialize)]
@@ -340,21 +338,12 @@ where
     T: DeserializeOwned,
 {
     let trimmed = text.trim();
-    if trimmed.is_empty() {
-        bail!("{context} returned empty content");
-    }
-
-    if let Ok(parsed) = serde_json::from_str::<T>(trimmed) {
-        return Ok(parsed);
-    }
-
+    if trimmed.is_empty() { bail!("{context} returned empty content"); }
+    if let Ok(parsed) = serde_json::from_str::<T>(trimmed) { return Ok(parsed); }
     if let Some(json_block) = extract_first_json_block(trimmed) {
-        return serde_json::from_str::<T>(json_block)
-            .with_context(|| format!("failed to parse {context} response"));
+        return serde_json::from_str::<T>(json_block).with_context(|| format!("failed to parse {context} response"));
     }
-
-    serde_json::from_str::<T>(trimmed)
-        .with_context(|| format!("failed to parse {context} response"))
+    serde_json::from_str::<T>(trimmed).with_context(|| format!("failed to parse {context} response"))
 }
 
 fn extract_first_json_block(text: &str) -> Option<&str> {
@@ -406,84 +395,45 @@ fn extract_first_json_block(text: &str) -> Option<&str> {
 }
 
 pub fn maybe_extract_tool_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::Tool {
-        return None;
-    }
-
+    if message.role != MessageRole::Tool { return None; }
     let tool_name = message.origin_tool.as_deref().unwrap_or("tool");
     let text = message.content.as_text();
     let raw = text.trim();
-    if raw.is_empty() {
-        return None;
-    }
+    if raw.is_empty() { return None; }
 
-    let candidate = serde_json::from_str::<serde_json::Value>(raw)
-        .ok()
-        .and_then(|value| {
-            if value.get("error").is_some()
-                || value.get("success") == Some(&serde_json::Value::Bool(false))
-            {
-                return None;
-            }
-
-            for key in ["summary", "message", "result", "output", "stdout"] {
-                if let Some(value) = value.get(key) {
-                    if let Some(text) = value.as_str() {
-                        let normalized = normalize_whitespace(text);
-                        if !normalized.is_empty() {
-                            return Some(normalized);
-                        }
-                    } else if !value.is_null() {
-                        let normalized = normalize_whitespace(&value.to_string());
-                        if !normalized.is_empty() {
-                            return Some(normalized);
-                        }
-                    }
+    let candidate = serde_json::from_str::<serde_json::Value>(raw).ok().and_then(|value| {
+        if value.get("error").is_some() || value.get("success") == Some(&serde_json::Value::Bool(false)) { return None; }
+        for key in ["summary", "message", "result", "output", "stdout"] {
+            if let Some(v) = value.get(key) {
+                if let Some(text) = v.as_str() {
+                    let normalized = normalize_whitespace(text);
+                    if !normalized.is_empty() { return Some(normalized); }
+                } else if !v.is_null() {
+                    let normalized = normalize_whitespace(&v.to_string());
+                    if !normalized.is_empty() { return Some(normalized); }
                 }
             }
+        }
+        let compact = normalize_whitespace(&value.to_string());
+        (!compact.is_empty()).then_some(compact)
+    }).or_else(|| {
+        let lowered = raw.to_ascii_lowercase();
+        if lowered.contains("error") || lowered.contains("failed") || lowered.contains("denied") || lowered.contains("timeout") { return None; }
+        Some(normalize_whitespace(raw))
+    })?;
 
-            let compact = normalize_whitespace(&value.to_string());
-            (!compact.is_empty()).then_some(compact)
-        })
-        .or_else(|| {
-            let lowered = raw.to_ascii_lowercase();
-            if lowered.contains("error")
-                || lowered.contains("failed")
-                || lowered.contains("denied")
-                || lowered.contains("timeout")
-            {
-                return None;
-            }
-            Some(normalize_whitespace(raw))
-        })?;
-
-    Some(GroundedFactRecord {
-        fact: truncate_for_fact(&candidate, 180),
-        source: format!("tool:{tool_name}"),
-    })
+    Some(GroundedFactRecord { fact: truncate_for_fact(&candidate, 180), source: format!("tool:{tool_name}") })
 }
 
 pub fn maybe_extract_user_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::User {
-        return None;
-    }
-
+    if message.role != MessageRole::User { return None; }
     let text = normalize_whitespace(message.content.as_text().as_ref());
-    if text.is_empty() {
-        return None;
-    }
-
+    if text.is_empty() { return None; }
     let candidate_text = strip_user_memory_candidate_prefixes(&text);
-    let (candidate_text, looks_authored_note) = strip_user_memory_note_marker(candidate_text)
-        .map(|fact| (fact, true))
-        .unwrap_or((candidate_text, false));
+    let (candidate_text, looks_authored_note) = strip_user_memory_note_marker(candidate_text).map(|fact| (fact, true)).unwrap_or((candidate_text, false));
     let looks_durable_self_fact = SELF_FACT_PREFIXES.iter().any(|p| candidate_text.to_ascii_lowercase().starts_with(*p));
-
     let should_extract = looks_authored_note || looks_durable_self_fact;
-    should_extract.then(|| GroundedFactRecord {
-        fact: truncate_for_fact(candidate_text, 180),
-        source: "user_assertion".to_string(),
-    })
+    should_extract.then(|| GroundedFactRecord { fact: truncate_for_fact(candidate_text, 180), source: "user_assertion".to_string() })
 }
 
 fn strip_user_memory_candidate_prefixes(text: &str) -> &str {
@@ -1178,9 +1128,7 @@ async fn read_existing_memory_lines(directory: &Path) -> Result<BTreeSet<String>
     Ok(lines)
 }
 
-const CLEANUP_REMEMBER_MARKERS: &[&str] = &[
-    "save to memory", "remember that", "remember my", "remember ", "add to memory", "store in memory",
-];
+const CLEANUP_REMEMBER_MARKERS: &[&str] = &["save to memory", "remember that", "remember my", "remember ", "add to memory", "store in memory"];
 const CLEANUP_FORGET_MARKERS: &[&str] = &["forget ", "remove from memory", "delete from memory"];
 const STRIP_PREFIXES: &[&str] = &["please ", "please, ", "can you ", "could you ", "would you ", "vt code, ", "vt code "];
 const CLEANUP_NOTE_PREFIXES: &[&str] = &["note that ", "important:"];
