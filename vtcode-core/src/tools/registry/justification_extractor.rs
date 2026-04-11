@@ -94,7 +94,9 @@ impl JustificationExtractor {
                 "Modify code or configuration to implement necessary changes.",
                 Some("Will create/update file with the generated content."),
             ),
-            "grep_file" | "find_files" | "list_files" => (
+            crate::config::constants::tools::GREP_FILE
+            | "find_files"
+            | crate::config::constants::tools::LIST_FILES => (
                 "Search or list files to understand codebase structure.",
                 Some("Will return matching files and their contents for analysis."),
             ),

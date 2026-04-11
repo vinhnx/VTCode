@@ -53,8 +53,8 @@ pub(super) fn is_known_textual_tool(name: &str) -> bool {
             | tools::UNIFIED_FILE
             | tools::UNIFIED_EXEC
             | tools::UNIFIED_SEARCH
-            | "grep_file"
-            | "list_files"
+            | tools::GREP_FILE
+            | tools::LIST_FILES
             | tools::APPLY_PATCH
             | tools::RESIZE_PTY_SESSION
     )

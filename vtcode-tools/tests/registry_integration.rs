@@ -9,6 +9,7 @@ mod tests {
     use std::hash::Hasher;
     use std::sync::Arc;
     use std::time::Duration;
+    use vtcode_core::config::constants::tools;
     use vtcode_tools::{
         CachedToolExecutor, UnifiedErrorKind, UnifiedToolError, cache::LruCache, middleware::*,
         patterns::PatternDetector,
@@ -46,7 +47,7 @@ mod tests {
         let cache: Arc<LruCache<String>> = Arc::new(LruCache::new(10, Duration::from_secs(60)));
 
         // Simulate two identical tool calls
-        let tool_name = "list_files";
+        let tool_name = tools::LIST_FILES;
         let args_json = r#"{"path": "/tmp"}"#;
 
         // First call - miss
@@ -117,7 +118,7 @@ mod tests {
         let now = std::time::Instant::now();
 
         // Simulate realistic workflow: find -> grep -> find -> grep repeated to cross interval
-        let tools = vec!["find_files", "grep_file"];
+        let tools = vec!["find_files", tools::GREP_FILE];
 
         for _ in 0..6 {
             for tool in &tools {
@@ -135,7 +136,9 @@ mod tests {
 
         // Should detect (find, grep) pattern
         let has_find_grep = patterns.iter().any(|p| {
-            p.sequence.len() == 2 && p.sequence[0] == "find_files" && p.sequence[1] == "grep_file"
+            p.sequence.len() == 2
+                && p.sequence[0] == "find_files"
+                && p.sequence[1] == tools::GREP_FILE
         });
 
         assert!(has_find_grep, "Should detect find->grep pattern");
@@ -154,8 +157,8 @@ mod tests {
 
         // Simulate a realistic development workflow repeated to cross ANALYZE_INTERVAL:
         let workflows = vec![
-            ("list_files", r#"{"path": "/src"}"#, true),
-            ("grep_file", r#"{"pattern": "fn main"}"#, true),
+            (tools::LIST_FILES, r#"{"path": "/src"}"#, true),
+            (tools::GREP_FILE, r#"{"pattern": "fn main"}"#, true),
         ];
 
         for _ in 0..6 {

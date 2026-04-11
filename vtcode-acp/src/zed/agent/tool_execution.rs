@@ -297,10 +297,9 @@ impl ZedAgent {
                 .run_read_file(client, session_id, args)
                 .await
                 .unwrap_or_else(|message| ToolExecutionReport::failure(tools::READ_FILE, &message)),
-            SupportedTool::ListFiles => self
-                .run_list_files(args)
-                .await
-                .unwrap_or_else(|message| ToolExecutionReport::failure("list_files", &message)),
+            SupportedTool::ListFiles => self.run_list_files(args).await.unwrap_or_else(|message| {
+                ToolExecutionReport::failure(tools::LIST_FILES, &message)
+            }),
             SupportedTool::SwitchMode => self
                 .run_switch_mode(session_id, args)
                 .await

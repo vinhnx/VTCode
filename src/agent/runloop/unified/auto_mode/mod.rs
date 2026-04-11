@@ -8,6 +8,7 @@ use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
 use vtcode_core::command_safety::parse_bash_lc_commands;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::{PermissionsConfig, loader::VTCodeConfig};
 use vtcode_core::git_info::get_git_remote_urls;
@@ -562,7 +563,7 @@ fn extract_written_content(tool_name: &str, args: &Value) -> Option<String> {
         }
     }
 
-    if tool_name == "apply_patch" {
+    if tool_name == tool_names::APPLY_PATCH {
         return args
             .get("patch")
             .or_else(|| args.get("input"))

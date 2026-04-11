@@ -253,19 +253,20 @@ impl ErrorRecoveryState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
 
     #[test]
     fn test_record_error() {
         let mut state = ErrorRecoveryState::new();
 
         state.record_error(
-            "grep_file",
+            tools::GREP_FILE,
             "Pattern not found".to_string(),
             ErrorType::ToolExecution,
         );
 
         assert_eq!(state.recent_errors.len(), 1);
-        assert_eq!(state.recent_errors[0].tool_name, "grep_file");
+        assert_eq!(state.recent_errors[0].tool_name, tools::GREP_FILE);
     }
 
     #[test]
@@ -326,7 +327,7 @@ mod tests {
 
         for _i in 0..3 {
             state.record_error(
-                "grep_file",
+                tools::GREP_FILE,
                 "Pattern not found".to_string(),
                 ErrorType::ToolExecution,
             );
@@ -340,7 +341,7 @@ mod tests {
 
         let diagnostics = state.get_diagnostics(&[], 10);
         assert_eq!(diagnostics.error_patterns.len(), 1);
-        assert_eq!(diagnostics.error_patterns[0].tool_name, "grep_file");
+        assert_eq!(diagnostics.error_patterns[0].tool_name, tools::GREP_FILE);
         assert_eq!(diagnostics.error_patterns[0].error_count, 3);
     }
 

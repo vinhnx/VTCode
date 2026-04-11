@@ -9,6 +9,7 @@ use ratatui::{
 use crate::config::constants::ui;
 use crate::ui::tui::session::terminal_capabilities;
 use crate::ui::tui::session::{Session, TranscriptLine, spinner_frame_for_phase};
+use vtcode_config::constants::tools;
 
 /// Widget for rendering the transcript area with conversation history
 ///
@@ -146,13 +147,13 @@ impl<'a> Widget for TranscriptWidget<'a> {
 }
 
 const FILE_OPERATION_STATUS_TOOLS: &[&str] = &[
-    "write_file",
-    "create_file",
-    "edit_file",
-    "apply_patch",
-    "search_replace",
-    "delete_file",
-    "unified_file",
+    tools::WRITE_FILE,
+    tools::CREATE_FILE,
+    tools::EDIT_FILE,
+    tools::APPLY_PATCH,
+    tools::SEARCH_REPLACE,
+    tools::DELETE_FILE,
+    tools::UNIFIED_FILE,
 ];
 
 const FILE_OPERATION_INDICATORS: &[&str] = &[

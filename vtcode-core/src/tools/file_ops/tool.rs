@@ -1,5 +1,6 @@
 //! File operations tool implementation.
 
+use crate::config::constants::tools;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::traits::{CacheableTool, FileTool, ModeTool, Tool};
@@ -136,7 +137,7 @@ impl Tool for FileOpsTool {
     }
 
     fn name(&self) -> &'static str {
-        "list_files"
+        tools::LIST_FILES
     }
 
     fn description(&self) -> &'static str {

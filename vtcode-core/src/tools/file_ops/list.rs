@@ -1,5 +1,6 @@
 use super::FileOpsTool;
 use super::path_policy::PathSuggestionKind;
+use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
@@ -284,7 +285,7 @@ impl FileOpsTool {
             None
         };
 
-        let mut builder = ToolResponseBuilder::new("list_files")
+        let mut builder = ToolResponseBuilder::new(tools::LIST_FILES)
             .success()
             .field("items", json!(page_items))
             .field("count", json!(page_items.len()))

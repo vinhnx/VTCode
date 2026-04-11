@@ -374,7 +374,7 @@ pub(crate) fn update_repetition_tracker(
         n if n == tool_names::UNIFIED_EXEC
             || n == tool_names::RUN_PTY_CMD
             || n == tool_names::EXECUTE_CODE
-            || n == "shell"
+            || n == tool_names::SHELL
     );
 
     if is_execution_tool {
@@ -428,6 +428,7 @@ pub(crate) fn check_is_argument_error(error_str: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+    use vtcode_core::config::constants::tools;
 
     #[test]
     fn push_tool_response_replaces_existing_tool_call_entry() {
@@ -589,7 +590,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            "grep_file",
+            tools::GREP_FILE,
             &json!({"pattern":"foo","path":"src/"}),
         );
         assert_eq!(tracker.consecutive_navigations, 2);

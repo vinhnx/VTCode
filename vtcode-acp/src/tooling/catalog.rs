@@ -37,7 +37,7 @@ impl SupportedTool {
     pub fn function_name(&self) -> &'static str {
         match self {
             Self::ReadFile => tools::READ_FILE,
-            Self::ListFiles => "list_files",
+            Self::ListFiles => tools::LIST_FILES,
             Self::SwitchMode => "switch_mode",
         }
     }
@@ -156,13 +156,13 @@ impl AcpToolRegistry {
     pub fn tool_kind(&self, function_name: &str) -> agent_client_protocol::ToolKind {
         match function_name {
             tools::READ_FILE => agent_client_protocol::ToolKind::Read,
-            "grep_file" | "list_files" => agent_client_protocol::ToolKind::Search,
+            tools::GREP_FILE | tools::LIST_FILES => agent_client_protocol::ToolKind::Search,
             tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => agent_client_protocol::ToolKind::Execute,
             tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => {
                 agent_client_protocol::ToolKind::Edit
             }
             tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
-            "web_fetch" => agent_client_protocol::ToolKind::Fetch,
+            tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
             _ => agent_client_protocol::ToolKind::Other,
         }
     }

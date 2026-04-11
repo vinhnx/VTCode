@@ -9,6 +9,7 @@
 //! The canonical public tool resolver is the registry assembly in
 //! `crate::tools::registry`; keep name normalization here compatibility-scoped.
 
+use crate::config::constants::tools;
 use hashbrown::HashMap;
 use std::sync::Arc;
 
@@ -52,12 +53,12 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
 
     let mapped = match normalized.as_str() {
         "exec_code" | "run_code" | "run_command" | "run_command_pty" | "container.exec"
-        | "bash" => "unified_exec",
-        "search_text" => "grep_file",
-        "read_file" => "read_file",
-        "write_file" => "write_file",
-        "edit_file" => "edit_file",
-        "list_files" => "list_files",
+        | "bash" => tools::UNIFIED_EXEC,
+        "search_text" => tools::GREP_FILE,
+        tools::READ_FILE => tools::READ_FILE,
+        tools::WRITE_FILE => tools::WRITE_FILE,
+        tools::EDIT_FILE => tools::EDIT_FILE,
+        tools::LIST_FILES => tools::LIST_FILES,
         _ => normalized.as_str(),
     };
 

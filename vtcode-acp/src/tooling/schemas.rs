@@ -171,7 +171,7 @@ pub(super) fn build_list_files_definition(workspace_root: &Path) -> ToolDefiniti
         "examples": examples,
     });
 
-    ToolDefinition::function("list_files".to_string(), description, schema)
+    ToolDefinition::function(tools::LIST_FILES.to_string(), description, schema)
 }
 
 pub(super) fn build_switch_mode_definition() -> ToolDefinition {

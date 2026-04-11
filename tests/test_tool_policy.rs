@@ -17,6 +17,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use vtcode_core::config::constants::tools;
 use vtcode_core::utils::colors::style;
 
 /// Tool execution policy
@@ -214,7 +215,7 @@ fn main() -> Result<()> {
     let initial_tools = vec![
         "read_file".to_string(),
         "write_file".to_string(),
-        "list_files".to_string(),
+        tools::LIST_FILES.to_string(),
     ];
     policy_manager.update_available_tools(initial_tools)?;
     policy_manager.print_status();
@@ -232,9 +233,9 @@ fn main() -> Result<()> {
     let updated_tools = vec![
         "read_file".to_string(),
         "write_file".to_string(),
-        "list_files".to_string(),
+        tools::LIST_FILES.to_string(),
         "run_pty_cmd".to_string(),
-        "grep_file".to_string(),
+        tools::GREP_FILE.to_string(),
     ];
     policy_manager.update_available_tools(updated_tools)?;
     policy_manager.print_status();
@@ -244,8 +245,8 @@ fn main() -> Result<()> {
     println!("{}", style("Test 4: Removing tools").cyan());
     let final_tools = vec![
         "read_file".to_string(),
-        "list_files".to_string(),
-        "grep_file".to_string(),
+        tools::LIST_FILES.to_string(),
+        tools::GREP_FILE.to_string(),
     ];
     policy_manager.update_available_tools(final_tools)?;
     policy_manager.print_status();
@@ -259,7 +260,7 @@ fn main() -> Result<()> {
     );
     println!(
         "list_files policy: {:?}",
-        policy_manager.get_policy("list_files")
+        policy_manager.get_policy(tools::LIST_FILES)
     );
     println!(
         "nonexistent_tool policy: {:?}",

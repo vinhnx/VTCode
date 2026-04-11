@@ -12,6 +12,9 @@ use std::fmt::Write;
 use std::time::Duration;
 use tracing::debug;
 
+#[cfg(test)]
+use crate::config::constants::tools;
+
 /// Statistics about skill usage patterns
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SkillStatistics {
@@ -516,7 +519,7 @@ mod tests {
         analyzer.record_tool_usage("read_file");
         analyzer.record_tool_usage("read_file");
         analyzer.record_tool_usage("write_file");
-        analyzer.record_tool_usage("list_files");
+        analyzer.record_tool_usage(tools::LIST_FILES);
 
         let recommendations = analyzer.recommend_tools("read", 1);
         assert!(recommendations.contains(&"read_file".to_owned()));
@@ -541,12 +544,12 @@ mod tests {
     #[test]
     fn test_tool_failure_tracking() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer.record_tool_failure("grep_file", "timeout");
-        analyzer.record_tool_failure("grep_file", "timeout");
-        analyzer.record_tool_failure("grep_file", "pattern_error");
+        analyzer.record_tool_failure(tools::GREP_FILE, "timeout");
+        analyzer.record_tool_failure(tools::GREP_FILE, "timeout");
+        analyzer.record_tool_failure(tools::GREP_FILE, "pattern_error");
 
         assert!(!analyzer.failure_patterns.high_failure_tools.is_empty());
-        assert!(analyzer.failure_patterns.high_failure_tools[0].0 == "grep_file");
+        assert!(analyzer.failure_patterns.high_failure_tools[0].0 == tools::GREP_FILE);
     }
 
     #[test]

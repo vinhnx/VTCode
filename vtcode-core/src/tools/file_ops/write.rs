@@ -3,6 +3,7 @@ use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_prev
 mod chunked;
 mod fs_ops;
 use crate::config::constants::diff;
+use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::edited_file_monitor::conflict_override_snapshot;
 use crate::tools::traits::FileTool;
@@ -117,7 +118,7 @@ impl FileOpsTool {
         };
 
         if effective_mode == "skip_if_exists" && file_exists {
-            return Ok(ToolResponseBuilder::new("write_file")
+            return Ok(ToolResponseBuilder::new(tools::WRITE_FILE)
                 .success()
                 .message("File already exists")
                 .field("skipped", json!(true))
@@ -185,7 +186,7 @@ impl FileOpsTool {
             "skip_if_exists" => {
                 if let Err(err) = create_text_file(&file_path, &input.content).await {
                     if err.kind() == ErrorKind::AlreadyExists {
-                        return Ok(ToolResponseBuilder::new("write_file")
+                        return Ok(ToolResponseBuilder::new(tools::WRITE_FILE)
                             .success()
                             .message("File already exists")
                             .field("skipped", json!(true))
@@ -268,7 +269,7 @@ impl FileOpsTool {
             }
         }
 
-        let mut builder = ToolResponseBuilder::new("write_file")
+        let mut builder = ToolResponseBuilder::new(tools::WRITE_FILE)
             .success()
             .message(format!(
                 "Successfully wrote file {}",

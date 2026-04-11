@@ -215,7 +215,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
                 return None;
             }
         }
-        Some("grep_file") => {
+        Some(tools::GREP_FILE) => {
             // For grep_file, ensure pattern is present
             if !positional.is_empty()
                 && !object.contains_key("pattern")

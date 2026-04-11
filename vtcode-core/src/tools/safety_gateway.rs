@@ -252,7 +252,7 @@ fn push_file_access_target(
 
 fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
     match tool_name {
-        "shell" | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args)
+        tools::SHELL | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args)
             .ok()
             .flatten(),
         tools::SEND_PTY_INPUT => {
@@ -974,7 +974,7 @@ impl SafetyGateway {
         }
 
         // Check for network access
-        if tool_name == "web_search" || tool_name == "fetch_url" || web_search {
+        if tool_name == tools::WEB_SEARCH || tool_name == tools::FETCH_URL || web_search {
             ctx = ctx.accesses_network();
         }
 

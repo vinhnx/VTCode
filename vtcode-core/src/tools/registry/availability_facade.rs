@@ -1,11 +1,11 @@
 //! Tool availability and schema accessors for ToolRegistry.
 
-use serde_json::Value;
-
 use crate::config::ToolDocumentationMode;
+use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use crate::tools::names::canonical_tool_name;
+use serde_json::Value;
 
 use super::ToolRegistry;
 use crate::tools::mcp::legacy_mcp_tool_name;
@@ -18,8 +18,8 @@ impl ToolRegistry {
 
         let lower = failed_tool.trim().to_ascii_lowercase();
         match lower.as_str() {
-            "exec_code" => "unified_exec".to_string(),
-            "list_dir" | "list_directory" => "unified_search".to_string(),
+            "exec_code" => tools::UNIFIED_EXEC.to_string(),
+            "list_dir" | "list_directory" => tools::UNIFIED_SEARCH.to_string(),
             _ => {
                 if let Some((_, suffix)) = lower.rsplit_once('.')
                     && let Ok(resolved) = self.resolve_public_tool_name_sync(suffix)
@@ -43,12 +43,12 @@ impl ToolRegistry {
         }
 
         let candidates: &[&str] = match seed.as_str() {
-            "unified_search" => &["unified_file"],
-            "unified_exec" => &["unified_search"],
-            "unified_file" | "apply_patch" => &["unified_search"],
+            tools::UNIFIED_SEARCH => &[tools::UNIFIED_FILE],
+            tools::UNIFIED_EXEC => &[tools::UNIFIED_SEARCH],
+            tools::UNIFIED_FILE | tools::APPLY_PATCH => &[tools::UNIFIED_SEARCH],
             // Task trackers require action-specific arguments; generic fallback names
             // create low-signal retries.
-            "task_tracker" | "plan_task_tracker" => &[],
+            tools::TASK_TRACKER | tools::PLAN_TASK_TRACKER => &[],
             // Unknown tools: prefer no fallback over noisy generic suggestions.
             _ => &[],
         };

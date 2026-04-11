@@ -566,7 +566,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                 ),
             }
         }
-        "list_files" => describe_list_files(args)
+        actual_name if actual_name == tool_names::LIST_FILES => describe_list_files(args)
             .map(|(desc, used)| {
                 (
                     format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
@@ -579,7 +579,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     HashSet::new(),
                 )
             }),
-        "grep_file" => describe_grep_file(args)
+        actual_name if actual_name == tool_names::GREP_FILE => describe_grep_file(args)
             .map(|(desc, used)| {
                 (
                     format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
@@ -718,7 +718,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             ),
             HashSet::new(),
         ),
-        "fetch" | "web_fetch" => {
+        "fetch" | tool_names::WEB_FETCH => {
             let (desc, used) = describe_fetch_action(args);
             (
                 format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),

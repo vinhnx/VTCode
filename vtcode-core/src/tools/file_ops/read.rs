@@ -4,6 +4,7 @@ use super::path_policy::PathSuggestionKind;
 mod legacy;
 mod logging;
 mod segments;
+use crate::config::constants::tools;
 use crate::telemetry::perf::PerfSpan;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
@@ -469,7 +470,7 @@ impl FileOpsTool {
                         } = handler.handle_detailed(read_args).await?;
                         let full_text_read = is_full_text_read(&args, is_spool_output);
 
-                        let mut builder = ToolResponseBuilder::new("read_file")
+                        let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
                             .success()
                             .message(format!("Successfully read file {}", requested_path))
                             .content(&content)
@@ -543,7 +544,7 @@ impl FileOpsTool {
                 self.read_file_legacy(&canonical, &input).await?
             };
 
-            let mut builder = ToolResponseBuilder::new("read_file")
+            let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
                 .success()
                 .message(format!(
                     "Successfully read {} bytes from {}",

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
+use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::handlers::plan_mode::{
     PlanModeState, PlanValidationReport, tracker_file_for_plan_file, validate_plan_content,
@@ -88,12 +89,10 @@ struct InterviewNeedState {
 }
 
 fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::SessionStats) -> bool {
-    use vtcode_core::config::constants::tools;
-
     [
         tools::READ_FILE,
-        "list_files",
-        "grep_file",
+        tools::LIST_FILES,
+        tools::GREP_FILE,
         tools::UNIFIED_SEARCH,
     ]
     .iter()
@@ -259,7 +258,7 @@ fn collect_interview_research_context(
         .filter(|tool| {
             matches!(
                 tool.as_str(),
-                "read_file" | "list_files" | "grep_file" | "unified_search"
+                tools::READ_FILE | tools::LIST_FILES | tools::GREP_FILE | tools::UNIFIED_SEARCH
             )
         })
         .collect::<Vec<_>>();

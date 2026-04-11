@@ -229,7 +229,7 @@ impl ZedAgent {
         let locations = Self::list_files_locations(&listing);
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
-            TOOL_RESPONSE_KEY_TOOL: "list_files",
+            TOOL_RESPONSE_KEY_TOOL: tools::LIST_FILES,
             TOOL_LIST_FILES_RESULT_KEY: listing,
         });
 

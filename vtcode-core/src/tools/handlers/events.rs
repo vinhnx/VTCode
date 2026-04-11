@@ -6,6 +6,7 @@
 //! - Failure events with errors
 //! - Patch-specific events for apply_patch
 
+use crate::config::constants::tools;
 use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -355,9 +356,9 @@ impl ToolEmitter {
     /// Get tool name for this emitter
     fn tool_name(&self) -> String {
         match self {
-            Self::Shell { .. } => "shell".to_string(),
-            Self::ApplyPatch { .. } => "apply_patch".to_string(),
-            Self::UnifiedExec { .. } => "unified_exec".to_string(),
+            Self::Shell { .. } => tools::SHELL.to_string(),
+            Self::ApplyPatch { .. } => tools::APPLY_PATCH.to_string(),
+            Self::UnifiedExec { .. } => tools::UNIFIED_EXEC.to_string(),
             Self::Generic { tool_name } => tool_name.clone(),
         }
     }

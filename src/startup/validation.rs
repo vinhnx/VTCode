@@ -45,8 +45,8 @@ pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &s
             config.automation.full_auto.enabled = true;
             config.automation.full_auto.allowed_tools = vec![
                 tools::READ_FILE.to_string(),
-                "list_files".to_string(),
-                "grep_file".to_string(),
+                tools::LIST_FILES.to_string(),
+                tools::GREP_FILE.to_string(),
             ];
         }
         "full-auto" => {

@@ -374,7 +374,7 @@ fn parse_mcp_request(normalized_tool_name: &str) -> Option<(String, String)> {
 }
 
 fn is_web_fetch_request(normalized_tool_name: &str, args: &Value) -> bool {
-    normalized_tool_name == "web_fetch"
+    normalized_tool_name == tools::WEB_FETCH
         || normalized_tool_name == tools::FETCH_URL
         || (normalized_tool_name == tools::UNIFIED_SEARCH
             && tool_intent::unified_search_action(args).is_some_and(|action| action == "web"))

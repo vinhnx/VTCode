@@ -4,6 +4,7 @@
 //! with dynamic configuration loading from vtcode.toml
 
 use super::traits::Tool;
+use crate::config::constants::tools;
 use crate::tools::error_helpers::with_path_context;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
@@ -494,7 +495,7 @@ impl Tool for WebFetchTool {
     }
 
     fn name(&self) -> &'static str {
-        "web_fetch"
+        tools::WEB_FETCH
     }
 
     fn description(&self) -> &'static str {

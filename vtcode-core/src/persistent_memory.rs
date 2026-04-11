@@ -1459,7 +1459,7 @@ fn count_suspicious_facts_in_file(path: &Path) -> Result<usize> {
         .with_context(|| format!("Failed to read {}", path.display()))?;
     Ok(parse_topic_file(&content)
         .into_iter()
-        .filter(|f| is_legacy_polluted_fact(f))
+        .filter(is_legacy_polluted_fact)
         .count())
 }
 
@@ -1651,11 +1651,11 @@ fn list_md_files(dir: &Path, filter: impl Fn(&str) -> bool) -> Result<Vec<PathBu
 }
 
 async fn list_pending_rollout_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
-    Ok(list_md_files(rollout_dir, |n| n.ends_with(".pending.md"))?)
+    list_md_files(rollout_dir, |n| n.ends_with(".pending.md"))
 }
 
 async fn list_rollout_markdown_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
-    Ok(list_md_files(rollout_dir, |_| true)?)
+    list_md_files(rollout_dir, |_| true)
 }
 
 fn list_note_markdown_files(notes_dir: &Path) -> Result<Vec<PathBuf>> {
@@ -1713,8 +1713,7 @@ async fn consolidate_memory_files(
         repository_facts: merge_topic_facts(repo_existing.into_iter().chain(rollout.1).collect()),
     };
     let created_files =
-        write_classified_memory(&files, &classified, runtime_config, vt_cfg, workspace_root)
-            .await?;
+        write_classified_memory(files, &classified, runtime_config, vt_cfg, workspace_root).await?;
     let added_facts = pending_files
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())

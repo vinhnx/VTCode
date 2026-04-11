@@ -207,10 +207,14 @@ mod tests {
         assert!(msg.contains("[MCP_E032]"));
         assert!(msg.contains("15 seconds"));
 
-        let err = tool_invocation_failed("claude", "list_files", "timeout");
+        let err = tool_invocation_failed(
+            "claude",
+            vtcode_config::constants::tools::LIST_FILES,
+            "timeout",
+        );
         let msg = err.to_string();
         assert!(msg.contains("[MCP_E002]"));
-        assert!(msg.contains("list_files"));
+        assert!(msg.contains(vtcode_config::constants::tools::LIST_FILES));
         assert!(msg.contains("timeout"));
     }
 

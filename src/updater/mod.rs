@@ -248,7 +248,7 @@ mod tests {
         let identifier = format!("{target}.tar.gz");
 
         // Simulate the asset selection logic from self_update
-        let assets = vec![
+        let assets = [
             "checksums.txt",
             "vtcode-0.98.1-aarch64-apple-darwin.sha256",
             "vtcode-0.98.1-aarch64-apple-darwin.tar.gz",
@@ -273,7 +273,7 @@ mod tests {
         let target = "aarch64-apple-darwin";
         let identifier = format!("{target}.tar.gz");
 
-        let assets = vec![
+        let assets = [
             "vtcode-0.98.1-x86_64-apple-darwin.sha256",
             "vtcode-0.98.1-x86_64-apple-darwin.tar.gz",
         ];

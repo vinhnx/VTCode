@@ -10,6 +10,9 @@ use std::fmt;
 use std::time::Instant;
 use uuid::Uuid;
 
+#[cfg(test)]
+use crate::config::constants::tools;
+
 /// Unique identifier for a tool invocation.
 ///
 /// UUID-based for global uniqueness across sessions and processes.
@@ -261,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_invocation_retry() {
-        let inv = ToolInvocation::new("grep_file", json!({"pattern": "TODO"}), "session-456");
+        let inv = ToolInvocation::new(tools::GREP_FILE, json!({"pattern": "TODO"}), "session-456");
         let retry = inv.retry();
 
         assert_ne!(inv.id, retry.id);

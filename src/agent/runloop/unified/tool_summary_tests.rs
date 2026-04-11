@@ -1,4 +1,5 @@
 use serde_json::json;
+use vtcode_core::config::constants::tools;
 
 use super::tool_summary::is_file_modification_tool;
 
@@ -47,5 +48,5 @@ fn test_is_file_modification_tool_read_file() {
 #[test]
 fn test_is_file_modification_tool_grep_file() {
     let args = json!({"pattern": "test", "path": "/tmp"});
-    assert!(!is_file_modification_tool("grep_file", &args));
+    assert!(!is_file_modification_tool(tools::GREP_FILE, &args));
 }

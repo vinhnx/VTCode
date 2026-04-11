@@ -262,7 +262,7 @@ pub(super) fn normalize_tool_args<'a>(
         tool_names::RUN_PTY_CMD
             | tool_names::CREATE_PTY_SESSION
             | tool_names::UNIFIED_EXEC
-            | "shell"
+            | tool_names::SHELL
     ) {
         let shell_args = crate::tools::command_args::normalize_shell_args(normalized.as_ref())
             .map_err(|error| anyhow!(error))?;
@@ -380,7 +380,7 @@ pub(super) fn preflight_validate_resolved_call(
 
     let should_validate_command = matches!(
         effective_tool_name.as_str(),
-        tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | "shell"
+        tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | tool_names::SHELL
     ) || (effective_tool_name == tool_names::UNIFIED_EXEC
         && crate::tools::command_args::unified_exec_requires_command_safety(
             validation_args.as_ref(),

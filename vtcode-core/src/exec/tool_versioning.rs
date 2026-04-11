@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use tracing::debug;
 
+#[cfg(test)]
+use crate::config::constants::tools;
+
 /// Represents a specific version of a tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolVersion {
@@ -370,12 +373,12 @@ mod tests {
         let mut tools = HashMap::new();
         // Tool is at 1.3.0 but skill requires 1.2
         tools.insert(
-            "list_files".to_owned(),
-            create_test_tool("list_files", "1.3.0"),
+            tools::LIST_FILES.to_owned(),
+            create_test_tool(tools::LIST_FILES, "1.3.0"),
         );
 
         let deps = vec![ToolDependency {
-            name: "list_files".to_owned(),
+            name: tools::LIST_FILES.to_owned(),
             version: "1.2".to_owned(),
             usage: vec![],
         }];
@@ -392,12 +395,12 @@ mod tests {
         let mut tools = HashMap::new();
         // Tool upgraded to 2.0.0, skill requires 1.2
         tools.insert(
-            "grep_file".to_owned(),
-            create_test_tool("grep_file", "2.0.0"),
+            tools::GREP_FILE.to_owned(),
+            create_test_tool(tools::GREP_FILE, "2.0.0"),
         );
 
         let deps = vec![ToolDependency {
-            name: "grep_file".to_owned(),
+            name: tools::GREP_FILE.to_owned(),
             version: "1.2".to_owned(),
             usage: vec![],
         }];
@@ -436,12 +439,12 @@ mod tests {
         // Should be compatible (patch version changes are backward compatible)
         let mut tools = HashMap::new();
         tools.insert(
-            "list_files".to_owned(),
-            create_test_tool("list_files", "1.2.5"),
+            tools::LIST_FILES.to_owned(),
+            create_test_tool(tools::LIST_FILES, "1.2.5"),
         );
 
         let deps = vec![ToolDependency {
-            name: "list_files".to_owned(),
+            name: tools::LIST_FILES.to_owned(),
             version: "1.2".to_owned(),
             usage: vec!["main".to_owned()],
         }];
@@ -469,8 +472,8 @@ mod tests {
             create_test_tool("write_file", "2.0.0"),
         );
         tools.insert(
-            "list_files".to_owned(),
-            create_test_tool("list_files", "1.3.0"),
+            tools::LIST_FILES.to_owned(),
+            create_test_tool(tools::LIST_FILES, "1.3.0"),
         );
 
         let deps = vec![
@@ -485,7 +488,7 @@ mod tests {
                 usage: vec!["write_output".to_owned()],
             },
             ToolDependency {
-                name: "list_files".to_owned(),
+                name: tools::LIST_FILES.to_owned(),
                 version: "1.2".to_owned(),
                 usage: vec!["scan_directory".to_owned()],
             },

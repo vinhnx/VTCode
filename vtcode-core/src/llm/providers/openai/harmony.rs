@@ -1,4 +1,5 @@
 use crate::config::constants::models;
+use crate::config::constants::tools;
 use serde_json::Value;
 
 pub(super) fn normalized_harmony_model(model: &str) -> String {
@@ -35,11 +36,11 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
     // Handle harmony format namespace mappings (e.g., "repo_browser.list_files" -> "list_files")
     // Direct tool name aliases are handled by canonical_tool_name() in the registry
     match recipient {
-        "repo_browser.list_files" => "list_files".to_string(),
-        "repo_browser.read_file" => "read_file".to_string(),
-        "repo_browser.write_file" => "write_file".to_string(),
-        "container.exec" | "bash" => "unified_exec".to_string(),
-        "grep" => "grep_file".to_string(),
+        "repo_browser.list_files" => tools::LIST_FILES.to_string(),
+        "repo_browser.read_file" => tools::READ_FILE.to_string(),
+        "repo_browser.write_file" => tools::WRITE_FILE.to_string(),
+        "container.exec" | "bash" => tools::UNIFIED_EXEC.to_string(),
+        "grep" => tools::GREP_FILE.to_string(),
         _ => {
             // Try to extract the function name after the last dot
             if let Some(dot_pos) = recipient.rfind('.') {

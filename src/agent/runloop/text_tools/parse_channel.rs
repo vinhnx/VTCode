@@ -58,11 +58,11 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
 
 pub(super) fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
     match tool_ref {
-        "repo_browser.list_files" | "list_files" => "list_files",
-        "repo_browser.read_file" | "read_file" => "read_file",
-        "repo_browser.write_file" | "write_file" => "write_file",
+        "repo_browser.list_files" | tools::LIST_FILES => tools::LIST_FILES,
+        "repo_browser.read_file" | tools::READ_FILE => tools::READ_FILE,
+        "repo_browser.write_file" | tools::WRITE_FILE => tools::WRITE_FILE,
         "container.exec" | "exec" | "bash" | "exec_command" => tools::UNIFIED_EXEC,
-        "grep" => "grep_file",
+        "grep" => tools::GREP_FILE,
         _ => {
             // Try to extract the function name after the last dot
             if let Some(dot_pos) = tool_ref.rfind('.') {
@@ -104,7 +104,7 @@ pub(super) fn convert_harmony_args_to_tool_format(
         Ok(Value::Object(result))
     } else {
         match tool_name {
-            "list_files" => {
+            tools::LIST_FILES => {
                 // Convert harmony list_files format to vtcode format
                 let mut args = serde_json::Map::new();
 

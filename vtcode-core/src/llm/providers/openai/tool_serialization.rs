@@ -2,6 +2,7 @@
 //!
 //! Keeps tool JSON shaping isolated from the main provider logic.
 
+use crate::config::constants::tools;
 use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
     OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
@@ -291,7 +292,7 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                     }
                     value
                 }
-                "apply_patch" | "shell" | "custom" | "grammar" => {
+                tools::APPLY_PATCH | tools::SHELL | "custom" | "grammar" => {
                     if is_gpt5_or_newer(model) {
                         json!(tool)
                     } else if let Some(func) = &tool.function {
@@ -333,7 +334,7 @@ pub fn serialize_tools_for_responses(
             let serialized = match tool.tool_type.as_str() {
                 "function" => {
                     let func = tool.function.as_ref()?;
-                    if func.name == "shell" {
+                    if func.name == tools::SHELL {
                         hosted_shell
                             .and_then(serialize_openai_hosted_shell)
                             .or_else(|| {
@@ -349,19 +350,19 @@ pub fn serialize_tools_for_responses(
                         ))
                     }
                 }
-                "apply_patch" => {
+                tools::APPLY_PATCH => {
                     if let Some(func) = tool.function.as_ref() {
                         Some(serialize_responses_function_tool(func, false))
                     } else {
                         Some(json!({
                             "type": "function",
-                            "name": "apply_patch",
+                            "name": tools::APPLY_PATCH,
                             "description": crate::tools::apply_patch::with_semantic_anchor_guidance("Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++)"),
                             "parameters": crate::tools::apply_patch::parameter_schema("Patch in VT Code format")
                         }))
                     }
                 }
-                "shell" => hosted_shell.and_then(serialize_openai_hosted_shell),
+                tools::SHELL => hosted_shell.and_then(serialize_openai_hosted_shell),
                 "custom" => tool.function.as_ref().map(|func| {
                     json!({
                         "type": "custom",

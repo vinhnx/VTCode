@@ -14,6 +14,7 @@ pub const UNIFIED_FILE: &str = "unified_file";
 pub const THINK: &str = "think";
 pub const SEARCH_TOOLS: &str = "search_tools";
 pub const WEB_SEARCH: &str = "web_search";
+pub const WEB_FETCH: &str = "web_fetch";
 pub const FETCH_URL: &str = "fetch_url";
 pub const LIST: &str = "list";
 pub const GREP: &str = "grep";

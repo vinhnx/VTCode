@@ -1,11 +1,9 @@
 pub use super::super::Session;
 use super::super::TranscriptLine;
-use super::*;
 pub use crate::config::constants::ui;
 pub use crate::core_tui::app::session::AppSession;
 pub use crate::core_tui::app::types as app_types;
 pub use crate::core_tui::session::terminal_capabilities;
-use crate::core_tui::session::transcript_links::{TranscriptFileLinkTarget, TranscriptLinkTarget};
 pub use crate::core_tui::types::{InlineCommand, InlineEvent};
 pub use crate::core_tui::types::{
     InlineHeaderBadge, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget,
@@ -16,7 +14,6 @@ pub use crate::core_tui::types::{
 };
 pub use crate::core_tui::widgets::TranscriptWidget;
 pub use crate::ui::tui::session::message::RenderedTranscriptLink;
-pub use crate::ui::tui::style::ratatui_style_from_inline;
 pub use anstyle::Color as AnsiColorEnum;
 pub use anstyle::RgbColor;
 pub use ratatui::crossterm::event::{
@@ -32,7 +29,7 @@ pub use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier},
-    text::{Line, Span},
+    text::Line,
     widgets::Widget,
 };
 pub use std::fs;
@@ -42,7 +39,7 @@ pub use std::sync::{
     LazyLock, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
-pub use std::time::{Duration, Instant};
+pub use std::time::Duration;
 pub use tokio::sync::mpsc;
 pub use tokio::sync::mpsc::UnboundedSender;
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
@@ -493,15 +490,6 @@ pub fn meta_modifier_press_event() -> KeyEvent {
     )
 }
 
-#[cfg(target_os = "macos")]
-#[cfg(target_os = "macos")]
-#[cfg(target_os = "macos")]
-#[cfg(target_os = "macos")]
-#[cfg(target_os = "macos")]
-#[cfg(unix)]
-#[cfg(unix)]
-#[cfg(unix)]
-
 pub fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     WizardStep {
         title: format!("Question {question_id}"),
@@ -748,19 +736,5 @@ pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, need
     assert!(
         footer.iter().any(|line| line.contains(needle)),
         "expected footer to contain: {needle}"
-    );
-}
-
-pub fn assert_footer_not_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
-    let view = visible_transcript(session);
-    let footer: Vec<String> = view
-        .iter()
-        .rev()
-        .take(take_from_bottom as usize)
-        .cloned()
-        .collect();
-    assert!(
-        !footer.iter().any(|line| line.contains(needle)),
-        "expected footer NOT to contain: {needle}"
     );
 }

@@ -1,5 +1,6 @@
 use super::FileOpsTool;
 use super::diff_preview_size_skip;
+use crate::config::constants::tools;
 use crate::tools::types::WriteInput;
 use crate::utils::file_utils::ensure_dir_exists;
 use anyhow::{Result, anyhow};
@@ -102,7 +103,7 @@ impl FileOpsTool {
         chunked: bool,
     ) -> Result<()> {
         let log_entry = json!({
-            "operation": if chunked { "write_file_chunked" } else { "write_file" },
+            "operation": if chunked { "write_file_chunked" } else { tools::WRITE_FILE },
             "file_path": file_path.to_string_lossy(),
             "bytes_written": bytes_written,
             "chunked": chunked,

@@ -3,6 +3,7 @@
 
 use serde_json::json;
 use vtcode_config::OptimizationConfig;
+use vtcode_config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
@@ -77,7 +78,7 @@ async fn test_execute_tool_ref_memory_pool_integration() {
         "path": "."
     });
 
-    let result = registry.execute_tool_ref("list_files", &args).await;
+    let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
     assert!(result.is_ok());
 
     println!("v execute_tool_ref memory pool integration test passed");
@@ -106,7 +107,7 @@ async fn test_execute_tool_ref_without_optimizations() {
         "path": "."
     });
 
-    let result = registry.execute_tool_ref("list_files", &args).await;
+    let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
     assert!(result.is_ok());
 
     println!("v execute_tool_ref without optimizations test passed");
@@ -127,10 +128,10 @@ async fn test_execute_tool_ref_hot_cache_effectiveness() {
     let args = json!({"path": "."});
 
     // Execute different tools to test cache behavior
-    let _result1 = registry.execute_tool_ref("list_files", &args).await;
+    let _result1 = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
     let (cache_size_1, _) = registry.hot_cache_stats();
 
-    let _result2 = registry.execute_tool_ref("list_files", &args).await; // Same tool
+    let _result2 = registry.execute_tool_ref(tools::LIST_FILES, &args).await; // Same tool
     let (cache_size_2, _) = registry.hot_cache_stats();
 
     // Cache size should not exceed capacity
@@ -159,17 +160,17 @@ async fn test_execute_tool_ref_performance_comparison() {
 
     // Warm up both registries
     let _ = registry_unoptimized
-        .execute_tool_ref("list_files", &args)
+        .execute_tool_ref(tools::LIST_FILES, &args)
         .await;
     let _ = registry_optimized
-        .execute_tool_ref("list_files", &args)
+        .execute_tool_ref(tools::LIST_FILES, &args)
         .await;
 
     // Time unoptimized execution
     let start = std::time::Instant::now();
     for _ in 0..5 {
         let _ = registry_unoptimized
-            .execute_tool_ref("list_files", &args)
+            .execute_tool_ref(tools::LIST_FILES, &args)
             .await;
     }
     let unoptimized_duration = start.elapsed();
@@ -178,7 +179,7 @@ async fn test_execute_tool_ref_performance_comparison() {
     let start = std::time::Instant::now();
     for _ in 0..5 {
         let _ = registry_optimized
-            .execute_tool_ref("list_files", &args)
+            .execute_tool_ref(tools::LIST_FILES, &args)
             .await;
     }
     let optimized_duration = start.elapsed();

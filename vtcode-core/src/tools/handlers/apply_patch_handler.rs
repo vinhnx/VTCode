@@ -23,6 +23,7 @@ use super::tool_handler::{
     ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
 };
 use super::tool_orchestrator::ToolOrchestrator;
+use crate::config::constants::tools;
 use crate::tools::editing::{Patch, PatchOperation};
 
 /// Context for intercepting apply_patch commands
@@ -320,7 +321,7 @@ fn convert_patch_to_changes(patch: &Patch, cwd: &Path) -> HashMap<PathBuf, FileC
 /// Create freeform apply_patch tool spec (for GPT-5 style models)
 pub fn create_apply_patch_freeform_tool() -> ToolSpec {
     ToolSpec::Freeform(FreeformTool {
-        name: "apply_patch".to_string(),
+        name: tools::APPLY_PATCH.to_string(),
         description: APPLY_PATCH_DESCRIPTION.to_string(),
         format: FreeformToolFormat {
             lark_grammar: Some(APPLY_PATCH_LARK_GRAMMAR.to_string()),
@@ -349,7 +350,7 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
     );
 
     ToolSpec::Function(ResponsesApiTool {
-        name: "apply_patch".to_string(),
+        name: tools::APPLY_PATCH.to_string(),
         description: format!(
             "{}\n\n{}",
             APPLY_PATCH_DESCRIPTION, APPLY_PATCH_GRAMMAR_HELP

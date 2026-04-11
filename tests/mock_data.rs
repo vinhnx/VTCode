@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use vtcode_core::config::constants::tools;
 
 /// Mock Gemini API responses for testing
 pub struct MockGeminiResponses;
@@ -11,7 +12,7 @@ impl MockGeminiResponses {
                 "content": {
                     "parts": [{
                         "functionCall": {
-                            "name": "list_files",
+                            "name": tools::LIST_FILES,
                             "args": {
                                 "path": "."
                             }
@@ -62,7 +63,7 @@ impl MockGeminiResponses {
                 "content": {
                     "parts": [{
                         "functionCall": {
-                            "name": "grep_file",
+                            "name": tools::GREP_FILE,
                             "args": {
                                 "pattern": "fn main",
                                 "path": ".",

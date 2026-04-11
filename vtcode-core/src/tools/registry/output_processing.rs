@@ -204,6 +204,7 @@ impl ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
 
     #[test]
     fn force_spool_for_truncated_pty_output() {
@@ -239,7 +240,7 @@ mod tests {
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
         });
         assert!(!should_force_spool(
-            "grep_file",
+            tools::GREP_FILE,
             &non_pty_value,
             false,
             true

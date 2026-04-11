@@ -11,7 +11,7 @@ async fn preflight_accepts_grep_file_alias_and_normalizes_to_unified_search() ->
 
     let outcome = registry
         .preflight_validate_call(
-            "grep_file",
+            tools::GREP_FILE,
             &json!({
                 "pattern": "LLMStreamEvent::",
                 "path": "."

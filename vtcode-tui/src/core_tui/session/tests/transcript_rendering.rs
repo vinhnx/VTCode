@@ -1,5 +1,6 @@
 use super::super::*;
 use super::helpers::*;
+use crate::ui::tui::style::ratatui_style_from_inline;
 
 // ---------------------------------------------------------------------------
 // Common test helpers extracted from repeated patterns

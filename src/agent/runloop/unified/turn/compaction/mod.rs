@@ -764,10 +764,10 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         }
     }
     fn push_unique(parts: &mut Vec<String>, text: Option<String>) {
-        if let Some(t) = text {
-            if !parts.iter().any(|e| e == &t) {
-                parts.push(t);
-            }
+        if let Some(t) = text
+            && !parts.iter().any(|e| e == &t)
+        {
+            parts.push(t);
         }
     }
     fn compact_json_preview(v: &Value) -> Option<String> {
@@ -916,8 +916,8 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
             .map(|(i, (t, _, _))| format!("Tool output {}: {}", i + 1, truncate_preview(&t))),
     );
 
-    if previews.is_empty() {
-        if let Some(text) = history.iter().rev().find_map(|m| {
+    if previews.is_empty()
+        && let Some(text) = history.iter().rev().find_map(|m| {
             let text = normalize_whitespace(m.content.as_text().trim());
             if text.is_empty() {
                 return None;
@@ -929,9 +929,9 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
                 _ => return None,
             };
             Some(preview_line(label, &text))
-        }) {
-            previews.push(text);
-        }
+        })
+    {
+        previews.push(text);
     }
     previews
 }

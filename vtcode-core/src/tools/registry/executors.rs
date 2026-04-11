@@ -1,4 +1,5 @@
 use crate::config::ConfigManager;
+use crate::config::constants::tools;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::native_memory;
@@ -453,7 +454,7 @@ impl ToolRegistry {
                         Ok(mut recovered) => {
                             if let Some(obj) = recovered.as_object_mut() {
                                 obj.insert("auto_recovered".to_string(), json!(true));
-                                obj.insert("recovery_tool".to_string(), json!("unified_exec"));
+                                obj.insert("recovery_tool".to_string(), json!(tools::UNIFIED_EXEC));
                                 obj.insert("recovery_action".to_string(), json!("poll"));
                                 obj.insert(
                                     "recovery_reason".to_string(),
@@ -677,7 +678,7 @@ impl ToolRegistry {
         let (patch_args, patch_input_bytes, patch_base64) = self.prepare_apply_patch_args(args)?;
         let context = self.harness_context_snapshot();
         tracing::debug!(
-            tool = "unified_file",
+            tool = tools::UNIFIED_FILE,
             action = "patch",
             payload_bytes = serialized_payload_size_bytes(&patch_args),
             patch_input_bytes,
@@ -714,7 +715,7 @@ impl ToolRegistry {
                 .unwrap_or((0, false));
 
         tracing::trace!(
-            tool = "unified_file",
+            tool = tools::UNIFIED_FILE,
             action,
             payload_bytes = serialized_payload_size_bytes(args),
             patch_source_bytes,

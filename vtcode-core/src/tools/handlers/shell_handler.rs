@@ -15,6 +15,7 @@ use super::tool_handler::{
     ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
     ToolPayload,
 };
+use crate::config::constants::tools;
 use crate::tools::shell::{ShellOutput as CoreShellOutput, ShellRunner};
 
 /// Default timeout for shell commands (30 seconds).
@@ -201,7 +202,7 @@ pub fn create_shell_tool() -> super::tool_handler::ToolSpec {
     );
 
     ToolSpec::Function(ResponsesApiTool {
-        name: "shell".to_string(),
+        name: tools::SHELL.to_string(),
         description: "Execute a shell command and return its output.".to_string(),
         parameters: JsonSchema::Object {
             properties,

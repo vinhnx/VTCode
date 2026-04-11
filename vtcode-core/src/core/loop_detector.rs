@@ -20,8 +20,8 @@ const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
 const MAX_SIMILAR_READ_TARGET_CALLS: usize = 5;
 const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 5;
-const LEGACY_GREP_FILE: &str = "grep_file";
-const LEGACY_LIST_FILES: &str = "list_files";
+const LEGACY_GREP_FILE: &str = tools::GREP_FILE;
+const LEGACY_LIST_FILES: &str = tools::LIST_FILES;
 const LEGACY_SEARCH_TOOLS: &str = "search_tools";
 
 #[inline]
@@ -504,7 +504,7 @@ impl LoopDetector {
             tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH => {
                 MAX_READONLY_TOOL_CALLS
             }
-            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
+            tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH => MAX_WRITE_TOOL_CALLS,
             _ if is_command_tool_name(base_name) => MAX_COMMAND_TOOL_CALLS,
             _ => MAX_OTHER_TOOL_CALLS,
         }

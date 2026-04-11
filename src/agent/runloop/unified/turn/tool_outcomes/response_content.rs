@@ -342,7 +342,7 @@ fn tool_output_summary_feature(
         return Some(LightweightFeature::LargeReadSummary);
     }
 
-    if tool_name == "web_fetch" || content_type == "web_page" {
+    if tool_name == tool_names::WEB_FETCH || content_type == "web_page" {
         return (serialized_len > 2_500).then_some(LightweightFeature::WebSummary);
     }
 

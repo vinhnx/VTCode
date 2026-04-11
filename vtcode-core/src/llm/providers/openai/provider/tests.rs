@@ -71,13 +71,13 @@ mv tokens.next tokens.txt
             .permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&script_path, perms).expect("set permissions");
-        return CustomProviderCommandAuthConfig {
+        CustomProviderCommandAuthConfig {
             command: "./print-token.sh".to_string(),
             args: Vec::new(),
             cwd: Some(dir.path().to_path_buf()),
             timeout_ms: 5_000,
             refresh_interval_ms: 60_000,
-        };
+        }
     }
     #[cfg(windows)]
     {
@@ -91,7 +91,7 @@ $lines | Select-Object -Skip 1 | Set-Content -Path tokens.txt
 "#,
         )
         .expect("write script");
-        return CustomProviderCommandAuthConfig {
+        CustomProviderCommandAuthConfig {
             command: "powershell".to_string(),
             args: vec![
                 "-NoProfile".to_string(),
@@ -103,7 +103,7 @@ $lines | Select-Object -Skip 1 | Set-Content -Path tokens.txt
             cwd: Some(dir.path().to_path_buf()),
             timeout_ms: 5_000,
             refresh_interval_ms: 60_000,
-        };
+        }
     }
 }
 
@@ -2328,7 +2328,7 @@ fn chatgpt_backend_keeps_streaming_for_codex_and_disables_non_streaming() {
 fn parse_harmony_tool_names_and_calls() {
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"),
-        "list_files"
+        vtcode_config::constants::tools::LIST_FILES
     );
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("container.exec"),
@@ -2344,7 +2344,7 @@ fn parse_harmony_tool_names_and_calls() {
         r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#,
     )
     .expect("should parse");
-    assert_eq!(name, "list_files");
+    assert_eq!(name, vtcode_config::constants::tools::LIST_FILES);
     assert_eq!(args["path"], json!(""));
 
     let (name2, args2) = OpenAIProvider::parse_harmony_tool_call_from_text(

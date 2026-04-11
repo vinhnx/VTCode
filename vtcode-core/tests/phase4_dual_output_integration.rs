@@ -4,6 +4,7 @@
 
 use serde_json::json;
 use std::path::PathBuf;
+use vtcode_config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 
 #[tokio::test]
@@ -20,7 +21,7 @@ async fn test_grep_dual_output_integration() {
     });
 
     let result = registry
-        .execute_tool_dual("grep_file", args)
+        .execute_tool_dual(tools::GREP_FILE, args)
         .await
         .expect("grep_file execution should succeed");
 
@@ -86,7 +87,7 @@ async fn test_list_dual_output_integration() {
     });
 
     let result = registry
-        .execute_tool_dual("list_files", args)
+        .execute_tool_dual(tools::LIST_FILES, args)
         .await
         .expect("list_files execution should succeed");
 
@@ -285,7 +286,7 @@ async fn test_backward_compatibility() {
 
     // Old API should still work
     let old_result = registry
-        .execute_tool("grep_file", args.clone())
+        .execute_tool(tools::GREP_FILE, args.clone())
         .await
         .expect("Old execute_tool should still work");
 
@@ -293,7 +294,7 @@ async fn test_backward_compatibility() {
 
     // New API should also work
     let new_result = registry
-        .execute_tool_dual("grep_file", args)
+        .execute_tool_dual(tools::GREP_FILE, args)
         .await
         .expect("New execute_tool_dual should work");
 

@@ -1,5 +1,6 @@
 use proptest::prelude::*;
 use serde_json::json;
+use vtcode_config::constants::tools;
 use vtcode_core::core::loop_detector::LoopDetector;
 
 // Property 1: Loop detection prevents infinite repetition (Req 1.1)
@@ -30,16 +31,16 @@ proptest! {
 
         // First two root variations should not warn
         prop_assert!(
-            detector.record_call("list_files", &json!({ "path": paths[0] })).is_none(),
+            detector.record_call(tools::LIST_FILES, &json!({ "path": paths[0] })).is_none(),
             "first root variation should not warn"
         );
         prop_assert!(
-            detector.record_call("list_files", &json!({ "path": paths[1] })).is_none(),
+            detector.record_call(tools::LIST_FILES, &json!({ "path": paths[1] })).is_none(),
             "second root variation should not warn"
         );
 
         // Third variation should still count as the same signature and trigger loop detection
-        let warning = detector.record_call("list_files", &json!({ "path": paths[2] }));
+        let warning = detector.record_call(tools::LIST_FILES, &json!({ "path": paths[2] }));
         prop_assert!(warning.is_some());
     }
 }

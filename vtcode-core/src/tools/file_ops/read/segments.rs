@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::types::Input;
 use crate::utils::file_utils::read_file_with_context;
@@ -36,7 +37,7 @@ impl FileOpsTool {
             };
 
         // Create builder and metadata object
-        let mut builder = ToolResponseBuilder::new("read_file")
+        let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
             .success()
             .message(format!(
                 "Successfully read file {} (paged)",

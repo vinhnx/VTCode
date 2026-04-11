@@ -230,7 +230,7 @@ impl ToolRiskScorer {
             | tools::UNIFIED_EXEC => 35,
 
             // Network operations (base: 40)
-            "web_search" | "fetch_url" | "unified_search:web" => 40,
+            tools::WEB_SEARCH | tools::FETCH_URL | "unified_search:web" => 40,
 
             // MCP tools (default to medium risk)
             _ if tool_name.starts_with("mcp_") => 30,

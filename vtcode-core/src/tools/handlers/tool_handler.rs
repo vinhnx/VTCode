@@ -10,6 +10,7 @@
 //! - `ToolOutput` for structured tool results
 //! - `ToolInvocation` for execution context
 
+use crate::config::constants::tools;
 use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -425,7 +426,7 @@ impl ToolSpec {
         match self {
             ToolSpec::Function(tool) => &tool.name,
             ToolSpec::Freeform(tool) => &tool.name,
-            ToolSpec::WebSearch {} => "web_search",
+            ToolSpec::WebSearch {} => tools::WEB_SEARCH,
             ToolSpec::LocalShell {} => "local_shell",
         }
     }

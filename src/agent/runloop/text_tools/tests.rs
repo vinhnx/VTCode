@@ -132,7 +132,7 @@ fn test_detect_textual_tool_call_skips_malformed_deep_candidate() {
     let message =
         format!("default_api.read_file(path={malformed} ignored default_api.list_files(path='.')");
     let (name, args) = detect_textual_tool_call(&message).expect("should parse second call");
-    assert_eq!(name, "list_files");
+    assert_eq!(name, tools::LIST_FILES);
     assert_eq!(args["path"], serde_json::json!("."));
 }
 
@@ -381,7 +381,7 @@ fn test_extract_code_fence_blocks_collects_languages() {
 fn test_parse_harmony_channel_tool_call_with_constrain() {
     let message = "<|start|>assistant<|channel|>commentary to=repo_browser.list_files <|constrain|>json<|message|>{\"path\":\"\", \"recursive\":\"true\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "list_files");
+    assert_eq!(name, tools::LIST_FILES);
     assert_eq!(args["path"], serde_json::json!(""));
     assert_eq!(args["recursive"], serde_json::json!("true"));
 }
@@ -617,7 +617,7 @@ fn test_parse_tagged_tool_call_handles_double_tag_malformed_xml() {
     let result = parse_tagged::parse_tagged_tool_call(message);
     assert!(result.is_some(), "Should parse malformed double-tag XML");
     let (name, args) = result.unwrap();
-    assert_eq!(name, "list_files");
+    assert_eq!(name, tools::LIST_FILES);
     // Args should be empty object since no valid args were found
     assert!(args.as_object().is_none_or(|o| o.is_empty()));
 }
@@ -681,5 +681,5 @@ fn test_parse_tagged_tool_call_stops_at_next_tool_call_tag() {
     let result = parse_tagged::parse_tagged_tool_call(message);
     assert!(result.is_some());
     let (name, _) = result.unwrap();
-    assert_eq!(name, "list_files");
+    assert_eq!(name, tools::LIST_FILES);
 }

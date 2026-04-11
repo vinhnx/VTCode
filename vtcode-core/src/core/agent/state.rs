@@ -731,7 +731,7 @@ mod tests {
             "".to_string(),
             vec![crate::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "list_files".to_string(),
+                vtcode_config::constants::tools::LIST_FILES.to_string(),
                 "{}".to_string(),
             )],
         );
@@ -763,7 +763,7 @@ mod tests {
             "".to_string(),
             vec![crate::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "list_files".to_string(),
+                vtcode_config::constants::tools::LIST_FILES.to_string(),
                 "{}".to_string(),
             )],
         );
@@ -832,7 +832,7 @@ mod tests {
             "".to_string(),
             vec![crate::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "list_files".to_string(),
+                vtcode_config::constants::tools::LIST_FILES.to_string(),
                 "{}".to_string(),
             )],
         );
@@ -879,7 +879,7 @@ mod tests {
             "".to_string(),
             vec![crate::llm::provider::ToolCall::function(
                 "call_1".to_string(),
-                "list_files".to_string(),
+                vtcode_config::constants::tools::LIST_FILES.to_string(),
                 "{}".to_string(),
             )],
         );

@@ -1,11 +1,12 @@
+use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 
-const TOOL_UNIFIED_EXEC: &str = "unified_exec";
-const TOOL_UNIFIED_FILE: &str = "unified_file";
-const TOOL_UNIFIED_SEARCH: &str = "unified_search";
-const TOOL_READ_FILE: &str = "read_file";
-const TOOL_LIST_FILES: &str = "list_files";
-const TOOL_APPLY_PATCH: &str = "apply_patch";
+const TOOL_UNIFIED_EXEC: &str = tools::UNIFIED_EXEC;
+const TOOL_UNIFIED_FILE: &str = tools::UNIFIED_FILE;
+const TOOL_UNIFIED_SEARCH: &str = tools::UNIFIED_SEARCH;
+const TOOL_READ_FILE: &str = tools::READ_FILE;
+const TOOL_LIST_FILES: &str = tools::LIST_FILES;
+const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 
 /// Generate compact cross-tool guidance based on the tools available in the session.
 pub fn generate_tool_guidelines(
@@ -155,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_harness_browse_tool_guidance() {
-        let tools = vec!["list_files".to_string(), "read_file".to_string()];
+        let tools = vec![TOOL_LIST_FILES.to_string(), TOOL_READ_FILE.to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Prefer `list_files` and `read_file`"));
         assert!(!guidelines.contains("offset"));
@@ -167,7 +168,7 @@ mod tests {
         let tools = vec![
             "unified_search".to_string(),
             "unified_file".to_string(),
-            "list_files".to_string(),
+            TOOL_LIST_FILES.to_string(),
             "read_file".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
@@ -231,7 +232,7 @@ mod tests {
         let tools = vec!["unified_search".to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::CodeSearch);
 
-        let tools = vec!["list_files".to_string()];
+        let tools = vec![TOOL_LIST_FILES.to_string()];
         assert_eq!(infer_capability_level(&tools), CapabilityLevel::FileListing);
 
         let tools = vec!["read_file".to_string()];
@@ -248,7 +249,7 @@ mod tests {
             "unified_search".to_string(),
             "unified_file".to_string(),
             "read_file".to_string(),
-            "list_files".to_string(),
+            TOOL_LIST_FILES.to_string(),
             "apply_patch".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);

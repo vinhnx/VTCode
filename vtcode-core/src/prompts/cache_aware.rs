@@ -1,14 +1,15 @@
+use crate::config::constants::tools;
 use crate::llm::provider::ToolDefinition;
 
 /// Priority tools (unified tools + critical controls) that should appear first
 const PRIORITY_TOOLS: &[&str] = &[
-    "unified_search",
-    "unified_file",
-    "unified_exec",
-    "request_user_input",
-    "plan_task_tracker",
-    "task_tracker",
-    "exit_plan_mode",
+    tools::UNIFIED_SEARCH,
+    tools::UNIFIED_FILE,
+    tools::UNIFIED_EXEC,
+    tools::REQUEST_USER_INPUT,
+    tools::PLAN_TASK_TRACKER,
+    tools::TASK_TRACKER,
+    tools::EXIT_PLAN_MODE,
 ];
 
 /// Sort tool definitions with priority grouping to improve LLM attention.

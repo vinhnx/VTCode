@@ -20,6 +20,7 @@ use super::types::{
     CopilotTerminalWaitForExitRequest, CopilotToolCallFailure, CopilotToolCallRequest,
     CopilotToolCallResponse,
 };
+use crate::config::constants::tools;
 use crate::llm::provider::ToolDefinition;
 
 #[derive(Debug)]
@@ -1694,7 +1695,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
         .map(ToString::to_string);
 
     Ok(match kind.as_deref() {
-        Some("shell") => CopilotPermissionRequest::Shell {
+        Some(tools::SHELL) => CopilotPermissionRequest::Shell {
             tool_call_id,
             full_command_text: object
                 .get("fullCommandText")

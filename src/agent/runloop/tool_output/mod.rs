@@ -187,12 +187,12 @@ pub(crate) async fn render_tool_output(
         {
             return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
-        Some("web_fetch") => {
+        Some(tools::WEB_FETCH) => {
             render_generic_output(renderer, val)?;
             render_tool_follow_up_hints_for_value(renderer, val)?;
             return Ok(());
         }
-        Some("list_files") => {
+        Some(tools::LIST_FILES) => {
             let ls_styles = LsStyles::from_env();
             render_list_dir_output(renderer, val, &ls_styles)?;
             render_tool_follow_up_hints_for_value(renderer, val)?;
@@ -856,9 +856,14 @@ mod tests {
             "spool_path": ".vtcode/context/tool_outputs/web.txt"
         });
 
-        render_tool_output(&mut renderer, Some("web_fetch"), &payload, None)
-            .await
-            .expect("web_fetch payload should render");
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::WEB_FETCH),
+            &payload,
+            None,
+        )
+        .await
+        .expect("web_fetch payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));

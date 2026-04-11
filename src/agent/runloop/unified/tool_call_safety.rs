@@ -11,6 +11,8 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
 use thiserror::Error;
+#[cfg(test)]
+use vtcode_core::config::constants::tools;
 use vtcode_core::tools::{
     RiskLevel, SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
     SafetyGatewayConfig, ToolInvocationId, WorkspaceTrust,
@@ -201,7 +203,7 @@ mod tests {
         assert!(validator.is_destructive("delete_file"));
         assert!(validator.is_destructive("edit_file"));
         assert!(!validator.is_destructive("read_file"));
-        assert!(!validator.is_destructive("grep_file"));
+        assert!(!validator.is_destructive(tools::GREP_FILE));
     }
 
     #[tokio::test]

@@ -168,7 +168,7 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         | tools::LIST_PTY_SESSIONS
         | tools::CLOSE_PTY_SESSION
         | tools::EXECUTE_CODE
-        | "shell" => Some(ToolBehavior::function(
+        | tools::SHELL => Some(ToolBehavior::function(
             ToolMutationModel::Mutating,
             false,
             true,

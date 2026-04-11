@@ -26,7 +26,7 @@ pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
 fn is_readonly_repo_browsing_tool(tool_name: &str, args: &Value) -> bool {
     matches!(
         tool_name,
-        "read_file" | "list_files" | "grep_search" | "find_files"
+        tools::READ_FILE | tools::LIST_FILES | "grep_search" | "find_files"
     ) || (tool_name == tools::UNIFIED_FILE && tool_intent::unified_file_action_is(args, "read"))
         || (tool_name == tools::UNIFIED_SEARCH
             && tool_intent::unified_search_action_in(args, &["grep", "list"]))

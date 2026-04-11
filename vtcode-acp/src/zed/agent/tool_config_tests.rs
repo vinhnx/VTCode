@@ -5,6 +5,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::Path;
 use tokio::sync::mpsc;
+use vtcode_core::config::constants::tools;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
@@ -222,11 +223,11 @@ async fn read_only_modes_hide_local_tools() {
 
     assert_eq!(
         ask_names,
-        vec!["list_files".to_string(), "switch_mode".to_string()]
+        vec![tools::LIST_FILES.to_string(), "switch_mode".to_string()]
     );
     assert_eq!(architect_names, ask_names);
     assert!(code_names.contains(&"switch_mode".to_string()));
-    assert!(code_names.contains(&"list_files".to_string()));
+    assert!(code_names.contains(&tools::LIST_FILES.to_string()));
     assert!(code_names.contains(&"unified_search".to_string()));
     assert!(code_names.contains(&"unified_file".to_string()));
     assert!(code_names.contains(&"unified_exec".to_string()));

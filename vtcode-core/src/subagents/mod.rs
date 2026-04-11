@@ -1680,6 +1680,7 @@ mod tests {
     use anyhow::{Result, anyhow};
     use std::collections::BTreeMap;
     use std::collections::VecDeque;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
@@ -1687,7 +1688,7 @@ mod tests {
     use vtcode_config::{SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec};
 
     fn test_controller_config(
-        workspace_root: std::path::PathBuf,
+        workspace_root: PathBuf,
         vt_cfg: VTCodeConfig,
     ) -> SubagentControllerConfig {
         let pty_sessions = PtySessionManager::new(workspace_root.clone(), vt_cfg.pty.clone());
@@ -2099,8 +2100,8 @@ mod tests {
         assert_eq!(
             child.permissions.allow,
             vec![
-                tools::UNIFIED_SEARCH.to_string(),
-                tools::READ_FILE.to_string()
+                tools::READ_FILE.to_string(),
+                tools::UNIFIED_SEARCH.to_string()
             ]
         );
         assert!(
@@ -2118,10 +2119,10 @@ mod tests {
     }
 
     #[test]
-    fn build_child_config_intersects_qualified_exact_tool_ids() {
+    fn build_child_config_preserves_matching_rule_and_exact_tool_ids() {
         let mut parent = VTCodeConfig::default();
         parent.permissions.allow = vec![
-            "Read".to_string(),
+            "Read(/docs/**)".to_string(),
             "mcp::context7::search".to_string(),
             tools::READ_FILE.to_string(),
         ];
@@ -2141,10 +2142,31 @@ mod tests {
         assert_eq!(
             child.permissions.allow,
             vec![
+                "Read(/docs/**)".to_string(),
                 "mcp::context7::search".to_string(),
                 tools::READ_FILE.to_string()
             ]
         );
+    }
+
+    #[test]
+    fn build_child_config_preserves_parent_rule_shaped_allowlist() {
+        let mut parent = VTCodeConfig::default();
+        parent.permissions.allow = vec!["Read".to_string()];
+
+        let mut spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+        spec.tools = Some(vec![
+            tools::READ_FILE.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+            tools::UNIFIED_EXEC.to_string(),
+        ]);
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
+
+        assert_eq!(child.permissions.allow, vec!["Read".to_string()]);
     }
 
     #[test]

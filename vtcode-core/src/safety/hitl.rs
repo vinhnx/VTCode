@@ -39,7 +39,12 @@ impl HitlPolicy {
         let mut policy = Self::new();
         policy.default_require_approval = false;
         // Common safe read-only tools
-        for tool in &["list_files", "read_file", "grep_search", "view_file"] {
+        for tool in &[
+            crate::config::constants::tools::LIST_FILES,
+            crate::config::constants::tools::READ_FILE,
+            "grep_search",
+            "view_file",
+        ] {
             policy.auto_approve_tools.insert(tool.to_string());
         }
         policy

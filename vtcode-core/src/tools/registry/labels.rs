@@ -70,7 +70,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
                 "read" => "Read file".to_string(),
                 "write" => "Write file".to_string(),
                 "edit" => "Edit file".to_string(),
-                "patch" | "apply_patch" => "Apply patch".to_string(),
+                "patch" | tool_names::APPLY_PATCH => "Apply patch".to_string(),
                 "delete" => "Delete file".to_string(),
                 "move" => "Move file".to_string(),
                 "copy" => "Copy file".to_string(),

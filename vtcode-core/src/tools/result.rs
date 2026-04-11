@@ -10,6 +10,8 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[cfg(test)]
+use crate::config::constants::tools;
 use crate::utils::tokens::estimate_tokens;
 
 /// Result from tool execution with dual-channel output
@@ -244,12 +246,12 @@ mod tests {
     #[test]
     fn test_tool_result_creation() {
         let result = ToolResult::new(
-            "grep_file",
+            tools::GREP_FILE,
             "Found 127 matches in 15 files",
             "Very long output with 127 full match listings...",
         );
 
-        assert_eq!(result.tool_name, "grep_file");
+        assert_eq!(result.tool_name, tools::GREP_FILE);
         assert!(result.success);
         assert!(result.error.is_none());
         assert!(result.metadata.token_counts.llm_tokens > 0);
@@ -259,9 +261,9 @@ mod tests {
 
     #[test]
     fn test_error_result() {
-        let result = ToolResult::error("grep_file", "Pattern invalid");
+        let result = ToolResult::error(tools::GREP_FILE, "Pattern invalid");
 
-        assert_eq!(result.tool_name, "grep_file");
+        assert_eq!(result.tool_name, tools::GREP_FILE);
         assert!(!result.success);
         assert_eq!(result.error, Some("Pattern invalid".to_string()));
         assert!(result.llm_content.contains("failed"));

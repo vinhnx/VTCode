@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 
+#[cfg(test)]
+use crate::config::constants::tools;
 use crate::tools::result_metadata::EnhancedToolResult;
 
 /// Tracks intent fulfillment
@@ -424,12 +426,12 @@ mod tests {
         );
 
         let exec = ToolExecution {
-            tool_name: "grep_file".to_owned(),
+            tool_name: tools::GREP_FILE.to_owned(),
             args: Value::Null,
             result: EnhancedToolResult::new(
                 Value::Null,
                 ResultMetadata::success(0.9, 0.9),
-                "grep_file".to_owned(),
+                tools::GREP_FILE.to_owned(),
             ),
             duration_ms: 100,
             contributed_to_intent: true,

@@ -35,7 +35,7 @@ mod integration_tests {
             "path": "."
         });
 
-        let result = registry.execute_tool_ref("list_files", &args).await;
+        let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();
@@ -156,7 +156,7 @@ fn calculate_sum(a: i32, b: i32) -> i32 {
             "type": "regex"
         });
 
-        let result = registry.execute_tool_ref("grep_file", &args).await;
+        let result = registry.execute_tool_ref(tools::GREP_FILE, &args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();

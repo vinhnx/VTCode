@@ -6,10 +6,12 @@ use vtcode_config::{
 
 use super::constants::{NON_MUTATING_TOOL_PREFIXES, SUBAGENT_MIN_MAX_TURNS, SUBAGENT_TOOL_NAMES};
 use crate::config::VTCodeConfig;
+use crate::config::constants::tools;
 use crate::config::models::ModelId;
 use crate::config::types::ReasoningEffortLevel;
 use crate::core::threads::build_thread_archive_metadata;
 use crate::llm::provider::ToolDefinition;
+use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::utils::session_archive::{SessionArchiveMetadata, SessionForkMode};
 
 // ─── Child Config Building ─────────────────────────────────────────────────
@@ -122,36 +124,132 @@ fn permission_rank(mode: PermissionMode) -> u8 {
 }
 
 fn intersect_allowed_tools(parent_allowed: &[String], spec_allowed: &[String]) -> Vec<String> {
-    let parent_exact_tools: Vec<&str> = parent_allowed
-        .iter()
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|entry| is_exact_tool_id(entry))
-        .collect();
-
-    if parent_exact_tools.is_empty() {
+    if parent_allowed.is_empty() {
         return spec_allowed.to_vec();
     }
 
-    spec_allowed
+    parent_allowed
         .iter()
-        .filter(|candidate| {
-            let candidate = candidate.trim();
-            parent_exact_tools.contains(&candidate)
-        })
+        .filter(|rule| parent_rule_matches_spec_tools(rule, spec_allowed))
         .cloned()
         .collect()
 }
 
+fn parent_rule_matches_spec_tools(rule: &str, spec_allowed: &[String]) -> bool {
+    let rule = rule.trim();
+    if rule.is_empty() {
+        return false;
+    }
+
+    let prefix = rule
+        .split_once('(')
+        .map_or(rule, |(prefix, _)| prefix)
+        .trim();
+    match prefix.to_ascii_lowercase().as_str() {
+        "read" => spec_allowed
+            .iter()
+            .any(|tool| tool_supports_read_permission(tool)),
+        "edit" => spec_allowed
+            .iter()
+            .any(|tool| tool_supports_edit_permission(tool)),
+        "write" => spec_allowed
+            .iter()
+            .any(|tool| tool_supports_write_permission(tool)),
+        "bash" => spec_allowed
+            .iter()
+            .any(|tool| tool_supports_bash_permission(tool)),
+        "webfetch" => spec_allowed
+            .iter()
+            .any(|tool| tool_supports_web_fetch_permission(tool)),
+        _ if rule.starts_with(MCP_QUALIFIED_TOOL_PREFIX) => spec_allowed
+            .iter()
+            .any(|tool| canonical_mcp_rule_matches_tool(rule, tool)),
+        _ if rule.contains(['(', ')']) => false,
+        _ => spec_allowed
+            .iter()
+            .any(|tool| tool.trim().eq_ignore_ascii_case(rule)),
+    }
+}
+
 #[must_use]
-fn is_exact_tool_id(entry: &str) -> bool {
-    let entry = entry.trim();
-    !entry.is_empty()
-        && !entry.contains(['(', ')', '*'])
-        && !matches!(
-            entry.to_ascii_lowercase().as_str(),
-            "bash" | "read" | "edit" | "write" | "webfetch"
-        )
+fn tool_supports_read_permission(tool: &str) -> bool {
+    matches!(
+        tool.trim(),
+        tools::READ_FILE
+            | tools::GREP_FILE
+            | tools::LIST_FILES
+            | tools::UNIFIED_SEARCH
+            | tools::UNIFIED_FILE
+    )
+}
+
+#[must_use]
+fn tool_supports_edit_permission(tool: &str) -> bool {
+    matches!(
+        tool.trim(),
+        tools::EDIT_FILE
+            | tools::APPLY_PATCH
+            | tools::SEARCH_REPLACE
+            | tools::FILE_OP
+            | tools::UNIFIED_FILE
+    )
+}
+
+#[must_use]
+fn tool_supports_write_permission(tool: &str) -> bool {
+    matches!(
+        tool.trim(),
+        tools::WRITE_FILE
+            | tools::CREATE_FILE
+            | tools::DELETE_FILE
+            | tools::MOVE_FILE
+            | tools::COPY_FILE
+            | tools::UNIFIED_FILE
+    )
+}
+
+#[must_use]
+fn tool_supports_bash_permission(tool: &str) -> bool {
+    matches!(
+        tool.trim(),
+        tools::UNIFIED_EXEC
+            | tools::SHELL
+            | tools::EXEC_COMMAND
+            | tools::WRITE_STDIN
+            | tools::RUN_PTY_CMD
+            | tools::EXEC_PTY_CMD
+            | tools::CREATE_PTY_SESSION
+            | tools::LIST_PTY_SESSIONS
+            | tools::CLOSE_PTY_SESSION
+            | tools::SEND_PTY_INPUT
+            | tools::READ_PTY_SESSION
+            | tools::RESIZE_PTY_SESSION
+            | tools::EXECUTE_CODE
+    )
+}
+
+#[must_use]
+fn tool_supports_web_fetch_permission(tool: &str) -> bool {
+    matches!(
+        tool.trim(),
+        tools::WEB_FETCH | tools::FETCH_URL | tools::UNIFIED_SEARCH
+    )
+}
+
+#[must_use]
+fn canonical_mcp_rule_matches_tool(rule: &str, tool: &str) -> bool {
+    let Some(rule) = rule.trim().strip_prefix(MCP_QUALIFIED_TOOL_PREFIX) else {
+        return false;
+    };
+    let Some(tool) = tool.trim().strip_prefix(MCP_QUALIFIED_TOOL_PREFIX) else {
+        return false;
+    };
+
+    match rule.split_once("__") {
+        Some((server, "*")) => tool.starts_with(&format!("{server}__")),
+        Some(_) => tool == rule,
+        None => tool == rule || tool.starts_with(&format!("{rule}__")),
+    }
 }
 
 // ─── Hook & MCP Merging ─────────────────────────────────────────────────────

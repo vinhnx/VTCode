@@ -1,6 +1,7 @@
 use anyhow::Result;
 use hashbrown::HashMap;
 use serde_json::json;
+use vtcode_config::constants::tools;
 
 use vtcode_core::tools::autonomous_executor::AutonomousExecutor;
 
@@ -12,7 +13,7 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     // 2. Configure Limits
     let mut limits = HashMap::new();
     limits.insert("read_file".to_string(), 3); // Strict limit for read_file
-    limits.insert("list_files".to_string(), 5); // Relaxed limit for list_files
+    limits.insert(tools::LIST_FILES.to_string(), 5); // Relaxed limit for list_files
     executor.configure_loop_limits(&limits);
 
     // 3. Test "read_file" limit (Should trigger on 3rd attempt)
@@ -45,7 +46,7 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     );
 
     // 4. Test "list_files" limit (Should NOT trigger on 3rd attempt)
-    let list_tool = "list_files";
+    let list_tool = tools::LIST_FILES;
     // Call 1-3 with different paths to avoid identical-call hard-stop behavior.
     executor.record_tool_call(list_tool, &json!({ "path": "/tmp/a" }));
     executor.record_tool_call(list_tool, &json!({ "path": "/tmp/b" }));

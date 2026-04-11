@@ -249,8 +249,8 @@ try:
         let mut analyzer = AgentBehaviorAnalyzer::new();
 
         // Record tool usage
-        analyzer.record_tool_usage("list_files");
-        analyzer.record_tool_usage("list_files");
+        analyzer.record_tool_usage(vtcode_config::constants::tools::LIST_FILES);
+        analyzer.record_tool_usage(vtcode_config::constants::tools::LIST_FILES);
         analyzer.record_tool_usage("read_file");
 
         // Record skill reuse
@@ -263,7 +263,10 @@ try:
 
         // Verify statistics
         assert_eq!(
-            analyzer.tool_stats().usage_frequency.get("list_files"),
+            analyzer
+                .tool_stats()
+                .usage_frequency
+                .get(vtcode_config::constants::tools::LIST_FILES),
             Some(&2)
         );
         assert_eq!(analyzer.skill_stats().reused_skills, 2);
@@ -271,7 +274,7 @@ try:
 
         // Get recommendations
         let tool_recs = analyzer.recommend_tools("list", 1);
-        assert!(tool_recs.contains(&"list_files".to_owned()));
+        assert!(tool_recs.contains(&vtcode_config::constants::tools::LIST_FILES.to_owned()));
 
         // Identify risky tools
         let risky = analyzer.identify_risky_tools(0.3);

@@ -1,5 +1,7 @@
 use super::super::*;
 use super::helpers::*;
+use crate::core_tui::session::input;
+use std::time::Instant;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ fn clear_shimmer_session(session: &mut Session) {
     });
 }
 
-fn input_data(session: &mut Session) -> crate::core_tui::session::input::InputWidgetData {
+fn input_data(session: &mut Session) -> input::InputWidgetData {
     session.build_input_widget_data(VIEW_WIDTH, 1)
 }
 

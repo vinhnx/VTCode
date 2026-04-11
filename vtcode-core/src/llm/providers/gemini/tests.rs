@@ -6,6 +6,7 @@ use super::wire::{
 };
 use super::*;
 use crate::config::constants::models;
+use crate::config::constants::tools;
 use crate::llm::provider::{
     MessageContent, MessageRole, SpecificFunctionChoice, SpecificToolChoice, ToolDefinition,
 };
@@ -19,7 +20,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
     let mut assistant_message = Message::assistant("Sure thing".to_string());
     assistant_message.tool_calls = Some(vec![ToolCall::function(
         "call_1".to_string(),
-        "list_files".to_string(),
+        tools::LIST_FILES.to_string(),
         json!({ "path": "." }).to_string(),
     )]);
 
@@ -27,7 +28,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
         Message::tool_response("call_1".to_string(), json!({ "result": "ok" }).to_string());
 
     let tool_def = ToolDefinition::function(
-        "list_files".to_string(),
+        tools::LIST_FILES.to_string(),
         "List files".to_string(),
         json!({
             "type": "object",
@@ -51,7 +52,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
         tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
             tool_type: "function".to_string(),
             function: SpecificFunctionChoice {
-                name: "list_files".to_string(),
+                name: tools::LIST_FILES.to_string(),
             },
         })),
         ..Default::default()
@@ -90,7 +91,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
             _ => None,
         })
         .expect("tool response part should exist");
-    assert_eq!(tool_part.name, "list_files");
+    assert_eq!(tool_part.name, tools::LIST_FILES);
 }
 
 #[test]
@@ -178,7 +179,7 @@ fn convert_from_gemini_response_extracts_tool_calls() {
                     },
                     Part::FunctionCall {
                         function_call: GeminiFunctionCall {
-                            name: "list_files".to_string(),
+                            name: tools::LIST_FILES.to_string(),
                             args: json!({ "path": "." }),
                             id: Some("call_1".to_string()),
                         },
@@ -203,7 +204,7 @@ fn convert_from_gemini_response_extracts_tool_calls() {
         .tool_calls
         .expect("tool call should be present");
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].function.as_ref().unwrap().name, "list_files");
+    assert_eq!(calls[0].function.as_ref().unwrap().name, tools::LIST_FILES);
     assert!(
         calls[0]
             .function

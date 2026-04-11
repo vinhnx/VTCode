@@ -1,5 +1,6 @@
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use ratatui::prelude::*;
+use vtcode_config::constants::tools;
 
 use crate::config::constants::ui;
 use crate::ui::tui::{
@@ -60,10 +61,10 @@ fn highlight_foreground_for(background: AnsiColorEnum) -> Color {
 
 pub fn normalize_tool_name(tool_name: &str) -> &'static str {
     match tool_name.to_lowercase().as_str() {
-        "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search",
-        "list" | "ls" | "dir" | "list_files" => "list",
-        "read" | "cat" | "file" | "read_file" => "read",
-        "write" | "edit" | "save" | "insert" | "edit_file" => "write",
+        "grep" | "rg" | "ripgrep" | "search" | "find" | "ag" | tools::GREP_FILE => "search",
+        "list" | "ls" | "dir" | tools::LIST_FILES => "list",
+        "read" | "cat" | "file" | tools::READ_FILE => "read",
+        "write" | "edit" | "save" | "insert" | tools::EDIT_FILE => "write",
         "run" | "command" | "bash" | "sh" => "run",
         _ => "other",
     }

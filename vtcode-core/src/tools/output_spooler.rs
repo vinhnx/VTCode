@@ -13,6 +13,7 @@
 //!
 //! This is more token-efficient as only necessary data is pulled into context.
 
+use crate::config::constants::tools;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -203,7 +204,9 @@ impl ToolOutputSpooler {
 
         // For read_file/unified_file and PTY-related tools, extract raw content so the spooled file is directly usable
         // This allows grep_file to work on the spooled output and makes reading more intuitive
-        let content = if (tool_name == "read_file" || tool_name == "unified_file") && !is_mcp {
+        let content = if (tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE)
+            && !is_mcp
+        {
             if let Some(raw_content) = value.get("content").and_then(|v| v.as_str()) {
                 raw_content.to_string()
             } else if let Some(json_str) = value.as_str() {
@@ -395,7 +398,7 @@ impl ToolOutputSpooler {
                 .get("output")
                 .and_then(|v| v.as_str())
                 .is_some_and(|s| !s.is_empty());
-        let source_path = if tool_name == "read_file" || tool_name == "unified_file" {
+        let source_path = if tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE {
             response
                 .get("path")
                 .and_then(|v| v.as_str())
