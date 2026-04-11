@@ -3,7 +3,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "minimax-m2.7:cloud"
 provider = "ollama"
 reasoning_effort = "low"
-theme = "homebrew"
+theme = "ciapre-blue"
 
 [agent.persistent_memory]
 enabled = true
