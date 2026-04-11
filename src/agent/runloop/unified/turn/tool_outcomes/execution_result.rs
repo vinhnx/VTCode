@@ -1,37 +1,47 @@
 //! Tool execution result handling for turn flow.
 
-use anyhow::{Context, Result};
-use std::path::Path;
+use anyhow::Result;
 use vtcode_commons::ErrorCategory;
-use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
-use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
-use vtcode_core::llm::{
-    LightweightFeature, collect_single_response, create_provider_for_model_route,
-    resolve_lightweight_route,
-};
+use vtcode_core::core::agent::error_recovery::ErrorType as RecoveryErrorType;
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
-use vtcode_core::persistent_memory::GroundedFactRecord;
-use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
-use vtcode_core::tools::validation::unified_path::validate_and_resolve_path;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::auto_mode::probe_tool_output;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use crate::agent::runloop::unified::turn::compaction::{
-    SessionMemoryEnvelopeUpdate, refresh_session_memory_envelope,
-};
 
+pub(crate) use super::error_handling::build_error_content;
+use super::error_handling::{
+    build_structured_error_content, fallback_from_error, format_structured_tool_error_for_user,
+    is_blocked_or_denied_failure,
+};
 use super::helpers::{check_is_argument_error, serialize_output, signature_key_for};
+pub(crate) use super::response_content::compact_model_tool_payload;
+use super::response_content::prepare_tool_response_content;
+use super::subagent_memory::{
+    merge_subagent_completion_into_memory, record_request_user_input_interview_result,
+};
 
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
+
+#[cfg(test)]
+use super::error_handling::serialize_json_for_model;
+#[cfg(test)]
+use super::response_content::{
+    maybe_inline_spooled, tool_output_summary_input_or_serialized, truncate_stderr_preview,
+};
+#[cfg(test)]
+use super::subagent_memory::{build_subagent_memory_update, parse_subagent_summary_markdown};
+#[cfg(test)]
+use vtcode_core::config::constants::tools as tool_names;
+#[cfg(test)]
+use vtcode_core::persistent_memory::GroundedFactRecord;
 
 fn record_tool_execution(
     ctx: &mut TurnProcessingContext<'_>,
@@ -47,25 +57,6 @@ fn record_tool_execution(
         ctx.autonomous_executor.record_execution(tool_name, success);
     }
     ctx.telemetry.record_tool_usage(tool_name, success);
-}
-
-fn is_blocked_or_denied_failure(error: &str) -> bool {
-    if agent_execution::is_plan_mode_denial(error) {
-        return true;
-    }
-
-    let lowered = error.to_ascii_lowercase();
-    [
-        "tool permission denied",
-        "policy violation:",
-        "safety validation failed",
-        "tool argument validation failed",
-        "not allowed in plan mode",
-        "only available when plan mode is active",
-        "compatibility alias",
-    ]
-    .iter()
-    .any(|marker| lowered.contains(marker))
 }
 
 fn emit_turn_metric_log(
@@ -88,769 +79,6 @@ fn emit_turn_metric_log(
         tool_calls = ctx.harness_state.tool_calls,
         "turn metric"
     );
-}
-
-const MAX_ERROR_MESSAGE_CHARS: usize = 420;
-const MAX_FALLBACK_ARGS_PREVIEW_CHARS: usize = 140;
-const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
-const TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS: usize = 12_000;
-const TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS: u32 = 400;
-const TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT: &str = "You summarize tool outputs for VT Code before they are added to the model context. Preserve actionable facts, concrete errors, file paths, commands, and next steps. Keep it concise, faithful, and specific. Do not invent details.";
-const TOOL_OUTPUT_SUMMARY_READ_HEAD_BYTES: usize = 6_000;
-const TOOL_OUTPUT_SUMMARY_READ_TAIL_BYTES: usize = 4_000;
-const TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES: usize = 10_000;
-const TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES: usize = 120;
-const TOOL_OUTPUT_SUMMARY_GENERIC_HEAD_BYTES: usize = 4_000;
-const TOOL_OUTPUT_SUMMARY_GENERIC_TAIL_BYTES: usize = 4_000;
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct ParsedSubagentSummary {
-    summary: Vec<String>,
-    facts: Vec<String>,
-    touched_files: Vec<String>,
-    verification: Vec<String>,
-    open_questions: Vec<String>,
-}
-
-fn request_user_input_result_stats(output: &serde_json::Value) -> (usize, bool) {
-    let cancelled = output
-        .get("cancelled")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    if cancelled {
-        return (0, true);
-    }
-
-    let Some(answers) = output.get("answers").and_then(serde_json::Value::as_object) else {
-        return (0, true);
-    };
-
-    let answered_questions = answers
-        .values()
-        .filter(|answer| {
-            let selected_count = answer
-                .get("selected")
-                .and_then(serde_json::Value::as_array)
-                .map_or(0, Vec::len);
-            let has_other = answer
-                .get("other")
-                .and_then(serde_json::Value::as_str)
-                .map(|text| !text.trim().is_empty())
-                .unwrap_or(false);
-            selected_count > 0 || has_other
-        })
-        .count();
-    let cancelled = answered_questions == 0;
-    (answered_questions, cancelled)
-}
-
-fn record_request_user_input_interview_result(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_name: &str,
-    output: Option<&serde_json::Value>,
-) {
-    if tool_name != tool_names::REQUEST_USER_INPUT {
-        return;
-    }
-
-    let (answered_questions, cancelled) = output
-        .map(request_user_input_result_stats)
-        .unwrap_or((0, true));
-    ctx.session_stats
-        .record_plan_mode_interview_result(answered_questions, cancelled);
-}
-
-fn normalize_subagent_section_items(lines: &[String]) -> Vec<String> {
-    lines
-        .iter()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| {
-            let item = line
-                .strip_prefix("- ")
-                .or_else(|| line.strip_prefix("* "))
-                .unwrap_or(line)
-                .trim();
-            (!item.eq_ignore_ascii_case("none")).then_some(item.to_string())
-        })
-        .collect()
-}
-
-fn parse_subagent_summary_markdown(summary: &str) -> Option<ParsedSubagentSummary> {
-    #[derive(Clone, Copy)]
-    enum Section {
-        Summary,
-        Facts,
-        TouchedFiles,
-        Verification,
-        OpenQuestions,
-    }
-
-    let mut current = None;
-    let mut summary_lines = Vec::new();
-    let mut fact_lines = Vec::new();
-    let mut touched_files = Vec::new();
-    let mut verification = Vec::new();
-    let mut open_questions = Vec::new();
-    let mut saw_contract = false;
-
-    for raw_line in summary.replace("\r\n", "\n").lines() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        current = match line {
-            "## Summary" => {
-                saw_contract = true;
-                Some(Section::Summary)
-            }
-            "## Facts" => {
-                saw_contract = true;
-                Some(Section::Facts)
-            }
-            "## Touched Files" => {
-                saw_contract = true;
-                Some(Section::TouchedFiles)
-            }
-            "## Verification" => {
-                saw_contract = true;
-                Some(Section::Verification)
-            }
-            "## Open Questions" => {
-                saw_contract = true;
-                Some(Section::OpenQuestions)
-            }
-            _ => current,
-        };
-
-        if line.starts_with("## ") {
-            continue;
-        }
-
-        match current {
-            Some(Section::Summary) => summary_lines.push(line.to_string()),
-            Some(Section::Facts) => fact_lines.push(line.to_string()),
-            Some(Section::TouchedFiles) => touched_files.push(line.to_string()),
-            Some(Section::Verification) => verification.push(line.to_string()),
-            Some(Section::OpenQuestions) => open_questions.push(line.to_string()),
-            None => {}
-        }
-    }
-
-    saw_contract.then(|| ParsedSubagentSummary {
-        summary: normalize_subagent_section_items(&summary_lines),
-        facts: normalize_subagent_section_items(&fact_lines),
-        touched_files: normalize_subagent_section_items(&touched_files),
-        verification: normalize_subagent_section_items(&verification),
-        open_questions: normalize_subagent_section_items(&open_questions),
-    })
-}
-
-fn extract_completed_subagent_entries(output: &serde_json::Value) -> Vec<&serde_json::Value> {
-    let mut entries = Vec::new();
-
-    if output.get("completed").and_then(serde_json::Value::as_bool) == Some(true)
-        && let Some(entry) = output.get("entry")
-    {
-        entries.push(entry);
-    }
-
-    if output
-        .get("status")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|status| status == "completed")
-    {
-        entries.push(output);
-    }
-
-    entries
-}
-
-fn build_subagent_memory_update(output: &serde_json::Value) -> Option<SessionMemoryEnvelopeUpdate> {
-    let entries = extract_completed_subagent_entries(output);
-    if entries.is_empty() {
-        return None;
-    }
-
-    let mut update = SessionMemoryEnvelopeUpdate::default();
-    let mut saw_summary = false;
-    for entry in entries {
-        let Some(summary) = entry.get("summary").and_then(serde_json::Value::as_str) else {
-            continue;
-        };
-        if summary.trim().is_empty() {
-            continue;
-        }
-
-        let agent_name = entry
-            .get("agent_name")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("subagent");
-        saw_summary = true;
-
-        if let Some(parsed) = parse_subagent_summary_markdown(summary) {
-            update
-                .grounded_facts
-                .extend(parsed.facts.into_iter().map(|fact| GroundedFactRecord {
-                    fact,
-                    source: format!("subagent:{agent_name}"),
-                }));
-            update.touched_files.extend(parsed.touched_files);
-            update.open_questions.extend(parsed.open_questions);
-            update.verification_todo.extend(parsed.verification);
-            if !parsed.summary.is_empty() {
-                update
-                    .delegation_notes
-                    .push(format!("{agent_name}: {}", parsed.summary.join(" | ")));
-            }
-        } else {
-            update
-                .delegation_notes
-                .push(format!("{agent_name}: {}", summary.trim()));
-        }
-    }
-
-    (saw_summary
-        && (!update.grounded_facts.is_empty()
-            || !update.touched_files.is_empty()
-            || !update.open_questions.is_empty()
-            || !update.verification_todo.is_empty()
-            || !update.delegation_notes.is_empty()))
-    .then_some(update)
-}
-
-fn merge_subagent_completion_into_memory(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_name: &str,
-    output: &serde_json::Value,
-) -> Result<()> {
-    if !matches!(
-        tool_name,
-        tool_names::SPAWN_AGENT
-            | tool_names::SEND_INPUT
-            | tool_names::WAIT_AGENT
-            | tool_names::RESUME_AGENT
-            | tool_names::CLOSE_AGENT
-    ) {
-        return Ok(());
-    }
-
-    let session_id = ctx.tool_registry.harness_context_snapshot().session_id;
-    let Some(update) = build_subagent_memory_update(output) else {
-        return Ok(());
-    };
-
-    if !update.touched_files.is_empty() {
-        ctx.session_stats
-            .record_touched_files(update.touched_files.iter().cloned());
-    }
-
-    refresh_session_memory_envelope(
-        ctx.config.workspace.as_path(),
-        &session_id,
-        ctx.vt_cfg,
-        ctx.working_history,
-        ctx.session_stats,
-        Some(&update),
-    )?;
-
-    Ok(())
-}
-
-fn truncate_text_for_model(value: &str, max_chars: usize) -> (String, bool) {
-    let total_chars = value.chars().count();
-    if total_chars <= max_chars {
-        return (value.to_string(), false);
-    }
-
-    const MARKER: &str = " ... [truncated] ... ";
-    let marker_chars = MARKER.chars().count();
-    if max_chars <= marker_chars + 16 {
-        let mut truncated = value.chars().take(max_chars).collect::<String>();
-        truncated.push_str(" [truncated]");
-        return (truncated, true);
-    }
-
-    let available = max_chars.saturating_sub(marker_chars);
-    let head_chars = (available * 2) / 3;
-    let tail_chars = available.saturating_sub(head_chars);
-    let head = value.chars().take(head_chars).collect::<String>();
-    let tail = value
-        .chars()
-        .skip(total_chars.saturating_sub(tail_chars))
-        .collect::<String>();
-    let mut truncated = String::with_capacity(max_chars + 20);
-    truncated.push_str(&head);
-    truncated.push_str(MARKER);
-    truncated.push_str(&tail);
-    (truncated, true)
-}
-
-fn compact_json_preview(serialized: &str, max_chars: usize) -> String {
-    let (preview, _) = truncate_text_for_model(serialized, max_chars);
-    preview
-}
-
-fn serialize_json_for_model(value: &serde_json::Value) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "<invalid-json>".to_string())
-}
-
-fn should_inline_fallback_args(serialized_args: &str) -> bool {
-    serialized_args.chars().count() <= MAX_FALLBACK_ARGS_INLINE_CHARS
-}
-
-fn push_fallback_args(
-    payload: &mut serde_json::Value,
-    args: serde_json::Value,
-    args_preview: &str,
-    inline_full_args: bool,
-) {
-    if let Some(obj) = payload.as_object_mut() {
-        if inline_full_args {
-            obj.insert("fallback_tool_args".to_string(), args);
-        } else {
-            obj.insert(
-                "fallback_tool_args_preview".to_string(),
-                serde_json::Value::String(args_preview.to_string()),
-            );
-            obj.insert(
-                "fallback_tool_args_truncated".to_string(),
-                serde_json::Value::Bool(true),
-            );
-        }
-    }
-}
-
-fn push_error_truncation_flag(payload: &mut serde_json::Value, error_truncated: bool) {
-    if !error_truncated {
-        return;
-    }
-    if let Some(obj) = payload.as_object_mut() {
-        obj.insert("error_truncated".to_string(), serde_json::Value::Bool(true));
-    }
-}
-
-fn fallback_args_preview_and_inline(
-    fallback_tool_args: &Option<serde_json::Value>,
-) -> (Option<String>, bool) {
-    let Some(args) = fallback_tool_args else {
-        return (None, false);
-    };
-    let serialized = serialize_json_for_model(args);
-    let preview = compact_json_preview(&serialized, MAX_FALLBACK_ARGS_PREVIEW_CHARS);
-    (Some(preview), should_inline_fallback_args(&serialized))
-}
-
-fn failure_guidance(
-    error_msg: &str,
-    failure_kind: &'static str,
-) -> (&'static str, bool, &'static str) {
-    if failure_kind == "timeout" {
-        return (
-            "timeout",
-            true,
-            "Retry with smaller scope or higher timeout.",
-        );
-    }
-
-    if check_is_argument_error(error_msg) {
-        return (
-            "invalid_arguments",
-            true,
-            "Fix tool arguments to match the schema.",
-        );
-    }
-
-    if is_blocked_or_denied_failure(error_msg) {
-        return (
-            "policy_blocked",
-            false,
-            "Switch to an allowed tool or mode.",
-        );
-    }
-
-    (
-        "execution_failure",
-        true,
-        "Try an alternative tool or narrower scope.",
-    )
-}
-
-fn structured_failure_guidance(
-    error: &ToolExecutionError,
-    failure_kind: &'static str,
-) -> (&'static str, bool, &'static str) {
-    if failure_kind == "timeout" || matches!(error.category, ErrorCategory::Timeout) {
-        return (
-            "timeout",
-            true,
-            "Retry with smaller scope or a higher timeout.",
-        );
-    }
-
-    if matches!(error.category, ErrorCategory::InvalidParameters)
-        || check_is_argument_error(&error.message)
-    {
-        return (
-            "invalid_arguments",
-            true,
-            "Fix the tool arguments to match the schema.",
-        );
-    }
-
-    if matches!(error.category, ErrorCategory::Authentication) {
-        return (
-            "authentication_failed",
-            false,
-            "Verify your credentials or choose a different provider.",
-        );
-    }
-
-    if matches!(
-        error.category,
-        ErrorCategory::PermissionDenied
-            | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanModeViolation
-    ) || is_blocked_or_denied_failure(&error.message)
-    {
-        return (
-            "policy_blocked",
-            false,
-            "Switch to an allowed tool or mode.",
-        );
-    }
-
-    if matches!(error.category, ErrorCategory::CircuitOpen) {
-        return (
-            "service_temporarily_unavailable",
-            true,
-            "Wait briefly, then retry or use a different tool.",
-        );
-    }
-
-    (
-        "execution_failure",
-        error.is_recoverable,
-        "Try an alternative tool or narrower scope.",
-    )
-}
-
-fn format_structured_tool_error_for_user(
-    tool_name: &str,
-    error: &ToolExecutionError,
-) -> (String, Option<String>) {
-    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
-        &error.message,
-    );
-    let mut primary = format!(
-        "Tool '{}' failed ({}): {}",
-        tool_name,
-        error.category.user_label(),
-        sanitized
-    );
-
-    if error.rollback_performed {
-        primary.push_str(" Any partial changes were rolled back.");
-    } else if error.partial_state_possible {
-        primary.push_str(" Partial changes may still exist.");
-    }
-
-    if let Some(retry_summary) = error.retry_summary() {
-        primary.push(' ');
-        primary.push_str(&retry_summary);
-    }
-
-    let hint = if error.recovery_suggestions.is_empty() {
-        None
-    } else {
-        Some(format!(
-            "Hint: {}",
-            error
-                .recovery_suggestions
-                .iter()
-                .map(|suggestion| suggestion.as_ref())
-                .collect::<Vec<_>>()
-                .join("; ")
-        ))
-    };
-
-    (primary, hint)
-}
-
-/// Build standardized error content for tool failures.
-///
-/// This is the canonical error content builder used across all tool execution paths.
-pub(crate) fn build_error_content(
-    error_msg: String,
-    fallback_tool: Option<String>,
-    fallback_tool_args: Option<serde_json::Value>,
-    failure_kind: &'static str,
-) -> serde_json::Value {
-    let (error_text, error_truncated) =
-        truncate_text_for_model(&error_msg, MAX_ERROR_MESSAGE_CHARS);
-    let (error_class, is_recoverable, next_action) = failure_guidance(&error_msg, failure_kind);
-    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
-
-    if let Some(tool) = fallback_tool {
-        let mut payload = serde_json::json!({
-            "error": error_text,
-            "failure_kind": failure_kind,
-            "error_class": error_class,
-            "is_recoverable": is_recoverable,
-            "next_action": next_action,
-            "fallback_tool": tool,
-        });
-        push_error_truncation_flag(&mut payload, error_truncated);
-        if let Some(args) = fallback_tool_args {
-            push_fallback_args(
-                &mut payload,
-                args,
-                args_preview.as_deref().unwrap_or("<invalid-json>"),
-                inline_full_args,
-            );
-        }
-        compact_model_tool_payload(payload)
-    } else {
-        let mut payload = serde_json::json!({
-            "error": error_text,
-            "failure_kind": failure_kind,
-            "error_class": error_class,
-            "is_recoverable": is_recoverable,
-            "next_action": next_action,
-        });
-        push_error_truncation_flag(&mut payload, error_truncated);
-        compact_model_tool_payload(payload)
-    }
-}
-
-fn build_structured_error_content(
-    error: &ToolExecutionError,
-    fallback_tool: Option<String>,
-    fallback_tool_args: Option<serde_json::Value>,
-    failure_kind: &'static str,
-) -> serde_json::Value {
-    let (error_summary, error_truncated) =
-        truncate_text_for_model(&error.user_message(), MAX_ERROR_MESSAGE_CHARS);
-    let (error_class, is_recoverable, default_next_action) =
-        structured_failure_guidance(error, failure_kind);
-    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
-    let retry_summary = error.retry_summary();
-    let next_action = error
-        .recovery_suggestions
-        .first()
-        .map(|suggestion| suggestion.as_ref())
-        .unwrap_or(default_next_action);
-    let mut payload = error.to_json_value();
-
-    if let Some(obj) = payload.as_object_mut() {
-        obj.insert(
-            "error_summary".to_string(),
-            serde_json::Value::String(error_summary),
-        );
-        obj.insert(
-            "failure_kind".to_string(),
-            serde_json::Value::String(failure_kind.to_string()),
-        );
-        obj.insert(
-            "error_class".to_string(),
-            serde_json::Value::String(error_class.to_string()),
-        );
-        obj.insert("category".to_string(), serde_json::json!(error.category));
-        obj.insert(
-            "is_recoverable".to_string(),
-            serde_json::Value::Bool(is_recoverable),
-        );
-        obj.insert(
-            "retryable".to_string(),
-            serde_json::Value::Bool(error.retryable),
-        );
-        obj.insert(
-            "partial_state_possible".to_string(),
-            serde_json::Value::Bool(error.partial_state_possible),
-        );
-        obj.insert(
-            "rollback_performed".to_string(),
-            serde_json::Value::Bool(error.rollback_performed),
-        );
-        obj.insert(
-            "circuit_breaker_impact".to_string(),
-            serde_json::Value::Bool(error.circuit_breaker_impact),
-        );
-        if is_recoverable {
-            obj.insert(
-                "next_action".to_string(),
-                serde_json::Value::String(next_action.to_string()),
-            );
-        }
-        if !error.recovery_suggestions.is_empty() {
-            obj.insert(
-                "recovery_suggestions".to_string(),
-                serde_json::json!(
-                    error
-                        .recovery_suggestions
-                        .iter()
-                        .map(|suggestion| suggestion.as_ref())
-                        .collect::<Vec<_>>()
-                ),
-            );
-        }
-        if let Some(summary) = retry_summary {
-            obj.insert(
-                "retry_summary".to_string(),
-                serde_json::Value::String(summary),
-            );
-        }
-        if let Some(retry_delay_ms) = error.retry_delay_ms {
-            obj.insert(
-                "retry_delay_ms".to_string(),
-                serde_json::Value::Number(retry_delay_ms.into()),
-            );
-        }
-        if let Some(retry_after_ms) = error.retry_after_ms {
-            obj.insert(
-                "retry_after_ms".to_string(),
-                serde_json::Value::Number(retry_after_ms.into()),
-            );
-        }
-        if let Some(debug_context) = &error.debug_context {
-            obj.insert(
-                "debug_context".to_string(),
-                serde_json::to_value(debug_context).unwrap_or(serde_json::Value::Null),
-            );
-        }
-    }
-
-    if let Some(tool) = fallback_tool {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert("fallback_tool".to_string(), serde_json::Value::String(tool));
-        }
-        if let Some(args) = fallback_tool_args {
-            push_fallback_args(
-                &mut payload,
-                args,
-                args_preview.as_deref().unwrap_or("<invalid-json>"),
-                inline_full_args,
-            );
-        }
-    }
-
-    push_error_truncation_flag(&mut payload, error_truncated);
-    compact_model_tool_payload(payload)
-}
-
-fn is_valid_pty_session_id(session_id: &str) -> bool {
-    !session_id.is_empty()
-        && session_id.len() <= 128
-        && session_id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
-fn extract_pty_session_id_from_error(error_msg: &str) -> Option<String> {
-    let marker = "session_id=\"";
-    let start = error_msg.find(marker)? + marker.len();
-    let rest = &error_msg[start..];
-    let end = rest.find('"')?;
-    let session_id = &rest[..end];
-    if is_valid_pty_session_id(session_id) {
-        Some(session_id.to_string())
-    } else {
-        None
-    }
-}
-
-fn extract_patch_target_path_from_error(error_msg: &str) -> Option<String> {
-    let markers = [
-        "failed to locate expected lines in ",
-        "failed to locate expected text in ",
-    ];
-    for marker in markers {
-        let Some(start) = error_msg.find(marker) else {
-            continue;
-        };
-        let rest = &error_msg[start + marker.len()..];
-        for quote in ['\'', '"'] {
-            let quote_s = quote.to_string();
-            let Some(stripped) = rest.strip_prefix(&quote_s) else {
-                continue;
-            };
-            let Some(end_idx) = stripped.find(quote) else {
-                continue;
-            };
-            let path = stripped[..end_idx].trim();
-            if !path.is_empty() {
-                return Some(path.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serde_json::Value)> {
-    if tool_name == tool_names::UNIFIED_SEARCH
-        && error_msg
-            .to_ascii_lowercase()
-            .contains("invalid action: read")
-    {
-        return Some((
-            tool_names::UNIFIED_SEARCH.to_string(),
-            serde_json::json!({
-                "action": "list",
-                "path": "."
-            }),
-        ));
-    }
-
-    if matches!(
-        tool_name,
-        tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file"
-    ) && let Some(session_id) = extract_pty_session_id_from_error(error_msg)
-    {
-        return Some((
-            tool_names::UNIFIED_EXEC.to_string(),
-            serde_json::json!({
-                "action": "poll",
-                "session_id": session_id
-            }),
-        ));
-    }
-
-    if matches!(
-        tool_name,
-        tool_names::APPLY_PATCH | tool_names::UNIFIED_FILE | "apply patch"
-    ) && let Some(path) = extract_patch_target_path_from_error(error_msg)
-    {
-        return Some((
-            tool_names::READ_FILE.to_string(),
-            serde_json::json!({
-                "path": path,
-                "offset": 1,
-                "limit": 120
-            }),
-        ));
-    }
-
-    if matches!(
-        tool_name,
-        tool_names::TASK_TRACKER | tool_names::PLAN_TASK_TRACKER
-    ) {
-        let lower = error_msg.to_ascii_lowercase();
-        if lower.contains("required for 'update'")
-            || lower.contains("required for \"update\"")
-            || lower.contains("invalid task_tracker arguments")
-            || lower.contains("invalid plan_task_tracker arguments")
-        {
-            return Some((
-                tool_name.to_string(),
-                serde_json::json!({
-                    "action": "list"
-                }),
-            ));
-        }
-    }
-
-    None
 }
 
 /// Main handler for tool execution results.
@@ -926,612 +154,6 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     Ok(None)
 }
 
-pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_json::Value {
-    let Some(obj) = output.as_object() else {
-        return output;
-    };
-
-    let next_continue_args = obj
-        .get("next_continue_args")
-        .and_then(PtyContinuationArgs::from_value);
-    let next_read_args = obj
-        .get("next_read_args")
-        .and_then(ReadChunkContinuationArgs::from_value);
-    let session_id = obj.get("session_id").and_then(serde_json::Value::as_str);
-    let process_session_id = session_id.or_else(|| {
-        next_continue_args
-            .as_ref()
-            .map(|next_continue| next_continue.session_id.as_str())
-    });
-    let loop_detected = obj
-        .get("loop_detected")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let is_exec_like = obj.contains_key("command")
-        || obj.contains_key("working_directory")
-        || session_id.is_some()
-        || obj.contains_key("process_id")
-        || obj.contains_key("is_exited")
-        || obj.contains_key("exit_code")
-        || obj.contains_key("rows")
-        || obj.contains_key("cols")
-        || obj
-            .get("content_type")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|content_type| matches!(content_type, "exec_inspect" | "git_diff"));
-    let keep_exec_success_critical_note = should_keep_exec_success_critical_note(obj, is_exec_like);
-    let keep_next_action = should_keep_exec_success_next_action(obj, is_exec_like)
-        || should_keep_recoverable_failure_next_action(obj)
-        || should_keep_search_recovery_success_next_action(obj);
-    let has_stderr = obj
-        .get("stderr")
-        .and_then(serde_json::Value::as_str)
-        .is_some();
-    let output_trimmed = obj
-        .get("output")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim_end);
-
-    let mut sanitized = serde_json::Map::with_capacity(obj.len());
-    for (key, value) in obj {
-        let skip = match key.as_str() {
-            "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args"
-            | "rows" | "cols" | "wall_time" => true,
-            "success" => value.as_bool().unwrap_or(false),
-            "status" => value.as_str().is_some_and(|status| status == "success"),
-            "spool_hint" | "spooled_bytes" | "spooled_to_file" => true,
-            "id" => session_id.is_some_and(|sid| value == sid),
-            "working_directory" => is_exec_like || value.is_null(),
-            "critical_note" => !keep_exec_success_critical_note,
-            "next_action" => !keep_next_action,
-            "has_more" | "preferred_next_action" => {
-                next_continue_args.is_some() || next_read_args.is_some() || is_false_bool(value)
-            }
-            "session_id" | "command" => is_exec_like,
-            "spool_path" => {
-                !loop_detected
-                    && next_read_args
-                        .as_ref()
-                        .is_some_and(|next_read| value == next_read.path.as_str())
-            }
-            "next_offset" => next_read_args
-                .as_ref()
-                .is_some_and(|next_read| value_matches_usize(value, next_read.offset)),
-            "chunk_limit" => next_read_args
-                .as_ref()
-                .is_some_and(|next_read| value_matches_usize(value, next_read.limit)),
-            "stderr_preview" => has_stderr,
-            "loop_detected_note"
-            | "spool_ref_only"
-            | "result_ref_only"
-            | "reused_spooled_output"
-            | "reused_recent_result"
-            | "repeat_count"
-            | "tool" => loop_detected,
-            "limit" => loop_detected && obj.get("tool").is_some(),
-            "truncated" | "auto_recovered" | "loop_detected" | "query_truncated" => {
-                is_false_bool(value)
-            }
-            "stdout" => {
-                (is_exec_like && output_trimmed.is_some())
-                    || output_trimmed == value.as_str().map(str::trim_end)
-            }
-            "process_id" => is_exec_like || process_session_id.is_some_and(|sid| value == sid),
-            "is_exited" => {
-                is_exec_like
-                    && (value.as_bool().is_some()
-                        || next_continue_args.is_some()
-                        || obj.get("exit_code").is_some())
-            }
-            _ => false,
-        };
-
-        if skip {
-            continue;
-        }
-
-        let cloned_value = match key.as_str() {
-            "next_continue_args" => compact_next_continue_args(value),
-            "next_read_args" => compact_next_read_args(value),
-            _ => value.clone(),
-        };
-        sanitized.insert(key.clone(), cloned_value);
-    }
-
-    serde_json::Value::Object(sanitized)
-}
-
-fn should_prefer_spool_reference_only(tool_name: &str, output: &serde_json::Value) -> bool {
-    vtcode_core::tools::tool_intent::should_use_spool_reference_only(Some(tool_name), output)
-}
-
-fn truncate_stderr_preview(stderr: &str) -> String {
-    const PREVIEW_CHARS: usize = 500;
-    if stderr.chars().nth(PREVIEW_CHARS).is_some() {
-        let mut truncated: String = stderr.chars().take(PREVIEW_CHARS).collect();
-        truncated.push_str("... (truncated)");
-        truncated
-    } else {
-        stderr.to_string()
-    }
-}
-
-fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serde_json::Value) {
-    let Some(obj) = compacted.as_object_mut() else {
-        return;
-    };
-
-    obj.remove("output");
-    obj.remove("content");
-    obj.remove("stdout");
-    obj.remove("stderr");
-
-    if !obj.contains_key("stderr_preview")
-        && let Some(stderr) = original.get("stderr").and_then(serde_json::Value::as_str)
-        && !stderr.trim().is_empty()
-    {
-        obj.insert(
-            "stderr_preview".to_string(),
-            serde_json::Value::String(truncate_stderr_preview(stderr)),
-        );
-    }
-
-    if !obj.contains_key("spool_path")
-        && let Some(spool_path) = original
-            .get("spool_path")
-            .and_then(serde_json::Value::as_str)
-    {
-        obj.insert(
-            "spool_path".to_string(),
-            serde_json::Value::String(spool_path.to_string()),
-        );
-    }
-
-    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
-}
-
-pub(super) fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) -> String {
-    let mut compacted = compact_model_tool_payload(output.clone());
-    if should_prefer_spool_reference_only(tool_name, output) {
-        apply_spool_reference_only(&mut compacted, output);
-    }
-    serialize_output(&compacted)
-}
-
-fn read_summary_source_path(output: &serde_json::Value) -> Option<&str> {
-    output
-        .get("source_path")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| output.get("path").and_then(serde_json::Value::as_str))
-        .filter(|path| !path.trim().is_empty())
-}
-
-fn is_large_read_summary_output(tool_name: &str, output: &serde_json::Value) -> bool {
-    matches!(tool_name, tool_names::READ_FILE)
-        || (tool_name == tool_names::UNIFIED_FILE && read_summary_source_path(output).is_some())
-}
-
-fn build_spooled_tool_summary_excerpt(
-    tool_name: &str,
-    output: &serde_json::Value,
-    spool_content: &str,
-) -> String {
-    let mut sections = Vec::new();
-
-    if should_prefer_spool_reference_only(tool_name, output) {
-        if let Some(stderr_preview) = output
-            .get("stderr_preview")
-            .and_then(serde_json::Value::as_str)
-            .filter(|value| !value.trim().is_empty())
-        {
-            sections.push(format!("stderr_preview:\n{stderr_preview}"));
-        }
-        sections.push(format!(
-            "tail_excerpt:\n{}",
-            tail_preview_text(
-                spool_content,
-                TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES,
-                TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES,
-            )
-        ));
-        return sections.join("\n\n");
-    }
-
-    if is_large_read_summary_output(tool_name, output) {
-        if let Some(path) = read_summary_source_path(output) {
-            sections.push(format!("source_path: {path}"));
-        }
-        sections.push(format!(
-            "content_excerpt:\n{}",
-            condense_text_bytes(
-                spool_content,
-                TOOL_OUTPUT_SUMMARY_READ_HEAD_BYTES,
-                TOOL_OUTPUT_SUMMARY_READ_TAIL_BYTES,
-            )
-        ));
-        return sections.join("\n\n");
-    }
-
-    format!(
-        "content_excerpt:\n{}",
-        condense_text_bytes(
-            spool_content,
-            TOOL_OUTPUT_SUMMARY_GENERIC_HEAD_BYTES,
-            TOOL_OUTPUT_SUMMARY_GENERIC_TAIL_BYTES,
-        )
-    )
-}
-
-fn build_spooled_tool_summary_input(
-    tool_name: &str,
-    output: &serde_json::Value,
-    spool_content: &str,
-) -> String {
-    let metadata = maybe_inline_spooled(tool_name, output);
-    let excerpt = build_spooled_tool_summary_excerpt(tool_name, output, spool_content);
-    if excerpt.trim().is_empty() {
-        metadata
-    } else {
-        format!("Tool payload:\n{metadata}\n\nSpooled content excerpt:\n{excerpt}")
-    }
-}
-
-async fn tool_output_summary_input_or_serialized(
-    workspace_root: &Path,
-    tool_name: &str,
-    output: &serde_json::Value,
-    serialized_output: &str,
-) -> String {
-    let Some(spool_path) = output
-        .get("spool_path")
-        .and_then(serde_json::Value::as_str)
-        .filter(|path| !path.trim().is_empty())
-    else {
-        return serialized_output.to_string();
-    };
-
-    let resolved = match validate_and_resolve_path(workspace_root, spool_path).await {
-        Ok(path) => path,
-        Err(err) => {
-            tracing::warn!(
-                tool = %tool_name,
-                spool_path,
-                error = %err,
-                "Failed to validate spool path for tool output summary; using compact fallback"
-            );
-            return serialized_output.to_string();
-        }
-    };
-
-    match tokio::fs::read(&resolved).await {
-        Ok(spool_bytes) => {
-            let spool_content = String::from_utf8_lossy(&spool_bytes);
-            build_spooled_tool_summary_input(tool_name, output, &spool_content)
-        }
-        Err(err) => {
-            tracing::warn!(
-                tool = %tool_name,
-                spool_path = %resolved.display(),
-                error = %err,
-                "Failed to read spool file for tool output summary; using compact fallback"
-            );
-            serialized_output.to_string()
-        }
-    }
-}
-
-fn tool_output_summary_feature(
-    tool_name: &str,
-    args_val: &serde_json::Value,
-    output: &serde_json::Value,
-    serialized_len: usize,
-) -> Option<LightweightFeature> {
-    let action = args_val.get("action").and_then(serde_json::Value::as_str);
-    let command = args_val
-        .get("command")
-        .map(serialize_json_for_model)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let content_type = output
-        .get("content_type")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
-
-    let is_large_read = matches!(tool_name, tool_names::READ_FILE)
-        || (tool_name == tool_names::UNIFIED_FILE
-            && matches!(action, Some("read" | "read_chunk" | "cat")));
-    if is_large_read && (serialized_len > 6_000 || output.get("spool_path").is_some()) {
-        return Some(LightweightFeature::LargeReadSummary);
-    }
-
-    if tool_name == "web_fetch" || content_type == "web_page" {
-        return (serialized_len > 2_500).then_some(LightweightFeature::WebSummary);
-    }
-
-    let is_git_history = tool_name == tool_names::UNIFIED_EXEC
-        && (content_type == "git_diff"
-            || command.contains("git log")
-            || command.contains("git show")
-            || command.contains("git diff"));
-    if is_git_history && serialized_len > 2_500 {
-        return Some(LightweightFeature::GitHistorySummary);
-    }
-
-    None
-}
-
-async fn summarize_tool_output_with_provider(
-    provider: &dyn vtcode_core::llm::provider::LLMProvider,
-    model: &str,
-    tool_name: &str,
-    serialized_output: &str,
-) -> Result<String> {
-    let prompt = format!(
-        "Tool: {tool_name}\n\nOutput:\n{}\n\nReturn a concise summary that preserves the actionable details VT Code should remember for the next model turn.",
-        truncate_text_for_model(serialized_output, TOOL_OUTPUT_SUMMARY_MAX_INPUT_CHARS).0
-    );
-    let request = LLMRequest {
-        messages: vec![LlmMessage::user(prompt)],
-        system_prompt: Some(std::sync::Arc::new(
-            TOOL_OUTPUT_SUMMARY_SYSTEM_PROMPT.to_string(),
-        )),
-        model: model.to_string(),
-        max_tokens: Some(TOOL_OUTPUT_SUMMARY_MAX_OUTPUT_TOKENS),
-        temperature: Some(0.0),
-        stream: false,
-        ..Default::default()
-    };
-    let response = collect_single_response(provider, request)
-        .await
-        .context("tool output summarization failed")?;
-    Ok(response.content_text().trim().to_string())
-}
-
-async fn summarize_tool_output_with_route(
-    ctx: &mut TurnProcessingContext<'_>,
-    route: &vtcode_core::llm::ModelRoute,
-    tool_name: &str,
-    serialized_output: &str,
-) -> Result<String> {
-    let same_runtime_provider = !ctx.config.provider.trim().is_empty()
-        && route
-            .provider_name
-            .eq_ignore_ascii_case(ctx.config.provider.as_str())
-        && route.model == ctx.config.model;
-    if same_runtime_provider {
-        return summarize_tool_output_with_provider(
-            ctx.provider_client.as_ref(),
-            &route.model,
-            tool_name,
-            serialized_output,
-        )
-        .await;
-    }
-
-    let provider = create_provider_for_model_route(route, ctx.config, ctx.vt_cfg)?;
-    summarize_tool_output_with_provider(
-        provider.as_ref(),
-        &route.model,
-        tool_name,
-        serialized_output,
-    )
-    .await
-}
-
-fn summarized_tool_response_payload(
-    tool_name: &str,
-    output: &serde_json::Value,
-    summary: &str,
-) -> String {
-    let mut compacted = compact_model_tool_payload(output.clone());
-    if should_prefer_spool_reference_only(tool_name, output) {
-        apply_spool_reference_only(&mut compacted, output);
-    }
-    if let Some(obj) = compacted.as_object_mut() {
-        obj.remove("output");
-        obj.remove("content");
-        obj.remove("stdout");
-        obj.remove("stderr");
-        obj.insert(
-            "summary".to_string(),
-            serde_json::Value::String(summary.to_string()),
-        );
-        obj.insert(
-            "summarized_for_model".to_string(),
-            serde_json::Value::Bool(true),
-        );
-    }
-    serialize_output(&compacted)
-}
-
-async fn prepare_tool_response_content(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_name: &str,
-    args_val: &serde_json::Value,
-    output: &serde_json::Value,
-) -> String {
-    let fallback = maybe_inline_spooled(tool_name, output);
-    let serialized_output = serialize_json_for_model(output);
-    let summary_input = tool_output_summary_input_or_serialized(
-        ctx.tool_registry.workspace_root().as_path(),
-        tool_name,
-        output,
-        &serialized_output,
-    )
-    .await;
-    let Some(feature) =
-        tool_output_summary_feature(tool_name, args_val, output, serialized_output.len())
-    else {
-        return fallback;
-    };
-
-    let resolution = resolve_lightweight_route(ctx.config, ctx.vt_cfg, feature, None);
-    if let Some(warning) = &resolution.warning {
-        tracing::warn!(warning = %warning, tool = %tool_name, "tool output route adjusted");
-    }
-
-    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &summary_input)
-        .await
-    {
-        Ok(summary) if !summary.trim().is_empty() => {
-            return summarized_tool_response_payload(tool_name, output, summary.trim());
-        }
-        Ok(_) => {}
-        Err(primary_err) => {
-            if let Some(fallback_route) = resolution.fallback.as_ref() {
-                tracing::warn!(
-                    tool = %tool_name,
-                    model = %resolution.primary.model,
-                    fallback_model = %fallback_route.model,
-                    error = %primary_err,
-                    "tool output summarization failed on lightweight route; retrying with main model"
-                );
-                match summarize_tool_output_with_route(
-                    ctx,
-                    fallback_route,
-                    tool_name,
-                    &summary_input,
-                )
-                .await
-                {
-                    Ok(summary) if !summary.trim().is_empty() => {
-                        return summarized_tool_response_payload(tool_name, output, summary.trim());
-                    }
-                    Ok(_) => {}
-                    Err(fallback_err) => {
-                        tracing::warn!(
-                            tool = %tool_name,
-                            error = %fallback_err,
-                            "tool output summarization failed on main model; using compact fallback"
-                        );
-                    }
-                }
-            } else {
-                tracing::warn!(
-                    tool = %tool_name,
-                    error = %primary_err,
-                    "tool output summarization failed; using compact fallback"
-                );
-            }
-        }
-    }
-
-    fallback
-}
-
-fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
-    let Some(obj) = value.as_object() else {
-        return value.clone();
-    };
-    let Some(parsed) = PtyContinuationArgs::from_value(value) else {
-        return value.clone();
-    };
-
-    let mut compacted = match parsed.to_compact_value() {
-        serde_json::Value::Object(map) => map,
-        _ => return value.clone(),
-    };
-    for (key, nested_value) in obj {
-        if key != "action" && key != "session_id" && key != "s" {
-            compacted.insert(key.clone(), nested_value.clone());
-        }
-    }
-    serde_json::Value::Object(compacted)
-}
-
-fn compact_next_read_args(value: &serde_json::Value) -> serde_json::Value {
-    let Some(obj) = value.as_object() else {
-        return value.clone();
-    };
-    let Some(parsed) = ReadChunkContinuationArgs::from_value(value) else {
-        return value.clone();
-    };
-
-    let mut compacted = match parsed.to_compact_value() {
-        serde_json::Value::Object(map) => map,
-        _ => return value.clone(),
-    };
-    for (key, nested_value) in obj {
-        if !matches!(key.as_str(), "path" | "offset" | "limit" | "p" | "o" | "l") {
-            compacted.insert(key.clone(), nested_value.clone());
-        }
-    }
-    serde_json::Value::Object(compacted)
-}
-
-fn is_false_bool(value: &serde_json::Value) -> bool {
-    value.as_bool().is_some_and(|flag| !flag)
-}
-
-fn value_matches_usize(value: &serde_json::Value, expected: usize) -> bool {
-    value
-        .as_u64()
-        .and_then(|actual| usize::try_from(actual).ok())
-        .is_some_and(|actual| actual == expected)
-}
-
-fn has_non_empty_string_field(obj: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
-    obj.get(key)
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|value| !value.trim().is_empty())
-}
-
-fn has_error_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
-    match obj.get("error") {
-        Some(serde_json::Value::String(message)) => !message.trim().is_empty(),
-        Some(serde_json::Value::Object(error)) => error
-            .get("message")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|message| !message.trim().is_empty()),
-        _ => false,
-    }
-}
-
-fn is_recoverable_failure_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
-    has_error_payload(obj)
-        && obj
-            .get("is_recoverable")
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
-}
-
-fn should_keep_exec_success_critical_note(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    is_exec_like: bool,
-) -> bool {
-    is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "critical_note")
-}
-
-fn should_keep_exec_success_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    is_exec_like: bool,
-) -> bool {
-    is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "next_action")
-}
-
-fn should_keep_recoverable_failure_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> bool {
-    is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
-}
-
-fn should_keep_search_recovery_success_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> bool {
-    !has_error_payload(obj)
-        && obj.get("backend").and_then(serde_json::Value::as_str) == Some("ast-grep")
-        && obj
-            .get("is_recoverable")
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
-        && obj
-            .get("matches")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|matches| matches.is_empty())
-        && has_non_empty_string_field(obj, "hint")
-        && has_non_empty_string_field(obj, "next_action")
-}
-
 async fn auto_mode_probe_warning(
     ctx: &mut TurnProcessingContext<'_>,
     tool_name: &str,
@@ -1595,6 +217,80 @@ async fn push_tool_response_with_auto_mode_probe(
         append_probe_warning(t_ctx.ctx, tool_name, probe_warning)?;
     }
     Ok(())
+}
+
+async fn notify_structured_failure(
+    tool_name: &str,
+    user_msg: &str,
+    notification_kind: Option<&'static str>,
+) {
+    if let Err(err) = notify_tool_failure(tool_name, user_msg, notification_kind).await {
+        let notification_label = notification_kind.unwrap_or("failure");
+        tracing::debug!(
+            tool = %tool_name,
+            error = %err,
+            notification = notification_label,
+            "Failed to emit tool failure notification"
+        );
+    }
+}
+
+fn log_structured_failure(
+    tool_name: &str,
+    error: &ToolExecutionError,
+    hint: Option<&str>,
+    log_message: &'static str,
+) {
+    if let Some(hint) = hint {
+        tracing::debug!(
+            tool = %tool_name,
+            category = ?error.category,
+            retryable = error.retryable,
+            partial_state_possible = error.partial_state_possible,
+            hint = %hint,
+            error = %error.message,
+            "{log_message}"
+        );
+    } else {
+        tracing::debug!(
+            tool = %tool_name,
+            category = ?error.category,
+            retryable = error.retryable,
+            partial_state_possible = error.partial_state_possible,
+            error = %error.message,
+            "{log_message}"
+        );
+    }
+}
+
+async fn record_recovery_tool_error(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    error: &ToolExecutionError,
+    error_type: RecoveryErrorType,
+) {
+    ctx.record_recovery_tool_error(tool_name, error, error_type)
+        .await;
+}
+
+async fn finalize_failed_tool_response(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
+    tool_call_id: String,
+    tool_name: &str,
+    error: &ToolExecutionError,
+    failure_kind: &'static str,
+) {
+    push_tool_error_response(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        error.message.as_str(),
+        failure_kind,
+        Some(error),
+    )
+    .await;
+
+    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 }
 
 async fn handle_success<'a>(
@@ -1667,13 +363,7 @@ async fn handle_failure<'a>(
 ) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.message.as_str();
     let (user_msg, hint) = format_structured_tool_error_for_user(tool_name, error);
-    if let Err(err) = notify_tool_failure(tool_name, &user_msg, None).await {
-        tracing::debug!(
-            tool = %tool_name,
-            error = %err,
-            "Failed to emit tool failure notification"
-        );
-    }
+    notify_structured_failure(tool_name, &user_msg, None).await;
 
     let is_plan_mode_denial = matches!(error.category, ErrorCategory::PlanModeViolation)
         || agent_execution::is_plan_mode_denial(error_str);
@@ -1684,27 +374,8 @@ async fn handle_failure<'a>(
             | ErrorCategory::PolicyViolation
             | ErrorCategory::PlanModeViolation
     ) || is_blocked_or_denied_failure(error_str);
-    if let Some(h) = &hint {
-        // Append the recovery hint as the first line the LLM will see.
-        tracing::debug!(
-            tool = %tool_name,
-            category = ?error.category,
-            retryable = error.retryable,
-            partial_state_possible = error.partial_state_possible,
-            hint = %h,
-            error = %error.message,
-            "Tool execution failed"
-        );
-    } else {
-        tracing::debug!(
-            tool = %tool_name,
-            category = ?error.category,
-            retryable = error.retryable,
-            partial_state_possible = error.partial_state_possible,
-            error = %error.message,
-            "Tool execution failed"
-        );
-    }
+    log_structured_failure(tool_name, error, hint.as_deref(), "Tool execution failed");
+
     if is_plan_mode_denial {
         let consecutive_blocked_tool_calls = t_ctx.ctx.harness_state.consecutive_blocked_tool_calls;
         emit_turn_metric_log(
@@ -1718,27 +389,16 @@ async fn handle_failure<'a>(
 
     // Record genuine tool errors for recovery diagnostics (skip policy denials)
     if !is_plan_mode_denial && !blocked_or_denied_failure {
-        t_ctx
-            .ctx
-            .record_recovery_tool_error(
-                tool_name,
-                error,
-                vtcode_core::core::agent::error_recovery::ErrorType::ToolExecution,
-            )
-            .await;
+        record_recovery_tool_error(
+            t_ctx.ctx,
+            tool_name,
+            error,
+            RecoveryErrorType::ToolExecution,
+        )
+        .await;
     }
 
-    push_tool_error_response(
-        t_ctx,
-        tool_call_id,
-        tool_name,
-        error.message.clone(),
-        "execution",
-        Some(error),
-    )
-    .await;
-
-    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
+    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, error, "execution").await;
 
     if blocked_or_denied_failure {
         let streak = t_ctx.ctx.record_blocked_tool_call();
@@ -1774,43 +434,12 @@ async fn handle_timeout(
     error: &vtcode_core::tools::registry::ToolExecutionError,
 ) -> Result<()> {
     let (user_msg, _) = format_structured_tool_error_for_user(tool_name, error);
-    if let Err(err) = notify_tool_failure(tool_name, &user_msg, Some("timeout")).await {
-        tracing::debug!(
-            tool = %tool_name,
-            error = %err,
-            "Failed to emit timeout notification"
-        );
-    }
+    notify_structured_failure(tool_name, &user_msg, Some("timeout")).await;
+    log_structured_failure(tool_name, error, None, "Tool timed out");
 
-    tracing::debug!(
-        tool = %tool_name,
-        retryable = error.retryable,
-        partial_state_possible = error.partial_state_possible,
-        error = %error.message,
-        "Tool timed out"
-    );
+    record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::Timeout).await;
 
-    // Record the timeout for recovery diagnostics
-    t_ctx
-        .ctx
-        .record_recovery_tool_error(
-            tool_name,
-            error,
-            vtcode_core::core::agent::error_recovery::ErrorType::Timeout,
-        )
-        .await;
-
-    push_tool_error_response(
-        t_ctx,
-        tool_call_id,
-        tool_name,
-        error.message.clone(),
-        "timeout",
-        Some(error),
-    )
-    .await;
-
-    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
+    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, error, "timeout").await;
 
     Ok(())
 }
@@ -1819,12 +448,12 @@ async fn push_tool_error_response(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
-    error_msg: String,
+    error_msg: &str,
     failure_kind: &'static str,
     structured_error: Option<&ToolExecutionError>,
 ) {
     let (fallback_tool, fallback_tool_args) =
-        if let Some((tool, args)) = fallback_from_error(tool_name, &error_msg) {
+        if let Some((tool, args)) = fallback_from_error(tool_name, error_msg) {
             (Some(tool), Some(args))
         } else {
             let fallback = t_ctx
@@ -1838,7 +467,12 @@ async fn push_tool_error_response(
         Some(error) => {
             build_structured_error_content(error, fallback_tool, fallback_tool_args, failure_kind)
         }
-        None => build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind),
+        None => build_error_content(
+            error_msg.to_string(),
+            fallback_tool,
+            fallback_tool_args,
+            failure_kind,
+        ),
     };
     let serialized = error_content.to_string();
     if let Err(err) =

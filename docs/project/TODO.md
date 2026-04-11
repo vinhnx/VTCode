@@ -14,7 +14,6 @@ Top 25 longest tracked Rust files:
 | Lines | Path |
 | ---: | --- |
 
-| 2851 | src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs |
 | 2668 | vtcode-core/src/utils/session_archive.rs |
 | 2563 | src/agent/runloop/unified/turn/turn_processing/llm_request/copilot_runtime.rs |
 | 2446 | vtcode-core/src/tools/skills/mod.rs |
@@ -52,3 +51,9 @@ https://deepwiki.com/search/how-does-tree-work-and-how-pi_13a0d64b-8d67-4c6a-bfd
 ===
 
 https://deepwiki.com/search/how-does-load-works-and-how-pi_1713c944-fe9f-4863-a3c0-3d695d5ca7ae?mode=fast
+
+---
+
+improve genering patch UX.
+
+example: [spinner] Generating patch (825 lines) in execution_result.rs
