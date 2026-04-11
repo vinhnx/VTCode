@@ -1319,73 +1319,54 @@ fn resolve_verification_command(
     analysis: &ProjectAnalysis,
     answers: &GuidedInitAnswers,
 ) -> Option<String> {
-    match resolve_answered_value(answers.answer(GuidedInitQuestionKey::VerificationCommand)) {
-        AnsweredValue::Value(value) => Some(value),
-        AnsweredValue::Control
-            if selected_control_value(
-                answers.answer(GuidedInitQuestionKey::VerificationCommand),
-            ) == Some(CONTROL_GENERIC) =>
-        {
-            None
-        }
-        AnsweredValue::Control => None,
-        AnsweredValue::Missing => analysis
-            .grounded_verification_command
-            .clone()
-            .or_else(|| analysis.selected_verification_command.clone())
-            .or_else(|| {
-                analysis
-                    .verification_candidates
-                    .first()
-                    .map(|candidate| candidate.value.clone())
-            }),
-    }
+    resolve_guided_answer(
+        answers.answer(GuidedInitQuestionKey::VerificationCommand),
+        analysis.grounded_verification_command.clone(),
+        analysis.selected_verification_command.clone(),
+        analysis
+            .verification_candidates
+            .first()
+            .map(|candidate| candidate.value.clone()),
+    )
 }
 
 fn resolve_orientation_doc(
     analysis: &ProjectAnalysis,
     answers: &GuidedInitAnswers,
 ) -> Option<String> {
-    match resolve_answered_value(answers.answer(GuidedInitQuestionKey::OrientationDoc)) {
-        AnsweredValue::Value(value) => Some(value),
-        AnsweredValue::Control
-            if selected_control_value(answers.answer(GuidedInitQuestionKey::OrientationDoc))
-                == Some(CONTROL_GENERIC) =>
-        {
-            None
-        }
-        AnsweredValue::Control => None,
-        AnsweredValue::Missing => analysis
-            .grounded_orientation_doc
-            .clone()
-            .or_else(|| analysis.selected_orientation_doc.clone())
-            .or_else(|| {
-                analysis
-                    .orientation_candidates
-                    .first()
-                    .map(|candidate| candidate.value.clone())
-            }),
-    }
+    resolve_guided_answer(
+        answers.answer(GuidedInitQuestionKey::OrientationDoc),
+        analysis.grounded_orientation_doc.clone(),
+        analysis.selected_orientation_doc.clone(),
+        analysis
+            .orientation_candidates
+            .first()
+            .map(|candidate| candidate.value.clone()),
+    )
 }
 
 fn resolve_critical_instruction(
     analysis: &ProjectAnalysis,
     answers: &GuidedInitAnswers,
 ) -> Option<String> {
-    match resolve_answered_value(answers.answer(GuidedInitQuestionKey::CriticalInstruction)) {
+    resolve_guided_answer(
+        answers.answer(GuidedInitQuestionKey::CriticalInstruction),
+        analysis.grounded_critical_instruction.clone(),
+        analysis.selected_critical_instruction.clone(),
+        None,
+    )
+}
+
+fn resolve_guided_answer(
+    answer: Option<&GuidedInitAnswer>,
+    grounded: Option<String>,
+    selected: Option<String>,
+    fallback: Option<String>,
+) -> Option<String> {
+    match resolve_answered_value(answer) {
         AnsweredValue::Value(value) => Some(value),
-        AnsweredValue::Control
-            if selected_control_value(
-                answers.answer(GuidedInitQuestionKey::CriticalInstruction),
-            ) == Some(CONTROL_NONE) =>
-        {
-            None
-        }
         AnsweredValue::Control => None,
-        AnsweredValue::Missing => analysis
-            .grounded_critical_instruction
-            .clone()
-            .or_else(|| analysis.selected_critical_instruction.clone()),
+        AnsweredValue::Missing => grounded.or(selected).or(fallback),
     }
 }
 
@@ -1419,11 +1400,6 @@ fn resolve_answered_value(answer: Option<&GuidedInitAnswer>) -> AnsweredValue {
     }
 
     AnsweredValue::Value(selected.to_owned())
-}
-
-fn selected_control_value(answer: Option<&GuidedInitAnswer>) -> Option<&str> {
-    let selected = answer?.selected.trim();
-    matches!(selected, CONTROL_GENERIC | CONTROL_NONE).then_some(selected)
 }
 
 fn build_quick_start_section(

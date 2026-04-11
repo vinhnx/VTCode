@@ -45,7 +45,7 @@ fn make_clickable_target(target: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+    if is_remote_link_target(trimmed) {
         return Some(trimmed.to_string());
     }
 
@@ -67,13 +67,17 @@ fn should_strip_inline_local_link_underline(target: &str) -> bool {
     if trimmed.is_empty() {
         return false;
     }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+    if is_remote_link_target(trimmed) {
         return false;
     }
     match Url::parse(trimmed) {
         Ok(url) => url.scheme() == "file",
         Err(_) => true,
     }
+}
+
+fn is_remote_link_target(target: &str) -> bool {
+    target.starts_with("http://") || target.starts_with("https://")
 }
 
 /// Renderer with deferred output buffering
@@ -1240,7 +1244,7 @@ impl InlineSink {
         }
 
         let had_trailing_newline = text.ends_with('\n');
-        let line_count_estimate = text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
+        let line_count_estimate = Self::count_lines(text).max(1);
 
         #[cfg(feature = "tui")]
         if let Ok(parsed) = text.as_bytes().into_text() {
@@ -1289,7 +1293,7 @@ impl InlineSink {
         }
 
         // Fallback: Process as plain text without ANSI parsing
-        let line_count_estimate = text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
+        let line_count_estimate = Self::count_lines(text).max(1);
         let mut converted_lines = Vec::with_capacity(line_count_estimate);
         let mut plain_lines = Vec::with_capacity(line_count_estimate);
 

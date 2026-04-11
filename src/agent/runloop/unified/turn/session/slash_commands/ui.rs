@@ -611,131 +611,120 @@ fn build_statusline_setup_items(
         ),
     ] {
         let active = draft.mode == mode;
-        items.push(InlineListItem {
-            title: label.to_string(),
-            subtitle: Some(subtitle.to_string()),
-            badge: Some(if active {
-                "Active".to_string()
-            } else {
-                "Mode".to_string()
-            }),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "statusline:mode:{}",
-                statusline_mode_id(&mode)
-            ))),
-            search_value: Some(format!("statusline mode {}", statusline_mode_id(&mode))),
-        });
+        items.push(config_action_item(
+            label,
+            subtitle,
+            if active { "Active" } else { "Mode" },
+            0,
+            format!("statusline:mode:{}", statusline_mode_id(&mode)),
+            format!("statusline mode {}", statusline_mode_id(&mode)),
+        ));
     }
 
-    items.push(InlineListItem {
-        title: "Edit command".to_string(),
-        subtitle: Some("Set the shell command for command mode.".to_string()),
-        badge: Some("Command".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:command:edit".to_string(),
-        )),
-        search_value: Some("statusline command edit".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Use scaffold script path".to_string(),
-        subtitle: Some("Point command to the target statusline.sh script.".to_string()),
-        badge: Some("Command".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:command:script".to_string(),
-        )),
-        search_value: Some("statusline command script".to_string()),
-    });
+    items.push(config_action_item(
+        "Edit command",
+        "Set the shell command for command mode.",
+        "Command",
+        0,
+        "statusline:command:edit",
+        "statusline command edit",
+    ));
+    items.push(config_action_item(
+        "Use scaffold script path",
+        "Point command to the target statusline.sh script.",
+        "Command",
+        0,
+        "statusline:command:script",
+        "statusline command script",
+    ));
     if draft
         .command
         .as_deref()
         .map(str::trim)
         .is_some_and(|value| !value.is_empty())
     {
-        items.push(InlineListItem {
-            title: "Clear command".to_string(),
-            subtitle: Some("Remove command so command mode falls back to auto.".to_string()),
-            badge: Some("Command".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "statusline:command:clear".to_string(),
-            )),
-            search_value: Some("statusline command clear".to_string()),
-        });
+        items.push(config_action_item(
+            "Clear command",
+            "Remove command so command mode falls back to auto.",
+            "Command",
+            0,
+            "statusline:command:clear",
+            "statusline command clear",
+        ));
     }
 
     if script_exists {
-        items.push(InlineListItem {
-            title: "Replace script template".to_string(),
-            subtitle: Some(
-                "Overwrite existing statusline.sh with the default template.".to_string(),
-            ),
-            badge: Some("Script".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "statusline:script:replace".to_string(),
-            )),
-            search_value: Some("statusline script replace".to_string()),
-        });
+        items.push(config_action_item(
+            "Replace script template",
+            "Overwrite existing statusline.sh with the default template.",
+            "Script",
+            0,
+            "statusline:script:replace",
+            "statusline script replace",
+        ));
     } else {
-        items.push(InlineListItem {
-            title: "Create script template".to_string(),
-            subtitle: Some(
-                "Create statusline.sh using the default JSON payload template.".to_string(),
-            ),
-            badge: Some("Script".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "statusline:script:create".to_string(),
-            )),
-            search_value: Some("statusline script create".to_string()),
-        });
+        items.push(config_action_item(
+            "Create script template",
+            "Create statusline.sh using the default JSON payload template.",
+            "Script",
+            0,
+            "statusline:script:create",
+            "statusline script create",
+        ));
     }
 
-    items.push(InlineListItem {
-        title: format!("Refresh interval: {}ms", draft.refresh_interval_ms),
-        subtitle: Some("Set command refresh cadence.".to_string()),
-        badge: Some("Timing".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:refresh:edit".to_string(),
-        )),
-        search_value: Some("statusline refresh interval".to_string()),
-    });
-    items.push(InlineListItem {
-        title: format!("Command timeout: {}ms", draft.command_timeout_ms),
-        subtitle: Some("Set command execution timeout.".to_string()),
-        badge: Some("Timing".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:timeout:edit".to_string(),
-        )),
-        search_value: Some("statusline timeout".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Save changes".to_string(),
-        subtitle: Some("Persist [ui.status_line] changes.".to_string()),
-        badge: Some("Save".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:save".to_string(),
-        )),
-        search_value: Some("statusline save".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Cancel".to_string(),
-        subtitle: Some("Discard changes.".to_string()),
-        badge: Some("Cancel".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "statusline:cancel".to_string(),
-        )),
-        search_value: Some("statusline cancel".to_string()),
-    });
+    items.push(config_action_item(
+        &format!("Refresh interval: {}ms", draft.refresh_interval_ms),
+        "Set command refresh cadence.",
+        "Timing",
+        0,
+        "statusline:refresh:edit",
+        "statusline refresh interval",
+    ));
+    items.push(config_action_item(
+        &format!("Command timeout: {}ms", draft.command_timeout_ms),
+        "Set command execution timeout.",
+        "Timing",
+        0,
+        "statusline:timeout:edit",
+        "statusline timeout",
+    ));
+    items.push(config_action_item(
+        "Save changes",
+        "Persist [ui.status_line] changes.",
+        "Save",
+        0,
+        "statusline:save",
+        "statusline save",
+    ));
+    items.push(config_action_item(
+        "Cancel",
+        "Discard changes.",
+        "Cancel",
+        0,
+        "statusline:cancel",
+        "statusline cancel",
+    ));
 
     items
+}
+
+fn config_action_item(
+    title: &str,
+    subtitle: &str,
+    badge: &str,
+    indent: usize,
+    action: impl Into<String>,
+    search_value: impl Into<String>,
+) -> InlineListItem {
+    InlineListItem {
+        title: title.to_string(),
+        subtitle: Some(subtitle.to_string()),
+        badge: Some(badge.to_string()),
+        indent,
+        selection: Some(InlineListSelection::ConfigAction(action.into())),
+        search_value: Some(search_value.into()),
+    }
 }
 
 fn apply_statusline_action(
@@ -1280,42 +1269,33 @@ fn build_terminal_title_setup_items(draft_items: &[String]) -> Vec<InlineListIte
         let Some(spec) = terminal_title_item_spec(item_id) else {
             continue;
         };
-        items.push(InlineListItem {
-            title: format!("Remove {}", spec.title),
-            subtitle: Some(format!("#{} in title. {}", index + 1, spec.description)),
-            badge: Some("Enabled".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "title:remove:{}",
-                spec.id
-            ))),
-            search_value: Some(format!("terminal title remove {}", spec.id)),
-        });
+        items.push(config_action_item(
+            &format!("Remove {}", spec.title),
+            &format!("#{} in title. {}", index + 1, spec.description),
+            "Enabled",
+            0,
+            format!("title:remove:{}", spec.id),
+            format!("terminal title remove {}", spec.id),
+        ));
         if index > 0 {
-            items.push(InlineListItem {
-                title: format!("Move {} up", spec.title),
-                subtitle: Some("Move earlier in the title".to_string()),
-                badge: Some("Reorder".to_string()),
-                indent: 1,
-                selection: Some(InlineListSelection::ConfigAction(format!(
-                    "title:move_up:{}",
-                    spec.id
-                ))),
-                search_value: Some(format!("terminal title move up {}", spec.id)),
-            });
+            items.push(config_action_item(
+                &format!("Move {} up", spec.title),
+                "Move earlier in the title",
+                "Reorder",
+                1,
+                format!("title:move_up:{}", spec.id),
+                format!("terminal title move up {}", spec.id),
+            ));
         }
         if index + 1 < draft_items.len() {
-            items.push(InlineListItem {
-                title: format!("Move {} down", spec.title),
-                subtitle: Some("Move later in the title".to_string()),
-                badge: Some("Reorder".to_string()),
-                indent: 1,
-                selection: Some(InlineListSelection::ConfigAction(format!(
-                    "title:move_down:{}",
-                    spec.id
-                ))),
-                search_value: Some(format!("terminal title move down {}", spec.id)),
-            });
+            items.push(config_action_item(
+                &format!("Move {} down", spec.title),
+                "Move later in the title",
+                "Reorder",
+                1,
+                format!("title:move_down:{}", spec.id),
+                format!("terminal title move down {}", spec.id),
+            ));
         }
     }
 
@@ -1323,37 +1303,32 @@ fn build_terminal_title_setup_items(draft_items: &[String]) -> Vec<InlineListIte
         if draft_items.iter().any(|item| item == spec.id) {
             continue;
         }
-        items.push(InlineListItem {
-            title: format!("Add {}", spec.title),
-            subtitle: Some(spec.description.to_string()),
-            badge: Some("Available".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "title:add:{}",
-                spec.id
-            ))),
-            search_value: Some(format!("terminal title add {}", spec.id)),
-        });
+        items.push(config_action_item(
+            &format!("Add {}", spec.title),
+            spec.description,
+            "Available",
+            0,
+            format!("title:add:{}", spec.id),
+            format!("terminal title add {}", spec.id),
+        ));
     }
 
-    items.push(InlineListItem {
-        title: "Save changes".to_string(),
-        subtitle: Some("Persist ui.terminal_title.items in vtcode.toml".to_string()),
-        badge: Some("Save".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction("title:save".to_string())),
-        search_value: Some("terminal title save".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Cancel".to_string(),
-        subtitle: Some("Discard changes and restore the original title".to_string()),
-        badge: Some("Cancel".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            "title:cancel".to_string(),
-        )),
-        search_value: Some("terminal title cancel".to_string()),
-    });
+    items.push(config_action_item(
+        "Save changes",
+        "Persist ui.terminal_title.items in vtcode.toml",
+        "Save",
+        0,
+        "title:save",
+        "terminal title save",
+    ));
+    items.push(config_action_item(
+        "Cancel",
+        "Discard changes and restore the original title",
+        "Cancel",
+        0,
+        "title:cancel",
+        "terminal title cancel",
+    ));
 
     items
 }

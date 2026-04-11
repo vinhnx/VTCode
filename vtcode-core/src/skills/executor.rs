@@ -412,6 +412,51 @@ impl ChildAgentSkillExecutor {
             runtime,
         }
     }
+
+    async fn build_runner(&self, skill: &Skill, session_id: String) -> Result<AgentRunner> {
+        let model = self
+            .runtime
+            .model
+            .parse::<ModelId>()
+            .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
+
+        let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
+            AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
+                fork_agent_type(skill),
+                model,
+                self.runtime.api_key.clone(),
+                self.runtime.workspace.clone(),
+                session_id,
+                RunnerSettings {
+                    reasoning_effort: None,
+                    verbosity: None,
+                },
+                None,
+                crate::core::threads::ThreadBootstrap::new(None),
+                vt_cfg,
+                self.runtime.openai_chatgpt_auth.clone(),
+            )
+            .await?
+        } else {
+            AgentRunner::new_with_thread_bootstrap_and_openai_auth(
+                fork_agent_type(skill),
+                model,
+                self.runtime.api_key.clone(),
+                self.runtime.workspace.clone(),
+                session_id,
+                RunnerSettings {
+                    reasoning_effort: None,
+                    verbosity: None,
+                },
+                None,
+                crate::core::threads::ThreadBootstrap::new(None),
+                self.runtime.openai_chatgpt_auth.clone(),
+            )
+            .await?
+        };
+        runner.set_quiet(true);
+        Ok(runner)
+    }
 }
 
 fn skill_runs_in_fork(skill: &Skill) -> bool {
@@ -482,47 +527,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
     async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
         let parent_session_id = self.tool_registry.harness_context_snapshot().session_id;
         let session_id = child_session_id(&parent_session_id, skill.name());
-        let model = self
-            .runtime
-            .model
-            .parse::<ModelId>()
-            .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
-
-        let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
-            AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
-                fork_agent_type(skill),
-                model,
-                self.runtime.api_key.clone(),
-                self.runtime.workspace.clone(),
-                session_id.clone(),
-                RunnerSettings {
-                    reasoning_effort: None,
-                    verbosity: None,
-                },
-                None,
-                crate::core::threads::ThreadBootstrap::new(None),
-                vt_cfg,
-                self.runtime.openai_chatgpt_auth.clone(),
-            )
-            .await?
-        } else {
-            AgentRunner::new_with_thread_bootstrap_and_openai_auth(
-                fork_agent_type(skill),
-                model,
-                self.runtime.api_key.clone(),
-                self.runtime.workspace.clone(),
-                session_id.clone(),
-                RunnerSettings {
-                    reasoning_effort: None,
-                    verbosity: None,
-                },
-                None,
-                crate::core::threads::ThreadBootstrap::new(None),
-                self.runtime.openai_chatgpt_auth.clone(),
-            )
-            .await?
-        };
-        runner.set_quiet(true);
+        let mut runner = self.build_runner(skill, session_id.clone()).await?;
 
         let restricted_tools = filter_tools_for_skill(skill, runner.build_universal_tools().await?);
         let allowed_tools = restricted_tools

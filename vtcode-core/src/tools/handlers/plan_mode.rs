@@ -783,6 +783,64 @@ pub async fn persist_plan_draft(
     })
 }
 
+fn resolve_plan_file_target(
+    workspace_root: &Path,
+    requested_path: Option<&str>,
+    existing_plan_file: Option<&Path>,
+    default_plan_file: PathBuf,
+    fallback_plan_name: &str,
+) -> (PathBuf, String) {
+    if let Some(raw_path) = requested_path {
+        let resolved = resolve_plan_path(workspace_root, raw_path);
+        let seed = plan_title_seed(&resolved, fallback_plan_name);
+        return (resolved, seed);
+    }
+
+    if let Some(existing_plan_file) = existing_plan_file {
+        let resolved = existing_plan_file.to_path_buf();
+        let seed = plan_title_seed(&resolved, fallback_plan_name);
+        return (resolved, seed);
+    }
+
+    (default_plan_file, fallback_plan_name.to_string())
+}
+
+fn resolve_plan_path(workspace_root: &Path, raw_path: &str) -> PathBuf {
+    let trimmed = raw_path.trim();
+    if Path::new(trimmed).is_absolute() {
+        PathBuf::from(trimmed)
+    } else {
+        workspace_root.join(trimmed)
+    }
+}
+
+fn plan_title_seed(path: &Path, fallback_plan_name: &str) -> String {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|stem| stem.to_string())
+        .unwrap_or_else(|| fallback_plan_name.to_string())
+}
+
+async fn initialize_plan_file(
+    plan_file: &Path,
+    plan_title: &str,
+    description: Option<&str>,
+    validation_hints: &ValidationCommandHints,
+) -> Result<()> {
+    let initial_content =
+        render_initial_plan_file_content(plan_title, description, plan_file, validation_hints);
+    write_file_with_context(plan_file, &initial_content, "plan file")
+        .await
+        .with_context(|| format!("Failed to create plan file: {}", plan_file.display()))
+}
+
+async fn plan_file_baseline(plan_file: &Path) -> SystemTime {
+    tokio::fs::metadata(plan_file)
+        .await
+        .and_then(|meta| meta.modified())
+        .unwrap_or_else(|_| SystemTime::now())
+}
+
 fn render_initial_plan_file_content(
     plan_title: &str,
     description: Option<&str>,
@@ -958,36 +1016,15 @@ impl Tool for EnterPlanModeTool {
                 }));
             }
 
-            let mut plan_title_seed: Option<String> = None;
-            let plan_file = if let Some(raw_path) = args.plan_path.as_deref() {
-                let trimmed = raw_path.trim();
-                let resolved = if Path::new(trimmed).is_absolute() {
-                    PathBuf::from(trimmed)
-                } else {
-                    workspace_root.join(trimmed)
-                };
-                if plan_title_seed.is_none() {
-                    plan_title_seed = resolved
-                        .file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .map(|stem| stem.to_string());
-                }
-                resolved
-            } else if let Some(existing_path) = existing_plan_file {
-                if plan_title_seed.is_none() {
-                    plan_title_seed = existing_path
-                        .file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .map(|stem| stem.to_string());
-                }
-                existing_path
-            } else {
-                plan_title_seed = Some(fallback_plan_name.clone());
+            let (plan_file, plan_title_seed) = resolve_plan_file_target(
+                &workspace_root,
+                args.plan_path.as_deref(),
+                existing_plan_file.as_deref(),
                 self.state
                     .plans_dir()
-                    .join(format!("{}.md", fallback_plan_name))
-            };
-            let plan_title_seed = plan_title_seed.unwrap_or_else(|| fallback_plan_name.clone());
+                    .join(format!("{}.md", fallback_plan_name)),
+                &fallback_plan_name,
+            );
             let plan_title = title_from_plan_name(&plan_title_seed);
 
             if let Some(parent) = plan_file.parent() {
@@ -999,24 +1036,17 @@ impl Tool for EnterPlanModeTool {
             let mut created_plan_file = false;
             if !plan_file.exists() {
                 created_plan_file = true;
-                let initial_content = render_initial_plan_file_content(
+                initialize_plan_file(
+                    &plan_file,
                     &plan_title,
                     args.description.as_deref(),
-                    &plan_file,
                     &validation_hints,
-                );
-                write_file_with_context(&plan_file, &initial_content, "plan file")
-                    .await
-                    .with_context(|| {
-                        format!("Failed to create plan file: {}", plan_file.display())
-                    })?;
+                )
+                .await?;
             }
 
             self.state.set_plan_file(Some(plan_file.clone())).await;
-            let baseline = tokio::fs::metadata(&plan_file)
-                .await
-                .and_then(|meta| meta.modified())
-                .unwrap_or_else(|_| SystemTime::now());
+            let baseline = plan_file_baseline(&plan_file).await;
             self.state.set_plan_baseline(Some(baseline)).await;
             self.state.set_phase(PlanLifecyclePhase::ActiveDrafting);
 
@@ -1035,26 +1065,13 @@ impl Tool for EnterPlanModeTool {
 
         // Resolve target plan path. Defaults to .vtcode/plans/, but allows explicit custom location.
         let plan_name = self.generate_plan_name(args.plan_name.as_deref());
-        let (plan_file, plan_title_seed) = if let Some(raw_path) = args.plan_path.as_deref() {
-            let trimmed = raw_path.trim();
-            let resolved = if Path::new(trimmed).is_absolute() {
-                PathBuf::from(trimmed)
-            } else {
-                workspace_root.join(trimmed)
-            };
-            let seed = resolved
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .map(|stem| stem.to_string())
-                .unwrap_or_else(|| plan_name.clone());
-            (resolved, seed)
-        } else {
-            let plans_dir = self.state.plans_dir();
-            (
-                plans_dir.join(format!("{}.md", plan_name)),
-                plan_name.clone(),
-            )
-        };
+        let (plan_file, plan_title_seed) = resolve_plan_file_target(
+            &workspace_root,
+            args.plan_path.as_deref(),
+            None,
+            self.state.plans_dir().join(format!("{}.md", plan_name)),
+            &plan_name,
+        );
         let plan_title = title_from_plan_name(&plan_title_seed);
         if args.require_confirmation && !args.approved {
             self.state
@@ -1079,23 +1096,17 @@ impl Tool for EnterPlanModeTool {
             })?;
         }
 
-        let initial_content = render_initial_plan_file_content(
+        initialize_plan_file(
+            &plan_file,
             &plan_title,
             args.description.as_deref(),
-            &plan_file,
             &validation_hints,
-        );
-
-        write_file_with_context(&plan_file, &initial_content, "plan file")
-            .await
-            .with_context(|| format!("Failed to create plan file: {}", plan_file.display()))?;
+        )
+        .await?;
 
         // Track the current plan file
         self.state.set_plan_file(Some(plan_file.clone())).await;
-        let baseline = tokio::fs::metadata(&plan_file)
-            .await
-            .and_then(|meta| meta.modified())
-            .unwrap_or_else(|_| SystemTime::now());
+        let baseline = plan_file_baseline(&plan_file).await;
         self.state.set_plan_baseline(Some(baseline)).await;
 
         Ok(json!({

@@ -140,11 +140,10 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::ThreadCompleted(evt) => {
-                emitter.emit(ResponseStreamEvent::CustomEvent {
-                    response_id: self.response.id.clone(),
-                    event_type: "vtcode.thread_completed".to_string(),
-                    sequence_number: self.next_output_index as u64,
-                    data: json!({
+                self.emit_custom_event(
+                    emitter,
+                    "vtcode.thread_completed",
+                    json!({
                         "thread_id": evt.thread_id,
                         "session_id": evt.session_id,
                         "subtype": evt.subtype.as_str(),
@@ -155,15 +154,14 @@ impl ResponseBuilder {
                         "total_cost_usd": evt.total_cost_usd,
                         "num_turns": evt.num_turns,
                     }),
-                });
+                );
             }
 
             ThreadEvent::ThreadCompactBoundary(evt) => {
-                emitter.emit(ResponseStreamEvent::CustomEvent {
-                    response_id: self.response.id.clone(),
-                    event_type: "vtcode.thread_compact_boundary".to_string(),
-                    sequence_number: self.next_output_index as u64,
-                    data: json!({
+                self.emit_custom_event(
+                    emitter,
+                    "vtcode.thread_compact_boundary",
+                    json!({
                         "thread_id": evt.thread_id,
                         "trigger": evt.trigger.as_str(),
                         "mode": evt.mode.as_str(),
@@ -171,7 +169,7 @@ impl ResponseBuilder {
                         "compacted_message_count": evt.compacted_message_count,
                         "history_artifact_path": evt.history_artifact_path,
                     }),
-                });
+                );
             }
 
             ThreadEvent::ItemStarted(evt) => {
@@ -302,6 +300,20 @@ impl ResponseBuilder {
                 part: msg.content[0].clone(),
             });
         }
+    }
+
+    fn emit_custom_event<E: StreamEventEmitter>(
+        &self,
+        emitter: &mut E,
+        event_type: &str,
+        data: serde_json::Value,
+    ) {
+        emitter.emit(ResponseStreamEvent::CustomEvent {
+            response_id: self.response.id.clone(),
+            event_type: event_type.to_string(),
+            sequence_number: self.next_output_index as u64,
+            data,
+        });
     }
 
     fn handle_item_updated<E: StreamEventEmitter>(&mut self, item: &ThreadItem, emitter: &mut E) {
@@ -951,14 +963,7 @@ impl ResponseBuilder {
         emitter: &mut E,
     ) {
         let (item_id, output_index) = match self.normalized.message_item_id.clone() {
-            Some(item_id) => {
-                let output_index = self
-                    .item_id_to_index
-                    .get(&item_id)
-                    .copied()
-                    .unwrap_or_else(|| self.allocate_output_index(&item_id));
-                (item_id, output_index)
-            }
+            Some(item_id) => (item_id.clone(), self.output_index_for_item(&item_id)),
             None => {
                 let item_id = generate_item_id();
                 let output_index = self.allocate_output_index(&item_id);
@@ -1012,14 +1017,7 @@ impl ResponseBuilder {
         emitter: &mut E,
     ) {
         let (item_id, output_index) = match self.normalized.reasoning_item_id.clone() {
-            Some(item_id) => {
-                let output_index = self
-                    .item_id_to_index
-                    .get(&item_id)
-                    .copied()
-                    .unwrap_or_else(|| self.allocate_output_index(&item_id));
-                (item_id, output_index)
-            }
+            Some(item_id) => (item_id.clone(), self.output_index_for_item(&item_id)),
             None => {
                 let item_id = generate_item_id();
                 let output_index = self.allocate_output_index(&item_id);
@@ -1155,6 +1153,13 @@ impl ResponseBuilder {
             return None;
         };
         reasoning.content.clone()
+    }
+
+    fn output_index_for_item(&mut self, item_id: &str) -> usize {
+        self.item_id_to_index
+            .get(item_id)
+            .copied()
+            .unwrap_or_else(|| self.allocate_output_index(item_id))
     }
 
     fn allocate_output_index(&mut self, item_id: &str) -> usize {
