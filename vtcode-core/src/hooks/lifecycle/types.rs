@@ -149,6 +149,7 @@ pub enum PreToolHookDecision {
 pub enum SessionStartTrigger {
     Startup,
     Resume,
+    NewSession,
     Compact,
 }
 
@@ -157,6 +158,7 @@ impl SessionStartTrigger {
         match self {
             Self::Startup => "startup",
             Self::Resume => "resume",
+            Self::NewSession => "new_session",
             Self::Compact => "compact",
         }
     }

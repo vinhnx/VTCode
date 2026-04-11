@@ -171,6 +171,64 @@ async fn test_session_start_hook_with_plain_text_output() {
 }
 
 #[tokio::test]
+async fn test_session_start_new_session_source_is_distinct_from_startup() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        session_start: vec![HookGroupConfig {
+            matcher: Some("new_session".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Fresh session hook fired'".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let startup_engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create startup hook engine")
+    .unwrap();
+
+    let startup_outcome = startup_engine
+        .run_session_start()
+        .await
+        .expect("Failed to run startup session start hook");
+
+    assert!(startup_outcome.messages.is_empty());
+    assert!(startup_outcome.additional_context.is_empty());
+
+    let new_session_engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::NewSession,
+    )
+    .expect("Failed to create new session hook engine")
+    .unwrap();
+
+    let new_session_outcome = new_session_engine
+        .run_session_start()
+        .await
+        .expect("Failed to run new session start hook");
+
+    assert!(new_session_outcome.messages.is_empty());
+    assert_eq!(new_session_outcome.additional_context.len(), 1);
+    assert_eq!(
+        new_session_outcome.additional_context[0],
+        "Fresh session hook fired"
+    );
+}
+
+#[tokio::test]
 async fn test_session_end_hook_execution() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();

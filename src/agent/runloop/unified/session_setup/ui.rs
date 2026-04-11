@@ -53,17 +53,13 @@ pub(crate) async fn initialize_session_ui(
     vt_cfg: Option<&VTCodeConfig>,
     session_id: &str,
     session_state: &mut SessionState,
+    session_trigger: SessionStartTrigger,
     resume_state: Option<&ResumeSession>,
     session_archive: Option<SessionArchive>,
     full_auto: bool,
     skip_confirmations: bool,
     steering_sender: Option<UnboundedSender<SteeringMessage>>,
 ) -> Result<SessionUISetup> {
-    let session_trigger = if resume_state.is_some() {
-        SessionStartTrigger::Resume
-    } else {
-        SessionStartTrigger::Startup
-    };
     let lifecycle_hooks = if let Some(vt) = vt_cfg {
         LifecycleHookEngine::new_with_session(
             config.workspace.clone(),

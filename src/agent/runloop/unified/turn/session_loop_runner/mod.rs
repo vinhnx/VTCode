@@ -484,12 +484,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     }
     let mut vt_cfg = initial_vt_cfg.or_else(|| config_watcher.load_config());
     let mut idle_config = extract_idle_config(vt_cfg.as_ref());
+    let mut pending_session_start_trigger = None;
 
     loop {
         let session_started_at = Instant::now();
         let start_code_changes = capture_code_change_snapshot(&config.workspace, "start").await;
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
+        let session_trigger = pending_session_start_trigger.take().unwrap_or_else(|| {
+            if resume_ref.is_some() {
+                SessionStartTrigger::Resume
+            } else {
+                SessionStartTrigger::Startup
+            }
+        });
         let active_thread_label = resume_ref.map_or("main", ResumeSession::thread_label);
         let thread_manager = vtcode_core::core::threads::ThreadManager::new();
         let archive_metadata = vtcode_core::core::threads::build_thread_archive_metadata(
@@ -611,11 +619,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         {
             tracing::warn!("Failed to checkpoint session archive at startup: {}", err);
         }
-        let _session_trigger = if resume_ref.is_some() {
-            SessionStartTrigger::Resume
-        } else {
-            SessionStartTrigger::Startup
-        };
         let mut session_state = initialize_session(
             &config,
             vt_cfg.as_ref(),
@@ -693,6 +696,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             vt_cfg.as_ref(),
             thread_handle.thread_id().as_str(),
             &mut session_state,
+            session_trigger,
             resume_ref,
             session_archive,
             full_auto,
@@ -1554,6 +1558,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), None)
                 .await?;
             resume_state = None;
+            pending_session_start_trigger = Some(SessionStartTrigger::NewSession);
             _consecutive_idle_cycles = 0;
             continue;
         }
