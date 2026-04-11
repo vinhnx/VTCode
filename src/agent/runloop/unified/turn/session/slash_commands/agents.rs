@@ -36,6 +36,8 @@ const DEFAULT_AGENT_DESCRIPTION_TEXT: &str = "Describe when VT Code should deleg
 const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behavior narrow and task-specific.\n\nConstraints:\n- Use VT Code tool ids in frontmatter such as `read_file`, `list_files`, `unified_search`, and `unified_exec`.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarize findings or changes.\n- Call out verification or remaining risks when relevant.\n";
 const DEFAULT_AGENT_TOOL_IDS: [&str; 3] =
     [tools::READ_FILE, tools::LIST_FILES, tools::UNIFIED_SEARCH];
+const SUBAGENT_CONTROLLER_INACTIVE_MESSAGE: &str =
+    "Subagent controller is not active in this session.";
 
 pub(crate) async fn handle_manage_agents(
     mut ctx: SlashCommandContext<'_>,
@@ -71,11 +73,7 @@ pub(crate) async fn handle_manage_agents(
         }
         AgentManagerAction::Inspect { id } => {
             let Some(controller) = ctx.tool_registry.subagent_controller() else {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Subagent controller is not active in this session.",
-                )?;
-                return Ok(SlashCommandControl::Continue);
+                return render_missing_subagent_controller(&mut ctx);
             };
             let entry = controller.status_for(&id).await?;
             if ctx.renderer.supports_inline_ui() {
@@ -89,19 +87,10 @@ pub(crate) async fn handle_manage_agents(
         }
         AgentManagerAction::Close { id } => {
             let Some(controller) = ctx.tool_registry.subagent_controller() else {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Subagent controller is not active in this session.",
-                )?;
-                return Ok(SlashCommandControl::Continue);
+                return render_missing_subagent_controller(&mut ctx);
             };
-            let entry = controller.close(&id).await?;
-            refresh_local_agents(ctx.handle, &controller).await?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Closed delegated agent {}.", entry.display_label),
-            )?;
-            Ok(SlashCommandControl::Continue)
+            let entry = controller.status_for(&id).await?;
+            close_subagent_entry(&mut ctx, &controller, &entry.id, &entry.display_label).await
         }
         AgentManagerAction::Edit { name } => {
             authoring::handle_edit_agent(ctx, name.as_deref()).await
@@ -118,11 +107,7 @@ pub(crate) async fn handle_manage_subprocesses(
     action: SubprocessManagerAction,
 ) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Subagent controller is not active in this session.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
+        return render_missing_subagent_controller(&mut ctx);
     };
 
     match action {
@@ -170,18 +155,56 @@ pub(crate) async fn handle_manage_subprocesses(
             }
         }
         SubprocessManagerAction::Stop { id } => {
-            let entry = controller.graceful_stop_background(&id).await?;
-            refresh_local_agents(ctx.handle, &controller).await?;
+            let entry =
+                apply_background_subprocess_action(&mut ctx, &controller, &id, false).await?;
             render_subprocess_status(&mut ctx, &entry)?;
             Ok(SlashCommandControl::Continue)
         }
         SubprocessManagerAction::Cancel { id } => {
-            let entry = controller.force_cancel_background(&id).await?;
-            refresh_local_agents(ctx.handle, &controller).await?;
+            let entry =
+                apply_background_subprocess_action(&mut ctx, &controller, &id, true).await?;
             render_subprocess_status(&mut ctx, &entry)?;
             Ok(SlashCommandControl::Continue)
         }
     }
+}
+
+fn render_missing_subagent_controller(
+    ctx: &mut SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    ctx.renderer
+        .line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+async fn close_subagent_entry(
+    ctx: &mut SlashCommandContext<'_>,
+    controller: &std::sync::Arc<vtcode_core::subagents::SubagentController>,
+    id: &str,
+    display_label: &str,
+) -> Result<SlashCommandControl> {
+    controller.close(id).await?;
+    refresh_local_agents(ctx.handle, controller).await?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!("Closed delegated agent {}.", display_label),
+    )?;
+    Ok(SlashCommandControl::Continue)
+}
+
+async fn apply_background_subprocess_action(
+    ctx: &mut SlashCommandContext<'_>,
+    controller: &std::sync::Arc<vtcode_core::subagents::SubagentController>,
+    id: &str,
+    force: bool,
+) -> Result<BackgroundSubprocessEntry> {
+    let entry = if force {
+        controller.force_cancel_background(id).await?
+    } else {
+        controller.graceful_stop_background(id).await?
+    };
+    refresh_local_agents(ctx.handle, controller).await?;
+    Ok(entry)
 }
 
 async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
@@ -280,11 +303,7 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
 
 async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Subagent controller is not active in this session.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
+        return render_missing_subagent_controller(&mut ctx);
     };
 
     let specs = controller.effective_specs().await;
@@ -374,11 +393,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
 
 async fn show_threads_modal(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Subagent controller is not active in this session.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
+        return render_missing_subagent_controller(&mut ctx);
     };
 
     loop {
@@ -1906,171 +1921,5 @@ async fn refresh_agent_palette(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        active_subagent_entries, background_subprocess_summary, subprocess_action_prompt,
-        summarize_thread_event_preview, visible_subagent_entries,
-    };
-    use chrono::Utc;
-    use std::path::PathBuf;
-    use vtcode_core::subagents::{
-        BackgroundSubprocessEntry, BackgroundSubprocessStatus, SubagentStatus, SubagentStatusEntry,
-    };
-    use vtcode_core::{
-        ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent, ThreadItem,
-        ThreadItemDetails, ToolCallStatus, ToolOutputItem,
-    };
-
-    fn test_subagent_entry(id: &str, status: SubagentStatus) -> SubagentStatusEntry {
-        let now = Utc::now();
-        SubagentStatusEntry {
-            id: id.to_string(),
-            session_id: format!("session-{id}"),
-            parent_thread_id: "parent".to_string(),
-            agent_name: "rust-engineer".to_string(),
-            display_label: "Rust Engineer".to_string(),
-            description: "Test agent".to_string(),
-            source: "project".to_string(),
-            color: Some("blue".to_string()),
-            status,
-            background: false,
-            depth: 1,
-            created_at: now,
-            updated_at: now,
-            completed_at: None,
-            summary: Some("summary".to_string()),
-            error: None,
-            transcript_path: Some(PathBuf::from("/tmp/transcript.md")),
-            nickname: None,
-        }
-    }
-
-    #[test]
-    fn active_subagent_entries_filter_terminal_statuses() {
-        let entries = vec![
-            test_subagent_entry("queued", SubagentStatus::Queued),
-            test_subagent_entry("running", SubagentStatus::Running),
-            test_subagent_entry("waiting", SubagentStatus::Waiting),
-            test_subagent_entry("completed", SubagentStatus::Completed),
-            test_subagent_entry("failed", SubagentStatus::Failed),
-            test_subagent_entry("closed", SubagentStatus::Closed),
-        ];
-
-        let active = active_subagent_entries(entries);
-        let active_ids = active.into_iter().map(|entry| entry.id).collect::<Vec<_>>();
-
-        assert_eq!(active_ids, vec!["queued", "running", "waiting"]);
-    }
-
-    #[test]
-    fn visible_subagent_entries_keep_recent_terminal_runs_inspectable() {
-        let mut completed = test_subagent_entry("completed", SubagentStatus::Completed);
-        completed.updated_at = Utc::now();
-
-        let mut running = test_subagent_entry("running", SubagentStatus::Running);
-        running.updated_at = completed.updated_at - chrono::Duration::seconds(1);
-
-        let mut failed = test_subagent_entry("failed", SubagentStatus::Failed);
-        failed.updated_at = running.updated_at - chrono::Duration::seconds(1);
-
-        let mut closed = test_subagent_entry("closed", SubagentStatus::Closed);
-        closed.updated_at = failed.updated_at - chrono::Duration::seconds(1);
-
-        let visible = visible_subagent_entries(vec![completed, closed, failed, running]);
-        let visible_ids = visible
-            .into_iter()
-            .map(|entry| entry.id)
-            .collect::<Vec<_>>();
-
-        assert_eq!(visible_ids, vec!["running", "completed", "failed"]);
-    }
-
-    #[test]
-    fn subprocess_action_prompt_matches_requested_action() {
-        let (graceful_title, graceful_message, graceful_confirm) =
-            subprocess_action_prompt("Rust Engineer", false);
-        assert_eq!(graceful_title, "Graceful stop subprocess");
-        assert_eq!(
-            graceful_message,
-            "Request a graceful shutdown for `Rust Engineer`?"
-        );
-        assert_eq!(graceful_confirm, "Graceful stop");
-
-        let (force_title, force_message, force_confirm) =
-            subprocess_action_prompt("Rust Engineer", true);
-        assert_eq!(force_title, "Force cancel subprocess");
-        assert_eq!(force_message, "Force cancel `Rust Engineer` immediately?");
-        assert_eq!(force_confirm, "Force cancel");
-    }
-
-    #[test]
-    fn summarize_thread_event_preview_uses_latest_live_updates() {
-        let preview = summarize_thread_event_preview(&[
-            ThreadEvent::ItemStarted(ItemStartedEvent {
-                item: ThreadItem {
-                    id: "reasoning-1".to_string(),
-                    details: ThreadItemDetails::Reasoning(ReasoningItem {
-                        text: "Inspecting the diff".to_string(),
-                        stage: None,
-                    }),
-                },
-            }),
-            ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-                item: ThreadItem {
-                    id: "reasoning-1".to_string(),
-                    details: ThreadItemDetails::Reasoning(ReasoningItem {
-                        text: "Inspecting the diff carefully".to_string(),
-                        stage: None,
-                    }),
-                },
-            }),
-            ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-                item: ThreadItem {
-                    id: "tool-output-1".to_string(),
-                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
-                        call_id: "call-1".to_string(),
-                        tool_call_id: None,
-                        spool_path: None,
-                        output: "line 1\nFinished `cargo check`".to_string(),
-                        exit_code: Some(0),
-                        status: ToolCallStatus::Completed,
-                    }),
-                },
-            }),
-        ]);
-
-        assert!(preview.contains("thinking: Inspecting the diff carefully"));
-        assert!(preview.contains("tool output: Finished `cargo check`"));
-        assert!(!preview.contains("thinking: Inspecting the diff\n"));
-    }
-
-    #[test]
-    fn background_subprocess_summary_reports_waiting_state_without_summary() {
-        let entry = BackgroundSubprocessEntry {
-            id: "background-rust-engineer".to_string(),
-            session_id: "session-123".to_string(),
-            exec_session_id: "exec-session-123".to_string(),
-            agent_name: "rust-engineer".to_string(),
-            display_label: "rust-engineer".to_string(),
-            description: "Review Rust changes".to_string(),
-            source: "project".to_string(),
-            color: None,
-            status: BackgroundSubprocessStatus::Starting,
-            desired_enabled: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            started_at: None,
-            ended_at: None,
-            pid: None,
-            summary: None,
-            error: None,
-            archive_path: None,
-            transcript_path: None,
-        };
-
-        assert_eq!(
-            background_subprocess_summary(&entry),
-            "Starting; waiting for subprocess output."
-        );
-    }
-}
+#[path = "agents/tests.rs"]
+mod tests;
