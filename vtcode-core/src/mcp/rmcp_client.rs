@@ -6,13 +6,15 @@ use hashbrown::HashMap;
 use jsonschema::Validator;
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, CancelledNotificationParam,
-    CreateElicitationRequestParams, ElicitationAction, GetPromptRequestParams, GetPromptResult,
-    InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
-    LoggingMessageNotificationParam, ProgressNotificationParam, Prompt, ReadResourceRequestParams,
-    ReadResourceResult, Resource, ResourceTemplate, ResourceUpdatedNotificationParam, Root, Tool,
+    CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult,
+    CreateElicitationRequestParams, CustomResult, ElicitationAction, GetPromptRequestParams,
+    GetPromptResult, InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
+    LoggingMessageNotificationParam, Meta, ProgressNotificationParam, Prompt,
+    ReadResourceRequestParams, ReadResourceResult, Resource,
+    ResourceTemplate, ResourceUpdatedNotificationParam, Root, ServerNotification, ServerRequest,
+    Tool,
 };
-use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService};
+use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService, Service};
 use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
@@ -28,6 +30,8 @@ use tokio::sync::Mutex;
 use tokio::time;
 use tracing::{debug, error, info, warn};
 use url::Url;
+
+const MCP_PROGRESS_TOKEN_META_KEY: &str = "progressToken";
 
 /// High level MCP client responsible for managing multiple providers and
 /// enforcing VT Code specific policies like tool allow lists.
@@ -45,7 +49,7 @@ enum ClientState {
         transport: Option<PendingTransport>,
     },
     Ready {
-        service: Arc<RunningService<RoleClient, LoggingClientHandler>>,
+        service: Arc<RunningService<RoleClient, ElicitationClientService>>,
     },
     /// The underlying transport has disconnected (server crash, network loss).
     /// The client can potentially be replaced by a new one via `McpProvider::reconnect()`.
@@ -175,17 +179,18 @@ impl RmcpClient {
             params,
             self.elicitation_handler.clone(),
         );
+        let service_handler = ElicitationClientService::new(handler.clone());
 
         let (transport_future, service_label) = {
             let mut guard = self.state.lock().await;
             match &mut *guard {
                 ClientState::Connecting { transport } => match transport.take() {
                     Some(PendingTransport::ChildProcess(transport)) => (
-                        service::serve_client(handler.clone(), transport).boxed(),
+                        service::serve_client(service_handler.clone(), transport).boxed(),
                         "stdio",
                     ),
                     Some(PendingTransport::StreamableHttp(transport)) => (
-                        service::serve_client(handler.clone(), transport).boxed(),
+                        service::serve_client(service_handler.clone(), transport).boxed(),
                         "http",
                     ),
                     None => {
@@ -323,7 +328,7 @@ impl RmcpClient {
         }
     }
 
-    async fn service(&self) -> Result<Arc<RunningService<RoleClient, LoggingClientHandler>>> {
+    async fn service(&self) -> Result<Arc<RunningService<RoleClient, ElicitationClientService>>> {
         let mut guard = self.state.lock().await;
         match &*guard {
             ClientState::Ready { service } => {
@@ -368,6 +373,68 @@ impl Drop for RmcpClient {
 }
 
 #[derive(Clone)]
+struct ElicitationClientService {
+    handler: LoggingClientHandler,
+}
+
+impl ElicitationClientService {
+    fn new(handler: LoggingClientHandler) -> Self {
+        Self { handler }
+    }
+
+    async fn create_elicitation(
+        &self,
+        request: CreateElicitationRequestParams,
+        context: RequestContext<RoleClient>,
+    ) -> Result<super::McpElicitationResponse, rmcp::ErrorData> {
+        let request = restore_context_meta(request, context.meta);
+        self.handler.process_elicitation_request(request).await
+    }
+}
+
+impl Service<RoleClient> for ElicitationClientService {
+    async fn handle_request(
+        &self,
+        request: ServerRequest,
+        context: RequestContext<RoleClient>,
+    ) -> Result<ClientResult, rmcp::ErrorData> {
+        match request {
+            ServerRequest::CreateElicitationRequest(request) => {
+                let response = self.create_elicitation(request.params, context).await?;
+                Ok(ClientResult::CustomResult(elicitation_response_result(
+                    response,
+                )?))
+            }
+            request => {
+                <LoggingClientHandler as Service<RoleClient>>::handle_request(
+                    &self.handler,
+                    request,
+                    context,
+                )
+                .await
+            }
+        }
+    }
+
+    async fn handle_notification(
+        &self,
+        notification: ServerNotification,
+        context: NotificationContext<RoleClient>,
+    ) -> Result<(), rmcp::ErrorData> {
+        <LoggingClientHandler as Service<RoleClient>>::handle_notification(
+            &self.handler,
+            notification,
+            context,
+        )
+        .await
+    }
+
+    fn get_info(&self) -> rmcp::model::ClientInfo {
+        <LoggingClientHandler as Service<RoleClient>>::get_info(&self.handler)
+    }
+}
+
+#[derive(Clone)]
 struct LoggingClientHandler {
     provider: String,
     initialize_params: InitializeRequestParams,
@@ -389,6 +456,116 @@ impl LoggingClientHandler {
 
     fn provider_name(&self) -> &str {
         &self.provider
+    }
+
+    async fn process_elicitation_request(
+        &self,
+        request: CreateElicitationRequestParams,
+    ) -> Result<super::McpElicitationResponse, rmcp::ErrorData> {
+        let provider = self.provider.clone();
+
+        let default_response = super::McpElicitationResponse {
+            action: ElicitationAction::Decline,
+            content: None,
+            meta: None,
+        };
+
+        if let Some(handler) = &self.elicitation_handler {
+            let (message, schema_value, request_meta) = match &request {
+                CreateElicitationRequestParams::FormElicitationParams {
+                    meta,
+                    message,
+                    requested_schema,
+                } => {
+                    let schema_value = match serde_json::to_value(requested_schema) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            warn!(
+                                provider = provider.as_str(),
+                                error = %err,
+                                "Failed to serialize MCP elicitation schema; using null placeholder"
+                            );
+                            Value::Null
+                        }
+                    };
+                    (
+                        message.clone(),
+                        schema_value,
+                        serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
+                    )
+                }
+                CreateElicitationRequestParams::UrlElicitationParams {
+                    meta,
+                    message,
+                    url,
+                    ..
+                } => {
+                    let schema_value = json!({
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "const": url
+                            }
+                        }
+                    });
+                    (
+                        message.clone(),
+                        schema_value,
+                        serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
+                    )
+                }
+            };
+
+            let validator = build_elicitation_validator(provider.as_str(), &schema_value);
+            let payload = super::McpElicitationRequest {
+                message: message.clone(),
+                requested_schema: schema_value.clone(),
+                meta: request_meta,
+            };
+
+            match handler.handle_elicitation(&provider, payload).await {
+                Ok(response) => {
+                    validate_elicitation_payload(
+                        provider.as_str(),
+                        validator.as_ref(),
+                        &response.action,
+                        response.content.as_ref(),
+                    )?;
+                    info!(
+                        provider = provider.as_str(),
+                        message = message.as_str(),
+                        action = ?response.action,
+                        "MCP provider elicitation handled"
+                    );
+                    return Ok(response);
+                }
+                Err(err) => {
+                    warn!(
+                        provider = provider.as_str(),
+                        message = message.as_str(),
+                        error = %err,
+                        "Failed to process MCP elicitation; declining"
+                    );
+                }
+            }
+        } else {
+            let message_str = match &request {
+                CreateElicitationRequestParams::FormElicitationParams { message, .. } => {
+                    message.as_str()
+                }
+                CreateElicitationRequestParams::UrlElicitationParams { message, .. } => {
+                    message.as_str()
+                }
+            };
+            info!(
+                provider = provider.as_str(),
+                message = message_str,
+                "MCP provider requested elicitation but no handler configured; declining"
+            );
+        }
+
+        Ok(default_response)
     }
 
     fn handle_logging(&self, params: LoggingMessageNotificationParam) {
@@ -440,106 +617,17 @@ impl ClientHandler for LoggingClientHandler {
     fn create_elicitation(
         &self,
         request: CreateElicitationRequestParams,
-        _context: RequestContext<RoleClient>,
+        context: RequestContext<RoleClient>,
     ) -> impl Future<Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>> + Send + '_
     {
-        let provider = self.provider.clone();
-        let handler = self.elicitation_handler.clone();
+        let request = restore_context_meta(request, context.meta);
         async move {
-            let default_response = rmcp::model::CreateElicitationResult {
-                action: ElicitationAction::Decline,
-                content: None,
-            };
-
-            if let Some(handler) = handler {
-                // Extract message and schema from the enum variants
-                let (message, schema_value) = match &request {
-                    CreateElicitationRequestParams::FormElicitationParams {
-                        message,
-                        requested_schema,
-                        ..
-                    } => {
-                        let schema_value = match serde_json::to_value(requested_schema) {
-                            Ok(value) => value,
-                            Err(err) => {
-                                warn!(
-                                    provider = provider.as_str(),
-                                    error = %err,
-                                    "Failed to serialize MCP elicitation schema; using null placeholder"
-                                );
-                                Value::Null
-                            }
-                        };
-                        (message.clone(), schema_value)
-                    }
-                    CreateElicitationRequestParams::UrlElicitationParams {
-                        message, url, ..
-                    } => {
-                        // For URL-based elicitation, create a simple schema with the URL
-                        let schema_value = json!({
-                            "type": "object",
-                            "properties": {
-                                "url": {
-                                    "type": "string",
-                                    "const": url
-                                }
-                            }
-                        });
-                        (message.clone(), schema_value)
-                    }
-                };
-
-                let validator = build_elicitation_validator(provider.as_str(), &schema_value);
-                let payload = super::McpElicitationRequest {
-                    message: message.clone(),
-                    requested_schema: schema_value.clone(),
-                };
-
-                match handler.handle_elicitation(&provider, payload).await {
-                    Ok(response) => {
-                        validate_elicitation_payload(
-                            provider.as_str(),
-                            validator.as_ref(),
-                            &response.action,
-                            response.content.as_ref(),
-                        )?;
-                        info!(
-                            provider = provider.as_str(),
-                            message = message.as_str(),
-                            action = ?response.action,
-                            "MCP provider elicitation handled"
-                        );
-                        return Ok(rmcp::model::CreateElicitationResult {
-                            action: response.action,
-                            content: response.content,
-                        });
-                    }
-                    Err(err) => {
-                        warn!(
-                            provider = provider.as_str(),
-                            message = message.as_str(),
-                            error = %err,
-                            "Failed to process MCP elicitation; declining"
-                        );
-                    }
-                }
-            } else {
-                let message_str = match &request {
-                    CreateElicitationRequestParams::FormElicitationParams { message, .. } => {
-                        message.as_str()
-                    }
-                    CreateElicitationRequestParams::UrlElicitationParams { message, .. } => {
-                        message.as_str()
-                    }
-                };
-                info!(
-                    provider = provider.as_str(),
-                    message = message_str,
-                    "MCP provider requested elicitation but no handler configured; declining"
-                );
-            }
-
-            Ok(default_response)
+            self.process_elicitation_request(request)
+                .await
+                .map(|response| rmcp::model::CreateElicitationResult {
+                    action: response.action,
+                    content: response.content,
+                })
         }
     }
 
@@ -675,6 +763,63 @@ impl ClientHandler for LoggingClientHandler {
     }
 }
 
+fn restore_context_meta(
+    mut request: CreateElicitationRequestParams,
+    mut context_meta: Meta,
+) -> CreateElicitationRequestParams {
+    context_meta.remove(MCP_PROGRESS_TOKEN_META_KEY);
+    if context_meta.is_empty() {
+        return request;
+    }
+
+    match &mut request {
+        CreateElicitationRequestParams::FormElicitationParams { meta, .. }
+        | CreateElicitationRequestParams::UrlElicitationParams { meta, .. } => {
+            meta.get_or_insert_with(Meta::new).extend(context_meta);
+        }
+    }
+
+    request
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateElicitationResultWithMeta {
+    action: ElicitationAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<Value>,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    meta: Option<Value>,
+}
+
+fn elicitation_response_result(
+    response: super::McpElicitationResponse,
+) -> Result<CustomResult, rmcp::ErrorData> {
+    let result = CreateElicitationResultWithMeta {
+        action: response.action,
+        content: response.content,
+        meta: response.meta,
+    };
+
+    serde_json::to_value(result)
+        .map(CustomResult)
+        .map_err(|err| rmcp::ErrorData::internal_error(err.to_string(), None))
+}
+
+fn serialize_elicitation_meta(provider: &str, meta: Option<&Meta>) -> Option<Value> {
+    meta.and_then(|meta| match serde_json::to_value(meta) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            warn!(
+                provider = provider,
+                error = %err,
+                "Failed to serialize MCP elicitation metadata; dropping _meta"
+            );
+            None
+        }
+    })
+}
+
 pub(crate) fn build_elicitation_validator(provider: &str, schema: &Value) -> Option<Validator> {
     if schema.is_null() {
         return None;
@@ -754,5 +899,75 @@ where
         result.map_err(|err| anyhow!("{label} failed: {err}"))
     } else {
         fut.await.map_err(|err| anyhow!("{label} failed: {err}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::model::{BooleanSchema, ElicitationSchema, PrimitiveSchema};
+
+    #[test]
+    fn restore_context_meta_adds_request_meta_and_removes_progress_token() {
+        let request = form_request(Some(meta(json!({ "existing": true }))));
+        let restored = restore_context_meta(
+            request,
+            meta(json!({
+                "persist": "always",
+                "progressToken": "token-1"
+            })),
+        );
+
+        let CreateElicitationRequestParams::FormElicitationParams { meta, .. } = restored else {
+            panic!("expected form elicitation request");
+        };
+
+        assert_eq!(
+            serde_json::to_value(meta.expect("meta should be present"))
+                .expect("meta should serialize"),
+            json!({
+                "existing": true,
+                "persist": "always"
+            })
+        );
+    }
+
+    #[test]
+    fn elicitation_response_result_serializes_response_meta() {
+        let result = ClientResult::CustomResult(
+            elicitation_response_result(super::super::McpElicitationResponse {
+                action: ElicitationAction::Accept,
+                content: Some(json!({ "confirmed": true })),
+                meta: Some(json!({ "persist": "always" })),
+            })
+            .expect("elicitation response should serialize"),
+        );
+
+        assert_eq!(
+            serde_json::to_value(result).expect("client result should serialize"),
+            json!({
+                "action": "accept",
+                "content": { "confirmed": true },
+                "_meta": { "persist": "always" }
+            })
+        );
+    }
+
+    fn form_request(meta: Option<Meta>) -> CreateElicitationRequestParams {
+        CreateElicitationRequestParams::FormElicitationParams {
+            meta,
+            message: "Confirm?".to_string(),
+            requested_schema: ElicitationSchema::builder()
+                .required_property("confirmed", PrimitiveSchema::Boolean(BooleanSchema::new()))
+                .build()
+                .expect("schema should build"),
+        }
+    }
+
+    fn meta(value: Value) -> Meta {
+        let Value::Object(map) = value else {
+            panic!("meta must be an object");
+        };
+        Meta(map)
     }
 }
