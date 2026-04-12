@@ -475,7 +475,11 @@ async fn run_interactive_session(
             Ok(output) => {
                 messages.push(SessionMessage::new(MessageRole::Assistant, output));
                 turn_number += 1;
-                persist_archive_progress(archive.as_ref(), &messages, turn_number)?;
+                if let Some(warning) =
+                    persist_archive_progress(archive.as_ref(), &messages, turn_number)
+                {
+                    eprintln!("warning: {warning}");
+                }
                 if plan_mode {
                     println!("{PLAN_MODE_HINT}");
                 }
@@ -486,7 +490,9 @@ async fn run_interactive_session(
         }
     }
 
-    finalize_archive(archive.take(), messages)?;
+    if let Some(warning) = finalize_archive(archive.take(), messages) {
+        eprintln!("warning: {warning}");
+    }
     Ok(())
 }
 
@@ -939,26 +945,31 @@ fn persist_archive_progress(
     archive: Option<&SessionArchive>,
     messages: &[SessionMessage],
     turn_number: usize,
-) -> Result<()> {
+) -> Option<String> {
     let Some(archive) = archive else {
-        return Ok(());
+        return None;
     };
 
-    archive.persist_progress(SessionProgressArgs {
-        total_messages: messages.len(),
-        distinct_tools: Vec::new(),
-        recent_messages: messages.to_vec(),
-        turn_number,
-        token_usage: None,
-        max_context_tokens: None,
-        loaded_skills: None,
-    })?;
-    Ok(())
+    archive
+        .persist_progress(SessionProgressArgs {
+            total_messages: messages.len(),
+            distinct_tools: Vec::new(),
+            recent_messages: messages.to_vec(),
+            turn_number,
+            token_usage: None,
+            max_context_tokens: None,
+            loaded_skills: None,
+        })
+        .err()
+        .map(|err| archive_save_warning_message("after turn completion", &err))
 }
 
-fn finalize_archive(archive: Option<SessionArchive>, messages: Vec<SessionMessage>) -> Result<()> {
+fn finalize_archive(
+    archive: Option<SessionArchive>,
+    messages: Vec<SessionMessage>,
+) -> Option<String> {
     let Some(archive) = archive else {
-        return Ok(());
+        return None;
     };
 
     let transcript = messages
@@ -974,8 +985,16 @@ fn finalize_archive(archive: Option<SessionArchive>, messages: Vec<SessionMessag
         })
         .collect::<Vec<_>>();
 
-    archive.finalize(transcript, messages.len(), Vec::new(), messages)?;
-    Ok(())
+    archive
+        .finalize(transcript, messages.len(), Vec::new(), messages)
+        .err()
+        .map(|err| archive_save_warning_message("during session shutdown", &err))
+}
+
+fn archive_save_warning_message(context: &str, err: &anyhow::Error) -> String {
+    format!(
+        "Failed to save the Codex session archive {context}; VT Code will continue, but persisted session history may be stale. Error: {err}"
+    )
 }
 
 fn workspace_archive_label(workspace: &std::path::Path) -> String {
@@ -1123,11 +1142,15 @@ mod tests {
     use super::{
         CodexCollaborationModeListResponse, CodexMcpStartupStatus, CodexMcpStartupTracker,
         MCP_SERVER_STATUS_UPDATED_METHOD, PLAN_MODE_FALLBACK_WARNING,
-        PLAN_MODE_IMPLEMENTATION_PROMPT, ServerEvent, codex_experimental_features_enabled,
-        collaboration_catalog_from_response, normalize_plan_mode_input,
-        parse_mcp_startup_notification, resolve_collaboration_mode,
+        PLAN_MODE_IMPLEMENTATION_PROMPT, ServerEvent, archive_save_warning_message,
+        codex_experimental_features_enabled, collaboration_catalog_from_response, finalize_archive,
+        normalize_plan_mode_input, parse_mcp_startup_notification, persist_archive_progress,
+        resolve_collaboration_mode,
     };
+    use anyhow::anyhow;
     use serde_json::json;
+    use vtcode_core::llm::provider::MessageRole;
+    use vtcode_core::utils::session_archive::SessionMessage;
 
     #[test]
     fn tracker_emits_immediate_failure_and_settled_summary() {
@@ -1322,6 +1345,30 @@ mod tests {
 
         assert!(resolution.mode.is_none());
         assert_eq!(resolution.warning, None);
+    }
+
+    #[test]
+    fn archive_save_warning_message_mentions_context_and_continuation() {
+        let warning = archive_save_warning_message(
+            "after turn completion",
+            &anyhow!("disk full while writing archive"),
+        );
+
+        assert!(warning.contains("after turn completion"));
+        assert!(warning.contains("VT Code will continue"));
+        assert!(warning.contains("disk full while writing archive"));
+    }
+
+    #[test]
+    fn persist_archive_progress_without_archive_is_noop() {
+        let messages = vec![SessionMessage::new(MessageRole::User, "hello")];
+        assert!(persist_archive_progress(None, &messages, 1).is_none());
+    }
+
+    #[test]
+    fn finalize_archive_without_archive_is_noop() {
+        let messages = vec![SessionMessage::new(MessageRole::Assistant, "done")];
+        assert!(finalize_archive(None, messages).is_none());
     }
 
     #[test]
