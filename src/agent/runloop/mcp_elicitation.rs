@@ -64,6 +64,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Decline,
                 content: None,
+                meta: None,
             });
         }
 
@@ -110,6 +111,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Cancel,
                 content: None,
+                meta: None,
             });
         }
 
@@ -118,6 +120,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Decline,
                 content: None,
+                meta: None,
             });
         }
 
@@ -129,6 +132,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         Ok(McpElicitationResponse {
             action: ElicitationAction::Accept,
             content: Some(content),
+            meta: None,
         })
     }
 }

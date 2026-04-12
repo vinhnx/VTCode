@@ -65,6 +65,7 @@ pub struct McpClientStatus {
 pub struct McpElicitationRequest {
     pub message: String,
     pub requested_schema: Value,
+    pub meta: Option<Value>,
 }
 
 /// Result returned by an elicitation handler after interacting with the user.
@@ -72,4 +73,5 @@ pub struct McpElicitationRequest {
 pub struct McpElicitationResponse {
     pub action: ElicitationAction,
     pub content: Option<Value>,
+    pub meta: Option<Value>,
 }
