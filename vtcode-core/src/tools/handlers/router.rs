@@ -383,6 +383,7 @@ pub trait ToolRouterProvider: Send + Sync {
 mod tests {
     use super::super::tool_handler::{ResponsesApiTool, ToolKind};
     use super::*;
+    use serde_json::json;
 
     struct MockHandler;
 
@@ -438,12 +439,7 @@ mod tests {
         let spec = ToolSpec::Function(ResponsesApiTool {
             name: "test_tool".to_string(),
             description: "A test tool".to_string(),
-            parameters: super::super::tool_handler::JsonSchema::Object {
-                properties: std::collections::BTreeMap::new(),
-                required: None,
-                additional_properties: None,
-                any_of: None,
-            },
+            parameters: json!({"type": "object"}),
             strict: false,
         });
 
@@ -465,12 +461,7 @@ mod tests {
         let spec = ToolSpec::Function(ResponsesApiTool {
             name: "parallel_tool".to_string(),
             description: "Supports parallel".to_string(),
-            parameters: super::super::tool_handler::JsonSchema::Object {
-                properties: std::collections::BTreeMap::new(),
-                required: None,
-                additional_properties: None,
-                any_of: None,
-            },
+            parameters: json!({"type": "object"}),
             strict: false,
         });
 

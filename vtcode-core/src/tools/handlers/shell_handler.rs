@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use serde_json::json;
 
 use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
@@ -178,38 +179,30 @@ impl ToolHandler for ShellHandler {
 
 /// Create the shell tool specification.
 pub fn create_shell_tool() -> super::tool_handler::ToolSpec {
-    use super::tool_handler::{JsonSchema, ResponsesApiTool, ToolSpec};
-    use std::collections::BTreeMap;
-
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "command".to_string(),
-        JsonSchema::String {
-            description: Some("The shell command to execute".to_string()),
-        },
-    );
-    properties.insert(
-        "workdir".to_string(),
-        JsonSchema::String {
-            description: Some("Working directory for the command (optional)".to_string()),
-        },
-    );
-    properties.insert(
-        "timeout_ms".to_string(),
-        JsonSchema::Number {
-            description: Some("Timeout in milliseconds (default: 30000, max: 300000)".to_string()),
-        },
-    );
+    use super::tool_handler::{ResponsesApiTool, ToolSpec};
 
     ToolSpec::Function(ResponsesApiTool {
         name: tools::SHELL.to_string(),
         description: "Execute a shell command and return its output.".to_string(),
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["command".to_string()]),
-            additional_properties: Some(false.into()),
-            any_of: None,
-        },
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute"
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": "Working directory for the command (optional)"
+                },
+                "timeout_ms": {
+                    "type": "number",
+                    "description": "Timeout in milliseconds (default: 30000, max: 300000)"
+                }
+            },
+            "required": ["command"],
+            "additionalProperties": false
+        }),
         strict: false,
     })
 }

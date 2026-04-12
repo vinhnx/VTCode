@@ -143,7 +143,7 @@ impl CodexAppServerClient {
     }
 
     pub(crate) async fn mcp_server_status_list(&self) -> Result<CodexMcpServerStatusListResponse> {
-        self.request_idempotent("mcpServerStatus/list", json!({}))
+        self.request_idempotent("mcpServerStatus/list", mcp_server_status_list_params())
             .await
     }
 
@@ -599,6 +599,12 @@ fn idempotent_retry_delay(attempt: usize) -> Duration {
     Duration::from_millis((attempt as u64) * 200)
 }
 
+fn mcp_server_status_list_params() -> Value {
+    json!({
+        "detail": "toolsAndAuthOnly"
+    })
+}
+
 fn overloaded_request_error(method: &str, retry_policy: RequestRetryPolicy) -> anyhow::Error {
     match retry_policy {
         RequestRetryPolicy::Idempotent => anyhow!(
@@ -906,7 +912,8 @@ mod tests {
         CodexCollaborationMode, CodexCollaborationModeSettings, CodexLoginAccountResponse,
         CodexThreadRequest, CodexTurnRequest, RequestRetryPolicy, STDIO_LISTEN_TARGET,
         codex_sidecar_requirement_note, ensure_codex_sidecar_command_available,
-        idempotent_retry_delay, is_codex_cli_unavailable, overloaded_request_error,
+        idempotent_retry_delay, is_codex_cli_unavailable, mcp_server_status_list_params,
+        overloaded_request_error,
         resolve_sidecar_command_path_with_path, validate_listen_target,
     };
     use anyhow::anyhow;
@@ -1068,6 +1075,16 @@ mod tests {
     #[test]
     fn idempotent_retry_delay_increases_per_attempt() {
         assert!(idempotent_retry_delay(2) > idempotent_retry_delay(1));
+    }
+
+    #[test]
+    fn mcp_server_status_list_uses_lightweight_detail_mode() {
+        assert_eq!(
+            mcp_server_status_list_params(),
+            json!({
+                "detail": "toolsAndAuthOnly"
+            })
+        );
     }
 
     #[test]

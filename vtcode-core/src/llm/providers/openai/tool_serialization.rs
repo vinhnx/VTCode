@@ -11,6 +11,7 @@ use crate::config::core::{
 use crate::llm::provider;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
+use vtcode_utility_tool_specs::parse_tool_input_schema;
 
 fn responses_dedupe_key(serialized_tool: &Value) -> String {
     if let Some(name) = serialized_tool.get("name").and_then(Value::as_str) {
@@ -61,25 +62,8 @@ fn sanitize_openai_function_parameters(value: Value) -> Value {
             map.remove("then");
             map.remove("else");
 
-            if map.get("type").is_none()
-                && let Some(any_of) = map.remove("anyOf")
-                && let Some(replacement) = collapse_supported_any_of(&any_of)
-            {
-                let mut sanitized = sanitize_openai_function_parameters(replacement);
-                if let Value::Object(ref mut replacement_map) = sanitized
-                    && let Some(description) = map.remove("description")
-                {
-                    replacement_map
-                        .entry("description".to_string())
-                        .or_insert(description);
-                }
-                return sanitized;
-            }
-
-            map.remove("anyOf");
-
             for nested in map.values_mut() {
-                let next = sanitize_openai_function_parameters(nested.clone());
+                let next = sanitize_openai_function_parameters(parse_tool_input_schema(nested));
                 *nested = next;
             }
 
@@ -94,20 +78,12 @@ fn sanitize_openai_function_parameters(value: Value) -> Value {
         Value::Array(items) => Value::Array(
             items
                 .into_iter()
+                .map(|value| parse_tool_input_schema(&value))
                 .map(sanitize_openai_function_parameters)
                 .collect(),
         ),
-        other => other,
+        other => parse_tool_input_schema(&other),
     }
-}
-
-fn collapse_supported_any_of(any_of: &Value) -> Option<Value> {
-    let variants = any_of.as_array()?;
-    variants
-        .iter()
-        .find(|variant| variant.get("type").and_then(Value::as_str) == Some("string"))
-        .cloned()
-        .or_else(|| variants.first().cloned())
 }
 
 fn trim_non_empty_owned(value: &str) -> Option<String> {

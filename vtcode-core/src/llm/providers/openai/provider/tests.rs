@@ -681,6 +681,56 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
 }
 
 #[test]
+fn responses_payload_preserves_any_of_enum_and_nullable_type_unions() {
+    let tools = vec![provider::ToolDefinition::function(
+        "schema_rich_tool".to_owned(),
+        "Schema rich tool".to_owned(),
+        json!({
+            "type": "object",
+            "properties": {
+                "open": {
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ref_id": {"type": "string"},
+                                    "lineno": {"type": ["integer", "null"]}
+                                },
+                                "required": ["ref_id"],
+                                "additionalProperties": false
+                            }
+                        },
+                        {"type": "null"}
+                    ]
+                },
+                "response_length": {
+                    "type": "string",
+                    "enum": ["short", "medium", "long"]
+                },
+                "message": {"type": ["string", "null"]}
+            },
+            "additionalProperties": false
+        }),
+    )];
+
+    let payload = tool_serialization::serialize_tools_for_responses(&tools, None)
+        .expect("tools should serialize for responses");
+    let params = &payload.as_array().expect("tool array")[0]["parameters"];
+
+    assert!(params["properties"]["open"]["anyOf"].is_array());
+    assert_eq!(
+        params["properties"]["response_length"]["enum"],
+        json!(["short", "medium", "long"])
+    );
+    assert_eq!(
+        params["properties"]["message"]["type"],
+        json!(["string", "null"])
+    );
+}
+
+#[test]
 fn chat_payload_serializes_deferred_function_for_tool_search() {
     let deferred = provider::ToolDefinition::function(
         "search_docs".to_owned(),

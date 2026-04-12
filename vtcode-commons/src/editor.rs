@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
 
+use percent_encoding::percent_decode_str;
 use url::Url;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,8 +99,10 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
         if path_str.is_empty() {
             return None;
         }
+        let decoded_path = decode_bare_local_path(path_str);
         return Some(EditorTarget::new(
-            expand_home_relative_path(path_str).unwrap_or_else(|| PathBuf::from(path_str)),
+            expand_home_relative_path(decoded_path.as_ref())
+                .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
             Some(location_suffix),
         ));
     }
@@ -109,9 +113,11 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
         if path_str.is_empty() {
             return None;
         }
+        let decoded_path = decode_bare_local_path(path_str);
 
         return Some(EditorTarget::new(
-            expand_home_relative_path(path_str).unwrap_or_else(|| PathBuf::from(path_str)),
+            expand_home_relative_path(decoded_path.as_ref())
+                .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
             Some(location_suffix),
         ));
     }
@@ -124,9 +130,11 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
     if path_str.is_empty() {
         return None;
     }
+    let decoded_path = decode_bare_local_path(path_str);
 
     Some(EditorTarget::new(
-        expand_home_relative_path(path_str).unwrap_or_else(|| PathBuf::from(path_str)),
+        expand_home_relative_path(decoded_path.as_ref())
+            .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
         location_suffix,
     ))
 }
@@ -161,6 +169,12 @@ fn expand_home_relative_path(path: &str) -> Option<PathBuf> {
         .or_else(|| path.strip_prefix("~\\"))?;
     let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(remainder))
+}
+
+fn decode_bare_local_path(path: &str) -> Cow<'_, str> {
+    percent_decode_str(path)
+        .decode_utf8()
+        .unwrap_or_else(|_| Cow::Borrowed(path))
 }
 
 fn extract_trailing_location(raw: &str) -> Option<String> {
@@ -320,6 +334,14 @@ mod tests {
     fn file_urls_are_supported() {
         let target = parse_editor_target("file:///tmp/demo.rs#L12").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/demo.rs"));
+        assert_eq!(target.location_suffix(), Some(":12"));
+    }
+
+    #[test]
+    fn bare_percent_encoded_paths_are_decoded() {
+        let target = parse_editor_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12")
+            .expect("target");
+        assert_eq!(target.path(), Path::new("/tmp/Example Folder/Résumé.md"));
         assert_eq!(target.location_suffix(), Some(":12"));
     }
 
