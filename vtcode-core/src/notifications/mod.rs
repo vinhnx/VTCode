@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 use crate::config::loader::VTCodeConfig;
 use crate::hooks::{LifecycleHookEngine, NotificationHookType};
 use vtcode_config::{
-    NotificationBackend, NotificationCondition, NotificationDeliveryMode, TerminalNotificationMethod,
-    TuiNotificationEvent, TuiNotificationsConfig,
+    NotificationBackend, NotificationCondition, NotificationDeliveryMode,
+    TerminalNotificationMethod, TuiNotificationEvent, TuiNotificationsConfig,
 };
 
 /// Types of important events that trigger notifications
@@ -284,9 +284,7 @@ impl NotificationManager {
         // `Always`: deliver regardless of focus state
         let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
         let should_suppress_for_focus = match config.notification_condition {
-            NotificationCondition::Unfocused => {
-                is_terminal_active && config.suppress_when_focused
-            }
+            NotificationCondition::Unfocused => is_terminal_active && config.suppress_when_focused,
             NotificationCondition::Always => false,
         };
         if should_suppress_for_focus {

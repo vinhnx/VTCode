@@ -913,8 +913,7 @@ mod tests {
         CodexThreadRequest, CodexTurnRequest, RequestRetryPolicy, STDIO_LISTEN_TARGET,
         codex_sidecar_requirement_note, ensure_codex_sidecar_command_available,
         idempotent_retry_delay, is_codex_cli_unavailable, mcp_server_status_list_params,
-        overloaded_request_error,
-        resolve_sidecar_command_path_with_path, validate_listen_target,
+        overloaded_request_error, resolve_sidecar_command_path_with_path, validate_listen_target,
     };
     use anyhow::anyhow;
     use serde_json::json;

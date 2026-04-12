@@ -174,7 +174,7 @@ fn expand_home_relative_path(path: &str) -> Option<PathBuf> {
 fn decode_bare_local_path(path: &str) -> Cow<'_, str> {
     percent_decode_str(path)
         .decode_utf8()
-        .unwrap_or_else(|_| Cow::Borrowed(path))
+        .unwrap_or(Cow::Borrowed(path))
 }
 
 fn extract_trailing_location(raw: &str) -> Option<String> {
@@ -339,8 +339,8 @@ mod tests {
 
     #[test]
     fn bare_percent_encoded_paths_are_decoded() {
-        let target = parse_editor_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12")
-            .expect("target");
+        let target =
+            parse_editor_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/Example Folder/Résumé.md"));
         assert_eq!(target.location_suffix(), Some(":12"));
     }

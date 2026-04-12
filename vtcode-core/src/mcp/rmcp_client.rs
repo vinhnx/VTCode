@@ -10,11 +10,12 @@ use rmcp::model::{
     CreateElicitationRequestParams, CustomResult, ElicitationAction, GetPromptRequestParams,
     GetPromptResult, InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
     LoggingMessageNotificationParam, Meta, ProgressNotificationParam, Prompt,
-    ReadResourceRequestParams, ReadResourceResult, Resource,
-    ResourceTemplate, ResourceUpdatedNotificationParam, Root, ServerNotification, ServerRequest,
-    Tool,
+    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceTemplate,
+    ResourceUpdatedNotificationParam, Root, ServerNotification, ServerRequest, Tool,
 };
-use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService, Service};
+use rmcp::service::{
+    self, NotificationContext, RequestContext, RoleClient, RunningService, Service,
+};
 use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
@@ -495,10 +496,7 @@ impl LoggingClientHandler {
                     )
                 }
                 CreateElicitationRequestParams::UrlElicitationParams {
-                    meta,
-                    message,
-                    url,
-                    ..
+                    meta, message, url, ..
                 } => {
                     let schema_value = json!({
                         "type": "object",

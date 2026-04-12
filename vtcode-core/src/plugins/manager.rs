@@ -119,11 +119,7 @@ impl PluginManager {
     }
 
     /// Cache a plugin for security
-    pub async fn cache_plugin(
-        &self,
-        plugin_id: &str,
-        source_path: &Path,
-    ) -> PluginResult<PathBuf> {
+    pub async fn cache_plugin(&self, plugin_id: &str, source_path: &Path) -> PluginResult<PathBuf> {
         let mut cache = self.cache.write().await;
         cache.cache_plugin(plugin_id, source_path).await
     }
@@ -191,7 +187,10 @@ impl PluginManager {
 
         for root in roots {
             if !root.exists() {
-                debug!("workspace root does not exist, skipping: {}", root.display());
+                debug!(
+                    "workspace root does not exist, skipping: {}",
+                    root.display()
+                );
                 continue;
             }
 
@@ -211,7 +210,9 @@ impl PluginManager {
                             }
                         }
 
-                        if let Err(e) = self.cache_plugin(&plugin_info.name, &plugin_info.path).await
+                        if let Err(e) = self
+                            .cache_plugin(&plugin_info.name, &plugin_info.path)
+                            .await
                         {
                             errors.push(format!(
                                 "failed to cache plugin '{}': {e}",
@@ -247,10 +248,7 @@ impl PluginManager {
         let mut discovered = Vec::new();
 
         // Look for plugins in .vtcode/plugins/ or similar locations
-        let plugin_roots = vec![
-            root.join(".vtcode").join("plugins"),
-            root.join("plugins"),
-        ];
+        let plugin_roots = vec![root.join(".vtcode").join("plugins"), root.join("plugins")];
 
         for plugin_root in plugin_roots {
             if !plugin_root.exists() {
@@ -261,7 +259,11 @@ impl PluginManager {
             let entries = match tokio::fs::read_dir(&plugin_root).await {
                 Ok(entries) => entries,
                 Err(e) => {
-                    warn!("Failed to read plugin root {}: {}", plugin_root.display(), e);
+                    warn!(
+                        "Failed to read plugin root {}: {}",
+                        plugin_root.display(),
+                        e
+                    );
                     continue;
                 }
             };
