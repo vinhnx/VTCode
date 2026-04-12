@@ -1,5 +1,5 @@
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +20,9 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
+use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::project_doc::load_instruction_appendix;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_terminal_detection::TerminalType;
 use vtcode_tui::app::InlineHandle;
@@ -34,6 +36,8 @@ type LoadedSkillsMap = hashbrown::HashMap<String, vtcode_core::skills::types::Sk
 pub(crate) struct SessionStatusContext<'a> {
     pub config: &'a CoreAgentConfig,
     pub vt_cfg: Option<&'a VTCodeConfig>,
+    pub active_instruction_directory: &'a Path,
+    pub instruction_context_paths: &'a [PathBuf],
     pub message_count: usize,
     pub stats: &'a SessionStats,
     pub available_tools: usize,
@@ -61,6 +65,12 @@ pub(crate) async fn display_session_status(
     let terminal_info = detect_terminal_info();
     let mcp_info = summarize_mcp_servers(ctx.vt_cfg, ctx.async_mcp_manager).await;
     let skills_info = summarize_loaded_skills(ctx.loaded_skills).await;
+    let agents_info = summarize_loaded_agents_sources(
+        ctx.vt_cfg,
+        ctx.active_instruction_directory,
+        ctx.instruction_context_paths,
+    )
+    .await;
     let memory_info = summarize_project_memory(&ctx.config.workspace);
     let settings_info = summarize_setting_sources(&ctx.config.workspace);
 
@@ -101,6 +111,10 @@ pub(crate) async fn display_session_status(
     )?;
     renderer.line(MessageStyle::Info, &format!("  MCP servers: {}", mcp_info))?;
     renderer.line(MessageStyle::Info, &format!("  Skills: {}", skills_info))?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  Loaded AGENTS.md sources: {}", agents_info),
+    )?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, &format!("  Memory: {}", memory_info))?;
     renderer.line(
@@ -483,6 +497,70 @@ fn summarize_project_memory(workspace: &Path) -> String {
         "project (AGENTS.md)".to_string()
     } else {
         "project (AGENTS.md not found)".to_string()
+    }
+}
+
+async fn summarize_loaded_agents_sources(
+    vt_cfg: Option<&VTCodeConfig>,
+    active_instruction_directory: &Path,
+    instruction_context_paths: &[PathBuf],
+) -> String {
+    let agent_config = vt_cfg.map(|cfg| cfg.agent.clone()).unwrap_or_default();
+    let appendix = load_instruction_appendix(
+        &agent_config,
+        active_instruction_directory,
+        instruction_context_paths,
+    )
+    .await;
+    let (agents, _) = instruction_memory_map(appendix.as_ref());
+    format_status_path_list(&agents)
+}
+
+pub(crate) fn instruction_memory_map(
+    appendix: Option<&vtcode_core::project_doc::InstructionAppendixBundle>,
+) -> (Vec<String>, Vec<String>) {
+    let Some(bundle) = appendix else {
+        return (Vec::new(), Vec::new());
+    };
+    let Some(project_doc) = bundle.project_doc.as_ref() else {
+        return (Vec::new(), Vec::new());
+    };
+
+    let agents = project_doc
+        .segments
+        .iter()
+        .filter(|segment| matches!(segment.source.kind, InstructionSourceKind::Agents))
+        .map(|segment| {
+            format_instruction_path(
+                &segment.source.path,
+                bundle.project_root.as_path(),
+                bundle.home_dir.as_deref(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let matched_rules = project_doc
+        .segments
+        .iter()
+        .filter(|segment| {
+            matches!(segment.source.kind, InstructionSourceKind::Rule) && segment.source.matched
+        })
+        .map(|segment| {
+            format_instruction_path(
+                &segment.source.path,
+                bundle.project_root.as_path(),
+                bundle.home_dir.as_deref(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    (agents, matched_rules)
+}
+
+fn format_status_path_list(paths: &[String]) -> String {
+    if paths.is_empty() {
+        "none".to_string()
+    } else {
+        paths.join(", ")
     }
 }
 

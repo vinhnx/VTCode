@@ -5,7 +5,6 @@ use toml::Value as TomlValue;
 use vtcode_core::config::current_config_defaults;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::loader::layers::ConfigLayerSource;
-use vtcode_core::instructions::{InstructionSourceKind, format_instruction_path};
 use vtcode_core::llm::{
     LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
     resolve_lightweight_route,
@@ -20,8 +19,9 @@ use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, Wiza
 
 use crate::agent::runloop::unified::diagnostics::{DoctorOptions, run_doctor_diagnostics};
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
-use crate::agent::runloop::unified::ui_interaction::display_session_status;
-use crate::agent::runloop::unified::ui_interaction::start_loading_status;
+use crate::agent::runloop::unified::ui_interaction::{
+    display_session_status, instruction_memory_map, start_loading_status,
+};
 use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
@@ -50,11 +50,18 @@ pub(crate) async fn handle_show_status(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
+    let active_instruction_directory = ctx
+        .context_manager
+        .active_instruction_directory_snapshot()
+        .unwrap_or_else(|| ctx.config.workspace.clone());
+    let instruction_context_paths = ctx.context_manager.instruction_context_paths_snapshot();
     display_session_status(
         ctx.renderer,
         crate::agent::runloop::unified::ui_interaction::SessionStatusContext {
             config: ctx.config,
             vt_cfg: ctx.vt_cfg.as_ref(),
+            active_instruction_directory: &active_instruction_directory,
+            instruction_context_paths: &instruction_context_paths,
             message_count: ctx.conversation_history.len(),
             stats: ctx.session_stats,
             available_tools: tool_count,
@@ -373,46 +380,6 @@ fn memory_lightweight_route_info(
         choices,
         main_model: runtime_config.model.clone(),
     }
-}
-
-fn instruction_memory_map(
-    appendix: Option<&vtcode_core::project_doc::InstructionAppendixBundle>,
-) -> (Vec<String>, Vec<String>) {
-    let Some(bundle) = appendix else {
-        return (Vec::new(), Vec::new());
-    };
-    let Some(project_doc) = bundle.project_doc.as_ref() else {
-        return (Vec::new(), Vec::new());
-    };
-
-    let agents = project_doc
-        .segments
-        .iter()
-        .filter(|segment| matches!(segment.source.kind, InstructionSourceKind::Agents))
-        .map(|segment| {
-            format_instruction_path(
-                &segment.source.path,
-                bundle.project_root.as_path(),
-                bundle.home_dir.as_deref(),
-            )
-        })
-        .collect::<Vec<_>>();
-    let matched_rules = project_doc
-        .segments
-        .iter()
-        .filter(|segment| {
-            matches!(segment.source.kind, InstructionSourceKind::Rule) && segment.source.matched
-        })
-        .map(|segment| {
-            format_instruction_path(
-                &segment.source.path,
-                bundle.project_root.as_path(),
-                bundle.home_dir.as_deref(),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    (agents, matched_rules)
 }
 
 fn show_memory_actions_modal(
