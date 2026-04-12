@@ -139,6 +139,7 @@ pub use auth::{
     save_openai_chatgpt_session,
 };
 pub use codex::{
-    FileOpener, HistoryConfig, HistoryPersistence, TerminalNotificationMethod, TuiAlternateScreen,
-    TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,
+    FileOpener, HistoryConfig, HistoryPersistence, NotificationCondition,
+    TerminalNotificationMethod, TuiAlternateScreen, TuiConfig, TuiNotificationEvent,
+    TuiNotificationsConfig,
 };

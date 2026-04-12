@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use crate::config::loader::VTCodeConfig;
 use crate::hooks::{LifecycleHookEngine, NotificationHookType};
 use vtcode_config::{
-    NotificationBackend, NotificationDeliveryMode, TerminalNotificationMethod,
+    NotificationBackend, NotificationCondition, NotificationDeliveryMode, TerminalNotificationMethod,
     TuiNotificationEvent, TuiNotificationsConfig,
 };
 
@@ -109,6 +109,9 @@ pub struct NotificationConfig {
     pub backend: NotificationBackend,
     /// Preferred terminal notification transport.
     pub notification_method: TerminalNotificationMethod,
+    /// When to deliver notifications relative to terminal focus.
+    /// Defaults to `Unfocused` (only when terminal is not focused).
+    pub notification_condition: NotificationCondition,
     /// Time window for suppressing repeated identical notifications.
     pub repeat_window_seconds: u64,
     /// Maximum identical notifications allowed per suppression window.
@@ -132,6 +135,7 @@ impl Default for NotificationConfig {
             delivery_mode: NotificationDeliveryMode::Desktop,
             backend: NotificationBackend::Auto,
             notification_method: TerminalNotificationMethod::Auto,
+            notification_condition: NotificationCondition::default(),
             repeat_window_seconds: 30,
             max_identical_notifications_in_window: 1,
         }
@@ -165,6 +169,7 @@ impl NotificationConfig {
             delivery_mode: notifications.delivery_mode,
             backend: notifications.backend,
             notification_method: config.tui.notification_method.unwrap_or_default(),
+            notification_condition: config.tui.notification_condition.unwrap_or_default(),
             repeat_window_seconds: notifications.repeat_window_seconds,
             max_identical_notifications_in_window: notifications.max_identical_in_window,
         };
@@ -274,11 +279,17 @@ impl NotificationManager {
             return Ok(());
         }
 
-        // Check if the terminal is currently focused/active
-        // Only send notifications when the terminal is NOT active (user is not using it)
+        // Evaluate notification condition based on configuration
+        // `Unfocused` (default): only deliver when terminal is not focused
+        // `Always`: deliver regardless of focus state
         let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
-        if is_terminal_active && config.suppress_when_focused {
-            // Terminal is active, don't send notification to avoid interrupting the user
+        let should_suppress_for_focus = match config.notification_condition {
+            NotificationCondition::Unfocused => {
+                is_terminal_active && config.suppress_when_focused
+            }
+            NotificationCondition::Always => false,
+        };
+        if should_suppress_for_focus {
             return Ok(());
         }
 

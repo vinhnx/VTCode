@@ -83,6 +83,18 @@ pub enum TuiNotificationsConfig {
     Events(Vec<TuiNotificationEvent>),
 }
 
+/// When to deliver desktop notifications relative to terminal focus.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationCondition {
+    /// Only deliver when the terminal is unfocused (legacy behaviour).
+    #[default]
+    Unfocused,
+    /// Always deliver regardless of focus state.
+    Always,
+}
+
 /// Codex-compatible TUI settings.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -91,6 +103,11 @@ pub struct TuiConfig {
     pub notifications: Option<TuiNotificationsConfig>,
     #[serde(default)]
     pub notification_method: Option<TerminalNotificationMethod>,
+    /// When to deliver desktop notifications relative to terminal focus.
+    /// Defaults to `unfocused` (only deliver when terminal is not focused).
+    /// Set to `always` to deliver notifications even when the terminal is focused.
+    #[serde(default)]
+    pub notification_condition: Option<NotificationCondition>,
     #[serde(default)]
     pub animations: Option<bool>,
     #[serde(default)]
