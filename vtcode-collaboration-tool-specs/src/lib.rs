@@ -8,7 +8,7 @@ pub fn spawn_agent_parameters() -> Value {
         "type": "object",
         "properties": {
             "agent_type": {"type": "string", "description": "Subagent type or name to run."},
-            "message": {"type": "string", "description": "Task prompt for the child agent."},
+            "message": {"type": "string", "description": "Task prompt for the child agent. The child receives the same tools as the parent and may spawn its own child agents."},
             "items": {
                 "type": "array",
                 "description": "Structured context items for the child agent.",
@@ -39,14 +39,14 @@ pub fn send_input_parameters() -> Value {
         "type": "object",
         "required": ["target"],
         "properties": {
-            "target": {"type": "string", "description": "Delegated child agent id."},
+            "target": {"type": "string", "description": "Child agent id to message."},
             "message": {"type": "string", "description": "Follow-up prompt for the child."},
             "items": {
                 "type": "array",
                 "description": "Structured follow-up items.",
                 "items": collaboration_input_item_schema()
             },
-            "interrupt": {"type": "boolean", "description": "Abort current child work and restart with this message.", "default": false}
+            "interrupt": {"type": "boolean", "description": "When true, abort current child work and restart with this input. When false (default), queue the input; if the child is already running, it starts the child's next turn after the current turn completes.", "default": false}
         }
     })
 }
@@ -60,11 +60,11 @@ pub fn wait_agent_parameters() -> Value {
             "targets": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Child agent ids to wait for. This blocks the current foreground turn until completion or timeout."
+                "description": "Child agent ids to wait for. This blocks the current foreground turn until one target reaches a terminal state or the wait times out."
             },
             "timeout_ms": {
                 "type": "integer",
-                "description": "Optional wait timeout in milliseconds. Prefer short waits in interactive sessions; managed background subprocesses are controlled through `/subprocesses`, not `wait_agent`."
+                "description": "Optional wait timeout in milliseconds. Uses the session default timeout when omitted."
             }
         }
     })
@@ -195,6 +195,41 @@ mod tests {
         assert_eq!(
             spawn_items["properties"]["image_url"]["type"],
             json!("string")
+        );
+    }
+    #[test]
+    fn collaboration_schemas_expose_updated_agent_description_text() {
+        let spawn = spawn_agent_parameters();
+        let send = send_input_parameters();
+        let wait = wait_agent_parameters();
+
+        assert_eq!(
+            spawn["properties"]["message"]["description"],
+            json!(
+                "Task prompt for the child agent. The child receives the same tools as the parent and may spawn its own child agents."
+            )
+        );
+        assert_eq!(
+            send["properties"]["target"]["description"],
+            json!("Child agent id to message.")
+        );
+        assert_eq!(
+            send["properties"]["interrupt"]["description"],
+            json!(
+                "When true, abort current child work and restart with this input. When false (default), queue the input; if the child is already running, it starts the child's next turn after the current turn completes."
+            )
+        );
+        assert_eq!(
+            wait["properties"]["targets"]["description"],
+            json!(
+                "Child agent ids to wait for. This blocks the current foreground turn until one target reaches a terminal state or the wait times out."
+            )
+        );
+        assert_eq!(
+            wait["properties"]["timeout_ms"]["description"],
+            json!(
+                "Optional wait timeout in milliseconds. Uses the session default timeout when omitted."
+            )
         );
     }
 

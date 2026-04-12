@@ -175,7 +175,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::spawn_agent_executor,
         )
         .with_description(
-            "Spawn a delegated child agent with isolated context and return its id plus status.",
+            "Spawn a delegated child agent for a scoped task. The child inherits the current toolset, can spawn its own child agents, and returns its agent id plus current status.",
         )
         .with_parameter_schema(spawn_agent_parameters())
         .with_aliases(["agent", "delegate", "subagent"]),
@@ -186,7 +186,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::send_input_executor,
         )
         .with_description(
-            "Send follow-up instructions to an existing child agent and optionally interrupt current work.",
+            "Send follow-up input to an existing child agent. When interrupt is false, running work keeps going and the new input is queued for the next turn; when true, current work is aborted and restarted with the new input.",
         )
         .with_parameter_schema(send_input_parameters())
         .with_aliases(["message_agent", "continue_agent"]),
@@ -197,7 +197,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::wait_agent_executor,
         )
         .with_description(
-            "Wait for one or more child agents to reach a terminal state and return the first result.",
+            "Wait for one or more child agents to reach a terminal state. Returns completion status for the first target that finishes, or completed=false if the wait times out.",
         )
         .with_parameter_schema(wait_agent_parameters())
         .with_aliases(["wait_subagent"]),
@@ -486,7 +486,6 @@ mod tests {
     fn unified_builtins_preserve_public_aliases() {
         let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
-
         let unified_search = registrations
             .iter()
             .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
@@ -534,5 +533,47 @@ mod tests {
                 "expected unified_file alias {alias}"
             );
         }
+    }
+
+    #[test]
+    fn multi_agent_builtins_expose_updated_descriptions() {
+        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let registrations = builtin_tool_registrations(Some(&plan_state));
+
+        let spawn_agent = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::SPAWN_AGENT)
+            .expect("spawn_agent registration should exist");
+        assert!(
+            spawn_agent
+                .metadata()
+                .description()
+                .expect("spawn_agent description")
+                .contains("inherits the current toolset")
+        );
+
+        let send_input = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::SEND_INPUT)
+            .expect("send_input registration should exist");
+        assert!(
+            send_input
+                .metadata()
+                .description()
+                .expect("send_input description")
+                .contains("queued for the next turn")
+        );
+
+        let wait_agent = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::WAIT_AGENT)
+            .expect("wait_agent registration should exist");
+        assert!(
+            wait_agent
+                .metadata()
+                .description()
+                .expect("wait_agent description")
+                .contains("completed=false if the wait times out")
+        );
     }
 }
