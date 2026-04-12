@@ -2,6 +2,57 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.98.2 - 2026-04-12
+
+### Highlights
+#### Bug Fixes
+
+- Refine asset selection logic to prioritize .tar.gz over .sha256 files (f113d8a6) (@vinhnx)
+#### Documentation
+
+- Update AGENTS.md and TODO.md for clarity on development workflow (bd4f0647) 
+- Remove broken copy/yank text issue description from TODO.md (29ad997b) 
+### Other Changes
+#### Other
+
+- Add README files for new modules and update existing ones (5c4384be) 
+- Add subagent constants, discovery, model resolution, prompt handling, and types (63230b30) 
+- Add tests for transcript rendering, Vim mode functionality, and wizard interactions (1505cbfa) 
+- Update code structure for improved readability and maintainability (39917c56) 
+- Add persistent memory tests for memory operations and classification (a0e0a343) 
+- Refactor code structure for improved readability and maintainability (3ffdf8a4) 
+- Refactor code for improved readability and consistency; update default model in configuration (d42726a2) 
+- Update theme in configuration to 'ciapre-blue' (c12bdf36) 
+- Add tool outcomes handling for response content and subagent memory (1327986f) 
+- Add session archive tests for persistence and message handling (311bd727) 
+- Refactor tool names to use constants from the tools module for consistency (44181fa5) 
+- Add runtime tests for Copilot functionality in llm_request module (d038b0cf) 
+- Add comprehensive tests for tool execution and context handling (0d3b4776) 
+- Refactor code for improved readability and consistency in copilot_runtime, components, and skills modules (b2cc57e0) 
+- Add tests for structural search functionality and request validation (f4649c89) 
+- Add tests for tool execution and sandbox runtime behavior (cbf7effb) 
+- Refactor UI command item creation for improved readability and maintainability (0db3b4d4) 
+- Update tool policies, fix keyboard shortcuts, and enhance documentation (8b91a421) 
+- Add websocket active response error handling and tests (a784ca34) 
+- Refactor tool policies and enhance lifecycle hook payloads to include tool call ID (f27a37cd) 
+- Add support for new session trigger and refactor session initialization logic (7fe243b0) 
+- Add grouping functions for MCP tools by provider and update related logic (b58a72f9) 
+- Add warning handling for session archive persistence and finalization (7341d25e) 
+- Update descriptions for agent parameters and built-in tool registrations (69e86421) 
+- Update command preview notice to include sharing instructions (4588b09c) 
+- Refactor diagnostics and UI interaction to enhance instruction context handling (f1bcb2d4) 
+- Refactor JSON schema handling and enhance tool specifications (c719871f) 
+- Add meta field to MCP elicitation request and response structures (914d59b8) 
+- Add notification condition for desktop notifications delivery (559bba94) 
+- Add default target for docs.rs in Cargo.toml files (12a5d068) 
+- Refactor code for improved readability and consistency in multiple files (7cc15514) 
+- Remove outdated TODO items from project documentation (58aec7ee) 
+#### Refactors
+
+- Enhance scrolling behavior and selection adjustment in session management (34060deb) 
+#### Tests
+
+- Enhance nested directories test to filter file matches (93d8e397) 
 ## 0.98.1 - 2026-04-09
 
 ### Highlights
