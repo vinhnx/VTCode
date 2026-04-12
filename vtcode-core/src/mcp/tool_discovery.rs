@@ -83,6 +83,26 @@ pub struct ToolDiscovery {
     mcp_client: Arc<dyn crate::mcp::McpToolExecutor>,
 }
 
+fn group_results_by_provider_preserving_order(
+    tools: impl IntoIterator<Item = ToolDiscoveryResult>,
+) -> Vec<(String, Vec<ToolDiscoveryResult>)> {
+    let mut grouped: Vec<(String, Vec<ToolDiscoveryResult>)> = Vec::new();
+
+    for tool in tools {
+        let provider = tool.provider.clone();
+        if let Some((_, provider_tools)) = grouped
+            .iter_mut()
+            .find(|(existing_provider, _)| *existing_provider == provider)
+        {
+            provider_tools.push(tool);
+        } else {
+            grouped.push((provider, vec![tool]));
+        }
+    }
+
+    grouped
+}
+
 impl ToolDiscovery {
     /// Create a new tool discovery service.
     pub fn new(mcp_client: Arc<dyn crate::mcp::McpToolExecutor>) -> Self {
@@ -189,37 +209,15 @@ impl ToolDiscovery {
     pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        let mut by_provider: rustc_hash::FxHashMap<String, Vec<ToolDiscoveryResult>> =
-            rustc_hash::FxHashMap::default();
-
-        for tool in tools {
-            let result = ToolDiscoveryResult {
-                name: tool.name.clone(),
-                provider: tool.provider.clone(),
-                description: tool.description.clone(),
+        Ok(group_results_by_provider_preserving_order(
+            tools.into_iter().map(|tool| ToolDiscoveryResult {
+                name: tool.name,
+                provider: tool.provider,
+                description: tool.description,
                 relevance_score: 1.0,
                 input_schema: None,
-            };
-
-            by_provider
-                .entry(tool.provider.clone())
-                .or_default()
-                .push(result);
-        }
-
-        let mut result: Vec<(String, Vec<ToolDiscoveryResult>)> = by_provider
-            .into_iter()
-            .map(|(provider, mut tools)| {
-                // Sort tools by name within each provider
-                tools.sort_by(|a, b| a.name.cmp(&b.name));
-                (provider, tools)
-            })
-            .collect();
-
-        // Sort providers alphabetically
-        result.sort_by(|a, b| a.0.cmp(&b.0));
-
-        Ok(result)
+            }),
+        ))
     }
 
     /// Calculate relevance score for a tool based on keyword match.
@@ -287,32 +285,81 @@ impl ToolDiscovery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn mock_tool(provider: &str, name: &str, description: &str) -> McpToolInfo {
+        McpToolInfo {
+            name: name.to_string(),
+            description: description.to_string(),
+            provider: provider.to_string(),
+            input_schema: json!({}),
+        }
+    }
 
     #[test]
     fn fuzzy_score_exact_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
         assert_eq!(discovery.fuzzy_score("read_file", "read_file"), 1.0);
     }
 
     #[test]
     fn fuzzy_score_partial_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
         let score = discovery.fuzzy_score("read_file_contents", "read");
         assert!(score > 0.5 && score <= 1.0);
     }
 
     #[test]
     fn fuzzy_score_no_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
         assert_eq!(discovery.fuzzy_score("read_file", "xyz"), 0.0);
     }
 
+    #[tokio::test]
+    async fn list_tools_by_provider_preserves_first_seen_provider_and_tool_order() {
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient {
+            tools: vec![
+                mock_tool("gmail", "send_email", "Send an email."),
+                mock_tool("calendar", "create_event", "Create a calendar event."),
+                mock_tool("gmail", "read_email", "Read an email."),
+                mock_tool("docs", "search", "Search docs."),
+                mock_tool("calendar", "list_events", "List calendar events."),
+            ],
+        }));
+
+        let grouped = discovery
+            .list_tools_by_provider()
+            .await
+            .expect("grouped tools");
+
+        let providers = grouped
+            .iter()
+            .map(|(provider, _)| provider.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(providers, vec!["gmail", "calendar", "docs"]);
+
+        let tool_names = grouped
+            .into_iter()
+            .map(|(_, tools)| tools.into_iter().map(|tool| tool.name).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tool_names,
+            vec![
+                vec!["send_email".to_string(), "read_email".to_string()],
+                vec!["create_event".to_string(), "list_events".to_string()],
+                vec!["search".to_string()],
+            ]
+        );
+    }
+
     // Mock for testing
-    struct MockMcpClient;
+    struct MockMcpClient {
+        tools: Vec<McpToolInfo>,
+    }
 
     impl Default for MockMcpClient {
         fn default() -> Self {
-            Self
+            Self { tools: Vec::new() }
         }
     }
 
@@ -323,7 +370,7 @@ mod tests {
         }
 
         async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-            Ok(vec![])
+            Ok(self.tools.clone())
         }
 
         async fn has_mcp_tool(&self, _tool_name: &str) -> Result<bool> {

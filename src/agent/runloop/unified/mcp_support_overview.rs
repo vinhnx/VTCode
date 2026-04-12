@@ -10,6 +10,26 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
+fn group_mcp_tools_by_provider_preserving_order(
+    tools: impl IntoIterator<Item = vtcode_core::mcp::McpToolInfo>,
+) -> Vec<(String, Vec<vtcode_core::mcp::McpToolInfo>)> {
+    let mut grouped: Vec<(String, Vec<vtcode_core::mcp::McpToolInfo>)> = Vec::new();
+
+    for tool in tools {
+        let provider = tool.provider.clone();
+        if let Some((_, provider_tools)) = grouped
+            .iter_mut()
+            .find(|(existing_provider, _)| *existing_provider == provider)
+        {
+            provider_tools.push(tool);
+        } else {
+            grouped.push((provider, vec![tool]));
+        }
+    }
+
+    grouped
+}
+
 pub(crate) async fn display_mcp_status(
     renderer: &mut AnsiRenderer,
     session_bootstrap: &SessionBootstrap,
@@ -328,14 +348,7 @@ pub(crate) async fn display_mcp_tools(
                 return Ok(());
             }
 
-            let mut grouped: std::collections::BTreeMap<String, Vec<_>> =
-                std::collections::BTreeMap::new();
-            for tool in tools {
-                grouped.entry(tool.provider.clone()).or_default().push(tool);
-            }
-
-            for (provider, mut entries) in grouped {
-                entries.sort_by(|a, b| a.name.cmp(&b.name));
+            for (provider, entries) in group_mcp_tools_by_provider_preserving_order(tools) {
                 renderer.line(
                     MessageStyle::Info,
                     &format!("- Provider: {} ({} tool(s))", provider, entries.len()),
@@ -353,6 +366,52 @@ pub(crate) async fn display_mcp_tools(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::group_mcp_tools_by_provider_preserving_order;
+    use serde_json::json;
+    use vtcode_core::mcp::McpToolInfo;
+
+    fn mock_tool(provider: &str, name: &str) -> McpToolInfo {
+        McpToolInfo {
+            name: name.to_string(),
+            description: String::new(),
+            provider: provider.to_string(),
+            input_schema: json!({}),
+        }
+    }
+
+    #[test]
+    fn grouped_mcp_tools_preserve_provider_and_tool_order() {
+        let grouped = group_mcp_tools_by_provider_preserving_order(vec![
+            mock_tool("gmail", "send_email"),
+            mock_tool("calendar", "create_event"),
+            mock_tool("gmail", "read_email"),
+            mock_tool("docs", "search"),
+            mock_tool("calendar", "list_events"),
+        ]);
+
+        let providers = grouped
+            .iter()
+            .map(|(provider, _)| provider.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(providers, vec!["gmail", "calendar", "docs"]);
+
+        let tool_names = grouped
+            .into_iter()
+            .map(|(_, tools)| tools.into_iter().map(|tool| tool.name).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tool_names,
+            vec![
+                vec!["send_email".to_string(), "read_email".to_string()],
+                vec!["create_event".to_string(), "list_events".to_string()],
+                vec!["search".to_string()],
+            ]
+        );
+    }
 }
 
 pub(crate) async fn refresh_mcp_tools(
