@@ -347,7 +347,8 @@ impl Session {
 
     /// Move cursor left to the start of the previous word
     pub(crate) fn move_left_word(&mut self) {
-        let cursor = previous_word_boundary(self.input_manager.content(), self.input_manager.cursor());
+        let cursor =
+            previous_word_boundary(self.input_manager.content(), self.input_manager.cursor());
         self.input_manager.set_cursor(cursor);
     }
     /// Move cursor right to the start of the next word

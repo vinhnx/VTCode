@@ -773,22 +773,29 @@ mod tests {
 
     #[test]
     fn describe_tool_action_annotates_skill_doc_reads_with_skill_name() {
-        let (description, used_keys) =
-            describe_tool_action(tool_names::READ_FILE, &json!({
+        let (description, used_keys) = describe_tool_action(
+            tool_names::READ_FILE,
+            &json!({
                 "path": "/tmp/pr-babysitter/SKILL.md"
-            }));
+            }),
+        );
 
-        assert_eq!(description, "Read file /tmp/pr-babysitter/SKILL.md (pr-babysitter skill)");
+        assert_eq!(
+            description,
+            "Read file /tmp/pr-babysitter/SKILL.md (pr-babysitter skill)"
+        );
         assert!(used_keys.contains("path"));
     }
 
     #[test]
     fn describe_tool_action_annotates_unified_file_skill_doc_reads_with_skill_name() {
-        let (description, used_keys) =
-            describe_tool_action(tool_names::UNIFIED_FILE, &json!({
+        let (description, used_keys) = describe_tool_action(
+            tool_names::UNIFIED_FILE,
+            &json!({
                 "action": "read",
                 "path": "skills/code-review-skill/SKILL.md"
-            }));
+            }),
+        );
 
         assert_eq!(
             description,

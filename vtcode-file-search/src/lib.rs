@@ -166,11 +166,13 @@ impl FileIndex {
     ) -> Vec<(u32, String, MatchType)> {
         let mut results = BinaryHeap::with_capacity(limit);
 
-        // Pre-compute pattern for reuse across all path matches
+        // Normalize pattern to lowercase to work around a nucleo-matcher bug:
+        // its prefilter only does case-insensitive search for lowercase needle
+        // chars, not uppercase. See https://github.com/openai/codex/pull/15772.
         let pattern_storage = if pattern_text.is_ascii() {
-            PatternStorage::Ascii(pattern_text.as_bytes().to_vec())
+            PatternStorage::Ascii(pattern_text.to_ascii_lowercase().into_bytes())
         } else {
-            PatternStorage::Unicode(pattern_text.chars().collect())
+            PatternStorage::Unicode(pattern_text.to_lowercase().chars().collect())
         };
 
         // Reuse single matcher across all queries (mem-reuse-collections)
@@ -422,11 +424,13 @@ enum PatternStorage {
 
 impl BestMatchesList {
     fn new(limit: usize, pattern_text: &str) -> Self {
-        // Pre-compute pattern storage once instead of per-match
+        // Normalize pattern to lowercase to work around a nucleo-matcher bug:
+        // its prefilter only does case-insensitive search for lowercase needle
+        // chars, not uppercase. See https://github.com/openai/codex/pull/15772.
         let pattern = if pattern_text.is_ascii() {
-            PatternStorage::Ascii(pattern_text.as_bytes().to_vec())
+            PatternStorage::Ascii(pattern_text.to_ascii_lowercase().into_bytes())
         } else {
-            PatternStorage::Unicode(pattern_text.chars().collect())
+            PatternStorage::Unicode(pattern_text.to_lowercase().chars().collect())
         };
 
         Self {
