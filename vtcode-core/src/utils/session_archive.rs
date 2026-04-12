@@ -1279,6 +1279,36 @@ pub async fn find_session_by_identifier(identifier: &str) -> Result<Option<Sessi
     Ok(Some(SessionListing { path, snapshot }))
 }
 
+/// Find a saved session by ID or name for TUI `/resume` command.
+///
+/// Searches both the session identifier (UUID or file stem) and matches
+/// against recent sessions. Returns a descriptive error message when no
+/// matching session is found.
+pub async fn find_session_by_id_or_name(id_or_name: &str) -> Result<SessionListing> {
+    // First try exact identifier match (UUID or file stem)
+    if let Some(listing) = find_session_by_identifier(id_or_name).await? {
+        return Ok(listing);
+    }
+
+    // Fall back to searching recent sessions by identifier substring
+    let listings = list_recent_sessions(200).await?;
+    let normalized_query = id_or_name.to_lowercase();
+
+    for listing in &listings {
+        // Match against the file stem (session identifier)
+        if let Some(stem) = listing.path.file_stem()
+            && let Some(stem_str) = stem.to_str()
+            && stem_str.to_lowercase().contains(&normalized_query)
+        {
+            return Ok(listing.clone());
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "No saved chat found matching '{id_or_name}'."
+    ))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub session_id: String,
