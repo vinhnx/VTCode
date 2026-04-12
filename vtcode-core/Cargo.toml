@@ -208,6 +208,7 @@ ignored = ["toml_edit", "tower"]
 
 [package.metadata.docs.rs]
 all-features = true
+default-target = "x86_64-unknown-linux-gnu"
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
