@@ -112,7 +112,10 @@ enum HiddenLinesNoticeKind {
 fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
     match kind {
         HiddenLinesNoticeKind::CommandPreview => {
-            format!("    {}", shared_hidden_lines_summary(hidden))
+            format!(
+                "    {} (/share html for full transcript)",
+                shared_hidden_lines_summary(hidden)
+            )
         }
         HiddenLinesNoticeKind::Generic => format!(
             "[... {} line{} truncated ...]",
@@ -737,7 +740,7 @@ mod tests {
     fn hidden_lines_notice_preserves_existing_variants() {
         assert_eq!(
             hidden_lines_notice(2, HiddenLinesNoticeKind::CommandPreview),
-            "    … +2 lines"
+            "    … +2 lines (/share html for full transcript)"
         );
         assert_eq!(
             hidden_lines_notice(1, HiddenLinesNoticeKind::Generic),
