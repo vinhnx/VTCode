@@ -1865,4 +1865,21 @@ mod tests {
 
         apply_file_opener_config(original);
     }
+
+    #[test]
+    fn clickable_targets_decode_percent_encoded_bare_paths() {
+        let _guard = lock_file_opener_test_guard();
+        let original = current_file_opener();
+        apply_file_opener_config(vtcode_config::FileOpener::Vscode);
+
+        let clickable = make_clickable_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12")
+            .expect("clickable target");
+
+        assert_eq!(
+            clickable,
+            "vscode://file/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12"
+        );
+
+        apply_file_opener_config(original);
+    }
 }

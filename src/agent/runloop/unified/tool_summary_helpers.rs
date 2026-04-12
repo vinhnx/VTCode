@@ -1,6 +1,7 @@
 use hashbrown::HashSet;
 
 use serde_json::Value;
+use std::path::Path;
 
 pub(super) fn humanize_tool_name(name: &str) -> String {
     humanize_key(name)
@@ -138,10 +139,33 @@ pub(super) fn describe_path_action(
             let mut used = HashSet::new();
             used.insert((*key).to_string());
             let summary = truncate_middle(&value, 60);
-            return Some((format!("{} {}", verb, summary), used));
+            let annotated_summary = annotate_skill_doc_summary(&value, summary);
+            return Some((format!("{} {}", verb, annotated_summary), used));
         }
     }
     None
+}
+
+fn annotate_skill_doc_summary(raw_path: &str, summary: String) -> String {
+    let path = Path::new(raw_path.trim());
+    let is_skill_doc = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("SKILL.md"));
+    if !is_skill_doc {
+        return summary;
+    }
+
+    let Some(skill_name) = path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+    else {
+        return summary;
+    };
+
+    format!("{} ({} skill)", summary, skill_name)
 }
 
 pub(super) fn lookup_string(args: &Value, key: &str) -> Option<String> {

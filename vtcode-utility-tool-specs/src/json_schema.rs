@@ -1,42 +1,7 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::BTreeMap;
+use serde_json::{Map, Value, json};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum JsonSchema {
-    Object {
-        #[serde(default)]
-        properties: BTreeMap<String, JsonSchema>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        required: Option<Vec<String>>,
-        #[serde(
-            rename = "additionalProperties",
-            skip_serializing_if = "Option::is_none"
-        )]
-        additional_properties: Option<AdditionalProperties>,
-        #[serde(rename = "anyOf", skip_serializing_if = "Option::is_none")]
-        any_of: Option<Vec<Value>>,
-    },
-    String {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Number {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Boolean {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Array {
-        items: Box<JsonSchema>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        description: Option<String>,
-    },
-    Null,
-}
+pub type JsonSchema = Value;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -53,92 +18,153 @@ impl From<bool> for AdditionalProperties {
 
 #[must_use]
 pub fn parse_tool_input_schema(value: &Value) -> JsonSchema {
-    match value {
-        Value::Object(map) => match map.get("type").and_then(Value::as_str) {
-            Some("object") => {
-                let properties = map
-                    .get("properties")
-                    .and_then(Value::as_object)
-                    .map(|props| {
-                        props
-                            .iter()
-                            .map(|(key, value)| (key.clone(), parse_tool_input_schema(value)))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let required = map.get("required").and_then(Value::as_array).map(|items| {
-                    items
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(ToOwned::to_owned)
-                        .collect::<Vec<_>>()
-                });
-                let additional_properties =
-                    map.get("additionalProperties").map(|value| match value {
-                        Value::Bool(flag) => AdditionalProperties::Boolean(*flag),
-                        Value::Object(_) => {
-                            AdditionalProperties::Schema(Box::new(parse_tool_input_schema(value)))
-                        }
-                        _ => AdditionalProperties::Boolean(true),
-                    });
-                let any_of = map.get("anyOf").and_then(Value::as_array).cloned();
+    let mut schema = value.clone();
+    sanitize_json_schema(&mut schema);
+    schema
+}
 
-                JsonSchema::Object {
-                    properties,
-                    required,
-                    additional_properties,
-                    any_of,
-                }
+fn sanitize_json_schema(value: &mut Value) {
+    match value {
+        Value::Bool(_) => {
+            *value = json!({ "type": "string" });
+        }
+        Value::Object(map) => sanitize_schema_object(map),
+        Value::Array(items) => {
+            for item in items {
+                sanitize_json_schema(item);
             }
-            Some("array") => JsonSchema::Array {
-                items: Box::new(
-                    map.get("items")
-                        .map(parse_tool_input_schema)
-                        .unwrap_or(JsonSchema::Null),
+        }
+        Value::Null | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+fn sanitize_schema_object(map: &mut Map<String, Value>) {
+    if let Some(properties) = map.get_mut("properties").and_then(Value::as_object_mut) {
+        for schema in properties.values_mut() {
+            sanitize_json_schema(schema);
+        }
+    }
+
+    if let Some(items) = map.get_mut("items") {
+        sanitize_json_schema(items);
+    }
+
+    if let Some(prefix_items) = map.get_mut("prefixItems") {
+        sanitize_json_schema(prefix_items);
+    }
+
+    if let Some(additional_properties) = map.get_mut("additionalProperties")
+        && !matches!(additional_properties, Value::Bool(_))
+    {
+        sanitize_json_schema(additional_properties);
+    }
+
+    if let Some(any_of) = map.get_mut("anyOf") {
+        sanitize_json_schema(any_of);
+    }
+
+    if let Some(const_value) = map.remove("const") {
+        map.insert("enum".to_string(), Value::Array(vec![const_value]));
+    }
+
+    let mut schema_types = normalized_schema_types(map);
+    if schema_types.is_empty() && map.contains_key("anyOf") {
+        return;
+    }
+
+    if schema_types.is_empty() {
+        if map.contains_key("properties")
+            || map.contains_key("required")
+            || map.contains_key("additionalProperties")
+        {
+            schema_types.push("object");
+        } else if map.contains_key("items") || map.contains_key("prefixItems") {
+            schema_types.push("array");
+        } else if map.contains_key("enum") || map.contains_key("format") {
+            schema_types.push("string");
+        } else if map.contains_key("minimum")
+            || map.contains_key("maximum")
+            || map.contains_key("exclusiveMinimum")
+            || map.contains_key("exclusiveMaximum")
+            || map.contains_key("multipleOf")
+        {
+            schema_types.push("number");
+        } else {
+            schema_types.push("string");
+        }
+    }
+
+    write_schema_types(map, &schema_types);
+    ensure_default_children_for_schema_types(map, &schema_types);
+}
+
+fn normalized_schema_types(map: &Map<String, Value>) -> Vec<&'static str> {
+    let Some(schema_type) = map.get("type") else {
+        return Vec::new();
+    };
+
+    match schema_type {
+        Value::String(schema_type) => schema_type_from_str(schema_type).into_iter().collect(),
+        Value::Array(schema_types) => schema_types
+            .iter()
+            .filter_map(Value::as_str)
+            .filter_map(schema_type_from_str)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn write_schema_types(map: &mut Map<String, Value>, schema_types: &[&'static str]) {
+    match schema_types {
+        [] => {
+            map.remove("type");
+        }
+        [schema_type] => {
+            map.insert(
+                "type".to_string(),
+                Value::String((*schema_type).to_string()),
+            );
+        }
+        _ => {
+            map.insert(
+                "type".to_string(),
+                Value::Array(
+                    schema_types
+                        .iter()
+                        .map(|schema_type| Value::String((*schema_type).to_string()))
+                        .collect(),
                 ),
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("boolean") => JsonSchema::Boolean {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("integer" | "number") => JsonSchema::Number {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            Some("string") => JsonSchema::String {
-                description: map
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            },
-            _ => {
-                if map.contains_key("enum") {
-                    JsonSchema::String {
-                        description: map
-                            .get("description")
-                            .and_then(Value::as_str)
-                            .map(ToOwned::to_owned),
-                    }
-                } else {
-                    JsonSchema::Null
-                }
-            }
-        },
-        _ => JsonSchema::Null,
+            );
+        }
+    }
+}
+
+fn ensure_default_children_for_schema_types(map: &mut Map<String, Value>, schema_types: &[&str]) {
+    if schema_types.contains(&"object") && !map.contains_key("properties") {
+        map.insert("properties".to_string(), Value::Object(Map::new()));
+    }
+
+    if schema_types.contains(&"array") && !map.contains_key("items") {
+        map.insert("items".to_string(), json!({ "type": "string" }));
+    }
+}
+
+fn schema_type_from_str(schema_type: &str) -> Option<&'static str> {
+    match schema_type {
+        "string" => Some("string"),
+        "number" => Some("number"),
+        "integer" => Some("integer"),
+        "boolean" => Some("boolean"),
+        "object" => Some("object"),
+        "array" => Some("array"),
+        "null" => Some("null"),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
+    use super::parse_tool_input_schema;
     use serde_json::{Value, json};
 
     #[test]
@@ -172,23 +198,77 @@ mod tests {
             }
         }));
 
-        let JsonSchema::Object {
-            additional_properties,
-            ..
-        } = schema
-        else {
-            panic!("expected object schema");
-        };
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["additionalProperties"]["type"], "string");
+        assert_eq!(schema["additionalProperties"]["description"], "value");
+    }
 
-        let Some(AdditionalProperties::Schema(nested)) = additional_properties else {
-            panic!("expected nested additional properties schema");
-        };
+    #[test]
+    fn parse_tool_input_schema_preserves_nested_any_of_and_nullable_type_unions() {
+        let schema = parse_tool_input_schema(&json!({
+            "type": "object",
+            "properties": {
+                "open": {
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ref_id": {"type": "string"},
+                                    "lineno": {"type": ["integer", "null"]}
+                                },
+                                "required": ["ref_id"],
+                                "additionalProperties": false
+                            }
+                        },
+                        {"type": "null"}
+                    ]
+                },
+                "message": {"type": ["string", "null"]}
+            },
+            "additionalProperties": false
+        }));
 
-        match *nested {
-            JsonSchema::String { description } => {
-                assert_eq!(description.as_deref(), Some("value"));
+        let variants = schema["properties"]["open"]["anyOf"]
+            .as_array()
+            .expect("open anyOf");
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0]["type"], "array");
+        assert_eq!(variants[0]["items"]["type"], "object");
+        assert_eq!(
+            variants[0]["items"]["properties"]["lineno"]["type"],
+            json!(["integer", "null"])
+        );
+        assert_eq!(
+            schema["properties"]["message"]["type"],
+            json!(["string", "null"])
+        );
+    }
+
+    #[test]
+    fn parse_tool_input_schema_preserves_integer_and_string_enums() {
+        let schema = parse_tool_input_schema(&json!({
+            "type": "object",
+            "properties": {
+                "page": {"type": "integer"},
+                "response_length": {
+                    "type": "string",
+                    "enum": ["short", "medium", "long"]
+                },
+                "kind": {
+                    "type": "const",
+                    "const": "tagged"
+                }
             }
-            other => panic!("expected string schema, got {other:?}"),
-        }
+        }));
+
+        assert_eq!(schema["properties"]["page"]["type"], "integer");
+        assert_eq!(
+            schema["properties"]["response_length"]["enum"],
+            json!(["short", "medium", "long"])
+        );
+        assert_eq!(schema["properties"]["kind"]["type"], "string");
+        assert_eq!(schema["properties"]["kind"]["enum"], json!(["tagged"]));
     }
 }

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
@@ -223,52 +224,39 @@ impl ToolHandler for ListDirHandler {
 
 /// Create the list_dir tool specification.
 pub fn create_list_dir_tool() -> super::tool_handler::ToolSpec {
-    use super::tool_handler::{JsonSchema, ResponsesApiTool, ToolSpec};
-    use std::collections::BTreeMap;
-
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "path".to_string(),
-        JsonSchema::String {
-            description: Some("Path to list (defaults to current directory)".to_string()),
-        },
-    );
-    properties.insert(
-        "show_hidden".to_string(),
-        JsonSchema::Boolean {
-            description: Some("Include hidden files (default: false)".to_string()),
-        },
-    );
-    properties.insert(
-        "recursive".to_string(),
-        JsonSchema::Boolean {
-            description: Some("List recursively (default: false)".to_string()),
-        },
-    );
-    properties.insert(
-        "max_depth".to_string(),
-        JsonSchema::Number {
-            description: Some("Maximum depth for recursive listing (default: 3)".to_string()),
-        },
-    );
-    properties.insert(
-        "pattern".to_string(),
-        JsonSchema::String {
-            description: Some("Glob pattern to filter entries".to_string()),
-        },
-    );
+    use super::tool_handler::{ResponsesApiTool, ToolSpec};
 
     ToolSpec::Function(ResponsesApiTool {
         name: "list_dir".to_string(),
         description:
             "List the contents of a directory. Returns file and directory names with metadata."
                 .to_string(),
-        parameters: JsonSchema::Object {
-            properties,
-            required: None,
-            additional_properties: Some(false.into()),
-            any_of: None,
-        },
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to list (defaults to current directory)"
+                },
+                "show_hidden": {
+                    "type": "boolean",
+                    "description": "Include hidden files (default: false)"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "List recursively (default: false)"
+                },
+                "max_depth": {
+                    "type": "number",
+                    "description": "Maximum depth for recursive listing (default: 3)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern to filter entries"
+                }
+            },
+            "additionalProperties": false
+        }),
         strict: false,
     })
 }

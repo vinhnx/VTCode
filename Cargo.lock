@@ -6568,6 +6568,7 @@ dependencies = [
  "left-right",
  "memchr",
  "once_cell",
+ "percent-encoding",
  "rand 0.10.0",
  "ratatui",
  "regex",

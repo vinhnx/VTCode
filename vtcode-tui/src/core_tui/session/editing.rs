@@ -10,6 +10,114 @@ use crate::config::constants::ui;
 /// - Newline handling with capacity limits
 use unicode_segmentation::UnicodeSegmentation;
 
+const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
+
+fn is_word_separator(ch: char) -> bool {
+    WORD_SEPARATORS.contains(ch)
+}
+
+fn is_separator_piece(piece: &str) -> bool {
+    piece.chars().all(is_word_separator)
+}
+
+fn split_word_pieces(run: &str) -> Vec<(usize, &str)> {
+    let mut pieces = Vec::new();
+    for (segment_start, segment) in run.split_word_bound_indices() {
+        let mut piece_start = 0;
+        let mut chars = segment.char_indices();
+        let Some((_, first_char)) = chars.next() else {
+            continue;
+        };
+        let mut in_separator = is_word_separator(first_char);
+
+        for (idx, ch) in chars {
+            let is_separator = is_word_separator(ch);
+            if is_separator == in_separator {
+                continue;
+            }
+
+            pieces.push((segment_start + piece_start, &segment[piece_start..idx]));
+            piece_start = idx;
+            in_separator = is_separator;
+        }
+
+        pieces.push((segment_start + piece_start, &segment[piece_start..]));
+    }
+
+    pieces
+}
+
+fn previous_word_boundary(content: &str, cursor: usize) -> usize {
+    if cursor == 0 {
+        return 0;
+    }
+
+    let prefix = &content[..cursor];
+    let Some((first_non_ws_idx, ch)) = prefix
+        .char_indices()
+        .rev()
+        .find(|&(_, ch)| !ch.is_whitespace())
+    else {
+        return 0;
+    };
+
+    let run_start = prefix[..first_non_ws_idx]
+        .char_indices()
+        .rev()
+        .find(|&(_, ch)| ch.is_whitespace())
+        .map_or(0, |(idx, ch)| idx + ch.len_utf8());
+    let run_end = first_non_ws_idx + ch.len_utf8();
+    let pieces = split_word_pieces(&prefix[run_start..run_end]);
+    let mut pieces = pieces.into_iter().rev().peekable();
+    let Some((piece_start, piece)) = pieces.next() else {
+        return run_start;
+    };
+    let mut start = run_start + piece_start;
+
+    if is_separator_piece(piece) {
+        while let Some((idx, piece)) = pieces.peek() {
+            if !is_separator_piece(piece) {
+                break;
+            }
+            start = run_start + *idx;
+            pieces.next();
+        }
+    }
+
+    start
+}
+
+fn next_word_boundary(content: &str, cursor: usize) -> usize {
+    if cursor >= content.len() {
+        return content.len();
+    }
+
+    let suffix = &content[cursor..];
+    let Some(first_non_ws) = suffix.find(|ch: char| !ch.is_whitespace()) else {
+        return content.len();
+    };
+    let run = &suffix[first_non_ws..];
+    let run = &run[..run.find(char::is_whitespace).unwrap_or(run.len())];
+    let mut pieces = split_word_pieces(run).into_iter().peekable();
+    let Some((start, piece)) = pieces.next() else {
+        return cursor + first_non_ws;
+    };
+
+    let word_start = cursor + first_non_ws + start;
+    let mut end = word_start + piece.len();
+    if is_separator_piece(piece) {
+        while let Some((idx, piece)) = pieces.peek() {
+            if !is_separator_piece(piece) {
+                break;
+            }
+            end = cursor + first_non_ws + *idx + piece.len();
+            pieces.next();
+        }
+    }
+
+    end
+}
+
 impl Session {
     pub(crate) fn refresh_input_edit_state(&mut self) {
         self.clear_suggested_prompt_state();
@@ -125,53 +233,16 @@ impl Session {
             self.refresh_input_edit_state();
             return;
         }
-        if self.input_manager.cursor() == 0 {
+        let cursor = self.input_manager.cursor();
+        if cursor == 0 {
             return;
         }
 
-        // Find the start of the current word by moving backward
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .take_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
+        let delete_start = previous_word_boundary(self.input_manager.content(), cursor);
 
-        if graphemes.is_empty() {
-            return;
-        }
-
-        let mut index = graphemes.len();
-
-        // Skip any trailing whitespace
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Move backwards until we find whitespace (start of the word)
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Calculate the position to delete from
-        let delete_start = if index < graphemes.len() {
-            graphemes[index].0
-        } else {
-            self.input_manager.cursor()
-        };
-
-        // Delete from delete_start to cursor
-        if delete_start < self.input_manager.cursor() {
+        if delete_start < cursor {
             let before = &self.input_manager.content()[..delete_start];
-            let after = &self.input_manager.content()[self.input_manager.cursor()..];
+            let after = &self.input_manager.content()[cursor..];
             let new_content = format!("{}{}", before, after);
 
             self.input_manager.set_content(new_content);
@@ -276,103 +347,13 @@ impl Session {
 
     /// Move cursor left to the start of the previous word
     pub(crate) fn move_left_word(&mut self) {
-        if self.input_manager.cursor() == 0 {
-            return;
-        }
-
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .take_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
-
-        if graphemes.is_empty() {
-            return;
-        }
-
-        let mut index = graphemes.len();
-
-        // Skip trailing whitespace
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Move to start of word
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        if index < graphemes.len() {
-            self.input_manager.set_cursor(graphemes[index].0);
-        } else {
-            self.input_manager.set_cursor(0);
-        }
+        let cursor = previous_word_boundary(self.input_manager.content(), self.input_manager.cursor());
+        self.input_manager.set_cursor(cursor);
     }
     /// Move cursor right to the start of the next word
     pub(crate) fn move_right_word(&mut self) {
-        if self.input_manager.cursor() >= self.input_manager.content().len() {
-            return;
-        }
-
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .skip_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
-
-        if graphemes.is_empty() {
-            self.input_manager.move_cursor_to_end();
-            return;
-        }
-
-        let mut index = 0;
-        let mut skipped_whitespace = false;
-
-        // Skip current whitespace
-        while index < graphemes.len() {
-            let (_, grapheme) = graphemes[index];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            skipped_whitespace = true;
-            index += 1;
-        }
-
-        if index >= graphemes.len() {
-            self.input_manager.move_cursor_to_end();
-            return;
-        }
-
-        // If we skipped whitespace, we're at the start of a word
-        if skipped_whitespace {
-            self.input_manager.set_cursor(graphemes[index].0);
-            return;
-        }
-
-        // Otherwise, skip to end of current word
-        while index < graphemes.len() {
-            let (_, grapheme) = graphemes[index];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index += 1;
-        }
-
-        if index < graphemes.len() {
-            self.input_manager.set_cursor(graphemes[index].0);
-        } else {
-            self.input_manager.move_cursor_to_end();
-        }
+        let cursor = next_word_boundary(self.input_manager.content(), self.input_manager.cursor());
+        self.input_manager.set_cursor(cursor);
     }
     /// Move cursor to the start of the line
     pub(crate) fn move_to_start(&mut self) {

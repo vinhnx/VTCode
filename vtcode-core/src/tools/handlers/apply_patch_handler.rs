@@ -4,13 +4,12 @@
 //! Supports both freeform and JSON function call formats.
 
 use hashbrown::HashMap;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::events::{ToolEmitter, ToolEventCtx};
 use super::sandboxing::{
@@ -19,8 +18,8 @@ use super::sandboxing::{
     ToolCtx, ToolError, ToolRuntime,
 };
 use super::tool_handler::{
-    ApprovalPolicy, FileChange, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool,
-    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
+    ApprovalPolicy, FileChange, FreeformTool, FreeformToolFormat, ResponsesApiTool, ToolCallError,
+    ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
 };
 use super::tool_orchestrator::ToolOrchestrator;
 use crate::config::constants::tools;
@@ -335,20 +334,6 @@ pub fn create_apply_patch_freeform_tool() -> ToolSpec {
 
 /// Create JSON function apply_patch tool spec (for standard function calling)
 pub fn create_apply_patch_json_tool() -> ToolSpec {
-    let mut properties = BTreeMap::new();
-    properties.insert(
-        "input".to_string(),
-        JsonSchema::String {
-            description: Some("The entire contents of the apply_patch command".to_string()),
-        },
-    );
-    properties.insert(
-        "patch".to_string(),
-        JsonSchema::String {
-            description: Some(crate::tools::apply_patch::APPLY_PATCH_ALIAS_DESCRIPTION.to_string()),
-        },
-    );
-
     ToolSpec::Function(ResponsesApiTool {
         name: tools::APPLY_PATCH.to_string(),
         description: format!(
@@ -356,12 +341,21 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
             APPLY_PATCH_DESCRIPTION, APPLY_PATCH_GRAMMAR_HELP
         ),
         strict: false,
-        parameters: JsonSchema::Object {
-            properties,
-            required: Some(vec!["input".to_string()]),
-            additional_properties: Some(false.into()),
-            any_of: None,
-        },
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "description": "The entire contents of the apply_patch command"
+                },
+                "patch": {
+                    "type": "string",
+                    "description": crate::tools::apply_patch::APPLY_PATCH_ALIAS_DESCRIPTION
+                }
+            },
+            "required": ["input"],
+            "additionalProperties": false
+        }),
     })
 }
 

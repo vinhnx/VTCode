@@ -282,9 +282,9 @@ pub fn create_cwd_session() -> Arc<dyn ToolSession> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tool_handler::{JsonSchema, ResponsesApiTool};
+    use super::super::tool_handler::ResponsesApiTool;
     use super::*;
-    use std::collections::BTreeMap;
+    use serde_json::json;
 
     struct TestHandler;
     struct ErrorHandler;
@@ -316,12 +316,7 @@ mod tests {
         let spec = ToolSpec::Function(ResponsesApiTool {
             name: "test_tool".to_string(),
             description: "A test tool".to_string(),
-            parameters: JsonSchema::Object {
-                properties: BTreeMap::new(),
-                required: None,
-                additional_properties: None,
-                any_of: None,
-            },
+            parameters: json!({"type": "object"}),
             strict: false,
         });
 
@@ -350,12 +345,7 @@ mod tests {
         let spec = ToolSpec::Function(ResponsesApiTool {
             name: "test_tool".to_string(),
             description: "A test tool".to_string(),
-            parameters: JsonSchema::Object {
-                properties: BTreeMap::new(),
-                required: None,
-                additional_properties: None,
-                any_of: None,
-            },
+            parameters: json!({"type": "object"}),
             strict: false,
         });
 
