@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.98.4"
+version = "0.98.5"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -87,7 +87,7 @@ ignore = "0.4"
 ring = "0.17"
 
 [workspace.package]
-version = "0.98.4"
+version = "0.98.5"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -153,13 +153,13 @@ multiple_unsafe_ops_per_block = "warn"
 
 
 [dependencies]
-vtcode-acp = { path = "vtcode-acp", version = "0.98.4" }
-vtcode-commons = { path = "vtcode-commons", version = "0.98.4" }
-vtcode-config = { path = "vtcode-config", version = "0.98.4" }
-vtcode-auth = { path = "vtcode-auth", version = "0.98.4" }
-vtcode-core = { path = "vtcode-core", version = "0.98.4", default-features = false }
-vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.98.4" }
-vtcode-tui = { path = "vtcode-tui", version = "0.98.4" }
+vtcode-acp = { path = "vtcode-acp", version = "0.98.5" }
+vtcode-commons = { path = "vtcode-commons", version = "0.98.5" }
+vtcode-config = { path = "vtcode-config", version = "0.98.5" }
+vtcode-auth = { path = "vtcode-auth", version = "0.98.5" }
+vtcode-core = { path = "vtcode-core", version = "0.98.5", default-features = false }
+vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.98.5" }
+vtcode-tui = { path = "vtcode-tui", version = "0.98.5" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
