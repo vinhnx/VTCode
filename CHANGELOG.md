@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.98.6 - 2026-04-13
+
+### Highlights
+#### Features
+
+- Add meta handling to elicitation response in LoggingClientHandler (0326ef68) 
+### Other Changes
 ## 0.98.5 - 2026-04-13
 
 ### Highlights
