@@ -1206,7 +1206,7 @@ main() {
         fi
 
         # Summary of what we have
-        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || ( "$require_windows" == "true" && "$windows_downloaded" == false ) ]]; then
+        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false ]] || [[ "$require_windows" == "true" && "$windows_downloaded" == false ]]; then
             print_warning "Some platform binaries are missing - release will include:"
             [[ "$linux_gnu_downloaded" == true ]] && print_info "  ✓ Linux x86_64 gnu" || print_warning "  ✗ Linux x86_64 gnu"
             [[ "$linux_musl_downloaded" == true ]] && print_info "  ✓ Linux x86_64 musl" || print_warning "  ✗ Linux x86_64 musl"
