@@ -348,12 +348,15 @@ impl<'a> SessionWidget<'a> {
     }
 
     fn render_footer(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
-        let left_status = self.session.input_status_left.as_deref().unwrap_or("");
-        let right_status = self.session.input_status_right.as_deref().unwrap_or("");
+        let left_status = self.session.status_left_text().unwrap_or("");
+        let right_status = self.session.status_right_text().unwrap_or("");
 
         let hint = if let Some(hint) = self.footer_hint_override {
             hint
-        } else if self.session.thinking_spinner.is_active {
+        } else if self.session.thinking_spinner.is_active
+            || self.session.has_status_spinner()
+            || self.session.is_running_activity()
+        {
             footer_hints::PROCESSING
         } else if self.session.has_active_overlay() {
             footer_hints::MODAL
@@ -363,27 +366,20 @@ impl<'a> SessionWidget<'a> {
             footer_hints::EDITING
         };
 
-        let input_status_visible = self
+        let shimmer_phase = self
             .session
-            .input_status_left
-            .as_ref()
-            .is_some_and(|value| !value.trim().is_empty())
-            || self
-                .session
-                .input_status_right
-                .as_ref()
-                .is_some_and(|value| !value.trim().is_empty());
-        let shimmer_phase = if input_status_visible {
-            None
-        } else {
-            Some(self.session.shimmer_state.phase())
-        };
+            .is_shimmer_active()
+            .then_some(self.session.shimmer_state.phase());
 
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
             .right_status(right_status)
             .hint(hint)
             .mode(mode);
+
+        if self.session.thinking_spinner.is_active {
+            footer = footer.spinner(self.session.thinking_spinner.current_frame());
+        }
 
         if let Some(phase) = shimmer_phase {
             footer = footer.shimmer_phase(phase);

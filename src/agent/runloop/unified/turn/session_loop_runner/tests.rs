@@ -5,7 +5,7 @@ use super::{
     checkpoint_session_archive_start, effective_max_tool_calls_for_turn,
     latest_assistant_result_text, prepare_resume_bootstrap_without_archive,
     remove_transient_system_notes, resolve_effective_turn_timeout_secs,
-    should_attempt_requesting_timeout_recovery,
+    should_attempt_requesting_timeout_recovery, take_pending_resumed_user_prompt,
 };
 use crate::agent::agents::ResumeSession;
 use crate::agent::runloop::git::normalize_workspace_path;
@@ -102,6 +102,35 @@ fn requesting_partial_timeout_without_recovery_mentions_retry_skip() {
     assert!(timeout_message.contains("retry is skipped"));
     assert!(!timeout_message.contains("continuing with a compacted tool-free recovery pass"));
     assert!(!timeout_error_message.contains("Continuing with a compacted tool-free recovery pass"));
+}
+
+#[test]
+fn take_pending_resumed_user_prompt_removes_trailing_user_message() {
+    let mut history = vec![
+        vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
+        vtcode_core::llm::provider::Message::user("what is this project".to_string()),
+    ];
+
+    let pending = take_pending_resumed_user_prompt(&mut history);
+
+    assert_eq!(pending.as_deref(), Some("what is this project"));
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].role, MessageRole::System);
+}
+
+#[test]
+fn take_pending_resumed_user_prompt_ignores_completed_turns() {
+    let mut history = vec![
+        vtcode_core::llm::provider::Message::user("what is this project".to_string()),
+        vtcode_core::llm::provider::Message::assistant("VT Code is a Rust coding agent".to_string()),
+    ];
+
+    let pending = take_pending_resumed_user_prompt(&mut history);
+
+    assert!(pending.is_none());
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].role, MessageRole::User);
+    assert_eq!(history[1].role, MessageRole::Assistant);
 }
 
 #[test]

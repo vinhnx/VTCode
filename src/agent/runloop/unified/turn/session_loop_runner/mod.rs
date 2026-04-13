@@ -204,6 +204,23 @@ fn latest_assistant_result_text(
         .filter(|text| !text.is_empty())
 }
 
+fn take_pending_resumed_user_prompt(
+    history: &mut Vec<vtcode_core::llm::provider::Message>,
+) -> Option<String> {
+    let message = history.last()?;
+    if message.role != vtcode_core::llm::provider::MessageRole::User {
+        return None;
+    }
+
+    let prompt = message.content.as_text().trim().to_string();
+    if prompt.is_empty() {
+        return None;
+    }
+
+    let _ = history.pop();
+    Some(prompt)
+}
+
 fn live_reload_preserves_session_config(
     initial_vt_cfg: Option<&VTCodeConfig>,
     runtime_cfg: &CoreAgentConfig,
@@ -764,6 +781,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             steering_receiver.take(),
         );
         runtime.state.messages = conversation_history;
+        if resume_ref.is_some()
+            && let Some(pending_prompt) = take_pending_resumed_user_prompt(&mut runtime.state.messages)
+        {
+            let (_, runtime_steering) = runtime.split_mut();
+            runtime_steering.queue_follow_up_input(pending_prompt);
+        }
         let tool_result_cache = execution.tool_result_cache;
         let tool_permission_cache = execution.tool_permission_cache;
         let permissions_state = execution.permissions_state;

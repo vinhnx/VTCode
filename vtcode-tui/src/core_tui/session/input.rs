@@ -784,17 +784,8 @@ impl Session {
         let mut left = self
             .copy_notification_text()
             .map(str::to_owned)
-            .or_else(|| {
-                self.input_status_left
-                    .as_ref()
-                    .map(|value| value.trim().to_owned())
-                    .filter(|value| !value.is_empty())
-            });
-        let right = self
-            .input_status_right
-            .as_ref()
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty());
+            .or_else(|| self.status_left_text().map(str::to_owned));
+        let right = self.status_right_text().map(str::to_owned);
 
         if let Some(shell_hint) = self.shell_mode_status_hint() {
             left = Some(match left {
@@ -1236,13 +1227,21 @@ fn is_spinner_frame(indicator: &str) -> bool {
 }
 
 pub(crate) fn status_requires_shimmer(text: &str) -> bool {
-    if text.contains("Running command:")
-        || text.contains("Running tool:")
-        || text.contains("Running:")
-        || text.contains("Running ")
-        || text.contains("Executing ")
-        || text.contains("Ctrl+C")
-        || text.contains("/stop to stop")
+    let normalized = text.trim().to_ascii_lowercase();
+
+    if normalized.contains("running command:")
+        || normalized.contains("running tool:")
+        || normalized.contains("running:")
+        || normalized.contains("running ")
+        || normalized.contains("executing ")
+        || normalized.contains("approval required")
+        || normalized.contains("permission required")
+        || normalized.contains("action required")
+        || normalized.contains("input required")
+        || normalized.contains("waiting for approval")
+        || normalized.contains("waiting for input")
+        || normalized.contains("ctrl+c")
+        || normalized.contains("/stop to stop")
     {
         return true;
     }
