@@ -190,10 +190,43 @@ fn permission_overlay_surfaces_action_required_status() {
 }
 
 #[test]
+fn non_permission_overlay_surfaces_generic_action_required_status() {
+    let mut session = fresh_session();
+    session.show_overlay(OverlayRequest::List(ListOverlayRequest {
+        title: "Open External Link".to_string(),
+        lines: vec!["example.com".to_string()],
+        footer_hint: None,
+        items: vec![InlineListItem {
+            title: "Open".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction("open".to_string())),
+            search_value: None,
+        }],
+        selected: None,
+        search: None,
+        hotkeys: Vec::new(),
+    }));
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .expect("input status line")
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(rendered.contains("Action required"));
+    assert!(status_requires_shimmer("Action required"));
+}
+
+#[test]
 fn status_requires_shimmer_for_input_required_states() {
     assert!(status_requires_shimmer("Approval required"));
     assert!(status_requires_shimmer("Input required"));
     assert!(status_requires_shimmer("Waiting for approval"));
+    assert!(status_requires_shimmer("Action required"));
 }
 
 #[test]

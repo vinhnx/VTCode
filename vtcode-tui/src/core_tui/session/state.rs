@@ -29,6 +29,7 @@ use crate::options::FullscreenInteractionSettings;
 
 const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(3);
 const COPY_NOTIFICATION_TEXT: &str = "Copied to clipboard";
+const ACTION_REQUIRED_STATUS_TEXT: &str = "Action required";
 const APPROVAL_REQUIRED_STATUS_TEXT: &str = "Approval required";
 const INPUT_REQUIRED_STATUS_TEXT: &str = "Input required";
 
@@ -279,15 +280,20 @@ impl Session {
     }
 
     pub(crate) fn overlay_attention_status_text(&self) -> Option<&'static str> {
-        let title = self.modal_state()?.title.trim();
+        if let Some(modal) = self.modal_state() {
+            let normalized_title = modal.title.trim().to_ascii_lowercase();
 
-        if title.eq_ignore_ascii_case("Tool Permission Required")
-            || title.to_ascii_lowercase().contains("approval")
-            || title.to_ascii_lowercase().contains("permission")
-        {
-            Some(APPROVAL_REQUIRED_STATUS_TEXT)
-        } else if title.to_ascii_lowercase().contains("input required") {
-            Some(INPUT_REQUIRED_STATUS_TEXT)
+            if normalized_title.contains("input required") {
+                Some(INPUT_REQUIRED_STATUS_TEXT)
+            } else if normalized_title.contains("approval")
+                || normalized_title.contains("permission")
+            {
+                Some(APPROVAL_REQUIRED_STATUS_TEXT)
+            } else {
+                Some(ACTION_REQUIRED_STATUS_TEXT)
+            }
+        } else if self.wizard_overlay().is_some() || self.has_active_overlay() {
+            Some(ACTION_REQUIRED_STATUS_TEXT)
         } else {
             None
         }
