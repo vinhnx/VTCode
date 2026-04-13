@@ -281,6 +281,27 @@ jobs:
           cp scripts/install.ps1 artifacts/
           chmod +x artifacts/install.sh
 
+      - name: Generate checksums.txt
+        shell: bash
+        run: |
+          cd artifacts
+          # Aggregate all .sha256 files into a single checksums.txt
+          # Each .sha256 file contains: <hash>  <filename>
+          # We extract and merge them into one unified file
+          > checksums.txt
+          for f in *.sha256; do
+            if [ -f "$f" ]; then
+              cat "$f" >> checksums.txt
+            fi
+          done
+          if [ -s checksums.txt ]; then
+            echo "Generated checksums.txt:"
+            cat checksums.txt
+          else
+            echo "No checksums found to aggregate" >&2
+            exit 1
+          fi
+
       - name: Generate Changelog
         id: changelog
         run: |
@@ -318,6 +339,7 @@ jobs:
             artifacts/*.tar.gz
             artifacts/*.zip
             artifacts/*.sha256
+            artifacts/checksums.txt
             artifacts/install.sh
             artifacts/install.ps1
           body_path: release_notes.md
