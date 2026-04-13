@@ -263,35 +263,37 @@ verify_checksum() {
     local binary_file="$1"
     local release_tag="$2"
     local release_filename="${3:-}"
-    
+
     log_info "Verifying binary integrity..."
-    
+
     local basename_file
     if [[ -n "$release_filename" ]]; then
         basename_file="$release_filename"
     else
         basename_file=$(basename "$binary_file")
     fi
-    
+
     local temp_checksums
     temp_checksums=$(mktemp)
-    
-    # Try to download checksums.txt first
+
+    # Try to download checksums.txt first (aggregated file from release)
     local checksums_url="${GITHUB_RELEASES}/${release_tag}/checksums.txt"
     local expected_checksum=""
-    
+
     if curl -fsSL -o "$temp_checksums" "$checksums_url" 2>/dev/null; then
-        expected_checksum=$(grep "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' || true)
+        # checksums.txt format: <hash>  <filename> (two spaces, from sha256sum/shasum)
+        # Use grep with fixed string match and extract the hash (first field)
+        expected_checksum=$(grep -F "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' | head -n1 || true)
     fi
-    
-    # If not found in checksums.txt, try individual .sha256 file
+
+    # If not found in checksums.txt, try individual .sha256 file (backwards compat)
     if [[ -z "$expected_checksum" ]]; then
         local sha_url="${GITHUB_RELEASES}/${release_tag}/${basename_file%.tar.gz}.sha256"
         if curl -fsSL -o "$temp_checksums" "$sha_url" 2>/dev/null; then
-            expected_checksum=$(cat "$temp_checksums" | awk '{print $1}')
+            expected_checksum=$(awk '{print $1}' "$temp_checksums" | head -n1)
         fi
     fi
-    
+
     rm -f "$temp_checksums"
     
     if [[ -z "$expected_checksum" ]]; then
