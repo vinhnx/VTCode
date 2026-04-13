@@ -1,8 +1,8 @@
 [agent]
-api_key_env = "OLLAMA_API_KEY"
-default_model = "glm-5.1:cloud"
-provider = "ollama"
-reasoning_effort = "low"
+api_key_env = ""
+default_model = "claude-haiku-4.5"
+provider = "copilot"
+reasoning_effort = "medium"
 theme = "ciapre-blue"
 
 [agent.persistent_memory]

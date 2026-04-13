@@ -822,7 +822,11 @@ impl Session {
             None
         };
 
-        if left.is_none() && right.is_none() && scroll_indicator.is_none() {
+        if left.is_none()
+            && right.is_none()
+            && scroll_indicator.is_none()
+            && !self.thinking_spinner.is_active
+        {
             return None;
         }
 
@@ -842,6 +846,13 @@ impl Session {
             } else {
                 spans.extend(self.create_git_status_spans(left_value, dim_style));
             }
+        } else if self.thinking_spinner.is_active {
+            spans.push(Span::styled(
+                self.thinking_spinner.current_frame(),
+                dim_style,
+            ));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled("Thinking", dim_style));
         }
 
         // Build right side spans (scroll indicator + optional right content)
