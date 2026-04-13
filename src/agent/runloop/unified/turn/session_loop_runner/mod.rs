@@ -207,17 +207,23 @@ fn latest_assistant_result_text(
 fn take_pending_resumed_user_prompt(
     history: &mut Vec<vtcode_core::llm::provider::Message>,
 ) -> Option<String> {
-    let message = history.last()?;
-    if message.role != vtcode_core::llm::provider::MessageRole::User {
+    let user_index = history
+        .iter()
+        .rposition(|message| message.role == vtcode_core::llm::provider::MessageRole::User)?;
+    if history
+        .iter()
+        .skip(user_index + 1)
+        .any(|message| message.role != vtcode_core::llm::provider::MessageRole::System)
+    {
         return None;
     }
 
-    let prompt = message.content.as_text().trim().to_string();
+    let prompt = history[user_index].content.as_text().trim().to_string();
     if prompt.is_empty() {
         return None;
     }
 
-    let _ = history.pop();
+    let _ = history.remove(user_index);
     Some(prompt)
 }
 

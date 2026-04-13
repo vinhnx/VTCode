@@ -119,16 +119,35 @@ fn take_pending_resumed_user_prompt_removes_trailing_user_message() {
 }
 
 #[test]
+fn take_pending_resumed_user_prompt_handles_trailing_system_notes() {
+    let mut history = vec![
+        vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
+        vtcode_core::llm::provider::Message::user("what is this project".to_string()),
+        vtcode_core::llm::provider::Message::system(
+            "Recovered from interrupted session".to_string(),
+        ),
+    ];
+
+    let pending = take_pending_resumed_user_prompt(&mut history);
+
+    assert_eq!(pending.as_deref(), Some("what is this project"));
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].role, MessageRole::System);
+    assert_eq!(history[1].role, MessageRole::System);
+}
+
+#[test]
 fn take_pending_resumed_user_prompt_ignores_completed_turns() {
     let mut history = vec![
         vtcode_core::llm::provider::Message::user("what is this project".to_string()),
         vtcode_core::llm::provider::Message::assistant("VT Code is a Rust coding agent".to_string()),
+        vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
     ];
 
     let pending = take_pending_resumed_user_prompt(&mut history);
 
     assert!(pending.is_none());
-    assert_eq!(history.len(), 2);
+    assert_eq!(history.len(), 3);
     assert_eq!(history[0].role, MessageRole::User);
     assert_eq!(history[1].role, MessageRole::Assistant);
 }
