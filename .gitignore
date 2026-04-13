@@ -821,4 +821,5 @@ plans/
 .vtcode/state/
 .vtcode/tasks/
 .vtcode/tasks/current_task.md
+.vtcode/history/vtcode-share-hf/
 .vtcode/history/
