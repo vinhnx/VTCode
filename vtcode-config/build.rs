@@ -706,98 +706,107 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
     }
     metadata.push_str("];\n\n");
 
-    metadata.push_str(
-        "pub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    match provider {\n",
-    );
-    for (provider, provider_entries) in &provider_map {
-        metadata.push_str("        \"");
-        metadata.push_str(provider);
-        metadata.push_str("\" => match id {\n");
-        for entry in provider_entries {
-            metadata.push_str("            \"");
-            metadata.push_str(&escape_rust_string(&entry.id));
-            metadata.push_str("\" => Some(Entry {\n");
-            metadata.push_str("                provider: \"");
+    if provider_map.is_empty() {
+        metadata.push_str(
+            "pub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> {\n    None\n}\n\n",
+        );
+        metadata.push_str(
+            "pub fn models_for_provider(_provider: &str) -> Option<&'static [&'static str]> {\n    None\n}\n",
+        );
+    } else {
+        metadata.push_str(
+            "pub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    match provider {\n",
+        );
+        for (provider, provider_entries) in &provider_map {
+            metadata.push_str("        \"");
             metadata.push_str(provider);
-            metadata.push_str("\",\n");
-            metadata.push_str("                id: \"");
-            metadata.push_str(&escape_rust_string(&entry.id));
-            metadata.push_str("\",\n");
-            metadata.push_str("                display_name: \"");
-            metadata.push_str(&escape_rust_string(&entry.display_name));
-            metadata.push_str("\",\n");
-            metadata.push_str("                description: \"");
-            metadata.push_str(&escape_rust_string(&entry.description));
-            metadata.push_str("\",\n");
-            metadata.push_str("                context_window: ");
-            metadata.push_str(&entry.context_window.to_string());
-            metadata.push_str(",\n");
-            metadata.push_str("                max_output_tokens: ");
-            match entry.max_output_tokens {
-                Some(value) => metadata.push_str(&format!("Some({value})")),
-                None => metadata.push_str("None"),
+            metadata.push_str("\" => match id {\n");
+            for entry in provider_entries {
+                metadata.push_str("            \"");
+                metadata.push_str(&escape_rust_string(&entry.id));
+                metadata.push_str("\" => Some(Entry {\n");
+                metadata.push_str("                provider: \"");
+                metadata.push_str(provider);
+                metadata.push_str("\",\n");
+                metadata.push_str("                id: \"");
+                metadata.push_str(&escape_rust_string(&entry.id));
+                metadata.push_str("\",\n");
+                metadata.push_str("                display_name: \"");
+                metadata.push_str(&escape_rust_string(&entry.display_name));
+                metadata.push_str("\",\n");
+                metadata.push_str("                description: \"");
+                metadata.push_str(&escape_rust_string(&entry.description));
+                metadata.push_str("\",\n");
+                metadata.push_str("                context_window: ");
+                metadata.push_str(&entry.context_window.to_string());
+                metadata.push_str(",\n");
+                metadata.push_str("                max_output_tokens: ");
+                match entry.max_output_tokens {
+                    Some(value) => metadata.push_str(&format!("Some({value})")),
+                    None => metadata.push_str("None"),
+                }
+                metadata.push_str(",\n");
+                metadata.push_str("                reasoning: ");
+                metadata.push_str(if entry.reasoning { "true" } else { "false" });
+                metadata.push_str(",\n");
+                metadata.push_str("                tool_call: ");
+                metadata.push_str(if entry.tool_call { "true" } else { "false" });
+                metadata.push_str(",\n");
+                metadata.push_str("                vision: ");
+                metadata.push_str(if entry.vision { "true" } else { "false" });
+                metadata.push_str(",\n");
+                metadata.push_str("                input_modalities: &[\n");
+                for modality in &entry.input_modalities {
+                    metadata.push_str("                    \"");
+                    metadata.push_str(&escape_rust_string(modality));
+                    metadata.push_str("\",\n");
+                }
+                metadata.push_str("                ],\n");
+                metadata.push_str("                caching: ");
+                metadata.push_str(if entry.caching { "true" } else { "false" });
+                metadata.push_str(",\n");
+                metadata.push_str("                structured_output: ");
+                metadata.push_str(if entry.structured_output {
+                    "true"
+                } else {
+                    "false"
+                });
+                metadata.push_str(",\n");
+                metadata.push_str("                pricing: Pricing {\n");
+                metadata.push_str("                    input: ");
+                write_optional_f64(&mut metadata, entry.pricing.input);
+                metadata.push_str(",\n");
+                metadata.push_str("                    output: ");
+                write_optional_f64(&mut metadata, entry.pricing.output);
+                metadata.push_str(",\n");
+                metadata.push_str("                    cache_read: ");
+                write_optional_f64(&mut metadata, entry.pricing.cache_read);
+                metadata.push_str(",\n");
+                metadata.push_str("                    cache_write: ");
+                write_optional_f64(&mut metadata, entry.pricing.cache_write);
+                metadata.push_str(",\n");
+                metadata.push_str("                },\n");
+                metadata.push_str("            }),\n");
             }
-            metadata.push_str(",\n");
-            metadata.push_str("                reasoning: ");
-            metadata.push_str(if entry.reasoning { "true" } else { "false" });
-            metadata.push_str(",\n");
-            metadata.push_str("                tool_call: ");
-            metadata.push_str(if entry.tool_call { "true" } else { "false" });
-            metadata.push_str(",\n");
-            metadata.push_str("                vision: ");
-            metadata.push_str(if entry.vision { "true" } else { "false" });
-            metadata.push_str(",\n");
-            metadata.push_str("                input_modalities: &[\n");
-            for modality in &entry.input_modalities {
-                metadata.push_str("                    \"");
-                metadata.push_str(&escape_rust_string(modality));
+            metadata.push_str("            _ => None,\n");
+            metadata.push_str("        },\n");
+        }
+        metadata.push_str("        _ => None,\n    }\n}\n\n");
+
+        metadata.push_str("pub fn models_for_provider(provider: &str) -> Option<&'static [&'static str]> {\n    match provider {\n");
+        for (provider, provider_entries) in &provider_map {
+            metadata.push_str("        \"");
+            metadata.push_str(provider);
+            metadata.push_str("\" => Some(&[\n");
+            for entry in provider_entries {
+                metadata.push_str("            \"");
+                metadata.push_str(&escape_rust_string(&entry.id));
                 metadata.push_str("\",\n");
             }
-            metadata.push_str("                ],\n");
-            metadata.push_str("                caching: ");
-            metadata.push_str(if entry.caching { "true" } else { "false" });
-            metadata.push_str(",\n");
-            metadata.push_str("                structured_output: ");
-            metadata.push_str(if entry.structured_output {
-                "true"
-            } else {
-                "false"
-            });
-            metadata.push_str(",\n");
-            metadata.push_str("                pricing: Pricing {\n");
-            metadata.push_str("                    input: ");
-            write_optional_f64(&mut metadata, entry.pricing.input);
-            metadata.push_str(",\n");
-            metadata.push_str("                    output: ");
-            write_optional_f64(&mut metadata, entry.pricing.output);
-            metadata.push_str(",\n");
-            metadata.push_str("                    cache_read: ");
-            write_optional_f64(&mut metadata, entry.pricing.cache_read);
-            metadata.push_str(",\n");
-            metadata.push_str("                    cache_write: ");
-            write_optional_f64(&mut metadata, entry.pricing.cache_write);
-            metadata.push_str(",\n");
-            metadata.push_str("                },\n");
-            metadata.push_str("            }),\n");
+            metadata.push_str("        ]),\n");
         }
-        metadata.push_str("            _ => None,\n");
-        metadata.push_str("        },\n");
+        metadata.push_str("        _ => None,\n    }\n}\n");
     }
-    metadata.push_str("        _ => None,\n    }\n}\n\n");
-
-    metadata.push_str("pub fn models_for_provider(provider: &str) -> Option<&'static [&'static str]> {\n    match provider {\n");
-    for (provider, provider_entries) in &provider_map {
-        metadata.push_str("        \"");
-        metadata.push_str(provider);
-        metadata.push_str("\" => Some(&[\n");
-        for entry in provider_entries {
-            metadata.push_str("            \"");
-            metadata.push_str(&escape_rust_string(&entry.id));
-            metadata.push_str("\",\n");
-        }
-        metadata.push_str("        ]),\n");
-    }
-    metadata.push_str("        _ => None,\n    }\n}\n");
 
     fs::write(out_dir.join("model_capabilities.rs"), metadata)
         .context("Failed to write generated model capability metadata")
