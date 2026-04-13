@@ -244,4 +244,22 @@ mod tests {
         assert_eq!(spans[2].content.as_ref(), "model");
         assert_ne!(spans[2].style.fg, Some(Color::Rgb(0xCE, 0x7E, 0x47)));
     }
+
+    #[test]
+    fn build_status_line_uses_shimmer_phase_for_visible_running_status() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let widget = FooterWidget::new(&styles)
+            .left_status("Approval required")
+            .shimmer_phase(0.5);
+
+        let line = widget.build_status_line(40);
+
+        assert!(line.spans.len() > 1);
+        let rendered = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>();
+        assert!(rendered.contains("Approval required"));
+    }
 }

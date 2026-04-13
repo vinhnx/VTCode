@@ -1,6 +1,6 @@
 use super::super::*;
 use super::helpers::*;
-use crate::core_tui::session::input;
+use crate::core_tui::session::{input, status_requires_shimmer};
 use std::time::Instant;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -155,6 +155,45 @@ fn cursor_fake_during_status_shimmer() {
     let after_shimmer = input_data(&mut session);
     assert!(after_shimmer.cursor_should_be_visible);
     assert!(!after_shimmer.use_fake_cursor);
+}
+
+#[test]
+fn permission_overlay_surfaces_action_required_status() {
+    let mut session = fresh_session();
+    session.show_overlay(OverlayRequest::List(ListOverlayRequest {
+        title: "Tool Permission Required".to_string(),
+        lines: vec!["Need approval".to_string()],
+        footer_hint: None,
+        items: vec![InlineListItem {
+            title: "Approve Once".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(true)),
+            search_value: None,
+        }],
+        selected: Some(InlineListSelection::ToolApproval(true)),
+        search: None,
+        hotkeys: Vec::new(),
+    }));
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .expect("input status line")
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(rendered.contains("Approval required"));
+    assert!(status_requires_shimmer("Approval required"));
+}
+
+#[test]
+fn status_requires_shimmer_for_input_required_states() {
+    assert!(status_requires_shimmer("Approval required"));
+    assert!(status_requires_shimmer("Input required"));
+    assert!(status_requires_shimmer("Waiting for approval"));
 }
 
 #[test]

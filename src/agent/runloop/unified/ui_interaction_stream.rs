@@ -947,7 +947,9 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         }
     }
 
-    Ok((response, emitted_tokens))
+    let response_rendered = emitted_tokens || reasoning_emitted || reasoning_state.rendered_reasoning();
+
+    Ok((response, response_rendered))
 }
 
 #[cfg(test)]

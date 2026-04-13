@@ -618,6 +618,37 @@ async fn does_not_suppress_large_content_after_reasoning_stream() {
 }
 
 #[tokio::test]
+async fn marks_reasoning_only_streams_as_rendered() {
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec![],
+        reasoning_chunks: vec!["Applying formatting".to_string()],
+    };
+    let request = build_request();
+    let (tx, _rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    assert!(
+        emitted,
+        "reasoning-only streams should count as rendered to avoid duplicate replay"
+    );
+}
+
+#[tokio::test]
 async fn emits_progress_events_for_stream_deltas() {
     let provider = StagedReasoningProvider {
         content: "final content".to_string(),

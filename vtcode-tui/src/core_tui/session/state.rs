@@ -29,6 +29,8 @@ use crate::options::FullscreenInteractionSettings;
 
 const COPY_NOTIFICATION_DURATION: Duration = Duration::from_secs(3);
 const COPY_NOTIFICATION_TEXT: &str = "Copied to clipboard";
+const APPROVAL_REQUIRED_STATUS_TEXT: &str = "Approval required";
+const INPUT_REQUIRED_STATUS_TEXT: &str = "Input required";
 
 impl Session {
     pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
@@ -276,8 +278,38 @@ impl Session {
             .map(|_| COPY_NOTIFICATION_TEXT)
     }
 
+    pub(crate) fn overlay_attention_status_text(&self) -> Option<&'static str> {
+        let title = self.modal_state()?.title.trim();
+
+        if title.eq_ignore_ascii_case("Tool Permission Required")
+            || title.to_ascii_lowercase().contains("approval")
+            || title.to_ascii_lowercase().contains("permission")
+        {
+            Some(APPROVAL_REQUIRED_STATUS_TEXT)
+        } else if title.to_ascii_lowercase().contains("input required") {
+            Some(INPUT_REQUIRED_STATUS_TEXT)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn status_left_text(&self) -> Option<&str> {
+        self.input_status_left
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .or_else(|| self.overlay_attention_status_text())
+    }
+
+    pub(crate) fn status_right_text(&self) -> Option<&str> {
+        self.input_status_right
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
     pub(crate) fn is_running_activity(&self) -> bool {
-        let left = self.input_status_left.as_deref().unwrap_or("");
+        let left = self.status_left_text().unwrap_or("");
         let running_status = self.appearance.should_animate_progress_status()
             && (left.contains("Running command:")
                 || left.contains("Running tool:")
@@ -298,14 +330,14 @@ impl Session {
         if !self.appearance.should_animate_progress_status() {
             return false;
         }
-        let Some(left) = self.input_status_left.as_deref() else {
+        let Some(left) = self.status_left_text() else {
             return false;
         };
         status_requires_shimmer(left)
     }
 
     pub(crate) fn is_shimmer_active(&self) -> bool {
-        self.has_status_spinner()
+        self.has_status_spinner() || self.thinking_spinner.is_active
     }
 
     pub(crate) fn use_steady_cursor(&self) -> bool {
