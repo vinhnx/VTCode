@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.98.7 - 2026-04-15
+
+### Highlights
+#### Bug Fixes
+
+- Update condition for missing platform binaries in release script (3e88cd0e) 
+- Improve user prompt handling and update configuration settings (934ee662) 
+#### Features
+
+- Add checksum generation and validation to release process (6708fec0) 
+- Add generic action required status handling in overlays (6d7ffdad) 
+### Other Changes
+#### Other
+
+- Update TODO (92336dc0) 
+- Update tool execution status display and refine UI handling (f77c7053) 
+- Implement pending user prompt handling and enhance status rendering in TUI (2c4dae7b) 
 ## 0.98.6 - 2026-04-13
 
 ### Highlights
