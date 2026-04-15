@@ -186,6 +186,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Getting Started & Overview
 
+- **File**: `docs/ACP_IMPLEMENTATION_SUMMARY.md`
+  - **Content**: ACP Slash Commands & Provider Configuration - Implementation Summary
+  - **Topics**: Overview, Key Findings, Changes Made, Architecture Summary, Testing
+  - **User Questions**: "What can you tell me about ACP Slash Commands & Provider Configuration - Implementation Summary?", "How does Overview work?", "How does Key Findings work?"
+
+- **File**: `docs/ACP_SLASH_COMMAND_IMPLEMENTATION.md`
+  - **Content**: ACP Slash Commands & Provider Configuration Implementation Plan
+  - **Topics**: Problem Statement, Current Architecture, Implementation Tasks, Files to Modify, Testing Strategy
+  - **User Questions**: "What can you tell me about ACP Slash Commands & Provider Configuration Implementation Plan?", "How does Problem Statement work?", "How does Current Architecture work?"
+
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
   - **Topics**: Launching exec mode, Dry-run mode, Continuation and verification, Structured event stream, Resuming sessions

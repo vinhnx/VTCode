@@ -166,6 +166,8 @@ pub(crate) struct SessionData {
     pub(crate) tool_notice_sent: bool,
     pub(crate) current_mode: SessionMode,
     pub(crate) reasoning_effort: ReasoningEffortLevel,
+    pub(crate) provider: String,
+    pub(crate) model: String,
 }
 
 pub(crate) struct NotificationEnvelope {

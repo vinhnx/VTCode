@@ -1,9 +1,15 @@
 use agent_client_protocol as acp;
+use std::collections::HashSet;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
+use vtcode_core::prompts::PromptTemplate;
+use vtcode_core::skills::find_command_skill_by_slash_name;
+use vtcode_core::ui::slash::SlashCommandInfo;
 
 pub(crate) const SESSION_CONFIG_MODE_ID: &str = "mode";
 pub(crate) const SESSION_CONFIG_THOUGHT_LEVEL_ID: &str = "thought_level";
+pub(crate) const SESSION_CONFIG_PROVIDER_ID: &str = "provider";
+pub(crate) const SESSION_CONFIG_MODEL_ID: &str = "model";
 
 pub(crate) fn session_mode_description(mode: SessionMode) -> &'static str {
     match mode {
@@ -69,6 +75,10 @@ pub(crate) fn session_config_options(
     current_mode: SessionMode,
     reasoning_effort: ReasoningEffortLevel,
     include_thought_level: bool,
+    current_provider: &str,
+    provider_options: Vec<acp::SessionConfigSelectOption>,
+    current_model: &str,
+    model_options: Vec<acp::SessionConfigSelectOption>,
 ) -> Vec<acp::SessionConfigOption> {
     let mode_options = [SessionMode::Ask, SessionMode::Architect, SessionMode::Code]
         .into_iter()
@@ -84,7 +94,7 @@ pub(crate) fn session_config_options(
         })
         .collect::<Vec<_>>();
 
-    let mut config_options = Vec::with_capacity(2);
+    let mut config_options = Vec::with_capacity(4);
     config_options.push(
         acp::SessionConfigOption::select(
             SESSION_CONFIG_MODE_ID,
@@ -94,6 +104,25 @@ pub(crate) fn session_config_options(
         )
         .description("Controls whether VT Code answers, plans, or edits.")
         .category(acp::SessionConfigOptionCategory::Mode),
+    );
+    config_options.push(
+        acp::SessionConfigOption::select(
+            SESSION_CONFIG_PROVIDER_ID,
+            "Provider",
+            current_provider.to_string(),
+            provider_options,
+        )
+        .description("Controls which LLM provider VT Code uses for this ACP session."),
+    );
+    config_options.push(
+        acp::SessionConfigOption::select(
+            SESSION_CONFIG_MODEL_ID,
+            "Model",
+            current_model.to_string(),
+            model_options,
+        )
+        .description("Controls which model VT Code uses for this ACP session.")
+        .category(acp::SessionConfigOptionCategory::Model),
     );
     if include_thought_level {
         config_options.push(
@@ -120,27 +149,86 @@ pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::
         .title(title_override.or_else(|| Some("VT Code".to_string())))
 }
 
-pub(crate) fn build_available_commands() -> Vec<acp::AvailableCommand> {
-    vec![
-        acp::AvailableCommand::new("init", "Create vtcode.toml and index the workspace").input(
-            acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
-                "Optional: --force flag",
-            )),
-        ),
-        acp::AvailableCommand::new("config", "Browse vtcode.toml settings sections"),
-        acp::AvailableCommand::new("status", "Show model, provider, workspace, and tool status"),
-        acp::AvailableCommand::new("doctor", "Run installation and configuration diagnostics"),
-        acp::AvailableCommand::new(
-            "plan",
-            "Toggle between Code and Architect modes for read-only planning",
-        )
-        .input(acp::AvailableCommandInput::Unstructured(
-            acp::UnstructuredCommandInput::new("Optional: on | off"),
-        )),
-        acp::AvailableCommand::new("mode", "Cycle through Ask -> Architect -> Code modes"),
-        acp::AvailableCommand::new("help", "Show slash command help"),
-        acp::AvailableCommand::new("reset", "Reset conversation context"),
-        acp::AvailableCommand::new("tools", "List tools and their descriptions"),
-        acp::AvailableCommand::new("exit", "Close the VT Code session"),
-    ]
+fn command_input_hint(name: &str) -> Option<String> {
+    let usage = find_command_skill_by_slash_name(name)?.usage.trim();
+    let bare_usage = format!("/{name}");
+    if usage == bare_usage {
+        None
+    } else {
+        Some(format!("Usage: {usage}"))
+    }
+}
+
+fn build_available_command(name: &str, description: &str) -> acp::AvailableCommand {
+    let mut command = acp::AvailableCommand::new(name.to_string(), description.to_string());
+    if let Some(hint) = command_input_hint(name) {
+        command = command.input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new(hint),
+        ));
+    }
+    command
+}
+
+pub(crate) fn build_available_commands(
+    slash_commands: &[&SlashCommandInfo],
+    prompt_templates: &[PromptTemplate],
+) -> Vec<acp::AvailableCommand> {
+    let mut available_commands = slash_commands
+        .iter()
+        .map(|command| build_available_command(command.name, command.description))
+        .collect::<Vec<_>>();
+
+    let mut seen_names = slash_commands
+        .iter()
+        .map(|command| command.name.to_string())
+        .collect::<HashSet<_>>();
+    for template in prompt_templates {
+        if !seen_names.insert(template.name.clone()) {
+            continue;
+        }
+        available_commands.push(
+            acp::AvailableCommand::new(template.name.clone(), template.description.clone()).input(
+                acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
+                    "Optional template arguments",
+                )),
+            ),
+        );
+    }
+
+    available_commands
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn build_available_commands_includes_templates_and_deduplicates_names() {
+        let slash_command = SlashCommandInfo {
+            name: "status",
+            description: "Show status",
+        };
+        let templates = vec![
+            PromptTemplate {
+                name: "custom-plan".to_string(),
+                description: "Generate a custom plan".to_string(),
+                body: "Plan $@".to_string(),
+                path: PathBuf::from("/tmp/custom-plan.md"),
+            },
+            PromptTemplate {
+                name: "status".to_string(),
+                description: "Duplicate built-in name".to_string(),
+                body: "ignored".to_string(),
+                path: PathBuf::from("/tmp/status.md"),
+            },
+        ];
+
+        let commands = build_available_commands(&[&slash_command], &templates);
+        let names = commands
+            .iter()
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["status", "custom-plan"]);
+    }
 }

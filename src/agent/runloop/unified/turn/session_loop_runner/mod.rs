@@ -788,7 +788,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         );
         runtime.state.messages = conversation_history;
         if resume_ref.is_some()
-            && let Some(pending_prompt) = take_pending_resumed_user_prompt(&mut runtime.state.messages)
+            && let Some(pending_prompt) =
+                take_pending_resumed_user_prompt(&mut runtime.state.messages)
         {
             let (_, runtime_steering) = runtime.split_mut();
             runtime_steering.queue_follow_up_input(pending_prompt);

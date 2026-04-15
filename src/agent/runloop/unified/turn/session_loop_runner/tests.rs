@@ -140,7 +140,9 @@ fn take_pending_resumed_user_prompt_handles_trailing_system_notes() {
 fn take_pending_resumed_user_prompt_ignores_completed_turns() {
     let mut history = vec![
         vtcode_core::llm::provider::Message::user("what is this project".to_string()),
-        vtcode_core::llm::provider::Message::assistant("VT Code is a Rust coding agent".to_string()),
+        vtcode_core::llm::provider::Message::assistant(
+            "VT Code is a Rust coding agent".to_string(),
+        ),
         vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
     ];
 

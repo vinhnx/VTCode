@@ -42,7 +42,10 @@ mod tests {
     use crate::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
-    use crate::zed::helpers::{SESSION_CONFIG_MODE_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID};
+    use crate::zed::helpers::{
+        SESSION_CONFIG_MODE_ID, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PROVIDER_ID,
+        SESSION_CONFIG_THOUGHT_LEVEL_ID,
+    };
     use crate::zed::types::NotificationEnvelope;
     use agent_client_protocol::{
         Agent, LoadSessionRequest, NewSessionRequest, SessionConfigKind, SessionModeId,
@@ -194,7 +197,7 @@ mod tests {
             SessionModeId::new("architect")
         );
         let config_options = response.config_options.unwrap();
-        assert_eq!(config_options.len(), 2);
+        assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
             option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
                 && matches!(
@@ -214,6 +217,24 @@ mod tests {
                             == agent_client_protocol::SessionConfigValueId::new("high")
                 )
         }));
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("openai")
+                )
+        }));
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4")
+                )
+        }));
     }
 
     #[tokio::test]
@@ -231,7 +252,7 @@ mod tests {
             SessionModeId::new("code")
         );
         let config_options = response.config_options.unwrap();
-        assert_eq!(config_options.len(), 2);
+        assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
             option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
                 && matches!(
@@ -249,6 +270,24 @@ mod tests {
                     SessionConfigKind::Select(select)
                         if select.current_value
                             == agent_client_protocol::SessionConfigValueId::new("low")
+                )
+        }));
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("openai")
+                )
+        }));
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4")
                 )
         }));
     }
@@ -309,6 +348,73 @@ mod tests {
                     SessionConfigKind::Select(select)
                         if select.current_value
                             == agent_client_protocol::SessionConfigValueId::new("xhigh")
+                )
+        }));
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_updates_provider_and_auto_switches_model() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let response = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                SESSION_CONFIG_PROVIDER_ID,
+                "anthropic",
+            ))
+            .await
+            .unwrap();
+
+        let session = agent.session_handle(&session_id).unwrap();
+        assert_eq!(session.data.borrow().provider, "anthropic");
+        assert_eq!(session.data.borrow().model, "claude-opus-4-6");
+        assert!(response.config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("anthropic")
+                )
+        }));
+        assert!(response.config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("claude-opus-4-6")
+                )
+        }));
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_updates_model_for_provider() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let response = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                SESSION_CONFIG_MODEL_ID,
+                "gpt-5.4-mini",
+            ))
+            .await
+            .unwrap();
+
+        let session = agent.session_handle(&session_id).unwrap();
+        assert_eq!(session.data.borrow().provider, "openai");
+        assert_eq!(session.data.borrow().model, "gpt-5.4-mini");
+        assert!(response.config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4-mini")
                 )
         }));
     }
