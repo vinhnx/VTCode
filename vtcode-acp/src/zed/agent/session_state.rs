@@ -259,7 +259,9 @@ impl ZedAgent {
             .map(|factory| factory.list_providers())
             .unwrap_or_default();
         if providers.is_empty() {
-            tracing::warn!("LLM factory has no registered providers, falling back to Provider::all_providers()");
+            tracing::warn!(
+                "LLM factory has no registered providers, falling back to Provider::all_providers()"
+            );
             providers = Provider::all_providers()
                 .into_iter()
                 .map(|provider| provider.to_string())
@@ -348,14 +350,14 @@ impl ZedAgent {
             &data.model,
             model_options,
         );
-        
+
         tracing::debug!(
             provider_count = config_options.len(),
             current_provider = %data.provider,
             current_model = %data.model,
             "Built session config options for ACP"
         );
-        
+
         config_options
     }
 

@@ -624,7 +624,7 @@ impl ClientHandler for LoggingClientHandler {
                 .await
                 .map(|response| {
                     let meta = response.meta.and_then(|value| {
-                        value.as_object().cloned().map(|map| Meta(map)).or_else(|| {
+                        value.as_object().cloned().map(Meta).or_else(|| {
                             warn!(
                                 provider = self.provider.as_str(),
                                 "Elicitation response meta is not an object; dropping _meta"

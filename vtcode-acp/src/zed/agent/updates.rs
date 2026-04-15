@@ -48,7 +48,7 @@ impl ZedAgent {
         let slash_commands = visible_commands();
         let prompt_templates = discover_prompt_templates(&self.config.workspace).await;
         let available_commands = build_available_commands(&slash_commands, &prompt_templates);
-        
+
         tracing::debug!(
             session_id = %session_id.0,
             command_count = available_commands.len(),
@@ -56,7 +56,7 @@ impl ZedAgent {
             template_count = prompt_templates.len(),
             "Sending available commands update to ACP client"
         );
-        
+
         self.send_update(
             session_id,
             acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(

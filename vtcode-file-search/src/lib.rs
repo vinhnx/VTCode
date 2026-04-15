@@ -308,7 +308,7 @@ impl FileIndexCache {
                     *guard = Some(Arc::new(new_index));
                 }
                 Err(e) => {
-                    eprintln!("[vtcode-file-search] failed to rebuild file index: {e}");
+                    tracing::error!("failed to rebuild file index: {e}");
                 }
             }
         });
