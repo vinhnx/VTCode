@@ -23,4 +23,5 @@ exec "$REPO/target/debug/vtcode" \
   --provider ollama \
   --model gpt-oss:120b-cloud \
   --api-key-env OLLAMA_API_KEY \
+  --enable-skills \
   acp 2>>"$STDERR_FILE"
