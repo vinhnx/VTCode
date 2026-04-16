@@ -541,62 +541,52 @@ fn openai_presets() -> Vec<ModelPreset> {
 fn anthropic_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "claude-opus-4.6".to_string(),
-            model: "claude-opus-4.6".to_string(),
-            display_name: "Claude Opus 4.6".to_string(),
-            description: "Next-gen flagship with adaptive thinking".to_string(),
+            id: "claude-opus-4-7".to_string(),
+            model: "claude-opus-4-7".to_string(),
+            display_name: "Claude Opus 4.7".to_string(),
+            description:
+                "Next-gen Anthropic flagship with adaptive thinking, xhigh default effort, max effort support, and optional task budgets"
+                    .to_string(),
             provider: Provider::Anthropic,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::XHigh,
             supported_reasoning_efforts: vec![
                 ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
                     effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(200_000),
-        },
-        ModelPreset {
-            id: "claude-opus-4.5".to_string(),
-            model: "claude-opus-4.5".to_string(),
-            display_name: "Claude Opus 4.5".to_string(),
-            description: "Latest flagship with exceptional reasoning".to_string(),
-            provider: Provider::Anthropic,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
+                    description: "Lower-latency deep reasoning".to_string(),
                 },
                 ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
+                    effort: ReasoningEffortLevel::XHigh,
+                    description: "Recommended default for coding and agentic work".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum adaptive effort for intelligence-demanding tasks"
+                        .to_string(),
                 },
             ],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
-            context_window: Some(200_000),
+            context_window: Some(1_000_000),
         },
         ModelPreset {
-            id: "claude-sonnet-4.5".to_string(),
-            model: "claude-sonnet-4.5".to_string(),
-            display_name: "Claude Sonnet 4.5".to_string(),
-            description: "Balanced Anthropic model".to_string(),
+            id: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            display_name: "Claude Sonnet 4.6".to_string(),
+            description: "Balanced Anthropic model with adaptive thinking".to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
+            ],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -604,8 +594,8 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             context_window: Some(200_000),
         },
         ModelPreset {
-            id: "claude-haiku-4.5".to_string(),
-            model: "claude-haiku-4.5".to_string(),
+            id: "claude-haiku-4-5".to_string(),
+            model: "claude-haiku-4-5".to_string(),
             display_name: "Claude Haiku 4.5".to_string(),
             description: "Efficient Anthropic model".to_string(),
             provider: Provider::Anthropic,
@@ -916,5 +906,20 @@ mod tests {
         assert_eq!(preset.id, "test-model");
         assert_eq!(preset.model, "test-model");
         assert!(preset.show_in_picker);
+    }
+
+    #[test]
+    fn anthropic_opus_47_defaults_to_xhigh_and_offers_max() {
+        let opus = anthropic_presets()
+            .into_iter()
+            .find(|preset| preset.id == "claude-opus-4-7")
+            .expect("claude-opus-4-7 preset");
+
+        assert_eq!(opus.default_reasoning_effort, ReasoningEffortLevel::XHigh);
+        assert!(
+            opus.supported_reasoning_efforts
+                .iter()
+                .any(|preset| preset.effort == ReasoningEffortLevel::Max)
+        );
     }
 }

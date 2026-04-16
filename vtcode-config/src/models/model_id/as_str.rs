@@ -31,7 +31,7 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
-            ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
+            ModelId::ClaudeOpus47 => models::CLAUDE_OPUS_4_7,
             ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::CopilotAuto => models::copilot::AUTO,

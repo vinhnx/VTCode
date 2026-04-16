@@ -11,7 +11,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
     SelectionDetail, reasoning_level_description, reasoning_level_label, service_tier_label,
-    supports_gpt5_none_reasoning, supports_xhigh_reasoning,
+    supports_gpt5_none_reasoning, supports_max_reasoning, supports_xhigh_reasoning,
 };
 use super::{
     CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_THREE_TITLE, STEP_TWO_TITLE,
@@ -58,6 +58,9 @@ pub(crate) fn render_reasoning_inline(
 
     if supports_xhigh_reasoning(&selection.model_id) {
         levels.push(ReasoningEffortLevel::XHigh);
+    }
+    if supports_max_reasoning(&selection.model_id) {
+        levels.push(ReasoningEffortLevel::Max);
     }
 
     for level in levels {
@@ -116,10 +119,14 @@ pub(crate) fn prompt_reasoning_plain(
     current: ReasoningEffortLevel,
 ) -> Result<()> {
     let is_responses_flagship = supports_gpt5_none_reasoning(&selection.model_id);
-    let xhigh_suffix = if supports_xhigh_reasoning(&selection.model_id) {
-        "/xhigh"
-    } else {
-        ""
+    let reasoning_suffix = match (
+        supports_xhigh_reasoning(&selection.model_id),
+        supports_max_reasoning(&selection.model_id),
+    ) {
+        (true, true) => "/xhigh/max",
+        (true, false) => "/xhigh",
+        (false, true) => "/max",
+        (false, false) => "",
     };
 
     if selection.reasoning_optional {
@@ -134,7 +141,7 @@ pub(crate) fn prompt_reasoning_plain(
                 "Step 2 – reasoning effort (current: {}). Choose {}{} or type 'skip' if the model does not expose configurable reasoning.",
                 current,
                 prefix,
-                xhigh_suffix
+                reasoning_suffix
             ),
         )?;
     } else if let Some(alternative) = selection.reasoning_off_model {
@@ -154,7 +161,7 @@ pub(crate) fn prompt_reasoning_plain(
                 "Step 2 – select reasoning effort for {} ({}{}). Type 'skip' to keep {} or 'off' to use {} ({}).{}",
                 selection.model_display,
                 prefix,
-                xhigh_suffix,
+                reasoning_suffix,
                 alternative.display_name(),
                 alternative.as_str(),
                 alternative.display_name(),
@@ -178,7 +185,7 @@ pub(crate) fn prompt_reasoning_plain(
                 "Step 2 – select reasoning effort for {} ({}{}). Type 'skip' to keep {}. Current: {}.{}",
                 selection.model_display,
                 prefix,
-                xhigh_suffix,
+                reasoning_suffix,
                 current,
                 current,
                 gpt5_hint

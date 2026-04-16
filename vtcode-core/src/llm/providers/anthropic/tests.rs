@@ -15,7 +15,7 @@ mod capabilities_tests {
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
-            models::CLAUDE_OPUS_4_6,
+            models::CLAUDE_OPUS_4_7,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
@@ -55,7 +55,7 @@ mod capabilities_tests {
     #[test]
     fn test_supports_effort() {
         assert!(supports_effort(
-            models::CLAUDE_OPUS_4_6,
+            models::CLAUDE_OPUS_4_7,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(!supports_effort(
@@ -68,7 +68,7 @@ mod capabilities_tests {
     fn test_effective_context_size() {
         assert_eq!(effective_context_size(models::CLAUDE_SONNET_4_6), 1_000_000);
         assert_eq!(
-            effective_context_size("claude-opus-4-6-20260303"),
+            effective_context_size("claude-opus-4-7-20260303"),
             1_000_000
         );
         assert_eq!(effective_context_size("claude-sonnet-4-5-latest"), 200_000);
@@ -118,6 +118,7 @@ mod prompt_cache_tests {
 mod validation_tests {
     use crate::config::constants::models;
     use crate::config::core::AnthropicConfig;
+    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{
         LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition,
     };
@@ -195,7 +196,7 @@ mod validation_tests {
     }
 
     #[test]
-    fn test_validate_effort_max_only_for_opus_4_6() {
+    fn test_validate_effort_max_only_for_opus_4_7() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
@@ -207,7 +208,7 @@ mod validation_tests {
 
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
         };
@@ -215,11 +216,92 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_validate_effort_xhigh_for_opus_4_7() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            effort: Some("xhigh".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_reasoning_effort_max_for_opus_4_7() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            reasoning_effort: Some(ReasoningEffortLevel::Max),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_opus_4_7_rejects_sampling_parameters() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            temperature: Some(0.2),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_opus_4_7_rejects_thinking_budget() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            thinking_budget: Some(4096),
+            reasoning_effort: Some(ReasoningEffortLevel::High),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_opus_4_7_rejects_prefill() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            prefill: Some("{".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_opus_4_7_rejects_task_budget_below_minimum() {
+        let config = AnthropicConfig {
+            task_budget_tokens: Some(19_999),
+            ..AnthropicConfig::default()
+        };
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
     fn test_validate_programmatic_tool_calling_rejects_disable_parallel_tool_use() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("find warmest city".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             tools: Some(Arc::new(vec![
                 ToolDefinition::function(
                     "get_weather".to_string(),
@@ -246,7 +328,7 @@ mod validation_tests {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("find warmest city".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             tools: Some(Arc::new(vec![
                 ToolDefinition::function(
                     "get_weather".to_string(),
@@ -273,7 +355,7 @@ mod validation_tests {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("find warmest city".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             tools: Some(Arc::new(vec![
                 ToolDefinition::function(
                     "get_weather".to_string(),
@@ -300,7 +382,7 @@ mod validation_tests {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("find warmest city".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             tools: Some(Arc::new(vec![
                 ToolDefinition::function(
                     "get_weather".to_string(),
@@ -348,7 +430,7 @@ mod validation_tests {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "bad tool name".to_string(),
                 "Bad name".to_string(),
@@ -468,6 +550,7 @@ mod response_parser_tests {
 mod request_builder_tests {
     use crate::config::constants::models;
     use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
+    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
     use crate::llm::providers::anthropic::request_builder::{
         RequestBuilderContext, convert_to_anthropic_format, tool_result_blocks,
@@ -755,7 +838,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_includes_native_web_search_tool() {
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("find latest rust release notes".to_string())],
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "web_search_20260209".to_string(),
@@ -793,7 +876,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_rejects_mixed_web_search_domain_filters() {
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("search docs".to_string())],
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "web_search_20250305".to_string(),
@@ -827,7 +910,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_includes_native_code_execution_tool() {
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("analyze this csv".to_string())],
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "code_execution_20250825".to_string(),
@@ -859,9 +942,83 @@ mod request_builder_tests {
     }
 
     #[test]
+    fn test_convert_to_anthropic_format_maps_xhigh_reasoning_to_adaptive_effort_for_opus_4_7() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            messages: vec![Message::user("solve this carefully".to_string())],
+            reasoning_effort: Some(ReasoningEffortLevel::XHigh),
+            temperature: Some(0.1),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["thinking"]["type"], "adaptive");
+        assert_eq!(payload["output_config"]["effort"], "xhigh");
+        assert!(payload.get("reasoning").is_none());
+        assert!(payload.get("temperature").is_none());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_maps_max_reasoning_to_adaptive_effort_for_opus_4_7() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            messages: vec![Message::user("solve this thoroughly".to_string())],
+            reasoning_effort: Some(ReasoningEffortLevel::Max),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["thinking"]["type"], "adaptive");
+        assert_eq!(payload["output_config"]["effort"], "max");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_includes_task_budget_for_opus_4_7() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            messages: vec![Message::user("analyze this repo".to_string())],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig {
+            task_budget_tokens: Some(128_000),
+            ..AnthropicConfig::default()
+        };
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["output_config"]["task_budget"]["type"], "tokens");
+        assert_eq!(payload["output_config"]["task_budget"]["total"], 128000);
+    }
+
+    #[test]
     fn test_convert_to_anthropic_format_includes_native_memory_tool() {
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user(
                 "remember my preferred test runner".to_string(),
             )],
@@ -910,7 +1067,7 @@ mod request_builder_tests {
         tool.allowed_callers = Some(vec!["code_execution_20250825".to_string()]);
 
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("find warmest city".to_string())],
             tools: Some(Arc::new(vec![tool])),
             ..Default::default()
@@ -954,7 +1111,7 @@ mod request_builder_tests {
         })]);
 
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("find warmest city".to_string())],
             tools: Some(Arc::new(vec![tool])),
             ..Default::default()

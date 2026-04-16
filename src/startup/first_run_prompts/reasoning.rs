@@ -31,6 +31,14 @@ pub(crate) fn prompt_reasoning_effort(
             ReasoningEffortLevel::High,
             "High – deeper reasoning, slower responses",
         ),
+        (
+            ReasoningEffortLevel::XHigh,
+            "Extra High – best default for advanced coding and agentic work",
+        ),
+        (
+            ReasoningEffortLevel::Max,
+            "Max – highest effort for Claude Opus 4.7, highest latency and token use",
+        ),
     ];
 
     match select_reasoning_with_ratatui(&levels, default) {
@@ -99,7 +107,7 @@ fn prompt_reasoning_effort_text(
 
         renderer.line(
             MessageStyle::Error,
-            "Please choose a valid reasoning effort level (none, low, medium, high).",
+            "Please choose a valid reasoning effort level (none, low, medium, high, xhigh, max).",
         )?;
     }
 }

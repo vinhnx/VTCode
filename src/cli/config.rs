@@ -78,7 +78,7 @@ provider = "openai"
 api_key_env = "OPENAI_API_KEY"
 # Maximum conversation turns
 max_conversation_turns = 150
-# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh)
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 reasoning_effort = "none"
 # Main model temperature
 temperature = 0.7

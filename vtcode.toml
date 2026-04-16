@@ -1,8 +1,8 @@
 [agent]
-api_key_env = "OLLAMA_API_KEY"
-default_model = "gpt-oss:20b-cloud"
-provider = "ollama"
-reasoning_effort = "medium"
+api_key_env = "ANTHROPIC_API_KEY"
+default_model = "claude-opus-4-7"
+provider = "anthropic"
+reasoning_effort = "xhigh"
 theme = "ciapre-blue"
 
 [agent.persistent_memory]

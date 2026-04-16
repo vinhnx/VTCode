@@ -10,7 +10,7 @@ impl ModelId {
             ModelId::GPT52,
             ModelId::GPT5,
             ModelId::OpenAIGptOss20b,
-            ModelId::ClaudeOpus46,
+            ModelId::ClaudeOpus47,
             ModelId::ClaudeSonnet46,
             ModelId::DeepSeekReasoner,
             ModelId::ZaiGlm5,
@@ -32,7 +32,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini31ProPreview,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus46,
+            Provider::Anthropic => ModelId::ClaudeOpus47,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
@@ -50,7 +50,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini3FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus46,
+            Provider::Anthropic => ModelId::ClaudeOpus47,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,

@@ -1174,7 +1174,9 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
                     Some("high")
                 }
             }
-            ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => Some("high"),
+            ReasoningEffortLevel::High
+            | ReasoningEffortLevel::XHigh
+            | ReasoningEffortLevel::Max => Some("high"),
         };
 
         if let Some(level) = thinking_level {

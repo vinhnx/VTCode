@@ -28,7 +28,7 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
+            ModelId::ClaudeOpus47 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
                 Provider::Anthropic
             }
             ModelId::CopilotAuto

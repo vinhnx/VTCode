@@ -9,7 +9,10 @@ use crate::config::core::AnthropicConfig;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, MessageRole, ToolChoice};
 
-use super::capabilities::{supports_effort, supports_reasoning_effort, supports_structured_output};
+use super::capabilities::{
+    resolve_model_name, supports_effort, supports_reasoning_effort, supports_structured_output,
+    supports_task_budget,
+};
 
 pub fn validate_request(
     request: &LLMRequest,
@@ -34,7 +37,7 @@ pub fn validate_request(
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5/4.6, Claude Opus 4.5/4.6, and Claude Haiku 4.5 models.",
+                "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5/4.6, Claude Opus 4.5/4.7, and Claude Haiku 4.5 models.",
                 request.model
             ),
         );
@@ -54,6 +57,34 @@ pub fn validate_request(
         validate_effort_setting(effort, &request.model, default_model)?;
     }
 
+    let resolved_model = resolve_model_name(&request.model, default_model);
+
+    if resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+        && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "Claude Opus 4.7 rejects explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    if resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+        && request.thinking_budget.is_some()
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "Claude Opus 4.7 no longer supports thinking_budget/budget_tokens. Use adaptive thinking plus effort, and configure task budgets separately if needed.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
     if let Some(budget) = request.thinking_budget
         && budget < 1024
     {
@@ -70,6 +101,36 @@ pub fn validate_request(
     let has_reasoning = request.reasoning_effort.is_some() || request.thinking_budget.is_some();
     if has_reasoning {
         validate_reasoning_constraints(request, default_model, anthropic_config)?;
+    }
+
+    if request.prefill.is_some()
+        && resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "Pre-filling assistant responses is not supported by Claude Opus 4.7.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    if let Some(task_budget) = anthropic_config.task_budget_tokens
+        && supports_task_budget(&request.model, default_model)
+        && task_budget < 20_000
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!(
+                "task_budget_tokens ({}) must be at least 20000 for Claude Opus 4.7.",
+                task_budget
+            ),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     if request.prefill.is_some() && has_reasoning {
@@ -226,7 +287,7 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "effort is not supported for model '{}'. Supported models are Claude Opus 4.5 and Claude Opus 4.6.",
+                "effort is not supported for model '{}'. Supported built-in Anthropic model is Claude Opus 4.7.",
                 if model.trim().is_empty() {
                     default_model
                 } else {
@@ -240,12 +301,12 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         });
     }
 
-    let allowed = ["low", "medium", "high", "max"];
+    let allowed = ["low", "medium", "high", "xhigh", "max"];
     if !allowed.contains(&normalized.as_str()) {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "effort must be one of low, medium, high, or max (got '{}').",
+                "effort must be one of low, medium, high, xhigh, or max (got '{}').",
                 effort
             ),
         );
@@ -261,11 +322,11 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         model
     };
     if normalized == "max"
-        && resolved_model != crate::config::constants::models::anthropic::CLAUDE_OPUS_4_6
+        && resolved_model != crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "effort='max' is only supported by Claude Opus 4.6.",
+            "effort='max' is only supported by Claude Opus 4.7.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -293,6 +354,7 @@ fn validate_reasoning_constraints(
             ReasoningEffortLevel::Medium => 8192,
             ReasoningEffortLevel::High => 16384,
             ReasoningEffortLevel::XHigh => 32768,
+            ReasoningEffortLevel::Max => 32768,
         }
     } else {
         anthropic_config.interleaved_thinking_budget_tokens

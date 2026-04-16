@@ -25,7 +25,7 @@ fn test_model_string_conversion() {
     assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
     assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
     // Anthropic models
-    assert_eq!(ModelId::ClaudeOpus46.as_str(), models::CLAUDE_OPUS_4_6);
+    assert_eq!(ModelId::ClaudeOpus47.as_str(), models::CLAUDE_OPUS_4_7);
     assert_eq!(ModelId::ClaudeSonnet46.as_str(), models::CLAUDE_SONNET_4_6);
     assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
     // DeepSeek models
@@ -107,8 +107,8 @@ fn test_model_from_string() {
         ModelId::ClaudeHaiku45
     );
     assert_eq!(
-        models::CLAUDE_OPUS_4_6.parse::<ModelId>().unwrap(),
-        ModelId::ClaudeOpus46
+        models::CLAUDE_OPUS_4_7.parse::<ModelId>().unwrap(),
+        ModelId::ClaudeOpus47
     );
     assert_eq!(
         models::CLAUDE_SONNET_4_6.parse::<ModelId>().unwrap(),
@@ -185,7 +185,7 @@ fn test_provider_parsing() {
 fn test_model_providers() {
     assert_eq!(ModelId::Gemini3FlashPreview.provider(), Provider::Gemini);
     assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
-    assert_eq!(ModelId::ClaudeOpus46.provider(), Provider::Anthropic);
+    assert_eq!(ModelId::ClaudeOpus47.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
@@ -219,7 +219,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-        ModelId::ClaudeOpus46
+        ModelId::ClaudeOpus47
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::DeepSeek),
@@ -256,7 +256,7 @@ fn test_model_variants() {
     assert!(ModelId::GPT5.is_pro_variant());
     assert!(ModelId::GPT52Codex.is_pro_variant());
     assert!(ModelId::GPT51CodexMax.is_pro_variant());
-    assert!(ModelId::ClaudeOpus46.is_pro_variant());
+    assert!(ModelId::ClaudeOpus47.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
     assert!(ModelId::ZaiGlm5.is_pro_variant());
@@ -277,7 +277,7 @@ fn test_model_variants() {
     assert!(ModelId::GPT5.is_top_tier());
     assert!(ModelId::GPT52Codex.is_top_tier());
     assert!(ModelId::GPT5Codex.is_top_tier());
-    assert!(ModelId::ClaudeOpus46.is_top_tier());
+    assert!(ModelId::ClaudeOpus47.is_top_tier());
     assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
@@ -324,7 +324,7 @@ fn test_model_generation() {
     assert_eq!(ModelId::GPT5Nano.generation(), "5");
 
     // Anthropic generations
-    assert_eq!(ModelId::ClaudeOpus46.generation(), "4.6");
+    assert_eq!(ModelId::ClaudeOpus47.generation(), "4.7");
     assert_eq!(ModelId::ClaudeSonnet46.generation(), "4.6");
     assert_eq!(ModelId::ClaudeHaiku45.generation(), "4.5");
 
@@ -355,7 +355,7 @@ fn test_models_for_provider() {
     assert!(!openai_models.contains(&ModelId::Gemini3FlashPreview));
 
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
-    assert!(anthropic_models.contains(&ModelId::ClaudeOpus46));
+    assert!(anthropic_models.contains(&ModelId::ClaudeOpus47));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet46));
     assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
     assert!(!anthropic_models.contains(&ModelId::GPT5));
@@ -455,7 +455,7 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::Gemini3FlashPreview));
     assert!(fallbacks.contains(&ModelId::GPT52));
     assert!(fallbacks.contains(&ModelId::GPT5));
-    assert!(fallbacks.contains(&ModelId::ClaudeOpus46));
+    assert!(fallbacks.contains(&ModelId::ClaudeOpus47));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
@@ -517,7 +517,7 @@ fn test_generated_model_capability_lookup() {
         ModelId::Gemini31ProPreview.input_modalities(),
         &["text", "image", "video", "audio", "pdf"]
     );
-    assert_eq!(ModelId::ClaudeOpus46.input_modalities(), &["text", "image"]);
+    assert_eq!(ModelId::ClaudeOpus47.input_modalities(), &["text", "image"]);
     assert_eq!(
         ModelId::OpenRouterOpenAIGpt5Chat.input_modalities(),
         &["file", "image", "text"]

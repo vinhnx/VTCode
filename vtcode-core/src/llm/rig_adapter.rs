@@ -107,6 +107,7 @@ impl RigProviderCapabilities {
                     ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                     ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
                     ReasoningEffortLevel::XHigh => return Some(json!({ "effort": "xhigh" })),
+                    ReasoningEffortLevel::Max => return Some(json!({ "effort": "xhigh" })),
                 };
                 reasoning = reasoning.with_effort(mapped);
                 serde_json::to_value(reasoning).ok()
@@ -114,14 +115,18 @@ impl RigProviderCapabilities {
             Provider::Gemini => {
                 let include_thoughts = matches!(
                     effort,
-                    ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh
+                    ReasoningEffortLevel::High
+                        | ReasoningEffortLevel::XHigh
+                        | ReasoningEffortLevel::Max
                 );
                 let budget = match effort {
                     ReasoningEffortLevel::None => return None,
                     ReasoningEffortLevel::Minimal => 16,
                     ReasoningEffortLevel::Low => 64,
                     ReasoningEffortLevel::Medium => 128,
-                    ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => 256,
+                    ReasoningEffortLevel::High
+                    | ReasoningEffortLevel::XHigh
+                    | ReasoningEffortLevel::Max => 256,
                 };
                 let config = ThinkingConfig {
                     thinking_budget: budget,
@@ -136,9 +141,9 @@ impl RigProviderCapabilities {
                 ReasoningEffortLevel::Minimal => Some(json!({ "reasoning_effort": "minimal" })),
                 ReasoningEffortLevel::Low => Some(json!({ "reasoning_effort": "low" })),
                 ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
-                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => {
-                    Some(json!({ "reasoning_effort": "high" }))
-                }
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
             },
             Provider::Minimax => None,
             Provider::Ollama => None,
@@ -156,7 +161,9 @@ impl RigProviderCapabilities {
                     "thinking": { "type": "enabled" },
                     "thinking_effort": "medium"
                 })),
-                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => Some(json!({
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max => Some(json!({
                     "thinking": { "type": "enabled" },
                     "thinking_effort": "high"
                 })),

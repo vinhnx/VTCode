@@ -68,6 +68,7 @@ fn reasoning_effort_name(level: ReasoningEffortLevel) -> &'static str {
         ReasoningEffortLevel::Medium => "Medium",
         ReasoningEffortLevel::High => "High",
         ReasoningEffortLevel::XHigh => "Extra High",
+        ReasoningEffortLevel::Max => "Max",
     }
 }
 

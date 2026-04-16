@@ -138,7 +138,11 @@ impl OpenAIProvider {
         let reasoning_effort = match request.reasoning_effort {
             Some(ReasoningEffortLevel::Low) => ReasoningEffort::Low,
             Some(ReasoningEffortLevel::Medium) => ReasoningEffort::Medium,
-            Some(ReasoningEffortLevel::High) => ReasoningEffort::High,
+            Some(
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max,
+            ) => ReasoningEffort::High,
             _ => ReasoningEffort::Medium,
         };
 

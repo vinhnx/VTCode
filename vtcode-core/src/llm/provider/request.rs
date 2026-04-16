@@ -35,8 +35,8 @@ pub struct LLMRequest {
     /// Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
     pub reasoning_effort: Option<ReasoningEffortLevel>,
 
-    /// Effort level for overall token usage (high, medium, low)
-    /// Applies to: Claude Opus 4.5 (beta) and Claude Opus 4.6 (GA)
+    /// Effort level for overall token usage (low, medium, high, xhigh, max)
+    /// Applies to: Anthropic adaptive-thinking models such as Claude Opus 4.7
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
     pub effort: Option<String>,

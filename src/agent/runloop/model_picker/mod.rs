@@ -38,7 +38,8 @@ use rendering::{
 use selection::{
     ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
     parse_model_selection, reasoning_level_description, reasoning_level_label,
-    selection_from_custom_provider, selection_from_option, supports_xhigh_reasoning,
+    selection_from_custom_provider, selection_from_option, supports_max_reasoning,
+    supports_xhigh_reasoning,
 };
 
 mod config_persistence;
@@ -1131,6 +1132,9 @@ fn subagent_reasoning_levels(model: &str, supports_reasoning: bool) -> Vec<Reaso
     if !is_subagent_shortcut(model) && supports_xhigh_reasoning(model) {
         levels.push(ReasoningEffortLevel::XHigh);
     }
+    if !is_subagent_shortcut(model) && supports_max_reasoning(model) {
+        levels.push(ReasoningEffortLevel::Max);
+    }
     levels
 }
 
@@ -1150,6 +1154,9 @@ fn subagent_supports_reasoning_level(
         | ReasoningEffortLevel::High => true,
         ReasoningEffortLevel::XHigh => {
             !is_subagent_shortcut(target.model()) && supports_xhigh_reasoning(target.model())
+        }
+        ReasoningEffortLevel::Max => {
+            !is_subagent_shortcut(target.model()) && supports_max_reasoning(target.model())
         }
     }
 }

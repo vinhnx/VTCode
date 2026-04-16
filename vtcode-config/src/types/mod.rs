@@ -31,6 +31,8 @@ pub enum ReasoningEffortLevel {
     High,
     /// Extra high reasoning effort - for GPT-5.4-family and similar long-running tasks
     XHigh,
+    /// Maximum reasoning effort - for Claude Opus 4.7 adaptive thinking
+    Max,
 }
 
 impl ReasoningEffortLevel {
@@ -43,6 +45,7 @@ impl ReasoningEffortLevel {
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
             Self::XHigh => "xhigh",
+            Self::Max => "max",
         }
     }
 
@@ -61,6 +64,8 @@ impl ReasoningEffortLevel {
             Some(Self::High)
         } else if normalized.eq_ignore_ascii_case("xhigh") {
             Some(Self::XHigh)
+        } else if normalized.eq_ignore_ascii_case("max") {
+            Some(Self::Max)
         } else {
             None
         }
@@ -686,6 +691,16 @@ pub enum CompressionLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_reasoning_effort_parse_and_allowed_values_include_max() {
+        assert_eq!(
+            ReasoningEffortLevel::parse("max"),
+            Some(ReasoningEffortLevel::Max)
+        );
+        assert_eq!(ReasoningEffortLevel::Max.as_str(), "max");
+        assert!(ReasoningEffortLevel::allowed_values().contains(&"max"));
+    }
 
     #[test]
     fn test_editing_mode_parse() {

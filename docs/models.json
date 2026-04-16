@@ -1143,7 +1143,7 @@
     "api": "https://api.anthropic.com/v1",
     "name": "Anthropic",
     "doc": "https://docs.anthropic.com/claude/docs/models-overview",
-    "default_model": "claude-sonnet-4-6",
+    "default_model": "claude-opus-4-7",
     "models": {
       "claude-haiku-4-5-20251001": {
         "id": "claude-haiku-4-5-20251001",
@@ -1164,10 +1164,10 @@
         "output_tokens": 64000,
         "status": "current"
       },
-      "claude-opus-4-6": {
-        "id": "claude-opus-4-6",
-        "name": "Claude Opus 4.6",
-        "description": "Next-gen flagship model with extended and adaptive thinking. 200K context with 1M beta.",
+      "claude-opus-4-7": {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "description": "Next-gen flagship model with adaptive thinking, xhigh default effort, max effort support, task budgets, and 1M context.",
         "reasoning": true,
         "effort": true,
         "tool_call": true,
@@ -1180,7 +1180,7 @@
             "text"
           ]
         },
-        "context": 200000,
+        "context": 1000000,
         "output_tokens": 128000,
         "status": "current"
       },

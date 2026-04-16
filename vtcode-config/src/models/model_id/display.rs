@@ -29,7 +29,7 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
-            ModelId::ClaudeOpus46 => "Claude Opus 4.6",
+            ModelId::ClaudeOpus47 => "Claude Opus 4.7",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::CopilotAuto => "GitHub Copilot Auto",

@@ -61,8 +61,8 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
-            ModelId::ClaudeOpus46 => {
-                "Next-gen Anthropic flagship with extended and adaptive thinking support"
+            ModelId::ClaudeOpus47 => {
+                "Next-gen Anthropic flagship with adaptive thinking, xhigh effort, and task budget support"
             }
             ModelId::ClaudeSonnet46 => {
                 "Balanced flagship model for coding with extended and adaptive thinking support"

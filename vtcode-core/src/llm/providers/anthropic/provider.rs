@@ -434,6 +434,10 @@ impl AnthropicProvider {
                 .get("output_config")
                 .and_then(|value| value.get("effort"))
                 .is_some(),
+            include_task_budget: anthropic_request
+                .get("output_config")
+                .and_then(|value| value.get("task_budget"))
+                .is_some(),
         };
 
         headers::combined_beta_header_value(
@@ -706,6 +710,7 @@ impl LLMClient for AnthropicProvider {
 mod tests {
     use super::{AnthropicProvider, code_execution_beta_name};
     use crate::config::constants::models;
+    use crate::config::core::AnthropicConfig;
     use crate::llm::provider::{ContentPart, LLMRequest, Message, MessageContent, ToolDefinition};
     use serde_json::json;
 
@@ -792,10 +797,10 @@ mod tests {
     fn effective_betas_include_code_execution_and_files_api_when_needed() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message {
                 role: crate::llm::provider::MessageRole::User,
                 content: MessageContent::Parts(vec![
@@ -828,10 +833,10 @@ mod tests {
     fn effective_betas_include_context_management_beta_for_memory_tools() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("remember this preference".to_string())],
             tools: Some(std::sync::Arc::new(vec![ToolDefinition {
                 tool_type: "memory_20250818".to_string(),
@@ -860,10 +865,10 @@ mod tests {
     fn effective_betas_include_context_management_beta_for_context_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -886,10 +891,10 @@ mod tests {
     fn effective_betas_include_compact_beta_for_compaction_requests() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!([
                 {
@@ -908,10 +913,10 @@ mod tests {
     fn effective_betas_include_compact_beta_for_compaction_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -940,10 +945,10 @@ mod tests {
     fn effective_betas_include_both_headers_for_mixed_context_edits() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("continue".to_string())],
             context_management: Some(json!({
                 "edits": [
@@ -973,10 +978,10 @@ mod tests {
     fn beta_header_includes_advanced_tool_use_for_programmatic_tools() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("find warmest city".to_string())],
             tools: Some(std::sync::Arc::new(vec![
                 ToolDefinition::function(
@@ -1007,7 +1012,7 @@ mod tests {
 
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
-        for model in [models::CLAUDE_SONNET_4_6, models::CLAUDE_OPUS_4_6] {
+        for model in [models::CLAUDE_SONNET_4_6, models::CLAUDE_OPUS_4_7] {
             let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
             let request = LLMRequest {
                 model: model.to_string(),
@@ -1030,7 +1035,7 @@ mod tests {
     fn beta_header_uses_request_model_instead_of_provider_default() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -1048,6 +1053,39 @@ mod tests {
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
         assert!(beta_header.contains("interleaved-thinking-2025-05-14"));
+    }
+
+    #[test]
+    fn beta_header_includes_task_budget_beta_for_opus_4_7() {
+        let provider = AnthropicProvider::from_config(
+            Some("test-key".to_string()),
+            Some(models::CLAUDE_OPUS_4_7.to_string()),
+            None,
+            None,
+            None,
+            Some(AnthropicConfig {
+                task_budget_tokens: Some(128_000),
+                ..AnthropicConfig::default()
+            }),
+            None,
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, false, None)
+            .expect("beta header");
+
+        assert_eq!(payload["output_config"]["task_budget"]["type"], "tokens");
+        assert_eq!(payload["output_config"]["task_budget"]["total"], 128000);
+        assert!(beta_header.contains("task-budgets-2026-03-13"));
+        assert!(!beta_header.contains("effort-2025-11-24"));
     }
 
     #[test]
@@ -1072,10 +1110,10 @@ mod tests {
     fn beta_header_includes_advanced_tool_use_for_tool_search_requests() {
         let provider = AnthropicProvider::with_model(
             "test-key".to_string(),
-            models::CLAUDE_OPUS_4_6.to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
         );
         let request = LLMRequest {
-            model: models::CLAUDE_OPUS_4_6.to_string(),
+            model: models::CLAUDE_OPUS_4_7.to_string(),
             messages: vec![Message::user("find the deployment tool".to_string())],
             tools: Some(std::sync::Arc::new(vec![ToolDefinition::tool_search(
                 crate::llm::provider::ToolSearchAlgorithm::Regex,

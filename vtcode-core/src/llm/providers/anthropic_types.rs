@@ -365,7 +365,16 @@ pub struct AnthropicOutputConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_budget: Option<AnthropicTaskBudget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<AnthropicOutputFormat>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicTaskBudget {
+    #[serde(rename = "type")]
+    pub budget_type: String,
+    pub total: u32,
 }
 
 /// Native structured output format for Anthropic responses.

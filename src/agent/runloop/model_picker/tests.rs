@@ -25,7 +25,7 @@ fn has_model(options: &[ModelOption], model: ModelId) -> bool {
 #[test]
 fn model_picker_lists_new_anthropic_models() {
     let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::ClaudeOpus46));
+    assert!(has_model(options, ModelId::ClaudeOpus47));
     assert!(has_model(options, ModelId::ClaudeSonnet46));
     assert!(has_model(options, ModelId::ClaudeHaiku45));
 
@@ -122,12 +122,19 @@ fn subagent_dynamic_model_filter_keeps_only_parseable_model_ids() {
 fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
     let supported = super::subagent_reasoning_levels("gpt-5.2", true);
     assert!(supported.contains(&ReasoningEffortLevel::XHigh));
+    assert!(!supported.contains(&ReasoningEffortLevel::Max));
+
+    let opus = super::subagent_reasoning_levels("claude-opus-4-7", true);
+    assert!(opus.contains(&ReasoningEffortLevel::XHigh));
+    assert!(opus.contains(&ReasoningEffortLevel::Max));
 
     let shortcut = super::subagent_reasoning_levels("haiku", true);
     assert!(!shortcut.contains(&ReasoningEffortLevel::XHigh));
+    assert!(!shortcut.contains(&ReasoningEffortLevel::Max));
 
     let unsupported = super::subagent_reasoning_levels("gpt-4.1", true);
     assert!(!unsupported.contains(&ReasoningEffortLevel::XHigh));
+    assert!(!unsupported.contains(&ReasoningEffortLevel::Max));
 }
 
 #[test]
@@ -141,6 +148,10 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
     );
     assert_eq!(
         super::normalized_subagent_reasoning(&shortcut, Some("xhigh")),
+        None
+    );
+    assert_eq!(
+        super::normalized_subagent_reasoning(&shortcut, Some("max")),
         None
     );
     assert_eq!(
@@ -158,6 +169,18 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
     assert_eq!(
         super::normalized_subagent_reasoning(&concrete, Some("xhigh")),
         Some("xhigh".to_string())
+    );
+
+    let opus = super::SubagentModelTarget::Concrete(selection::selection_from_dynamic(
+        Provider::Anthropic,
+        "claude-opus-4-7",
+        "claude-opus-4-7",
+        None,
+        None,
+    ));
+    assert_eq!(
+        super::normalized_subagent_reasoning(&opus, Some("max")),
+        Some("max".to_string())
     );
 }
 
@@ -341,7 +364,7 @@ fn session_with_channels() -> (InlineHandle, InlineSession) {
 
 #[test]
 fn preferred_model_selection_matches_current_static_model() {
-    let model_id = ModelId::ClaudeOpus46.as_str();
+    let model_id = ModelId::ClaudeOpus47.as_str();
     let picker = base_picker_state("anthropic", model_id);
 
     let selection = picker.preferred_model_selection();
@@ -468,8 +491,13 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(selection::supports_xhigh_reasoning("gpt-5.2"));
     assert!(selection::supports_xhigh_reasoning("gpt-5.2-codex"));
     assert!(selection::supports_xhigh_reasoning("gpt-5.3-codex"));
+    assert!(selection::supports_xhigh_reasoning("claude-opus-4-7"));
     assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex"));
     assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex-max"));
+
+    assert!(selection::supports_max_reasoning("claude-opus-4-7"));
+    assert!(!selection::supports_max_reasoning("claude-sonnet-4-6"));
+    assert!(!selection::supports_max_reasoning("gpt-5.4"));
 }
 
 #[test]

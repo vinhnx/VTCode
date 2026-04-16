@@ -424,11 +424,11 @@ pub struct AnthropicConfig {
     #[serde(default)]
     pub skip_model_validation: bool,
 
-    /// Enable extended thinking feature for Anthropic models
+    /// Enable adaptive or extended thinking for Anthropic models
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
     /// Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
-    /// Claude 4.6 uses adaptive thinking instead of extended thinking.
+    /// Claude Opus 4.7 uses adaptive thinking instead of budgeted extended thinking.
     /// Note: Extended thinking is now auto-enabled by default (31,999 tokens).
     /// Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models.
     /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking>
@@ -442,6 +442,7 @@ pub struct AnthropicConfig {
     /// Budget tokens for extended thinking (minimum: 1024, default: 31999)
     /// On 64K output models (Opus 4.5, Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999
     /// On 32K output models (Opus 4): max 31,999
+    /// Claude Opus 4.7 ignores this setting and uses adaptive thinking instead.
     /// Use MAX_THINKING_TOKENS environment variable to override.
     #[serde(default = "default_interleaved_thinking_budget_tokens")]
     pub interleaved_thinking_budget_tokens: u32,
@@ -458,12 +459,23 @@ pub struct AnthropicConfig {
     #[serde(default)]
     pub memory: AnthropicMemoryConfig,
 
-    /// Effort level for token usage (high, medium, low)
+    /// Effort level for adaptive thinking/token usage (low, medium, high, xhigh, max)
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
-    /// Supported by Claude Opus 4.5/4.6 (4.5 requires effort beta header)
+    /// Claude Opus 4.7 supports the new xhigh level between high and max.
     #[serde(default = "default_effort")]
     pub effort: String,
+
+    /// Optional Anthropic task budget token total for Claude Opus 4.7.
+    /// When set, VT Code sends `output_config.task_budget = { type = "tokens", total = N }`
+    /// and the required beta header.
+    /// Anthropic currently requires a minimum of 20,000 tokens.
+    #[serde(default)]
+    pub task_budget_tokens: Option<u32>,
+
+    /// Beta header for Anthropic task budgets.
+    #[serde(default = "default_task_budget_beta")]
+    pub task_budget_beta: String,
 
     /// Enable token counting via the count_tokens endpoint
     /// When enabled, the agent can estimate input token counts before making API calls
@@ -484,6 +496,8 @@ impl Default for AnthropicConfig {
             tool_search: ToolSearchConfig::default(),
             memory: AnthropicMemoryConfig::default(),
             effort: default_effort(),
+            task_budget_tokens: None,
+            task_budget_beta: default_task_budget_beta(),
             count_tokens_enabled: default_count_tokens_enabled(),
         }
     }
@@ -581,7 +595,12 @@ fn default_interleaved_thinking_type() -> String {
 
 #[inline]
 fn default_effort() -> String {
-    "low".to_string()
+    "xhigh".to_string()
+}
+
+#[inline]
+fn default_task_budget_beta() -> String {
+    "task-budgets-2026-03-13".to_string()
 }
 
 #[cfg(test)]

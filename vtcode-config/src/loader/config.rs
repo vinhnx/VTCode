@@ -439,7 +439,7 @@ ui_surface = "auto"
 # Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
 max_conversation_turns = 150
 
-# Reasoning effort level ("none", "minimal", "low", "medium", "high", "xhigh") - affects model usage and response speed
+# Reasoning effort level ("none", "minimal", "low", "medium", "high", "xhigh", "max") - affects model usage and response speed
 reasoning_effort = "none"
 
 # Temperature for main model responses (0.0-1.0)

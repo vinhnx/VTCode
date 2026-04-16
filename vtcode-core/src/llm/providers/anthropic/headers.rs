@@ -17,6 +17,7 @@ pub struct BetaHeaderConfig<'a> {
     pub include_advanced_tool_use: bool,
     pub request_betas: Option<&'a Vec<String>>,
     pub include_effort: bool,
+    pub include_task_budget: bool,
 }
 
 pub fn prompt_cache_beta_header_value(
@@ -53,7 +54,7 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_6
+    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_7
     {
         pieces.push(config.config.interleaved_thinking_beta.clone());
     }
@@ -62,8 +63,12 @@ pub fn combined_beta_header_value(
         pieces.push("advanced-tool-use-2025-11-20".to_owned());
     }
 
-    if config.include_effort && config.model != models::anthropic::CLAUDE_OPUS_4_6 {
+    if config.include_effort && config.model != models::anthropic::CLAUDE_OPUS_4_7 {
         pieces.push("effort-2025-11-24".to_owned());
+    }
+
+    if config.include_task_budget {
+        pieces.push(config.config.task_budget_beta.clone());
     }
 
     pieces.push("output-64k-2025-02-19".to_owned());

@@ -13,7 +13,8 @@ use super::rendering::{
 };
 use super::selection::{
     ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description,
-    reasoning_level_label, selection_from_option, service_tier_label, supports_xhigh_reasoning,
+    reasoning_level_label, selection_from_option, service_tier_label, supports_max_reasoning,
+    supports_xhigh_reasoning,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh dynamic model lists";
@@ -216,6 +217,9 @@ pub(super) fn select_reasoning_with_ratatui(
 
     if supports_xhigh_reasoning(&selection.model_id) {
         levels.push(ReasoningEffortLevel::XHigh);
+    }
+    if supports_max_reasoning(&selection.model_id) {
+        levels.push(ReasoningEffortLevel::Max);
     }
 
     for level in levels {

@@ -175,7 +175,7 @@ impl ModelId {
             | ModelId::GPT51CodexMax
             | ModelId::GPT5
             | ModelId::GPT5Codex => Some(ModelId::GPT5Mini),
-            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
+            ModelId::ClaudeOpus47 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
                 Some(ModelId::CopilotGPT54Mini)
@@ -240,7 +240,7 @@ impl ModelId {
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
+            ModelId::ClaudeOpus47 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
         };
@@ -287,7 +287,7 @@ impl ModelId {
                 | ModelId::CopilotGPT54
                 | ModelId::CopilotClaudeSonnet46
                 | ModelId::GPT5Codex
-                | ModelId::ClaudeOpus46
+                | ModelId::ClaudeOpus47
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
@@ -344,7 +344,7 @@ impl ModelId {
                 | ModelId::GPT51Codex
                 | ModelId::GPT51CodexMax
                 | ModelId::GPT5Codex
-                | ModelId::ClaudeOpus46
+                | ModelId::ClaudeOpus47
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
@@ -403,7 +403,8 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => "4.6",
+            ModelId::ClaudeOpus47 => "4.7",
+            ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeHaiku45 => "4.5",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",

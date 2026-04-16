@@ -10,11 +10,12 @@ use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::{LLMError, LLMRequest};
 use crate::llm::providers::anthropic_types::{
-    AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest, CacheControl,
+    AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget,
+    CacheControl,
 };
 use serde_json::Value;
 
-use super::capabilities::{resolve_model_name, supports_effort};
+use super::capabilities::{resolve_model_name, supports_effort, supports_task_budget};
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
 use system::{SystemPromptBuildResult, build_system_prompt};
@@ -123,7 +124,7 @@ pub fn convert_to_anthropic_format(
     let final_tool_choice = build_tool_choice(request, &thinking_val);
 
     let adaptive_effort =
-        if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 && request.effort.is_none() {
+        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 && request.effort.is_none() {
             request
                 .reasoning_effort
                 .map(|effort| effort_from_reasoning_for_adaptive(effort).to_string())
@@ -141,12 +142,19 @@ pub fn convert_to_anthropic_format(
                     .map(|effort| effort.to_ascii_lowercase())
             })
             .or_else(|| {
-                let eff = ctx.anthropic_config.effort.as_str();
-                if eff.eq_ignore_ascii_case("high") {
-                    None
-                } else {
-                    Some(eff.to_ascii_lowercase())
-                }
+                thinking_val
+                    .as_ref()
+                    .map(|_| ctx.anthropic_config.effort.to_ascii_lowercase())
+            })
+    } else {
+        None
+    };
+    let task_budget = if supports_task_budget(resolved_model, ctx.model) {
+        ctx.anthropic_config
+            .task_budget_tokens
+            .map(|total| AnthropicTaskBudget {
+                budget_type: "tokens".to_string(),
+                total,
             })
     } else {
         None
@@ -158,20 +166,23 @@ pub fn convert_to_anthropic_format(
             .map(|schema| AnthropicOutputFormat::JsonSchema {
                 schema: schema.clone(),
             });
-    let output_config = if effort_value.is_some() || output_format.is_some() {
-        Some(AnthropicOutputConfig {
-            effort: effort_value,
-            format: output_format,
-        })
-    } else {
-        None
-    };
+    let output_config =
+        if effort_value.is_some() || task_budget.is_some() || output_format.is_some() {
+            Some(AnthropicOutputConfig {
+                effort: effort_value,
+                task_budget,
+                format: output_format,
+            })
+        } else {
+            None
+        };
 
-    let effective_temperature = if thinking_val.is_some() {
-        None
-    } else {
-        request.temperature
-    };
+    let effective_temperature =
+        if thinking_val.is_some() || resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
+            None
+        } else {
+            request.temperature
+        };
 
     let top_level_cache_control = if ctx.prompt_cache_enabled
         && explicit_breakpoints_used < max_breakpoints
@@ -224,6 +235,7 @@ fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static 
         }
         ReasoningEffortLevel::Medium => "medium",
         ReasoningEffortLevel::High => "high",
-        ReasoningEffortLevel::XHigh => "max",
+        ReasoningEffortLevel::XHigh => "xhigh",
+        ReasoningEffortLevel::Max => "max",
     }
 }

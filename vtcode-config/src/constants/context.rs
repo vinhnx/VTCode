@@ -59,7 +59,7 @@ pub const BETA_CONTEXT_1M: &str = "context-1m-2025-08-07";
 /// Requires usage tier 4 or custom rate limits
 pub const EXTENDED_CONTEXT_ELIGIBLE_MODELS: &[&str] = &[
     crate::constants::models::anthropic::CLAUDE_SONNET_4_6,
-    crate::constants::models::anthropic::CLAUDE_OPUS_4_6,
+    crate::constants::models::anthropic::CLAUDE_OPUS_4_7,
 ];
 
 /// Check if a model is eligible for 1M context window

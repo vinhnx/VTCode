@@ -28,6 +28,8 @@ impl ModelPickerState {
             "none" => Some(ReasoningEffortLevel::None),
             "easy" | "low" => Some(ReasoningEffortLevel::Low),
             "medium" => Some(ReasoningEffortLevel::Medium),
+            "xhigh" => Some(ReasoningEffortLevel::XHigh),
+            "max" => Some(ReasoningEffortLevel::Max),
             "hard" | "high" => Some(ReasoningEffortLevel::High),
             "skip" => Some(self.current_reasoning),
             _ => None,
@@ -36,7 +38,7 @@ impl ModelPickerState {
         let Some(selected) = level else {
             renderer.line(
                 MessageStyle::Error,
-                "Unknown reasoning option. Use none, low, medium, high, skip, or off.",
+                "Unknown reasoning option. Use none, low, medium, high, xhigh, max, skip, or off.",
             )?;
             if let Some(progress) = self.prompt_reasoning_step(renderer)? {
                 return Ok(progress);

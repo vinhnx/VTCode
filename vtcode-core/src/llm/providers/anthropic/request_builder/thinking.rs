@@ -20,7 +20,7 @@ pub(crate) fn build_thinking_config(
         && supports_reasoning_effort(resolved_model, default_model);
 
     if thinking_enabled {
-        if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 {
+        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
             return (Some(ThinkingConfig::Adaptive), None);
         }
 
@@ -40,6 +40,7 @@ pub(crate) fn build_thinking_config(
                 ReasoningEffortLevel::Medium => 8192,
                 ReasoningEffortLevel::High => 16384,
                 ReasoningEffortLevel::XHigh => 32768,
+                ReasoningEffortLevel::Max => 32768,
             }
         } else {
             anthropic_config.interleaved_thinking_budget_tokens
@@ -56,6 +57,10 @@ pub(crate) fn build_thinking_config(
             );
         }
     } else if let Some(effort) = request.reasoning_effort {
+        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
+            return (None, None);
+        }
+
         if let Some(payload) = RigProviderCapabilities::new(Provider::Anthropic, &request.model)
             .reasoning_parameters(effort)
         {
@@ -74,9 +79,9 @@ mod tests {
     use crate::config::constants::models;
 
     #[test]
-    fn uses_adaptive_thinking_for_opus_4_6_by_default() {
+    fn uses_adaptive_thinking_for_opus_4_7_by_default() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
+            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
             ..Default::default()
         };
         let config = AnthropicConfig::default();
@@ -88,9 +93,9 @@ mod tests {
     }
 
     #[test]
-    fn ignores_explicit_budget_for_opus_4_6() {
+    fn ignores_explicit_budget_for_opus_4_7() {
         let request = LLMRequest {
-            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
+            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
             thinking_budget: Some(2048),
             ..Default::default()
         };

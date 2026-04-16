@@ -65,7 +65,7 @@ pub struct AgentConfig {
     #[serde(default = "default_max_conversation_turns")]
     pub max_conversation_turns: usize,
 
-    /// Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh)
+    /// Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
     /// Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: ReasoningEffortLevel,

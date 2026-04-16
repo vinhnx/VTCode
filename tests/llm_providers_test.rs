@@ -257,7 +257,7 @@ fn test_provider_supported_models() {
     let anthropic_models = anthropic.supported_models();
     assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_6.to_string()));
     assert!(anthropic_models.contains(&models::CLAUDE_HAIKU_4_5.to_string()));
-    assert!(anthropic_models.contains(&models::CLAUDE_OPUS_4_6.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_OPUS_4_7.to_string()));
     assert!(anthropic_models.len() >= 3);
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
