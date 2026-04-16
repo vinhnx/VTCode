@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.99.0 - 2026-04-16
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update Anthropic provider to support Claude Opus 4.7 with new task budget and reasoning effort features (0a278b96) 
 ## 0.98.7 - 2026-04-15
 
 ### Highlights
