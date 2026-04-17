@@ -370,6 +370,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
         responses_include: None,
         service_tier: None,
         prompt_cache_key: None,
+        prompt_cache_profile: None,
     }
 }
 

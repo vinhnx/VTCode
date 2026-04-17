@@ -1,8 +1,9 @@
 use super::{
-    CompactionContext, CompactionState, GroundedFactRecord,
-    build_server_compaction_context_management, build_summarized_fork_history,
-    compact_history_for_recovery_in_place, compact_history_from_index_in_place,
-    compact_history_in_place, compact_history_in_place_with_events, inject_latest_memory_envelope,
+    CompactionContext, CompactionState, GroundedFactRecord, SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION,
+    SessionMemoryEnvelope, build_server_compaction_context_management,
+    build_summarized_fork_history, compact_history_for_recovery_in_place,
+    compact_history_from_index_in_place, compact_history_in_place,
+    compact_history_in_place_with_events, inject_latest_memory_envelope,
     latest_memory_envelope_path_for_session, manual_openai_compact_history_in_place,
     maybe_auto_compact_history, resolve_compaction_threshold,
 };
@@ -1648,6 +1649,7 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
         temp.path(),
         Some(&VTCodeConfig::default()),
         &test_history(),
+        false,
     )
     .await
     .expect("summarized fork history");
@@ -1676,6 +1678,62 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
     assert!(compacted.iter().all(
         |message| message.role == MessageRole::System || message.role == MessageRole::User
     ));
+}
+
+#[tokio::test]
+async fn budget_resume_summary_reuses_saved_envelope_without_provider_compaction() {
+    let temp = tempdir().expect("tempdir");
+    let history_dir = temp.path().join(".vtcode").join("history");
+    fs::create_dir_all(&history_dir).expect("create history dir");
+
+    let source_envelope = SessionMemoryEnvelope {
+        session_id: "session-source".to_string(),
+        schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+        summary: "Budget-limited session summary".to_string(),
+        objective: None,
+        task_summary: None,
+        spec_summary: None,
+        evaluation_summary: None,
+        constraints: Vec::new(),
+        grounded_facts: Vec::new(),
+        touched_files: vec!["src/lib.rs".to_string()],
+        open_questions: Vec::new(),
+        verification_todo: Vec::new(),
+        delegation_notes: Vec::new(),
+        history_artifact_path: None,
+        generated_at: "2026-03-14T00:00:00Z".to_string(),
+    };
+    fs::write(
+        history_dir.join("session-source_0001.memory.json"),
+        serde_json::to_string_pretty(&source_envelope).expect("serialize envelope"),
+    )
+    .expect("write envelope");
+
+    let compacted = build_summarized_fork_history(
+        &FailingProviderCompactionProvider,
+        "stub-model",
+        "session-source",
+        "session-target",
+        temp.path(),
+        Some(&VTCodeConfig::default()),
+        &test_history(),
+        true,
+    )
+    .await
+    .expect("saved summary fork history");
+
+    assert!(
+        compacted[0]
+            .content
+            .as_text()
+            .contains("[Session Memory Envelope]")
+    );
+    assert!(
+        compacted[1]
+            .content
+            .as_text()
+            .contains("Budget-limited session summary")
+    );
 }
 
 #[tokio::test]
@@ -1713,6 +1771,7 @@ async fn local_and_fork_compaction_share_retained_user_budget() {
         temp.path(),
         Some(&vt_cfg),
         &test_history(),
+        false,
     )
     .await
     .expect("summarized fork history");

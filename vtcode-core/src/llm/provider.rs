@@ -63,8 +63,8 @@ pub use provider_trait::{
     LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
 };
 pub use request::{
-    CodingAgentSettings, LLMRequest, ParallelToolConfig, ResponsesCompactionOptions,
-    SpecificFunctionChoice, SpecificToolChoice, ToolChoice,
+    CodingAgentSettings, LLMRequest, ParallelToolConfig, PromptCacheProfile,
+    ResponsesCompactionOptions, SpecificFunctionChoice, SpecificToolChoice, ToolChoice,
 };
 pub use response::{
     BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,

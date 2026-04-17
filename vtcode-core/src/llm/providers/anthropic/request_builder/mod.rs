@@ -8,7 +8,7 @@ mod tools;
 use crate::config::constants::models;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
-use crate::llm::provider::{LLMError, LLMRequest};
+use crate::llm::provider::{LLMError, LLMRequest, PromptCacheProfile};
 use crate::llm::providers::anthropic_types::{
     AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget,
     CacheControl,
@@ -32,6 +32,17 @@ pub struct RequestBuilderContext<'a> {
     pub model: &'a str,
 }
 
+fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -> &'static str {
+    if !ctx.prompt_cache_enabled {
+        return "5m";
+    }
+
+    match request.prompt_cache_profile {
+        Some(PromptCacheProfile::BudgetContinuation) => "1h",
+        None => get_messages_cache_ttl(ctx.prompt_cache_settings),
+    }
+}
+
 pub fn convert_to_anthropic_format(
     request: &LLMRequest,
     ctx: &RequestBuilderContext,
@@ -43,11 +54,7 @@ pub fn convert_to_anthropic_format(
         "5m"
     };
 
-    let messages_ttl = if ctx.prompt_cache_enabled {
-        get_messages_cache_ttl(ctx.prompt_cache_settings)
-    } else {
-        "5m"
-    };
+    let messages_ttl = resolve_messages_ttl(request, ctx);
 
     let tools_cache_control =
         if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_tool_definitions {

@@ -16,6 +16,7 @@ use vtcode_core::core::agent::harness_artifacts::{
 };
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole, ResponsesCompactionOptions};
+use vtcode_core::llm::utils::truncate_to_token_limit;
 use vtcode_core::persistent_memory::{
     GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact,
 };
@@ -1302,6 +1303,79 @@ fn local_compaction_config(
     }
 }
 
+fn collect_zero_cost_retained_user_messages(
+    history: &[Message],
+    token_budget: usize,
+    max_messages: usize,
+) -> Vec<Message> {
+    if token_budget == 0 || max_messages == 0 {
+        return Vec::new();
+    }
+
+    let mut kept = Vec::new();
+    let mut remaining = token_budget;
+
+    for message in history.iter().rev() {
+        if kept.len() >= max_messages {
+            break;
+        }
+        if message.role != MessageRole::User || message.content.trim().is_empty() {
+            continue;
+        }
+
+        let estimated = message.estimate_tokens();
+        if estimated <= remaining {
+            kept.push(message.clone());
+            remaining = remaining.saturating_sub(estimated);
+            continue;
+        }
+
+        if remaining > 4 {
+            let truncated = truncate_to_token_limit(
+                message.content.as_text().as_ref(),
+                remaining.saturating_sub(4),
+            );
+            let trimmed = truncated.trim();
+            if !trimmed.is_empty() {
+                kept.push(Message::user(trimmed.to_string()));
+            }
+        }
+        break;
+    }
+
+    kept.reverse();
+    kept
+}
+
+fn build_zero_cost_summarized_fork_history(
+    source_history: &[Message],
+    source_envelope: Option<&SessionMemoryEnvelope>,
+    retained_user_messages: usize,
+) -> Vec<Message> {
+    let summary = source_envelope
+        .map(|envelope| normalize_whitespace(&envelope.summary))
+        .filter(|summary| !summary.is_empty())
+        .unwrap_or_else(|| derive_continuity_summary(source_history, source_envelope));
+
+    let retained_users = collect_zero_cost_retained_user_messages(
+        source_history,
+        CompactionConfig::default().retained_user_message_tokens,
+        retained_user_messages,
+    );
+
+    let mut compacted = Vec::with_capacity(retained_users.len().saturating_add(1));
+    compacted.push(Message::system(format!(
+        "Previous conversation summary:\n{}",
+        summary.trim()
+    )));
+    compacted.extend(retained_users);
+    compacted
+}
+
+pub(crate) fn has_latest_memory_envelope(workspace_root: &Path, session_id: &str) -> bool {
+    latest_memory_envelope_path_for_session(workspace_root, session_id).is_some()
+}
+
 pub(crate) fn refresh_session_memory_envelope(
     workspace_root: &Path,
     session_id: &str,
@@ -1343,6 +1417,7 @@ pub(crate) async fn build_summarized_fork_history(
     workspace_root: &Path,
     vt_cfg: Option<&VTCodeConfig>,
     source_history: &[Message],
+    prefer_saved_summary: bool,
 ) -> Result<Vec<Message>> {
     if source_history.is_empty() {
         return Ok(Vec::new());
@@ -1359,14 +1434,22 @@ pub(crate) async fn build_summarized_fork_history(
         );
     }
 
-    let compaction_input = dedup_repeated_file_reads_for_local_compaction(&source_history);
-    let mut compacted = vtcode_core::compaction::compact_history(
-        provider,
-        model,
-        &compaction_input,
-        &local_compaction_config(vt_cfg, true),
-    )
-    .await?;
+    let mut compacted = if prefer_saved_summary && source_envelope.is_some() {
+        build_zero_cost_summarized_fork_history(
+            &source_history,
+            source_envelope.as_ref(),
+            configured_retained_user_messages(vt_cfg),
+        )
+    } else {
+        let compaction_input = dedup_repeated_file_reads_for_local_compaction(&source_history);
+        vtcode_core::compaction::compact_history(
+            provider,
+            model,
+            &compaction_input,
+            &local_compaction_config(vt_cfg, true),
+        )
+        .await?
+    };
 
     let _ = persist_memory_envelope(
         workspace_root,

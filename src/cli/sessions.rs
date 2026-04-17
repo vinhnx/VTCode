@@ -15,6 +15,19 @@ use crate::startup::SessionResumeMode;
 
 const INTERACTIVE_SESSION_LIMIT: usize = 10;
 
+enum ResumeExecutionMode {
+    Resume(ResumeSession),
+    StartFresh,
+}
+
+#[derive(Clone, Copy)]
+enum BudgetResumeAction {
+    ContinueFromSummary,
+    ContinueFullHistory,
+    StartFresh,
+    Cancel,
+}
+
 pub async fn handle_resume_session_command(
     config: &CoreAgentConfig,
     mode: SessionResumeMode,
@@ -62,6 +75,26 @@ pub async fn handle_resume_session_command(
     let Some(resume) = resume else {
         println!("{}", style("No session selected. Exiting.").red());
         return Ok(());
+    };
+
+    let Some(execution_mode) = maybe_choose_budget_limited_resume_mode(resume)? else {
+        println!("{}", style("No session selected. Exiting.").red());
+        return Ok(());
+    };
+
+    let resume = match execution_mode {
+        ResumeExecutionMode::Resume(resume) => resume,
+        ResumeExecutionMode::StartFresh => {
+            return crate::agent::agents::run_single_agent_loop(
+                config,
+                None,
+                skip_confirmations,
+                false,
+                PlanModeEntrySource::None,
+                None,
+            )
+            .await;
+        }
     };
 
     if resume.is_fork() {
@@ -175,6 +208,78 @@ fn maybe_choose_fork_mode(intent: ArchivedSessionIntent) -> Result<Option<Archiv
             summarize: true,
         })),
         _ => Ok(None),
+    }
+}
+
+fn maybe_choose_budget_limited_resume_mode(
+    resume: ResumeSession,
+) -> Result<Option<ResumeExecutionMode>> {
+    let Some(continuation) = resume.budget_limit_continuation() else {
+        return Ok(Some(ResumeExecutionMode::Resume(resume)));
+    };
+    if resume.is_fork() {
+        return Ok(Some(ResumeExecutionMode::Resume(resume)));
+    }
+
+    println!(
+        "{}",
+        style("This session stopped after reaching the local budget limit.").yellow()
+    );
+    if let (Some(actual_cost_usd), Some(max_budget_usd)) = (
+        continuation.actual_cost_usd(),
+        continuation.max_budget_usd(),
+    ) {
+        println!(
+            "{}",
+            style(format!(
+                "Prior spend: ${actual_cost_usd:.2} on a ${max_budget_usd:.2} session budget."
+            ))
+            .yellow()
+        );
+    }
+
+    let mut actions = Vec::new();
+    let mut options = Vec::new();
+
+    if continuation.summary_available {
+        actions.push(BudgetResumeAction::ContinueFromSummary);
+        options.push("Continue from saved summary (recommended, lower cost)".to_string());
+    }
+
+    actions.push(BudgetResumeAction::ContinueFullHistory);
+    options.push("Continue with full history (higher cost)".to_string());
+
+    actions.push(BudgetResumeAction::StartFresh);
+    options.push("Start fresh in a new session".to_string());
+
+    actions.push(BudgetResumeAction::Cancel);
+    options.push("Cancel".to_string());
+
+    let default_index = if continuation.summary_available { 0 } else { 1 };
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose how to continue.")
+        .items(&options)
+        .default(default_index)
+        .interact()
+        .context("failed to select a budget-limit resume mode")?;
+
+    let Some(action) = actions.get(selection).copied() else {
+        return Ok(None);
+    };
+
+    match action {
+        BudgetResumeAction::ContinueFromSummary => {
+            Ok(Some(ResumeExecutionMode::Resume(convert_listing(
+                resume.listing(),
+                ArchivedSessionIntent::ForkNewArchive {
+                    custom_suffix: None,
+                    summarize: true,
+                },
+            ))))
+        }
+        BudgetResumeAction::ContinueFullHistory => Ok(Some(ResumeExecutionMode::Resume(resume))),
+        BudgetResumeAction::StartFresh => Ok(Some(ResumeExecutionMode::StartFresh)),
+        BudgetResumeAction::Cancel => Ok(None),
     }
 }
 

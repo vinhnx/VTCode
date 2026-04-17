@@ -6,7 +6,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::exec::events::Usage as HarnessUsage;
-use vtcode_core::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
+use vtcode_core::llm::provider::{
+    Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key,
+};
 use vtcode_tui::app::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -79,6 +81,7 @@ pub(crate) struct SessionStats {
     turn_stall_reason: Option<String>,
     /// Responses-style continuation state keyed by normalized provider/model pairs.
     previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
+    prompt_cache_profile: Option<PromptCacheProfile>,
     prompt_cache_lineage_id: Option<String>,
     last_prompt_cache_model: Option<String>,
     last_stable_prefix_hash: Option<u64>,
@@ -171,6 +174,14 @@ impl SessionStats {
 
     pub(crate) fn budget_limit(&self) -> Option<(f64, f64)> {
         self.budget_limit
+    }
+
+    pub(crate) fn set_prompt_cache_profile(&mut self, profile: Option<PromptCacheProfile>) {
+        self.prompt_cache_profile = profile;
+    }
+
+    pub(crate) fn prompt_cache_profile(&self) -> Option<PromptCacheProfile> {
+        self.prompt_cache_profile
     }
 
     pub(crate) fn record_turn_completed(&mut self) {

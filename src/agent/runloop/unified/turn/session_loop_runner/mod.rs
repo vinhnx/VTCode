@@ -267,6 +267,7 @@ fn prepare_resume_bootstrap_without_archive(
     if is_compatible && let Some(lineage_id) = source_metadata.prompt_cache_lineage_id.as_ref() {
         metadata.prompt_cache_lineage_id = Some(lineage_id.clone());
     }
+    metadata.continuation_metadata = source_metadata.continuation_metadata.clone();
     if resume.is_fork() {
         metadata.parent_session_id = Some(resume.identifier());
         metadata.fork_mode = Some(if resume.summarize_fork() {
@@ -570,6 +571,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             &config.workspace,
                             vt_cfg.as_ref(),
                             resume.history(),
+                            resume.budget_limit_continuation().is_some(),
                         )
                         .await?;
                 }
@@ -596,6 +598,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             &config.workspace,
                             vt_cfg.as_ref(),
                             resume.history(),
+                            resume.budget_limit_continuation().is_some(),
                         )
                         .await?;
                 }
@@ -823,6 +826,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .metadata
                 .as_ref()
                 .and_then(|metadata| metadata.prompt_cache_lineage_id.clone()),
+        );
+        session_stats.set_prompt_cache_profile(
+            thread_handle
+                .snapshot()
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.budget_limit_continuation())
+                .map(|_| vtcode_core::llm::provider::PromptCacheProfile::BudgetContinuation),
         );
         session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
         if plan_mode_entry_source.should_auto_enter() {
@@ -1484,6 +1495,18 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(archive) = session_archive.as_mut() {
             let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
             archive.set_loaded_skills(skill_names);
+            archive.set_continuation_metadata(session_stats.budget_limit().map(
+                |(max_budget_usd, actual_cost_usd)| {
+                    vtcode_core::utils::session_archive::SessionContinuationMetadata::budget_limit(
+                        max_budget_usd,
+                        actual_cost_usd,
+                        crate::agent::runloop::unified::turn::compaction::has_latest_memory_envelope(
+                            &config.workspace,
+                            thread_handle.thread_id().as_str(),
+                        ),
+                    )
+                },
+            ));
         }
         if let Some(emitter) = harness_emitter.as_ref() {
             let harness_snapshot = tool_registry.harness_context_snapshot();
@@ -1691,6 +1714,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             telemetry: telemetry_snapshot,
             header_context,
             resume_identifier,
+            budget_limit: session_stats.budget_limit(),
         });
         if matches!(session_end_reason, SessionEndReason::Error) {
             return Err(anyhow::anyhow!(

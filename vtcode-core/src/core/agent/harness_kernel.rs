@@ -303,6 +303,7 @@ pub struct HarnessRequestPlanInput {
     pub context_management: Option<Value>,
     pub previous_response_id: Option<String>,
     pub prompt_cache_key: Option<String>,
+    pub prompt_cache_profile: Option<crate::llm::provider::PromptCacheProfile>,
     pub tool_catalog_hash: Option<u64>,
 }
 
@@ -329,6 +330,7 @@ pub fn build_harness_request_plan(input: HarnessRequestPlanInput) -> HarnessRequ
         context_management: input.context_management,
         previous_response_id: input.previous_response_id,
         prompt_cache_key: input.prompt_cache_key,
+        prompt_cache_profile: input.prompt_cache_profile,
         ..Default::default()
     };
 
@@ -688,6 +690,7 @@ mod tests {
             context_management: None,
             previous_response_id: None,
             prompt_cache_key: None,
+            prompt_cache_profile: None,
             tool_catalog_hash: None,
         });
 
@@ -717,6 +720,7 @@ mod tests {
             context_management: None,
             previous_response_id: None,
             prompt_cache_key: None,
+            prompt_cache_profile: None,
             tool_catalog_hash: None,
         });
 

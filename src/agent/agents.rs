@@ -11,7 +11,9 @@ use vtcode_core::core::threads::{
 };
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::SessionArchiveMetadata;
-use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
+use vtcode_core::utils::session_archive::{
+    SessionContinuationMetadata, SessionListing, SessionSnapshot,
+};
 use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 
 #[derive(Clone, Debug)]
@@ -92,6 +94,11 @@ impl SessionContinuation {
     pub(crate) fn vt_cfg_override(&self) -> Option<&VTCodeConfig> {
         self.vt_cfg_override.as_ref()
     }
+
+    pub(crate) fn budget_limit_continuation(&self) -> Option<&SessionContinuationMetadata> {
+        self.snapshot().metadata.budget_limit_continuation()
+    }
+
     pub(crate) fn from_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> Self {
         Self {
             listing: listing.clone(),

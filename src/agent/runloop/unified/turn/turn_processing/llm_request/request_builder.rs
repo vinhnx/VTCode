@@ -524,6 +524,7 @@ pub(super) async fn build_turn_request(
         context_management,
         previous_response_id,
         prompt_cache_key,
+        prompt_cache_profile: ctx.session_stats.prompt_cache_profile(),
         tool_catalog_hash,
     });
 
