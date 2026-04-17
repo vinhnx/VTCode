@@ -1,62 +1,183 @@
-[agent]
-api_key_env = "ANTHROPIC_API_KEY"
-default_model = "claude-opus-4-7"
-provider = "anthropic"
-reasoning_effort = "xhigh"
-theme = "ciapre-blue"
+# VT Code Configuration File
+# Saved from /config with readable section headings.
+# Every field includes descriptions, defaults, and known choices where available.
 
+# Agent Defaults
+# Primary model, prompt, and chat behavior.
+[agent]
+# Environment variable that stores the API key for the active provider
+# Default: "OPENAI_API_KEY"
+# Type: `string`
+api_key_env = "ANTHROPIC_API_KEY"
+
+# Default model to use
+# Default: "gpt-5.3-codex"
+# Type: `string`
+default_model = "claude-opus-4-7"
+
+# AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
+# Possible values: anthropic, gemini, openai, openrouter, zai
+# Default: "openai"
+# Type: `string`
+provider = "anthropic"
+
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
+# Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
+# currently intended for Claude Opus 4.7.
+# Possible values: high, low, max, medium, minimal, none, xhigh
+# Default: "none"
+# Type: `string`
+reasoning_effort = "xhigh"
+
+# UI theme identifier controlling ANSI styling
+# Default: "ciapre"
+# Type: `string`
+theme = "ansi-classic"
+
+# Persistent Memory
+# Per-repository memory summary, rollout staging, and learned durable notes.
 [agent.persistent_memory]
+# Toggle main-session persistent memory for this repository
+# Default: false
+# Type: `boolean`
 enabled = true
 
-[provider.openai]
-service_tier = "flex"
 
+# Permissions
+# Default approval and trust behavior.
 [permissions]
+# Default unified permission mode for the current session.
+# Default: "default"
+# Type: `string`
 default_mode = "auto"
 
+
+# Provider Endpoints
+# Network and provider-specific API settings.
+[provider]
+# Anthropic
+# Anthropic-specific request settings.
+[provider.anthropic]
+# Controls how thinking content is returned in API responses. Options: "summarized" (thinking blocks
+# contain summarized text, default on Claude 4 models), "omitted" (thinking blocks have an empty
+# thinking field, default on Opus 4.7). When unset, uses model-specific default.
+# Possible values: omitted, summarized
+# Default: -
+# Type: `null | string`
+thinking_display = "summarized"
+
+
+# OpenAI
+# OpenAI-specific request settings.
+[provider.openai]
+# Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level
+# default service tier. Options: "flex", "priority"
+# Possible values: flex, priority
+# Default: -
+# Type: `OpenAIServiceTier | null`
+service_tier = "flex"
+
+
+# Telemetry
+# Local analytics, metrics, and reporting.
 [telemetry]
+# Enable ATIF (Agent Trajectory Interchange Format) trajectory export. When enabled, sessions write an
+# `atif-trajectory.json` alongside the existing `.jsonl` trajectory log.
+# Default: false
+# Type: `boolean`
 atif_enabled = true
+
+# Emit bottleneck traces for slow paths
+# Default: false
+# Type: `boolean`
 bottleneck_tracing = false
 
+
+# Tool Defaults
+# Loop limits and default tool behavior.
+[tools]
+# Tool Policies
+# Per-tool allow, prompt, or deny rules.
 [tools.policies]
 agent_info = "allow"
+
 ask_user_question = "allow"
+
 close_pty_session = "allow"
+
 create_pty_session = "allow"
+
 enter_plan_mode = "prompt"
+
 exec_code = "allow"
+
 execute_code = "allow"
+
 exit_plan_mode = "prompt"
+
 git_diff = "allow"
+
 grep_file = "allow"
+
 list_files = "allow"
+
 list_pty_sessions = "allow"
+
 list_skills = "allow"
+
 load_skill = "allow"
+
 load_skill_resource = "allow"
+
 memory = "allow"
+
 open_file = "allow"
+
 plan_task_tracker = "prompt"
+
 read_pty_session = "allow"
+
 request_user_input = "allow"
+
 resize_pty_session = "allow"
+
 resume_agent = "allow"
+
 run_pty_cmd = "allow"
+
 search_file = "allow"
+
 search_tools = "allow"
+
 send_input = "allow"
+
 skill = "allow"
+
 spawn_agent = "allow"
+
 task_tracker = "allow"
+
 unified_exec = "allow"
+
 unified_file = "allow"
+
 wait_agent = "allow"
+
 web_fetch = "allow"
 
+
+# Interface
+# Appearance, layout, and transcript behavior.
+[ui]
+# Terminal Title
 [ui.terminal_title]
+# -
+# Default: null
+# Type: `array | null`
 items = [
     "project",
     "spinner",
     "app-name",
     "git-branch",
 ]
+

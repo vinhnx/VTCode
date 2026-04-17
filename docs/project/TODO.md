@@ -14,33 +14,7 @@ https://x.com/trq212/status/2044548257058328723
 
 ---
 
-implement /effort system command to set the effort level for models that support it. The effort level will determine the depth of reasoning and the amount of resources allocated for processing the conversation. This can help users manage costs while still getting the level of detail they need.
 
-❯ /effort
-⎿ Set effort level to xhigh: Deeper reasoning than high, just below maximum (Opus 4.7 only)
+---
 
-❯ /effort
-⎿ Set effort level to high: Comprehensive implementation with extensive testing and documentation
-
-❯ /effort
-⎿ Set effort level to medium: Balanced approach with standard implementation and testing
-
-❯ /effort
-⎿ Set effort level to low: Quick, straightforward implementation with minimal overhead
-
-Apply for models and providers that support it, and make it available for users to set the effort level for their conversations. This will allow users to choose the level of depth and reasoning they want in their interactions, while also managing costs effectively.
-
-First: `claude-opus-4-7` guide
-
-```
-
-UI:
-
-
- Speed                         Intelligence
-─▲────────────────────────────────────────
-low     medium     high     xhigh      max
-
-```
-
-
+https://developers.openai.com/codex/memories

@@ -3,12 +3,23 @@ use crate::config::core::AnthropicConfig;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::LLMRequest;
-use crate::llm::providers::anthropic_types::ThinkingConfig;
+use crate::llm::providers::anthropic_types::{ThinkingConfig, ThinkingDisplay};
 use crate::llm::rig_adapter::RigProviderCapabilities;
 use serde_json::{Value, json};
 use std::env;
 
 use super::super::capabilities::{resolve_model_name, supports_reasoning_effort};
+
+fn resolve_thinking_display(anthropic_config: &AnthropicConfig) -> Option<ThinkingDisplay> {
+    anthropic_config
+        .thinking_display
+        .as_deref()
+        .and_then(|d| match d.to_ascii_lowercase().as_str() {
+            "summarized" => Some(ThinkingDisplay::Summarized),
+            "omitted" => Some(ThinkingDisplay::Omitted),
+            _ => None,
+        })
+}
 
 pub(crate) fn build_thinking_config(
     request: &LLMRequest,
@@ -18,10 +29,11 @@ pub(crate) fn build_thinking_config(
     let resolved_model = resolve_model_name(&request.model, default_model);
     let thinking_enabled = anthropic_config.extended_thinking_enabled
         && supports_reasoning_effort(resolved_model, default_model);
+    let display = resolve_thinking_display(anthropic_config);
 
     if thinking_enabled {
         if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
-            return (Some(ThinkingConfig::Adaptive), None);
+            return (Some(ThinkingConfig::Adaptive { display }), None);
         }
 
         let max_thinking_tokens: Option<u32> = env::var(env_vars::MAX_THINKING_TOKENS)
@@ -52,6 +64,7 @@ pub(crate) fn build_thinking_config(
             return (
                 Some(ThinkingConfig::Enabled {
                     budget_tokens: effective_budget,
+                    display,
                 }),
                 None,
             );
@@ -88,7 +101,7 @@ mod tests {
         let (thinking, reasoning) =
             build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
 
-        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive)));
+        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
         assert!(reasoning.is_none());
     }
 
@@ -103,6 +116,86 @@ mod tests {
         let (thinking, _) =
             build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
 
-        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive)));
+        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
+    }
+
+    #[test]
+    fn adaptive_thinking_includes_summarized_display() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig {
+            thinking_display: Some("summarized".to_string()),
+            ..AnthropicConfig::default()
+        };
+        let (thinking, _) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        match thinking {
+            Some(ThinkingConfig::Adaptive {
+                display: Some(ThinkingDisplay::Summarized),
+            }) => {}
+            other => panic!("expected Adaptive with Summarized display, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn adaptive_thinking_includes_omitted_display() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig {
+            thinking_display: Some("omitted".to_string()),
+            ..AnthropicConfig::default()
+        };
+        let (thinking, _) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        match thinking {
+            Some(ThinkingConfig::Adaptive {
+                display: Some(ThinkingDisplay::Omitted),
+            }) => {}
+            other => panic!("expected Adaptive with Omitted display, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn enabled_thinking_includes_display_when_configured() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_SONNET_4_6.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig {
+            thinking_display: Some("summarized".to_string()),
+            ..AnthropicConfig::default()
+        };
+        let (thinking, _) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        match thinking {
+            Some(ThinkingConfig::Enabled {
+                display: Some(ThinkingDisplay::Summarized),
+                ..
+            }) => {}
+            other => panic!("expected Enabled with Summarized display, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn thinking_display_defaults_to_none() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, _) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        match thinking {
+            Some(ThinkingConfig::Adaptive { display: None }) => {}
+            other => panic!("expected Adaptive with no display, got {other:?}"),
+        }
     }
 }

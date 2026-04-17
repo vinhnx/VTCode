@@ -37,7 +37,10 @@ const ACTION_PREFIX_OPEN: &str = "settings:open:";
 const ACTION_PREFIX_ARRAY_ADD: &str = "settings:array_add:";
 const ACTION_PREFIX_ARRAY_POP: &str = "settings:array_pop:";
 const ACTION_PREFIX_SET: &str = "settings:set:";
-const OPTIONAL_DOC_FIELDS: &[&str] = &["provider.openai.service_tier"];
+const OPTIONAL_DOC_FIELDS: &[&str] = &[
+    "provider.anthropic.thinking_display",
+    "provider.openai.service_tier",
+];
 pub(crate) const SETTINGS_MODEL_CONFIG_PATH: &str = "model_config";
 pub(crate) const SETTINGS_MODEL_CONFIG_MAIN_PATH: &str = "model_config.main";
 pub(crate) const SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH: &str = "model_config.lightweight";

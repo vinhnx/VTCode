@@ -505,6 +505,7 @@ python3 scripts/generate_config_field_reference.py
 | `provider.anthropic.memory.enabled` | `boolean` | no | `false` | - |
 | `provider.anthropic.task_budget_beta` | `string` | no | `"task-budgets-2026-03-13"` | Beta header for Anthropic task budgets. |
 | `provider.anthropic.task_budget_tokens` | `null \| integer` | no | `-` | Optional Anthropic task budget token total for Claude Opus 4.7. When set, VT Code sends `output_config.task_budget = { type = "tokens", total = N }` and the required beta header. Anthropic currently requires a minimum of 20,000 tokens. |
+| `provider.anthropic.thinking_display` | `null \| string` | no | `-` | Controls how thinking content is returned in API responses. Options: "summarized" (thinking blocks contain summarized text, default on Claude 4 models), "omitted" (thinking blocks have an empty thinking field, default on Opus 4.7). When unset, uses model-specific default. |
 | `provider.anthropic.skip_model_validation` | `boolean` | no | `false` | DEPRECATED: Model name validation has been removed. The Anthropic API validates model names directly, avoiding maintenance burden and allowing flexibility. This field is kept for backward compatibility but has no effect. |
 | `provider.anthropic.tool_search.algorithm` | `string` | no | `"regex"` | Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language) |
 | `provider.anthropic.tool_search.always_available_tools` | `array` | no | `[]` | Tool names that should never be deferred (always available) |

@@ -477,6 +477,14 @@ pub struct AnthropicConfig {
     #[serde(default = "default_task_budget_beta")]
     pub task_budget_beta: String,
 
+    /// Controls how thinking content is returned in API responses.
+    /// - "summarized": Thinking blocks contain summarized text (default on Claude 4 models).
+    /// - "omitted": Thinking blocks have an empty `thinking` field (default on Opus 4.7).
+    /// When set, this overrides the model-specific default.
+    /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#controlling-thinking-display>
+    #[serde(default)]
+    pub thinking_display: Option<String>,
+
     /// Enable token counting via the count_tokens endpoint
     /// When enabled, the agent can estimate input token counts before making API calls
     /// Useful for proactive management of rate limits and costs
@@ -498,6 +506,7 @@ impl Default for AnthropicConfig {
             effort: default_effort(),
             task_budget_tokens: None,
             task_budget_beta: default_task_budget_beta(),
+            thinking_display: None,
             count_tokens_enabled: default_count_tokens_enabled(),
         }
     }

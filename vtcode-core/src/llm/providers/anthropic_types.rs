@@ -30,9 +30,28 @@ pub struct AnthropicRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ThinkingConfig {
-    Enabled { budget_tokens: u32 },
-    Adaptive,
+    Enabled {
+        budget_tokens: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<ThinkingDisplay>,
+    },
+    Adaptive {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<ThinkingDisplay>,
+    },
     Disabled,
+}
+
+/// Controls how thinking content is returned in API responses.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ThinkingDisplay {
+    /// Thinking blocks contain summarized thinking text (default on Claude 4 models).
+    Summarized,
+    /// Thinking blocks are returned with an empty `thinking` field; the `signature`
+    /// still carries encrypted full thinking for multi-turn continuity
+    /// (default on Claude Opus 4.7 and Claude Mythos Preview).
+    Omitted,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
