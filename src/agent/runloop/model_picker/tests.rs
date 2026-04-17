@@ -496,7 +496,9 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex-max"));
 
     assert!(selection::supports_max_reasoning("claude-opus-4-7"));
-    assert!(!selection::supports_max_reasoning("claude-sonnet-4-6"));
+    assert!(selection::supports_max_reasoning("claude-sonnet-4-6"));
+    assert!(selection::supports_max_reasoning("claude-opus-4-6"));
+    assert!(selection::supports_max_reasoning("claude-mythos-preview"));
     assert!(!selection::supports_max_reasoning("gpt-5.4"));
 }
 

@@ -69,6 +69,7 @@ async fn collect_streamed_response(
         match event? {
             provider::LLMStreamEvent::Token { delta } => streamed_content.push_str(&delta),
             provider::LLMStreamEvent::Reasoning { delta } => streamed_reasoning.push_str(&delta),
+            provider::LLMStreamEvent::ReasoningSignature { .. } => {}
             provider::LLMStreamEvent::ReasoningStage { .. } => {}
             provider::LLMStreamEvent::Completed { response } => {
                 completed = Some(*response);

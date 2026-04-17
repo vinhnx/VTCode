@@ -11,6 +11,55 @@ pub enum PromptCacheProfile {
     BudgetContinuation,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicThinkingModeOverride {
+    #[default]
+    Inherit,
+    Disabled,
+    Adaptive,
+    ManualBudget(u32),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicThinkingDisplayOverride {
+    #[default]
+    Inherit,
+    Summarized,
+    Omitted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicOptionalStringOverride {
+    #[default]
+    Inherit,
+    Omit,
+    Explicit(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicOptionalU32Override {
+    #[default]
+    Inherit,
+    Omit,
+    Explicit(u32),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct AnthropicRequestOverrides {
+    #[serde(default)]
+    pub thinking_mode: AnthropicThinkingModeOverride,
+    #[serde(default)]
+    pub thinking_display: AnthropicThinkingDisplayOverride,
+    #[serde(default)]
+    pub effort: AnthropicOptionalStringOverride,
+    #[serde(default)]
+    pub task_budget_tokens: AnthropicOptionalU32Override,
+}
+
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
@@ -107,6 +156,10 @@ pub struct LLMRequest {
 
     /// Optional request-scoped prompt cache profile for provider-specific TTL overrides.
     pub prompt_cache_profile: Option<PromptCacheProfile>,
+
+    /// Optional Anthropic-specific request overrides used when request semantics must
+    /// not inherit VT Code's provider defaults, such as the Anthropic compatibility server.
+    pub anthropic_request_overrides: Option<AnthropicRequestOverrides>,
 }
 
 /// Optional overrides for standalone Responses compaction requests.

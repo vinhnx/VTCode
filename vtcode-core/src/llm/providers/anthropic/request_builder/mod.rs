@@ -5,18 +5,22 @@ mod system;
 mod thinking;
 mod tools;
 
+use crate::config::constants::reasoning;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
-use crate::llm::provider::{LLMError, LLMRequest, PromptCacheProfile};
+use crate::llm::provider::{
+    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, LLMError, LLMRequest,
+    PromptCacheProfile,
+};
 use crate::llm::providers::anthropic_types::{
     AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget,
-    CacheControl,
+    CacheControl, ThinkingConfig,
 };
 use serde_json::Value;
 
 use super::capabilities::{
-    default_effort_for_model, effort_allowed_for_model, resolve_model_name,
-    supports_adaptive_thinking, supports_effort, supports_task_budget,
+    default_effort_for_model, effort_allowed_for_model, resolve_model_name, supports_effort,
+    supports_task_budget,
 };
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
@@ -131,45 +135,60 @@ pub fn convert_to_anthropic_format(
         build_thinking_config(request, ctx.anthropic_config, ctx.model);
 
     let final_tool_choice = build_tool_choice(request, &thinking_val);
+    let anthropic_overrides = request.anthropic_request_overrides.as_ref();
+    let thinking_is_adaptive = matches!(thinking_val, Some(ThinkingConfig::Adaptive { .. }));
 
-    let adaptive_effort =
-        if supports_adaptive_thinking(resolved_model, ctx.model) && request.effort.is_none() {
-            request
-                .reasoning_effort
-                .map(|effort| effort_from_reasoning_for_adaptive(effort).to_string())
-        } else {
-            None
-        };
-    let effort_value = if supports_effort(resolved_model, ctx.model) {
+    let adaptive_effort = if thinking_is_adaptive && request.effort.is_none() {
         request
-            .effort
-            .as_ref()
-            .map(|effort| effort.to_ascii_lowercase())
-            .or_else(|| {
-                adaptive_effort
-                    .as_ref()
-                    .map(|effort| effort.to_ascii_lowercase())
-            })
-            .or_else(|| {
-                thinking_val.as_ref().and_then(|_| {
-                    let configured_effort = ctx.anthropic_config.effort.to_ascii_lowercase();
-                    if effort_allowed_for_model(resolved_model, ctx.model, &configured_effort) {
-                        Some(configured_effort)
-                    } else {
-                        default_effort_for_model(resolved_model, ctx.model).map(str::to_string)
-                    }
+            .reasoning_effort
+            .map(|effort| effort_from_reasoning_for_adaptive(effort).to_string())
+    } else {
+        None
+    };
+    let effort_value = if supports_effort(resolved_model, ctx.model) && thinking_is_adaptive {
+        match anthropic_overrides.map(|overrides| &overrides.effort) {
+            Some(AnthropicOptionalStringOverride::Explicit(effort)) => {
+                Some(effort.to_ascii_lowercase())
+            }
+            Some(AnthropicOptionalStringOverride::Omit) => None,
+            _ => request
+                .effort
+                .as_ref()
+                .map(|effort| effort.to_ascii_lowercase())
+                .or_else(|| {
+                    adaptive_effort
+                        .as_ref()
+                        .map(|effort| effort.to_ascii_lowercase())
                 })
-            })
+                .or_else(|| {
+                    thinking_val.as_ref().and_then(|_| {
+                        let configured_effort = ctx.anthropic_config.effort.to_ascii_lowercase();
+                        if effort_allowed_for_model(resolved_model, ctx.model, &configured_effort) {
+                            Some(configured_effort)
+                        } else {
+                            default_effort_for_model(resolved_model, ctx.model).map(str::to_string)
+                        }
+                    })
+                }),
+        }
     } else {
         None
     };
     let task_budget = if supports_task_budget(resolved_model, ctx.model) {
-        ctx.anthropic_config
-            .task_budget_tokens
-            .map(|total| AnthropicTaskBudget {
+        match anthropic_overrides.map(|overrides| &overrides.task_budget_tokens) {
+            Some(AnthropicOptionalU32Override::Explicit(total)) => Some(AnthropicTaskBudget {
                 budget_type: "tokens".to_string(),
-                total,
-            })
+                total: *total,
+            }),
+            Some(AnthropicOptionalU32Override::Omit) => None,
+            _ => ctx
+                .anthropic_config
+                .task_budget_tokens
+                .map(|total| AnthropicTaskBudget {
+                    budget_type: "tokens".to_string(),
+                    total,
+                }),
+        }
     } else {
         None
     };
@@ -191,12 +210,13 @@ pub fn convert_to_anthropic_format(
             None
         };
 
-    let effective_temperature =
-        if thinking_val.is_some() || supports_adaptive_thinking(resolved_model, ctx.model) {
-            None
-        } else {
-            request.temperature
-        };
+    let effective_temperature = if thinking_val.is_some()
+        || resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+    {
+        None
+    } else {
+        request.temperature
+    };
 
     let top_level_cache_control = if ctx.prompt_cache_enabled
         && explicit_breakpoints_used < max_breakpoints
@@ -245,11 +265,8 @@ pub fn convert_to_anthropic_format(
 fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static str {
     match effort {
         ReasoningEffortLevel::None | ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
-            "low"
+            reasoning::LOW
         }
-        ReasoningEffortLevel::Medium => "medium",
-        ReasoningEffortLevel::High => "high",
-        ReasoningEffortLevel::XHigh => "xhigh",
-        ReasoningEffortLevel::Max => "max",
+        _ => effort.as_str(),
     }
 }

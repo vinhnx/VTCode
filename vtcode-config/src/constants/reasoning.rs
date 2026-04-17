@@ -1,7 +1,11 @@
+pub const NONE: &str = "none";
+pub const MINIMAL: &str = "minimal";
 pub const LOW: &str = "low";
 pub const MEDIUM: &str = "medium";
 pub const HIGH: &str = "high";
-pub const ALLOWED_LEVELS: &[&str] = &["minimal", LOW, MEDIUM, HIGH, "xhigh", "max"];
+pub const XHIGH: &str = "xhigh";
+pub const MAX: &str = "max";
+pub const ALLOWED_LEVELS: &[&str] = &[MINIMAL, LOW, MEDIUM, HIGH, XHIGH, MAX];
 pub const LABEL_LOW: &str = "Low";
 pub const LABEL_MEDIUM: &str = "Medium";
 pub const LABEL_HIGH: &str = "High";

@@ -1363,6 +1363,7 @@ data: [DONE]\n\n",
                 LLMStreamEvent::Completed { response } => completed = Some(response),
                 LLMStreamEvent::Token { .. }
                 | LLMStreamEvent::Reasoning { .. }
+                | LLMStreamEvent::ReasoningSignature { .. }
                 | LLMStreamEvent::ReasoningStage { .. } => {}
             }
         }

@@ -7,7 +7,7 @@
 //! - Parallel tool configuration
 //! - Context window sizes
 
-use crate::config::constants::models;
+use crate::config::constants::{models, reasoning};
 use crate::llm::providers::anthropic_types::ThinkingDisplay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +19,7 @@ pub(crate) enum ClaudeThinkingMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ClaudeThinkingProfile {
     pub mode: ClaudeThinkingMode,
+    pub supports_manual_budget: bool,
     pub adaptive_only: bool,
     pub default_thinking_enabled: bool,
     pub manual_interleaved_beta: bool,
@@ -29,6 +30,21 @@ pub(crate) struct ClaudeThinkingProfile {
     pub supports_xhigh_effort: bool,
     pub supports_max_effort: bool,
 }
+
+const ANTHROPIC_EFFORTS_UP_TO_HIGH: &[&str] = &[reasoning::LOW, reasoning::MEDIUM, reasoning::HIGH];
+const ANTHROPIC_EFFORTS_UP_TO_MAX: &[&str] = &[
+    reasoning::LOW,
+    reasoning::MEDIUM,
+    reasoning::HIGH,
+    reasoning::MAX,
+];
+const ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX: &[&str] = &[
+    reasoning::LOW,
+    reasoning::MEDIUM,
+    reasoning::HIGH,
+    reasoning::XHIGH,
+    reasoning::MAX,
+];
 
 pub(crate) fn resolve_model_name<'a>(model: &'a str, default_model: &'a str) -> &'a str {
     if model.trim().is_empty() {
@@ -51,13 +67,14 @@ pub(crate) fn claude_thinking_profile(
     if matches_model(requested, models::anthropic::CLAUDE_MYTHOS_PREVIEW) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
             adaptive_only: true,
             default_thinking_enabled: true,
             manual_interleaved_beta: false,
             supports_effort: true,
             supports_task_budget: false,
             default_display: ThinkingDisplay::Omitted,
-            default_effort: "high",
+            default_effort: reasoning::HIGH,
             supports_xhigh_effort: false,
             supports_max_effort: true,
         });
@@ -66,13 +83,14 @@ pub(crate) fn claude_thinking_profile(
     if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
             adaptive_only: true,
             default_thinking_enabled: false,
             manual_interleaved_beta: false,
             supports_effort: true,
             supports_task_budget: true,
             default_display: ThinkingDisplay::Omitted,
-            default_effort: "high",
+            default_effort: reasoning::XHIGH,
             supports_xhigh_effort: true,
             supports_max_effort: true,
         });
@@ -80,44 +98,47 @@ pub(crate) fn claude_thinking_profile(
 
     if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_6) {
         return Some(ClaudeThinkingProfile {
-            mode: ClaudeThinkingMode::ManualBudget,
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: true,
             adaptive_only: false,
             default_thinking_enabled: false,
             manual_interleaved_beta: false,
-            supports_effort: false,
+            supports_effort: true,
             supports_task_budget: false,
             default_display: ThinkingDisplay::Summarized,
-            default_effort: "high",
+            default_effort: reasoning::HIGH,
             supports_xhigh_effort: false,
-            supports_max_effort: false,
+            supports_max_effort: true,
         });
     }
 
     if matches_model(requested, models::anthropic::CLAUDE_SONNET_4_6) {
         return Some(ClaudeThinkingProfile {
-            mode: ClaudeThinkingMode::ManualBudget,
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: true,
             adaptive_only: false,
             default_thinking_enabled: false,
             manual_interleaved_beta: true,
-            supports_effort: false,
+            supports_effort: true,
             supports_task_budget: false,
             default_display: ThinkingDisplay::Summarized,
-            default_effort: "high",
+            default_effort: reasoning::HIGH,
             supports_xhigh_effort: false,
-            supports_max_effort: false,
+            supports_max_effort: true,
         });
     }
 
     if matches_model(requested, models::anthropic::CLAUDE_HAIKU_4_5) {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::ManualBudget,
+            supports_manual_budget: true,
             adaptive_only: false,
             default_thinking_enabled: false,
             manual_interleaved_beta: true,
             supports_effort: false,
             supports_task_budget: false,
             default_display: ThinkingDisplay::Summarized,
-            default_effort: "high",
+            default_effort: reasoning::HIGH,
             supports_xhigh_effort: false,
             supports_max_effort: false,
         });
@@ -167,12 +188,7 @@ pub fn supports_task_budget(model: &str, default_model: &str) -> bool {
 
 pub(crate) fn supports_manual_thinking_budget(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| matches!(profile.mode, ClaudeThinkingMode::ManualBudget))
-}
-
-pub(crate) fn supports_adaptive_thinking(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| matches!(profile.mode, ClaudeThinkingMode::Adaptive))
+        .is_some_and(|profile| profile.supports_manual_budget)
 }
 
 pub(crate) fn supports_manual_interleaved_beta(model: &str, default_model: &str) -> bool {
@@ -201,11 +217,11 @@ pub(crate) fn allowed_efforts_for_model(
     }
 
     if profile.supports_xhigh_effort {
-        Some(&["low", "medium", "high", "xhigh", "max"])
+        Some(ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX)
     } else if profile.supports_max_effort {
-        Some(&["low", "medium", "high", "max"])
+        Some(ANTHROPIC_EFFORTS_UP_TO_MAX)
     } else {
-        Some(&["low", "medium", "high"])
+        Some(ANTHROPIC_EFFORTS_UP_TO_HIGH)
     }
 }
 

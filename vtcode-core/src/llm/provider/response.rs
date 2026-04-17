@@ -6,6 +6,7 @@ pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};
 pub enum LLMStreamEvent {
     Token { delta: String },
     Reasoning { delta: String },
+    ReasoningSignature { signature: String },
     ReasoningStage { stage: String },
     Completed { response: Box<LLMResponse> },
 }
@@ -45,6 +46,7 @@ impl LLMStreamEvent {
         match self {
             Self::Token { delta } => vec![NormalizedStreamEvent::TextDelta { delta }],
             Self::Reasoning { delta } => vec![NormalizedStreamEvent::ReasoningDelta { delta }],
+            Self::ReasoningSignature { .. } => Vec::new(),
             Self::ReasoningStage { .. } => Vec::new(),
             Self::Completed { response } => {
                 let mut events = Vec::new();

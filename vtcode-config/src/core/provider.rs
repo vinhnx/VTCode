@@ -1,3 +1,4 @@
+use crate::constants::reasoning;
 use serde::{Deserialize, Serialize};
 
 /// Native OpenAI service tier selection.
@@ -462,7 +463,8 @@ pub struct AnthropicConfig {
     /// Effort level for adaptive thinking/token usage (low, medium, high, xhigh, max)
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
-    /// Claude Opus 4.7 supports the new xhigh level between high and max.
+    /// The default config value keeps Claude Opus 4.7 on `xhigh`; models that do not
+    /// support `xhigh` fall back to their supported model default, typically `high`.
     #[serde(default = "default_effort")]
     pub effort: String,
 
@@ -604,7 +606,7 @@ fn default_interleaved_thinking_type() -> String {
 
 #[inline]
 fn default_effort() -> String {
-    "xhigh".to_string()
+    reasoning::XHIGH.to_string()
 }
 
 #[inline]

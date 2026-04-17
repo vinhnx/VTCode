@@ -369,6 +369,7 @@ impl LLMProvider for CopilotProvider {
             match event? {
                 LLMStreamEvent::Token { delta } => content.push_str(&delta),
                 LLMStreamEvent::Reasoning { delta } => reasoning.push_str(&delta),
+                LLMStreamEvent::ReasoningSignature { .. } => {}
                 LLMStreamEvent::ReasoningStage { .. } => {}
                 LLMStreamEvent::Completed { response } => {
                     completed = Some(*response);

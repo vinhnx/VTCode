@@ -45,12 +45,33 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             Some("thinking") => {
                 if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
                     let thinking = thinking.to_string();
-                    reasoning_details_vec.push(thinking.clone());
+                    let mut detail = json!({
+                        "type": "thinking",
+                        "thinking": thinking,
+                    });
+                    if let Some(signature) = block.get("signature").and_then(|value| value.as_str())
+                        && let Some(obj) = detail.as_object_mut()
+                    {
+                        obj.insert(
+                            "signature".to_string(),
+                            Value::String(signature.to_string()),
+                        );
+                    }
+                    reasoning_details_vec.push(detail.to_string());
                     reasoning_parts.push(thinking);
                 }
             }
             Some("redacted_thinking") => {
-                reasoning_details_vec.push("[REDACTED THINKING]".to_string());
+                reasoning_details_vec.push(
+                    json!({
+                        "type": "redacted_thinking",
+                        "data": block
+                            .get("data")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or_default(),
+                    })
+                    .to_string(),
+                );
             }
             Some("tool_use") => {
                 let id = block

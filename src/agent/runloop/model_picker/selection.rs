@@ -293,7 +293,10 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
 }
 
 pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
-    matches!(model_id, "claude-opus-4-7")
+    matches!(
+        model_id,
+        "claude-opus-4-7" | "claude-opus-4-6" | "claude-sonnet-4-6" | "claude-mythos-preview"
+    )
 }
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
@@ -307,7 +310,7 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
             "Maximum reasoning for hardest long-running tasks (GPT-5.3+/GPT-5.4 family and Claude Opus 4.7)"
         }
         ReasoningEffortLevel::Max => {
-            "Highest adaptive effort for Claude Opus 4.7; may use more tokens and can overthink"
+            "Highest adaptive effort for supported Anthropic adaptive-thinking models; may use more tokens and can overthink"
         }
     }
 }

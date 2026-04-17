@@ -14,8 +14,19 @@ use crate::llm::providers::shared;
 use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 
 use super::response_parser::parse_finish_reason;
+
+enum ReasoningBlockState {
+    Thinking {
+        thinking: String,
+        signature: Option<String>,
+    },
+    Redacted {
+        data: String,
+    },
+}
 
 pub fn create_stream(
     response: reqwest::Response,
@@ -27,6 +38,8 @@ pub fn create_stream(
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
         let mut aggregator = shared::StreamAggregator::new(model);
+        let mut reasoning_blocks = BTreeMap::new();
+        let mut finalized_reasoning_details = Vec::new();
 
         while let Some(chunk_result) = body_stream.next().await {
             let chunk = chunk_result.map_err(|err| {
@@ -63,6 +76,26 @@ pub fn create_stream(
                                 cache_read_tokens: message.usage.cache_read_input_tokens,
                             });
                         }
+                        AnthropicStreamEvent::ContentBlockStart {
+                            index,
+                            content_block:
+                                AnthropicContentBlock::Thinking {
+                                    thinking,
+                                    signature,
+                                    ..
+                                },
+                        } => {
+                            reasoning_blocks.insert(index, ReasoningBlockState::Thinking {
+                                thinking,
+                                signature,
+                            });
+                        }
+                        AnthropicStreamEvent::ContentBlockStart {
+                            index,
+                            content_block: AnthropicContentBlock::RedactedThinking { data, .. },
+                        } => {
+                            reasoning_blocks.insert(index, ReasoningBlockState::Redacted { data });
+                        }
                         AnthropicStreamEvent::ContentBlockStart { index, content_block: AnthropicContentBlock::ToolUse(tool_use) } => {
                             if aggregator.tool_builders.len() <= index {
                                 aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
@@ -82,9 +115,38 @@ pub fn create_stream(
                                     }
                                 }
                                 AnthropicStreamDelta::ThinkingDelta { thinking } => {
+                                    match reasoning_blocks.entry(index) {
+                                        std::collections::btree_map::Entry::Occupied(mut entry) => {
+                                            if let ReasoningBlockState::Thinking { thinking: accumulated, .. } = entry.get_mut() {
+                                                accumulated.push_str(&thinking);
+                                            }
+                                        }
+                                        std::collections::btree_map::Entry::Vacant(entry) => {
+                                            entry.insert(ReasoningBlockState::Thinking {
+                                                thinking: thinking.clone(),
+                                                signature: None,
+                                            });
+                                        }
+                                    }
                                     if let Some(delta) = aggregator.handle_reasoning(&thinking) {
                                         yield LLMStreamEvent::Reasoning { delta };
                                     }
+                                }
+                                AnthropicStreamDelta::SignatureDelta { signature } => {
+                                    match reasoning_blocks.entry(index) {
+                                        std::collections::btree_map::Entry::Occupied(mut entry) => {
+                                            if let ReasoningBlockState::Thinking { signature: current, .. } = entry.get_mut() {
+                                                *current = Some(signature.clone());
+                                            }
+                                        }
+                                        std::collections::btree_map::Entry::Vacant(entry) => {
+                                            entry.insert(ReasoningBlockState::Thinking {
+                                                thinking: String::new(),
+                                                signature: Some(signature.clone()),
+                                            });
+                                        }
+                                    }
+                                    yield LLMStreamEvent::ReasoningSignature { signature };
                                 }
                                 AnthropicStreamDelta::InputJsonDelta { partial_json } => {
                                     if aggregator.tool_builders.len() <= index {
@@ -97,7 +159,33 @@ pub fn create_stream(
                                     aggregator.tool_builders[index].apply_delta(&Value::Object(delta_map));
                                 }
                                 AnthropicStreamDelta::CompactionDelta { .. } => {}
-                                _ => {}
+                            }
+                        }
+                        AnthropicStreamEvent::ContentBlockStop { index } => {
+                            if let Some(reasoning_block) = reasoning_blocks.remove(&index) {
+                                let detail = match reasoning_block {
+                                    ReasoningBlockState::Thinking { thinking, signature } => {
+                                        let mut detail = serde_json::json!({
+                                            "type": "thinking",
+                                            "thinking": thinking,
+                                        });
+                                        if let Some(signature) = signature
+                                            && let Some(obj) = detail.as_object_mut()
+                                        {
+                                            obj.insert(
+                                                "signature".to_string(),
+                                                Value::String(signature),
+                                            );
+                                        }
+                                        detail.to_string()
+                                    }
+                                    ReasoningBlockState::Redacted { data } => serde_json::json!({
+                                        "type": "redacted_thinking",
+                                        "data": data,
+                                    })
+                                    .to_string(),
+                                };
+                                finalized_reasoning_details.push(detail);
                             }
                         }
                         AnthropicStreamEvent::MessageDelta { delta, usage } => {
@@ -124,7 +212,33 @@ pub fn create_stream(
             }
         }
 
+        for (_, reasoning_block) in reasoning_blocks {
+            let detail = match reasoning_block {
+                ReasoningBlockState::Thinking { thinking, signature } => {
+                    let mut detail = serde_json::json!({
+                        "type": "thinking",
+                        "thinking": thinking,
+                    });
+                    if let Some(signature) = signature
+                        && let Some(obj) = detail.as_object_mut()
+                    {
+                        obj.insert("signature".to_string(), Value::String(signature));
+                    }
+                    detail.to_string()
+                }
+                ReasoningBlockState::Redacted { data } => serde_json::json!({
+                    "type": "redacted_thinking",
+                    "data": data,
+                })
+                .to_string(),
+            };
+            finalized_reasoning_details.push(detail);
+        }
+
         let mut response = aggregator.finalize();
+        if !finalized_reasoning_details.is_empty() {
+            response.reasoning_details = Some(finalized_reasoning_details);
+        }
         response.request_id = request_id.clone();
         response.organization_id = organization_id.clone();
 

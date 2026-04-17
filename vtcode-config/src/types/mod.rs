@@ -39,22 +39,22 @@ impl ReasoningEffortLevel {
     /// Return the textual representation expected by downstream APIs
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::None => "none",
-            Self::Minimal => "minimal",
+            Self::None => reasoning::NONE,
+            Self::Minimal => reasoning::MINIMAL,
             Self::Low => reasoning::LOW,
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
-            Self::XHigh => "xhigh",
-            Self::Max => "max",
+            Self::XHigh => reasoning::XHIGH,
+            Self::Max => reasoning::MAX,
         }
     }
 
     /// Attempt to parse an effort level from user configuration input
     pub fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
-        if normalized.eq_ignore_ascii_case("none") {
+        if normalized.eq_ignore_ascii_case(reasoning::NONE) {
             Some(Self::None)
-        } else if normalized.eq_ignore_ascii_case("minimal") {
+        } else if normalized.eq_ignore_ascii_case(reasoning::MINIMAL) {
             Some(Self::Minimal)
         } else if normalized.eq_ignore_ascii_case(reasoning::LOW) {
             Some(Self::Low)
@@ -62,9 +62,9 @@ impl ReasoningEffortLevel {
             Some(Self::Medium)
         } else if normalized.eq_ignore_ascii_case(reasoning::HIGH) {
             Some(Self::High)
-        } else if normalized.eq_ignore_ascii_case("xhigh") {
+        } else if normalized.eq_ignore_ascii_case(reasoning::XHIGH) {
             Some(Self::XHigh)
-        } else if normalized.eq_ignore_ascii_case("max") {
+        } else if normalized.eq_ignore_ascii_case(reasoning::MAX) {
             Some(Self::Max)
         } else {
             None

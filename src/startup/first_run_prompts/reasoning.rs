@@ -37,7 +37,7 @@ pub(crate) fn prompt_reasoning_effort(
         ),
         (
             ReasoningEffortLevel::Max,
-            "Max – highest effort for Claude Opus 4.7, highest latency and token use",
+            "Max – highest adaptive effort for supported Anthropic models, highest latency and token use",
         ),
     ];
 

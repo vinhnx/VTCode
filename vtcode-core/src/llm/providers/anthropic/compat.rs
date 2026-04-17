@@ -1,8 +1,13 @@
 use crate::llm::provider::{
-    ContentPart, FinishReason, LLMRequest, LLMResponse, Message, MessageContent, MessageRole,
-    ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
+    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
+    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart, FinishReason,
+    LLMRequest, LLMResponse, Message, MessageContent, MessageRole, ParallelToolConfig, ToolCall,
+    ToolChoice, ToolDefinition,
 };
-use crate::llm::providers::anthropic_types::{AnthropicOutputConfig, AnthropicOutputFormat};
+use crate::llm::providers::anthropic_types::{
+    AnthropicOutputConfig, AnthropicOutputFormat, ThinkingConfig, ThinkingDisplay,
+};
+use crate::llm::providers::common::normalize_reasoning_detail_object;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -30,7 +35,7 @@ pub struct AnthropicMessagesRequest {
     #[serde(default)]
     pub tool_choice: Option<Value>,
     #[serde(default)]
-    pub thinking: Option<bool>,
+    pub thinking: Option<ThinkingConfig>,
     #[serde(default)]
     pub betas: Option<Vec<String>>,
     #[serde(default)]
@@ -78,7 +83,13 @@ pub enum AnthropicContentBlock {
         is_error: Option<bool>,
     },
     #[serde(rename = "thinking")]
-    Thinking { thinking: String },
+    Thinking {
+        thinking: String,
+        #[serde(default)]
+        signature: Option<String>,
+    },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking { data: String },
     #[serde(rename = "server_tool_use")]
     ServerToolUse {
         id: String,
@@ -191,6 +202,8 @@ pub enum AnthropicContentDelta {
     InputJsonDelta { partial_json: String },
     #[serde(rename = "thinking_delta")]
     ThinkingDelta { thinking: String },
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
 }
 
 #[derive(Debug, Serialize)]
@@ -210,6 +223,7 @@ struct ConvertedAnthropicBlocks {
     content_parts: Vec<ContentPart>,
     tool_calls: Vec<ToolCall>,
     reasoning_chunks: Vec<String>,
+    reasoning_details: Vec<Value>,
     emitted_messages: Vec<Message>,
 }
 
@@ -225,6 +239,22 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
             .format
             .as_ref()
             .map(|AnthropicOutputFormat::JsonSchema { schema }| schema.clone())
+    });
+    let task_budget_tokens = request
+        .output_config
+        .as_ref()
+        .and_then(|config| config.task_budget.as_ref())
+        .map(|budget| budget.total);
+    let anthropic_request_overrides = Some(AnthropicRequestOverrides {
+        thinking_mode: compatibility_thinking_mode(&request.model, request.thinking.as_ref()),
+        thinking_display: compatibility_thinking_display(request.thinking.as_ref()),
+        effort: effort
+            .as_ref()
+            .map(|effort| AnthropicOptionalStringOverride::Explicit(effort.clone()))
+            .unwrap_or(AnthropicOptionalStringOverride::Omit),
+        task_budget_tokens: task_budget_tokens
+            .map(AnthropicOptionalU32Override::Explicit)
+            .unwrap_or(AnthropicOptionalU32Override::Omit),
     });
 
     let system_prompt = request
@@ -260,6 +290,11 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                         && message.role == MessageRole::Assistant
                     {
                         message.reasoning = Some(converted.reasoning_chunks.join("\n"));
+                    }
+                    if !converted.reasoning_details.is_empty()
+                        && message.role == MessageRole::Assistant
+                    {
+                        message.reasoning_details = Some(converted.reasoning_details);
                     }
                     messages.push(message);
                 }
@@ -371,6 +406,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
         service_tier: None,
         prompt_cache_key: None,
         prompt_cache_profile: None,
+        anthropic_request_overrides,
     }
 }
 
@@ -378,12 +414,54 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
     use uuid::Uuid;
 
     let mut content_blocks = Vec::new();
+    let mut preserved_reasoning = false;
 
-    if let Some(reasoning) = response.reasoning.as_ref()
+    if let Some(reasoning_details) = response.reasoning_details.as_ref() {
+        for detail in reasoning_details {
+            let Some(normalized) =
+                normalize_reasoning_detail_object(&Value::String(detail.clone()))
+            else {
+                continue;
+            };
+
+            match normalized.get("type").and_then(|value| value.as_str()) {
+                Some("thinking") => {
+                    let thinking = normalized
+                        .get("thinking")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let signature = normalized
+                        .get("signature")
+                        .and_then(|value| value.as_str())
+                        .map(ToOwned::to_owned);
+                    content_blocks.push(AnthropicContentBlock::Thinking {
+                        thinking,
+                        signature,
+                    });
+                    preserved_reasoning = true;
+                }
+                Some("redacted_thinking") => {
+                    let data = normalized
+                        .get("data")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    content_blocks.push(AnthropicContentBlock::RedactedThinking { data });
+                    preserved_reasoning = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if !preserved_reasoning
+        && let Some(reasoning) = response.reasoning.as_ref()
         && !reasoning.trim().is_empty()
     {
         content_blocks.push(AnthropicContentBlock::Thinking {
             thinking: reasoning.clone(),
+            signature: None,
         });
     }
 
@@ -536,8 +614,27 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
                 tool_use_id.clone(),
                 anthropic_content_text(content),
             )),
-            AnthropicContentBlock::Thinking { thinking } => {
+            AnthropicContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
                 converted.reasoning_chunks.push(thinking.clone());
+                let mut detail = json!({
+                    "type": "thinking",
+                    "thinking": thinking,
+                });
+                if let Some(signature) = signature
+                    && let Some(obj) = detail.as_object_mut()
+                {
+                    obj.insert("signature".to_string(), Value::String(signature.clone()));
+                }
+                converted.reasoning_details.push(detail);
+            }
+            AnthropicContentBlock::RedactedThinking { data } => {
+                converted.reasoning_details.push(json!({
+                    "type": "redacted_thinking",
+                    "data": data,
+                }));
             }
             AnthropicContentBlock::ContainerUpload { file_id } => {
                 converted
@@ -594,7 +691,8 @@ fn anthropic_content_text(content: &AnthropicContent) -> String {
 fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
     match block {
         AnthropicContentBlock::Text { text, .. } => text.clone(),
-        AnthropicContentBlock::Thinking { thinking } => thinking.clone(),
+        AnthropicContentBlock::Thinking { thinking, .. } => thinking.clone(),
+        AnthropicContentBlock::RedactedThinking { .. } => "[REDACTED THINKING]".to_string(),
         AnthropicContentBlock::Image { .. } => "[Image]".to_string(),
         AnthropicContentBlock::ContainerUpload { file_id } => format!("[File: {file_id}]"),
         AnthropicContentBlock::ToolUse { name, input, .. }
@@ -632,6 +730,46 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
                 serialize_value(content)
             )
         }
+    }
+}
+
+fn compatibility_thinking_mode(
+    model: &str,
+    thinking: Option<&ThinkingConfig>,
+) -> AnthropicThinkingModeOverride {
+    match thinking {
+        Some(ThinkingConfig::Adaptive { .. }) => AnthropicThinkingModeOverride::Adaptive,
+        Some(ThinkingConfig::Enabled { budget_tokens, .. }) => {
+            AnthropicThinkingModeOverride::ManualBudget(*budget_tokens)
+        }
+        Some(ThinkingConfig::Disabled) => AnthropicThinkingModeOverride::Disabled,
+        None => {
+            let is_mythos = model
+                == crate::config::constants::models::anthropic::CLAUDE_MYTHOS_PREVIEW
+                || model
+                    .contains(crate::config::constants::models::anthropic::CLAUDE_MYTHOS_PREVIEW);
+            if is_mythos {
+                AnthropicThinkingModeOverride::Adaptive
+            } else {
+                AnthropicThinkingModeOverride::Disabled
+            }
+        }
+    }
+}
+
+fn compatibility_thinking_display(
+    thinking: Option<&ThinkingConfig>,
+) -> AnthropicThinkingDisplayOverride {
+    let display = match thinking {
+        Some(ThinkingConfig::Adaptive { display })
+        | Some(ThinkingConfig::Enabled { display, .. }) => *display,
+        Some(ThinkingConfig::Disabled) | None => None,
+    };
+
+    match display {
+        Some(ThinkingDisplay::Summarized) => AnthropicThinkingDisplayOverride::Summarized,
+        Some(ThinkingDisplay::Omitted) => AnthropicThinkingDisplayOverride::Omitted,
+        None => AnthropicThinkingDisplayOverride::Inherit,
     }
 }
 

@@ -186,7 +186,7 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
                     .map(str::to_owned);
-                if !thinking.is_empty() && signature.is_some() {
+                if !thinking.is_empty() || signature.is_some() {
                     blocks.push(AnthropicContentBlock::Thinking {
                         thinking,
                         signature,
@@ -406,6 +406,27 @@ mod tests {
             } => {
                 assert_eq!(thinking, "trace");
                 assert_eq!(signature.as_deref(), Some("sig_123"));
+            }
+            other => panic!("expected thinking block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_reasoning_blocks_preserves_omitted_thinking_with_signature() {
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(
+            r#"{"type":"thinking","thinking":"","signature":"sig_omitted"}"#
+        )]));
+
+        let blocks = build_reasoning_blocks(&message);
+        assert_eq!(blocks.len(), 1);
+        match &blocks[0] {
+            AnthropicContentBlock::Thinking {
+                thinking,
+                signature,
+                ..
+            } => {
+                assert!(thinking.is_empty());
+                assert_eq!(signature.as_deref(), Some("sig_omitted"));
             }
             other => panic!("expected thinking block, got {other:?}"),
         }

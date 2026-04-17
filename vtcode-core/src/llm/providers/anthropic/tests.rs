@@ -74,11 +74,11 @@ mod capabilities_tests {
             models::CLAUDE_MYTHOS_PREVIEW,
             models::anthropic::DEFAULT_MODEL
         ));
-        assert!(!supports_effort(
+        assert!(supports_effort(
             models::CLAUDE_OPUS_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
-        assert!(!supports_effort(
+        assert!(supports_effort(
             models::CLAUDE_SONNET_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
@@ -212,7 +212,7 @@ mod validation_tests {
     fn test_validate_effort_rejects_unsupported_models() {
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
-            model: models::CLAUDE_SONNET_4_6.to_string(),
+            model: models::CLAUDE_HAIKU_4_5.to_string(),
             effort: Some("medium".to_string()),
             ..Default::default()
         };
@@ -229,7 +229,7 @@ mod validation_tests {
             effort: Some("max".to_string()),
             ..Default::default()
         };
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
 
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
@@ -246,6 +246,19 @@ mod validation_tests {
             ..Default::default()
         };
         assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_effort_xhigh_rejected_for_sonnet_4_6() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            effort: Some("xhigh".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
     }
 
     #[test]
@@ -601,6 +614,17 @@ mod response_parser_tests {
             .as_deref()
             .expect("expected reasoning content");
         assert!(reasoning.contains("Let me think"));
+        assert_eq!(
+            response.reasoning_details,
+            Some(vec![
+                json!({
+                    "type": "thinking",
+                    "thinking": "Let me think...",
+                    "signature": "sig123"
+                })
+                .to_string()
+            ])
+        );
         assert_eq!(response.content.as_deref(), Some("The answer is 42."));
     }
 
@@ -1080,6 +1104,75 @@ mod request_builder_tests {
         assert_eq!(payload["output_config"]["effort"], "xhigh");
         assert!(payload.get("reasoning").is_none());
         assert!(payload.get("temperature").is_none());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_defaults_to_xhigh_effort_for_opus_4_7() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_7.to_string(),
+            messages: vec![Message::user("solve this carefully".to_string())],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["thinking"]["type"], "adaptive");
+        assert_eq!(payload["output_config"]["effort"], "xhigh");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_falls_back_to_high_for_sonnet_4_6_default_effort() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            messages: vec![Message::user("solve this carefully".to_string())],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["thinking"]["type"], "adaptive");
+        assert_eq!(payload["output_config"]["effort"], "high");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_uses_manual_budget_for_opus_4_6_without_effort() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("solve this carefully".to_string())],
+            thinking_budget: Some(4096),
+            max_tokens: Some(8192),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["thinking"]["type"], "enabled");
+        assert_eq!(payload["thinking"]["budget_tokens"], 4096);
+        assert!(payload["output_config"].get("effort").is_none());
     }
 
     #[test]

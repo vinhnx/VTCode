@@ -323,7 +323,7 @@ fn effort_description(level: ReasoningEffortLevel, model: &str) -> &'static str 
         }
         ReasoningEffortLevel::XHigh => "Deeper reasoning for harder, longer-running problems",
         ReasoningEffortLevel::Max => {
-            "Maximum adaptive effort for the most demanding tasks (Opus 4.7 only)"
+            "Maximum adaptive effort for the most demanding tasks on supported Anthropic models"
         }
     }
 }
@@ -346,6 +346,8 @@ mod tests {
         assert_eq!(
             levels,
             vec![
+                ReasoningEffortLevel::Low,
+                ReasoningEffortLevel::Medium,
                 ReasoningEffortLevel::High,
                 ReasoningEffortLevel::XHigh,
                 ReasoningEffortLevel::Max,

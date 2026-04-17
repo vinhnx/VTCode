@@ -8,7 +8,10 @@
 use crate::config::core::AnthropicConfig;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMRequest, MessageRole, ToolChoice};
+use crate::llm::provider::{
+    AnthropicOptionalU32Override, AnthropicThinkingModeOverride, LLMError, LLMRequest, MessageRole,
+    ToolChoice,
+};
 
 use super::capabilities::{
     adaptive_thinking_is_default, allowed_efforts_for_model, claude_thinking_profile,
@@ -61,9 +64,11 @@ pub fn validate_request(
     }
 
     let resolved_model = resolve_model_name(&request.model, default_model);
+    let effective_thinking_mode =
+        resolve_effective_thinking_mode(request, default_model, anthropic_config);
 
     if adaptive_thinking_is_default(resolved_model, default_model)
-        && !anthropic_config.extended_thinking_enabled
+        && matches!(effective_thinking_mode, EffectiveThinkingMode::Disabled)
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
@@ -91,9 +96,10 @@ pub fn validate_request(
         });
     }
 
-    if claude_thinking_profile(resolved_model, default_model)
-        .is_some_and(|profile| profile.adaptive_only)
-        && request.thinking_budget.is_some()
+    if matches!(
+        effective_thinking_mode,
+        EffectiveThinkingMode::ManualBudget(_)
+    ) && !supports_manual_thinking_budget(resolved_model, default_model)
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
@@ -108,7 +114,28 @@ pub fn validate_request(
         });
     }
 
-    if let Some(budget) = request.thinking_budget
+    if request.thinking_budget.is_some()
+        && claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
+            matches!(
+                profile.mode,
+                super::capabilities::ClaudeThinkingMode::Adaptive
+            ) && !profile.supports_manual_budget
+        })
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!(
+                "{} does not support thinking_budget/budget_tokens. Use adaptive thinking plus effort instead.",
+                resolved_model
+            ),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    if let Some(budget) = effective_manual_thinking_budget_override(request)
         && budget < 1024
     {
         let formatted_error = error_display::format_llm_error(
@@ -121,7 +148,7 @@ pub fn validate_request(
         });
     }
 
-    let thinking_active = request_uses_thinking(request, default_model, anthropic_config);
+    let thinking_active = !matches!(effective_thinking_mode, EffectiveThinkingMode::Disabled);
     if thinking_active {
         validate_reasoning_constraints(request, default_model, anthropic_config)?;
     }
@@ -139,7 +166,7 @@ pub fn validate_request(
         });
     }
 
-    if let Some(task_budget) = anthropic_config.task_budget_tokens
+    if let Some(task_budget) = effective_task_budget_tokens(request, anthropic_config)
         && supports_task_budget(&request.model, default_model)
         && task_budget < 20_000
     {
@@ -178,6 +205,23 @@ pub fn validate_request(
         });
     }
 
+    if request.anthropic_request_overrides.is_some()
+        && request.effort.is_some()
+        && matches!(
+            effective_thinking_mode,
+            EffectiveThinkingMode::Disabled | EffectiveThinkingMode::ManualBudget(_)
+        )
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "output_config.effort is only valid for adaptive-thinking Anthropic requests.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
     validate_tool_definitions(request)?;
 
     for message in &request.messages {
@@ -193,29 +237,76 @@ pub fn validate_request(
     Ok(())
 }
 
-fn request_uses_thinking(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EffectiveThinkingMode {
+    Disabled,
+    Adaptive,
+    ManualBudget(u32),
+}
+
+fn resolve_effective_thinking_mode(
     request: &LLMRequest,
     default_model: &str,
     anthropic_config: &AnthropicConfig,
-) -> bool {
+) -> EffectiveThinkingMode {
     let resolved_model = resolve_model_name(&request.model, default_model);
+    if let Some(overrides) = request.anthropic_request_overrides.as_ref() {
+        match overrides.thinking_mode {
+            AnthropicThinkingModeOverride::Disabled => return EffectiveThinkingMode::Disabled,
+            AnthropicThinkingModeOverride::Adaptive => return EffectiveThinkingMode::Adaptive,
+            AnthropicThinkingModeOverride::ManualBudget(budget) => {
+                return EffectiveThinkingMode::ManualBudget(budget);
+            }
+            AnthropicThinkingModeOverride::Inherit => {}
+        }
+    }
+
     let Some(profile) = claude_thinking_profile(resolved_model, default_model) else {
-        return request.thinking_budget.is_some()
-            || request
-                .reasoning_effort
-                .is_some_and(|effort| effort != ReasoningEffortLevel::None);
+        if let Some(budget) = request.thinking_budget {
+            return EffectiveThinkingMode::ManualBudget(budget);
+        }
+        if request
+            .reasoning_effort
+            .is_some_and(|effort| effort != ReasoningEffortLevel::None)
+        {
+            return EffectiveThinkingMode::Adaptive;
+        }
+        return EffectiveThinkingMode::Disabled;
     };
 
     if !anthropic_config.extended_thinking_enabled {
-        return false;
+        return EffectiveThinkingMode::Disabled;
     }
 
     match profile.mode {
-        super::capabilities::ClaudeThinkingMode::Adaptive => true,
+        super::capabilities::ClaudeThinkingMode::Adaptive => {
+            if profile.supports_manual_budget
+                && let Some(budget) = request.thinking_budget
+            {
+                EffectiveThinkingMode::ManualBudget(budget)
+            } else {
+                EffectiveThinkingMode::Adaptive
+            }
+        }
         super::capabilities::ClaudeThinkingMode::ManualBudget => {
-            effective_manual_thinking_budget(request, anthropic_config) >= 1024
+            let budget = effective_manual_thinking_budget(request, anthropic_config);
+            if budget >= 1024 {
+                EffectiveThinkingMode::ManualBudget(budget)
+            } else {
+                EffectiveThinkingMode::Disabled
+            }
         }
     }
+}
+
+fn effective_manual_thinking_budget_override(request: &LLMRequest) -> Option<u32> {
+    if let Some(overrides) = request.anthropic_request_overrides.as_ref()
+        && let AnthropicThinkingModeOverride::ManualBudget(budget) = overrides.thinking_mode
+    {
+        return Some(budget);
+    }
+
+    request.thinking_budget
 }
 
 fn effective_manual_thinking_budget(
@@ -239,6 +330,21 @@ fn effective_manual_thinking_budget(
     }
 
     anthropic_config.interleaved_thinking_budget_tokens
+}
+
+fn effective_task_budget_tokens(
+    request: &LLMRequest,
+    anthropic_config: &AnthropicConfig,
+) -> Option<u32> {
+    if let Some(overrides) = request.anthropic_request_overrides.as_ref() {
+        return match overrides.task_budget_tokens {
+            AnthropicOptionalU32Override::Explicit(total) => Some(total),
+            AnthropicOptionalU32Override::Omit => None,
+            AnthropicOptionalU32Override::Inherit => anthropic_config.task_budget_tokens,
+        };
+    }
+
+    anthropic_config.task_budget_tokens
 }
 
 fn validate_tool_definitions(request: &LLMRequest) -> Result<(), LLMError> {
@@ -358,7 +464,7 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "effort is not supported for model '{}'. VT Code currently enables effort on Claude Opus 4.7 and Claude Mythos Preview on the Anthropic provider.",
+                "effort is not supported for model '{}'. VT Code currently enables effort on Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Mythos Preview on the Anthropic provider.",
                 if model.trim().is_empty() {
                     default_model
                 } else {
@@ -396,26 +502,6 @@ fn validate_reasoning_constraints(
     default_model: &str,
     anthropic_config: &AnthropicConfig,
 ) -> Result<(), LLMError> {
-    let budget = effective_manual_thinking_budget(request, anthropic_config);
-
-    let max_tokens = request.max_tokens.unwrap_or(4096);
-    if supports_manual_thinking_budget(&request.model, default_model)
-        && budget >= max_tokens
-        && !supports_manual_interleaved_beta(&request.model, default_model)
-    {
-        let formatted_error = error_display::format_llm_error(
-            "Anthropic",
-            &format!(
-                "The value of max_tokens ({}) must be strictly greater than budget_tokens ({}) when extended thinking is enabled without interleaved-thinking support.",
-                max_tokens, budget
-            ),
-        );
-        return Err(LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
-    }
-
     if let Some(ToolChoice::Any | ToolChoice::Specific(_)) = request.tool_choice {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
@@ -427,15 +513,37 @@ fn validate_reasoning_constraints(
         });
     }
 
-    if request.temperature.is_some() || request.top_k.is_some() {
-        let formatted_error = error_display::format_llm_error(
-            "Anthropic",
-            "temperature and top_k parameters must not be set when extended thinking is enabled.",
-        );
-        return Err(LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
+    if let EffectiveThinkingMode::ManualBudget(budget) =
+        resolve_effective_thinking_mode(request, default_model, anthropic_config)
+    {
+        let max_tokens = request.max_tokens.unwrap_or(4096);
+        if supports_manual_thinking_budget(&request.model, default_model)
+            && budget >= max_tokens
+            && !supports_manual_interleaved_beta(&request.model, default_model)
+        {
+            let formatted_error = error_display::format_llm_error(
+                "Anthropic",
+                &format!(
+                    "The value of max_tokens ({}) must be strictly greater than budget_tokens ({}) when extended thinking is enabled without interleaved-thinking support.",
+                    max_tokens, budget
+                ),
+            );
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        if request.temperature.is_some() || request.top_k.is_some() {
+            let formatted_error = error_display::format_llm_error(
+                "Anthropic",
+                "temperature and top_k parameters must not be set when extended thinking is enabled.",
+            );
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
     }
 
     if let Some(top_p) = request.top_p

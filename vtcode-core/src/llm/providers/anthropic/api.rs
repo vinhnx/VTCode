@@ -75,13 +75,12 @@ async fn send_stream_event(tx: &AnthropicSseSender, event: AnthropicStreamEvent)
     tx.send(Event::default().json_data(event)).await.is_ok()
 }
 
-async fn send_content_block(
+async fn send_content_block_start(
     tx: &AnthropicSseSender,
     index: u32,
     content_block: AnthropicContentBlock,
-    delta: AnthropicContentDelta,
 ) -> bool {
-    if !send_stream_event(
+    send_stream_event(
         tx,
         AnthropicStreamEvent::ContentBlockStart {
             index,
@@ -89,14 +88,17 @@ async fn send_content_block(
         },
     )
     .await
-    {
-        return false;
-    }
+}
 
-    if !send_stream_event(tx, AnthropicStreamEvent::ContentBlockDelta { index, delta }).await {
-        return false;
-    }
+async fn send_content_block_delta(
+    tx: &AnthropicSseSender,
+    index: u32,
+    delta: AnthropicContentDelta,
+) -> bool {
+    send_stream_event(tx, AnthropicStreamEvent::ContentBlockDelta { index, delta }).await
+}
 
+async fn send_content_block_stop(tx: &AnthropicSseSender, index: u32) -> bool {
     send_stream_event(tx, AnthropicStreamEvent::ContentBlockStop { index }).await
 }
 
@@ -127,7 +129,9 @@ pub async fn messages_handler(
         // Spawn a task to convert the stream
         tokio::spawn(async move {
             let mut stream = Box::pin(stream);
-            let mut content_block_idx = 0u32;
+            let mut next_content_block_idx = 0u32;
+            let mut open_text_block = None;
+            let mut open_reasoning_block = None;
 
             // Send message_start event
             let initial_response = AnthropicMessagesResponse {
@@ -160,45 +164,107 @@ pub async fn messages_handler(
                     Ok(provider_event) => {
                         match provider_event {
                             LLMStreamEvent::Token { delta } => {
-                                let content_block = AnthropicContentBlock::Text {
-                                    text: delta.clone(),
-                                    citations: None,
-                                    cache_control: None,
+                                if let Some(index) = open_reasoning_block.take()
+                                    && !send_content_block_stop(&tx, index).await
+                                {
+                                    break;
+                                }
+
+                                let index = if let Some(index) = open_text_block {
+                                    index
+                                } else {
+                                    let index = next_content_block_idx;
+                                    next_content_block_idx += 1;
+                                    if !send_content_block_start(
+                                        &tx,
+                                        index,
+                                        AnthropicContentBlock::Text {
+                                            text: String::new(),
+                                            citations: None,
+                                            cache_control: None,
+                                        },
+                                    )
+                                    .await
+                                    {
+                                        break;
+                                    }
+                                    open_text_block = Some(index);
+                                    index
                                 };
 
-                                if !send_content_block(
+                                if !send_content_block_delta(
                                     &tx,
-                                    content_block_idx,
-                                    content_block,
+                                    index,
                                     AnthropicContentDelta::TextDelta { text: delta },
                                 )
                                 .await
                                 {
                                     break;
                                 }
-
-                                content_block_idx += 1;
                             }
                             LLMStreamEvent::Reasoning { delta } => {
-                                let content_block = AnthropicContentBlock::Thinking {
-                                    thinking: delta.clone(),
+                                if let Some(index) = open_text_block.take()
+                                    && !send_content_block_stop(&tx, index).await
+                                {
+                                    break;
+                                }
+
+                                let index = if let Some(index) = open_reasoning_block {
+                                    index
+                                } else {
+                                    let index = next_content_block_idx;
+                                    next_content_block_idx += 1;
+                                    if !send_content_block_start(
+                                        &tx,
+                                        index,
+                                        AnthropicContentBlock::Thinking {
+                                            thinking: String::new(),
+                                            signature: None,
+                                        },
+                                    )
+                                    .await
+                                    {
+                                        break;
+                                    }
+                                    open_reasoning_block = Some(index);
+                                    index
                                 };
 
-                                if !send_content_block(
+                                if !send_content_block_delta(
                                     &tx,
-                                    content_block_idx,
-                                    content_block,
+                                    index,
                                     AnthropicContentDelta::ThinkingDelta { thinking: delta },
                                 )
                                 .await
                                 {
                                     break;
                                 }
-
-                                content_block_idx += 1;
+                            }
+                            LLMStreamEvent::ReasoningSignature { signature } => {
+                                if let Some(index) = open_reasoning_block
+                                    && !send_content_block_delta(
+                                        &tx,
+                                        index,
+                                        AnthropicContentDelta::SignatureDelta { signature },
+                                    )
+                                    .await
+                                {
+                                    break;
+                                }
                             }
                             LLMStreamEvent::ReasoningStage { .. } => {}
                             LLMStreamEvent::Completed { response } => {
+                                if let Some(index) = open_reasoning_block.take()
+                                    && !send_content_block_stop(&tx, index).await
+                                {
+                                    break;
+                                }
+                                if let Some(index) = open_text_block.take()
+                                    && !send_content_block_stop(&tx, index).await
+                                {
+                                    break;
+                                }
+
                                 let usage = response.usage.unwrap_or_default();
                                 let delta = AnthropicDelta {
                                     stop_reason: Some(anthropic_stop_reason(
@@ -266,11 +332,18 @@ pub async fn messages_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::provider::{ContentPart, MessageContent, ToolChoice};
+    use crate::llm::provider::{
+        AnthropicOptionalStringOverride, AnthropicOptionalU32Override,
+        AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart,
+        MessageContent, ToolChoice,
+    };
     use crate::llm::providers::anthropic::compat::{
         AnthropicContent, AnthropicMessage, AnthropicTool,
     };
-    use crate::llm::providers::anthropic_types::{AnthropicOutputConfig, AnthropicOutputFormat};
+    use crate::llm::providers::anthropic_types::{
+        AnthropicOutputConfig, AnthropicOutputFormat, AnthropicTaskBudget, ThinkingConfig,
+        ThinkingDisplay,
+    };
     use serde_json::json;
 
     #[test]
@@ -583,6 +656,166 @@ mod tests {
     }
 
     #[test]
+    fn convert_anthropic_to_llm_request_defaults_to_disabled_thinking_for_opus_4_7() {
+        let request = AnthropicMessagesRequest {
+            model: "claude-opus-4-7".to_string(),
+            max_tokens: 1024,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: AnthropicContent::Text("hello".to_string()),
+            }],
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+            betas: None,
+            context_management: None,
+            output_config: None,
+        };
+
+        let llm_request = convert_anthropic_to_llm_request(request);
+        let overrides = llm_request
+            .anthropic_request_overrides
+            .expect("anthropic overrides");
+        assert_eq!(
+            overrides.thinking_mode,
+            AnthropicThinkingModeOverride::Disabled
+        );
+    }
+
+    #[test]
+    fn convert_anthropic_to_llm_request_defaults_to_adaptive_thinking_for_mythos() {
+        let request = AnthropicMessagesRequest {
+            model: "claude-mythos-preview".to_string(),
+            max_tokens: 1024,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: AnthropicContent::Text("hello".to_string()),
+            }],
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+            betas: None,
+            context_management: None,
+            output_config: None,
+        };
+
+        let llm_request = convert_anthropic_to_llm_request(request);
+        let overrides = llm_request
+            .anthropic_request_overrides
+            .expect("anthropic overrides");
+        assert_eq!(
+            overrides.thinking_mode,
+            AnthropicThinkingModeOverride::Adaptive
+        );
+    }
+
+    #[test]
+    fn convert_anthropic_to_llm_request_maps_thinking_display_effort_and_task_budget() {
+        let request = AnthropicMessagesRequest {
+            model: "claude-opus-4-7".to_string(),
+            max_tokens: 1024,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: AnthropicContent::Text("hello".to_string()),
+            }],
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: Some(ThinkingConfig::Adaptive {
+                display: Some(ThinkingDisplay::Summarized),
+            }),
+            betas: None,
+            context_management: None,
+            output_config: Some(AnthropicOutputConfig {
+                effort: Some("medium".to_string()),
+                task_budget: Some(AnthropicTaskBudget {
+                    budget_type: "tokens".to_string(),
+                    total: 64_000,
+                }),
+                format: None,
+            }),
+        };
+
+        let llm_request = convert_anthropic_to_llm_request(request);
+        let overrides = llm_request
+            .anthropic_request_overrides
+            .expect("anthropic overrides");
+        assert_eq!(
+            overrides.thinking_mode,
+            AnthropicThinkingModeOverride::Adaptive
+        );
+        assert_eq!(
+            overrides.thinking_display,
+            AnthropicThinkingDisplayOverride::Summarized
+        );
+        assert_eq!(
+            overrides.effort,
+            AnthropicOptionalStringOverride::Explicit("medium".to_string())
+        );
+        assert_eq!(
+            overrides.task_budget_tokens,
+            AnthropicOptionalU32Override::Explicit(64_000)
+        );
+    }
+
+    #[test]
+    fn convert_anthropic_to_llm_request_maps_manual_budget_thinking_mode() {
+        let request = AnthropicMessagesRequest {
+            model: "claude-opus-4-6".to_string(),
+            max_tokens: 1024,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: AnthropicContent::Text("hello".to_string()),
+            }],
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: Some(ThinkingConfig::Enabled {
+                budget_tokens: 4096,
+                display: Some(ThinkingDisplay::Omitted),
+            }),
+            betas: None,
+            context_management: None,
+            output_config: None,
+        };
+
+        let llm_request = convert_anthropic_to_llm_request(request);
+        let overrides = llm_request
+            .anthropic_request_overrides
+            .expect("anthropic overrides");
+        assert_eq!(
+            overrides.thinking_mode,
+            AnthropicThinkingModeOverride::ManualBudget(4096)
+        );
+        assert_eq!(
+            overrides.thinking_display,
+            AnthropicThinkingDisplayOverride::Omitted
+        );
+    }
+
+    #[test]
     fn convert_anthropic_to_llm_request_preserves_assistant_tool_calls_and_reasoning() {
         let request = AnthropicMessagesRequest {
             model: "claude-opus-4-7".to_string(),
@@ -592,6 +825,7 @@ mod tests {
                 content: AnthropicContent::Blocks(vec![
                     AnthropicContentBlock::Thinking {
                         thinking: "inspect files".to_string(),
+                        signature: None,
                     },
                     AnthropicContentBlock::Text {
                         text: "Calling read_file".to_string(),
@@ -675,6 +909,7 @@ mod tests {
     fn anthropic_content_block_thinking_uses_anthropic_wire_field() {
         let block = AnthropicContentBlock::Thinking {
             thinking: "plan".to_string(),
+            signature: None,
         };
 
         let serialized = serde_json::to_value(block).expect("serialize thinking block");
@@ -708,11 +943,43 @@ mod tests {
         assert_eq!(anthropic.model, "claude-opus-4-7");
         assert!(matches!(
             anthropic.content.first(),
-            Some(AnthropicContentBlock::Thinking { thinking }) if thinking == "inspect files"
+            Some(AnthropicContentBlock::Thinking { thinking, .. }) if thinking == "inspect files"
         ));
         assert!(matches!(
             anthropic.content.get(1),
             Some(AnthropicContentBlock::Text { text, .. }) if text == "Done"
+        ));
+    }
+
+    #[test]
+    fn convert_llm_to_anthropic_response_preserves_reasoning_signature_details() {
+        let response = crate::llm::provider::LLMResponse {
+            model: "claude-opus-4-7".to_string(),
+            reasoning_details: Some(vec![
+                json!({
+                    "type": "thinking",
+                    "thinking": "",
+                    "signature": "sig_123",
+                })
+                .to_string(),
+                json!({
+                    "type": "redacted_thinking",
+                    "data": "encrypted",
+                })
+                .to_string(),
+            ]),
+            ..Default::default()
+        };
+
+        let anthropic = convert_llm_to_anthropic_response(response);
+        assert!(matches!(
+            anthropic.content.first(),
+            Some(AnthropicContentBlock::Thinking { thinking, signature })
+                if thinking.is_empty() && signature.as_deref() == Some("sig_123")
+        ));
+        assert!(matches!(
+            anthropic.content.get(1),
+            Some(AnthropicContentBlock::RedactedThinking { data }) if data == "encrypted"
         ));
     }
 }
