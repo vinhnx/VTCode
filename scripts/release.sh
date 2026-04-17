@@ -971,6 +971,9 @@ main() {
         else
             print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
             
+            # Clear RUSTC_WRAPPER to avoid sccache permission issues
+            unset RUSTC_WRAPPER
+            
             local build_args=(-v "$next_version" --only-build-local)
             ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
@@ -983,6 +986,9 @@ main() {
     # 3. Cargo Release (version, tag, and push only)
     print_info "Step 3: Running cargo release (version, tag, and push only)..."
 
+    # Clear RUSTC_WRAPPER to avoid sccache permission issues during cargo release
+    unset RUSTC_WRAPPER
+    
     local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -1116,10 +1122,13 @@ main() {
         mkdir -p "$binaries_dir"
 
         # Build macOS binaries locally
-        print_info "Building macOS binaries locally..."
-        
-        # x86_64-apple-darwin
-        if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
+         print_info "Building macOS binaries locally..."
+         
+         # Clear RUSTC_WRAPPER to avoid sccache permission issues
+         unset RUSTC_WRAPPER
+         
+         # x86_64-apple-darwin
+         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
             package_release_archive_with_ghostty \
                 "x86_64-apple-darwin" \
                 "vtcode" \
