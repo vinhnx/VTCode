@@ -702,6 +702,9 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     spinner.set_reasoning_stage(Some(stage));
                 }
             }
+            Ok(LLMStreamEvent::ReasoningSignature { .. }) => {
+                // Signature field not currently processed in UI stream
+            }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(*response);
             }
