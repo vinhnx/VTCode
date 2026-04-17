@@ -368,6 +368,43 @@ pub(crate) async fn display_mcp_tools(
     Ok(())
 }
 
+pub(crate) async fn refresh_mcp_tools(
+    renderer: &mut AnsiRenderer,
+    tool_registry: &mut ToolRegistry,
+) -> Result<bool> {
+    renderer.line(MessageStyle::Status, "Refreshing MCP tool index…")?;
+    match tool_registry.refresh_mcp_tools().await {
+        Ok(()) => {
+            match tool_registry.list_mcp_tools().await {
+                Ok(tools) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Indexed {} MCP tool(s).", tools.len()),
+                    )?;
+                }
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Refreshed but failed to list tools: {}", err),
+                    )?;
+                }
+            }
+            renderer.line(
+                MessageStyle::Info,
+                "Use /mcp tools to inspect the refreshed catalog.",
+            )?;
+            Ok(true)
+        }
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to refresh MCP tools: {}", err),
+            )?;
+            Ok(false)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::group_mcp_tools_by_provider_preserving_order;
@@ -411,42 +448,5 @@ mod tests {
                 vec!["search".to_string()],
             ]
         );
-    }
-}
-
-pub(crate) async fn refresh_mcp_tools(
-    renderer: &mut AnsiRenderer,
-    tool_registry: &mut ToolRegistry,
-) -> Result<bool> {
-    renderer.line(MessageStyle::Status, "Refreshing MCP tool index…")?;
-    match tool_registry.refresh_mcp_tools().await {
-        Ok(()) => {
-            match tool_registry.list_mcp_tools().await {
-                Ok(tools) => {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Indexed {} MCP tool(s).", tools.len()),
-                    )?;
-                }
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Refreshed but failed to list tools: {}", err),
-                    )?;
-                }
-            }
-            renderer.line(
-                MessageStyle::Info,
-                "Use /mcp tools to inspect the refreshed catalog.",
-            )?;
-            Ok(true)
-        }
-        Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to refresh MCP tools: {}", err),
-            )?;
-            Ok(false)
-        }
     }
 }

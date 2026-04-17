@@ -61,6 +61,7 @@ fn request_plan_benchmark(c: &mut Criterion) {
                 context_management: None,
                 previous_response_id: Some("resp_123".to_string()),
                 prompt_cache_key: Some("session:test".to_string()),
+                prompt_cache_profile: None,
                 tool_catalog_hash: None,
             }))
         })

@@ -946,9 +946,7 @@ fn persist_archive_progress(
     messages: &[SessionMessage],
     turn_number: usize,
 ) -> Option<String> {
-    let Some(archive) = archive else {
-        return None;
-    };
+    let archive = archive?;
 
     archive
         .persist_progress(SessionProgressArgs {
@@ -968,9 +966,7 @@ fn finalize_archive(
     archive: Option<SessionArchive>,
     messages: Vec<SessionMessage>,
 ) -> Option<String> {
-    let Some(archive) = archive else {
-        return None;
-    };
+    let archive = archive?;
 
     let transcript = messages
         .iter()

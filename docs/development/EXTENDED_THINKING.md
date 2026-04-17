@@ -1,155 +1,112 @@
-# Extended Thinking for Anthropic Models
+# Anthropic Thinking in VT Code
 
-Extended thinking gives Claude enhanced reasoning capabilities for complex tasks, providing transparency into its step-by-step thought process before delivering its final answer.
+VT Code currently splits direct Anthropic Claude thinking into two runtime paths:
 
-## Supported Models
+- Adaptive thinking: `claude-opus-4-7`, `claude-mythos-preview`
+- Budgeted extended thinking: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`
 
-Extended thinking is supported in the following Claude models:
+This is a conservative rollout. Anthropic documents adaptive thinking on more Claude models than VT Code currently enables.
 
-- Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`)
-- Claude Haiku 4.5 (`claude-haiku-4-5-20251001`)
-- Claude Opus 4.5 (`claude-opus-4-5-20251101`)
-- Claude Opus 4.1 (`claude-opus-4-1-20250805`)
-- Claude Sonnet 4 (`claude-sonnet-4-20250514`)
-- Claude Opus 4 (`claude-opus-4-20250514`)
-- Claude Sonnet 3.7 (`claude-3-7-sonnet-20250219`)
+## Compact Runtime Matrix
+
+| Model                   | VT Code mode  | What VT Code emits                                                                |
+| ----------------------- | ------------- | --------------------------------------------------------------------------------- |
+| `claude-opus-4-7`       | Adaptive      | `thinking: { type: "adaptive" }`, default `effort = high`, optional `task_budget` |
+| `claude-mythos-preview` | Adaptive      | Adaptive thinking, thinking-disabled requests are rejected                        |
+| `claude-opus-4-6`       | Manual budget | `thinking: { type: "enabled", budget_tokens: N }`                                 |
+| `claude-sonnet-4-6`     | Manual budget | `thinking: { type: "enabled", budget_tokens: N }`                                 |
+| `claude-haiku-4-5`      | Manual budget | `thinking: { type: "enabled", budget_tokens: N }`                                 |
 
 ## Configuration
 
-Configure extended thinking in your `vtcode.toml`:
+Configure Anthropic thinking in `vtcode.toml`:
 
 ```toml
 [provider.anthropic]
-# Enable/disable extended thinking (default: true)
 extended_thinking_enabled = true
-
-# Budget tokens for extended thinking (minimum: 1024, recommended: 10000+)
-# Larger budgets enable more thorough analysis for complex problems.
 interleaved_thinking_budget_tokens = 12000
-
-# Beta header for interleaved thinking (allows thinking between tool calls)
 interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
-
-# Type value for enabling thinking mode
-interleaved_thinking_type_enabled = "enabled"
+effort = "high"
+thinking_display = "summarized"
 ```
 
-## How It Works
+### Important defaults
 
-When extended thinking is enabled:
+- `effort` now defaults to `high`
+- `xhigh` is only valid for Claude Opus 4.7
+- `task_budget_tokens` is only sent for Claude Opus 4.7
+- `thinking_display` defaults to the Anthropic API default when unset
+- Claude Opus 4.7 and Claude Mythos Preview default to omitted thinking at the API level
 
-1. Claude creates `thinking` content blocks where it outputs its internal reasoning
-2. Claude incorporates insights from this reasoning before crafting a final response
-3. The API response includes `thinking` content blocks, followed by `text` content blocks
+## Adaptive Thinking Behavior
 
-## Token Budget
+For adaptive models, VT Code sends:
 
-The `interleaved_thinking_budget_tokens` parameter determines the maximum number of tokens Claude is allowed to use for its internal reasoning process:
+```json
+{
+    "thinking": { "type": "adaptive" },
+    "output_config": { "effort": "high" }
+}
+```
 
-- **Minimum**: 1024 tokens
-- **Recommended**: 10000+ tokens for complex tasks
-- Claude may not use the entire budget allocated
+### Adaptive model notes
 
-### Budget Guidelines by Task Complexity
+- Claude Opus 4.7 is adaptive-only in VT Code
+- Claude Mythos Preview is adaptive-only and cannot be used with disabled thinking
+- `thinking_budget` is rejected on adaptive-only models
+- `effort` is enabled on Claude Opus 4.7 and Claude Mythos Preview only
+- Claude Opus 4.7 supports `low`, `medium`, `high`, `xhigh`, and `max`
+- Claude Mythos Preview supports `low`, `medium`, `high`, and `max`
 
-| Task Type | Recommended Budget |
-|-----------|-------------------|
-| Simple analysis | 1024-4096 |
-| Code review | 4096-8192 |
-| Complex reasoning | 8192-16384 |
-| Architecture planning | 16384-32768 |
+## Budgeted Thinking Behavior
 
-## Interleaved Thinking
+For budgeted-thinking models, VT Code sends:
 
-With interleaved thinking enabled (via the beta header), Claude can think between tool calls, enabling:
+```json
+{
+    "thinking": {
+        "type": "enabled",
+        "budget_tokens": 12000
+    }
+}
+```
 
-- Reasoning about tool results before deciding what to do next
-- Chaining multiple tool calls with reasoning steps in between
-- More nuanced decisions based on intermediate results
+### Budget selection order
+
+1. Explicit `thinking_budget` on the request
+2. `MAX_THINKING_TOKENS` from the environment
+3. `reasoning_effort` mapped to a token budget
+4. `provider.anthropic.interleaved_thinking_budget_tokens`
+
+### Manual-mode notes
+
+- Claude Sonnet 4.6 and Claude Haiku 4.5 still use the interleaved-thinking beta header in VT Code
+- Claude Opus 4.6 stays on a budgeted path, but VT Code does not enable interleaved manual thinking for it
+- When interleaving is unavailable, `budget_tokens` must stay below `max_tokens`
 
 ## Feature Compatibility
 
-When extended thinking is enabled, the following features are affected:
+When thinking is active, VT Code enforces or normalizes the following behavior:
 
-- **Temperature**: Automatically set to `None` (temperature modification is not compatible with thinking)
-- **Top-k**: Not compatible with thinking
-- **Top-p**: When thinking is enabled, can only be set between 0.95 and 1.0
-- **Pre-fill**: Cannot pre-fill responses when thinking is enabled
-- **Tool choice**: Only `auto` and `none` are supported (not `any` or specific tool forcing)
-- **Structured output**: Cannot force structured output tool when thinking is enabled
-- **Budget limit**: `budget_tokens` must be less than `max_tokens` (except with interleaved thinking)
+- `tool_choice` is limited to `auto` or `none`
+- assistant prefills are incompatible with adaptive-only Claude models
+- `thinking_display = "summarized"` restores visible summarized thinking on models that default to omitted output
+- Claude Opus 4.7 rejects explicit `temperature`, `top_p`, and `top_k`
 
-## Extended Thinking with Tool Use
+## Disabling Thinking
 
-Extended thinking can be used alongside tool use, but with some limitations:
-
-### Tool Choice Restrictions
-
-When thinking is enabled, only these tool choices are supported:
-- `auto` (default) - Claude decides when to use tools
-- `none` - Disable tool use
-
-The following are **not supported** with thinking:
-- `any` - Forces Claude to use some tool
-- Specific tool forcing - Forces a particular tool
-
-If an incompatible tool choice is detected, VT Code automatically falls back to `auto`.
-
-### Preserving Thinking Blocks
-
-When using tools with thinking, thinking blocks must be preserved and passed back with tool results. VT Code handles this automatically in multi-turn conversations.
-
-### Interleaved Thinking
-
-With the `interleaved-thinking-2025-05-14` beta header (enabled by default), Claude can think between tool calls:
-- Reason about tool results before deciding what to do next
-- Chain multiple tool calls with reasoning steps in between
-- Make more nuanced decisions based on intermediate results
-
-## Summarized Thinking
-
-For Claude 4 models, the API returns a summary of Claude's full thinking process. Key points:
-
-- You're charged for the full thinking tokens generated, not the summary tokens
-- The billed output token count will **not match** the visible token count
-- Summarization preserves key ideas with minimal added latency
-
-## Error Handling
-
-Common errors when using extended thinking:
-
-### Budget Too Small
-```
-Error code: 400 - thinking.enabled.budget_tokens: Input should be greater than or equal to 1024
-```
-**Solution**: Increase `interleaved_thinking_budget_tokens` to at least 1024.
-
-### Temperature with Thinking
-```
-Error code: 400 - `temperature` may only be set to 1 when thinking is enabled
-```
-**Solution**: VT Code automatically handles this by setting temperature to `None` when thinking is enabled.
-
-### Context Window Exceeded
-```
-Error code: 400 - prompt is too long: 214315 tokens > 204798 maximum
-```
-**Solution**: Reduce input size or thinking budget. Consider using batch processing for large thinking budgets.
-
-## Disabling Extended Thinking
-
-To disable extended thinking:
+To disable thinking where VT Code allows it:
 
 ```toml
 [provider.anthropic]
 extended_thinking_enabled = false
 ```
 
-When disabled:
-- The interleaved-thinking beta header is not sent
-- No thinking blocks are generated
-- Temperature controls work normally
-- Fallback to `reasoning` parameter for older models if `reasoning_effort` is set
+Current VT Code behavior:
+
+- Disabled thinking is allowed for Claude Opus 4.7
+- Disabled thinking is rejected for Claude Mythos Preview
+- Budgeted models stop emitting `thinking` blocks when disabled
 
 ## Prompting Tips
 
@@ -158,6 +115,7 @@ When disabled:
 Claude often performs better with high-level instructions rather than step-by-step prescriptive guidance. The model's creativity in approaching problems may exceed a human's ability to prescribe the optimal thinking process.
 
 **Instead of:**
+
 ```
 Think through this problem step by step:
 1. First, identify the variables
@@ -166,6 +124,7 @@ Think through this problem step by step:
 ```
 
 **Consider:**
+
 ```
 Please think about this problem thoroughly and in great detail.
 Consider multiple approaches and show your complete reasoning.
@@ -209,14 +168,14 @@ And fix any issues you find.
 
 ## Budget Recommendations by Task Type
 
-| Task Type | Recommended Budget | Example |
-|-----------|-------------------|---------|
-| Simple calculations | 1024-2048 | Basic math, simple lookups |
-| Standard analysis | 2048-4096 | Code review, summarization |
-| Complex reasoning | 4096-8192 | Multi-step problems, debugging |
-| Research synthesis | 8192-16384 | Analyzing multiple sources |
-| Complex STEM problems | 16384-32768 | 4D visualizations, physics simulations |
-| Constraint optimization | 16384-32768 | Multi-variable planning with constraints |
+| Task Type               | Recommended Budget | Example                                  |
+| ----------------------- | ------------------ | ---------------------------------------- |
+| Simple calculations     | 1024-2048          | Basic math, simple lookups               |
+| Standard analysis       | 2048-4096          | Code review, summarization               |
+| Complex reasoning       | 4096-8192          | Multi-step problems, debugging           |
+| Research synthesis      | 8192-16384         | Analyzing multiple sources               |
+| Complex STEM problems   | 16384-32768        | 4D visualizations, physics simulations   |
+| Constraint optimization | 16384-32768        | Multi-variable planning with constraints |
 
 ## References
 

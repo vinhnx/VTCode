@@ -545,18 +545,18 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             model: "claude-opus-4-7".to_string(),
             display_name: "Claude Opus 4.7".to_string(),
             description:
-                "Next-gen Anthropic flagship with adaptive thinking, xhigh default effort, max effort support, and optional task budgets"
+                "Next-gen Anthropic flagship with adaptive thinking, optional task budgets, and configurable high-through-max effort"
                     .to_string(),
             provider: Provider::Anthropic,
-            default_reasoning_effort: ReasoningEffortLevel::XHigh,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
                 ReasoningEffortPreset {
                     effort: ReasoningEffortLevel::High,
-                    description: "Lower-latency deep reasoning".to_string(),
+                    description: "Default adaptive effort".to_string(),
                 },
                 ReasoningEffortPreset {
                     effort: ReasoningEffortLevel::XHigh,
-                    description: "Recommended default for coding and agentic work".to_string(),
+                    description: "Higher adaptive effort for coding and agentic work".to_string(),
                 },
                 ReasoningEffortPreset {
                     effort: ReasoningEffortLevel::Max,
@@ -574,7 +574,9 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             id: "claude-sonnet-4-6".to_string(),
             model: "claude-sonnet-4-6".to_string(),
             display_name: "Claude Sonnet 4.6".to_string(),
-            description: "Balanced Anthropic model with adaptive thinking".to_string(),
+            description:
+                "Balanced Anthropic model on VT Code's current budgeted-thinking path"
+                    .to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -909,13 +911,13 @@ mod tests {
     }
 
     #[test]
-    fn anthropic_opus_47_defaults_to_xhigh_and_offers_max() {
+    fn anthropic_opus_47_defaults_to_high_and_offers_max() {
         let opus = anthropic_presets()
             .into_iter()
             .find(|preset| preset.id == "claude-opus-4-7")
             .expect("claude-opus-4-7 preset");
 
-        assert_eq!(opus.default_reasoning_effort, ReasoningEffortLevel::XHigh);
+        assert_eq!(opus.default_reasoning_effort, ReasoningEffortLevel::High);
         assert!(
             opus.supported_reasoning_efforts
                 .iter()

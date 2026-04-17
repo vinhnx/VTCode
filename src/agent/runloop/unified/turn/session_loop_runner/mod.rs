@@ -724,10 +724,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             &mut session_state,
             session_trigger,
             resume_ref,
-            session_archive,
-            full_auto,
-            skip_confirmations,
-            steering_sender,
+            crate::agent::runloop::unified::session_setup::SessionUiLaunchOptions {
+                session_archive,
+                full_auto,
+                skip_confirmations,
+                steering_sender,
+            },
         )
         .await?;
         let mut renderer = ui_setup.renderer;

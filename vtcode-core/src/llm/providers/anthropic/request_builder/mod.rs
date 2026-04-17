@@ -5,7 +5,6 @@ mod system;
 mod thinking;
 mod tools;
 
-use crate::config::constants::models;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::{LLMError, LLMRequest, PromptCacheProfile};
@@ -15,7 +14,10 @@ use crate::llm::providers::anthropic_types::{
 };
 use serde_json::Value;
 
-use super::capabilities::{resolve_model_name, supports_effort, supports_task_budget};
+use super::capabilities::{
+    default_effort_for_model, effort_allowed_for_model, resolve_model_name,
+    supports_adaptive_thinking, supports_effort, supports_task_budget,
+};
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
 use system::{SystemPromptBuildResult, build_system_prompt};
@@ -131,7 +133,7 @@ pub fn convert_to_anthropic_format(
     let final_tool_choice = build_tool_choice(request, &thinking_val);
 
     let adaptive_effort =
-        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 && request.effort.is_none() {
+        if supports_adaptive_thinking(resolved_model, ctx.model) && request.effort.is_none() {
             request
                 .reasoning_effort
                 .map(|effort| effort_from_reasoning_for_adaptive(effort).to_string())
@@ -149,9 +151,14 @@ pub fn convert_to_anthropic_format(
                     .map(|effort| effort.to_ascii_lowercase())
             })
             .or_else(|| {
-                thinking_val
-                    .as_ref()
-                    .map(|_| ctx.anthropic_config.effort.to_ascii_lowercase())
+                thinking_val.as_ref().and_then(|_| {
+                    let configured_effort = ctx.anthropic_config.effort.to_ascii_lowercase();
+                    if effort_allowed_for_model(resolved_model, ctx.model, &configured_effort) {
+                        Some(configured_effort)
+                    } else {
+                        default_effort_for_model(resolved_model, ctx.model).map(str::to_string)
+                    }
+                })
             })
     } else {
         None
@@ -185,7 +192,7 @@ pub fn convert_to_anthropic_format(
         };
 
     let effective_temperature =
-        if thinking_val.is_some() || resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
+        if thinking_val.is_some() || supports_adaptive_thinking(resolved_model, ctx.model) {
             None
         } else {
             request.temperature

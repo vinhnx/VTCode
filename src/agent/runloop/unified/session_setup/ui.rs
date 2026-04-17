@@ -48,6 +48,13 @@ use vtcode_tui::app::{
     LocalAgentEntry, LocalAgentKind, SessionOptions, SlashCommandItem, spawn_session_with_options,
 };
 
+pub(crate) struct SessionUiLaunchOptions {
+    pub session_archive: Option<SessionArchive>,
+    pub full_auto: bool,
+    pub skip_confirmations: bool,
+    pub steering_sender: Option<UnboundedSender<SteeringMessage>>,
+}
+
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -55,11 +62,15 @@ pub(crate) async fn initialize_session_ui(
     session_state: &mut SessionState,
     session_trigger: SessionStartTrigger,
     resume_state: Option<&ResumeSession>,
-    session_archive: Option<SessionArchive>,
-    full_auto: bool,
-    skip_confirmations: bool,
-    steering_sender: Option<UnboundedSender<SteeringMessage>>,
+    options: SessionUiLaunchOptions,
 ) -> Result<SessionUISetup> {
+    let SessionUiLaunchOptions {
+        session_archive,
+        full_auto,
+        skip_confirmations,
+        steering_sender,
+    } = options;
+
     let lifecycle_hooks = if let Some(vt) = vt_cfg {
         LifecycleHookEngine::new_with_session(
             config.workspace.clone(),

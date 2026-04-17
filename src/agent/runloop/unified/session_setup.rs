@@ -14,6 +14,6 @@ pub(crate) use init::resolve_provider_label;
 pub(crate) use signal::spawn_signal_handler;
 pub(crate) use types::SessionState;
 pub(crate) use ui::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge, initialize_session_ui,
-    refresh_local_agents,
+    SessionUiLaunchOptions, apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+    initialize_session_ui, refresh_local_agents,
 };

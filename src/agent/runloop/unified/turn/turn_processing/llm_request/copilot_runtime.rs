@@ -822,15 +822,16 @@ fn process_observed_tool_state(
         false
     };
 
-    if started && state.pty_stream.is_none() {
-        if let Some(cmd) = observed_tool_command_display(update) {
-            state.pty_stream = Some(ObservedToolPtyStream::start(
-                handle,
-                tail_limit,
-                cmd,
-                tool_registry.pty_config().clone(),
-            ));
-        }
+    if started
+        && state.pty_stream.is_none()
+        && let Some(cmd) = observed_tool_command_display(update)
+    {
+        state.pty_stream = Some(ObservedToolPtyStream::start(
+            handle,
+            tail_limit,
+            cmd,
+            tool_registry.pty_config().clone(),
+        ));
     }
 
     let output_delta = if let Some(output) =
@@ -839,10 +840,9 @@ fn process_observed_tool_state(
     {
         if let Some(delta) = observed_tool_output_delta(state.last_output.as_deref(), output)
             && !delta.is_empty()
+            && let Some(stream) = state.pty_stream.as_ref()
         {
-            if let Some(stream) = state.pty_stream.as_ref() {
-                stream.push_output(delta);
-            }
+            stream.push_output(delta);
         }
         state.last_output = Some(output.to_string());
         Some(output.to_string())
@@ -1693,7 +1693,7 @@ fn denied_tool_response(tool_name: &str, reason: &str) -> CopilotToolCallRespons
 }
 
 fn tool_not_exposed_response(tool_name: &str) -> CopilotToolCallResponse {
-    denied_tool_response(tool_name, &format!("is not allowlisted in VT Code"))
+    denied_tool_response(tool_name, "is not allowlisted in VT Code")
 }
 
 fn tool_exceeded_budget_response(

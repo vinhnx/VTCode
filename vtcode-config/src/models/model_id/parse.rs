@@ -51,9 +51,11 @@ impl FromStr for ModelId {
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_7 => Ok(ModelId::ClaudeOpus47),
+            s if s == models::CLAUDE_OPUS_4_6 => Ok(ModelId::ClaudeOpus46),
             s if s == models::CLAUDE_SONNET_4_6 => Ok(ModelId::ClaudeSonnet46),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
             s if s == models::CLAUDE_HAIKU_4_5_20251001 => Ok(ModelId::ClaudeHaiku45),
+            s if s == models::CLAUDE_MYTHOS_PREVIEW => Ok(ModelId::ClaudeMythosPreview),
             s if s == models::copilot::AUTO => Ok(ModelId::CopilotAuto),
             s if s == models::copilot::GPT_5_2_CODEX => Ok(ModelId::CopilotGPT52Codex),
             s if s == models::copilot::GPT_5_1_CODEX_MAX => Ok(ModelId::CopilotGPT51CodexMax),

@@ -11,6 +11,7 @@ impl ModelId {
             ModelId::GPT5,
             ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus47,
+            ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
             ModelId::DeepSeekReasoner,
             ModelId::ZaiGlm5,

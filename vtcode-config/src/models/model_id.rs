@@ -64,12 +64,16 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
-    /// Claude Opus 4.7 - Next-gen flagship Anthropic model with adaptive thinking and xhigh effort
+    /// Claude Opus 4.7 - Next-gen flagship Anthropic model with adaptive thinking
     ClaudeOpus47,
-    /// Claude Sonnet 4.6 - Balanced flagship Anthropic model with extended thinking
+    /// Claude Opus 4.6 - Previous Anthropic flagship retained for compatibility
+    ClaudeOpus46,
+    /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout
     ClaudeSonnet46,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
+    /// Claude Mythos Preview - Invitation-only Anthropic research preview for defensive cybersecurity workflows
+    ClaudeMythosPreview,
     /// GitHub Copilot auto model selection
     CopilotAuto,
     /// GitHub Copilot GPT-5.2 Codex
@@ -230,6 +234,8 @@ pub enum ModelId {
     OpenRouterNvidiaNemotron3Super120bA12bFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
+    /// GLM-4.7 - Z.AI GLM-4.7 model via OpenRouter
+    OpenRouterZaiGlm47,
     /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
     OpenRouterZaiGlm51,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter

@@ -28,9 +28,11 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus47 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
-                Provider::Anthropic
-            }
+            ModelId::ClaudeOpus47
+            | ModelId::ClaudeOpus46
+            | ModelId::ClaudeSonnet46
+            | ModelId::ClaudeHaiku45
+            | ModelId::ClaudeMythosPreview => Provider::Anthropic,
             ModelId::CopilotAuto
             | ModelId::CopilotGPT52Codex
             | ModelId::CopilotGPT51CodexMax
@@ -104,6 +106,7 @@ impl ModelId {
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
             | ModelId::OpenRouterZaiGlm5
+            | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm51 => Provider::OpenRouter,
         }
     }

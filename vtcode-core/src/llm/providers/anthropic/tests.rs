@@ -15,7 +15,15 @@ mod capabilities_tests {
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
+            models::CLAUDE_OPUS_4_6,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
             models::CLAUDE_OPUS_4_7,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
+            models::CLAUDE_MYTHOS_PREVIEW,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
@@ -43,6 +51,10 @@ mod capabilities_tests {
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_vision(
+            models::CLAUDE_MYTHOS_PREVIEW,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_vision(
             "claude-3-opus",
             models::anthropic::DEFAULT_MODEL
         ));
@@ -58,6 +70,14 @@ mod capabilities_tests {
             models::CLAUDE_OPUS_4_7,
             models::anthropic::DEFAULT_MODEL
         ));
+        assert!(supports_effort(
+            models::CLAUDE_MYTHOS_PREVIEW,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(!supports_effort(
+            models::CLAUDE_OPUS_4_6,
+            models::anthropic::DEFAULT_MODEL
+        ));
         assert!(!supports_effort(
             models::CLAUDE_SONNET_4_6,
             models::anthropic::DEFAULT_MODEL
@@ -67,8 +87,13 @@ mod capabilities_tests {
     #[test]
     fn test_effective_context_size() {
         assert_eq!(effective_context_size(models::CLAUDE_SONNET_4_6), 1_000_000);
+        assert_eq!(effective_context_size(models::CLAUDE_OPUS_4_6), 1_000_000);
         assert_eq!(
             effective_context_size("claude-opus-4-7-20260303"),
+            1_000_000
+        );
+        assert_eq!(
+            effective_context_size(models::CLAUDE_MYTHOS_PREVIEW),
             1_000_000
         );
         assert_eq!(effective_context_size("claude-sonnet-4-5-latest"), 200_000);
@@ -196,7 +221,7 @@ mod validation_tests {
     }
 
     #[test]
-    fn test_validate_effort_max_only_for_opus_4_7() {
+    fn test_validate_effort_max_supported_for_adaptive_models() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
@@ -209,6 +234,14 @@ mod validation_tests {
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
             model: models::CLAUDE_OPUS_4_7.to_string(),
+            effort: Some("max".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_MYTHOS_PREVIEW.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
         };
@@ -226,6 +259,19 @@ mod validation_tests {
         };
 
         assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_effort_xhigh_rejected_for_mythos_preview() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_MYTHOS_PREVIEW.to_string(),
+            effort: Some("xhigh".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
     }
 
     #[test]
@@ -269,12 +315,54 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_validate_mythos_preview_rejects_disabled_thinking() {
+        let config = AnthropicConfig {
+            extended_thinking_enabled: false,
+            ..AnthropicConfig::default()
+        };
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_MYTHOS_PREVIEW.to_string(),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_mythos_preview_rejects_thinking_budget() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_MYTHOS_PREVIEW.to_string(),
+            thinking_budget: Some(4096),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
     fn test_validate_opus_4_7_rejects_prefill() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
             model: models::CLAUDE_OPUS_4_7.to_string(),
             prefill: Some("{".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_opus_4_6_requires_budget_below_max_tokens() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            thinking_budget: Some(4096),
+            max_tokens: Some(4096),
             ..Default::default()
         };
 

@@ -353,14 +353,9 @@ mod tests {
     }
 
     // Mock for testing
+    #[derive(Default)]
     struct MockMcpClient {
         tools: Vec<McpToolInfo>,
-    }
-
-    impl Default for MockMcpClient {
-        fn default() -> Self {
-            Self { tools: Vec::new() }
-        }
     }
 
     #[async_trait::async_trait]

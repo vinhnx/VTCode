@@ -1,4 +1,4 @@
-use crate::config::constants::{env_vars, models};
+use crate::config::constants::env_vars;
 use crate::config::core::AnthropicConfig;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -8,7 +8,9 @@ use crate::llm::rig_adapter::RigProviderCapabilities;
 use serde_json::{Value, json};
 use std::env;
 
-use super::super::capabilities::{resolve_model_name, supports_reasoning_effort};
+use super::super::capabilities::{
+    claude_thinking_profile, resolve_model_name, supports_reasoning_effort,
+};
 
 fn resolve_thinking_display(anthropic_config: &AnthropicConfig) -> Option<ThinkingDisplay> {
     anthropic_config.thinking_display.as_deref().and_then(|d| {
@@ -31,7 +33,12 @@ pub(crate) fn build_thinking_config(
     let display = resolve_thinking_display(anthropic_config);
 
     if thinking_enabled {
-        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
+        if claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
+            matches!(
+                profile.mode,
+                super::super::capabilities::ClaudeThinkingMode::Adaptive
+            )
+        }) {
             return (Some(ThinkingConfig::Adaptive { display }), None);
         }
 
@@ -69,7 +76,12 @@ pub(crate) fn build_thinking_config(
             );
         }
     } else if let Some(effort) = request.reasoning_effort {
-        if resolved_model == models::anthropic::CLAUDE_OPUS_4_7 {
+        if claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
+            matches!(
+                profile.mode,
+                super::super::capabilities::ClaudeThinkingMode::Adaptive
+            )
+        }) {
             return (None, None);
         }
 
@@ -196,5 +208,33 @@ mod tests {
             Some(ThinkingConfig::Adaptive { display: None }) => {}
             other => panic!("expected Adaptive with no display, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn uses_adaptive_thinking_for_mythos_preview() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_MYTHOS_PREVIEW.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, reasoning) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive { .. })));
+        assert!(reasoning.is_none());
+    }
+
+    #[test]
+    fn uses_budgeted_thinking_for_opus_4_6() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, reasoning) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        assert!(matches!(thinking, Some(ThinkingConfig::Enabled { .. })));
+        assert!(reasoning.is_none());
     }
 }

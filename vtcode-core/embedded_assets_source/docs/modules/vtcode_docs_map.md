@@ -47,6 +47,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Quick Checklist, Detailed Steps, Verification, Template for Copy-Paste
   - **User Questions**: "What can you tell me about Adding New Models to VT Code?", "How does Overview work?", "How does Quick Checklist work?"
 
+- **File**: `docs/development/EXTENDED_THINKING.md`
+  - **Content**: Anthropic Thinking in VT Code
+  - **Topics**: Compact Runtime Matrix, Configuration, Adaptive Thinking Behavior, Budgeted Thinking Behavior, Feature Compatibility
+  - **User Questions**: "What can you tell me about Anthropic Thinking in VT Code?", "How does Compact Runtime Matrix work?", "How does Configuration work?"
+
 - **File**: `docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`
   - **Content**: C++ Core Guidelines Adoption
   - **Topics**: Scope, Mandatory C++ Rules, Review and Enforcement
@@ -86,11 +91,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Development Setup
   - **Topics**: One-Time Setup, Daily Development Loop, Full Quality Gate, Common Commands, Troubleshooting
   - **User Questions**: "What can you tell me about Development Setup?", "How does One-Time Setup work?", "How does Daily Development Loop work?"
-
-- **File**: `docs/development/EXTENDED_THINKING.md`
-  - **Content**: Extended Thinking for Anthropic Models
-  - **Topics**: Supported Models, Configuration, How It Works, Token Budget, Interleaved Thinking
-  - **User Questions**: "What can you tell me about Extended Thinking for Anthropic Models?", "How does Supported Models work?", "How does Configuration work?"
 
 - **File**: `docs/development/EXTENSION_BOUNDARIES.md`
   - **Content**: Extension Boundaries in VT Code

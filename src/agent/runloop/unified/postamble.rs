@@ -86,7 +86,8 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
 
     if let Some((max_budget_usd, actual_cost_usd)) = data.budget_limit {
         println!(
-            "{DIM}Budget limit reached at ${actual_cost_usd:.2} / ${max_budget_usd:.2}. Resume will offer summary, full-history, or fresh-start options.{RESET}"
+            "{DIM}{}{RESET}",
+            format_budget_limit_line(max_budget_usd, actual_cost_usd)
         );
     }
     if let Some(session_id) = data.resume_identifier {
@@ -226,6 +227,12 @@ fn format_cache_hit_ratio(cache_read: u64, cache_creation: u64) -> String {
     }
 }
 
+fn format_budget_limit_line(max_budget_usd: f64, actual_cost_usd: f64) -> String {
+    format!(
+        "Budget limit reached at ${actual_cost_usd:.2} / ${max_budget_usd:.2}. Resume will offer summary, full-history, or fresh-start options."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +270,13 @@ mod tests {
         );
         assert_eq!(format_cache_hit_ratio(0, 0), "");
         assert_eq!(format_cache_hit_ratio(9, 1), " | Hit  90.0%");
+    }
+
+    #[test]
+    fn formats_budget_limit_resume_guidance() {
+        assert_eq!(
+            format_budget_limit_line(5.0, 5.24),
+            "Budget limit reached at $5.24 / $5.00. Resume will offer summary, full-history, or fresh-start options."
+        );
     }
 }

@@ -5,9 +5,9 @@
 //! - Beta feature headers (prompt caching, extended thinking, structured outputs)
 //! - Authentication headers
 
-use crate::config::constants::models;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 
+use super::capabilities::supports_manual_interleaved_beta;
 use super::prompt_cache::requires_extended_ttl_beta;
 
 /// Configuration for beta header generation
@@ -16,7 +16,6 @@ pub struct BetaHeaderConfig<'a> {
     pub model: &'a str,
     pub include_advanced_tool_use: bool,
     pub request_betas: Option<&'a Vec<String>>,
-    pub include_effort: bool,
     pub include_task_budget: bool,
 }
 
@@ -54,17 +53,14 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_7
+    if config.config.extended_thinking_enabled
+        && supports_manual_interleaved_beta(config.model, config.model)
     {
         pieces.push(config.config.interleaved_thinking_beta.clone());
     }
 
     if config.include_advanced_tool_use {
         pieces.push("advanced-tool-use-2025-11-20".to_owned());
-    }
-
-    if config.include_effort && config.model != models::anthropic::CLAUDE_OPUS_4_7 {
-        pieces.push("effort-2025-11-24".to_owned());
     }
 
     if config.include_task_budget {

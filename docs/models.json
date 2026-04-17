@@ -72,6 +72,37 @@
           "thinking": true
         }
       },
+      "gemini-3.1-flash-lite-preview": {
+        "id": "gemini-3.1-flash-lite-preview",
+        "name": "Gemini 3.1 Flash-Lite Preview",
+        "description": "Our most cost-efficient multimodal model, offering the fastest performance for high-frequency, lightweight tasks",
+        "version": "preview",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "caching": true,
+          "code_execution": true,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": true,
+          "thinking": true
+        }
+      },
       "gemini-3-flash-preview": {
         "id": "gemini-3-flash-preview",
         "name": "Gemini 3 Flash",
@@ -100,6 +131,35 @@
           "structured_output": true,
           "search_grounding": true,
           "url_context": true,
+          "thinking": true
+        }
+      },
+      "gemini-3-pro-image-preview": {
+        "id": "gemini-3-pro-image-preview",
+        "name": "Gemini 3 Pro Image Preview",
+        "description": "Nano Banana Pro is a sophisticated reasoning-driven engine for professional-grade image editing and generation, offering studio-quality precision and advanced creative control",
+        "version": "preview",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "image",
+            "text"
+          ],
+          "output": [
+            "image",
+            "text"
+          ]
+        },
+        "context": 65536,
+        "output_tokens": 32768,
+        "capabilities": {
+          "caching": false,
+          "code_execution": false,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": false,
           "thinking": true
         }
       }
@@ -178,6 +238,42 @@
           ]
         },
         "context": 200000
+      },
+      "o3": {
+        "id": "o3",
+        "name": "o3",
+        "description": "Reasoning model for complex tasks, succeeded by GPT-5",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "output_tokens": 100000
+      },
+      "o4-mini": {
+        "id": "o4-mini",
+        "name": "o4-mini",
+        "description": "Fast, cost-efficient reasoning model, succeeded by GPT-5 mini",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "output_tokens": 100000
       },
       "gpt-5": {
         "id": "gpt-5",
@@ -1167,7 +1263,7 @@
       "claude-opus-4-7": {
         "id": "claude-opus-4-7",
         "name": "Claude Opus 4.7",
-        "description": "Next-gen flagship model with adaptive thinking, xhigh default effort, max effort support, task budgets, and 1M context.",
+        "description": "Next-gen flagship model with adaptive thinking, optional task budgets, and 1M context.",
         "reasoning": true,
         "effort": true,
         "tool_call": true,
@@ -1184,10 +1280,48 @@
         "output_tokens": 128000,
         "status": "current"
       },
+      "claude-opus-4-6": {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "description": "Previous Anthropic flagship. VT Code currently keeps it on the budgeted-thinking path for compatibility.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "legacy"
+      },
       "claude-sonnet-4-6": {
         "id": "claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",
-        "description": "Balanced flagship model for coding with extended and adaptive thinking. 200K context with 1M beta.",
+        "description": "Balanced flagship model for coding. VT Code currently keeps it on the budgeted-thinking path.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 64000,
+        "status": "current"
+      },
+      "claude-mythos-preview": {
+        "id": "claude-mythos-preview",
+        "name": "Claude Mythos Preview",
+        "description": "Invitation-only Anthropic research preview for defensive cybersecurity workflows with adaptive thinking.",
         "reasoning": true,
         "effort": true,
         "tool_call": true,
@@ -1200,9 +1334,9 @@
             "text"
           ]
         },
-        "context": 200000,
+        "context": 1000000,
         "output_tokens": 128000,
-        "status": "current"
+        "status": "preview"
       },
       "claude-haiku-4-5": {
         "id": "claude-haiku-4-5",
@@ -1372,6 +1506,56 @@
           "top_tier": true,
           "generation": "GLM-5.1",
           "doc_comment": "GLM-5.1 - Z.AI next-gen GLM-5.1 model"
+        }
+      },
+      "z-ai/glm-5": {
+        "id": "z-ai/glm-5",
+        "name": "Z.AI: GLM-5",
+        "description": "Z.ai legacy GLM-5 alias retained for compatibility.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "Z.AI: GLM-4.7",
+        "description": "Advancing the Coding Capability",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
         }
       }
     }

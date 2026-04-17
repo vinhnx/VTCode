@@ -384,7 +384,7 @@ fn service_rendering_mentions_schedule_serve() {
 #[test]
 fn schedule_create_arg_parser_supports_workspace() {
     let parsed = parse_schedule_create_args(
-        "--prompt 'check build' --every 15m --workspace /tmp/demo --name 'Build watch'",
+        r#"--prompt "check build" --every 15m --workspace /tmp/demo --name "Build watch""#,
     )
     .expect("parse");
     assert_eq!(parsed.name.as_deref(), Some("Build watch"));

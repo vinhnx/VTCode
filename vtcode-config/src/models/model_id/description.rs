@@ -62,13 +62,19 @@ impl ModelId {
             }
             // Anthropic models
             ModelId::ClaudeOpus47 => {
-                "Next-gen Anthropic flagship with adaptive thinking, xhigh effort, and task budget support"
+                "Next-gen Anthropic flagship with adaptive thinking and task budget support"
+            }
+            ModelId::ClaudeOpus46 => {
+                "Previous Anthropic flagship retained on VT Code's budgeted-thinking path for compatibility"
             }
             ModelId::ClaudeSonnet46 => {
-                "Balanced flagship model for coding with extended and adaptive thinking support"
+                "Balanced flagship model for coding with budgeted thinking in VT Code's current Anthropic rollout"
             }
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
+            }
+            ModelId::ClaudeMythosPreview => {
+                "Invitation-only Anthropic research preview for defensive cybersecurity workflows with adaptive thinking"
             }
             ModelId::CopilotAuto => {
                 "GitHub Copilot preview provider with automatic model selection via the official Copilot CLI"

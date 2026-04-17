@@ -43,7 +43,10 @@ fn serialize_responses_function_tool(
         "type": "function",
         "name": &func.name,
         "description": &func.description,
-        "parameters": sanitize_openai_function_parameters(func.parameters.clone())
+        "parameters": sanitize_openai_function_parameters(
+            func.parameters.clone(),
+            should_strip_any_of_for_builtin_tool(&func.name),
+        )
     });
     if defer_loading && let Some(obj) = value.as_object_mut() {
         obj.insert("defer_loading".to_string(), json!(true));
@@ -51,7 +54,72 @@ fn serialize_responses_function_tool(
     value
 }
 
-fn sanitize_openai_function_parameters(value: Value) -> Value {
+fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        tools::UNIFIED_SEARCH
+            | tools::UNIFIED_EXEC
+            | tools::UNIFIED_FILE
+            | tools::THINK
+            | tools::SEARCH_TOOLS
+            | tools::WEB_SEARCH
+            | tools::WEB_FETCH
+            | tools::FETCH_URL
+            | tools::LIST
+            | tools::GREP
+            | tools::FETCH
+            | tools::EXEC_PTY_CMD
+            | tools::SHELL
+            | tools::GREP_FILE
+            | tools::LIST_FILES
+            | tools::LIST_SKILLS
+            | tools::LOAD_SKILL
+            | tools::LOAD_SKILL_RESOURCE
+            | tools::EXEC_COMMAND
+            | tools::WRITE_STDIN
+            | tools::RUN_PTY_CMD
+            | tools::CREATE_PTY_SESSION
+            | tools::LIST_PTY_SESSIONS
+            | tools::CLOSE_PTY_SESSION
+            | tools::SEND_PTY_INPUT
+            | tools::READ_PTY_SESSION
+            | tools::RESIZE_PTY_SESSION
+            | tools::EXECUTE_CODE
+            | tools::READ_FILE
+            | tools::WRITE_FILE
+            | tools::EDIT_FILE
+            | tools::DELETE_FILE
+            | tools::CREATE_FILE
+            | tools::APPLY_PATCH
+            | tools::SEARCH_REPLACE
+            | tools::FILE_OP
+            | tools::MOVE_FILE
+            | tools::COPY_FILE
+            | tools::GET_ERRORS
+            | tools::REQUEST_USER_INPUT
+            | tools::MEMORY
+            | tools::ASK_QUESTIONS
+            | tools::ASK_USER_QUESTION
+            | tools::CRON_CREATE
+            | tools::CRON_LIST
+            | tools::CRON_DELETE
+            | tools::ENTER_PLAN_MODE
+            | tools::EXIT_PLAN_MODE
+            | tools::TASK_TRACKER
+            | tools::PLAN_TASK_TRACKER
+            | tools::SPAWN_AGENT
+            | tools::SEND_INPUT
+            | tools::WAIT_AGENT
+            | tools::RESUME_AGENT
+            | tools::CLOSE_AGENT
+    )
+}
+
+fn sanitize_openai_function_parameters(value: Value, strip_any_of: bool) -> Value {
+    sanitize_openai_schema_node(parse_tool_input_schema(&value), strip_any_of)
+}
+
+fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
     match value {
         Value::Object(mut map) => {
             map.remove("default");
@@ -62,9 +130,57 @@ fn sanitize_openai_function_parameters(value: Value) -> Value {
             map.remove("then");
             map.remove("else");
 
-            for nested in map.values_mut() {
-                let next = sanitize_openai_function_parameters(parse_tool_input_schema(nested));
-                *nested = next;
+            if let Some(properties) = map.get_mut("properties").and_then(Value::as_object_mut) {
+                for schema in properties.values_mut() {
+                    *schema =
+                        sanitize_openai_schema_node(parse_tool_input_schema(schema), strip_any_of);
+                }
+            }
+
+            if let Some(items) = map.get_mut("items") {
+                *items = sanitize_openai_schema_node(parse_tool_input_schema(items), strip_any_of);
+            }
+
+            if let Some(prefix_items) = map.get_mut("prefixItems") {
+                *prefix_items = match std::mem::take(prefix_items) {
+                    Value::Array(items) => Value::Array(
+                        items
+                            .into_iter()
+                            .map(|value| sanitize_openai_schema_node(value, strip_any_of))
+                            .collect(),
+                    ),
+                    other => {
+                        sanitize_openai_schema_node(parse_tool_input_schema(&other), strip_any_of)
+                    }
+                };
+            }
+
+            if let Some(additional_properties) = map.get_mut("additionalProperties")
+                && !matches!(additional_properties, Value::Bool(_))
+            {
+                *additional_properties = sanitize_openai_schema_node(
+                    parse_tool_input_schema(additional_properties),
+                    strip_any_of,
+                );
+            }
+
+            if let Some(any_of) = map.get_mut("anyOf") {
+                let sanitized_any_of = match std::mem::take(any_of) {
+                    Value::Array(items) => items
+                        .into_iter()
+                        .map(|value| sanitize_openai_schema_node(value, strip_any_of))
+                        .collect::<Vec<_>>(),
+                    other => vec![sanitize_openai_schema_node(other, strip_any_of)],
+                };
+
+                if let Some(fallback_type) = fallback_type_from_any_of(&sanitized_any_of) {
+                    map.insert("type".to_string(), json!(fallback_type));
+                    map.remove("anyOf");
+                } else if strip_any_of || any_of_is_constraint_only(&sanitized_any_of) {
+                    map.remove("anyOf");
+                } else {
+                    map.insert("anyOf".to_string(), Value::Array(sanitized_any_of));
+                }
             }
 
             if map.get("type").and_then(Value::as_str) == Some("object")
@@ -78,12 +194,37 @@ fn sanitize_openai_function_parameters(value: Value) -> Value {
         Value::Array(items) => Value::Array(
             items
                 .into_iter()
-                .map(|value| parse_tool_input_schema(&value))
-                .map(sanitize_openai_function_parameters)
+                .map(|value| sanitize_openai_schema_node(value, strip_any_of))
                 .collect(),
         ),
-        other => parse_tool_input_schema(&other),
+        other => other,
     }
+}
+
+fn fallback_type_from_any_of(variants: &[Value]) -> Option<&'static str> {
+    variants.iter().find_map(|variant| {
+        variant
+            .get("type")
+            .and_then(Value::as_str)
+            .filter(|schema_type| *schema_type == "string")
+            .map(|_| "string")
+    })
+}
+
+fn any_of_is_constraint_only(variants: &[Value]) -> bool {
+    variants.iter().all(|variant| {
+        let Some(map) = variant.as_object() else {
+            return false;
+        };
+
+        !map.contains_key("type")
+            && !map.contains_key("properties")
+            && !map.contains_key("items")
+            && !map.contains_key("prefixItems")
+            && !map.contains_key("additionalProperties")
+            && !map.contains_key("enum")
+            && !map.contains_key("const")
+    })
 }
 
 fn trim_non_empty_owned(value: &str) -> Option<String> {

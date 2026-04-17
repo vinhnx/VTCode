@@ -430,10 +430,6 @@ impl AnthropicProvider {
             model: self.resolved_request_model(request),
             include_advanced_tool_use,
             request_betas,
-            include_effort: anthropic_request
-                .get("output_config")
-                .and_then(|value| value.get("effort"))
-                .is_some(),
             include_task_budget: anthropic_request
                 .get("output_config")
                 .and_then(|value| value.get("task_budget"))
@@ -1012,7 +1008,12 @@ mod tests {
 
     #[test]
     fn beta_header_omits_context_1m_for_native_1m_models() {
-        for model in [models::CLAUDE_SONNET_4_6, models::CLAUDE_OPUS_4_7] {
+        for model in [
+            models::CLAUDE_SONNET_4_6,
+            models::CLAUDE_OPUS_4_6,
+            models::CLAUDE_OPUS_4_7,
+            models::CLAUDE_MYTHOS_PREVIEW,
+        ] {
             let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
             let request = LLMRequest {
                 model: model.to_string(),
@@ -1040,7 +1041,6 @@ mod tests {
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("hello".to_string())],
-            effort: Some("medium".to_string()),
             ..Default::default()
         };
 
@@ -1053,6 +1053,28 @@ mod tests {
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
         assert!(beta_header.contains("interleaved-thinking-2025-05-14"));
+    }
+
+    #[test]
+    fn beta_header_omits_interleaved_thinking_for_opus_4_6_manual_mode() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, false, None)
+            .expect("beta header");
+
+        assert!(!beta_header.contains("interleaved-thinking-2025-05-14"));
     }
 
     #[test]

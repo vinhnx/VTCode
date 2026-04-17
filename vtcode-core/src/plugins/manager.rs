@@ -200,14 +200,14 @@ impl PluginManager {
                         // Use version from plugin.json to determine if update is needed
                         if let Some(existing) = self.get_cached_plugin(&plugin_info.name).await
                             && existing.exists()
-                                && plugin_info.version_matches_existing(&existing).await
-                            {
-                                debug!(
-                                    "plugin '{}' version unchanged, skipping cache update",
-                                    plugin_info.name
-                                );
-                                continue;
-                            }
+                            && plugin_info.version_matches_existing(&existing).await
+                        {
+                            debug!(
+                                "plugin '{}' version unchanged, skipping cache update",
+                                plugin_info.name
+                            );
+                            continue;
+                        }
 
                         if let Err(e) = self
                             .cache_plugin(&plugin_info.name, &plugin_info.path)

@@ -96,6 +96,11 @@ fn next_word_boundary(content: &str, cursor: usize) -> usize {
     let Some(first_non_ws) = suffix.find(|ch: char| !ch.is_whitespace()) else {
         return content.len();
     };
+
+    if first_non_ws > 0 {
+        return cursor + first_non_ws;
+    }
+
     let run = &suffix[first_non_ws..];
     let run = &run[..run.find(char::is_whitespace).unwrap_or(run.len())];
     let mut pieces = split_word_pieces(run).into_iter().peekable();

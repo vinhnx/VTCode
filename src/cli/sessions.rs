@@ -8,7 +8,10 @@ use vtcode_core::core::threads::{
     ArchivedSessionIntent, SessionQueryScope, list_recent_sessions_in_scope,
 };
 use vtcode_core::utils::colors::style;
-use vtcode_core::utils::session_archive::{SessionListing, session_workspace_path};
+use vtcode_core::utils::session_archive::{
+    SessionContinuationMetadata, SessionContinuationRecommendedAction, SessionListing,
+    session_workspace_path,
+};
 
 use crate::agent::agents::{ResumeSession, SessionContinuation};
 use crate::startup::SessionResumeMode;
@@ -16,16 +19,22 @@ use crate::startup::SessionResumeMode;
 const INTERACTIVE_SESSION_LIMIT: usize = 10;
 
 enum ResumeExecutionMode {
-    Resume(ResumeSession),
+    Resume(Box<ResumeSession>),
     StartFresh,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BudgetResumeAction {
     ContinueFromSummary,
     ContinueFullHistory,
     StartFresh,
     Cancel,
+}
+
+struct BudgetResumeMenu {
+    actions: Vec<BudgetResumeAction>,
+    options: Vec<String>,
+    default_index: usize,
 }
 
 pub async fn handle_resume_session_command(
@@ -83,7 +92,7 @@ pub async fn handle_resume_session_command(
     };
 
     let resume = match execution_mode {
-        ResumeExecutionMode::Resume(resume) => resume,
+        ResumeExecutionMode::Resume(resume) => *resume,
         ResumeExecutionMode::StartFresh => {
             return crate::agent::agents::run_single_agent_loop(
                 config,
@@ -215,10 +224,10 @@ fn maybe_choose_budget_limited_resume_mode(
     resume: ResumeSession,
 ) -> Result<Option<ResumeExecutionMode>> {
     let Some(continuation) = resume.budget_limit_continuation() else {
-        return Ok(Some(ResumeExecutionMode::Resume(resume)));
+        return Ok(Some(ResumeExecutionMode::Resume(Box::new(resume))));
     };
     if resume.is_fork() {
-        return Ok(Some(ResumeExecutionMode::Resume(resume)));
+        return Ok(Some(ResumeExecutionMode::Resume(Box::new(resume))));
     }
 
     println!(
@@ -238,6 +247,22 @@ fn maybe_choose_budget_limited_resume_mode(
         );
     }
 
+    let menu = build_budget_resume_menu(continuation);
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose how to continue.")
+        .items(&menu.options)
+        .default(menu.default_index)
+        .interact()
+        .context("failed to select a budget-limit resume mode")?;
+
+    let Some(action) = menu.actions.get(selection).copied() else {
+        return Ok(None);
+    };
+
+    Ok(resolve_budget_resume_action(resume, action))
+}
+
+fn build_budget_resume_menu(continuation: &SessionContinuationMetadata) -> BudgetResumeMenu {
     let mut actions = Vec::new();
     let mut options = Vec::new();
 
@@ -255,21 +280,44 @@ fn maybe_choose_budget_limited_resume_mode(
     actions.push(BudgetResumeAction::Cancel);
     options.push("Cancel".to_string());
 
-    let default_index = if continuation.summary_available { 0 } else { 1 };
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose how to continue.")
-        .items(&options)
-        .default(default_index)
-        .interact()
-        .context("failed to select a budget-limit resume mode")?;
+    let default_action = preferred_budget_resume_action(continuation);
+    let default_index = actions
+        .iter()
+        .position(|action| *action == default_action)
+        .unwrap_or(0);
 
-    let Some(action) = actions.get(selection).copied() else {
-        return Ok(None);
-    };
+    BudgetResumeMenu {
+        actions,
+        options,
+        default_index,
+    }
+}
 
+fn preferred_budget_resume_action(
+    continuation: &SessionContinuationMetadata,
+) -> BudgetResumeAction {
+    match continuation.recommended_action {
+        Some(SessionContinuationRecommendedAction::ContinueFromSummary)
+            if continuation.summary_available =>
+        {
+            BudgetResumeAction::ContinueFromSummary
+        }
+        Some(SessionContinuationRecommendedAction::StartFresh) => BudgetResumeAction::StartFresh,
+        Some(SessionContinuationRecommendedAction::ContinueFullHistory) => {
+            BudgetResumeAction::ContinueFullHistory
+        }
+        _ if continuation.summary_available => BudgetResumeAction::ContinueFromSummary,
+        _ => BudgetResumeAction::ContinueFullHistory,
+    }
+}
+
+fn resolve_budget_resume_action(
+    resume: ResumeSession,
+    action: BudgetResumeAction,
+) -> Option<ResumeExecutionMode> {
     match action {
         BudgetResumeAction::ContinueFromSummary => {
-            Ok(Some(ResumeExecutionMode::Resume(convert_listing(
+            Some(ResumeExecutionMode::Resume(Box::new(convert_listing(
                 resume.listing(),
                 ArchivedSessionIntent::ForkNewArchive {
                     custom_suffix: None,
@@ -277,9 +325,11 @@ fn maybe_choose_budget_limited_resume_mode(
                 },
             ))))
         }
-        BudgetResumeAction::ContinueFullHistory => Ok(Some(ResumeExecutionMode::Resume(resume))),
-        BudgetResumeAction::StartFresh => Ok(Some(ResumeExecutionMode::StartFresh)),
-        BudgetResumeAction::Cancel => Ok(None),
+        BudgetResumeAction::ContinueFullHistory => {
+            Some(ResumeExecutionMode::Resume(Box::new(resume)))
+        }
+        BudgetResumeAction::StartFresh => Some(ResumeExecutionMode::StartFresh),
+        BudgetResumeAction::Cancel => None,
     }
 }
 
@@ -446,7 +496,8 @@ mod tests {
     use chrono::Utc;
     use vtcode_core::llm::provider::MessageRole;
     use vtcode_core::utils::session_archive::{
-        SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
+        SessionArchiveMetadata, SessionContinuationMetadata, SessionMessage, SessionProgress,
+        SessionSnapshot,
     };
 
     #[test]
@@ -482,5 +533,74 @@ mod tests {
         assert_eq!(resume.history().len(), 1);
         assert_eq!(resume.history()[0].content.as_text(), "progress");
         assert!(!resume.is_fork());
+    }
+
+    #[test]
+    fn budget_resume_menu_prefers_saved_summary_when_available() {
+        let menu =
+            build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, true));
+
+        assert_eq!(menu.default_index, 0);
+        assert_eq!(
+            menu.actions,
+            vec![
+                BudgetResumeAction::ContinueFromSummary,
+                BudgetResumeAction::ContinueFullHistory,
+                BudgetResumeAction::StartFresh,
+                BudgetResumeAction::Cancel,
+            ]
+        );
+    }
+
+    #[test]
+    fn budget_resume_menu_falls_back_to_full_history_without_saved_summary() {
+        let menu =
+            build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, false));
+
+        assert_eq!(menu.default_index, 0);
+        assert_eq!(
+            menu.actions,
+            vec![
+                BudgetResumeAction::ContinueFullHistory,
+                BudgetResumeAction::StartFresh,
+                BudgetResumeAction::Cancel,
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_budget_resume_action_converts_summary_choice_into_summarized_fork() {
+        let listing = SessionListing {
+            path: PathBuf::new(),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws", "/tmp/ws", "model", "provider", "theme", "medium",
+                )
+                .with_continuation_metadata(Some(
+                    SessionContinuationMetadata::budget_limit(2.5, 2.7, true),
+                )),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "full")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+        let resume = convert_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
+
+        let outcome = resolve_budget_resume_action(resume, BudgetResumeAction::ContinueFromSummary)
+            .expect("summary action should continue");
+
+        match outcome {
+            ResumeExecutionMode::Resume(resume) => {
+                let resume = *resume;
+                assert!(resume.is_fork());
+                assert!(resume.summarize_fork());
+            }
+            ResumeExecutionMode::StartFresh => panic!("expected summarized fork resume"),
+        }
     }
 }
