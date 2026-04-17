@@ -188,6 +188,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!(
+        "effort",
+        "Set model effort level for this conversation (usage: /effort [--persist] [level])",
+        "/effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
+        "configuration"
+    ),
+    built_in_command_spec!(
         "ide",
         "Toggle IDE context for this session",
         "/ide",

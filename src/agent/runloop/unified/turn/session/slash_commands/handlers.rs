@@ -41,6 +41,8 @@ mod compact;
 mod config_toml;
 #[path = "diagnostics.rs"]
 mod diagnostics;
+#[path = "effort.rs"]
+mod effort;
 #[path = "interactive.rs"]
 mod interactive;
 #[path = "mcp.rs"]
@@ -72,6 +74,7 @@ pub(super) use diagnostics::{
     handle_run_doctor, handle_show_memory, handle_show_memory_config, handle_show_status,
     handle_start_doctor_interactive, handle_start_terminal_setup,
 };
+pub(super) use effort::handle_set_effort;
 pub(super) use interactive::{
     handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,
 };

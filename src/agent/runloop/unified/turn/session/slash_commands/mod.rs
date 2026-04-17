@@ -157,6 +157,9 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::StartModelSelection => {
             handlers::handle_start_model_selection(ctx).await
         }
+        SlashCommandOutcome::SetEffort { level, persist } => {
+            handlers::handle_set_effort(ctx, level, persist).await
+        }
         SlashCommandOutcome::ToggleIdeContext => handlers::handle_toggle_ide_context(ctx).await,
         SlashCommandOutcome::InitializeWorkspace { force } => {
             handlers::handle_initialize_workspace(ctx, force).await
