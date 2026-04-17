@@ -351,6 +351,9 @@ impl acp::Agent for ZedAgent {
                     LLMStreamEvent::ReasoningStage { .. } => {
                         // ACP protocol doesn't currently support specific reasoning stages
                     }
+                    LLMStreamEvent::ReasoningSignature { .. } => {
+                        // Signature field not currently processed in ACP stream
+                    }
                     LLMStreamEvent::Completed { response } => {
                         if assistant_message.is_empty()
                             && let Some(content) = response.content
