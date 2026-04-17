@@ -70,6 +70,8 @@ impl ZedAgent {
         &'a self,
         provider_supports_tools: bool,
         client_supports_read_text_file: bool,
+        provider_name: &'a str,
+        model_name: &'a str,
     ) -> Vec<(SupportedTool, ToolRuntime<'a>)> {
         self.acp_tool_registry
             .registered_tools()
@@ -77,8 +79,8 @@ impl ZedAgent {
             .map(|tool| {
                 let runtime = if !provider_supports_tools {
                     ToolRuntime::Disabled(ToolDisableReason::Provider {
-                        provider: self.config.provider.as_str(),
-                        model: self.config.model.as_str(),
+                        provider: provider_name,
+                        model: model_name,
                     })
                 } else {
                     match tool {

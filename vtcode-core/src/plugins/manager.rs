@@ -198,8 +198,8 @@ impl PluginManager {
                 Ok(plugins) => {
                     for plugin_info in &plugins {
                         // Use version from plugin.json to determine if update is needed
-                        if let Some(existing) = self.get_cached_plugin(&plugin_info.name).await {
-                            if existing.exists()
+                        if let Some(existing) = self.get_cached_plugin(&plugin_info.name).await
+                            && existing.exists()
                                 && plugin_info.version_matches_existing(&existing).await
                             {
                                 debug!(
@@ -208,7 +208,6 @@ impl PluginManager {
                                 );
                                 continue;
                             }
-                        }
 
                         if let Err(e) = self
                             .cache_plugin(&plugin_info.name, &plugin_info.path)
@@ -272,7 +271,7 @@ impl PluginManager {
             let mut dirs = Vec::new();
             let mut entries = entries;
             while let Ok(Some(entry)) = entries.next_entry().await {
-                if entry.file_type().await.map_or(false, |ft| ft.is_dir()) {
+                if entry.file_type().await.is_ok_and(|ft| ft.is_dir()) {
                     dirs.push(entry.path());
                 }
             }

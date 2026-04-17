@@ -57,3 +57,14 @@
 - Keep changes surgical and behavior-preserving.
 - Measure before optimizing.
 - If this repo includes or adds C/C++ surfaces, follow [`docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`](docs/development/CPP_CORE_GUIDELINES_ADOPTION.md).
+
+<!-- codemod-skill-discovery:begin -->
+## Codemod Skill Discovery
+This section is managed by `codemod` CLI.
+
+- Core skill: `.agents/skills/codemod/SKILL.md`
+- Package skills: `.agents/skills/<package-skill>/SKILL.md`
+- Codemod MCP: use it for JSSG authoring guidance, CLI/workflow guidance, import-helper guidance, and semantic-analysis-aware codemod work.
+- List installed Codemod skills: `npx codemod ai list --harness codex --format json`
+
+<!-- codemod-skill-discovery:end -->

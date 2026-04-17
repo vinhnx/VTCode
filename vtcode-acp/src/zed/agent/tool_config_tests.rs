@@ -197,7 +197,7 @@ async fn read_only_modes_hide_local_tools() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let enabled_tools: Vec<_> = agent
-        .tool_availability(true, false)
+        .tool_availability(true, false, "test-provider", "test-model")
         .into_iter()
         .filter_map(|(tool, runtime)| match runtime {
             ToolRuntime::Enabled => Some(tool),

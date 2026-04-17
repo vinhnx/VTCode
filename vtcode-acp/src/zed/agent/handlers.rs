@@ -1,7 +1,8 @@
 use super::super::constants::*;
 use super::super::helpers::{
-    SESSION_CONFIG_MODE_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID, acp_session_modes,
-    agent_implementation_info, session_mode_id, text_chunk,
+    SESSION_CONFIG_MODE_ID, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PROVIDER_ID,
+    SESSION_CONFIG_THOUGHT_LEVEL_ID, acp_session_modes, agent_implementation_info, session_mode_id,
+    text_chunk,
 };
 use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
@@ -10,10 +11,11 @@ use anyhow::Result;
 use futures::StreamExt;
 use serde_json::json;
 use tracing::warn;
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::factory::ProviderConfig;
-use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
+use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::{LLMRequest, LLMStreamEvent, Message};
 
 #[async_trait::async_trait(?Send)]
@@ -203,35 +205,39 @@ impl acp::Agent for ZedAgent {
 
         self.push_message(&session, Message::user(user_message.clone()));
 
-        let provider = match create_provider_for_model(
-            &self.config.model,
-            self.config.api_key.clone(),
-            Some(self.config.prompt_cache.clone()),
-            self.config.model_behavior.clone(),
-        ) {
-            Ok(provider) => provider,
-            Err(_) => create_provider_with_config(
-                &self.config.provider,
-                ProviderConfig {
-                    api_key: Some(self.config.api_key.clone()),
-                    openai_chatgpt_auth: self.config.openai_chatgpt_auth.clone(),
-                    copilot_auth: None,
-                    base_url: None,
-                    model: Some(self.config.model.clone()),
-                    prompt_cache: Some(self.config.prompt_cache.clone()),
-                    timeouts: None,
-                    openai: None,
-                    anthropic: None,
-                    model_behavior: self.config.model_behavior.clone(),
-                    workspace_root: Some(self.config.workspace.clone()),
-                },
+        let (session_provider_name, session_model, session_reasoning_effort) = {
+            let data = session.data.borrow();
+            (
+                data.provider.clone(),
+                data.model.clone(),
+                data.reasoning_effort,
             )
-            .map_err(acp::Error::into_internal_error)?,
         };
+        let session_api_key = self.resolve_api_key_for_provider(&session_provider_name);
+        let provider = create_provider_with_config(
+            &session_provider_name,
+            ProviderConfig {
+                api_key: Some(session_api_key),
+                openai_chatgpt_auth: if session_provider_name.eq_ignore_ascii_case("openai") {
+                    self.config.openai_chatgpt_auth.clone()
+                } else {
+                    None
+                },
+                copilot_auth: None,
+                base_url: None,
+                model: Some(session_model.clone()),
+                prompt_cache: Some(self.config.prompt_cache.clone()),
+                timeouts: None,
+                openai: None,
+                anthropic: None,
+                model_behavior: self.config.model_behavior.clone(),
+                workspace_root: Some(self.config.workspace.clone()),
+            },
+        )
+        .map_err(acp::Error::into_internal_error)?;
 
         let supports_streaming = provider.supports_streaming();
-        let session_reasoning_effort = session.data.borrow().reasoning_effort;
-        let reasoning_effort = if provider.supports_reasoning_effort(&self.config.model) {
+        let reasoning_effort = if provider.supports_reasoning_effort(&session_model) {
             Some(session_reasoning_effort)
         } else {
             None
@@ -240,10 +246,14 @@ impl acp::Agent for ZedAgent {
         let mut stop_reason = acp::StopReason::EndTurn;
         let mut assistant_message = String::with_capacity(4096);
         let client_supports_read_text_file = self.client_supports_read_text_file();
-        let provider_supports_tools = provider.supports_tools(&self.config.model);
+        let provider_supports_tools = provider.supports_tools(&session_model);
         let mut session_mode = session.data.borrow().current_mode;
-        let availability =
-            self.tool_availability(provider_supports_tools, client_supports_read_text_file);
+        let availability = self.tool_availability(
+            provider_supports_tools,
+            client_supports_read_text_file,
+            &session_provider_name,
+            &session_model,
+        );
         let mut enabled_tools = Vec::with_capacity(5);
         let mut disabled_tools = Vec::with_capacity(5);
         for (tool, runtime) in availability {
@@ -291,7 +301,7 @@ impl acp::Agent for ZedAgent {
         if allow_streaming {
             let request = LLMRequest {
                 messages: messages.clone(),
-                model: self.config.model.clone(),
+                model: session_model.clone(),
                 stream: true,
                 tools: tool_definitions,
                 tool_choice: self.tool_choice(tools_allowed),
@@ -381,7 +391,7 @@ impl acp::Agent for ZedAgent {
 
                 let request = LLMRequest {
                     messages: messages.clone(),
-                    model: self.config.model.clone(),
+                    model: session_model.clone(),
                     tools: tool_definitions.clone(),
                     tool_choice: self.tool_choice(tools_allowed),
                     reasoning_effort,
@@ -544,7 +554,11 @@ impl acp::Agent for ZedAgent {
                     .await?;
             }
             SESSION_CONFIG_THOUGHT_LEVEL_ID => {
-                if !self.model_supports_thought_level() {
+                let (session_provider, session_model) = {
+                    let data = session.data.borrow();
+                    (data.provider.clone(), data.model.clone())
+                };
+                if !self.model_supports_thought_level(&session_provider, &session_model) {
                     return Err(acp::Error::invalid_params().data(json!({
                         "reason": "unsupported_config_option",
                         "config_id": args.config_id.0,
@@ -559,6 +573,71 @@ impl acp::Agent for ZedAgent {
                 };
 
                 if self.update_session_reasoning_effort(&session, reasoning_effort) {
+                    let config_options = self.current_session_config_options(&session);
+                    self.send_update(
+                        &args.session_id,
+                        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(
+                            config_options,
+                        )),
+                    )
+                    .await?;
+                }
+            }
+            SESSION_CONFIG_PROVIDER_ID => {
+                let provider = args.value.0.as_ref().trim().to_lowercase();
+                let current_provider = session.data.borrow().provider.clone();
+                if provider.is_empty() || !self.supports_provider(&provider, &current_provider) {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "unknown_provider",
+                        "value": args.value.0,
+                    })));
+                }
+
+                let current_model = session.data.borrow().model.clone();
+                let resolved_model = if self.provider_supports_model(&provider, &current_model) {
+                    current_model
+                } else {
+                    self.provider_default_model(&provider).ok_or_else(|| {
+                        acp::Error::invalid_params().data(json!({
+                            "reason": "provider_has_no_default_model",
+                            "provider": provider,
+                        }))
+                    })?
+                };
+
+                if self.update_session_provider_and_model(
+                    &session,
+                    provider.to_string(),
+                    resolved_model,
+                ) {
+                    let config_options = self.current_session_config_options(&session);
+                    self.send_update(
+                        &args.session_id,
+                        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(
+                            config_options,
+                        )),
+                    )
+                    .await?;
+                }
+            }
+            SESSION_CONFIG_MODEL_ID => {
+                let model = args.value.0.as_ref().trim();
+                if model.is_empty() {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "unknown_model",
+                        "value": args.value.0,
+                    })));
+                }
+                let provider = session.data.borrow().provider.clone();
+                if !self.provider_supports_model(&provider, model) {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "model_not_supported_for_provider",
+                        "provider": provider,
+                        "model": model,
+                    })));
+                }
+
+                if self.update_session_provider_and_model(&session, provider, model.to_string()) {
                     let config_options = self.current_session_config_options(&session);
                     self.send_update(
                         &args.session_id,
@@ -587,5 +666,15 @@ impl acp::Agent for ZedAgent {
             session.cancel_flag.set(true);
         }
         Ok(())
+    }
+}
+
+impl ZedAgent {
+    fn resolve_api_key_for_provider(&self, provider: &str) -> String {
+        if provider.eq_ignore_ascii_case(&self.config.provider) && !self.config.api_key.is_empty() {
+            return self.config.api_key.clone();
+        }
+
+        get_api_key(provider, &ApiKeySources::default()).unwrap_or_default()
     }
 }

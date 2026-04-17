@@ -186,6 +186,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Getting Started & Overview
 
+- **File**: `docs/acp/ACP_INTEGRATION.md`
+  - **Content**: ACP (Agent Communication Protocol) Integration Guide
+  - **Topics**: Overview, Architecture, Module Structure, Usage Examples, Error Handling
+  - **User Questions**: "What can you tell me about ACP (Agent Communication Protocol) Integration Guide?", "How does Overview work?", "How does Architecture work?"
+
+- **File**: `docs/guides/zed-acp.md`
+  - **Content**: Zed Agent Client Protocol Integration
+  - **Topics**: Setup overview, Configure VT Code for ACP, Manual smoke test, Register VT Code in Zed, Use it inside Zed
+  - **User Questions**: "What can you tell me about Zed Agent Client Protocol Integration?", "How does Setup overview work?", "How does Configure VT Code for ACP work?"
+
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
   - **Topics**: Launching exec mode, Dry-run mode, Continuation and verification, Structured event stream, Resuming sessions

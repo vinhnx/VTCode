@@ -25,6 +25,7 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.98.7" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 num_cpus = { workspace = true }
 parking_lot = "0.12.5"
 

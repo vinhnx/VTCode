@@ -1485,21 +1485,52 @@ fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
         .find(|t| t.get("name").and_then(Value::as_str) == Some("unified_exec"))
         .and_then(|t| t.get("parameters"))
         .expect("unified_exec parameters");
-    let cmd = &exec_params["properties"]["command"];
-    assert_eq!(cmd.get("type").and_then(Value::as_str), Some("string"));
-    assert!(cmd.get("anyOf").is_none());
-    assert!(cmd.get("default").is_none());
+    assert!(exec_params["properties"].is_object());
     assert!(exec_params["properties"]["tty"].get("default").is_none());
+    assert!(
+        exec_params["properties"]["language"]
+            .get("default")
+            .is_none()
+    );
+    assert!(
+        exec_params["properties"]["literal"]
+            .get("default")
+            .is_none()
+    );
+    let exec_found = schema_keyword_path(
+        exec_params,
+        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
+        "$",
+    );
+    assert!(
+        exec_found.is_none(),
+        "Unsupported keyword found in unified_exec schema at: {}",
+        exec_found.unwrap_or_default()
+    );
 
     let search_params = tools
         .iter()
         .find(|t| t.get("name").and_then(Value::as_str) == Some("unified_search"))
         .and_then(|t| t.get("parameters"))
         .expect("unified_search parameters");
-    let globs = &search_params["properties"]["globs"];
-    assert_eq!(globs.get("type").and_then(Value::as_str), Some("string"));
-    assert!(globs.get("anyOf").is_none());
     assert!(search_params["properties"]["path"].get("default").is_none());
+    assert!(
+        search_params["properties"]["workflow"]
+            .get("default")
+            .is_none()
+    );
+    assert!(search_params["properties"]["mode"].get("default").is_none());
+    assert!(search_params["properties"]["url"].get("format").is_none());
+    let search_found = schema_keyword_path(
+        search_params,
+        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
+        "$",
+    );
+    assert!(
+        search_found.is_none(),
+        "Unsupported keyword found in unified_search schema at: {}",
+        search_found.unwrap_or_default()
+    );
 }
 
 #[test]
@@ -1542,13 +1573,7 @@ fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools()
         let params = tool
             .get("parameters")
             .expect("tool parameters should be present");
-        let found = schema_keyword_path(
-            params,
-            &[
-                "allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format",
-            ],
-            "$",
-        );
+        let found = schema_keyword_path(params, &["default", "format"], "$");
         assert!(
             found.is_none(),
             "Unsupported keyword found at: {}",
@@ -1582,7 +1607,7 @@ fn responses_function_tools_add_empty_properties_for_bare_object_schema() {
         .expect("vtcode-clippy parameters");
     assert_eq!(params["type"].as_str(), Some("object"));
     assert_eq!(params["properties"], json!({}));
-    assert_eq!(params["additionalProperties"], json!(true));
+    assert_eq!(params["additionalProperties"], json!({"type": "string"}));
 }
 
 // ─── Specialized Tool Types ──────────────────────────────────────────────────

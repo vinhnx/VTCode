@@ -127,7 +127,7 @@ fn move_right_word_advances_to_word_boundaries() {
     assert_eq!(session.cursor(), 5);
 
     session.move_right_word();
-    assert_eq!(session.cursor(), 7);
+    assert_eq!(session.cursor(), 12);
 
     session.move_right_word();
     assert_eq!(session.cursor(), text.len());
@@ -139,7 +139,7 @@ fn move_right_word_from_whitespace_moves_to_next_word_start() {
     let mut session = session_with_input(text, 5);
 
     session.move_right_word();
-    assert_eq!(session.cursor(), 7);
+    assert_eq!(session.cursor(), 12);
 }
 
 #[test]

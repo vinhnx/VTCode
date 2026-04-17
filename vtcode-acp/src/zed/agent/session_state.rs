@@ -4,11 +4,14 @@ use agent_client_protocol as acp;
 use agent_client_protocol::AgentSideConnection;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
+use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
 use vtcode_core::llm::ModelResolver;
+use vtcode_core::llm::factory::get_factory;
 use vtcode_core::llm::provider::{FinishReason, Message};
 use vtcode_core::utils::session_archive::find_session_by_identifier;
 
@@ -50,6 +53,26 @@ impl ZedAgent {
         }
     }
 
+    fn session_provider_for_thread(
+        &self,
+        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
+    ) -> String {
+        thread
+            .metadata()
+            .map(|metadata| metadata.provider)
+            .unwrap_or_else(|| self.config.provider.clone())
+    }
+
+    fn session_model_for_thread(
+        &self,
+        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
+    ) -> String {
+        thread
+            .metadata()
+            .map(|metadata| metadata.model)
+            .unwrap_or_else(|| self.config.model.clone())
+    }
+
     fn sync_thread_mode(
         &self,
         thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
@@ -61,8 +84,21 @@ impl ZedAgent {
         }
     }
 
-    pub(super) fn model_supports_thought_level(&self) -> bool {
-        ModelResolver::resolve(Some(&self.config.provider), &self.config.model, &[], None)
+    fn sync_thread_provider_and_model(
+        &self,
+        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
+        provider: &str,
+        model: &str,
+    ) {
+        if let Some(mut metadata) = thread.metadata() {
+            metadata.provider = provider.to_string();
+            metadata.model = model.to_string();
+            thread.replace_metadata(Some(metadata));
+        }
+    }
+
+    pub(super) fn model_supports_thought_level(&self, provider: &str, model: &str) -> bool {
+        ModelResolver::resolve(Some(provider), model, &[], None)
             .map(|resolved| resolved.reasoning_supported())
             .unwrap_or(false)
     }
@@ -74,6 +110,8 @@ impl ZedAgent {
     ) -> SessionHandle {
         let reasoning_effort = self.session_reasoning_effort_for_thread(&thread);
         let current_mode = self.session_mode_for_thread(&thread);
+        let provider = self.session_provider_for_thread(&thread);
+        let model = self.session_model_for_thread(&thread);
         SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
                 _session_id: session_id,
@@ -81,6 +119,8 @@ impl ZedAgent {
                 tool_notice_sent: false,
                 current_mode,
                 reasoning_effort,
+                provider,
+                model,
             })),
             cancel_flag: Rc::new(Cell::new(false)),
         }
@@ -176,16 +216,149 @@ impl ZedAgent {
         true
     }
 
+    pub(super) fn update_session_provider_and_model(
+        &self,
+        session: &SessionHandle,
+        provider: String,
+        model: String,
+    ) -> bool {
+        let mut data = session.data.borrow_mut();
+        if data.provider == provider && data.model == model {
+            return false;
+        }
+        data.provider = provider;
+        data.model = model;
+        self.sync_thread_provider_and_model(&data.thread, &data.provider, &data.model);
+        true
+    }
+
+    pub(super) fn provider_default_model(&self, provider: &str) -> Option<String> {
+        Provider::from_str(provider).ok().map(|value| {
+            ModelId::default_single_for_provider(value)
+                .as_str()
+                .to_string()
+        })
+    }
+
+    pub(super) fn provider_supports_model(&self, provider: &str, model: &str) -> bool {
+        let Ok(provider) = Provider::from_str(provider) else {
+            return true;
+        };
+        ModelId::models_for_provider(provider)
+            .iter()
+            .any(|entry| entry.as_str() == model)
+    }
+
+    fn provider_select_options(
+        &self,
+        current_provider: &str,
+    ) -> Vec<acp::SessionConfigSelectOption> {
+        let mut providers = get_factory()
+            .lock()
+            .ok()
+            .map(|factory| factory.list_providers())
+            .unwrap_or_default();
+        if providers.is_empty() {
+            tracing::warn!(
+                "LLM factory has no registered providers, falling back to Provider::all_providers()"
+            );
+            providers = Provider::all_providers()
+                .into_iter()
+                .map(|provider| provider.to_string())
+                .collect();
+        }
+
+        if !providers
+            .iter()
+            .any(|provider| provider.eq_ignore_ascii_case(current_provider))
+        {
+            providers.push(current_provider.to_string());
+        }
+
+        providers.sort();
+        providers.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+
+        tracing::debug!(
+            provider_count = providers.len(),
+            providers = ?providers,
+            current_provider = current_provider,
+            "Building provider select options for ACP"
+        );
+
+        providers
+            .into_iter()
+            .map(|provider| {
+                let name = Provider::from_str(&provider)
+                    .ok()
+                    .map(|parsed| parsed.label().to_string())
+                    .unwrap_or_else(|| provider.clone());
+                acp::SessionConfigSelectOption::new(provider, name)
+            })
+            .collect()
+    }
+
+    fn model_select_options(
+        &self,
+        provider: &str,
+        current_model: &str,
+    ) -> Vec<acp::SessionConfigSelectOption> {
+        let mut options = Provider::from_str(provider)
+            .ok()
+            .map(|provider| {
+                ModelId::models_for_provider(provider)
+                    .into_iter()
+                    .map(|model| {
+                        acp::SessionConfigSelectOption::new(model.as_str(), model.display_name())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        if !options
+            .iter()
+            .any(|option| option.value.0.as_ref() == current_model)
+        {
+            options.push(acp::SessionConfigSelectOption::new(
+                current_model.to_string(),
+                current_model.to_string(),
+            ));
+        }
+
+        options.sort_by(|left, right| left.value.0.cmp(&right.value.0));
+        options
+    }
+
+    pub(super) fn supports_provider(&self, provider: &str, current_provider: &str) -> bool {
+        self.provider_select_options(current_provider)
+            .iter()
+            .any(|option| option.value.0.as_ref() == provider)
+    }
+
     pub(super) fn current_session_config_options(
         &self,
         session: &SessionHandle,
     ) -> Vec<acp::SessionConfigOption> {
         let data = session.data.borrow();
-        session_config_options(
+        let provider_options = self.provider_select_options(&data.provider);
+        let model_options = self.model_select_options(&data.provider, &data.model);
+        let config_options = session_config_options(
             data.current_mode,
             data.reasoning_effort,
-            self.model_supports_thought_level(),
-        )
+            self.model_supports_thought_level(&data.provider, &data.model),
+            &data.provider,
+            provider_options,
+            &data.model,
+            model_options,
+        );
+
+        tracing::debug!(
+            config_option_count = config_options.len(),
+            current_provider = %data.provider,
+            current_model = %data.model,
+            "Built session config options for ACP"
+        );
+
+        config_options
     }
 
     pub(super) fn resolved_messages(&self, session: &SessionHandle) -> Vec<Message> {
@@ -342,6 +515,8 @@ mod tests {
             handle.data.borrow().reasoning_effort,
             ReasoningEffortLevel::XHigh
         );
+        assert_eq!(handle.data.borrow().provider, "openai");
+        assert_eq!(handle.data.borrow().model, "gpt-5.4");
     }
 
     #[tokio::test]
@@ -396,7 +571,7 @@ mod tests {
 
         let config_options = agent.current_session_config_options(&session);
 
-        assert_eq!(config_options.len(), 1);
+        assert_eq!(config_options.len(), 3);
         assert_eq!(config_options[0].id, acp::SessionConfigId::new("mode"));
     }
 }
