@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.99.1 - 2026-04-17
+
+### Highlights
+#### Features
+
+- Add handling for reasoning signature in UI and ACP streams (9049a09a) 
+### Other Changes
 ## 0.99.0 - 2026-04-16
 
 ### Highlights
