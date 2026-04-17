@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
 use vtcode_core::scheduler::{LoopCommand, ScheduleCreateInput};
@@ -142,6 +143,10 @@ pub(crate) enum SlashCommandOutcome {
     NewSession,
     OpenDocs,
     StartModelSelection,
+    SetEffort {
+        level: Option<ReasoningEffortLevel>,
+        persist: bool,
+    },
     ToggleIdeContext,
     StartThemePalette {
         mode: ThemePaletteMode,
@@ -606,6 +611,17 @@ async fn execute_built_in_command_skill(
         },
         "mcp" => handle_mcp_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "effort" => match parse_effort_args(args) {
+            Ok((level, persist)) => Ok(SlashCommandOutcome::SetEffort { level, persist }),
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
+                )?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
         "hooks" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /hooks")?;
@@ -850,6 +866,30 @@ fn parse_update_args(args: &str) -> std::result::Result<(bool, bool, bool), Stri
     Ok((check_only, install, force))
 }
 
+fn parse_effort_args(
+    args: &str,
+) -> std::result::Result<(Option<ReasoningEffortLevel>, bool), String> {
+    let mut persist = false;
+    let mut level = None;
+
+    for token in args.split_whitespace() {
+        match token.to_ascii_lowercase().as_str() {
+            "--persist" | "persist" => persist = true,
+            "" => {}
+            _ => {
+                let Some(parsed) = ReasoningEffortLevel::parse(token) else {
+                    return Err(format!("Unknown effort value '{}'", token));
+                };
+                if level.replace(parsed).is_some() {
+                    return Err("Specify at most one effort level.".to_string());
+                }
+            }
+        }
+    }
+
+    Ok((level, persist))
+}
+
 #[derive(Debug)]
 enum DoctorCommand {
     Interactive,
@@ -893,8 +933,9 @@ mod tests {
     use super::{
         AgentManagerAction, CompactConversationCommand, DoctorCommand, ScheduleCommandAction,
         SessionLogExportFormat, SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction,
-        handle_slash_command, parse_doctor_args, parse_update_args,
+        handle_slash_command, parse_doctor_args, parse_effort_args, parse_update_args,
     };
+    use vtcode_core::config::types::ReasoningEffortLevel;
     use vtcode_core::llm::provider::ResponsesCompactionOptions;
     use vtcode_core::skills::command_skill_specs;
     use vtcode_core::utils::ansi::AnsiRenderer;
@@ -939,6 +980,27 @@ mod tests {
     fn parse_update_rejects_conflicting_modes() {
         let err = parse_update_args("check install").expect_err("must reject");
         assert!(err.contains("either 'check' or 'install'"));
+    }
+
+    #[test]
+    fn parse_effort_defaults_to_picker_mode() {
+        let parsed = parse_effort_args("").expect("should parse");
+        assert_eq!(parsed, (None, false));
+    }
+
+    #[test]
+    fn parse_effort_supports_persist_flag_and_level() {
+        let parsed = parse_effort_args("--persist xhigh").expect("should parse");
+        assert_eq!(parsed, (Some(ReasoningEffortLevel::XHigh), true));
+
+        let parsed = parse_effort_args("high persist").expect("should parse");
+        assert_eq!(parsed, (Some(ReasoningEffortLevel::High), true));
+    }
+
+    #[test]
+    fn parse_effort_rejects_multiple_levels() {
+        let err = parse_effort_args("low high").expect_err("must reject");
+        assert!(err.contains("at most one effort level"));
     }
 
     #[tokio::test]
@@ -1041,6 +1103,24 @@ mod tests {
             .expect("ide command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::ToggleIdeContext));
+    }
+
+    #[tokio::test]
+    async fn effort_command_returns_set_effort_outcome() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("effort --persist high", &mut renderer, &workspace)
+            .await
+            .expect("effort command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::SetEffort {
+                level: Some(ReasoningEffortLevel::High),
+                persist: true,
+            }
+        ));
     }
 
     #[tokio::test]

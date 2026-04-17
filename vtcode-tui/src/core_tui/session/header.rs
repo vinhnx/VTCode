@@ -651,6 +651,8 @@ impl Session {
             dot.clone(),
             Span::styled("/model", key),
             dot.clone(),
+            Span::styled("/effort", key),
+            dot.clone(),
             Span::styled("/config", key),
             dot.clone(),
             Span::styled("/clear", key),

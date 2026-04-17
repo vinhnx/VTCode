@@ -129,11 +129,11 @@ pub(crate) fn session_config_options(
         config_options.push(
             acp::SessionConfigOption::select(
                 SESSION_CONFIG_THOUGHT_LEVEL_ID,
-                "Thought level",
+                "Effort level",
                 reasoning_effort.as_str(),
                 thought_level_options,
             )
-            .description("Controls how much reasoning effort VT Code requests from the model.")
+            .description("Controls how much effort VT Code requests from the model.")
             .category(acp::SessionConfigOptionCategory::ThoughtLevel),
         );
     }
@@ -150,6 +150,38 @@ pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::
         .title(title_override.or_else(|| Some("VT Code".to_string())))
 }
 
+pub(crate) fn build_available_commands() -> Vec<acp::AvailableCommand> {
+    vec![
+        acp::AvailableCommand::new("init", "Create vtcode.toml and index the workspace").input(
+            acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
+                "Optional: --force flag",
+            )),
+        ),
+        acp::AvailableCommand::new("config", "Browse vtcode.toml settings sections"),
+        acp::AvailableCommand::new("status", "Show model, provider, workspace, and tool status"),
+        acp::AvailableCommand::new(
+            "effort",
+            "Set the active conversation effort level for models that support it",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new(
+                "Optional: [--persist] [none|minimal|low|medium|high|xhigh|max]",
+            ),
+        )),
+        acp::AvailableCommand::new("doctor", "Run installation and configuration diagnostics"),
+        acp::AvailableCommand::new(
+            "plan",
+            "Toggle between Code and Architect modes for read-only planning",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("Optional: on | off"),
+        )),
+        acp::AvailableCommand::new("mode", "Cycle through Ask -> Architect -> Code modes"),
+        acp::AvailableCommand::new("help", "Show slash command help"),
+        acp::AvailableCommand::new("reset", "Reset conversation context"),
+        acp::AvailableCommand::new("tools", "List tools and their descriptions"),
+        acp::AvailableCommand::new("exit", "Close the VT Code session"),
+    ]
 fn command_input_hint(name: &str) -> Option<String> {
     let usage = find_command_skill_by_slash_name(name)?.usage.trim();
     let bare_usage = format!("/{name}");
