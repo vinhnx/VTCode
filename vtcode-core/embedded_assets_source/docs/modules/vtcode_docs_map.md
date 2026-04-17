@@ -186,15 +186,15 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Getting Started & Overview
 
-- **File**: `docs/ACP_IMPLEMENTATION_SUMMARY.md`
-  - **Content**: ACP Slash Commands & Provider Configuration - Implementation Summary
-  - **Topics**: Overview, Key Findings, Changes Made, Architecture Summary, Testing
-  - **User Questions**: "What can you tell me about ACP Slash Commands & Provider Configuration - Implementation Summary?", "How does Overview work?", "How does Key Findings work?"
+- **File**: `docs/acp/ACP_INTEGRATION.md`
+  - **Content**: ACP (Agent Communication Protocol) Integration Guide
+  - **Topics**: Overview, Architecture, Module Structure, Usage Examples, Error Handling
+  - **User Questions**: "What can you tell me about ACP (Agent Communication Protocol) Integration Guide?", "How does Overview work?", "How does Architecture work?"
 
-- **File**: `docs/ACP_SLASH_COMMAND_IMPLEMENTATION.md`
-  - **Content**: ACP Slash Commands & Provider Configuration Implementation Plan
-  - **Topics**: Problem Statement, Current Architecture, Implementation Tasks, Files to Modify, Testing Strategy
-  - **User Questions**: "What can you tell me about ACP Slash Commands & Provider Configuration Implementation Plan?", "How does Problem Statement work?", "How does Current Architecture work?"
+- **File**: `docs/guides/zed-acp.md`
+  - **Content**: Zed Agent Client Protocol Integration
+  - **Topics**: Setup overview, Configure VT Code for ACP, Manual smoke test, Register VT Code in Zed, Use it inside Zed
+  - **User Questions**: "What can you tell me about Zed Agent Client Protocol Integration?", "How does Setup overview work?", "How does Configure VT Code for ACP work?"
 
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation

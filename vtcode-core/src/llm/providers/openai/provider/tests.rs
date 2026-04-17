@@ -1487,6 +1487,26 @@ fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
         .expect("unified_exec parameters");
     assert!(exec_params["properties"].is_object());
     assert!(exec_params["properties"]["tty"].get("default").is_none());
+    assert!(
+        exec_params["properties"]["language"]
+            .get("default")
+            .is_none()
+    );
+    assert!(
+        exec_params["properties"]["literal"]
+            .get("default")
+            .is_none()
+    );
+    let exec_found = schema_keyword_path(
+        exec_params,
+        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
+        "$",
+    );
+    assert!(
+        exec_found.is_none(),
+        "Unsupported keyword found in unified_exec schema at: {}",
+        exec_found.unwrap_or_default()
+    );
 
     let search_params = tools
         .iter()
@@ -1494,6 +1514,23 @@ fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
         .and_then(|t| t.get("parameters"))
         .expect("unified_search parameters");
     assert!(search_params["properties"]["path"].get("default").is_none());
+    assert!(
+        search_params["properties"]["workflow"]
+            .get("default")
+            .is_none()
+    );
+    assert!(search_params["properties"]["mode"].get("default").is_none());
+    assert!(search_params["properties"]["url"].get("format").is_none());
+    let search_found = schema_keyword_path(
+        search_params,
+        &["default", "format", "allOf", "oneOf", "if", "then", "else"],
+        "$",
+    );
+    assert!(
+        search_found.is_none(),
+        "Unsupported keyword found in unified_search schema at: {}",
+        search_found.unwrap_or_default()
+    );
 }
 
 #[test]
@@ -1568,7 +1605,6 @@ fn responses_function_tools_add_empty_properties_for_bare_object_schema() {
         .find(|t| t.get("name").and_then(Value::as_str) == Some("vtcode-clippy"))
         .and_then(|t| t.get("parameters"))
         .expect("vtcode-clippy parameters");
-    println!("DEBUG: params = {:#?}", params);
     assert_eq!(params["type"].as_str(), Some("object"));
     assert_eq!(params["properties"], json!({}));
     assert_eq!(params["additionalProperties"], json!({"type": "string"}));

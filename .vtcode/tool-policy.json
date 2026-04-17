@@ -33,8 +33,6 @@
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
-    "list_files": "allow",
-    "memory": "allow",
     "read_file": "allow",
     "cargo_check": "allow",
     "cargo_test": "allow",
@@ -188,7 +186,6 @@
   "approval_cache": {
     "allowed": [
       "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "spawn_agent",
       "bash -lc 'echo '\\''Hello world'\\'''|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "echo|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ],
