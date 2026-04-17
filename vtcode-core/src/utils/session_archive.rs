@@ -163,6 +163,8 @@ pub struct SessionArchiveMetadata {
     pub parent_session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_mode: Option<SessionForkMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuation_metadata: Option<SessionContinuationMetadata>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,6 +172,76 @@ pub struct SessionArchiveMetadata {
 pub enum SessionForkMode {
     FullCopy,
     Summarized,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionContinuationExhaustionReason {
+    MaxBudgetUsd,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionContinuationRecommendedAction {
+    ContinueFromSummary,
+    ContinueFullHistory,
+    StartFresh,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionContinuationMetadata {
+    pub exhaustion_reason: SessionContinuationExhaustionReason,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_budget_usd_micros: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actual_cost_usd_micros: Option<u64>,
+    #[serde(default)]
+    pub summary_available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_action: Option<SessionContinuationRecommendedAction>,
+}
+
+impl SessionContinuationMetadata {
+    pub fn budget_limit(
+        max_budget_usd: f64,
+        actual_cost_usd: f64,
+        summary_available: bool,
+    ) -> Self {
+        Self {
+            exhaustion_reason: SessionContinuationExhaustionReason::MaxBudgetUsd,
+            max_budget_usd_micros: usd_to_micros(max_budget_usd),
+            actual_cost_usd_micros: usd_to_micros(actual_cost_usd),
+            summary_available,
+            recommended_action: Some(SessionContinuationRecommendedAction::ContinueFromSummary),
+        }
+    }
+
+    pub fn max_budget_usd(&self) -> Option<f64> {
+        self.max_budget_usd_micros.map(micros_to_usd)
+    }
+
+    pub fn actual_cost_usd(&self) -> Option<f64> {
+        self.actual_cost_usd_micros.map(micros_to_usd)
+    }
+
+    pub fn is_budget_limit(&self) -> bool {
+        matches!(
+            self.exhaustion_reason,
+            SessionContinuationExhaustionReason::MaxBudgetUsd
+        )
+    }
+}
+
+fn usd_to_micros(value: f64) -> Option<u64> {
+    if !value.is_finite() || value.is_sign_negative() {
+        return None;
+    }
+
+    Some((value * 1_000_000.0).round() as u64)
+}
+
+fn micros_to_usd(value: u64) -> f64 {
+    value as f64 / 1_000_000.0
 }
 
 impl SessionArchiveMetadata {
@@ -195,6 +267,7 @@ impl SessionArchiveMetadata {
             external_thread_id: None,
             parent_session_id: None,
             fork_mode: None,
+            continuation_metadata: None,
         }
     }
 
@@ -237,6 +310,20 @@ impl SessionArchiveMetadata {
         self
     }
 
+    pub fn with_continuation_metadata(
+        mut self,
+        continuation_metadata: Option<SessionContinuationMetadata>,
+    ) -> Self {
+        self.continuation_metadata = continuation_metadata;
+        self
+    }
+
+    pub fn budget_limit_continuation(&self) -> Option<&SessionContinuationMetadata> {
+        self.continuation_metadata
+            .as_ref()
+            .filter(|continuation| continuation.is_budget_limit())
+    }
+
     fn fork_seed(&self) -> Self {
         Self {
             workspace_label: self.workspace_label.clone(),
@@ -252,6 +339,7 @@ impl SessionArchiveMetadata {
             external_thread_id: self.external_thread_id.clone(),
             parent_session_id: None,
             fork_mode: None,
+            continuation_metadata: None,
         }
     }
 }
@@ -1145,6 +1233,14 @@ impl SessionArchive {
         self.metadata.loaded_skills = skills;
     }
 
+    /// Update continuation metadata in the archive metadata.
+    pub fn set_continuation_metadata(
+        &mut self,
+        continuation_metadata: Option<SessionContinuationMetadata>,
+    ) {
+        self.metadata.continuation_metadata = continuation_metadata;
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -1814,6 +1910,24 @@ fn shrink_snapshot_metadata(metadata: &mut SessionArchiveMetadata) -> bool {
 
     for skill in &mut metadata.loaded_skills {
         changed |= shrink_string(skill);
+    }
+
+    if let Some(continuation) = metadata.continuation_metadata.as_mut() {
+        if continuation.max_budget_usd_micros == Some(0) {
+            continuation.max_budget_usd_micros = None;
+            changed = true;
+        }
+        if continuation.actual_cost_usd_micros == Some(0) {
+            continuation.actual_cost_usd_micros = None;
+            changed = true;
+        }
+        if !continuation.summary_available
+            && continuation.recommended_action
+                == Some(SessionContinuationRecommendedAction::ContinueFromSummary)
+        {
+            continuation.recommended_action = None;
+            changed = true;
+        }
     }
 
     changed

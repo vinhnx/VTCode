@@ -96,6 +96,43 @@ async fn session_archive_persists_snapshot() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn session_archive_persists_budget_limit_continuation_metadata() -> Result<()> {
+    let _settings_lock = lock_history_test_guard().await;
+    let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
+    let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+    let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+    let metadata = SessionArchiveMetadata::new(
+        "ExampleWorkspace",
+        "/tmp/example",
+        "model-x",
+        "provider-y",
+        "dark",
+        "medium",
+    )
+    .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(
+        2.5, 2.7, true,
+    )));
+    let archive = SessionArchive::new(metadata.clone(), None).await?;
+
+    let path = archive.finalize(Vec::new(), 0, Vec::new(), Vec::new())?;
+    let stored = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot =
+        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+
+    let continuation = snapshot
+        .metadata
+        .budget_limit_continuation()
+        .expect("budget limit continuation metadata should exist");
+    assert_eq!(continuation.max_budget_usd(), Some(2.5));
+    assert_eq!(continuation.actual_cost_usd(), Some(2.7));
+    assert!(continuation.summary_available);
+    assert_eq!(snapshot.metadata, metadata);
+    Ok(())
+}
+
 #[test]
 fn session_message_converts_back_and_forth() {
     let mut original = Message::assistant("Test response".to_owned());

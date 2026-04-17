@@ -388,6 +388,7 @@ pub async fn prepare_archived_session(
 ) -> Result<PreparedArchivedSession> {
     let mut metadata =
         preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
+    metadata.continuation_metadata = source.snapshot.metadata.continuation_metadata.clone();
     let mut bootstrap = ThreadBootstrap::from_listing(source.clone());
     bootstrap.metadata = Some(metadata.clone());
 

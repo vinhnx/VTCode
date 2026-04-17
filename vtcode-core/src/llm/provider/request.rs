@@ -5,6 +5,12 @@ use std::sync::Arc;
 
 use super::{Message, ToolDefinition};
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptCacheProfile {
+    BudgetContinuation,
+}
+
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 
@@ -98,6 +104,9 @@ pub struct LLMRequest {
     /// Optional provider routing hint for prompt cache stickiness.
     /// OpenAI uses this value to improve routing locality for repeated prefixes.
     pub prompt_cache_key: Option<String>,
+
+    /// Optional request-scoped prompt cache profile for provider-specific TTL overrides.
+    pub prompt_cache_profile: Option<PromptCacheProfile>,
 }
 
 /// Optional overrides for standalone Responses compaction requests.

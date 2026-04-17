@@ -605,6 +605,7 @@ impl AgentRunner {
                             .prompt_cache_key_mode,
                         Some(&self.session_id),
                     ),
+                    prompt_cache_profile: None,
                     tool_catalog_hash,
                 })
                 .request;

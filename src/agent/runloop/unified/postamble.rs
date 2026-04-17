@@ -13,6 +13,7 @@ pub(crate) struct ExitSummaryData {
     pub telemetry: TelemetryStats,
     pub header_context: Option<InlineHeaderContext>,
     pub resume_identifier: Option<String>,
+    pub budget_limit: Option<(f64, f64)>,
 }
 
 pub(crate) fn print_exit_summary(data: ExitSummaryData) {
@@ -83,6 +84,11 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         }
     }
 
+    if let Some((max_budget_usd, actual_cost_usd)) = data.budget_limit {
+        println!(
+            "{DIM}Budget limit reached at ${actual_cost_usd:.2} / ${max_budget_usd:.2}. Resume will offer summary, full-history, or fresh-start options.{RESET}"
+        );
+    }
     if let Some(session_id) = data.resume_identifier {
         println!("{DIM}Resume: {resume_style}vtcode --resume {session_id}{RESET}");
     }

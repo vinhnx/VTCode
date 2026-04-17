@@ -551,7 +551,7 @@ mod request_builder_tests {
     use crate::config::constants::models;
     use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
     use crate::config::types::ReasoningEffortLevel;
-    use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
+    use crate::llm::provider::{LLMRequest, Message, PromptCacheProfile, ToolDefinition};
     use crate::llm::providers::anthropic::request_builder::{
         RequestBuilderContext, convert_to_anthropic_format, tool_result_blocks,
     };
@@ -788,6 +788,33 @@ mod request_builder_tests {
         );
         assert!(payload["system"][1].get("cache_control").is_none());
         assert!(payload.get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_uses_extended_message_ttl_for_budget_continuations() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            system_prompt: Some(Arc::new("stable system instructions".to_string())),
+            messages: vec![Message::user("resume ".repeat(60))],
+            prompt_cache_profile: Some(PromptCacheProfile::BudgetContinuation),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: true,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["cache_control"]["ttl"], "1h");
+        assert_eq!(
+            payload["messages"][0]["content"][0]["cache_control"]["ttl"],
+            "1h"
+        );
     }
 
     #[test]

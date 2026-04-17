@@ -11,14 +11,13 @@ use std::env;
 use super::super::capabilities::{resolve_model_name, supports_reasoning_effort};
 
 fn resolve_thinking_display(anthropic_config: &AnthropicConfig) -> Option<ThinkingDisplay> {
-    anthropic_config
-        .thinking_display
-        .as_deref()
-        .and_then(|d| match d.to_ascii_lowercase().as_str() {
+    anthropic_config.thinking_display.as_deref().and_then(|d| {
+        match d.to_ascii_lowercase().as_str() {
             "summarized" => Some(ThinkingDisplay::Summarized),
             "omitted" => Some(ThinkingDisplay::Omitted),
             _ => None,
-        })
+        }
+    })
 }
 
 pub(crate) fn build_thinking_config(
