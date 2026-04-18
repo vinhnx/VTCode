@@ -426,7 +426,9 @@ impl AgentRunner {
         if !session_config.effective().memories_enabled() {
             appendix_config.persistent_memory.enabled = false;
         }
-        if let Some(appendix) = build_instruction_appendix(&appendix_config, workspace.as_path()).await {
+        if let Some(appendix) =
+            build_instruction_appendix(&appendix_config, workspace.as_path()).await
+        {
             system_prompt.push_str("\n\n# INSTRUCTIONS\n");
             system_prompt.push_str(&appendix);
         }

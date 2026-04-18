@@ -114,7 +114,7 @@ fn build_quick_start_help() -> String {
     if has_provider_or_model_configuration() {
         "Quick start:\n  1. Start interactive chat: vtcode chat\n  2. Run one prompt directly: vtcode --print \"summarize this repository\"\n\nUse `vtcode <command> --help` for command-specific details.".to_string()
     } else {
-        "Quick start:\n  1. Export your provider API key (examples: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY)\n  2. Start chat with a provider/model: vtcode chat --provider openai --model gpt-5\n  3. Run one prompt directly: vtcode --provider anthropic --model claude-sonnet-4-5 --print \"summarize this repository\"\n\nUse `vtcode <command> --help` for command-specific details.".to_string()
+        "Quick start:\n  1. Export your provider API key (examples: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY)\n  2. Start chat with a provider/model: vtcode chat --provider openai --model gpt-5\n  3. Run one prompt directly: vtcode --provider anthropic --model claude-sonnet-4-6 --print \"summarize this repository\"\n\nUse `vtcode <command> --help` for command-specific details.".to_string()
     }
 }
 

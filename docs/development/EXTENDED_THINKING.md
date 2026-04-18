@@ -7,13 +7,13 @@ VT Code currently splits direct Anthropic Claude thinking into two runtime paths
 
 ## Compact Runtime Matrix
 
-| Model                   | VT Code default | What VT Code emits                                                                          |
-| ----------------------- | --------------- | ------------------------------------------------------------------------------------------- |
-| `claude-opus-4-7`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = xhigh`, optional `task_budget`          |
-| `claude-mythos-preview` | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, disabled thinking is rejected    |
+| Model                   | VT Code default | What VT Code emits                                                                                              |
+| ----------------------- | --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `claude-opus-4-7`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = xhigh`, optional `task_budget`                              |
+| `claude-mythos-preview` | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, disabled thinking is rejected                        |
 | `claude-opus-4-6`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, explicit `thinking_budget` falls back to manual mode |
 | `claude-sonnet-4-6`     | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, explicit `thinking_budget` falls back to manual mode |
-| `claude-haiku-4-5`      | Manual budget   | `thinking: { type: "enabled", budget_tokens: N }`                                           |
+| `claude-haiku-4-5`      | Manual budget   | `thinking: { type: "enabled", budget_tokens: N }`                                                               |
 
 ## Configuration
 
@@ -81,7 +81,7 @@ For budgeted-thinking models, VT Code sends:
 ### Manual-mode notes
 
 - Claude Haiku 4.5 stays on the budgeted path
-- Claude Sonnet 4.6 still uses the interleaved-thinking beta header when it falls back to manual mode
+- Claude Sonnet 4.6 only uses the interleaved-thinking beta header when it falls back to manual mode; adaptive thinking does not require it
 - Claude Opus 4.6 can still use manual budgets, but VT Code does not enable interleaved manual thinking for it
 - When interleaving is unavailable, `budget_tokens` must stay below `max_tokens`
 
@@ -90,7 +90,7 @@ For budgeted-thinking models, VT Code sends:
 When thinking is active, VT Code enforces or normalizes the following behavior:
 
 - `tool_choice` is limited to `auto` or `none`
-- assistant prefills are incompatible with adaptive-only Claude models
+- assistant prefills are incompatible with Claude Opus 4.6/4.7 and Claude Sonnet 4.6
 - `thinking_display = "summarized"` restores visible summarized thinking on models that default to omitted output
 - Claude Opus 4.7 rejects explicit `temperature`, `top_p`, and `top_k`
 

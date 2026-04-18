@@ -387,7 +387,7 @@ mod tests {
         fs::write(&home_config, "agent.provider = \"openai\"\n").expect("home config");
         fs::write(
             &workspace_config,
-            "agent.provider = \"anthropic\"\nagent.default_model = \"claude-sonnet-4-5\"\n",
+            "agent.provider = \"anthropic\"\nagent.default_model = \"claude-sonnet-4-6\"\n",
         )
         .expect("workspace config");
 

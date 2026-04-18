@@ -172,6 +172,7 @@ pub fn parse_finish_reason(stop_reason: &str) -> FinishReason {
     match stop_reason {
         "end_turn" => FinishReason::Stop,
         "max_tokens" => FinishReason::Length,
+        "model_context_window_exceeded" => FinishReason::Length,
         "stop_sequence" => FinishReason::Stop,
         "tool_use" => FinishReason::ToolCalls,
         "compaction" => FinishReason::Pause,

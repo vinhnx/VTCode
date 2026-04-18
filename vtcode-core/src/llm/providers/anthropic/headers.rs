@@ -15,6 +15,7 @@ pub struct BetaHeaderConfig<'a> {
     pub config: &'a AnthropicConfig,
     pub model: &'a str,
     pub include_advanced_tool_use: bool,
+    pub include_manual_interleaved_beta: bool,
     pub request_betas: Option<&'a Vec<String>>,
     pub include_task_budget: bool,
 }
@@ -53,7 +54,7 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.config.extended_thinking_enabled
+    if config.include_manual_interleaved_beta
         && supports_manual_interleaved_beta(config.model, config.model)
     {
         pieces.push(config.config.interleaved_thinking_beta.clone());
