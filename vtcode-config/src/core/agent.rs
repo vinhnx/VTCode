@@ -901,6 +901,52 @@ const fn default_checkpointing_max_age_days() -> Option<u64> {
     Some(DEFAULT_MAX_AGE_DAYS)
 }
 
+/// Codex-compatible memories configuration.
+///
+/// Controls whether VT Code extracts durable context from completed threads
+/// and injects it into future sessions. Mirrors the Codex `[memories]` table.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MemoriesConfig {
+    /// Controls whether newly completed threads can be stored as
+    /// memory-generation inputs.
+    #[serde(default = "default_memories_generate")]
+    pub generate_memories: bool,
+
+    /// Controls whether VT Code injects existing memories into future sessions.
+    #[serde(default = "default_memories_use")]
+    pub use_memories: bool,
+
+    /// Overrides the model used for per-thread memory extraction.
+    #[serde(default)]
+    pub extract_model: Option<String>,
+
+    /// Overrides the model used for global memory consolidation.
+    #[serde(default)]
+    pub consolidation_model: Option<String>,
+}
+
+impl Default for MemoriesConfig {
+    fn default() -> Self {
+        Self {
+            generate_memories: default_memories_generate(),
+            use_memories: default_memories_use(),
+            extract_model: None,
+            consolidation_model: None,
+        }
+    }
+}
+
+#[inline]
+const fn default_memories_generate() -> bool {
+    true
+}
+
+#[inline]
+const fn default_memories_use() -> bool {
+    true
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PersistentMemoryConfig {
@@ -923,6 +969,10 @@ pub struct PersistentMemoryConfig {
     /// Startup byte budget scanned from memory_summary.md before VT Code renders a compact startup summary
     #[serde(default = "default_persistent_memory_startup_byte_limit")]
     pub startup_byte_limit: usize,
+
+    /// Codex-compatible memories sub-configuration
+    #[serde(default)]
+    pub memories: MemoriesConfig,
 }
 
 impl Default for PersistentMemoryConfig {
@@ -933,6 +983,7 @@ impl Default for PersistentMemoryConfig {
             directory_override: None,
             startup_line_limit: default_persistent_memory_startup_line_limit(),
             startup_byte_limit: default_persistent_memory_startup_byte_limit(),
+            memories: MemoriesConfig::default(),
         }
     }
 }

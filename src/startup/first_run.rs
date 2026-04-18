@@ -292,6 +292,7 @@ fn apply_selection(
     config.agent.reasoning_effort = reasoning;
     let startup_mode_config = startup_mode_config(startup_mode);
     config.permissions.default_mode = startup_mode_config.permission_mode;
+    config.features.memories = persistent_memory_enabled;
     config.agent.persistent_memory.enabled = persistent_memory_enabled;
     config.agent.theme = defaults::DEFAULT_THEME.to_owned();
     config.agent.max_conversation_turns = defaults::DEFAULT_MAX_CONVERSATION_TURNS;
@@ -384,7 +385,7 @@ fn capability_highlight_lines(persistent_memory_enabled: bool) -> Vec<String> {
         "- Switch modes anytime with `/mode` or `Shift+Tab` to move between Edit, Auto, and Plan.".to_string(),
         "- Auto mode uses classifier-backed permission checks inside the normal session. `--full-auto` is separate and uses the explicit `[automation.full_auto]` allow-list.".to_string(),
         format!(
-            "- Persistent repository memory is {} for this workspace. Change `agent.persistent_memory.enabled` later in `vtcode.toml` if you want a different default.",
+            "- Persistent repository memory is {} for this workspace. Change `[features].memories` or `agent.persistent_memory.enabled` later in `vtcode.toml` if you want a different default.",
             persistent_memory_label(persistent_memory_enabled).to_ascii_lowercase()
         ),
         "- Subagents let you delegate bounded work; use `/agent`, `/agents`, or the Local Agents drawer.".to_string(),
@@ -501,12 +502,14 @@ mod tests {
             true,
         );
 
+        assert!(config.features.memories);
         assert!(config.agent.persistent_memory.enabled);
     }
 
     #[test]
     fn persistent_memory_selection_persists_opt_out() {
         let mut config = base_config();
+        config.features.memories = true;
         config.agent.persistent_memory.enabled = true;
 
         apply_selection(
@@ -519,6 +522,7 @@ mod tests {
             false,
         );
 
+        assert!(!config.features.memories);
         assert!(!config.agent.persistent_memory.enabled);
     }
 

@@ -386,7 +386,7 @@ pub(crate) async fn build_inline_header_context(
 
     let memory_enabled = workspace_signals.memory_enabled.unwrap_or_else(|| {
         vt_cfg
-            .map(|cfg| cfg.agent.persistent_memory.enabled)
+            .map(VTCodeConfig::persistent_memory_enabled)
             .unwrap_or(false)
     });
     let persistent_memory = memory_enabled.then_some(InlineHeaderStatusBadge {

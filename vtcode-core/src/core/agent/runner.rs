@@ -422,9 +422,11 @@ impl AgentRunner {
             Some(&prompt_context),
         )
         .await;
-        if let Some(appendix) =
-            build_instruction_appendix(&session_config.effective().agent, workspace.as_path()).await
-        {
+        let mut appendix_config = session_config.effective().agent.clone();
+        if !session_config.effective().memories_enabled() {
+            appendix_config.persistent_memory.enabled = false;
+        }
+        if let Some(appendix) = build_instruction_appendix(&appendix_config, workspace.as_path()).await {
             system_prompt.push_str("\n\n# INSTRUCTIONS\n");
             system_prompt.push_str(&appendix);
         }

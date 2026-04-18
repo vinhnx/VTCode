@@ -38,10 +38,29 @@ pub struct ProviderConfig {
     pub anthropic: AnthropicConfig,
 }
 
+/// Codex-compatible top-level feature flags.
+///
+/// Maps to `[features]` in `vtcode.toml` (or `~/.vtcode/config.toml`).
+/// When `memories` is true, VT Code can carry useful context from earlier
+/// threads into future work via the persistent memory subsystem.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct FeaturesConfig {
+    /// Master toggle for the memories subsystem.
+    /// When true, VT Code extracts durable context from completed threads
+    /// and injects it into future sessions.
+    #[serde(default)]
+    pub memories: bool,
+}
+
 /// Main configuration structure for VT Code
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {
+    /// Codex-compatible top-level feature flags (`[features]` table).
+    #[serde(default)]
+    pub features: FeaturesConfig,
+
     /// Codex-compatible clickable citation URI scheme.
     #[serde(default)]
     pub file_opener: FileOpener,
@@ -223,6 +242,30 @@ impl VTCodeConfig {
         }
 
         Ok(())
+    }
+
+    /// Returns true when the persistent memory subsystem is enabled.
+    ///
+    /// The top-level `features.memories` flag is the global master switch.
+    /// `agent.persistent_memory.enabled` then enables repository-scoped storage.
+    #[must_use]
+    pub fn persistent_memory_enabled(&self) -> bool {
+        self.features.memories && self.agent.persistent_memory.enabled
+    }
+
+    /// Returns true when the memories subsystem is enabled for injection.
+    ///
+    /// Memories are active when the subsystem is enabled and `memories.use_memories`
+    /// is true.
+    #[must_use]
+    pub fn memories_enabled(&self) -> bool {
+        self.persistent_memory_enabled() && self.agent.persistent_memory.memories.use_memories
+    }
+
+    /// Returns true when completed threads should be stored as memory inputs.
+    #[must_use]
+    pub fn should_generate_memories(&self) -> bool {
+        self.persistent_memory_enabled() && self.agent.persistent_memory.memories.generate_memories
     }
 
     /// Look up a custom provider by its stable key.

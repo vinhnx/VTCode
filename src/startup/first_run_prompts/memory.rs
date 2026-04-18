@@ -6,7 +6,7 @@ use vtcode_tui::ui::interactive_list::SelectionEntry;
 use super::common::{prompt_with_placeholder, run_selection};
 
 pub(crate) fn resolve_initial_persistent_memory_enabled(config: &VTCodeConfig) -> bool {
-    config.agent.persistent_memory.enabled
+    config.persistent_memory_enabled()
 }
 
 pub(crate) fn prompt_persistent_memory(
@@ -125,6 +125,7 @@ mod tests {
     #[test]
     fn resolve_initial_persistent_memory_enabled_reads_config() {
         let mut config = VTCodeConfig::default();
+        config.features.memories = true;
         config.agent.persistent_memory.enabled = true;
 
         assert!(resolve_initial_persistent_memory_enabled(&config));

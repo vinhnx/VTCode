@@ -797,7 +797,7 @@ async fn handle_memory_action(
             let enabled = ctx
                 .vt_cfg
                 .as_ref()
-                .map(|cfg| cfg.agent.persistent_memory.enabled)
+                .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
                 .unwrap_or(true);
             persist_workspace_config_change(ctx, move |root| {
                 set_workspace_memory_enabled(root, !enabled);
@@ -1177,6 +1177,9 @@ fn write_user_directory_override(path: &Path, value: Option<String>) -> Result<(
 }
 
 fn set_workspace_memory_enabled(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
+    let features_table = ensure_child_table(root_table, "features");
+    features_table.insert("memories".to_string(), TomlValue::Boolean(value));
+
     let agent_table = ensure_child_table(root_table, "agent");
     let memory_table = ensure_child_table(agent_table, "persistent_memory");
     memory_table.insert("enabled".to_string(), TomlValue::Boolean(value));

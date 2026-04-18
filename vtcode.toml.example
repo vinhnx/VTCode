@@ -2,6 +2,12 @@
 # Copy this file to vtcode.toml and keep only the overrides you need.
 # This example is intentionally sparse. Defaults are omitted on purpose.
 
+# Feature flags (Codex-compatible)
+[features]
+# Master toggle for the memories subsystem. When true, VT Code extracts
+# durable context from completed threads and injects it into future sessions.
+memories = true
+
 [agent]
 # Replace these values for your provider and API key environment variable.
 provider = "ollama"
@@ -11,6 +17,13 @@ reasoning_effort = "low"
 
 [agent.persistent_memory]
 enabled = true
+
+# Codex-compatible memories sub-configuration
+[agent.persistent_memory.memories]
+generate_memories = true
+use_memories = true
+# extract_model = "gpt-4.1-mini"
+# consolidation_model = "gpt-4.1-mini"
 
 [telemetry]
 atif_enabled = true

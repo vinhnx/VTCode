@@ -117,6 +117,13 @@ fn enabled_memory_config_for(workspace: &Path) -> PersistentMemoryConfig {
     }
 }
 
+fn enabled_vt_memory_config_for(workspace: &Path) -> VTCodeConfig {
+    let mut config = VTCodeConfig::default();
+    config.features.memories = true;
+    config.agent.persistent_memory = enabled_memory_config_for(workspace);
+    config
+}
+
 #[test]
 fn dedup_latest_facts_extracts_user_and_tool_memory() {
     let facts = dedup_latest_facts(&message_history(), 8);
@@ -197,8 +204,7 @@ async fn finalize_persistent_memory_ignores_explicit_memory_prompts() {
     let mut runtime = runtime_config(workspace.path());
     runtime.provider = "missing-provider".to_string();
 
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+    let vt_cfg = enabled_vt_memory_config_for(workspace.path());
 
     let report = finalize_persistent_memory(
         &runtime,
@@ -221,8 +227,7 @@ async fn finalize_persistent_memory_skips_existing_authored_note_duplicates() {
     let mut runtime = runtime_config(workspace.path());
     runtime.provider = "missing-provider".to_string();
 
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+    let vt_cfg = enabled_vt_memory_config_for(workspace.path());
 
     let memory_dir =
         resolve_persistent_memory_dir(&vt_cfg.agent.persistent_memory, workspace.path())
@@ -555,6 +560,7 @@ async fn rebuild_summary_uses_summary_file_not_registry() {
     std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
     let memory_config = enabled_memory_config_for(workspace.path());
     let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.features.memories = true;
     vt_cfg.agent.persistent_memory = memory_config.clone();
 
     let memory_dir = resolve_persistent_memory_dir(&memory_config, workspace.path())
@@ -663,8 +669,7 @@ async fn rebuild_generated_files_include_notes_as_canonical_inputs() {
 async fn remember_plan_persists_normalized_manual_memory_update() {
     let workspace = tempdir().expect("workspace");
     std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+    let vt_cfg = enabled_vt_memory_config_for(workspace.path());
     let plan = MemoryOpPlan {
         kind: MemoryOpKind::Remember,
         facts: vec![MemoryPlannedFact {
@@ -696,8 +701,7 @@ async fn forget_planned_matches_remove_notes_from_memory_files() {
     let workspace = tempdir().expect("workspace");
     std::fs::write(workspace.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
     let runtime = runtime_config(workspace.path());
-    let mut vt_cfg = VTCodeConfig::default();
-    vt_cfg.agent.persistent_memory = enabled_memory_config_for(workspace.path());
+    let vt_cfg = enabled_vt_memory_config_for(workspace.path());
     let remember_plan = MemoryOpPlan {
         kind: MemoryOpKind::Remember,
         facts: vec![MemoryPlannedFact {
@@ -836,12 +840,12 @@ fn cleanup_status_ignores_embedded_remember_word_in_fact() {
 fn resolve_memory_model_route_prefers_explicit_small_model_provider() {
     let workspace = tempdir().expect("workspace");
     let runtime = runtime_config(workspace.path());
-    let mut vt_cfg = VTCodeConfig::default();
+    let mut vt_cfg = enabled_vt_memory_config_for(workspace.path());
     vt_cfg.agent.small_model.enabled = true;
     vt_cfg.agent.small_model.use_for_memory = true;
     vt_cfg.agent.small_model.model = "claude-4-5-haiku".to_string();
 
-    let routes = resolve_memory_model_routes(&runtime, Some(&vt_cfg));
+    let routes = resolve_memory_model_routes(&runtime, Some(&vt_cfg), MemoryPhase::Extract);
 
     assert_eq!(routes.primary.provider_name, "openai");
     assert_eq!(routes.primary.model, ModelId::GPT5Mini.as_str());

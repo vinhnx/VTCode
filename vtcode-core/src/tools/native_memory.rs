@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::{Component, Path, PathBuf};
 
+use crate::config::loader::VTCodeConfig;
 use crate::config::PersistentMemoryConfig;
 use crate::persistent_memory::{
     rebuild_generated_memory_files, resolve_persistent_memory_dir, scaffold_persistent_memory,
@@ -100,6 +101,20 @@ pub async fn execute(
     let root = prepare_root(workspace_root, config).await?;
     let output = execute_request(&root, workspace_root, config, request).await?;
     Ok(Value::String(output))
+}
+
+pub async fn execute_with_vt_config(
+    workspace_root: &Path,
+    vt_cfg: &VTCodeConfig,
+    args: Value,
+) -> Result<Value> {
+    if !vt_cfg.persistent_memory_enabled() {
+        bail!(
+            "Persistent memory is disabled. Enable features.memories and agent.persistent_memory.enabled to use /memories"
+        );
+    }
+
+    execute(workspace_root, &vt_cfg.agent.persistent_memory, args).await
 }
 
 async fn prepare_root(workspace_root: &Path, config: &PersistentMemoryConfig) -> Result<PathBuf> {

@@ -312,8 +312,12 @@ impl AgentRunner {
                     Some(&prompt_context),
                 )
                 .await;
+                let mut appendix_config = config.agent.clone();
+                if !config.memories_enabled() {
+                    appendix_config.persistent_memory.enabled = false;
+                }
                 if let Some(appendix) =
-                    build_instruction_appendix(&config.agent, self._workspace.as_path()).await
+                    build_instruction_appendix(&appendix_config, self._workspace.as_path()).await
                 {
                     prompt.push_str("\n\n# INSTRUCTIONS\n");
                     prompt.push_str(&appendix);

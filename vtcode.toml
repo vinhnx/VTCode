@@ -2,24 +2,34 @@
 # Saved from /config with readable section headings.
 # Every field includes descriptions, defaults, and known choices where available.
 
+# Feature Flags (Codex-compatible)
+# Top-level toggles for optional subsystems.
+[features]
+# Master toggle for the memories subsystem.
+# When true, VT Code extracts durable context from completed threads
+# and injects it into future sessions.
+# Default: false
+# Type: `boolean`
+memories = true
+
 # Agent Defaults
 # Primary model, prompt, and chat behavior.
 [agent]
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "ANTHROPIC_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "claude-opus-4-7"
+default_model = "gpt-oss:120b-cloud"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "anthropic"
+provider = "ollama"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -27,7 +37,7 @@ provider = "anthropic"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "xhigh"
+reasoning_effort = "low"
 
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"

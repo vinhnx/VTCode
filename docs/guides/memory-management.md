@@ -86,6 +86,33 @@ memory/
 - `repository-facts.md` stores grounded repository and tooling facts.
 - `rollout_summaries/` stores per-session evidence summaries before and after consolidation.
 
+### Feature flag
+
+Memories can also be controlled via a Codex-compatible `[features]` table in
+`vtcode.toml`:
+
+```toml
+[features]
+memories = true
+```
+
+When `features.memories` is true **and** `agent.persistent_memory.enabled` is
+true, VT Code carries durable context from completed threads into future
+sessions.  The `[features]` toggle acts as the global master switch; the
+per-repo `agent.persistent_memory.enabled` gates the actual storage layer.
+
+### Memories sub-configuration
+
+The `[agent.persistent_memory.memories]` table provides Codex-compatible
+controls for the extraction and injection pipeline:
+
+| Key | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `generate_memories` | `bool` | `true` | Whether completed threads can be stored as memory-generation inputs. |
+| `use_memories` | `bool` | `true` | Whether existing memories are injected into future sessions. |
+| `extract_model` | `string?` | agent model | Overrides the model used for per-thread memory extraction. |
+| `consolidation_model` | `string?` | agent model | Overrides the model used for global memory consolidation. |
+
 ### Startup behavior
 
 Persistent memory is disabled by default. Enable it with `/config memory` or by setting `agent.persistent_memory.enabled = true`.

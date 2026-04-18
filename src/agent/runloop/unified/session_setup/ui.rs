@@ -919,7 +919,7 @@ fn load_persistent_memory_status(
         return Ok(None);
     };
     let memory_config = &vt_cfg.agent.persistent_memory;
-    if !memory_config.enabled {
+    if !vt_cfg.persistent_memory_enabled() {
         return Ok(None);
     }
 

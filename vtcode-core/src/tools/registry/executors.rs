@@ -183,7 +183,7 @@ impl ToolRegistry {
             let config = ConfigManager::load_from_workspace(&workspace_root)
                 .map(|manager| manager.config().clone())
                 .unwrap_or_default();
-            native_memory::execute(&workspace_root, &config.agent.persistent_memory, args).await
+            native_memory::execute_with_vt_config(&workspace_root, &config, args).await
         })
     }
 

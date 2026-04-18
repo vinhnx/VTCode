@@ -97,7 +97,7 @@ pub(crate) async fn handle_memory_prompt(
             if !ctx
                 .vt_cfg
                 .as_ref()
-                .map(|cfg| cfg.agent.persistent_memory.enabled)
+                .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
                 .unwrap_or(true)
             {
                 respond_to_memory_prompt(
@@ -177,7 +177,7 @@ pub(crate) async fn handle_memory_prompt(
             if !ctx
                 .vt_cfg
                 .as_ref()
-                .map(|cfg| cfg.agent.persistent_memory.enabled)
+                .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
                 .unwrap_or(true)
             {
                 respond_to_memory_prompt(

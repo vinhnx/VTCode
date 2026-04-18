@@ -258,6 +258,15 @@ struct MemorySummaryResponse {
     bullets: Vec<String>,
 }
 
+/// Distinguishes memory LLM call phases for model override routing.
+#[derive(Debug, Clone, Copy)]
+enum MemoryPhase {
+    /// Per-thread fact extraction and classification.
+    Extract,
+    /// Global consolidation and summary generation.
+    Consolidate,
+}
+
 #[derive(Debug, Clone)]
 struct MemoryModelRoute {
     provider_name: String,
@@ -606,14 +615,20 @@ pub async fn read_persistent_memory_excerpt(
     }))
 }
 
+pub async fn read_persistent_memory_excerpt_for_config(
+    vt_cfg: Option<&VTCodeConfig>,
+    workspace_root: &Path,
+) -> Result<Option<PersistentMemoryExcerpt>> {
+    let config = effective_persistent_memory_config(vt_cfg);
+    read_persistent_memory_excerpt(&config, workspace_root).await
+}
+
 pub async fn finalize_persistent_memory(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     history: &[Message],
 ) -> Result<Option<PersistentMemoryWriteReport>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_generated_memory_config(vt_cfg);
     if !config.enabled || !config.auto_write {
         return Ok(None);
     }
@@ -641,9 +656,7 @@ pub async fn rebuild_persistent_memory_summary(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<Option<PersistentMemoryWriteReport>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled {
         return Ok(None);
     }
@@ -761,9 +774,7 @@ pub async fn cleanup_persistent_memory(
     vt_cfg: Option<&VTCodeConfig>,
     include_summary_only_signals: bool,
 ) -> Result<Option<PersistentMemoryCleanupReport>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled {
         return Ok(None);
     }
@@ -868,9 +879,7 @@ pub async fn plan_remember_persistent_memory(
     request: &str,
     supplemental_answer: Option<&str>,
 ) -> Result<Option<MemoryOpPlan>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled {
         return Ok(None);
     }
@@ -893,9 +902,7 @@ pub async fn persist_remembered_memory_plan(
     vt_cfg: Option<&VTCodeConfig>,
     plan: &MemoryOpPlan,
 ) -> Result<Option<PersistentMemoryWriteReport>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled || plan.kind != MemoryOpKind::Remember {
         return Ok(None);
     }
@@ -919,9 +926,7 @@ pub async fn plan_forget_persistent_memory(
     request: &str,
     candidates: &[MemoryOpCandidate],
 ) -> Result<Option<MemoryOpPlan>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled {
         return Ok(None);
     }
@@ -945,9 +950,7 @@ pub async fn forget_planned_persistent_memory_matches(
     candidates: &[MemoryOpCandidate],
     plan: &MemoryOpPlan,
 ) -> Result<Option<PersistentMemoryForgetReport>> {
-    let config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let config = effective_persistent_memory_config(vt_cfg);
     if !config.enabled || plan.kind != MemoryOpKind::Forget {
         return Ok(None);
     }
@@ -1950,10 +1953,10 @@ async fn classify_facts_strict(
 /// Try a memory LLM operation with primary route, falling back to the fallback route on error.
 /// This macro expands to the full routing/fallback pattern used by all memory LLM calls.
 macro_rules! try_with_memory_routes {
-    ($runtime_config:expr, $vt_cfg:expr, $workspace_root:expr, $provider_fn:expr) => {
+    ($runtime_config:expr, $vt_cfg:expr, $workspace_root:expr, $phase:expr, $provider_fn:expr) => {
         async {
             let __rt_cfg: &RuntimeAgentConfig = $runtime_config;
-            let __routes = resolve_memory_model_routes(__rt_cfg, $vt_cfg);
+            let __routes = resolve_memory_model_routes(__rt_cfg, $vt_cfg, $phase);
             log_memory_route_warning(&__routes);
 
             let __provider = create_memory_provider(&__routes.primary, __rt_cfg, $vt_cfg)?;
@@ -1986,7 +1989,7 @@ async fn classify_facts_with_llm(
 ) -> Result<ClassifiedFacts> {
     let rt_cfg = runtime_config
         .ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
-    try_with_memory_routes!(rt_cfg, vt_cfg, workspace_root, |provider, route| {
+    try_with_memory_routes!(rt_cfg, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
         classify_facts_with_provider(provider, route, workspace_root, candidates)
     })
     .await
@@ -2102,7 +2105,7 @@ async fn summarize_memory(
     notes: &[MemoryNoteSummary],
 ) -> Option<String> {
     let runtime_config = runtime_config?;
-    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, |provider, route| {
+    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Consolidate, |provider, route| {
         summarize_memory_with_provider(
             provider,
             route,
@@ -2181,7 +2184,7 @@ async fn plan_memory_operation(
     supplemental_answer: Option<&str>,
     candidates: &[MemoryOpCandidate],
 ) -> Result<MemoryOpPlan> {
-    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, |provider, route| {
+    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
         plan_memory_operation_with_provider(
             provider,
             route,
@@ -2370,6 +2373,24 @@ fn selected_memory_candidates(
     Ok(selected)
 }
 
+fn effective_persistent_memory_config(vt_cfg: Option<&VTCodeConfig>) -> PersistentMemoryConfig {
+    let mut config = vt_cfg
+        .map(|cfg| cfg.agent.persistent_memory.clone())
+        .unwrap_or_default();
+    if let Some(cfg) = vt_cfg {
+        config.enabled = cfg.persistent_memory_enabled();
+    }
+    config
+}
+
+fn effective_generated_memory_config(vt_cfg: Option<&VTCodeConfig>) -> PersistentMemoryConfig {
+    let mut config = effective_persistent_memory_config(vt_cfg);
+    if let Some(cfg) = vt_cfg {
+        config.enabled = cfg.should_generate_memories();
+    }
+    config
+}
+
 fn facts_for_prompt(facts: &[GroundedFactRecord]) -> String {
     if facts.is_empty() {
         return "- none".to_string();
@@ -2405,9 +2426,23 @@ fn notes_for_prompt(notes: &[MemoryNoteSummary]) -> String {
 fn resolve_memory_model_routes(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
+    phase: MemoryPhase,
 ) -> ResolvedMemoryRoutes {
-    let resolution =
-        resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
+    // Check for a phase-specific model override from MemoriesConfig.
+    let model_override = vt_cfg.and_then(|cfg| {
+        let memories = &cfg.agent.persistent_memory.memories;
+        match phase {
+            MemoryPhase::Extract => memories.extract_model.as_deref(),
+            MemoryPhase::Consolidate => memories.consolidation_model.as_deref(),
+        }
+    });
+
+    let resolution = resolve_lightweight_route(
+        runtime_config,
+        vt_cfg,
+        LightweightFeature::Memory,
+        model_override,
+    );
     let primary = memory_model_route_from_resolution(&resolution.primary, runtime_config, vt_cfg);
     let fallback = resolution
         .fallback

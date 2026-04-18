@@ -63,7 +63,7 @@ pub use core::{
     AuthConfig, AutoModeConfig, AutoModeEnvironmentConfig, AutomationConfig, BundledSkillsConfig,
     CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig, DockerSandboxConfig,
     EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
-    MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
+    MemoriesConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
     OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
     OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
     OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIManualCompactionConfig,
@@ -92,9 +92,9 @@ pub use loader::layers::{
     ConfigLayerStack, LayerDisabledReason,
 };
 pub use loader::{
-    ConfigBuilder, ConfigManager, ConfigWatcher, SimpleConfigWatcher, SyntaxHighlightingConfig,
-    VTCodeConfig, fingerprint_str, fingerprint_toml_value, merge_toml_values,
-    merge_toml_values_with_origins,
+    ConfigBuilder, ConfigManager, ConfigWatcher, FeaturesConfig, SimpleConfigWatcher,
+    SyntaxHighlightingConfig, VTCodeConfig, fingerprint_str, fingerprint_toml_value,
+    merge_toml_values, merge_toml_values_with_origins,
 };
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
