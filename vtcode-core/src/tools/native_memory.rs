@@ -3,8 +3,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::{Component, Path, PathBuf};
 
-use crate::config::loader::VTCodeConfig;
 use crate::config::PersistentMemoryConfig;
+use crate::config::loader::VTCodeConfig;
 use crate::persistent_memory::{
     rebuild_generated_memory_files, resolve_persistent_memory_dir, scaffold_persistent_memory,
 };

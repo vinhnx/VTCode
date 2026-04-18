@@ -155,13 +155,15 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
                 };
             }
 
-            if let Some(additional_properties) = map.get_mut("additionalProperties")
-                && !matches!(additional_properties, Value::Bool(_))
-            {
-                *additional_properties = sanitize_openai_schema_node(
-                    parse_tool_input_schema(additional_properties),
-                    strip_any_of,
-                );
+            if let Some(additional_properties) = map.get_mut("additionalProperties") {
+                if matches!(additional_properties, Value::Bool(true)) {
+                    *additional_properties = json!({ "type": "string" });
+                } else if !matches!(additional_properties, Value::Bool(_)) {
+                    *additional_properties = sanitize_openai_schema_node(
+                        parse_tool_input_schema(additional_properties),
+                        strip_any_of,
+                    );
+                }
             }
 
             if let Some(any_of) = map.get_mut("anyOf") {

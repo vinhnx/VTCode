@@ -15,7 +15,7 @@ use crate::llm::provider::{
 
 use super::capabilities::{
     adaptive_thinking_is_default, allowed_efforts_for_model, claude_thinking_profile,
-    effort_allowed_for_model, resolve_model_name, supports_effort,
+    effort_allowed_for_model, resolve_model_name, supports_assistant_prefill, supports_effort,
     supports_manual_interleaved_beta, supports_manual_thinking_budget, supports_structured_output,
     supports_task_budget,
 };
@@ -153,12 +153,15 @@ pub fn validate_request(
         validate_reasoning_constraints(request, default_model, anthropic_config)?;
     }
 
-    if request.prefill.is_some()
-        && resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+    if request_uses_assistant_prefill(request)
+        && !supports_assistant_prefill(resolved_model, default_model)
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Pre-filling assistant responses is not supported by Claude Opus 4.7.",
+            &format!(
+                "{} does not support assistant-message prefills. Use system instructions or structured outputs instead.",
+                resolved_model
+            ),
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -183,10 +186,10 @@ pub fn validate_request(
         });
     }
 
-    if request.prefill.is_some() && thinking_active {
+    if request_uses_assistant_prefill(request) && thinking_active {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Pre-filling assistant responses is not supported when extended thinking is enabled. Use 'prefill' only for non-reasoning requests.",
+            "Assistant-message prefills are not supported when thinking is enabled. Use system instructions instead.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -194,10 +197,10 @@ pub fn validate_request(
         });
     }
 
-    if request.prefill.is_some() && request.output_format.is_some() {
+    if request_uses_assistant_prefill(request) && request.output_format.is_some() {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Pre-filling assistant responses is not supported when structured outputs are enabled.",
+            "Assistant-message prefills are not supported when structured outputs are enabled.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,
@@ -297,6 +300,15 @@ fn resolve_effective_thinking_mode(
             }
         }
     }
+}
+
+fn request_uses_assistant_prefill(request: &LLMRequest) -> bool {
+    request.prefill.is_some()
+        || request
+            .coding_agent_settings
+            .as_ref()
+            .is_some_and(|settings| settings.prefill_thought)
+        || (request.character_reinforcement && request.character_name.is_some())
 }
 
 fn effective_manual_thinking_budget_override(request: &LLMRequest) -> Option<u32> {

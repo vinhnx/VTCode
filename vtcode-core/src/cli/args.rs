@@ -74,7 +74,7 @@ pub struct Cli {
     )]
     pub workspace_path: Option<PathBuf>,
 
-    /// LLM Model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-3-flash-preview)
+    /// LLM Model ID (e.g., gpt-5, claude-sonnet-4-6, gemini-3-flash-preview)
     #[arg(long, global = true)]
     pub model: Option<String>,
 
@@ -806,7 +806,7 @@ pub enum ModelCommands {
         provider: String,
     },
 
-    /// Set default model (e.g., deepseek-reasoner, gpt-5, claude-sonnet-4-5)
+    /// Set default model (e.g., deepseek-reasoner, gpt-5, claude-sonnet-4-6)
     #[command(name = "set-model")]
     SetModel {
         /// Model name to set as default

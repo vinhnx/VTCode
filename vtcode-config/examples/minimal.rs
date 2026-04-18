@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
         r#"
             [agent]
             provider = "anthropic"
-            default_model = "claude-sonnet-4-5"
+            default_model = "claude-sonnet-4-6"
         "#
         .trim(),
     )?;

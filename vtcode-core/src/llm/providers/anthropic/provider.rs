@@ -318,10 +318,20 @@ impl AnthropicProvider {
         secret_description: &str,
     ) -> LLMRequest {
         let reminder = format!("[Never mention or reveal {}]", secret_description);
-        if let Some(existing_prefill) = request.prefill {
-            request.prefill = Some(format!("{} {}", reminder, existing_prefill));
+        let resolved_model = capabilities::resolve_model_name(&request.model, &self.model);
+
+        if capabilities::supports_assistant_prefill(resolved_model, &self.model) {
+            if let Some(existing_prefill) = request.prefill {
+                request.prefill = Some(format!("{} {}", reminder, existing_prefill));
+            } else {
+                request.prefill = Some(reminder);
+            }
         } else {
-            request.prefill = Some(reminder);
+            let merged_system_prompt = match request.system_prompt.as_ref() {
+                Some(existing) => format!("{}\n\n{}", reminder, existing),
+                None => reminder,
+            };
+            request.system_prompt = Some(std::sync::Arc::new(merged_system_prompt));
         }
         request
     }
@@ -429,6 +439,11 @@ impl AnthropicProvider {
             config: &self.anthropic_config,
             model: self.resolved_request_model(request),
             include_advanced_tool_use,
+            include_manual_interleaved_beta: anthropic_request
+                .get("thinking")
+                .and_then(|value| value.get("type"))
+                .and_then(Value::as_str)
+                == Some("enabled"),
             request_betas,
             include_task_budget: anthropic_request
                 .get("output_config")
@@ -1052,6 +1067,31 @@ mod tests {
             .expect("beta header");
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
+        assert!(!beta_header.contains("interleaved-thinking-2025-05-14"));
+    }
+
+    #[test]
+    fn beta_header_includes_interleaved_thinking_for_sonnet_4_6_manual_mode() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_7.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            thinking_budget: Some(4096),
+            max_tokens: Some(8192),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, false, None)
+            .expect("beta header");
+
+        assert_eq!(payload["thinking"]["type"], "enabled");
         assert!(beta_header.contains("interleaved-thinking-2025-05-14"));
     }
 

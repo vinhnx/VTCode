@@ -65,7 +65,7 @@ The AI provider that VT Code should use.
 ```toml
 [agent]
 provider = "anthropic"  # available: openai, anthropic, google, together, fireworks, ollama
-default_model = "claude-sonnet-4-5"  # overrides the default model for the selected provider
+default_model = "claude-sonnet-4-6"  # overrides the default model for the selected provider
 ```
 
 ### agent.provider_settings

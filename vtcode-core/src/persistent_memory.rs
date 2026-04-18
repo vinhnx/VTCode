@@ -1989,9 +1989,15 @@ async fn classify_facts_with_llm(
 ) -> Result<ClassifiedFacts> {
     let rt_cfg = runtime_config
         .ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
-    try_with_memory_routes!(rt_cfg, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
-        classify_facts_with_provider(provider, route, workspace_root, candidates)
-    })
+    try_with_memory_routes!(
+        rt_cfg,
+        vt_cfg,
+        workspace_root,
+        MemoryPhase::Extract,
+        |provider, route| {
+            classify_facts_with_provider(provider, route, workspace_root, candidates)
+        }
+    )
     .await
 }
 
@@ -2105,16 +2111,22 @@ async fn summarize_memory(
     notes: &[MemoryNoteSummary],
 ) -> Option<String> {
     let runtime_config = runtime_config?;
-    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Consolidate, |provider, route| {
-        summarize_memory_with_provider(
-            provider,
-            route,
-            workspace_root,
-            preferences,
-            repository_facts,
-            notes,
-        )
-    })
+    try_with_memory_routes!(
+        runtime_config,
+        vt_cfg,
+        workspace_root,
+        MemoryPhase::Consolidate,
+        |provider, route| {
+            summarize_memory_with_provider(
+                provider,
+                route,
+                workspace_root,
+                preferences,
+                repository_facts,
+                notes,
+            )
+        }
+    )
     .await
     .ok()
 }
@@ -2184,17 +2196,23 @@ async fn plan_memory_operation(
     supplemental_answer: Option<&str>,
     candidates: &[MemoryOpCandidate],
 ) -> Result<MemoryOpPlan> {
-    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
-        plan_memory_operation_with_provider(
-            provider,
-            route,
-            workspace_root,
-            expected_kind.clone(),
-            request,
-            supplemental_answer,
-            candidates,
-        )
-    })
+    try_with_memory_routes!(
+        runtime_config,
+        vt_cfg,
+        workspace_root,
+        MemoryPhase::Extract,
+        |provider, route| {
+            plan_memory_operation_with_provider(
+                provider,
+                route,
+                workspace_root,
+                expected_kind.clone(),
+                request,
+                supplemental_answer,
+                candidates,
+            )
+        }
+    )
     .await
 }
 

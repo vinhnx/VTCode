@@ -1,10 +1,12 @@
+import argparse
 import json
+import os
 import subprocess
 import time
-import os
-import argparse
 from datetime import datetime
-from metrics import ExactMatch, LLMGrader, CodeValidity
+
+from metrics import CodeValidity, ExactMatch, LLMGrader
+
 
 def load_env():
     """Manually load .env file if it exists."""
@@ -125,7 +127,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="vtcode Empirical Evaluation Engine")
     parser.add_argument("--cases", default="evals/test_cases.json", help="Path to test cases JSON")
     parser.add_argument("--provider", default="anthropic", help="LLM provider")
-    parser.add_argument("--model", default="claude-sonnet-4-5", help="Model to evaluate")
+    parser.add_argument("--model", default="claude-sonnet-4-6", help="Model to evaluate")
     args = parser.parse_args()
 
     engine = EvaluationEngine(provider=args.provider, model=args.model)
@@ -149,6 +151,6 @@ if __name__ == "__main__":
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
 
-    print(f"\nEvaluation Complete!")
+    print("\nEvaluation Complete!")
     print(f"Passed: {report['summary']['passed']}/{report['summary']['total']}")
     print(f"Report saved to: {report_path}")

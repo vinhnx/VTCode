@@ -196,6 +196,14 @@ pub(crate) fn supports_manual_interleaved_beta(model: &str, default_model: &str)
         .is_some_and(|profile| profile.manual_interleaved_beta)
 }
 
+pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bool {
+    let requested = resolve_model_name(model, default_model);
+
+    !(matches_model(requested, models::anthropic::CLAUDE_OPUS_4_6)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7)
+        || matches_model(requested, models::anthropic::CLAUDE_SONNET_4_6))
+}
+
 pub(crate) fn adaptive_thinking_is_default(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model)
         .is_some_and(|profile| profile.default_thinking_enabled)

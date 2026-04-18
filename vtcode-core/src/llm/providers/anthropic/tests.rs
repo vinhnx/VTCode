@@ -369,6 +369,54 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_validate_opus_4_6_rejects_prefill() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            prefill: Some("{".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_sonnet_4_6_rejects_prefill_without_thinking() {
+        let config = AnthropicConfig {
+            extended_thinking_enabled: false,
+            ..AnthropicConfig::default()
+        };
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            prefill: Some("{".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_sonnet_4_6_rejects_prefill_thought_without_thinking() {
+        let config = AnthropicConfig {
+            extended_thinking_enabled: false,
+            ..AnthropicConfig::default()
+        };
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            coding_agent_settings: Some(Box::new(crate::llm::provider::CodingAgentSettings {
+                prefill_thought: true,
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
     fn test_validate_opus_4_6_requires_budget_below_max_tokens() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
@@ -571,6 +619,10 @@ mod response_parser_tests {
         assert!(matches!(
             parse_finish_reason("refusal"),
             FinishReason::Refusal
+        ));
+        assert!(matches!(
+            parse_finish_reason("model_context_window_exceeded"),
+            FinishReason::Length
         ));
     }
 
