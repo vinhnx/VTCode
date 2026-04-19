@@ -31,6 +31,8 @@ pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
 pub const PLAN_MODE_PLAN_QUALITY_LINE: &str = "Explore repository facts first, ask only material blocking questions, keep planning read-only, and emit exactly one decision-complete `<proposed_plan>` block with a summary, implementation steps, test cases, and assumptions/defaults. If something is still unresolved, end with `Next open decision: ...`.";
 /// Shared Plan Mode policy line requiring context-aware interview closure before final plans.
 pub const PLAN_MODE_INTERVIEW_POLICY_LINE: &str = "In Plan Mode, prefer model-generated `request_user_input` interview questions informed by discovered repository context, keep custom notes/free-form responses available as first-class input, and continue interviewing until material scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
+/// Shared Plan Mode policy line for runtimes where `request_user_input` is unavailable.
+pub const PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE: &str = "In this runtime, `request_user_input` is unavailable. In Plan Mode, continue exploring repository facts in read-only mode, finish any unblocked planning work, and surface material blockers explicitly in plain text instead of emitting interview tool calls.";
 /// Shared Plan Mode guard line requiring explicit transition from planning to execution.
 pub const PLAN_MODE_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Plan Mode just because a plan exists; wait for explicit implementation intent.";
 /// Shared Plan Mode task-tracking line clarifying availability and aliasing.
