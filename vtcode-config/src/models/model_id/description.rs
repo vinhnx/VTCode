@@ -154,6 +154,31 @@ impl ModelId {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }
             ModelId::MoonshotKimiK25 => "Kimi K2.5 - Moonshot.ai's flagship reasoning model",
+            ModelId::OpenCodeZenGPT54 => {
+                "OpenCode Zen flagship GPT-5.4 route using OpenCode's curated pay-as-you-go gateway"
+            }
+            ModelId::OpenCodeZenGPT54Mini => {
+                "Lower-cost OpenCode Zen GPT-5.4 Mini option for faster and cheaper tasks"
+            }
+            ModelId::OpenCodeZenClaudeSonnet46 => {
+                "Claude Sonnet 4.6 served through OpenCode Zen's curated Anthropic endpoint"
+            }
+            ModelId::OpenCodeZenGlm51 => {
+                "GLM-5.1 served through OpenCode Zen for lower-cost reasoning and coding work"
+            }
+            ModelId::OpenCodeZenKimiK25 => {
+                "Kimi K2.5 served through OpenCode Zen's curated open-model gateway"
+            }
+            ModelId::OpenCodeGoGlm51 => {
+                "GLM-5.1 included with the OpenCode Go subscription for open-model coding workflows"
+            }
+            ModelId::OpenCodeGoKimiK25 => "Kimi K2.5 included with the OpenCode Go subscription",
+            ModelId::OpenCodeGoMinimaxM25 => {
+                "MiniMax-M2.5 included with the OpenCode Go subscription"
+            }
+            ModelId::OpenCodeGoMinimaxM27 => {
+                "MiniMax-M2.7 included with the OpenCode Go subscription for stronger agentic coding"
+            }
             ModelId::HuggingFaceDeepseekV32 => {
                 "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
             }

@@ -53,6 +53,15 @@ impl ModelId {
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK25 => Provider::Moonshot,
+            ModelId::OpenCodeZenGPT54
+            | ModelId::OpenCodeZenGPT54Mini
+            | ModelId::OpenCodeZenClaudeSonnet46
+            | ModelId::OpenCodeZenGlm51
+            | ModelId::OpenCodeZenKimiK25 => Provider::OpenCodeZen,
+            ModelId::OpenCodeGoGlm51
+            | ModelId::OpenCodeGoKimiK25
+            | ModelId::OpenCodeGoMinimaxM25
+            | ModelId::OpenCodeGoMinimaxM27 => Provider::OpenCodeGo,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud

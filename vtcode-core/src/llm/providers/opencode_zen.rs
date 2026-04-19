@@ -3,25 +3,26 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use crate::config::models::model_catalog_entry;
 use crate::llm::client::LLMClient;
-use crate::llm::error_display;
-use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-};
+use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use crate::llm::types as llm_types;
-use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use serde_json::{Map, Value};
 
-use super::common::{
-    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format,
-};
-use super::error_handling::handle_openai_http_error;
+use super::common::{override_base_url, resolve_model};
+use super::opencode_shared::OpenCodeCompatibleProvider;
+use super::{AnthropicProvider, OpenAIProvider};
 
 const PROVIDER_NAME: &str = "OpenCode Zen";
 const PROVIDER_KEY: &str = "opencode-zen";
+const API_KEY_ENV: &str = "OPENCODE_ZEN_API_KEY";
+
+enum ZenProtocol {
+    OpenAI,
+    Anthropic,
+    OpenAICompatible,
+}
 
 pub struct OpenCodeZenProvider {
     api_key: String,
@@ -31,6 +32,14 @@ pub struct OpenCodeZenProvider {
 }
 
 impl OpenCodeZenProvider {
+    fn normalize_model(model: &str) -> &str {
+        model
+            .trim()
+            .strip_prefix("opencode/")
+            .or_else(|| model.trim().strip_prefix("opencode-zen/"))
+            .unwrap_or(model.trim())
+    }
+
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
@@ -56,7 +65,7 @@ impl OpenCodeZenProvider {
             api_key,
             http_client,
             base_url,
-            model,
+            model: Self::normalize_model(&model).to_string(),
         }
     }
 
@@ -100,221 +109,150 @@ impl OpenCodeZenProvider {
                 base_url,
                 Some(env_vars::OPENCODE_ZEN_BASE_URL),
             ),
-            model,
+            model: Self::normalize_model(&model).to_string(),
         }
     }
 
-    fn convert_to_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::new();
-
-        payload.insert("model".to_owned(), Value::String(request.model.clone()));
-        payload.insert(
-            "messages".to_owned(),
-            Value::Array(serialize_messages_openai_format(request, PROVIDER_KEY)?),
-        );
-
-        if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                "max_tokens".to_owned(),
-                Value::Number(serde_json::Number::from(max_tokens as u64)),
-            );
+    fn requested_model<'a>(&'a self, model: &'a str) -> &'a str {
+        if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            Self::normalize_model(model)
         }
+    }
 
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest {
-                        message: "Invalid temperature value".to_string(),
-                        metadata: None,
-                    },
-                )?),
-            );
+    fn catalog_entry(&self, model: &str) -> Option<vtcode_config::models::ModelCatalogEntry> {
+        model_catalog_entry(PROVIDER_KEY, self.requested_model(model))
+    }
+
+    fn protocol_for_model(model: &str) -> ZenProtocol {
+        if models::opencode_zen::OPENAI_MODELS.contains(&model) {
+            ZenProtocol::OpenAI
+        } else if models::opencode_zen::ANTHROPIC_MODELS.contains(&model) {
+            ZenProtocol::Anthropic
+        } else {
+            ZenProtocol::OpenAICompatible
         }
+    }
 
-        if request.stream {
-            payload.insert("stream".to_string(), Value::Bool(true));
+    fn delegate_for_model(&self, model: &str) -> Box<dyn LLMProvider> {
+        let requested = self.requested_model(model).to_string();
+        match Self::protocol_for_model(requested.as_str()) {
+            ZenProtocol::OpenAI => Box::new(OpenAIProvider::new_with_client(
+                self.api_key.clone(),
+                None,
+                requested,
+                self.http_client.clone(),
+                self.base_url.clone(),
+                TimeoutsConfig::default(),
+            )),
+            ZenProtocol::Anthropic => Box::new(AnthropicProvider::new_with_client(
+                self.api_key.clone(),
+                requested,
+                self.http_client.clone(),
+                self.base_url.clone(),
+                TimeoutsConfig::default(),
+            )),
+            ZenProtocol::OpenAICompatible => Box::new(OpenCodeCompatibleProvider::new(
+                PROVIDER_NAME,
+                PROVIDER_KEY,
+                API_KEY_ENV,
+                self.api_key.clone(),
+                self.http_client.clone(),
+                self.base_url.clone(),
+                requested,
+                models::opencode_zen::SUPPORTED_MODELS,
+            )),
         }
-
-        // Add tools if present
-        if let Some(tools) = &request.tools
-            && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
-        {
-            payload.insert("tools".to_string(), Value::Array(serialized_tools));
-        }
-
-        if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_string(),
-                choice.to_provider_format(PROVIDER_KEY),
-            );
-        }
-
-        Ok(Value::Object(payload))
     }
 }
 
 #[async_trait]
 impl LLMProvider for OpenCodeZenProvider {
     fn name(&self) -> &str {
-        "opencode-zen"
+        PROVIDER_KEY
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_streaming(&self) -> bool {
+        true
     }
 
-    fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        false
+    fn supports_non_streaming(&self, model: &str) -> bool {
+        self.delegate_for_model(model)
+            .supports_non_streaming(self.requested_model(model))
+    }
+
+    fn supports_reasoning(&self, model: &str) -> bool {
+        self.catalog_entry(model)
+            .map(|entry| entry.reasoning)
+            .unwrap_or_else(|| {
+                self.delegate_for_model(model)
+                    .supports_reasoning(self.requested_model(model))
+            })
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        match Self::protocol_for_model(self.requested_model(model)) {
+            ZenProtocol::OpenAI | ZenProtocol::Anthropic => self
+                .delegate_for_model(model)
+                .supports_reasoning_effort(self.requested_model(model)),
+            ZenProtocol::OpenAICompatible => false,
+        }
+    }
+
+    fn supports_tools(&self, model: &str) -> bool {
+        self.catalog_entry(model)
+            .map(|entry| entry.tool_call)
+            .unwrap_or(true)
+    }
+
+    fn supports_structured_output(&self, model: &str) -> bool {
+        self.catalog_entry(model)
+            .map(|entry| entry.structured_output)
+            .unwrap_or(false)
+    }
+
+    fn supports_context_caching(&self, model: &str) -> bool {
+        self.catalog_entry(model)
+            .map(|entry| entry.caching)
+            .unwrap_or(false)
+    }
+
+    fn supports_vision(&self, model: &str) -> bool {
+        self.catalog_entry(model)
+            .map(|entry| entry.vision)
+            .unwrap_or(false)
+    }
+
+    fn effective_context_size(&self, model: &str) -> usize {
+        self.catalog_entry(model)
+            .map(|entry| entry.context_window)
+            .filter(|value| *value > 0)
+            .unwrap_or(128_000)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
+        } else {
+            request.model = self.requested_model(&request.model).to_string();
         }
-        let model = request.model.clone();
-
-        let payload = self.convert_to_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
+        self.validate_request(&request)?;
+        self.delegate_for_model(&request.model)
+            .generate(request)
             .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, "OPENCODE_ZEN_API_KEY").await?;
-
-        let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
-
-        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
-            response_json,
-            PROVIDER_NAME,
-            model,
-            false,
-            None,
-        )
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
+        } else {
+            request.model = self.requested_model(&request.model).to_string();
         }
-        let model = request.model.clone();
-
         self.validate_request(&request)?;
-        request.stream = true;
-
-        let payload = self.convert_to_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
+        self.delegate_for_model(&request.model)
+            .stream(request)
             .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
-        let response =
-            handle_openai_http_error(response, PROVIDER_NAME, "OPENCODE_ZEN_API_KEY").await?;
-
-        let bytes_stream = response.bytes_stream();
-        let (event_tx, event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
-        let tx = event_tx.clone();
-
-        let model_clone = model.clone();
-        tokio::spawn(async move {
-            let mut aggregator =
-                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
-
-            let result = crate::llm::providers::shared::process_openai_stream(
-                bytes_stream,
-                PROVIDER_NAME,
-                model_clone,
-                |value| {
-                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
-                        && let Some(choice) = choices.first()
-                    {
-                        if let Some(delta) = choice.get("delta") {
-                            // Handle regular content
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                for event in aggregator.handle_content(content) {
-                                    let _ = tx.send(Ok(event));
-                                }
-                            }
-                        }
-
-                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                            aggregator.set_finish_reason(map_finish_reason_common(reason));
-                        }
-                    }
-
-                    if let Some(_usage_value) = value.get("usage")
-                        && let Some(usage) =
-                            crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                    {
-                        aggregator.set_usage(usage);
-                    }
-                    Ok(())
-                },
-            )
-            .await;
-
-            match result {
-                Ok(_) => {
-                    let response = aggregator.finalize();
-                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(response),
-                    }));
-                }
-                Err(err) => {
-                    let _ = tx.send(Err(err));
-                }
-            }
-        });
-
-        let stream = try_stream! {
-            let mut receiver = event_rx;
-            while let Some(event) = receiver.recv().await {
-                yield event?;
-            }
-        };
-
-        Ok(Box::pin(stream))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -325,13 +263,18 @@ impl LLMProvider for OpenCodeZenProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        let mut normalized = request.clone();
+        if !normalized.model.trim().is_empty() {
+            normalized.model = self.requested_model(&normalized.model).to_string();
+        }
+
         let supported_models = models::opencode_zen::SUPPORTED_MODELS
             .iter()
             .map(|model| model.to_string())
             .collect::<Vec<_>>();
 
         super::common::validate_request_common(
-            request,
+            &normalized,
             PROVIDER_NAME,
             PROVIDER_KEY,
             Some(&supported_models),
@@ -347,7 +290,7 @@ impl LLMClient for OpenCodeZenProvider {
             model: self.model.clone(),
             ..Default::default()
         };
-        Ok(LLMProvider::generate(self, request).await?)
+        LLMProvider::generate(self, request).await
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {

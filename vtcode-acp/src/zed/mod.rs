@@ -58,6 +58,7 @@ mod tests {
     use tokio::fs;
     use tokio::sync::mpsc;
     use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::{ModelId, Provider};
     use vtcode_core::config::types::{
         AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
         UiSurfacePreference,
@@ -357,6 +358,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
+        let anthropic_default = ModelId::default_single_for_provider(Provider::Anthropic).as_str();
 
         let response = agent
             .set_session_config_option(SetSessionConfigOptionRequest::new(
@@ -369,7 +371,7 @@ mod tests {
 
         let session = agent.session_handle(&session_id).unwrap();
         assert_eq!(session.data.borrow().provider, "anthropic");
-        assert_eq!(session.data.borrow().model, "claude-opus-4-6");
+        assert_eq!(session.data.borrow().model, anthropic_default);
         assert!(response.config_options.iter().any(|option| {
             option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
                 && matches!(
@@ -385,7 +387,7 @@ mod tests {
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("claude-opus-4-6")
+                            == agent_client_protocol::SessionConfigValueId::new(anthropic_default)
                 )
         }));
     }

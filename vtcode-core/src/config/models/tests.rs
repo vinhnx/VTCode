@@ -44,6 +44,15 @@ fn test_model_string_conversion() {
     );
     // Z.AI models
     assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
+    // OpenCode models
+    assert_eq!(
+        ModelId::OpenCodeZenGPT54.as_str(),
+        models::opencode_zen::GPT_5_4
+    );
+    assert_eq!(
+        ModelId::OpenCodeGoKimiK25.as_str(),
+        models::opencode_go::KIMI_K2_5
+    );
 }
 
 #[test]
@@ -145,6 +154,14 @@ fn test_model_from_string() {
         models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        "opencode/gpt-5.4".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeZenGPT54
+    );
+    assert_eq!(
+        "opencode-go/kimi-k2.5".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeGoKimiK25
+    );
     // Invalid model
     assert!("invalid-model".parse::<ModelId>().is_err());
 }
@@ -164,6 +181,14 @@ fn test_provider_parsing() {
     );
     assert_eq!("zai".parse::<Provider>().unwrap(), Provider::ZAI);
     assert_eq!("moonshot".parse::<Provider>().unwrap(), Provider::Moonshot);
+    assert_eq!(
+        "opencode-zen".parse::<Provider>().unwrap(),
+        Provider::OpenCodeZen
+    );
+    assert_eq!(
+        "opencode-go".parse::<Provider>().unwrap(),
+        Provider::OpenCodeGo
+    );
     assert_eq!("lmstudio".parse::<Provider>().unwrap(), Provider::LmStudio);
     assert!("invalid-provider".parse::<Provider>().is_err());
 }
@@ -177,6 +202,8 @@ fn test_model_providers() {
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
     assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
+    assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
+    assert_eq!(ModelId::OpenCodeGoKimiK25.provider(), Provider::OpenCodeGo);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
@@ -208,6 +235,14 @@ fn test_provider_defaults() {
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        ModelId::default_orchestrator_for_provider(Provider::OpenCodeZen),
+        ModelId::OpenCodeZenGPT54
+    );
+    assert_eq!(
+        ModelId::default_orchestrator_for_provider(Provider::OpenCodeGo),
+        ModelId::OpenCodeGoKimiK25
+    );
 
     assert_eq!(
         ModelId::default_single_for_provider(Provider::DeepSeek),
@@ -220,6 +255,14 @@ fn test_provider_defaults() {
     assert_eq!(
         ModelId::default_single_for_provider(Provider::ZAI),
         ModelId::ZaiGlm5
+    );
+    assert_eq!(
+        ModelId::default_single_for_provider(Provider::OpenCodeZen),
+        ModelId::OpenCodeZenGPT54
+    );
+    assert_eq!(
+        ModelId::default_single_for_provider(Provider::OpenCodeGo),
+        ModelId::OpenCodeGoKimiK25
     );
 }
 

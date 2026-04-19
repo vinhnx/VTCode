@@ -125,6 +125,28 @@ pub enum ModelId {
     /// Kimi K2.5 - Moonshot.ai's flagship reasoning model
     MoonshotKimiK25,
 
+    // OpenCode Zen models
+    /// GPT-5.4 - OpenCode Zen default flagship model
+    OpenCodeZenGPT54,
+    /// GPT-5.4 Mini - Lower-cost OpenCode Zen GPT option
+    OpenCodeZenGPT54Mini,
+    /// Claude Sonnet 4.6 - Anthropic-backed OpenCode Zen coding model
+    OpenCodeZenClaudeSonnet46,
+    /// GLM-5.1 - Z.AI model served through OpenCode Zen
+    OpenCodeZenGlm51,
+    /// Kimi K2.5 - Moonshot model served through OpenCode Zen
+    OpenCodeZenKimiK25,
+
+    // OpenCode Go models
+    /// GLM-5.1 - Z.AI model included with OpenCode Go
+    OpenCodeGoGlm51,
+    /// Kimi K2.5 - Moonshot model included with OpenCode Go
+    OpenCodeGoKimiK25,
+    /// MiniMax M2.5 - OpenCode Go subscription model
+    OpenCodeGoMinimaxM25,
+    /// MiniMax M2.7 - Higher-tier OpenCode Go subscription model
+    OpenCodeGoMinimaxM27,
+
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
     OllamaGptOss20b,

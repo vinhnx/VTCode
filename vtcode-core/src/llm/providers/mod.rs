@@ -11,6 +11,7 @@ pub mod moonshot;
 pub mod ollama;
 pub mod openai;
 pub mod opencode_go;
+mod opencode_shared;
 pub mod opencode_zen;
 pub mod openresponses;
 pub mod openrouter;

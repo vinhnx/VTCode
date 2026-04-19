@@ -43,8 +43,8 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
-            Provider::OpenCodeZen => ModelId::GPT54,
-            Provider::OpenCodeGo => ModelId::MoonshotKimiK25,
+            Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
+            Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
         }
     }
 
@@ -63,8 +63,8 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
-            Provider::OpenCodeZen => ModelId::GPT54,
-            Provider::OpenCodeGo => ModelId::MoonshotKimiK25,
+            Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
+            Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
         }
     }
 }

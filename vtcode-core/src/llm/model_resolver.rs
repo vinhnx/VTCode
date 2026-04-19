@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use crate::config::api_keys::api_key_env_var;
 use crate::config::models::{
-    ModelCatalogEntry, ModelPricing, Provider, catalog_provider_keys, model_catalog_entry,
+    ModelCatalogEntry, ModelId, ModelPricing, Provider, catalog_provider_keys, model_catalog_entry,
 };
 use crate::llm::provider::Usage;
 use vtcode_config::auth::{AuthCredentialsStoreMode, CustomApiKeyStorage};
@@ -145,6 +145,15 @@ impl ModelResolver {
             ));
         }
 
+        if let Ok(model_id) = ModelId::from_str(model) {
+            return Some(Self::resolve_for_model_id(
+                model,
+                model_id,
+                dynamic_models,
+                dynamic_meta,
+            ));
+        }
+
         if let Some((provider, entry)) = find_catalog_provider(model) {
             return Some(ResolvedModel {
                 provider,
@@ -270,6 +279,36 @@ impl ModelResolver {
             availability: Self::availability(provider, model),
         }
     }
+
+    fn resolve_for_model_id(
+        requested_model: &str,
+        model_id: ModelId,
+        dynamic_models: &[DynamicModelRef<'_>],
+        dynamic_meta: Option<DynamicModelMeta>,
+    ) -> ResolvedModel {
+        let provider = model_id.provider();
+        let catalog = model_catalog_entry(provider.as_ref(), model_id.as_str());
+        let dynamic =
+            if catalog.is_some() || !has_dynamic_model(provider, requested_model, dynamic_models) {
+                None
+            } else {
+                dynamic_meta.or_else(|| {
+                    Some(DynamicModelMeta {
+                        display_name: requested_model.to_string(),
+                        description: None,
+                        context_window: None,
+                    })
+                })
+            };
+
+        ResolvedModel {
+            provider,
+            model_id: requested_model.to_string(),
+            catalog,
+            dynamic,
+            availability: Self::availability(provider, requested_model),
+        }
+    }
 }
 
 fn parse_provider_override(value: &str) -> Option<Provider> {
@@ -384,7 +423,7 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::LmStudio)
     } else if model.starts_with("moonshot-") || model.starts_with("kimi-") {
         Some(Provider::Moonshot)
-    } else if model.starts_with("opencode/") {
+    } else if model.starts_with("opencode/") || model.starts_with("opencode-zen/") {
         Some(Provider::OpenCodeZen)
     } else if model.starts_with("opencode-go/") {
         Some(Provider::OpenCodeGo)
@@ -421,6 +460,24 @@ mod tests {
         assert_eq!(resolved.provider, Provider::OpenAI);
         assert!(resolved.known_model());
         assert_eq!(resolved.display_name(), "GPT-5.4");
+    }
+
+    #[test]
+    fn resolver_uses_model_id_to_disambiguate_shared_opencode_slugs() {
+        let moonshot = ModelResolver::resolve(None, "kimi-k2.5", &[], None).expect("moonshot");
+        assert_eq!(moonshot.provider, Provider::Moonshot);
+
+        let zen =
+            ModelResolver::resolve(None, "opencode/kimi-k2.5", &[], None).expect("opencode zen");
+        assert_eq!(zen.provider, Provider::OpenCodeZen);
+        assert!(zen.known_model());
+        assert_eq!(zen.display_name(), "Kimi K2.5 (OpenCode Zen)");
+
+        let go =
+            ModelResolver::resolve(None, "opencode-go/kimi-k2.5", &[], None).expect("opencode go");
+        assert_eq!(go.provider, Provider::OpenCodeGo);
+        assert!(go.known_model());
+        assert_eq!(go.display_name(), "Kimi K2.5 (OpenCode Go)");
     }
 
     #[test]

@@ -170,6 +170,7 @@ impl ModelId {
                 Some(ModelId::Gemini31FlashLitePreview)
             }
             ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
+            ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT52
             | ModelId::GPT52Codex
             | ModelId::GPT53Codex
@@ -188,6 +189,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
+            ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             _ => None,
         }
     }
@@ -242,6 +244,7 @@ impl ModelId {
             | ModelId::GPT54Nano
             | ModelId::GPT54Mini
             | ModelId::GPT5 => Some(ModelId::GPT5Mini),
+            ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
@@ -249,6 +252,7 @@ impl ModelId {
             | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeSonnet46),
+            ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
         };
@@ -299,6 +303,13 @@ impl ModelId {
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeMythosPreview
+                | ModelId::OpenCodeZenGPT54
+                | ModelId::OpenCodeZenClaudeSonnet46
+                | ModelId::OpenCodeZenGlm51
+                | ModelId::OpenCodeZenKimiK25
+                | ModelId::OpenCodeGoGlm51
+                | ModelId::OpenCodeGoKimiK25
+                | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
@@ -306,6 +317,7 @@ impl ModelId {
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM27
                 | ModelId::MinimaxM25
+                | ModelId::OpenCodeGoMinimaxM25
                 | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaNemotron3SuperCloud
@@ -328,6 +340,8 @@ impl ModelId {
                 | ModelId::GPT5Nano
                 | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
+                | ModelId::OpenCodeZenGPT54Mini
+                | ModelId::OpenCodeGoMinimaxM25
                 | ModelId::DeepSeekChat
                 | ModelId::HuggingFaceStep35Flash
         )
@@ -358,6 +372,13 @@ impl ModelId {
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeMythosPreview
+                | ModelId::OpenCodeZenGPT54
+                | ModelId::OpenCodeZenClaudeSonnet46
+                | ModelId::OpenCodeZenGlm51
+                | ModelId::OpenCodeZenKimiK25
+                | ModelId::OpenCodeGoGlm51
+                | ModelId::OpenCodeGoKimiK25
+                | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
@@ -425,6 +446,12 @@ impl ModelId {
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
             ModelId::ZaiGlm51 => "5.1",
+            ModelId::OpenCodeZenGPT54 | ModelId::OpenCodeZenGPT54Mini => "5.4",
+            ModelId::OpenCodeZenClaudeSonnet46 => "4.6",
+            ModelId::OpenCodeZenGlm51 | ModelId::OpenCodeGoGlm51 => "5.1",
+            ModelId::OpenCodeZenKimiK25 | ModelId::OpenCodeGoKimiK25 => "k2.5",
+            ModelId::OpenCodeGoMinimaxM25 => "m2.5",
+            ModelId::OpenCodeGoMinimaxM27 => "m2.7",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",

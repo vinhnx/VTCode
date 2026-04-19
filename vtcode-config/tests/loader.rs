@@ -82,9 +82,10 @@ fn loads_config_from_workspace_root_before_config_dir() -> Result<()> {
         vec![home_config.clone()],
         || ConfigManager::load_from_workspace(workspace_root),
     )?;
+    let expected_root_config = fs::canonicalize(&root_config)?;
 
     assert_eq!(manager.config().agent.provider, "workspace-root");
-    assert_eq!(manager.config_path(), Some(root_config.as_path()));
+    assert_eq!(manager.config_path(), Some(expected_root_config.as_path()));
 
     Ok(())
 }
@@ -109,9 +110,13 @@ fn loads_config_from_config_dir_when_root_missing() -> Result<()> {
         vec![home_config.clone()],
         || ConfigManager::load_from_workspace(workspace_root),
     )?;
+    let expected_config_dir_config = fs::canonicalize(&config_dir_config)?;
 
     assert_eq!(manager.config().agent.provider, "config-dir");
-    assert_eq!(manager.config_path(), Some(config_dir_config.as_path()));
+    assert_eq!(
+        manager.config_path(),
+        Some(expected_config_dir_config.as_path())
+    );
 
     Ok(())
 }
@@ -133,9 +138,10 @@ fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
         vec![home_config.clone()],
         || ConfigManager::load_from_workspace(workspace_root),
     )?;
+    let expected_home_config = fs::canonicalize(&home_config)?;
 
     assert_eq!(manager.config().agent.provider, "home");
-    assert_eq!(manager.config_path(), Some(home_config.as_path()));
+    assert_eq!(manager.config_path(), Some(expected_home_config.as_path()));
 
     Ok(())
 }
@@ -177,8 +183,9 @@ fn load_uses_current_directory_workspace() -> Result<()> {
     std::env::set_current_dir(original_dir)?;
 
     let manager = manager?;
+    let expected_root_config = fs::canonicalize(&root_config)?;
     assert_eq!(manager.config().agent.provider, "workspace-root");
-    assert_eq!(manager.config_path(), Some(root_config.as_path()));
+    assert_eq!(manager.config_path(), Some(expected_root_config.as_path()));
 
     Ok(())
 }

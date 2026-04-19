@@ -205,6 +205,20 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "moonshot");
     }
 
+    let opencode_zen_client =
+        create_provider_for_model("opencode/gpt-5.4", "test_key".to_string(), None, None);
+    assert!(opencode_zen_client.is_ok());
+    if let Ok(client) = opencode_zen_client {
+        assert_eq!(client.name(), "opencode-zen");
+    }
+
+    let opencode_go_client =
+        create_provider_for_model("opencode-go/kimi-k2.5", "test_key".to_string(), None, None);
+    assert!(opencode_go_client.is_ok());
+    if let Ok(client) = opencode_go_client {
+        assert_eq!(client.name(), "opencode-go");
+    }
+
     let ollama_client =
         create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     assert!(ollama_client.is_ok());

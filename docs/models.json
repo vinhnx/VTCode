@@ -1560,6 +1560,233 @@
       }
     }
   },
+  "opencode-zen": {
+    "id": "opencode-zen",
+    "env": [
+      "OPENCODE_ZEN_API_KEY"
+    ],
+    "api": "https://opencode.ai/zen/v1",
+    "name": "OpenCode Zen",
+    "doc": "https://opencode.ai/docs/zen/",
+    "default_model": "gpt-5.4",
+    "models": {
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4 (OpenCode Zen)",
+        "description": "OpenCode Zen flagship GPT-5.4 route on the curated pay-as-you-go gateway.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "capabilities": {
+          "caching": true,
+          "structured_output": true
+        },
+        "cost": {
+          "input": 2.5e-06,
+          "output": 1.5e-05,
+          "cache_read": 2.5e-07
+        }
+      },
+      "gpt-5.4-mini": {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 Mini (OpenCode Zen)",
+        "description": "Lower-cost GPT-5.4 Mini route served through OpenCode Zen.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "capabilities": {
+          "caching": true,
+          "structured_output": true
+        },
+        "cost": {
+          "input": 7.5e-07,
+          "output": 4.5e-06,
+          "cache_read": 7.5e-08
+        }
+      },
+      "claude-sonnet-4-6": {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6 (OpenCode Zen)",
+        "description": "Claude Sonnet 4.6 served through OpenCode Zen's curated Anthropic endpoint.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        },
+        "cost": {
+          "input": 3e-06,
+          "output": 1.5e-05,
+          "cache_read": 3e-07,
+          "cache_write": 3.75e-06
+        }
+      },
+      "glm-5.1": {
+        "id": "glm-5.1",
+        "name": "GLM-5.1 (OpenCode Zen)",
+        "description": "GLM-5.1 served through OpenCode Zen for lower-cost reasoning and coding work.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        },
+        "cost": {
+          "input": 1.4e-06,
+          "output": 4.4e-06,
+          "cache_read": 2.6e-07
+        }
+      },
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5 (OpenCode Zen)",
+        "description": "Kimi K2.5 served through OpenCode Zen's curated open-model gateway.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        },
+        "cost": {
+          "input": 6e-07,
+          "output": 3e-06,
+          "cache_read": 1e-07
+        }
+      }
+    }
+  },
+  "opencode-go": {
+    "id": "opencode-go",
+    "env": [
+      "OPENCODE_GO_API_KEY"
+    ],
+    "api": "https://opencode.ai/zen/go/v1",
+    "name": "OpenCode Go",
+    "doc": "https://opencode.ai/docs/go/",
+    "default_model": "kimi-k2.5",
+    "models": {
+      "glm-5.1": {
+        "id": "glm-5.1",
+        "name": "GLM-5.1 (OpenCode Go)",
+        "description": "GLM-5.1 included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        }
+      },
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5 (OpenCode Go)",
+        "description": "Kimi K2.5 included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        }
+      },
+      "minimax-m2.5": {
+        "id": "minimax-m2.5",
+        "name": "MiniMax M2.5 (OpenCode Go)",
+        "description": "MiniMax M2.5 included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800
+      },
+      "minimax-m2.7": {
+        "id": "minimax-m2.7",
+        "name": "MiniMax M2.7 (OpenCode Go)",
+        "description": "MiniMax M2.7 included with the OpenCode Go subscription for stronger agentic coding.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800
+      }
+    }
+  },
   "openrouter": {
     "id": "openrouter",
     "env": [
@@ -2630,6 +2857,37 @@
           "top_tier": true,
           "generation": "GLM-5",
           "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
+        }
+      },
+      "z-ai/glm-4.7": {
+        "id": "z-ai/glm-4.7",
+        "name": "Z.AI: GLM-4.7",
+        "description": "Z.ai's GLM-4.7 flagship reasoning model with stronger programming performance and more stable multi-step execution.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 202752,
+        "cost": {
+          "input": 3.9e-07,
+          "output": 1.75e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm47",
+          "constant": "Z_AI_GLM_4_7",
+          "vendor": "zai",
+          "display": "GLM-4.7",
+          "description": "Z.ai GLM-4.7 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-4.7",
+          "doc_comment": "GLM-4.7 - Z.AI GLM-4.7 model via OpenRouter"
         }
       },
       "z-ai/glm-5.1": {
