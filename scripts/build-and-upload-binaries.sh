@@ -170,9 +170,9 @@ build_with_tool() {
     local cmd=("$BUILD_TOOL" build --release --target "$target")
 
     if [[ ${#TARGET_ENV_ASSIGNMENTS[@]} -gt 0 ]]; then
-        env "${TARGET_ENV_ASSIGNMENTS[@]}" "${cmd[@]}"
+        env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "${TARGET_ENV_ASSIGNMENTS[@]}" "${cmd[@]}"
     else
-        "${cmd[@]}"
+        env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "${cmd[@]}"
     fi
 }
 
@@ -205,13 +205,13 @@ build_binaries() {
         # On Linux, build directly
         build_linux=true
         print_info "Building Linux binary natively..."
-        ( $BUILD_TOOL build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
         pids+=($!)
     elif command -v cross &>/dev/null; then
         # Use cross for cross-compilation which handles dependencies better
         build_linux=true
         print_info "Attempting Linux build using cross..."
-        ( cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
         pids+=($!)
     else
         print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"

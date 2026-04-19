@@ -971,11 +971,8 @@ main() {
         else
             print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
             
-            # Clear RUSTC_WRAPPER to avoid sccache permission issues
-            unset RUSTC_WRAPPER
-            
             local build_args=(-v "$next_version" --only-build-local)
-            ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
+            env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
     fi
 
@@ -986,15 +983,12 @@ main() {
     # 3. Cargo Release (version, tag, and push only)
     print_info "Step 3: Running cargo release (version, tag, and push only)..."
 
-    # Clear RUSTC_WRAPPER to avoid sccache permission issues during cargo release
-    unset RUSTC_WRAPPER
-    
     local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
 
     if [[ "$dry_run" == 'true' ]]; then
         print_info "Dry run - would run: ${command[*]}"
     else
-        "${command[@]}"
+        env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "${command[@]}"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
