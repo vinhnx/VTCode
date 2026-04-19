@@ -284,6 +284,12 @@ impl ModelsManager {
             Provider::LmStudio => "local-model".to_string(),
             Provider::Moonshot => "qwen3-coder-next".to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
+            Provider::OpenCodeZen => {
+                crate::config::constants::models::opencode_zen::DEFAULT_MODEL.to_string()
+            }
+            Provider::OpenCodeGo => {
+                crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string()
+            }
         }
     }
 

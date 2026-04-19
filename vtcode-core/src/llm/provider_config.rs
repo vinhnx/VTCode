@@ -147,6 +147,24 @@ define_provider_config!(
     Some(crate::config::constants::env_vars::MINIMAX_BASE_URL),
     ()
 );
+define_provider_config!(
+    OpenCodeZenProviderConfig,
+    "opencode-zen",
+    "OpenCode Zen",
+    crate::config::constants::models::opencode_zen::DEFAULT_MODEL,
+    crate::config::constants::urls::OPENCODE_ZEN_API_BASE,
+    Some(crate::config::constants::env_vars::OPENCODE_ZEN_BASE_URL),
+    ()
+);
+define_provider_config!(
+    OpenCodeGoProviderConfig,
+    "opencode-go",
+    "OpenCode Go",
+    crate::config::constants::models::opencode_go::DEFAULT_MODEL,
+    crate::config::constants::urls::OPENCODE_GO_API_BASE,
+    Some(crate::config::constants::env_vars::OPENCODE_GO_BASE_URL),
+    ()
+);
 
 /// Macro kept for source compatibility with older builder-based call sites.
 #[macro_export]

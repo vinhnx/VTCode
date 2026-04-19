@@ -16,13 +16,15 @@ use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
     HuggingFaceProviderConfig, LmStudioProviderConfig, MinimaxProviderConfig,
-    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
-    OpenResponsesProviderConfig, OpenRouterProviderConfig, ZAIProviderConfig,
+    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig, OpenCodeGoProviderConfig,
+    OpenCodeZenProviderConfig, OpenResponsesProviderConfig, OpenRouterProviderConfig,
+    ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
     LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
+    OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
+    ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -260,6 +262,8 @@ impl_standard_provider_constructor!(
     OllamaProvider,
     LmStudioProvider,
     ZAIProvider,
+    OpenCodeZenProvider,
+    OpenCodeGoProvider,
 );
 
 crate::delegate_components!(GeminiProviderConfig {
@@ -314,6 +318,14 @@ crate::delegate_components!(ZAIProviderConfig {
     ProviderMetadataComponent => ZAIProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<ZAIProvider>,
 });
+crate::delegate_components!(OpenCodeZenProviderConfig {
+    ProviderMetadataComponent => OpenCodeZenProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<OpenCodeZenProvider>,
+});
+crate::delegate_components!(OpenCodeGoProviderConfig {
+    ProviderMetadataComponent => OpenCodeGoProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<OpenCodeGoProvider>,
+});
 
 /// Register all built-in provider contexts into the runtime factory.
 pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
@@ -330,6 +342,8 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<OllamaProviderConfig>();
     factory.register_cgp_provider::<LmStudioProviderConfig>();
     factory.register_cgp_provider::<ZAIProviderConfig>();
+    factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
+    factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
 }
 
 #[cfg(test)]
@@ -442,6 +456,8 @@ mod tests {
                 "moonshot",
                 "ollama",
                 "openai",
+                "opencode-go",
+                "opencode-zen",
                 "openresponses",
                 "openrouter",
                 "zai",

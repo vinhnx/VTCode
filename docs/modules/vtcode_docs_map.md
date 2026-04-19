@@ -624,11 +624,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Semantic Understanding, Tree-sitter Security Parsing (Bash), Syntax Highlighting
   - **User Questions**: "What can you tell me about Language Support in VT Code?", "How does Semantic Understanding work?", "How does Tree-sitter Security Parsing (Bash) work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: Memories
-  - **Topics**: Enable memories, How memories work, Memory storage, Control memories per thread, Configuration
-  - **User Questions**: "What can you tell me about Memories?", "How does Enable memories work?", "How does How memories work work?"
-
 - **File**: `docs/installation/NATIVE_INSTALLERS.md`
   - **Content**: Native Installers
   - **Topics**: macOS & Linux (Shell), Windows (PowerShell)
@@ -703,6 +698,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

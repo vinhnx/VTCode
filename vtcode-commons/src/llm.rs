@@ -14,6 +14,8 @@ pub enum BackendKind {
     Moonshot,
     HuggingFace,
     Minimax,
+    OpenCodeZen,
+    OpenCodeGo,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

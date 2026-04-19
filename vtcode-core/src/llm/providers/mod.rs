@@ -10,6 +10,8 @@ pub mod minimax;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+pub mod opencode_go;
+pub mod opencode_zen;
 pub mod openresponses;
 pub mod openrouter;
 pub mod streaming_progress;
@@ -41,6 +43,8 @@ pub use minimax::MinimaxProvider;
 pub use moonshot::MoonshotProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
+pub use opencode_go::OpenCodeGoProvider;
+pub use opencode_zen::OpenCodeZenProvider;
 pub use openresponses::OpenResponsesProvider;
 pub use openrouter::OpenRouterProvider;
 pub use streaming_progress::{

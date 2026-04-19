@@ -33,6 +33,10 @@ pub enum Provider {
     Minimax,
     /// Hugging Face Inference Providers
     HuggingFace,
+    /// OpenCode Zen gateway (pay-as-you-go)
+    OpenCodeZen,
+    /// OpenCode Go subscription
+    OpenCodeGo,
 }
 
 impl Provider {
@@ -51,6 +55,8 @@ impl Provider {
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
             Provider::HuggingFace => "HF_TOKEN",
+            Provider::OpenCodeZen => "OPENCODE_ZEN_API_KEY",
+            Provider::OpenCodeGo => "OPENCODE_GO_API_KEY",
         }
     }
 
@@ -69,6 +75,8 @@ impl Provider {
             Provider::LmStudio,
             Provider::Moonshot,
             Provider::ZAI,
+            Provider::OpenCodeZen,
+            Provider::OpenCodeGo,
         ]
     }
 
@@ -87,6 +95,8 @@ impl Provider {
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
             Provider::HuggingFace => "Hugging Face",
+            Provider::OpenCodeZen => "OpenCode Zen",
+            Provider::OpenCodeGo => "OpenCode Go",
         }
     }
 
@@ -139,6 +149,8 @@ impl Provider {
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => models::minimax::SUPPORTED_MODELS.contains(&model),
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
+            Provider::OpenCodeZen => false,
+            Provider::OpenCodeGo => false,
         }
     }
 
@@ -172,6 +184,8 @@ impl fmt::Display for Provider {
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
             Provider::HuggingFace => write!(f, "huggingface"),
+            Provider::OpenCodeZen => write!(f, "opencode-zen"),
+            Provider::OpenCodeGo => write!(f, "opencode-go"),
         }
     }
 }
@@ -191,6 +205,8 @@ impl AsRef<str> for Provider {
             Provider::ZAI => "zai",
             Provider::Minimax => "minimax",
             Provider::HuggingFace => "huggingface",
+            Provider::OpenCodeZen => "opencode-zen",
+            Provider::OpenCodeGo => "opencode-go",
         }
     }
 }
@@ -212,6 +228,8 @@ impl FromStr for Provider {
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
             "huggingface" => Ok(Provider::HuggingFace),
+            "opencode-zen" | "opencodezen" => Ok(Provider::OpenCodeZen),
+            "opencode-go" | "opencodego" => Ok(Provider::OpenCodeGo),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }

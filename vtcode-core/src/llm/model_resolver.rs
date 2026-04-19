@@ -330,6 +330,8 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::Copilot => 9,
         Provider::Ollama => 10,
         Provider::LmStudio => 11,
+        Provider::OpenCodeZen => 12,
+        Provider::OpenCodeGo => 13,
     }
 }
 
@@ -382,6 +384,10 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::LmStudio)
     } else if model.starts_with("moonshot-") || model.starts_with("kimi-") {
         Some(Provider::Moonshot)
+    } else if model.starts_with("opencode/") {
+        Some(Provider::OpenCodeZen)
+    } else if model.starts_with("opencode-go/") {
+        Some(Provider::OpenCodeGo)
     } else if model.starts_with("deepseek-ai/")
         || model.starts_with("openai/gpt-oss-")
         || model.starts_with("zai-org/")

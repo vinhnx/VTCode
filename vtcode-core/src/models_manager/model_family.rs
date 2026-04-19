@@ -312,6 +312,19 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         );
     }
 
+    // OpenCode Zen / Go models
+    if slug.starts_with("opencode/") || slug.starts_with("opencode-go/") {
+        let provider = if slug.starts_with("opencode-go/") {
+            Provider::OpenCodeGo
+        } else {
+            Provider::OpenCodeZen
+        };
+        return model_family!(
+            slug, "opencode", provider,
+            context_window: Some(DEFAULT_CONTEXT_WINDOW),
+        );
+    }
+
     // Qwen models (via OpenRouter or Ollama)
     if slug.contains("qwen") {
         return model_family!(

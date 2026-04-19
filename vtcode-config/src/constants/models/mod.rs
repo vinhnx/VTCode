@@ -8,6 +8,8 @@ pub mod minimax;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+pub mod opencode_go;
+pub mod opencode_zen;
 pub mod openresponses;
 pub mod openrouter;
 pub mod zai;

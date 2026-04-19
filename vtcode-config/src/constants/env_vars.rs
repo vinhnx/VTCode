@@ -14,6 +14,9 @@ pub const MINIMAX_BASE_URL: &str = "MINIMAX_BASE_URL";
 pub const OPENRESPONSES_BASE_URL: &str = "OPENRESPONSES_BASE_URL";
 pub const LITELLM_BASE_URL: &str = "LITELLM_BASE_URL";
 
+pub const OPENCODE_ZEN_BASE_URL: &str = "OPENCODE_ZEN_BASE_URL";
+pub const OPENCODE_GO_BASE_URL: &str = "OPENCODE_GO_BASE_URL";
+
 /// Environment variable for setting maximum thinking budget tokens
 /// Set to 63999 to get 2x the default thinking budget on 64K output models
 /// See: <https://decodeclaude.com/ultrathink-deprecated/>

@@ -28,6 +28,8 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "minimax",
     "huggingface",
     "openresponses",
+    "opencode-zen",
+    "opencode-go",
 ];
 
 /// LLM provider factory and registry
@@ -334,6 +336,8 @@ mod tests {
                 "moonshot",
                 "ollama",
                 "openai",
+                "opencode-go",
+                "opencode-zen",
                 "openresponses",
                 "openrouter",
                 "zai",

@@ -168,6 +168,12 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // MiniMax presets
     presets.extend(minimax_presets());
 
+    // OpenCode Zen presets
+    presets.extend(opencode_zen_presets());
+
+    // OpenCode Go presets
+    presets.extend(opencode_go_presets());
+
     presets
 }
 
@@ -186,6 +192,8 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::LmStudio => lmstudio_presets(),
         Provider::Moonshot => moonshot_presets(),
         Provider::HuggingFace => huggingface_presets(),
+        Provider::OpenCodeZen => opencode_zen_presets(),
+        Provider::OpenCodeGo => opencode_go_presets(),
     }
 }
 
@@ -904,6 +912,46 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
         show_in_picker: true,
         supported_in_api: true,
         context_window: Some(32_000),
+    }]
+}
+
+fn opencode_zen_presets() -> Vec<ModelPreset> {
+    vec![ModelPreset {
+        id: "opencode-zen/gpt-5.4".to_string(),
+        model: "gpt-5.4".to_string(),
+        display_name: "GPT-5.4 (OpenCode Zen)".to_string(),
+        description: "OpenCode Zen gateway — curated, benchmarked models at cost".to_string(),
+        provider: Provider::OpenCodeZen,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
+}
+
+fn opencode_go_presets() -> Vec<ModelPreset> {
+    vec![ModelPreset {
+        id: "opencode-go/kimi-k2.5".to_string(),
+        model: "kimi-k2.5".to_string(),
+        display_name: "Kimi K2.5 (OpenCode Go)".to_string(),
+        description: "OpenCode Go — affordable subscription for open coding models".to_string(),
+        provider: Provider::OpenCodeGo,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
     }]
 }
 

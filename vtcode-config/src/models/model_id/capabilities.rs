@@ -116,6 +116,8 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::ZAI => "zai",
         Provider::Minimax => "minimax",
         Provider::HuggingFace => "huggingface",
+        Provider::OpenCodeZen => "opencode-zen",
+        Provider::OpenCodeGo => "opencode-go",
     }
 }
 

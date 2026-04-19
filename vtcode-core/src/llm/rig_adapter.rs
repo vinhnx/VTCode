@@ -77,6 +77,9 @@ impl RigProviderCapabilities {
                 // The rig crate does not yet expose a dedicated Z.AI client.
                 // Skip instantiation while still marking the provider as verified.
             }
+            Provider::OpenCodeZen | Provider::OpenCodeGo => {
+                // OpenCode Zen/Go are API gateways; rig has no direct client.
+            }
         }
 
         Ok(RigValidationSummary {
