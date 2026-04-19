@@ -5,6 +5,7 @@ fn test_context() -> SystemPromptContext {
         full_auto: false,
         auto_mode: false,
         plan_mode: false,
+        request_user_input_enabled: true,
         discovered_skills: Vec::new(),
         active_instruction_directory: None,
         instruction_context_paths: Vec::new(),
@@ -142,6 +143,31 @@ async fn test_plan_mode_notice_appended() {
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_NO_AUTO_EXIT_LINE));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_TASK_TRACKER_LINE));
     assert!(!prompt.contains("[Context]"));
+}
+
+#[tokio::test]
+async fn test_plan_mode_uses_noninteractive_notice_when_request_user_input_is_disabled() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let context = SystemPromptContext {
+        plan_mode: true,
+        request_user_input_enabled: false,
+        ..test_context()
+    };
+
+    let prompt = prompt_builder
+        .get_system_prompt(
+            "You are a helpful assistant.",
+            1,
+            context.hash(),
+            &context,
+            None,
+        )
+        .await;
+
+    assert!(
+        prompt.contains(vtcode_core::prompts::system::PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE)
+    );
+    assert!(!prompt.contains(vtcode_core::prompts::system::PLAN_MODE_INTERVIEW_POLICY_LINE));
 }
 
 #[tokio::test]

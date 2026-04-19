@@ -11,6 +11,7 @@ pub mod guidelines;
 pub mod harness_limits;
 pub mod output_styles;
 pub mod resources;
+pub mod runtime_contract;
 pub mod system;
 pub mod system_prompt_cache;
 pub mod templates;
@@ -27,6 +28,7 @@ pub use resources::{
     PromptTemplate, apply_system_prompt_layers, discover_prompt_templates, expand_prompt_template,
     find_prompt_template, resolve_system_prompt_layers,
 };
+pub use runtime_contract::{RuntimePromptContract, append_runtime_mode_sections};
 pub use system::{
     apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,
     generate_system_instruction,

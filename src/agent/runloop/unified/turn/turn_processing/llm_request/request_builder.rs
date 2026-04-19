@@ -160,6 +160,7 @@ async fn assemble_prompt(
                 full_auto: input.turn.full_auto,
                 auto_mode: input.turn.auto_mode,
                 plan_mode: input.turn.plan_mode,
+                request_user_input_enabled: input.turn.request_user_input_enabled,
             },
         )
         .await?;

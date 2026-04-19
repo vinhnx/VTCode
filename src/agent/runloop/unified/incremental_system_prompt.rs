@@ -16,42 +16,6 @@ fn append_auto_mode_notice(prompt: &mut String) {
     prompt.push('\n');
 }
 
-fn append_plan_mode_notice(prompt: &mut String) {
-    if prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER) {
-        return;
-    }
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_NOTICE_LINE);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_PLAN_QUALITY_LINE);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_INTERVIEW_POLICY_LINE);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_NO_AUTO_EXIT_LINE);
-    prompt.push('\n');
-    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_TASK_TRACKER_LINE);
-    prompt.push('\n');
-}
-
-fn append_full_auto_notice(prompt: &mut String, plan_mode: bool) {
-    use std::fmt::Write;
-    if plan_mode {
-        let _ = writeln!(
-            prompt,
-            "\n# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
-        );
-    } else {
-        let _ = writeln!(
-            prompt,
-            "\n# FULL-AUTO: Complete task autonomously until done or blocked."
-        );
-    }
-}
-
 pub(crate) fn hash_base_system_prompt(base_prompt: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -200,16 +164,17 @@ impl IncrementalSystemPrompt {
             );
         }
 
-        if context.full_auto {
-            append_full_auto_notice(&mut prompt, context.plan_mode);
-        }
+        vtcode_core::prompts::append_runtime_mode_sections(
+            &mut prompt,
+            vtcode_core::prompts::RuntimePromptContract {
+                full_auto: context.full_auto,
+                plan_mode: context.plan_mode,
+                request_user_input_enabled: context.request_user_input_enabled,
+            },
+        );
 
         if context.auto_mode && !context.plan_mode {
             append_auto_mode_notice(&mut prompt);
-        }
-
-        if context.plan_mode {
-            append_plan_mode_notice(&mut prompt);
         }
 
         prompt
@@ -236,6 +201,8 @@ pub(crate) struct SystemPromptContext {
     pub(crate) auto_mode: bool,
     /// Plan mode: read-only mode for exploration and planning.
     pub(crate) plan_mode: bool,
+    /// Whether `request_user_input` can be called in the current runtime.
+    pub(crate) request_user_input_enabled: bool,
     /// Discovered skills for immediate awareness
     pub(crate) discovered_skills: Vec<vtcode_core::skills::types::Skill>,
     /// Explicit scope root for AGENTS.md and instruction discovery.
@@ -253,6 +220,7 @@ impl SystemPromptContext {
         self.full_auto.hash(&mut hasher);
         self.auto_mode.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
+        self.request_user_input_enabled.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
         for path in &self.instruction_context_paths {
             path.hash(&mut hasher);

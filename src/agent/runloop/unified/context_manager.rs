@@ -19,6 +19,7 @@ pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
     pub auto_mode: bool,
     pub plan_mode: bool,
+    pub request_user_input_enabled: bool,
 }
 
 /// Context state tracked outside the prompt builder.
@@ -214,6 +215,7 @@ impl ContextManager {
             full_auto: params.full_auto,
             auto_mode: params.auto_mode,
             plan_mode: params.plan_mode,
+            request_user_input_enabled: params.request_user_input_enabled,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             active_instruction_directory: self.active_instruction_directory(),
             instruction_context_paths: self.instruction_context_paths(),

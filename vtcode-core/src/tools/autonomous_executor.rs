@@ -62,6 +62,7 @@ impl ToolStats {
 }
 
 use crate::tools::circuit_breaker::CircuitBreaker;
+use crate::tools::validation::paths::validate_non_root_listing_path;
 use crate::utils::path::{normalize_path, resolve_workspace_path};
 
 /// Autonomous tool executor with safety checks.
@@ -404,22 +405,7 @@ impl AutonomousExecutor {
 
     /// Validate list_files arguments to prevent root listing loops
     fn validate_list_files_args(&self, args: &Value) -> Result<()> {
-        if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-            let normalized = path.trim_start_matches("./").trim_start_matches('/');
-            if normalized.is_empty() || normalized == "." {
-                anyhow::bail!(
-                    "list_files on root directory is blocked (causes loops). \
-                     Use specific subdirectories like 'src/', 'vtcode-core/src/', etc."
-                );
-            }
-        } else {
-            // No path = root
-            anyhow::bail!(
-                "list_files requires explicit path. \
-                 root directory listing is blocked to prevent loops."
-            );
-        }
-        Ok(())
+        validate_non_root_listing_path(args.get("path").and_then(|v| v.as_str()))
     }
 
     /// Generate dry-run preview for verification

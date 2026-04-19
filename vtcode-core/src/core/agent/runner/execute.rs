@@ -28,8 +28,11 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
-use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
+use crate::prompts::{
+    PromptContext, RuntimePromptContract, append_runtime_mode_sections,
+    upsert_harness_limits_section,
+};
 use crate::utils::colors::style;
 use anyhow::Result;
 use serde_json::json;
@@ -295,7 +298,7 @@ impl AgentRunner {
                 .clone()
                 .unwrap_or_else(|| Arc::new(Vec::new()));
 
-            let system_prompt = if is_simple_task {
+            let mut system_prompt = if is_simple_task {
                 // One-time clone for simple tasks to override prompt mode (not per-turn)
                 let mut config = self.config().clone();
                 config.agent.system_prompt_mode = SystemPromptMode::Minimal;
@@ -326,6 +329,27 @@ impl AgentRunner {
             } else {
                 self.system_prompt.clone()
             };
+
+            let review_like = is_review_like_task(task);
+            let full_auto_active = self
+                .tool_registry
+                .current_full_auto_allowlist()
+                .await
+                .is_some();
+            append_runtime_mode_sections(
+                &mut system_prompt,
+                RuntimePromptContract {
+                    full_auto: full_auto_active,
+                    plan_mode: self.tool_registry.is_plan_mode(),
+                    request_user_input_enabled: false,
+                },
+            );
+            upsert_harness_limits_section(
+                &mut system_prompt,
+                self.config().agent.harness.max_tool_calls_per_turn,
+                self.config().agent.harness.max_tool_wall_clock_secs,
+                self.config().agent.harness.max_tool_retries,
+            );
 
             // Prepare conversation with task context
             let system_instruction = Arc::new(system_prompt);
@@ -364,13 +388,6 @@ impl AgentRunner {
                     .warnings
                     .push(format!("Tool registry init failed: {err}"));
             }
-
-            let review_like = is_review_like_task(task);
-            let full_auto_active = self
-                .tool_registry
-                .current_full_auto_allowlist()
-                .await
-                .is_some();
             let orchestration_enabled =
                 self.harness_plan_build_evaluate_enabled(full_auto_active, review_like);
             let planner_artifacts = if orchestration_enabled {

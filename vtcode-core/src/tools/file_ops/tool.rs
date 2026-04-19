@@ -5,6 +5,7 @@ use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use crate::tools::types::{ListInput, PathArgs};
+use crate::tools::validation::paths::validate_non_root_listing_path;
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
@@ -107,15 +108,7 @@ impl Tool for FileOpsTool {
             input.path = ".".to_string();
         }
 
-        // Block root directory listing to prevent loops
-        let normalized_path = input.path.trim_start_matches("./").trim_start_matches('/');
-        if normalized_path.is_empty() || normalized_path == "." {
-            return Err(anyhow!(
-                "Error: list_files on root directory is blocked to prevent infinite loops. \
-                 Please specify a subdirectory like 'src/', 'vtcode-core/src/', 'tests/', etc. \
-                 Use grep_file with a pattern to search across the entire workspace."
-            ));
-        }
+        validate_non_root_listing_path(Some(input.path.as_str()))?;
 
         let should_promote_glob_to_recursive = input.mode.is_none()
             && input

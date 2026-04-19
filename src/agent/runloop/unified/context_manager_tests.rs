@@ -147,6 +147,7 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
         full_auto: false,
         auto_mode: false,
         plan_mode: false,
+        request_user_input_enabled: true,
     };
 
     let result = manager.build_system_prompt(params).await;
@@ -202,6 +203,7 @@ async fn request_editor_context_message_includes_active_editor_context_block() {
             full_auto: false,
             auto_mode: false,
             plan_mode: false,
+            request_user_input_enabled: true,
         })
         .await
         .expect("system prompt");
@@ -263,6 +265,7 @@ async fn request_editor_context_message_skips_disallowed_provider_family() {
             full_auto: false,
             auto_mode: false,
             plan_mode: false,
+            request_user_input_enabled: true,
         })
         .await
         .expect("system prompt");
@@ -304,6 +307,7 @@ async fn request_editor_context_message_respects_session_local_ide_toggle() {
             full_auto: false,
             auto_mode: false,
             plan_mode: false,
+            request_user_input_enabled: true,
         })
         .await
         .expect("enabled prompt");
@@ -324,6 +328,7 @@ async fn request_editor_context_message_respects_session_local_ide_toggle() {
             full_auto: false,
             auto_mode: false,
             plan_mode: false,
+            request_user_input_enabled: true,
         })
         .await
         .expect("disabled prompt");
@@ -336,6 +341,7 @@ async fn request_editor_context_message_respects_session_local_ide_toggle() {
             full_auto: false,
             auto_mode: false,
             plan_mode: false,
+            request_user_input_enabled: true,
         })
         .await
         .expect("reenabled prompt");
@@ -421,6 +427,7 @@ async fn build_system_prompt_ignores_token_usage_updates() {
         full_auto: false,
         auto_mode: false,
         plan_mode: false,
+        request_user_input_enabled: true,
     };
 
     let prompt_before = manager
