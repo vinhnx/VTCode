@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.99.2 - 2026-04-19
+
+### Highlights
+#### Bug Fixes
+
+- Upgrade rustls-webpki to 0.103.12 (#2 #3) (b53f9c9a) (@vinhnx)
+- Update default model to claude-sonnet-4-6 across configurations and documentation (13f942bb) 
+#### Features
+
+- Implement memories subsystem with configuration options (021aa664) 
+### Other Changes
+#### Other
+
+- Add OpenCode Zen and OpenCode Go providers and models (42bbea49) 
+- Refactor OpenCode providers to support model ID resolution and enhance compatibility (0a5bf2c1) 
 ## 0.99.1 - 2026-04-17
 
 ### Highlights
