@@ -1,5 +1,5 @@
 use super::*;
-use crate::constants::models;
+use crate::constants::{model_helpers, models};
 use std::str::FromStr;
 
 #[test]
@@ -49,6 +49,15 @@ fn test_model_string_conversion() {
     );
     // Z.AI models
     assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
+    // OpenCode models
+    assert_eq!(
+        ModelId::OpenCodeZenGPT54.as_str(),
+        models::opencode_zen::GPT_5_4
+    );
+    assert_eq!(
+        ModelId::OpenCodeGoKimiK25.as_str(),
+        models::opencode_go::KIMI_K2_5
+    );
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.as_str(), entry.id);
     }
@@ -151,6 +160,18 @@ fn test_model_from_string() {
         models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        "opencode/gpt-5.4".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeZenGPT54
+    );
+    assert_eq!(
+        "opencode-zen/claude-sonnet-4-6".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeZenClaudeSonnet46
+    );
+    assert_eq!(
+        "opencode-go/kimi-k2.5".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeGoKimiK25
+    );
     for entry in openrouter_generated::ENTRIES {
         // Skip models that are shadowed by built-in variants with the same ID
         if entry.id == models::zai::GLM_5 || entry.id == models::zai::GLM_5_LEGACY {
@@ -177,6 +198,14 @@ fn test_provider_parsing() {
     );
     assert_eq!("zai".parse::<Provider>().unwrap(), Provider::ZAI);
     assert_eq!("moonshot".parse::<Provider>().unwrap(), Provider::Moonshot);
+    assert_eq!(
+        "opencode-zen".parse::<Provider>().unwrap(),
+        Provider::OpenCodeZen
+    );
+    assert_eq!(
+        "opencode-go".parse::<Provider>().unwrap(),
+        Provider::OpenCodeGo
+    );
     assert_eq!("lmstudio".parse::<Provider>().unwrap(), Provider::LmStudio);
     assert!("invalid-provider".parse::<Provider>().is_err());
 }
@@ -190,6 +219,8 @@ fn test_model_providers() {
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
     assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
+    assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
+    assert_eq!(ModelId::OpenCodeGoKimiK25.provider(), Provider::OpenCodeGo);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
@@ -237,6 +268,14 @@ fn test_provider_defaults() {
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        ModelId::default_orchestrator_for_provider(Provider::OpenCodeZen),
+        ModelId::OpenCodeZenGPT54
+    );
+    assert_eq!(
+        ModelId::default_orchestrator_for_provider(Provider::OpenCodeGo),
+        ModelId::OpenCodeGoKimiK25
+    );
 }
 
 #[test]
@@ -258,6 +297,7 @@ fn test_model_variants() {
     assert!(ModelId::GPT51CodexMax.is_pro_variant());
     assert!(ModelId::ClaudeOpus47.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
+    assert!(ModelId::OpenCodeZenGPT54.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
     assert!(ModelId::ZaiGlm5.is_pro_variant());
     assert!(!ModelId::Gemini3FlashPreview.is_pro_variant());
@@ -266,6 +306,7 @@ fn test_model_variants() {
     assert!(ModelId::Gemini3FlashPreview.is_efficient_variant());
     assert!(ModelId::GPT5Mini.is_efficient_variant());
     assert!(ModelId::ClaudeHaiku45.is_efficient_variant());
+    assert!(ModelId::OpenCodeZenGPT54Mini.is_efficient_variant());
     assert!(ModelId::DeepSeekChat.is_efficient_variant());
     assert!(!ModelId::GPT5.is_efficient_variant());
 
@@ -307,6 +348,10 @@ fn test_preferred_lightweight_variant() {
         ModelId::ZaiGlm51.preferred_lightweight_variant(),
         Some(ModelId::ZaiGlm5)
     );
+    assert_eq!(
+        ModelId::OpenCodeZenGPT54.preferred_lightweight_variant(),
+        Some(ModelId::OpenCodeZenGPT54Mini)
+    );
     assert_eq!(ModelId::GPT54Mini.preferred_lightweight_variant(), None);
 }
 
@@ -334,6 +379,8 @@ fn test_model_generation() {
 
     // Z.AI generations
     assert_eq!(ModelId::ZaiGlm5.generation(), "5");
+    assert_eq!(ModelId::OpenCodeZenGPT54.generation(), "5.4");
+    assert_eq!(ModelId::OpenCodeGoKimiK25.generation(), "k2.5");
 
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.generation(), entry.generation);
@@ -371,6 +418,14 @@ fn test_models_for_provider() {
 
     let zai_models = ModelId::models_for_provider(Provider::ZAI);
     assert!(zai_models.contains(&ModelId::ZaiGlm5));
+
+    let opencode_zen_models = ModelId::models_for_provider(Provider::OpenCodeZen);
+    assert!(opencode_zen_models.contains(&ModelId::OpenCodeZenGPT54));
+    assert!(opencode_zen_models.contains(&ModelId::OpenCodeZenClaudeSonnet46));
+
+    let opencode_go_models = ModelId::models_for_provider(Provider::OpenCodeGo);
+    assert!(opencode_go_models.contains(&ModelId::OpenCodeGoKimiK25));
+    assert!(opencode_go_models.contains(&ModelId::OpenCodeGoMinimaxM27));
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
@@ -504,8 +559,18 @@ fn test_generated_model_capability_lookup() {
     let openai_models = supported_models_for_provider("openai").expect("openai models");
     assert!(openai_models.contains(&models::GPT_5_4));
     assert!(catalog_provider_keys().contains(&"openai"));
+    let opencode_zen_models =
+        supported_models_for_provider("opencode-zen").expect("opencode zen models");
+    assert!(opencode_zen_models.contains(&models::opencode_zen::GPT_5_4));
+    let opencode_go_models =
+        supported_models_for_provider("opencode-go").expect("opencode go models");
+    assert!(opencode_go_models.contains(&models::opencode_go::KIMI_K2_5));
 
     assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
+    assert_eq!(
+        ModelId::OpenCodeZenGPT54.input_modalities(),
+        &["text", "image"]
+    );
     assert_eq!(ModelId::GPT52Codex.input_modalities(), &["text", "image"]);
     assert_eq!(ModelId::GPT51Codex.input_modalities(), &["text", "image"]);
     assert_eq!(
@@ -524,10 +589,32 @@ fn test_generated_model_capability_lookup() {
     );
 
     assert!(ModelId::GPT54.supports_tool_calls());
+    assert!(ModelId::OpenCodeZenGPT54.supports_tool_calls());
     assert!(ModelId::GPT52Codex.supports_tool_calls());
     assert!(ModelId::Gemini31ProPreview.supports_tool_calls());
     assert!(!ModelId::OpenRouterOpenAIGpt5Chat.supports_tool_calls());
     assert!(!ModelId::OpenRouterDeepSeekV32Speciale.supports_tool_calls());
+}
+
+#[test]
+fn test_model_helpers_include_curated_opencode_models() {
+    let zen_models = model_helpers::supported_for("opencode-zen").expect("opencode zen helpers");
+    assert!(zen_models.contains(&models::opencode_zen::GPT_5_4));
+    assert!(zen_models.contains(&models::opencode_zen::CLAUDE_SONNET_4_6));
+    assert!(!zen_models.contains(&models::opencode_zen::GPT_5_2));
+    assert_eq!(
+        model_helpers::default_for("opencode-zen"),
+        Some(models::opencode_zen::DEFAULT_MODEL)
+    );
+
+    let go_models = model_helpers::supported_for("opencode-go").expect("opencode go helpers");
+    assert!(go_models.contains(&models::opencode_go::KIMI_K2_5));
+    assert!(go_models.contains(&models::opencode_go::MINIMAX_M2_7));
+    assert!(!go_models.contains(&models::opencode_go::GLM_5));
+    assert_eq!(
+        model_helpers::default_for("opencode-go"),
+        Some(models::opencode_go::DEFAULT_MODEL)
+    );
 }
 
 #[test]
@@ -579,6 +666,20 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
         assert!(!model.display_name().is_empty());
         assert!(!model.description().is_empty());
         assert!(!model.generation().is_empty());
-        assert!(ModelId::from_str(model.as_str()).is_ok());
+        let parsed = match model {
+            ModelId::OpenCodeZenGPT54 => ModelId::from_str("opencode/gpt-5.4"),
+            ModelId::OpenCodeZenGPT54Mini => ModelId::from_str("opencode/gpt-5.4-mini"),
+            ModelId::OpenCodeZenClaudeSonnet46 => ModelId::from_str("opencode/claude-sonnet-4-6"),
+            ModelId::OpenCodeZenGlm51 => ModelId::from_str("opencode/glm-5.1"),
+            ModelId::OpenCodeZenKimiK25 => ModelId::from_str("opencode/kimi-k2.5"),
+            ModelId::OpenCodeGoGlm51 => ModelId::from_str("opencode-go/glm-5.1"),
+            ModelId::OpenCodeGoKimiK25 => ModelId::from_str("opencode-go/kimi-k2.5"),
+            ModelId::OpenCodeGoMinimaxM25 => ModelId::from_str("opencode-go/minimax-m2.5"),
+            ModelId::OpenCodeGoMinimaxM27 => ModelId::from_str("opencode-go/minimax-m2.7"),
+            // `z-ai/glm-5` intentionally resolves to the native Z.AI model alias first.
+            ModelId::OpenRouterZaiGlm5 => continue,
+            _ => ModelId::from_str(model.as_str()),
+        };
+        assert_eq!(parsed.unwrap(), model);
     }
 }

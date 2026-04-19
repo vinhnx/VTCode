@@ -53,6 +53,17 @@ impl ModelId {
             ModelId::ZaiGlm51,
             // Moonshot models
             ModelId::MoonshotKimiK25,
+            // OpenCode Zen models
+            ModelId::OpenCodeZenGPT54,
+            ModelId::OpenCodeZenGPT54Mini,
+            ModelId::OpenCodeZenClaudeSonnet46,
+            ModelId::OpenCodeZenGlm51,
+            ModelId::OpenCodeZenKimiK25,
+            // OpenCode Go models
+            ModelId::OpenCodeGoGlm51,
+            ModelId::OpenCodeGoKimiK25,
+            ModelId::OpenCodeGoMinimaxM25,
+            ModelId::OpenCodeGoMinimaxM27,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -86,6 +97,7 @@ impl ModelId {
             ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
+            ModelId::OpenRouterZaiGlm47,
         ];
         models.extend(Self::openrouter_models());
         let mut seen = HashSet::new();

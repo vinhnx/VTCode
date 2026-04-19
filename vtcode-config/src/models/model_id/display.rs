@@ -80,6 +80,17 @@ impl ModelId {
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Moonshot models
             ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",
+            // OpenCode Zen models
+            ModelId::OpenCodeZenGPT54 => "GPT-5.4 (OpenCode Zen)",
+            ModelId::OpenCodeZenGPT54Mini => "GPT-5.4 Mini (OpenCode Zen)",
+            ModelId::OpenCodeZenClaudeSonnet46 => "Claude Sonnet 4.6 (OpenCode Zen)",
+            ModelId::OpenCodeZenGlm51 => "GLM-5.1 (OpenCode Zen)",
+            ModelId::OpenCodeZenKimiK25 => "Kimi K2.5 (OpenCode Zen)",
+            // OpenCode Go models
+            ModelId::OpenCodeGoGlm51 => "GLM-5.1 (OpenCode Go)",
+            ModelId::OpenCodeGoKimiK25 => "Kimi K2.5 (OpenCode Go)",
+            ModelId::OpenCodeGoMinimaxM25 => "MiniMax-M2.5 (OpenCode Go)",
+            ModelId::OpenCodeGoMinimaxM27 => "MiniMax-M2.7 (OpenCode Go)",
             // OpenRouter models
             _ => unreachable!(),
         }

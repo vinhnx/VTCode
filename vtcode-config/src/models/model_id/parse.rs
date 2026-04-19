@@ -9,20 +9,47 @@ impl FromStr for ModelId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use crate::constants::models;
+        let trimmed = s.trim();
 
         // Explicitly handle built-in models that might be shadowed by OpenRouter
-        if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY {
+        if trimmed == models::zai::GLM_5 || trimmed == models::zai::GLM_5_LEGACY {
             return Ok(ModelId::ZaiGlm5);
         }
-        if s == models::zai::GLM_5_1 {
+        if trimmed == models::zai::GLM_5_1 {
             return Ok(ModelId::ZaiGlm51);
         }
 
-        if let Some(model) = Self::parse_openrouter_model(s) {
+        if let Some(opencode_model) = trimmed
+            .strip_prefix("opencode/")
+            .or_else(|| trimmed.strip_prefix("opencode-zen/"))
+        {
+            return match opencode_model {
+                m if m == models::opencode_zen::GPT_5_4 => Ok(ModelId::OpenCodeZenGPT54),
+                m if m == models::opencode_zen::GPT_5_4_MINI => Ok(ModelId::OpenCodeZenGPT54Mini),
+                m if m == models::opencode_zen::CLAUDE_SONNET_4_6 => {
+                    Ok(ModelId::OpenCodeZenClaudeSonnet46)
+                }
+                m if m == models::opencode_zen::GLM_5_1 => Ok(ModelId::OpenCodeZenGlm51),
+                m if m == models::opencode_zen::KIMI_K2_5 => Ok(ModelId::OpenCodeZenKimiK25),
+                _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
+            };
+        }
+
+        if let Some(opencode_model) = trimmed.strip_prefix("opencode-go/") {
+            return match opencode_model {
+                m if m == models::opencode_go::GLM_5_1 => Ok(ModelId::OpenCodeGoGlm51),
+                m if m == models::opencode_go::KIMI_K2_5 => Ok(ModelId::OpenCodeGoKimiK25),
+                m if m == models::opencode_go::MINIMAX_M2_5 => Ok(ModelId::OpenCodeGoMinimaxM25),
+                m if m == models::opencode_go::MINIMAX_M2_7 => Ok(ModelId::OpenCodeGoMinimaxM27),
+                _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
+            };
+        }
+
+        if let Some(model) = Self::parse_openrouter_model(trimmed) {
             return Ok(model);
         }
 
-        match s {
+        match trimmed {
             // Gemini models
             s if s == models::GEMINI_3_1_PRO_PREVIEW => Ok(ModelId::Gemini31ProPreview),
             s if s == models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS => {

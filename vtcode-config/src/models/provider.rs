@@ -149,7 +149,15 @@ impl Provider {
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => models::minimax::SUPPORTED_MODELS.contains(&model),
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
-            Provider::OpenCodeZen => false,
+            Provider::OpenCodeZen => {
+                if models::opencode_zen::OPENAI_MODELS.contains(&model) {
+                    Provider::OpenAI.supports_reasoning_effort(model)
+                } else if models::opencode_zen::ANTHROPIC_MODELS.contains(&model) {
+                    Provider::Anthropic.supports_reasoning_effort(model)
+                } else {
+                    false
+                }
+            }
             Provider::OpenCodeGo => false,
         }
     }

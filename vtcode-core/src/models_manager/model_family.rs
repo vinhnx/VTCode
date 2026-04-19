@@ -185,6 +185,13 @@ macro_rules! model_family {
 
 /// Internal helper that returns a `ModelFamily` for the given model slug.
 pub fn find_family_for_model(slug: &str) -> ModelFamily {
+    if let Some((provider, raw_slug)) = opencode_provider_and_raw_slug(slug) {
+        let mut family = find_family_for_model(raw_slug);
+        family.slug = slug.to_string();
+        family.provider = provider;
+        return family;
+    }
+
     // Gemini models
     if slug.starts_with("gemini-3") {
         return model_family!(
@@ -312,19 +319,6 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         );
     }
 
-    // OpenCode Zen / Go models
-    if slug.starts_with("opencode/") || slug.starts_with("opencode-go/") {
-        let provider = if slug.starts_with("opencode-go/") {
-            Provider::OpenCodeGo
-        } else {
-            Provider::OpenCodeZen
-        };
-        return model_family!(
-            slug, "opencode", provider,
-            context_window: Some(DEFAULT_CONTEXT_WINDOW),
-        );
-    }
-
     // Qwen models (via OpenRouter or Ollama)
     if slug.contains("qwen") {
         return model_family!(
@@ -357,6 +351,19 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
     )
 }
 
+fn opencode_provider_and_raw_slug(slug: &str) -> Option<(Provider, &str)> {
+    if let Some(raw_slug) = slug.strip_prefix("opencode-go/") {
+        Some((Provider::OpenCodeGo, raw_slug))
+    } else if let Some(raw_slug) = slug
+        .strip_prefix("opencode/")
+        .or_else(|| slug.strip_prefix("opencode-zen/"))
+    {
+        Some((Provider::OpenCodeZen, raw_slug))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +389,21 @@ mod tests {
         let family = find_family_for_model("claude-opus-4.5");
         assert_eq!(family.family, "claude-opus");
         assert_eq!(family.provider, Provider::Anthropic);
+    }
+
+    #[test]
+    fn test_opencode_zen_family_detection_preserves_provider() {
+        let family = find_family_for_model("opencode/gpt-5.4");
+        assert_eq!(family.family, "gpt-5");
+        assert_eq!(family.provider, Provider::OpenCodeZen);
+        assert!(family.supports_thinking);
+    }
+
+    #[test]
+    fn test_opencode_go_family_detection_preserves_provider() {
+        let family = find_family_for_model("opencode-go/kimi-k2.5");
+        assert_eq!(family.family, "kimi");
+        assert_eq!(family.provider, Provider::OpenCodeGo);
     }
 
     #[test]

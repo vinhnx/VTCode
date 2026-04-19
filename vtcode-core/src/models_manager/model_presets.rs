@@ -917,7 +917,7 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
 
 fn opencode_zen_presets() -> Vec<ModelPreset> {
     vec![ModelPreset {
-        id: "opencode-zen/gpt-5.4".to_string(),
+        id: "opencode/gpt-5.4".to_string(),
         model: "gpt-5.4".to_string(),
         display_name: "GPT-5.4 (OpenCode Zen)".to_string(),
         description: "OpenCode Zen gateway — curated, benchmarked models at cost".to_string(),
@@ -931,7 +931,7 @@ fn opencode_zen_presets() -> Vec<ModelPreset> {
         upgrade: None,
         show_in_picker: true,
         supported_in_api: true,
-        context_window: Some(128_000),
+        context_window: Some(1_050_000),
     }]
 }
 
@@ -951,7 +951,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
         upgrade: None,
         show_in_picker: true,
         supported_in_api: true,
-        context_window: Some(128_000),
+        context_window: Some(256_000),
     }]
 }
 

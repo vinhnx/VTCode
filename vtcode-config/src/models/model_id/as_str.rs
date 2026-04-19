@@ -50,6 +50,17 @@ impl ModelId {
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,
             // Moonshot models
             ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
+            // OpenCode Zen models
+            ModelId::OpenCodeZenGPT54 => models::opencode_zen::GPT_5_4,
+            ModelId::OpenCodeZenGPT54Mini => models::opencode_zen::GPT_5_4_MINI,
+            ModelId::OpenCodeZenClaudeSonnet46 => models::opencode_zen::CLAUDE_SONNET_4_6,
+            ModelId::OpenCodeZenGlm51 => models::opencode_zen::GLM_5_1,
+            ModelId::OpenCodeZenKimiK25 => models::opencode_zen::KIMI_K2_5,
+            // OpenCode Go models
+            ModelId::OpenCodeGoGlm51 => models::opencode_go::GLM_5_1,
+            ModelId::OpenCodeGoKimiK25 => models::opencode_go::KIMI_K2_5,
+            ModelId::OpenCodeGoMinimaxM25 => models::opencode_go::MINIMAX_M2_5,
+            ModelId::OpenCodeGoMinimaxM27 => models::opencode_go::MINIMAX_M2_7,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
