@@ -2,6 +2,7 @@ use super::FileOpsTool;
 use crate::tools::jaro_winkler_similarity;
 use anyhow::{Result, anyhow};
 use std::cmp::Ordering;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
@@ -134,8 +135,11 @@ impl FileOpsTool {
         Ok(canonical)
     }
 
-    pub(super) async fn canonicalize_allow_missing(&self, normalized: &Path) -> Result<PathBuf> {
-        crate::utils::path::canonicalize_allow_missing(normalized).await
+    pub(super) fn canonicalize_allow_missing<'a>(
+        &'a self,
+        normalized: &'a Path,
+    ) -> impl Future<Output = Result<PathBuf>> + 'a {
+        crate::utils::path::canonicalize_allow_missing(normalized)
     }
 
     pub(super) fn resolve_file_path(&self, path: &str) -> Result<Vec<PathBuf>> {

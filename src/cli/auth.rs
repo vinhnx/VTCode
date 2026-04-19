@@ -396,10 +396,10 @@ pub(crate) fn load_openai_session(
     load_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
 }
 
-pub(crate) async fn refresh_openai_login(
+pub(crate) fn refresh_openai_login(
     vt_cfg: Option<&VTCodeConfig>,
-) -> Result<OpenAIChatGptSession> {
-    vtcode_auth::refresh_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg)).await
+) -> impl Future<Output = Result<OpenAIChatGptSession>> + '_ {
+    vtcode_auth::refresh_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
 }
 
 pub(crate) async fn refresh_openai_login_if_available(

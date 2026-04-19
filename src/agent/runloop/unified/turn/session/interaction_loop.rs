@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::Instant;
@@ -191,9 +192,9 @@ pub(crate) enum InteractionOutcome {
     },
 }
 
-pub(crate) async fn run_interaction_loop(
-    ctx: &mut InteractionLoopContext<'_>,
-    state: &mut InteractionState<'_>,
-) -> Result<InteractionOutcome> {
-    super::interaction_loop_runner::run_interaction_loop_impl(ctx, state).await
+pub(crate) fn run_interaction_loop<'a>(
+    ctx: &'a mut InteractionLoopContext<'_>,
+    state: &'a mut InteractionState<'_>,
+) -> impl Future<Output = Result<InteractionOutcome>> + 'a {
+    super::interaction_loop_runner::run_interaction_loop_impl(ctx, state)
 }

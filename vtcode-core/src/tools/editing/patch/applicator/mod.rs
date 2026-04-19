@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::path::Path;
 
 pub(super) use super::error::PatchError;
@@ -23,11 +24,11 @@ pub(crate) async fn apply(
     runner::execute_plan(root, plan).await
 }
 
-pub(crate) async fn render_updated_content(
-    source_path: &Path,
-    content: &str,
-    chunks: &[PatchChunk],
-    path: &str,
-) -> Result<String, PatchError> {
-    text::render_patched_text_from_content(source_path, content, chunks, path).await
+pub(crate) fn render_updated_content<'a>(
+    source_path: &'a Path,
+    content: &'a str,
+    chunks: &'a [PatchChunk],
+    path: &'a str,
+) -> impl Future<Output = Result<String, PatchError>> + 'a {
+    text::render_patched_text_from_content(source_path, content, chunks, path)
 }

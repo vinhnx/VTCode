@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::path::Path;
 
 use anyhow::Result;
@@ -132,20 +133,20 @@ async fn handle_session_palette_command(
     Ok(SlashCommandOutcome::Handled)
 }
 
-pub(super) async fn handle_resume_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-    workspace: &Path,
-) -> Result<SlashCommandOutcome> {
-    handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Resume).await
+pub(super) fn handle_resume_command<'a>(
+    args: &'a str,
+    renderer: &'a mut AnsiRenderer,
+    workspace: &'a Path,
+) -> impl Future<Output = Result<SlashCommandOutcome>> + 'a {
+    handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Resume)
 }
 
-pub(super) async fn handle_fork_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-    workspace: &Path,
-) -> Result<SlashCommandOutcome> {
-    handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Fork).await
+pub(super) fn handle_fork_command<'a>(
+    args: &'a str,
+    renderer: &'a mut AnsiRenderer,
+    workspace: &'a Path,
+) -> impl Future<Output = Result<SlashCommandOutcome>> + 'a {
+    handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Fork)
 }
 
 pub(super) fn handle_rewind_command(

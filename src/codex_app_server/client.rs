@@ -1,9 +1,10 @@
 use anyhow::{Context, Result, anyhow, bail};
-use futures::future::BoxFuture;
+use futures::{TryFutureExt, future::BoxFuture};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::ffi::OsStr;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
@@ -118,95 +119,100 @@ impl CodexAppServerClient {
         }
     }
 
-    pub(crate) async fn account_read(&self) -> Result<CodexAccountReadResponse> {
-        self.request_idempotent("account/read", json!({})).await
-    }
-
-    pub(crate) async fn account_login_chatgpt(&self) -> Result<CodexLoginAccountResponse> {
-        self.request("account/login/start", json!({ "type": "chatgpt" }))
-            .await
-    }
-
-    pub(crate) async fn account_login_chatgpt_device_code(
+    pub(crate) fn account_read(
         &self,
-    ) -> Result<CodexLoginAccountResponse> {
+    ) -> impl Future<Output = Result<CodexAccountReadResponse>> + '_ {
+        self.request_idempotent("account/read", json!({}))
+    }
+
+    pub(crate) fn account_login_chatgpt(
+        &self,
+    ) -> impl Future<Output = Result<CodexLoginAccountResponse>> + '_ {
+        self.request("account/login/start", json!({ "type": "chatgpt" }))
+    }
+
+    pub(crate) fn account_login_chatgpt_device_code(
+        &self,
+    ) -> impl Future<Output = Result<CodexLoginAccountResponse>> + '_ {
         self.request(
             "account/login/start",
             json!({ "type": "chatgptDeviceCode" }),
         )
-        .await
     }
 
-    pub(crate) async fn account_logout(&self) -> Result<()> {
-        let _: CodexLogoutAccountResponse = self.request("account/logout", json!({})).await?;
-        Ok(())
+    pub(crate) fn account_logout(&self) -> impl Future<Output = Result<()>> + '_ {
+        self.request("account/logout", json!({}))
+            .map_ok(|_: CodexLogoutAccountResponse| ())
     }
 
-    pub(crate) async fn mcp_server_status_list(&self) -> Result<CodexMcpServerStatusListResponse> {
-        self.request_idempotent("mcpServerStatus/list", mcp_server_status_list_params())
-            .await
-    }
-
-    pub(crate) async fn collaboration_mode_list(
+    pub(crate) fn mcp_server_status_list(
         &self,
-    ) -> Result<CodexCollaborationModeListResponse> {
-        self.request_idempotent("collaborationMode/list", json!({}))
-            .await
+    ) -> impl Future<Output = Result<CodexMcpServerStatusListResponse>> + '_ {
+        self.request_idempotent("mcpServerStatus/list", mcp_server_status_list_params())
     }
 
-    pub(crate) async fn thread_start(
+    pub(crate) fn collaboration_mode_list(
+        &self,
+    ) -> impl Future<Output = Result<CodexCollaborationModeListResponse>> + '_ {
+        self.request_idempotent("collaborationMode/list", json!({}))
+    }
+
+    pub(crate) fn thread_start(
         &self,
         params: CodexThreadRequest,
         ephemeral: bool,
-    ) -> Result<CodexThreadEnvelope> {
+    ) -> impl Future<Output = Result<CodexThreadEnvelope>> + '_ {
         self.request("thread/start", params.thread_start_params(ephemeral))
-            .await
     }
 
-    pub(crate) async fn thread_resume(&self, thread_id: &str) -> Result<CodexThreadEnvelope> {
+    pub(crate) fn thread_resume(
+        &self,
+        thread_id: &str,
+    ) -> impl Future<Output = Result<CodexThreadEnvelope>> + '_ {
         self.request("thread/resume", json!({ "threadId": thread_id }))
-            .await
     }
 
-    pub(crate) async fn thread_fork(
+    pub(crate) fn thread_fork(
         &self,
         thread_id: &str,
         params: CodexThreadRequest,
         ephemeral: bool,
-    ) -> Result<CodexThreadEnvelope> {
+    ) -> impl Future<Output = Result<CodexThreadEnvelope>> + '_ {
         let mut request = params.thread_start_params(ephemeral);
         if let Some(object) = request.as_object_mut() {
             object.insert("threadId".to_string(), Value::String(thread_id.to_string()));
         }
-        self.request("thread/fork", request).await
+        self.request("thread/fork", request)
     }
 
-    pub(crate) async fn turn_start(
+    pub(crate) fn turn_start(
         &self,
         params: CodexTurnRequest,
-    ) -> Result<CodexTurnStartResponse> {
-        self.request("turn/start", params.as_json()).await
+    ) -> impl Future<Output = Result<CodexTurnStartResponse>> + '_ {
+        self.request("turn/start", params.as_json())
     }
 
-    pub(crate) async fn turn_interrupt(&self, thread_id: &str, turn_id: &str) -> Result<()> {
-        let _: CodexEmptyResponse = self
-            .request(
-                "turn/interrupt",
-                json!({
-                    "threadId": thread_id,
-                    "turnId": turn_id,
-                }),
-            )
-            .await?;
-        Ok(())
+    pub(crate) fn turn_interrupt(
+        &self,
+        thread_id: &str,
+        turn_id: &str,
+    ) -> impl Future<Output = Result<()>> + '_ {
+        self.request(
+            "turn/interrupt",
+            json!({
+                "threadId": thread_id,
+                "turnId": turn_id,
+            }),
+        )
+        .map_ok(|_: CodexEmptyResponse| ())
     }
 
-    pub(crate) async fn turn_steer(
+    pub(crate) fn turn_steer(
         &self,
         thread_id: &str,
         turn_id: &str,
         input: String,
-    ) -> Result<CodexTurnSteerResponse> {
+    ) -> impl Future<Output = Result<CodexTurnSteerResponse>> + '_ {
         self.request(
             "turn/steer",
             json!({
@@ -218,22 +224,21 @@ impl CodexAppServerClient {
                 "threadId": thread_id,
             }),
         )
-        .await
     }
 
-    pub(crate) async fn review_start(
+    pub(crate) fn review_start(
         &self,
         params: CodexReviewStartRequest,
-    ) -> Result<CodexReviewStartResponse> {
-        self.request("review/start", params.as_json()).await
+    ) -> impl Future<Output = Result<CodexReviewStartResponse>> + '_ {
+        self.request("review/start", params.as_json())
     }
 
     #[allow(dead_code)]
-    pub(crate) async fn command_exec(
+    pub(crate) fn command_exec(
         &self,
         params: CodexCommandExecRequest,
-    ) -> Result<CodexCommandExecResponse> {
-        self.request("command/exec", params.as_json()).await
+    ) -> impl Future<Output = Result<CodexCommandExecResponse>> + '_ {
+        self.request("command/exec", params.as_json())
     }
 
     pub(crate) fn respond_to_server_request(&self, id: Value, result: Value) -> Result<()> {
@@ -242,20 +247,26 @@ impl CodexAppServerClient {
             .map_err(|err| anyhow!(err.to_string()))
     }
 
-    async fn request<T>(&self, method: &str, params: Value) -> Result<T>
+    fn request<'a, T>(
+        &'a self,
+        method: &'a str,
+        params: Value,
+    ) -> impl Future<Output = Result<T>> + 'a
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned + 'a,
     {
         self.request_with_policy(method, params, RequestRetryPolicy::Never)
-            .await
     }
 
-    async fn request_idempotent<T>(&self, method: &str, params: Value) -> Result<T>
+    fn request_idempotent<'a, T>(
+        &'a self,
+        method: &'a str,
+        params: Value,
+    ) -> impl Future<Output = Result<T>> + 'a
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned + 'a,
     {
         self.request_with_policy(method, params, RequestRetryPolicy::Idempotent)
-            .await
     }
 
     async fn request_with_policy<T>(

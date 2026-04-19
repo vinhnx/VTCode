@@ -12,6 +12,7 @@ use indexmap::{IndexMap, IndexSet};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 
 use crate::config::constants::tools;
@@ -1099,8 +1100,8 @@ impl ToolPolicyManager {
     }
 
     /// Save configuration to file
-    async fn save_config(&self) -> Result<()> {
-        Self::write_config(&self.config_path, &self.config).await
+    fn save_config(&self) -> impl Future<Output = Result<()>> + '_ {
+        Self::write_config(&self.config_path, &self.config)
     }
 
     fn persist_policy_to_workspace_config(

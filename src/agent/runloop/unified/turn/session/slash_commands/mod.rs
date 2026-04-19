@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -110,15 +111,15 @@ impl<'a> SlashCommandContext<'a> {
     }
 }
 
-pub(crate) async fn run_with_event_loop_suspended<T, F>(
-    handle: &InlineHandle,
+pub(crate) fn run_with_event_loop_suspended<'a, T: 'a, F>(
+    handle: &'a InlineHandle,
     suspend_tui: bool,
     launch: F,
-) -> Result<T>
+) -> impl Future<Output = Result<T>> + 'a
 where
-    F: FnOnce() -> Result<T>,
+    F: FnOnce() -> Result<T> + 'a,
 {
-    handlers::run_with_event_loop_suspended(handle, suspend_tui, launch).await
+    handlers::run_with_event_loop_suspended(handle, suspend_tui, launch)
 }
 
 pub(crate) async fn handle_outcome(

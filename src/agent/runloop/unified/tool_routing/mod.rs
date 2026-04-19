@@ -7,6 +7,7 @@ mod limit_prompts;
 mod permission_prompt;
 mod shell_approval;
 
+use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -885,12 +886,12 @@ async fn persist_segment_approval_cache_keys(
     }
 }
 
-pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
-    ctx: ToolPermissionsContext<'_, S>,
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Result<ToolPermissionFlow> {
-    ensure_tool_permission_with_call_id(ctx, tool_name, tool_args, None).await
+pub(crate) fn ensure_tool_permission<'a, S: UiSession + ?Sized>(
+    ctx: ToolPermissionsContext<'a, S>,
+    tool_name: &'a str,
+    tool_args: Option<&'a Value>,
+) -> impl Future<Output = Result<ToolPermissionFlow>> + 'a {
+    ensure_tool_permission_with_call_id(ctx, tool_name, tool_args, None)
 }
 
 pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(

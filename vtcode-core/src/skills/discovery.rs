@@ -177,7 +177,7 @@ impl SkillDiscovery {
             stats.directories_scanned += 1;
 
             // Scan for skill directories
-            match self.scan_for_skills(&full_path, stats).await {
+            match self.scan_for_skills(&full_path, stats) {
                 Ok(found_skills) => {
                     info!(
                         "Found {} skills in {}",
@@ -197,11 +197,7 @@ impl SkillDiscovery {
     }
 
     /// Scan directory for traditional skills
-    async fn scan_for_skills(
-        &self,
-        dir: &Path,
-        stats: &mut DiscoveryStats,
-    ) -> Result<Vec<SkillContext>> {
+    fn scan_for_skills(&self, dir: &Path, stats: &mut DiscoveryStats) -> Result<Vec<SkillContext>> {
         self.scan_for_skills_recursive(dir, stats, 0)
     }
 

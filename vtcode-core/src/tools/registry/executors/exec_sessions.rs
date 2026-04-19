@@ -9,6 +9,7 @@ use crate::zsh_exec_bridge::ZshExecBridgeSession;
 use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use serde_json::{Value, json};
+use std::future::Future;
 use std::time::{Duration, Instant};
 use tokio::fs;
 
@@ -342,33 +343,40 @@ impl ToolRegistry {
         env
     }
 
-    async fn exec_session_metadata(&self, session_id: &str) -> Result<VTCodeExecSession> {
-        self.exec_sessions.snapshot_session(session_id).await
+    fn exec_session_metadata<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<VTCodeExecSession>> + 'a {
+        self.exec_sessions.snapshot_session(session_id)
     }
 
-    async fn read_exec_session_output(
-        &self,
-        session_id: &str,
+    fn read_exec_session_output<'a>(
+        &'a self,
+        session_id: &'a str,
         drain: bool,
-    ) -> Result<Option<String>> {
-        self.exec_sessions
-            .read_session_output(session_id, drain)
-            .await
+    ) -> impl Future<Output = Result<Option<String>>> + 'a {
+        self.exec_sessions.read_session_output(session_id, drain)
     }
 
-    pub(crate) async fn exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
-        self.exec_sessions.is_session_completed(session_id).await
+    pub(crate) fn exec_session_completed<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<Option<i32>>> + 'a {
+        self.exec_sessions.is_session_completed(session_id)
     }
 
-    async fn exec_session_activity_receiver(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<tokio::sync::watch::Receiver<u64>>> {
-        self.exec_sessions.activity_receiver(session_id).await
+    fn exec_session_activity_receiver<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<Option<tokio::sync::watch::Receiver<u64>>>> + 'a {
+        self.exec_sessions.activity_receiver(session_id)
     }
 
-    async fn exec_session_output_drained(&self, session_id: &str) -> Result<bool> {
-        self.exec_sessions.is_output_drained(session_id).await
+    fn exec_session_output_drained<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<bool>> + 'a {
+        self.exec_sessions.is_output_drained(session_id)
     }
 
     fn handle_closed_exec_session(&self, session_metadata: &VTCodeExecSession) {

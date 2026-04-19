@@ -984,7 +984,7 @@ pub async fn forget_planned_persistent_memory_matches(
     )
     .await?;
 
-    let rollout_files = list_rollout_markdown_files(&files.rollout_summaries_dir).await?;
+    let rollout_files = list_rollout_markdown_files(&files.rollout_summaries_dir)?;
     for path in rollout_files {
         removed_facts += scrub_rollout_file_by_selection(&path, &selected).await?;
     }
@@ -1079,7 +1079,7 @@ async fn persist_memory_internal(
         None
     };
 
-    let pending_before = list_pending_rollout_files(&files.rollout_summaries_dir).await?;
+    let pending_before = list_pending_rollout_files(&files.rollout_summaries_dir)?;
     let should_consolidate = force_rebuild
         || staged_rollout.is_some()
         || !pending_before.is_empty()
@@ -1653,11 +1653,11 @@ fn list_md_files(dir: &Path, filter: impl Fn(&str) -> bool) -> Result<Vec<PathBu
     Ok(files)
 }
 
-async fn list_pending_rollout_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
+fn list_pending_rollout_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
     list_md_files(rollout_dir, |n| n.ends_with(".pending.md"))
 }
 
-async fn list_rollout_markdown_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
+fn list_rollout_markdown_files(rollout_dir: &Path) -> Result<Vec<PathBuf>> {
     list_md_files(rollout_dir, |_| true)
 }
 
@@ -1705,7 +1705,7 @@ async fn consolidate_memory_files(
     workspace_root: &Path,
     files: &PersistentMemoryFiles,
 ) -> Result<ConsolidationResult> {
-    let pending_files = list_pending_rollout_files(&files.rollout_summaries_dir).await?;
+    let pending_files = list_pending_rollout_files(&files.rollout_summaries_dir)?;
     let prefs_existing =
         read_topic_records(&files.preferences_file, MemoryTopic::Preferences).await?;
     let repo_existing =
@@ -1887,7 +1887,7 @@ async fn scrub_rollout_file_by_selection(
 }
 
 async fn remove_rollout_markdown_files(rollout_dir: &Path) -> Result<usize> {
-    let files = list_rollout_markdown_files(rollout_dir).await?;
+    let files = list_rollout_markdown_files(rollout_dir)?;
     let count = files.len();
     for p in files {
         tokio::fs::remove_file(&p)

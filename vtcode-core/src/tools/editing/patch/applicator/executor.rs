@@ -8,15 +8,17 @@ pub(super) struct OperationExecutor<'a> {
     root: &'a Path,
 }
 
+use std::future::Future;
+
 impl<'a> OperationExecutor<'a> {
     pub(super) fn new(root: &'a Path) -> Self {
         Self { root }
     }
 
-    pub(super) async fn execute(
+    pub(super) fn execute(
         &self,
-        operation: PreparedOperation<'_>,
-    ) -> Result<OperationEffect, PatchError> {
-        Operation::from_prepared(operation).apply(self.root).await
+        operation: PreparedOperation<'a>,
+    ) -> impl Future<Output = Result<OperationEffect, PatchError>> + 'a {
+        Operation::from_prepared(operation).apply(self.root)
     }
 }

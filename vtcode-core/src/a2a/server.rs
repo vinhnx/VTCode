@@ -29,6 +29,7 @@ use axum::{
 };
 use serde_json::{Value, json};
 use std::convert::Infallible;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -392,13 +393,13 @@ async fn handle_push_config_get(
 }
 
 /// Handle message/stream RPC method
-async fn handle_message_stream(
-    state: &A2aServerState,
+fn handle_message_stream<'a>(
+    state: &'a A2aServerState,
     params: Option<Value>,
     id: Value,
-) -> A2aResult<Value> {
+) -> impl Future<Output = A2aResult<Value>> + 'a {
     // Same as message_send for now, but would support streaming
-    handle_message_send(state, params, id).await
+    handle_message_send(state, params, id)
 }
 
 /// Handle tasks/get RPC method

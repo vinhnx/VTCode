@@ -122,10 +122,7 @@ impl ToolRegistry {
         assembly.resolve_public_tool(name)
     }
 
-    pub(crate) async fn resolve_public_tool_name(
-        &self,
-        name: &str,
-    ) -> Result<String, ToolCallError> {
+    pub(crate) fn resolve_public_tool_name(&self, name: &str) -> Result<String, ToolCallError> {
         self.resolve_public_tool_name_sync(name)
     }
 }

@@ -20,7 +20,6 @@ impl AgentRunner {
         let canonical_name = self
             .tool_registry
             .resolve_public_tool_name(requested_name)
-            .await
             .ok()?;
 
         self.is_tool_exposed(&canonical_name)

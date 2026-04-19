@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -387,11 +388,11 @@ pub(crate) fn show_lightweight_model_palette(
     Ok(true)
 }
 
-pub(crate) async fn build_lightweight_palette_view(
-    config: &vtcode_core::config::types::AgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-) -> LightweightModelPaletteView {
-    prepare_lightweight_model_palette_view(LIGHTWEIGHT_MODEL_ACTION_PREFIX, config, vt_cfg).await
+pub(crate) fn build_lightweight_palette_view<'a>(
+    config: &'a vtcode_core::config::types::AgentConfig,
+    vt_cfg: Option<&'a VTCodeConfig>,
+) -> impl Future<Output = LightweightModelPaletteView> + 'a {
+    prepare_lightweight_model_palette_view(LIGHTWEIGHT_MODEL_ACTION_PREFIX, config, vt_cfg)
 }
 
 #[allow(clippy::too_many_arguments)]

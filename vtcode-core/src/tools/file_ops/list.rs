@@ -7,6 +7,7 @@ use crate::tools::types::ListInput;
 use anyhow::{Context, Result, anyhow};
 use glob::Pattern;
 use serde_json::{Value, json};
+use std::future::Future;
 use std::path::Path;
 use tracing::{info, warn};
 
@@ -322,8 +323,11 @@ impl FileOpsTool {
     }
 
     /// Execute tree view of directory structure
-    pub(super) async fn execute_tree_view(&self, input: &ListInput) -> Result<Value> {
-        tree::execute_tree_view(self, input).await
+    pub(super) fn execute_tree_view<'a>(
+        &'a self,
+        input: &'a ListInput,
+    ) -> impl Future<Output = Result<Value>> + 'a {
+        tree::execute_tree_view(self, input)
     }
 
     pub(super) fn paginate_and_format(
