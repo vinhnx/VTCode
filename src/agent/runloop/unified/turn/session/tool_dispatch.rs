@@ -394,7 +394,7 @@ fn split_path_and_suffix(input: &str) -> (&str, &str) {
 
 fn strip_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a str> {
     let prefix_len = prefix.len();
-    if input.len() < prefix_len {
+    if input.len() < prefix_len || !input.is_char_boundary(prefix_len) {
         return None;
     }
     let head = &input[..prefix_len];
@@ -407,7 +407,7 @@ fn strip_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a
 
 fn strip_bounded_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a str> {
     let prefix_len = prefix.len();
-    if input.len() < prefix_len {
+    if input.len() < prefix_len || !input.is_char_boundary(prefix_len) {
         return None;
     }
     let head = &input[..prefix_len];

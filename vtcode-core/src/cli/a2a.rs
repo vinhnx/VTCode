@@ -318,20 +318,15 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
             for part in &artifact.parts {
                 match part {
                     crate::a2a::types::Part::Text { text } => {
-                        let preview = if text.len() > 60 {
-                            format!("{}...", &text[..60])
-                        } else {
-                            text.clone()
-                        };
+                        let preview =
+                            vtcode_commons::formatting::truncate_byte_budget(text, 60, "...");
                         println!("    Text: {}", preview);
                     }
                     crate::a2a::types::Part::File { file } => println!("    File: {:?}", file),
                     crate::a2a::types::Part::Data { data } => {
-                        let preview = if data.to_string().len() > 60 {
-                            format!("{}...", &data.to_string()[..60])
-                        } else {
-                            data.to_string()
-                        };
+                        let s = data.to_string();
+                        let preview =
+                            vtcode_commons::formatting::truncate_byte_budget(&s, 60, "...");
                         println!("    Data: {}", preview);
                     }
                 }

@@ -191,11 +191,8 @@ impl PtyManager {
 
             for session in sessions {
                 let cwd = session.working_dir.as_deref().unwrap_or("-");
-                let cmd_truncated = if session.command.len() > 25 {
-                    format!("{}...", &session.command[..22])
-                } else {
-                    session.command.clone()
-                };
+                let cmd_truncated =
+                    vtcode_commons::formatting::truncate_byte_budget(&session.command, 22, "...");
 
                 content.push_str(&format!(
                     "| `{}` | {} | {} | {}x{} |\n",

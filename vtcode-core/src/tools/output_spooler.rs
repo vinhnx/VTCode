@@ -406,13 +406,10 @@ impl ToolOutputSpooler {
         } else {
             None
         };
-        let stderr_preview = response.get("stderr").and_then(|v| v.as_str()).map(|s| {
-            if s.len() > 500 {
-                format!("{}... (truncated)", &s[..500])
-            } else {
-                s.to_string()
-            }
-        });
+        let stderr_preview = response
+            .get("stderr")
+            .and_then(|v| v.as_str())
+            .map(|s| vtcode_commons::formatting::truncate_byte_budget(s, 500, "... (truncated)"));
 
         if let Some(obj) = response.as_object_mut() {
             obj.remove("stdout");
