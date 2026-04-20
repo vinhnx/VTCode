@@ -7,12 +7,12 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         if command_exists("brew") {
-            eprintln!("Installing ripgrep via Homebrew...");
+            tracing::info!(method = "homebrew", "installing ripgrep");
             debug_log("Attempting installation via Homebrew");
             return install_via_homebrew();
         }
         if command_exists("cargo") {
-            eprintln!("Installing ripgrep via Cargo...");
+            tracing::info!(method = "cargo", "installing ripgrep");
             debug_log("Attempting installation via Cargo");
             return install_via_cargo();
         }
@@ -24,7 +24,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
     #[cfg(target_os = "linux")]
     {
         if command_exists("apt") || command_exists("apt-get") {
-            eprintln!("Installing ripgrep via APT...");
+            tracing::info!(method = "apt", "installing ripgrep");
             debug_log("Attempting installation via APT");
             if install_via_apt().is_ok() {
                 return Ok(());
@@ -32,7 +32,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("APT installation failed, trying fallback");
         }
         if command_exists("cargo") {
-            eprintln!("Installing ripgrep via Cargo...");
+            tracing::info!(method = "cargo", "installing ripgrep");
             debug_log("Attempting installation via Cargo (fallback)");
             return install_via_cargo();
         }
@@ -44,7 +44,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         if command_exists("cargo") {
-            eprintln!("Installing ripgrep via Cargo...");
+            tracing::info!(method = "cargo", "installing ripgrep");
             debug_log("Attempting installation via Cargo");
             if install_via_cargo().is_ok() {
                 return Ok(());
@@ -52,7 +52,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("Cargo installation failed, trying fallback");
         }
         if command_exists("choco") {
-            eprintln!("Installing ripgrep via Chocolatey...");
+            tracing::info!(method = "chocolatey", "installing ripgrep");
             debug_log("Attempting installation via Chocolatey (fallback)");
             if install_via_chocolatey().is_ok() {
                 return Ok(());
@@ -60,7 +60,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("Chocolatey installation failed, trying Scoop");
         }
         if command_exists("scoop") {
-            eprintln!("Installing ripgrep via Scoop...");
+            tracing::info!(method = "scoop", "installing ripgrep");
             debug_log("Attempting installation via Scoop (fallback)");
             return install_via_scoop();
         }
@@ -106,7 +106,7 @@ fn install_via_homebrew() -> Result<()> {
         .context("Failed to execute brew install ripgrep")?;
 
     if output.status.success() {
-        eprintln!("✓ Ripgrep installed successfully via Homebrew");
+        tracing::info!(method = "homebrew", "ripgrep installed successfully");
         Ok(())
     } else {
         Err(anyhow!(
@@ -126,7 +126,7 @@ fn install_via_apt() -> Result<()> {
         .context("Failed to execute apt install ripgrep")?;
 
     if output.status.success() {
-        eprintln!("✓ Ripgrep installed successfully via apt");
+        tracing::info!(method = "apt", "ripgrep installed successfully");
         Ok(())
     } else {
         Err(anyhow!(
@@ -144,7 +144,7 @@ fn install_via_cargo() -> Result<()> {
         .context("Failed to execute cargo install ripgrep")?;
 
     if output.status.success() {
-        eprintln!("✓ Ripgrep installed successfully via cargo");
+        tracing::info!(method = "cargo", "ripgrep installed successfully");
         Ok(())
     } else {
         Err(anyhow!(
@@ -162,7 +162,7 @@ fn install_via_chocolatey() -> Result<()> {
         .context("Failed to execute choco install ripgrep")?;
 
     if output.status.success() {
-        eprintln!("✓ Ripgrep installed successfully via Chocolatey");
+        tracing::info!(method = "chocolatey", "ripgrep installed successfully");
         Ok(())
     } else {
         Err(anyhow!(
@@ -180,7 +180,7 @@ fn install_via_scoop() -> Result<()> {
         .context("Failed to execute scoop install ripgrep")?;
 
     if output.status.success() {
-        eprintln!("✓ Ripgrep installed successfully via Scoop");
+        tracing::info!(method = "scoop", "ripgrep installed successfully");
         Ok(())
     } else {
         Err(anyhow!(

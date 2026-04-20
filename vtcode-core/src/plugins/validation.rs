@@ -243,7 +243,7 @@ pub async fn handle_plugin_validate(path: &Path) -> Result<()> {
 
     // Validate the manifest
     let validation_output = PluginDebugger::validate_and_debug_manifest(&manifest)?;
-    println!("{}", validation_output);
+    tracing::info!(output = %validation_output, "plugin validation result");
 
     Ok(())
 }

@@ -260,7 +260,7 @@ impl LMStudioClient {
     /// Download a model using the `lms` CLI tool.
     pub async fn download_model(&self, model: &str) -> io::Result<()> {
         let lms = Self::find_lms()?;
-        eprintln!("Downloading model: {model}");
+        tracing::info!(model, "downloading model");
 
         let status = std::process::Command::new(&lms)
             .args(["get", "--yes", model])

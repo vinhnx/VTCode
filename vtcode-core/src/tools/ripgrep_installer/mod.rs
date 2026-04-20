@@ -134,7 +134,7 @@ impl RipgrepStatus {
         match Self::check() {
             status @ RipgrepStatus::Available { .. } => Ok(status),
             RipgrepStatus::NotFound => {
-                eprintln!("Ripgrep not found. Run `{RIPGREP_INSTALL_COMMAND}` to install it.");
+                tracing::warn!("ripgrep not found, run `{RIPGREP_INSTALL_COMMAND}` to install");
                 Self::install()?;
                 Ok(Self::check())
             }
@@ -145,7 +145,7 @@ impl RipgrepStatus {
 
 pub(super) fn debug_log(message: &str) {
     if std::env::var("VTCODE_DEBUG_RIPGREP").is_ok() {
-        eprintln!("[DEBUG ripgrep] {message}");
+        tracing::debug!(message, "ripgrep");
     }
 }
 

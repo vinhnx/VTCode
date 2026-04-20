@@ -2,7 +2,7 @@
 src/** | Root application binary renders CLI and app output directly.
 vtcode-core/src/cli/** | VT Code core CLI adapters intentionally render command output for users.
 vtcode-core/src/commands/** | Command implementations print human-readable summaries and reports.
-vtcode-core/src/config/validation.rs | Configuration validation warnings are surfaced directly to users during startup.
+vtcode-core/src/config/validation.rs | Configuration validation warnings now use tracing::warn.
 vtcode-core/src/core/agent/core.rs | Interactive agent session headers and summaries are part of the terminal UX.
 vtcode-core/src/core/agent/runner.rs | Interactive agent runner status output is user-facing.
 vtcode-core/src/core/agent/runner/output.rs | Assistant response rendering intentionally writes to stdout.

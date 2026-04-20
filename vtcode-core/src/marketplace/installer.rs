@@ -57,15 +57,9 @@ impl PluginInstaller {
         if let Some(runtime) = &self.core_plugin_runtime {
             // Load the plugin manifest and register it with the core runtime
             let handle = runtime.register_manifest(manifest_path).await?;
-            println!(
-                "Successfully registered plugin with core runtime: {}",
-                handle.manifest.id
-            );
+            tracing::info!(plugin_id = %handle.manifest.id, "registered plugin with core runtime");
         } else {
-            println!(
-                "No core plugin runtime provided, skipping integration: {}",
-                manifest_path.display()
-            );
+            tracing::info!(path = %manifest_path.display(), "no core plugin runtime, skipping integration");
         }
 
         Ok(())
@@ -76,10 +70,7 @@ impl PluginInstaller {
         // Validate the manifest before downloading
         self.validate_manifest(manifest)?;
 
-        println!(
-            "Downloading plugin '{}' from source: {}",
-            manifest.id, manifest.source
-        );
+        tracing::info!(plugin_id = %manifest.id, source = %manifest.source, "downloading plugin");
 
         // Determine the source type and download accordingly
         if manifest.source.starts_with("http") {
@@ -109,7 +100,7 @@ impl PluginInstaller {
         )
         .await?;
 
-        println!("HTTP download completed for plugin: {}", manifest.id);
+        tracing::info!(plugin_id = %manifest.id, "http download completed");
         Ok(())
     }
 
@@ -132,7 +123,7 @@ impl PluginInstaller {
             )
         })?;
 
-        println!("Local file copy completed for plugin: {}", manifest.id);
+        tracing::info!(plugin_id = %manifest.id, "local file copy completed");
         Ok(())
     }
 
@@ -159,7 +150,7 @@ impl PluginInstaller {
             )
         })?;
 
-        println!("Local path copy completed for plugin: {}", manifest.id);
+        tracing::info!(plugin_id = %manifest.id, "local path copy completed");
         Ok(())
     }
 
@@ -175,7 +166,7 @@ impl PluginInstaller {
         )
         .await?;
 
-        println!("Git download completed for plugin: {}", manifest.id);
+        tracing::info!(plugin_id = %manifest.id, "git download completed");
         Ok(())
     }
 
@@ -235,15 +226,9 @@ impl PluginInstaller {
                 .unload_plugin(plugin_id)
                 .await
                 .with_context(|| format!("Failed to unload plugin from runtime: {}", plugin_id))?;
-            println!(
-                "Successfully unloaded plugin from core runtime: {}",
-                plugin_id
-            );
+            tracing::info!(plugin_id = %plugin_id, "unloaded plugin from core runtime");
         } else {
-            println!(
-                "No core plugin runtime provided, skipping removal: {}",
-                plugin_id
-            );
+            tracing::info!(plugin_id = %plugin_id, "no core plugin runtime, skipping removal");
         }
 
         Ok(())
