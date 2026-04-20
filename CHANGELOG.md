@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.99.3 - 2026-04-20
+
+### Highlights
+#### Features
+
+- Add request_user_input_enabled flag to system prompt context and update related logic (ad39062d) 
+### Other Changes
+#### Refactors
+
+- Convert async functions to return Future for improved performance (38fc4722) 
+- Replace manual string truncation with truncate_byte_budget utility for consistency (29a6dc34) 
+- Replace eprintln with tracing for consistent logging across modules (803235eb) 
 ## 0.99.2 - 2026-04-19
 
 ### Highlights
