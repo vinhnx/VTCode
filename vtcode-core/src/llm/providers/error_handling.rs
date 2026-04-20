@@ -400,9 +400,7 @@ mod tests {
                 assert!(message.contains("MOONSHOT_API_KEY"));
                 assert!(message.contains("platform.kimi.ai/console/api-keys"));
                 assert_eq!(
-                    metadata
-                        .as_ref()
-                        .and_then(|meta| meta.code.as_deref()),
+                    metadata.as_ref().and_then(|meta| meta.code.as_deref()),
                     Some("authentication_error")
                 );
             }
