@@ -79,6 +79,7 @@ impl ModelId {
             ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Moonshot models
+            ModelId::MoonshotKimiK26 => "Kimi K2.6 (Moonshot)",
             ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54 => "GPT-5.4 (OpenCode Zen)",

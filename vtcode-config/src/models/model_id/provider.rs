@@ -52,7 +52,7 @@ impl ModelId {
             | ModelId::HuggingFaceQwen35397BA17BTogether
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
-            ModelId::MoonshotKimiK25 => Provider::Moonshot,
+            ModelId::MoonshotKimiK26 | ModelId::MoonshotKimiK25 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54
             | ModelId::OpenCodeZenGPT54Mini
             | ModelId::OpenCodeZenClaudeSonnet46

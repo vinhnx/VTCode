@@ -48,7 +48,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::OpenRouter => models::openrouter::DEFAULT_MODEL,
         Provider::Ollama => models::ollama::DEFAULT_MODEL,
         Provider::LmStudio => models::lmstudio::DEFAULT_MODEL,
-        Provider::Moonshot => models::minimax::MINIMAX_M2_5,
+        Provider::Moonshot => models::moonshot::DEFAULT_MODEL,
         Provider::ZAI => models::zai::DEFAULT_MODEL,
         Provider::Minimax => models::minimax::MINIMAX_M2_5,
         Provider::OpenCodeZen => models::opencode_zen::DEFAULT_MODEL,

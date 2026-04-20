@@ -122,7 +122,9 @@ pub enum ModelId {
     ZaiGlm51,
 
     // Moonshot models
-    /// Kimi K2.5 - Moonshot.ai's flagship reasoning model
+    /// Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship (32B active, MLA, MoonViT vision)
+    MoonshotKimiK26,
+    /// Kimi K2.5 - Moonshot.ai's previous flagship reasoning model
     MoonshotKimiK25,
 
     // OpenCode Zen models

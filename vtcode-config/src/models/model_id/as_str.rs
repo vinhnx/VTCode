@@ -49,6 +49,7 @@ impl ModelId {
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,
             // Moonshot models
+            ModelId::MoonshotKimiK26 => models::moonshot::KIMI_K2_6,
             ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54 => models::opencode_zen::GPT_5_4,

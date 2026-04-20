@@ -153,7 +153,8 @@ impl ModelId {
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }
-            ModelId::MoonshotKimiK25 => "Kimi K2.5 - Moonshot.ai's flagship reasoning model",
+            ModelId::MoonshotKimiK26 => "Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship with 32B active parameters, MLA attention, and MoonViT vision",
+            ModelId::MoonshotKimiK25 => "Kimi K2.5 - Moonshot.ai's previous flagship reasoning model",
             ModelId::OpenCodeZenGPT54 => {
                 "OpenCode Zen flagship GPT-5.4 route using OpenCode's curated pay-as-you-go gateway"
             }

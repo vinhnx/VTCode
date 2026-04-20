@@ -470,6 +470,7 @@ impl ModelId {
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
             // Moonshot models
+            ModelId::MoonshotKimiK26 => "k2.6",
             ModelId::MoonshotKimiK25 => "k2.5",
             // Hugging Face generations
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
