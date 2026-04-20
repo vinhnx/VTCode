@@ -282,7 +282,9 @@ impl ModelsManager {
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => "local-model".to_string(),
-            Provider::Moonshot => "qwen3-coder-next".to_string(),
+            Provider::Moonshot => {
+                crate::config::constants::models::moonshot::DEFAULT_MODEL.to_string()
+            }
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
             Provider::OpenCodeZen => {
                 crate::config::constants::models::opencode_zen::DEFAULT_MODEL.to_string()
@@ -596,5 +598,14 @@ mod tests {
         assert!(!providers.is_empty());
         assert!(providers.contains(&Provider::Gemini));
         assert!(providers.contains(&Provider::OpenAI));
+    }
+
+    #[test]
+    fn moonshot_default_model_uses_curated_default() {
+        let manager = ModelsManager::new();
+        assert_eq!(
+            manager.get_default_model_for_provider(Provider::Moonshot),
+            crate::config::constants::models::moonshot::DEFAULT_MODEL
+        );
     }
 }

@@ -98,7 +98,11 @@ fn test_provider_auto_detection() {
 
     // Test Moonshot models
     assert_eq!(
-        factory.provider_from_model("kimi-k2.5"),
+        factory.provider_from_model(models::moonshot::KIMI_K2_6),
+        Some("moonshot".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::moonshot::KIMI_K2_5),
         Some("moonshot".to_string())
     );
 
@@ -147,7 +151,12 @@ fn test_provider_creation() {
     );
     assert!(openrouter.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
+    let moonshot = create_provider_for_model(
+        models::moonshot::DEFAULT_MODEL,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(moonshot.is_ok());
 
     let ollama =
@@ -198,8 +207,12 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "openrouter");
     }
 
-    let moonshot_client =
-        create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
+    let moonshot_client = create_provider_for_model(
+        models::moonshot::DEFAULT_MODEL,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
@@ -282,8 +295,9 @@ fn test_provider_supported_models() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     let moonshot_models = moonshot.supported_models();
+    assert!(moonshot_models.contains(&models::moonshot::KIMI_K2_6.to_string()));
     assert!(moonshot_models.contains(&"kimi-k2.5".to_string()));
-    assert_eq!(moonshot_models.len(), 1);
+    assert_eq!(moonshot_models.len(), 2);
 }
 
 #[test]

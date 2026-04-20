@@ -956,7 +956,42 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {
-    vec![]
+    vec![
+        ModelPreset {
+            id: "kimi-k2.6".to_string(),
+            model: "kimi-k2.6".to_string(),
+            display_name: "Kimi K2.6 (Moonshot)".to_string(),
+            description: "Moonshot's latest flagship coding and agent model.".to_string(),
+            provider: Provider::Moonshot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![reasoning_preset(
+                ReasoningEffortLevel::Medium,
+                "Balanced",
+            )],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(256_000),
+        },
+        ModelPreset {
+            id: "kimi-k2.5".to_string(),
+            model: "kimi-k2.5".to_string(),
+            display_name: "Kimi K2.5 (Moonshot)".to_string(),
+            description: "Moonshot's previous flagship model for long-context coding.".to_string(),
+            provider: Provider::Moonshot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![reasoning_preset(
+                ReasoningEffortLevel::Medium,
+                "Balanced",
+            )],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(256_000),
+        },
+    ]
 }
 
 fn huggingface_presets() -> Vec<ModelPreset> {
@@ -1053,5 +1088,19 @@ mod tests {
                 .iter()
                 .any(|preset| preset.effort == ReasoningEffortLevel::Max)
         );
+    }
+
+    #[test]
+    fn moonshot_presets_exist_and_default_to_kimi_k26() {
+        let presets = moonshot_presets();
+        assert_eq!(presets.len(), 2);
+        assert!(presets.iter().any(|preset| preset.id == "kimi-k2.5"));
+
+        let default = presets
+            .iter()
+            .find(|preset| preset.is_default)
+            .expect("moonshot default preset");
+        assert_eq!(default.id, "kimi-k2.6");
+        assert_eq!(default.provider, Provider::Moonshot);
     }
 }

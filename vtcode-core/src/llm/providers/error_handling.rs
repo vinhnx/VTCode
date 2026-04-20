@@ -177,7 +177,7 @@ fn parse_api_error_with_metadata(
         401 | 403 => LLMError::Authentication {
             message: error_display::format_llm_error(
                 provider_name,
-                &format!("Authentication failed: {}", error_message),
+                &authentication_error_message(provider_name, &error_message),
             ),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
@@ -242,6 +242,18 @@ fn parse_api_error_with_metadata(
             )),
         },
     }
+}
+
+fn authentication_error_message(provider_name: &str, error_message: &str) -> String {
+    let trimmed = error_message.trim();
+    if provider_name.eq_ignore_ascii_case("Moonshot") {
+        return format!(
+            "Authentication failed: {}. Use a MOONSHOT_API_KEY from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API",
+            trimmed
+        );
+    }
+
+    format!("Authentication failed: {}", trimmed)
 }
 
 /// Extract the most human-readable error message from a provider's JSON error body.
@@ -371,6 +383,30 @@ mod tests {
                 );
             }
             other => panic!("expected rate limit error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_moonshot_auth_error_includes_platform_key_guidance() {
+        let error = parse_api_error(
+            "Moonshot",
+            reqwest::StatusCode::UNAUTHORIZED,
+            r#"{"error":{"message":"Invalid Authentication","type":"invalid_authentication_error"}}"#,
+        );
+
+        match error {
+            LLMError::Authentication { message, metadata } => {
+                assert!(message.contains("Invalid Authentication"));
+                assert!(message.contains("MOONSHOT_API_KEY"));
+                assert!(message.contains("platform.kimi.ai/console/api-keys"));
+                assert_eq!(
+                    metadata
+                        .as_ref()
+                        .and_then(|meta| meta.code.as_deref()),
+                    Some("authentication_error")
+                );
+            }
+            other => panic!("expected authentication error, got {other:?}"),
         }
     }
 
