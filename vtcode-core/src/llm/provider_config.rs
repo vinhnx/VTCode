@@ -88,7 +88,7 @@ define_provider_config!(
     MoonshotProviderConfig,
     "moonshot",
     "Moonshot",
-    "kimi-latest",
+    crate::config::constants::models::moonshot::DEFAULT_MODEL,
     crate::config::constants::urls::MOONSHOT_API_BASE,
     Some(crate::config::constants::env_vars::MOONSHOT_BASE_URL),
     ()

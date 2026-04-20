@@ -32,7 +32,13 @@ pub struct MoonshotProvider {
 
 impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, "kimi-latest".to_string(), None, None, None)
+        Self::with_model_internal(
+            api_key,
+            models::moonshot::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -50,7 +56,7 @@ impl MoonshotProvider {
             api_key,
             http_client,
             base_url,
-            model,
+            model: model.trim().to_string(),
         }
     }
 
@@ -64,7 +70,7 @@ impl MoonshotProvider {
         _model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, "kimi-latest");
+        let model_value = resolve_model(model, models::moonshot::DEFAULT_MODEL);
 
         Self::with_model_internal(
             api_key_value,
@@ -94,7 +100,7 @@ impl MoonshotProvider {
                 base_url,
                 Some(env_vars::MOONSHOT_BASE_URL),
             ),
-            model,
+            model: model.trim().to_string(),
         }
     }
 
@@ -176,6 +182,7 @@ impl LLMProvider for MoonshotProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
         }
+        request.model = request.model.trim().to_string();
         let model = request.model.clone();
 
         let payload = self.convert_to_moonshot_format(&request)?;
@@ -226,6 +233,7 @@ impl LLMProvider for MoonshotProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
         }
+        request.model = request.model.trim().to_string();
         let model = request.model.clone();
 
         self.validate_request(&request)?;
@@ -337,17 +345,10 @@ impl LLMProvider for MoonshotProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = models::moonshot::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        super::common::validate_request_common(
-            request,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            Some(&supported_models),
-        )
+        // Moonshot publishes new official aliases and preview slugs faster than VT Code's
+        // curated picker list is refreshed, so let the upstream API be the source of truth
+        // for model identifiers and keep local validation focused on request shape.
+        super::common::validate_request_common(request, PROVIDER_NAME, PROVIDER_KEY, None)
     }
 }
 

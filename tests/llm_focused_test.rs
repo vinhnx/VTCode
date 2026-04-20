@@ -56,7 +56,7 @@ fn test_provider_auto_detection() {
         Some("openrouter".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("kimi-k2.5"),
+        factory.provider_from_model(models::moonshot::DEFAULT_MODEL),
         Some("moonshot".to_string())
     );
     assert_eq!(
@@ -92,7 +92,12 @@ fn test_unified_client_creation() {
     );
     assert!(openrouter.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
+    let moonshot = create_provider_for_model(
+        models::moonshot::DEFAULT_MODEL,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(moonshot.is_ok());
 
     let ollama =
