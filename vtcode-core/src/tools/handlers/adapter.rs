@@ -124,11 +124,13 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
             Ok(output) => {
                 let ui_content = output.content().unwrap_or("").to_string();
 
-                // Create a summary for LLM (first 500 chars or key info)
+                // Create a summary for LLM (first ~500 bytes or key info)
                 let llm_content = if ui_content.len() > 500 {
+                    let truncated =
+                        vtcode_commons::formatting::truncate_byte_budget(&ui_content, 500, "");
                     format!(
                         "{}...[truncated, {} chars total]",
-                        &ui_content[..500],
+                        truncated,
                         ui_content.len()
                     )
                 } else {

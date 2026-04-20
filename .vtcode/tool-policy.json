@@ -191,11 +191,7 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [
-      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "bash -lc 'echo '\\''Hello world'\\'''|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "echo|sandbox_permissions=\"use_default\"|additional_permissions=null"
-    ],
+    "allowed": [],
     "prefixes": [],
     "regexes": []
   }

@@ -381,7 +381,8 @@ impl WebFetchTool {
         // Truncate preview for UI; keep full content available for reasoning.
         let preview_limit = 8000;
         let (preview, truncated, overflow_info) = if content_length > preview_limit {
-            let truncated_content = format!("{}...", &content[..preview_limit]);
+            let truncated_content =
+                vtcode_commons::formatting::truncate_byte_budget(&content, preview_limit, "...");
             let overflow = format!("[+{} more characters]", content_length - preview_limit);
             (truncated_content, true, Some(overflow))
         } else {

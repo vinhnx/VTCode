@@ -171,11 +171,7 @@ fn edit_not_found_error(
     stripped_new: bool,
 ) -> anyhow::Error {
     let content_preview = if current_content.len() > 500 {
-        format!(
-            "{}...{}",
-            &current_content[..250],
-            &current_content[current_content.len().saturating_sub(250)..]
-        )
+        vtcode_commons::preview::condense_text_bytes(current_content, 250, 250)
     } else {
         current_content.to_owned()
     };

@@ -540,11 +540,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
         && !original.trim().is_empty()
     {
-        let display_error = if original.len() > 200 {
-            format!("{}...", &original[..197])
-        } else {
-            original.to_string()
-        };
+        let display_error = vtcode_commons::formatting::truncate_byte_budget(original, 197, "...");
         renderer.line(
             MessageStyle::ToolDetail,
             &format!("Details: {}", display_error),

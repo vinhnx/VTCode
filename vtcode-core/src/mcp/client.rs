@@ -472,11 +472,8 @@ impl McpClient {
 
             for tool in tools {
                 let desc = tool.description.lines().next().unwrap_or(&tool.description);
-                let desc_truncated = if desc.len() > 60 {
-                    format!("{}...", &desc[..57])
-                } else {
-                    desc.to_string()
-                };
+                let desc_truncated =
+                    vtcode_commons::formatting::truncate_byte_budget(desc, 57, "...");
                 content.push_str(&format!(
                     "| {} | `{}` | {} |\n",
                     tool.provider,

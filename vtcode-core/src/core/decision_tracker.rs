@@ -260,11 +260,7 @@ impl DecisionTracker {
                         Value::String(s) => s.clone(),
                         _ => {
                             let s = args.to_string();
-                            if s.len() > 120 {
-                                format!("{}…", &s[..120])
-                            } else {
-                                s
-                            }
+                            vtcode_commons::formatting::truncate_byte_budget(&s, 120, "…")
                         }
                     };
                     format!(
@@ -276,11 +272,8 @@ impl DecisionTracker {
                     response_type,
                     content,
                 } => {
-                    let preview = if content.len() > 120 {
-                        format!("{}…", &content[..120])
-                    } else {
-                        content.clone()
-                    };
+                    let preview =
+                        vtcode_commons::formatting::truncate_byte_budget(content, 120, "…");
                     format!(
                         "- [turn {}] response:{:?} {} (t={})",
                         turn, response_type, preview, ts
