@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.100.0 - 2026-04-20
+
+### Highlights
+#### Bug Fixes
+
+- Simplify metadata code retrieval in tests (5c4dbd5b) 
+#### Features
+
+- Update Moonshot model references and configurations (365c522f) 
+- Update Moonshot model references to use DEFAULT_MODEL and add presets (794ee1a5) 
+### Other Changes
 ## 0.99.3 - 2026-04-20
 
 ### Highlights
