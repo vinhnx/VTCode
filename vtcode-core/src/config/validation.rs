@@ -52,7 +52,7 @@ impl ValidationResult {
 
         // Print warnings if any
         for warning in &self.warnings {
-            eprintln!("Configuration warning: {}", warning);
+            tracing::warn!(warning = %warning, "configuration warning");
         }
 
         Ok(())

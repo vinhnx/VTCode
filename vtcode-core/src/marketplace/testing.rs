@@ -13,7 +13,7 @@ use crate::marketplace::{
 
 /// Test the marketplace system with sample configurations
 pub async fn test_marketplace_system() -> Result<()> {
-    println!("Testing VT Code marketplace system...");
+    tracing::info!("testing marketplace system");
 
     // Create a temporary directory for testing
     let temp_dir = tempfile::tempdir()?;
@@ -28,7 +28,7 @@ pub async fn test_marketplace_system() -> Result<()> {
 
     // Initialize the system
     marketplace_system.initialize().await?;
-    println!("✓ Marketplace system initialized");
+    tracing::info!("marketplace system initialized");
 
     // Test adding a marketplace
     let test_marketplace = MarketplaceSource::Git {
@@ -41,7 +41,7 @@ pub async fn test_marketplace_system() -> Result<()> {
         .registry
         .add_marketplace(test_marketplace)
         .await?;
-    println!("✓ Test marketplace added");
+    tracing::info!("test marketplace added");
 
     // Test creating and installing a sample plugin
     let sample_plugin = PluginManifest {
@@ -65,7 +65,7 @@ pub async fn test_marketplace_system() -> Result<()> {
         .installer
         .install_plugin(&sample_plugin)
         .await?;
-    println!("✓ Sample plugin installed");
+    tracing::info!("sample plugin installed");
 
     // Verify the plugin is installed
     let is_installed = marketplace_system
@@ -73,14 +73,14 @@ pub async fn test_marketplace_system() -> Result<()> {
         .is_installed("test-plugin")
         .await;
     assert!(is_installed, "Plugin should be installed");
-    println!("✓ Plugin installation verified");
+    tracing::info!("plugin installation verified");
 
     // Test uninstalling the plugin
     marketplace_system
         .installer
         .uninstall_plugin("test-plugin")
         .await?;
-    println!("✓ Sample plugin uninstalled");
+    tracing::info!("sample plugin uninstalled");
 
     // Verify the plugin is uninstalled
     let is_installed_after = marketplace_system
@@ -88,15 +88,15 @@ pub async fn test_marketplace_system() -> Result<()> {
         .is_installed("test-plugin")
         .await;
     assert!(!is_installed_after, "Plugin should be uninstalled");
-    println!("✓ Plugin uninstallation verified");
+    tracing::info!("plugin uninstallation verified");
 
-    println!("All marketplace system tests passed!");
+    tracing::info!("all marketplace system tests passed");
     Ok(())
 }
 
 /// Test marketplace configuration system
 pub async fn test_marketplace_config() -> Result<()> {
-    println!("Testing marketplace configuration system...");
+    tracing::info!("testing marketplace configuration system");
 
     // Create a temporary directory for testing
     let temp_dir = tempfile::tempdir()?;
@@ -131,11 +131,11 @@ pub async fn test_marketplace_config() -> Result<()> {
 
     // Save settings to file
     settings.save_to_file(&config_path).await?;
-    println!("✓ Marketplace settings saved to file");
+    tracing::info!("marketplace settings saved to file");
 
     // Load settings from file
     let loaded_settings = MarketplaceSettings::load_from_file(&config_path).await?;
-    println!("✓ Marketplace settings loaded from file");
+    tracing::info!("marketplace settings loaded from file");
 
     // Verify loaded settings
     assert_eq!(
@@ -155,13 +155,13 @@ pub async fn test_marketplace_config() -> Result<()> {
         loaded_settings.installed_plugins.len()
     );
 
-    println!("✓ Configuration system tests passed!");
+    tracing::info!("configuration system tests passed");
     Ok(())
 }
 
 /// Test plugin validation functionality
 pub fn test_plugin_validation() -> Result<()> {
-    println!("Testing plugin validation...");
+    tracing::info!("testing plugin validation");
 
     // Create a valid plugin manifest
     let valid_plugin = PluginManifest {
@@ -204,7 +204,7 @@ pub fn test_plugin_validation() -> Result<()> {
     // Test validation of valid plugin (should pass)
     let valid_result = installer.validate_manifest(&valid_plugin);
     assert!(valid_result.is_ok(), "Valid plugin should pass validation");
-    println!("✓ Valid plugin validation passed");
+    tracing::info!("valid plugin validation passed");
 
     // Test validation of invalid plugin (should fail)
     let invalid_result = installer.validate_manifest(&invalid_plugin);
@@ -212,26 +212,23 @@ pub fn test_plugin_validation() -> Result<()> {
         invalid_result.is_err(),
         "Invalid plugin should fail validation"
     );
-    println!("✓ Invalid plugin validation failed as expected");
+    tracing::info!("invalid plugin validation failed as expected");
 
-    println!("✓ Plugin validation tests passed!");
+    tracing::info!("plugin validation tests passed");
     Ok(())
 }
 
 /// Run all marketplace tests
 pub async fn run_all_tests() -> Result<()> {
-    println!("Running VT Code marketplace system tests...\n");
+    tracing::info!("running marketplace system tests");
 
     test_plugin_validation()?;
-    println!();
 
     test_marketplace_config().await?;
-    println!();
 
     test_marketplace_system().await?;
-    println!();
 
-    println!("All tests completed successfully!");
+    tracing::info!("all tests completed successfully");
     Ok(())
 }
 
