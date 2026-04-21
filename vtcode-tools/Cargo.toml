@@ -21,11 +21,11 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.100.0" }
-vtcode-core = { path = "../vtcode-core", version = "0.100.0", default-features = false }
-vtcode-acp = { path = "../vtcode-acp", version = "0.100.0" }
-vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.100.0" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.100.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.100.1" }
+vtcode-core = { path = "../vtcode-core", version = "0.100.1", default-features = false }
+vtcode-acp = { path = "../vtcode-acp", version = "0.100.1" }
+vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.100.1" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.100.1" }
 parking_lot = "0.12"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
