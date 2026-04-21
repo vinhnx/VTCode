@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.100.1 - 2026-04-21
+
+### Highlights
+#### Features
+
+- Add Kimi K2.6 model support in Ollama and Hugging Face providers (dbb69fc0) 
+### Other Changes
 ## 0.100.0 - 2026-04-20
 
 ### Highlights
