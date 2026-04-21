@@ -79,6 +79,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaMinimaxM27Cloud,
             ModelId::OllamaMinimaxM25Cloud,
+            ModelId::OllamaKimiK26Cloud,
             ModelId::OllamaNemotron3SuperCloud,
             // MiniMax models
             ModelId::MinimaxM27,
@@ -94,6 +95,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm51ZaiOrg,
             ModelId::HuggingFaceQwen3CoderNextNovita,
             ModelId::HuggingFaceQwen35397BA17BTogether,
+            ModelId::HuggingFaceKimiK26Novita,
             ModelId::HuggingFaceStep35Flash,
             ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
             ModelId::OpenRouterMinimaxM25,
