@@ -77,7 +77,8 @@ impl ModelId {
             ModelId::HuggingFaceStep35Flash => "Step 3.5 Flash (HF)",
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
-            // MiniMax models
+            ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
+            // OpenRouter models
             ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Moonshot models

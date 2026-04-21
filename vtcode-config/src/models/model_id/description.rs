@@ -221,6 +221,9 @@ impl ModelId {
             ModelId::OpenRouterQwen3CoderNext => {
                 "Next-generation Qwen3 coding model optimized for agentic workflows via OpenRouter"
             }
+            ModelId::OpenRouterMoonshotaiKimiK26 => {
+                "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter"
+            }
             _ => unreachable!(),
         }
     }

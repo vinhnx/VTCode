@@ -158,6 +158,7 @@ impl FromStr for ModelId {
             }
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
+            "moonshotai/kimi-k2.6" => Ok(ModelId::OpenRouterMoonshotaiKimiK26),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)

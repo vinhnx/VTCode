@@ -324,6 +324,7 @@ impl ModelId {
                 | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
+                | ModelId::OpenRouterMoonshotaiKimiK26
         )
     }
 
@@ -385,6 +386,7 @@ impl ModelId {
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
+                | ModelId::OpenRouterMoonshotaiKimiK26
         )
     }
 

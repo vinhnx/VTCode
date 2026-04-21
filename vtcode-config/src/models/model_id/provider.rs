@@ -118,7 +118,8 @@ impl ModelId {
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
             | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterZaiGlm47
-            | ModelId::OpenRouterZaiGlm51 => Provider::OpenRouter,
+            | ModelId::OpenRouterZaiGlm51
+            | ModelId::OpenRouterMoonshotaiKimiK26 => Provider::OpenRouter,
         }
     }
 

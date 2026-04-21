@@ -101,6 +101,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
             ModelId::OpenRouterZaiGlm47,
+            ModelId::OpenRouterMoonshotaiKimiK26,
         ];
         models.extend(Self::openrouter_models());
         let mut seen = HashSet::new();

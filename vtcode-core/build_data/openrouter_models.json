@@ -1098,6 +1098,39 @@
         "generation": "2025-08-05",
         "doc_comment": "Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing"
       }
+    },
+    "moonshotai/kimi-k2.6": {
+      "id": "moonshotai/kimi-k2.6",
+      "name": "MoonshotAI: Kimi K2.6",
+      "description": "Kimi K2.6 is Moonshot AI's next-generation multimodal model, designed for long-horizon coding, coding-driven UI/UX generation, and multi-agent orchestration. Handles complex end-to-end coding tasks across Python, Rust, and Go, and can convert prompts and visual inputs into production-ready interfaces.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 262144,
+      "max_output_tokens": 8192,
+      "cost": {
+        "input": 9.5e-07,
+        "output": 4e-06
+      },
+      "vtcode": {
+        "variant": "OpenRouterMoonshotaiKimiK26",
+        "constant": "MOONSHOTAI_KIMI_K2_6",
+        "vendor": "moonshotai",
+        "display": "Kimi K2.6",
+        "description": "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "K2.6",
+        "doc_comment": "Kimi K2.6 - Moonshot AI's next-generation multimodal model for long-horizon coding and design via OpenRouter"
+      }
     }
   },
   "default_model": "qwen/qwen3-coder"

@@ -268,4 +268,6 @@ pub enum ModelId {
     OpenRouterZaiGlm51,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter
     OpenRouterMinimaxM25,
+    /// Kimi K2.6 - Moonshot AI's next-generation multimodal model via OpenRouter
+    OpenRouterMoonshotaiKimiK26,
 }

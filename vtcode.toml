@@ -42,7 +42,7 @@ reasoning_effort = "low"
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ansi-classic"
+theme = "ciapre-blue"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
