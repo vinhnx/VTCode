@@ -2,6 +2,15 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.100.2 - 2026-04-21
+
+### Highlights
+#### Features
+
+- Add Kimi K2.6 support (d0a6a254) 
+- Add Kimi K2.6 to OpenRouter presets (04ca6808) 
+- Add MoonshotAI Kimi K2.6 model support (8882cf58) 
+### Other Changes
 ## 0.100.1 - 2026-04-21
 
 ### Highlights
