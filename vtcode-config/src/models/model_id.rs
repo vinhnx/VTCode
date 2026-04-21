@@ -113,6 +113,8 @@ pub enum ModelId {
     HuggingFaceQwen3CoderNextNovita,
     /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
     HuggingFaceQwen35397BA17BTogether,
+    /// Kimi K2.6 via Novita on Hugging Face router
+    HuggingFaceKimiK26Novita,
     /// Step 3.5 Flash via Hugging Face router
     HuggingFaceStep35Flash,
 
@@ -176,6 +178,8 @@ pub enum ModelId {
     OllamaMinimaxM25Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
     OllamaGemini3FlashPreviewCloud,
+    /// Kimi K2.6 Cloud - Moonshot Kimi K2.6 via Ollama Cloud
+    OllamaKimiK26Cloud,
     /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
     OllamaNemotron3SuperCloud,
 

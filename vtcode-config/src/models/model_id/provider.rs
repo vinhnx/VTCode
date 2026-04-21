@@ -50,6 +50,7 @@ impl ModelId {
             | ModelId::HuggingFaceGlm51ZaiOrg
             | ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::HuggingFaceQwen35397BA17BTogether
+            | ModelId::HuggingFaceKimiK26Novita
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK26 | ModelId::MoonshotKimiK25 => Provider::Moonshot,
@@ -74,6 +75,7 @@ impl ModelId {
             | ModelId::OllamaMinimaxM27Cloud
             | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3SuperCloud
+            | ModelId::OllamaKimiK26Cloud
             | ModelId::OllamaGlm5Cloud
             | ModelId::OllamaGlm51Cloud => Provider::Ollama,
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,

@@ -138,6 +138,7 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => {
                 "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }
+            ModelId::OllamaKimiK26Cloud => "Cloud-hosted Kimi K2.6 model served via Ollama Cloud",
             ModelId::OllamaNemotron3SuperCloud => {
                 "NVIDIA Nemotron™ is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
             }
@@ -209,6 +210,9 @@ impl ModelId {
             }
             ModelId::HuggingFaceQwen35397BA17BTogether => {
                 "Qwen3.5-397B-A17B via Together inference provider on HuggingFace router. Vision-language model with linear attention and sparse MoE, 1M context window."
+            }
+            ModelId::HuggingFaceKimiK26Novita => {
+                "Kimi K2.6 via Novita inference provider on HuggingFace router."
             }
             ModelId::HuggingFaceStep35Flash => {
                 "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
