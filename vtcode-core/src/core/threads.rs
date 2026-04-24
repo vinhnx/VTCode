@@ -646,14 +646,14 @@ mod tests {
                 distinct_tools: vec!["tool_a".to_string()],
                 transcript: Vec::new(),
                 messages: vec![SessionMessage::new(MessageRole::User, "hello")],
-                progress: Some(SessionProgress {
+                progress: Some(Box::new(SessionProgress {
                     turn_number: 1,
                     recent_messages: vec![SessionMessage::new(MessageRole::Assistant, "recent")],
                     tool_summaries: Vec::new(),
                     token_usage: None,
                     max_context_tokens: None,
                     loaded_skills: vec!["skill_a".to_string()],
-                }),
+                })),
                 error_logs: Vec::new(),
             },
         };
@@ -914,7 +914,7 @@ mod tests {
                 distinct_tools: Vec::new(),
                 transcript: Vec::new(),
                 messages: Vec::new(),
-                progress: Some(SessionProgress {
+                progress: Some(Box::new(SessionProgress {
                     turn_number: 2,
                     recent_messages: vec![
                         SessionMessage::from(
@@ -931,7 +931,7 @@ mod tests {
                     token_usage: None,
                     max_context_tokens: None,
                     loaded_skills: Vec::new(),
-                }),
+                })),
                 error_logs: Vec::new(),
             },
         };

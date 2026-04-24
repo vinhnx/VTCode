@@ -23,7 +23,7 @@ api_key_env = "OLLAMA_API_KEY"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-v4-flash:cloud"
+default_model = "minimax-m2.7:cloud"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai

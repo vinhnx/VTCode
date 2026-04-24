@@ -3,6 +3,7 @@ use crate::config::constants::tools as tool_names;
 use crate::llm::provider::{ContentPart, ToolCall};
 use anyhow::anyhow;
 use chrono::{TimeZone, Timelike};
+use std::mem::size_of;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -143,7 +144,10 @@ fn session_message_converts_back_and_forth() {
 
     assert_eq!(original.role, restored.role);
     assert_eq!(original.content, restored.content);
-    assert_eq!(original.reasoning, stored.reasoning);
+    assert_eq!(
+        original.reasoning.as_deref(),
+        stored.reasoning.as_deref().map(|v| v.as_str())
+    );
     assert_eq!(original.reasoning, restored.reasoning);
     assert_eq!(original.tool_call_id, restored.tool_call_id);
     assert_eq!(original.phase, stored.phase);
@@ -177,12 +181,62 @@ fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
     let stored = SessionMessage::from(&original);
     let restored = Message::from(&stored);
 
-    assert_eq!(stored.reasoning_details, original.reasoning_details);
-    assert_eq!(stored.tool_calls, original.tool_calls);
-    assert_eq!(stored.origin_tool, original.origin_tool);
+    assert_eq!(
+        stored.reasoning_details.as_deref(),
+        original.reasoning_details.as_ref()
+    );
+    assert_eq!(stored.tool_calls.as_deref(), original.tool_calls.as_ref());
+    assert_eq!(
+        stored.origin_tool.as_deref().map(|v| v.as_str()),
+        original.origin_tool.as_deref()
+    );
     assert_eq!(restored.reasoning_details, original.reasoning_details);
     assert_eq!(restored.tool_calls, original.tool_calls);
     assert_eq!(restored.origin_tool, original.origin_tool);
+}
+
+#[test]
+fn session_message_discards_empty_sparse_metadata() {
+    let mut original = Message::assistant("Calling a tool".to_owned());
+    original.reasoning = Some(String::new());
+    original.reasoning_details = Some(Vec::new());
+    original.tool_calls = Some(Vec::new());
+    original.tool_call_id = Some(String::new());
+    original.origin_tool = Some(String::new());
+
+    let stored = SessionMessage::from(&original);
+    assert!(stored.reasoning.is_none());
+    assert!(stored.reasoning_details.is_none());
+    assert!(stored.tool_calls.is_none());
+    assert!(stored.tool_call_id.is_none());
+    assert!(stored.origin_tool.is_none());
+
+    let restored = Message::from(&stored);
+    assert!(restored.reasoning.is_none());
+    assert!(restored.reasoning_details.is_none());
+    assert!(restored.tool_calls.is_none());
+    assert!(restored.tool_call_id.is_none());
+    assert!(restored.origin_tool.is_none());
+}
+
+#[test]
+fn session_message_deserialize_discards_empty_sparse_metadata() {
+    let payload = serde_json::json!({
+        "role": "Assistant",
+        "content": "done",
+        "reasoning": "",
+        "reasoning_details": [],
+        "tool_calls": [],
+        "tool_call_id": "",
+        "origin_tool": "",
+    });
+
+    let message: SessionMessage = serde_json::from_value(payload).expect("session message");
+    assert!(message.reasoning.is_none());
+    assert!(message.reasoning_details.is_none());
+    assert!(message.tool_calls.is_none());
+    assert!(message.tool_call_id.is_none());
+    assert!(message.origin_tool.is_none());
 }
 
 #[test]
@@ -200,6 +254,33 @@ fn session_message_preserves_parts() {
 
     let restored = Message::from(&stored);
     assert_eq!(restored.content, original.content);
+}
+
+#[test]
+fn session_message_layout_is_smaller_than_unboxed_equivalent() {
+    #[derive(Debug)]
+    #[allow(dead_code)]
+    struct UnboxedSessionMessageLike(
+        MessageRole,
+        MessageContent,
+        Option<String>,
+        Option<Vec<serde_json::Value>>,
+        Option<Vec<ToolCall>>,
+        Option<String>,
+        Option<AssistantPhase>,
+        Option<String>,
+    );
+
+    assert!(size_of::<SessionMessage>() < size_of::<UnboxedSessionMessageLike>());
+}
+
+#[test]
+fn boxed_session_progress_option_is_pointer_sized() {
+    assert_eq!(
+        size_of::<Option<Box<SessionProgress>>>(),
+        size_of::<usize>()
+    );
+    assert!(size_of::<Option<SessionProgress>>() > size_of::<Option<Box<SessionProgress>>>());
 }
 
 #[tokio::test]
@@ -262,7 +343,7 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
     );
     let archive = SessionArchive::new(metadata, None).await?;
     let mut assistant = SessionMessage::new(MessageRole::Assistant, "done");
-    assistant.reasoning = Some("reasoned".to_string());
+    assistant.reasoning = Some(Box::new("reasoned".to_string()));
     let recent = vec![
         SessionMessage::new(MessageRole::User, "run cargo check"),
         SessionMessage::new(MessageRole::Tool, "{\"output\":\"...\"}"),
@@ -879,18 +960,18 @@ fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
                 ContentPart::text("text ".repeat(800)),
                 ContentPart::image("a".repeat(4000), "image/png".to_string()),
             ]),
-            reasoning: Some("reasoning ".repeat(300)),
+            reasoning: Some(Box::new("reasoning ".repeat(300))),
             reasoning_details: None,
-            tool_calls: Some(vec![ToolCall::function(
+            tool_calls: Some(Box::new(vec![ToolCall::function(
                 "call_1".to_string(),
                 "unified_exec".to_string(),
                 "{\"cmd\":\"echo giant payload\"}".repeat(100),
-            )]),
+            )])),
             tool_call_id: None,
             phase: None,
-            origin_tool: Some("unified_exec".repeat(50)),
+            origin_tool: Some(Box::new("unified_exec".repeat(50))),
         }],
-        progress: Some(SessionProgress {
+        progress: Some(Box::new(SessionProgress {
             turn_number: 1,
             recent_messages: vec![SessionMessage::new(
                 MessageRole::Assistant,
@@ -900,7 +981,7 @@ fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
             token_usage: Some("token ".repeat(200)),
             max_context_tokens: Some(128_000),
             loaded_skills: vec!["skill ".repeat(50)],
-        }),
+        })),
         error_logs: vec![ErrorLogEntry {
             timestamp: Utc::now().to_rfc3339(),
             level: "ERROR".to_string(),

@@ -513,14 +513,14 @@ mod tests {
             distinct_tools: vec!["tool_a".to_string()],
             transcript: Vec::new(),
             messages: vec![SessionMessage::new(MessageRole::User, "full")],
-            progress: Some(SessionProgress {
+            progress: Some(Box::new(SessionProgress {
                 turn_number: 2,
                 recent_messages: vec![progress_msg.clone()],
                 tool_summaries: vec!["tool_a".to_string()],
                 token_usage: None,
                 max_context_tokens: Some(128),
                 loaded_skills: Vec::new(),
-            }),
+            })),
             error_logs: Vec::new(),
         };
 

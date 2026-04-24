@@ -10,7 +10,7 @@ use crate::utils::file_utils::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::RegexBuilder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -348,21 +348,83 @@ impl SessionArchiveMetadata {
 pub struct SessionMessage {
     pub role: MessageRole,
     pub content: MessageContent,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_details: Option<Vec<serde_json::Value>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    #[serde(default)]
-    pub tool_call_id: Option<String>,
+    // Keep sparse metadata boxed so long histories don't pay large inline Option<T> costs.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_non_empty_string_opt"
+    )]
+    pub reasoning: Option<Box<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_non_empty_vec_opt"
+    )]
+    pub reasoning_details: Option<Box<Vec<serde_json::Value>>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_non_empty_vec_opt"
+    )]
+    pub tool_calls: Option<Box<Vec<ToolCall>>>,
+    #[serde(default, deserialize_with = "deserialize_boxed_non_empty_string_opt")]
+    pub tool_call_id: Option<Box<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase: Option<AssistantPhase>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub origin_tool: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_non_empty_string_opt"
+    )]
+    pub origin_tool: Option<Box<String>>,
 }
 
 impl Eq for SessionMessage {}
+
+#[allow(clippy::box_collection)]
+fn boxed_non_empty_string(value: Option<String>) -> Option<Box<String>> {
+    value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
+}
+
+#[allow(clippy::box_collection)]
+fn boxed_non_empty_vec<T>(value: Option<Vec<T>>) -> Option<Box<Vec<T>>> {
+    value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
+}
+
+#[allow(clippy::box_collection)]
+fn clone_non_empty_boxed_string(value: &Option<Box<String>>) -> Option<String> {
+    value
+        .as_deref()
+        .and_then(|value| (!value.is_empty()).then_some(value.to_owned()))
+}
+
+#[allow(clippy::box_collection)]
+fn clone_non_empty_boxed_vec<T: Clone>(value: &Option<Box<Vec<T>>>) -> Option<Vec<T>> {
+    value
+        .as_deref()
+        .and_then(|value| (!value.is_empty()).then_some(value.clone()))
+}
+
+#[allow(clippy::box_collection)]
+fn deserialize_boxed_non_empty_string_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer).map(boxed_non_empty_string)
+}
+
+#[allow(clippy::box_collection)]
+fn deserialize_boxed_non_empty_vec_opt<'de, D, T>(
+    deserializer: D,
+) -> Result<Option<Box<Vec<T>>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<Vec<T>>::deserialize(deserializer).map(boxed_non_empty_vec)
+}
 
 impl SessionMessage {
     fn base(role: MessageRole, content: MessageContent) -> Self {
@@ -400,7 +462,7 @@ impl SessionMessage {
         tool_call_id: Option<String>,
     ) -> Self {
         let mut message = Self::base(role, content);
-        message.tool_call_id = tool_call_id;
+        message.tool_call_id = boxed_non_empty_string(tool_call_id);
         message
     }
 }
@@ -410,12 +472,12 @@ impl From<&Message> for SessionMessage {
         Self {
             role: message.role.clone(),
             content: message.content.clone(),
-            reasoning: message.reasoning.clone(),
-            reasoning_details: message.reasoning_details.clone(),
-            tool_calls: message.tool_calls.clone(),
-            tool_call_id: message.tool_call_id.clone(),
+            reasoning: boxed_non_empty_string(message.reasoning.clone()),
+            reasoning_details: boxed_non_empty_vec(message.reasoning_details.clone()),
+            tool_calls: boxed_non_empty_vec(message.tool_calls.clone()),
+            tool_call_id: boxed_non_empty_string(message.tool_call_id.clone()),
             phase: message.phase,
-            origin_tool: message.origin_tool.clone(),
+            origin_tool: boxed_non_empty_string(message.origin_tool.clone()),
         }
     }
 }
@@ -425,12 +487,12 @@ impl From<&SessionMessage> for Message {
         Self {
             role: message.role.clone(),
             content: message.content.clone(),
-            reasoning: message.reasoning.clone(),
-            reasoning_details: message.reasoning_details.clone(),
-            tool_calls: message.tool_calls.clone(),
-            tool_call_id: message.tool_call_id.clone(),
+            reasoning: clone_non_empty_boxed_string(&message.reasoning),
+            reasoning_details: clone_non_empty_boxed_vec(&message.reasoning_details),
+            tool_calls: clone_non_empty_boxed_vec(&message.tool_calls),
+            tool_call_id: clone_non_empty_boxed_string(&message.tool_call_id),
             phase: message.phase,
-            origin_tool: message.origin_tool.clone(),
+            origin_tool: clone_non_empty_boxed_string(&message.origin_tool),
         }
     }
 }
@@ -445,8 +507,9 @@ pub struct SessionSnapshot {
     pub transcript: Vec<String>,
     #[serde(default)]
     pub messages: Vec<SessionMessage>,
+    // SessionProgress is heavy and frequently absent in final snapshots.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub progress: Option<SessionProgress>,
+    pub progress: Option<Box<SessionProgress>>,
     /// ERROR-level log entries captured during the session for post-mortem debugging.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub error_logs: Vec<ErrorLogEntry>,
@@ -1063,7 +1126,7 @@ impl SessionArchive {
             distinct_tools,
             transcript,
             messages,
-            progress,
+            progress: progress.map(Box::new),
             error_logs: drain_error_logs(),
         }
     }
@@ -1861,10 +1924,7 @@ fn shrink_session_message(message: &mut SessionMessage) -> bool {
     if let Some(reasoning) = message.reasoning.as_mut() {
         changed |= shrink_string(reasoning);
     }
-    if let Some(reasoning_details) = message.reasoning_details.as_mut()
-        && !reasoning_details.is_empty()
-    {
-        reasoning_details.clear();
+    if message.reasoning_details.take().is_some() {
         changed = true;
     }
     if let Some(tool_call_id) = message.tool_call_id.as_mut() {
@@ -1874,7 +1934,7 @@ fn shrink_session_message(message: &mut SessionMessage) -> bool {
         changed |= shrink_string(origin_tool);
     }
     if let Some(tool_calls) = message.tool_calls.as_mut() {
-        for tool_call in tool_calls {
+        for tool_call in tool_calls.iter_mut() {
             changed |= shrink_string(&mut tool_call.id);
             changed |= shrink_string(&mut tool_call.call_type);
             if let Some(function) = tool_call.function.as_mut() {
