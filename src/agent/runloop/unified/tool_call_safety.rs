@@ -127,6 +127,7 @@ impl ToolCallSafetyValidator {
     }
 
     /// Validate a tool call before execution
+    #[cfg(test)]
     pub(crate) async fn validate_call(
         &self,
         tool_name: &str,
@@ -164,6 +165,10 @@ impl ToolCallSafetyValidator {
         )
         .destructive
     }
+}
+
+pub(crate) fn invocation_id_from_call_id(call_id: &str) -> ToolInvocationId {
+    ToolInvocationId::parse(call_id).unwrap_or_else(|_| ToolInvocationId::new())
 }
 
 fn map_gateway_violation(violation: Option<GatewaySafetyError>, reason: &str) -> SafetyError {

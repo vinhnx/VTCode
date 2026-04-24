@@ -21,7 +21,10 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::tool_call_safety::{SafetyError, invocation_id_from_call_id};
+use crate::agent::runloop::unified::tool_routing::{
+    ToolPermissionFlow, ensure_tool_permission_with_call_id, prompt_session_limit_increase,
+};
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
@@ -34,7 +37,7 @@ fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, Strin
     match ToolInvocationId::parse(tool_item_id) {
         Ok(invocation_id) => (invocation_id, tool_item_id.to_string()),
         Err(_) => {
-            let invocation_id = ToolInvocationId::new();
+            let invocation_id = invocation_id_from_call_id(tool_item_id);
             (
                 invocation_id,
                 format!("{tool_item_id}:{}", invocation_id.short()),
@@ -148,9 +151,12 @@ pub(crate) async fn run_tool_call_with_args(
 
         match ctx
             .tool_registry
-            .preflight_validate_call(requested_name, args_val)
+            .admit_public_tool_call(requested_name, args_val)
         {
-            Ok(preflight) => canonical_name = preflight.normalized_tool_name,
+            Ok(prepared) => {
+                canonical_name = prepared.canonical_name;
+                effective_args = prepared.effective_args;
+            }
             Err(err) => {
                 return Ok(ToolPipelineOutcome::from_status(
                     ToolExecutionStatus::Failure {
@@ -162,8 +168,6 @@ pub(crate) async fn run_tool_call_with_args(
                 ));
             }
         }
-
-        let _ = safety_invocation_id;
     } else if let Some(tool) = ctx.tool_registry.get_tool(requested_name) {
         canonical_name = tool.name().to_string();
     }
@@ -217,8 +221,22 @@ pub(crate) async fn run_tool_call_with_args(
     }
 
     if !prevalidated {
+        if let Err(safety_failure) = check_tool_safety(
+            ctx,
+            name,
+            &effective_args,
+            safety_invocation_id,
+            ctrl_c_state,
+            ctrl_c_notify,
+        )
+        .await
+        {
+            return Ok(finish_with_status(safety_failure, false, &effective_args));
+        }
+
         match check_tool_permission(
             ctx,
+            tool_call_id,
             name,
             &effective_args,
             ctrl_c_state,
@@ -436,8 +454,67 @@ pub(crate) fn exec_settlement_mode_for_tool_call(
     }
 }
 
+async fn check_tool_safety(
+    ctx: &mut RunLoopContext<'_>,
+    name: &str,
+    args_val: &Value,
+    invocation_id: ToolInvocationId,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> std::result::Result<(), ToolExecutionStatus> {
+    let Some(safety_validator) = ctx.safety_validator else {
+        return Ok(());
+    };
+
+    loop {
+        match safety_validator
+            .validate_call_with_invocation_id(name, args_val, invocation_id)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(SafetyError::SessionLimitReached { max }) => {
+                match prompt_session_limit_increase(
+                    ctx.handle,
+                    ctx.session,
+                    ctrl_c_state,
+                    ctrl_c_notify,
+                    max,
+                )
+                .await
+                {
+                    Ok(Some(increment)) => safety_validator.increase_session_limit(increment),
+                    Ok(None) => {
+                        return Err(ToolExecutionStatus::Failure {
+                            error: structured_failure_from_message(
+                                name,
+                                "Session tool limit reached and not increased by user",
+                            ),
+                        });
+                    }
+                    Err(error) => {
+                        return Err(ToolExecutionStatus::Failure {
+                            error: structured_failure(
+                                name,
+                                &anyhow!(
+                                    "Failed while requesting a session tool-limit increase: {error}"
+                                ),
+                            ),
+                        });
+                    }
+                }
+            }
+            Err(error) => {
+                return Err(ToolExecutionStatus::Failure {
+                    error: structured_failure(name, &anyhow!("Safety validation failed: {error}")),
+                });
+            }
+        }
+    }
+}
+
 async fn check_tool_permission(
     ctx: &mut RunLoopContext<'_>,
+    tool_call_id: &str,
     name: &str,
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -456,7 +533,7 @@ async fn check_tool_permission(
         }
     });
 
-    match ensure_tool_permission(
+    match ensure_tool_permission_with_call_id(
         crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
             tool_registry: ctx.tool_registry,
             renderer: ctx.renderer,
@@ -486,6 +563,7 @@ async fn check_tool_permission(
         },
         name,
         Some(args_val),
+        Some(tool_call_id),
     )
     .await
     {

@@ -9,7 +9,7 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
-use crate::agent::runloop::unified::tool_call_safety::SafetyError;
+use crate::agent::runloop::unified::tool_call_safety::{SafetyError, invocation_id_from_call_id};
 use crate::agent::runloop::unified::tool_routing::{
     ensure_tool_permission_with_call_id, prompt_session_limit_increase,
 };
@@ -116,10 +116,11 @@ async fn run_safety_validation_loop(
     canonical_tool_name: &str,
     effective_args: &serde_json::Value,
 ) -> Result<Option<ValidationResult>> {
+    let invocation_id = invocation_id_from_call_id(tool_call_id);
     loop {
         let validation_result = ctx
             .safety_validator
-            .validate_call(canonical_tool_name, effective_args)
+            .validate_call_with_invocation_id(canonical_tool_name, effective_args, invocation_id)
             .await;
 
         match validation_result {
