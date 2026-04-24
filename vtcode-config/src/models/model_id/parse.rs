@@ -105,6 +105,9 @@ impl FromStr for ModelId {
             s if s == models::ollama::QWEN3_CODER_NEXT => Ok(ModelId::OllamaQwen3CoderNext),
             "qwen3-coder-next" => Ok(ModelId::OllamaQwen3CoderNext),
             s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
+            s if s == models::ollama::DEEPSEEK_V4_FLASH_CLOUD => {
+                Ok(ModelId::OllamaDeepseekV4FlashCloud)
+            }
             s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => Ok(ModelId::OllamaQwen3Next80bCloud),
             s if s == models::ollama::GLM_5_CLOUD => Ok(ModelId::OllamaGlm5Cloud),
             s if s == models::ollama::GLM_5_1_CLOUD => Ok(ModelId::OllamaGlm51Cloud),

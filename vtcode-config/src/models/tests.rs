@@ -475,6 +475,10 @@ fn test_ollama_cloud_models() {
             models::ollama::DEEPSEEK_V32_CLOUD,
         ),
         (
+            ModelId::OllamaDeepseekV4FlashCloud,
+            models::ollama::DEEPSEEK_V4_FLASH_CLOUD,
+        ),
+        (
             ModelId::OllamaQwen3CoderNext,
             models::ollama::QWEN3_CODER_NEXT,
         ),
