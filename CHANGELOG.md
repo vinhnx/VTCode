@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.103.3 - 2026-04-24
+
+### Highlights
+#### Features
+
+- Add Ollama cloud provider support for DeepSeek V4 Flash (92908fe3) 
+- Add DeepSeek V4 Pro and Flash cloud models support (973ec7ff) 
+### Other Changes
 ## 0.103.2 - 2026-04-24
 
 ### Highlights
