@@ -9,10 +9,11 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
-use crate::agent::runloop::unified::tool_call_safety::{SafetyError, invocation_id_from_call_id};
-use crate::agent::runloop::unified::tool_routing::{
-    ensure_tool_permission_with_call_id, prompt_session_limit_increase,
+use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
+use crate::agent::runloop::unified::tool_pipeline::validation::{
+    SafetyValidationFailure, validate_tool_call_with_limit_prompt,
 };
+use crate::agent::runloop::unified::tool_routing::ensure_tool_permission_with_call_id;
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
@@ -117,53 +118,43 @@ async fn run_safety_validation_loop(
     effective_args: &serde_json::Value,
 ) -> Result<Option<ValidationResult>> {
     let invocation_id = invocation_id_from_call_id(tool_call_id);
-    loop {
-        let validation_result = ctx
-            .safety_validator
-            .validate_call_with_invocation_id(canonical_tool_name, effective_args, invocation_id)
-            .await;
-
-        match validation_result {
-            Ok(_) => return Ok(None),
-            Err(SafetyError::SessionLimitReached { max }) => {
-                match prompt_session_limit_increase(
-                    ctx.handle,
-                    ctx.session,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    max,
-                )
-                .await
-                {
-                    Ok(Some(increment)) => {
-                        ctx.safety_validator.increase_session_limit(increment);
-                    }
-                    _ => {
-                        ctx.push_tool_response(
-                            tool_call_id,
-                            build_failure_error_content(
-                                "Session tool limit reached and not increased by user".to_string(),
-                                "safety_limit",
-                            ),
-                        );
-                        return Ok(Some(ValidationResult::Blocked));
-                    }
-                }
-            }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Safety validation failed: {}", err),
-                )?;
-                ctx.push_tool_response(
-                    tool_call_id,
-                    build_failure_error_content(
-                        format!("Safety validation failed: {}", err),
-                        "safety_validation",
-                    ),
-                );
-                return Ok(Some(ValidationResult::Blocked));
-            }
+    match validate_tool_call_with_limit_prompt(
+        ctx.safety_validator,
+        ctx.handle,
+        ctx.session,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        canonical_tool_name,
+        effective_args,
+        invocation_id,
+    )
+    .await
+    {
+        Ok(()) => Ok(None),
+        Err(SafetyValidationFailure::SessionLimitNotIncreased)
+        | Err(SafetyValidationFailure::SessionLimitPromptFailed(_)) => {
+            ctx.push_tool_response(
+                tool_call_id,
+                build_failure_error_content(
+                    "Session tool limit reached and not increased by user".to_string(),
+                    "safety_limit",
+                ),
+            );
+            Ok(Some(ValidationResult::Blocked))
+        }
+        Err(SafetyValidationFailure::Validation(err)) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Safety validation failed: {}", err),
+            )?;
+            ctx.push_tool_response(
+                tool_call_id,
+                build_failure_error_content(
+                    format!("Safety validation failed: {}", err),
+                    "safety_validation",
+                ),
+            );
+            Ok(Some(ValidationResult::Blocked))
         }
     }
 }

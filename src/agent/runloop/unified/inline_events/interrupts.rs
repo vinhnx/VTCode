@@ -5,6 +5,7 @@ use vtcode_tui::app::InlineHandle;
 
 use super::action::InlineLoopAction;
 use super::queue::InlineQueueState;
+use crate::agent::runloop::unified::display::reset_inline_input;
 use crate::agent::runloop::unified::state::CtrlCState;
 use vtcode_core::hooks::SessionEndReason;
 
@@ -63,10 +64,10 @@ impl<'a> InlineInterruptCoordinator<'a> {
             MessageStyle::Info,
             "Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 1s to exit)",
         )?;
-        handle.clear_input();
-        handle.set_placeholder(Some(
-            vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned(),
-        ));
+        reset_inline_input(
+            handle,
+            Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()),
+        );
         queue.clear();
         Ok(())
     }

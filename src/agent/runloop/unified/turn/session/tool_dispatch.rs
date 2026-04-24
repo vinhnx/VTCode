@@ -88,9 +88,10 @@ pub(crate) async fn execute_direct_tool_call(
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
+    let direct_turn_id = SessionId::new();
     let mut harness_state = HarnessTurnState::new(
-        TurnRunId(SessionId::new().0),
-        TurnId(SessionId::new().0),
+        TurnRunId(direct_turn_id.0.clone()),
+        TurnId(direct_turn_id.0),
         ctx.interaction_ctx.harness_config.max_tool_calls_per_turn,
         ctx.interaction_ctx.harness_config.max_tool_wall_clock_secs,
         ctx.interaction_ctx.harness_config.max_tool_retries,
@@ -152,10 +153,7 @@ pub(crate) async fn execute_direct_tool_call(
         let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, tool_name, args).await?;
 
         // 4. Cleanup UI and return outcome
-        t_ctx.ctx.handle.clear_input();
-        if let Some(placeholder) = t_ctx.ctx.default_placeholder {
-            t_ctx.ctx.handle.set_placeholder(Some(placeholder.clone()));
-        }
+        t_ctx.ctx.reset_input_to_default_placeholder();
         let restore_left = t_ctx.ctx.input_status_state.left.clone();
         let restore_right = t_ctx.ctx.input_status_state.right.clone();
         t_ctx.ctx.restore_input_status(restore_left, restore_right);

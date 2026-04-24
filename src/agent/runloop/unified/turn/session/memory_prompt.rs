@@ -11,7 +11,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::slash_commands::SlashCommandOutcome;
-use crate::agent::runloop::unified::display::display_user_message;
+use crate::agent::runloop::unified::display::{display_user_message, reset_inline_input};
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome, InteractionState,
 };
@@ -817,10 +817,7 @@ fn respond_to_memory_prompt(
         uni::Message::assistant(reply.to_string())
             .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
     );
-    ctx.handle.clear_input();
-    if let Some(placeholder) = ctx.default_placeholder.as_ref() {
-        ctx.handle.set_placeholder(Some(placeholder.clone()));
-    }
+    reset_inline_input(ctx.handle, ctx.default_placeholder.clone());
     Ok(())
 }
 

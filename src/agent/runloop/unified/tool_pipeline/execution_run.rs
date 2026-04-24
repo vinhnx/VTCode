@@ -21,9 +21,9 @@ use crate::agent::runloop::unified::inline_events::harness::{
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::tool_call_safety::{SafetyError, invocation_id_from_call_id};
+use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
 use crate::agent::runloop::unified::tool_routing::{
-    ToolPermissionFlow, ensure_tool_permission_with_call_id, prompt_session_limit_increase,
+    ToolPermissionFlow, ensure_tool_permission_with_call_id,
 };
 
 use super::execute_hitl_tool;
@@ -32,6 +32,7 @@ use super::execution_plan_mode::{handle_enter_plan_mode, handle_exit_plan_mode};
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
+use super::validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt};
 
 fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, String) {
     match ToolInvocationId::parse(tool_item_id) {
@@ -259,18 +260,13 @@ pub(crate) async fn run_tool_call_with_args(
             }
         }
 
-        ctx.harness_state.record_tool_call();
-        if ctx.harness_state.should_emit_tool_budget_warning(0.75) {
-            let used = ctx.harness_state.tool_calls;
-            let max = ctx.harness_state.max_tool_calls;
-            let remaining = ctx.harness_state.remaining_tool_calls();
+        if let Some(warning) = ctx.harness_state.record_tool_call_with_warning(0.75) {
             tracing::info!(
-                used,
-                max,
-                remaining,
+                used = warning.used,
+                max = warning.max,
+                remaining = warning.remaining,
                 "Tool-call budget warning threshold reached in tool pipeline path"
             );
-            ctx.harness_state.mark_tool_budget_warning_emitted();
         }
     }
 
@@ -466,49 +462,38 @@ async fn check_tool_safety(
         return Ok(());
     };
 
-    loop {
-        match safety_validator
-            .validate_call_with_invocation_id(name, args_val, invocation_id)
-            .await
-        {
-            Ok(()) => return Ok(()),
-            Err(SafetyError::SessionLimitReached { max }) => {
-                match prompt_session_limit_increase(
-                    ctx.handle,
-                    ctx.session,
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                    max,
-                )
-                .await
-                {
-                    Ok(Some(increment)) => safety_validator.increase_session_limit(increment),
-                    Ok(None) => {
-                        return Err(ToolExecutionStatus::Failure {
-                            error: structured_failure_from_message(
-                                name,
-                                "Session tool limit reached and not increased by user",
-                            ),
-                        });
-                    }
-                    Err(error) => {
-                        return Err(ToolExecutionStatus::Failure {
-                            error: structured_failure(
-                                name,
-                                &anyhow!(
-                                    "Failed while requesting a session tool-limit increase: {error}"
-                                ),
-                            ),
-                        });
-                    }
-                }
-            }
-            Err(error) => {
-                return Err(ToolExecutionStatus::Failure {
-                    error: structured_failure(name, &anyhow!("Safety validation failed: {error}")),
-                });
-            }
+    match validate_tool_call_with_limit_prompt(
+        safety_validator,
+        ctx.handle,
+        ctx.session,
+        ctrl_c_state,
+        ctrl_c_notify,
+        name,
+        args_val,
+        invocation_id,
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(SafetyValidationFailure::SessionLimitNotIncreased) => {
+            Err(ToolExecutionStatus::Failure {
+                error: structured_failure_from_message(
+                    name,
+                    "Session tool limit reached and not increased by user",
+                ),
+            })
         }
+        Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => {
+            Err(ToolExecutionStatus::Failure {
+                error: structured_failure(
+                    name,
+                    &anyhow!("Failed while requesting a session tool-limit increase: {error}"),
+                ),
+            })
+        }
+        Err(SafetyValidationFailure::Validation(error)) => Err(ToolExecutionStatus::Failure {
+            error: structured_failure(name, &anyhow!("Safety validation failed: {error}")),
+        }),
     }
 }
 
@@ -524,43 +509,18 @@ async fn check_tool_permission(
     skip_confirmations: bool,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> std::result::Result<Option<Value>, ToolExecutionStatus> {
-    let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
-        crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
-            config: auto_mode.config,
-            vt_cfg,
-            provider_client: &mut *auto_mode.provider_client,
-            working_history: auto_mode.working_history,
-        }
-    });
+    let permissions_ctx = build_tool_permissions_context(
+        ctx,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        lifecycle_hooks,
+        skip_confirmations,
+        vt_cfg,
+    );
 
     match ensure_tool_permission_with_call_id(
-        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
-            tool_registry: ctx.tool_registry,
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session: ctx.session,
-            active_thread_label: None,
-            default_placeholder,
-            ctrl_c_state,
-            ctrl_c_notify,
-            hooks: lifecycle_hooks,
-            justification: None,
-            approval_recorder: Some(ctx.approval_recorder),
-            decision_ledger: Some(ctx.decision_ledger),
-            tool_permission_cache: Some(ctx.tool_permission_cache),
-            permissions_state: Some(ctx.permissions_state),
-            hitl_notification_bell: vt_cfg
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
-            approval_policy: vt_cfg
-                .map(|cfg| cfg.security.human_in_the_loop)
-                .map(approval_policy_from_human_in_the_loop)
-                .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
-            skip_confirmations,
-            permissions_config: vt_cfg.map(|cfg| &cfg.permissions),
-            auto_mode_runtime,
-            session_stats: Some(ctx.session_stats),
-        },
+        permissions_ctx,
         name,
         Some(args_val),
         Some(tool_call_id),
@@ -580,6 +540,56 @@ async fn check_tool_permission(
         Err(error) => Err(ToolExecutionStatus::Failure {
             error: structured_failure(name, &error),
         }),
+    }
+}
+
+fn build_tool_permissions_context<'a>(
+    ctx: &'a mut RunLoopContext<'_>,
+    ctrl_c_state: &'a Arc<CtrlCState>,
+    ctrl_c_notify: &'a Arc<Notify>,
+    default_placeholder: Option<String>,
+    lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    skip_confirmations: bool,
+    vt_cfg: Option<&'a VTCodeConfig>,
+) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
+    'a,
+    vtcode_tui::app::InlineSession,
+> {
+    let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
+        crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+            config: auto_mode.config,
+            vt_cfg,
+            provider_client: &mut *auto_mode.provider_client,
+            working_history: auto_mode.working_history,
+        }
+    });
+
+    crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+        tool_registry: ctx.tool_registry,
+        renderer: ctx.renderer,
+        handle: ctx.handle,
+        session: ctx.session,
+        active_thread_label: None,
+        default_placeholder,
+        ctrl_c_state,
+        ctrl_c_notify,
+        hooks: lifecycle_hooks,
+        justification: None,
+        approval_recorder: Some(ctx.approval_recorder),
+        decision_ledger: Some(ctx.decision_ledger),
+        tool_permission_cache: Some(ctx.tool_permission_cache),
+        permissions_state: Some(ctx.permissions_state),
+        hitl_notification_bell: vt_cfg
+            .map(|cfg| cfg.security.hitl_notification_bell)
+            .unwrap_or(true),
+        approval_policy: vt_cfg
+            .map(|cfg| cfg.security.human_in_the_loop)
+            .map(approval_policy_from_human_in_the_loop)
+            .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
+        skip_confirmations,
+        permissions_config: vt_cfg.map(|cfg| &cfg.permissions),
+        auto_mode_runtime,
+        session_stats: Some(ctx.session_stats),
     }
 }
 

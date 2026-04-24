@@ -373,28 +373,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             .with_context(|| format!("copilot tool safety validation for '{tool_name}'"))?;
 
         match ensure_tool_permission_with_call_id(
-            ToolPermissionsContext {
-                tool_registry: self.tool_registry,
-                renderer,
-                handle: self.handle,
-                session: self.session,
-                active_thread_label: None,
-                default_placeholder: self.default_placeholder.clone(),
-                ctrl_c_state: self.ctrl_c_state,
-                ctrl_c_notify: self.ctrl_c_notify,
-                hooks: self.lifecycle_hooks,
-                justification: None,
-                approval_recorder: Some(self.approval_recorder),
-                decision_ledger: Some(self.decision_ledger),
-                tool_permission_cache: Some(self.tool_permission_cache),
-                permissions_state: Some(self.permissions_state),
-                hitl_notification_bell: self.hitl_notification_bell,
-                approval_policy: self.approval_policy,
-                skip_confirmations: self.skip_confirmations,
-                permissions_config: self.vt_cfg.map(|cfg| &cfg.permissions),
-                auto_mode_runtime: None,
-                session_stats: Some(self.session_stats),
-            },
+            self.tool_permissions_context(renderer),
             tool_name,
             Some(arguments),
             Some(tool_call_id),
@@ -426,21 +405,44 @@ impl<'a> CopilotRuntimeHost<'a> {
             )));
         }
 
-        self.harness_state.record_tool_call();
-        if self.harness_state.should_emit_tool_budget_warning(0.75) {
-            let used = self.harness_state.tool_calls;
-            let max = self.harness_state.max_tool_calls;
-            let remaining = self.harness_state.remaining_tool_calls();
+        if let Some(warning) = self.harness_state.record_tool_call_with_warning(0.75) {
             tracing::info!(
-                used,
-                max,
-                remaining,
+                used = warning.used,
+                max = warning.max,
+                remaining = warning.remaining,
                 "Tool-call budget warning threshold reached in copilot ACP path"
             );
-            self.harness_state.mark_tool_budget_warning_emitted();
         }
 
         Ok(None)
+    }
+
+    fn tool_permissions_context<'b>(
+        &'b mut self,
+        renderer: &'b mut AnsiRenderer,
+    ) -> ToolPermissionsContext<'b, InlineSession> {
+        ToolPermissionsContext {
+            tool_registry: self.tool_registry,
+            renderer,
+            handle: self.handle,
+            session: self.session,
+            active_thread_label: None,
+            default_placeholder: self.default_placeholder.clone(),
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            hooks: self.lifecycle_hooks,
+            justification: None,
+            approval_recorder: Some(self.approval_recorder),
+            decision_ledger: Some(self.decision_ledger),
+            tool_permission_cache: Some(self.tool_permission_cache),
+            permissions_state: Some(self.permissions_state),
+            hitl_notification_bell: self.hitl_notification_bell,
+            approval_policy: self.approval_policy,
+            skip_confirmations: self.skip_confirmations,
+            permissions_config: self.vt_cfg.map(|cfg| &cfg.permissions),
+            auto_mode_runtime: None,
+            session_stats: Some(self.session_stats),
+        }
     }
 
     fn record_tool_use(&mut self, tool_name: &str) {

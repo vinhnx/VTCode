@@ -1,3 +1,4 @@
+use crate::agent::runloop::unified::display::reset_inline_input;
 use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnOutcomeContext};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use anyhow::Result;
@@ -41,10 +42,10 @@ pub(crate) async fn apply_turn_outcome(
                 MessageStyle::Info,
                 "Interrupted current task. Press Esc, Ctrl+C, or /stop again to exit.",
             )?;
-            ctx.handle.clear_input();
-            ctx.handle.set_placeholder(Some(
-                vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned(),
-            ));
+            reset_inline_input(
+                ctx.handle,
+                Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()),
+            );
             ctx.ctrl_c_state.mark_cancel_handled();
             *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Cancelled;
             Ok(())
@@ -97,8 +98,7 @@ pub(crate) async fn apply_turn_outcome(
                 }
                 Err(err) => tracing::warn!("Failed to persist blocked handoff: {}", err),
             }
-            ctx.handle.clear_input();
-            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
+            reset_inline_input(ctx.handle, ctx.default_placeholder.clone());
             ctx.ctrl_c_state.reset();
             Ok(())
         }
