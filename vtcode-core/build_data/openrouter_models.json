@@ -648,17 +648,6 @@
       "cost": {
         "input": 2.8e-07,
         "output": 1.1e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Flash",
-        "constant": "DEEPSEEK_CHAT",
-        "vendor": "deepseek",
-        "display": "DeepSeek V3.2 Chat",
-        "description": "DeepSeek official chat model via OpenRouter",
-        "efficient": true,
-        "top_tier": true,
-        "generation": "V3.2",
-        "doc_comment": "DeepSeek V3.2 Chat - Official chat model via OpenRouter"
       }
     },
     "deepseek/deepseek-v3.2": {
@@ -679,17 +668,6 @@
       "cost": {
         "input": 2.8e-07,
         "output": 1.1e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Flash",
-        "constant": "DEEPSEEK_V3_2",
-        "vendor": "deepseek",
-        "display": "DeepSeek V3.2",
-        "description": "DeepSeek V3.2 model with thinking support via OpenRouter",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "V3.2",
-        "doc_comment": "DeepSeek V3.2 - Standard model with thinking support via OpenRouter"
       }
     },
     "deepseek/deepseek-reasoner": {
@@ -710,17 +688,6 @@
       "cost": {
         "input": 5.5e-06,
         "output": 2.2e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Pro",
-        "constant": "DEEPSEEK_REASONER",
-        "vendor": "deepseek",
-        "display": "DeepSeek V3.2 Reasoner",
-        "description": "DeepSeek thinking mode model via OpenRouter with deliberate reasoning output",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "V3.2",
-        "doc_comment": "DeepSeek V3.2 Reasoner - Thinking mode via OpenRouter"
       }
     },
     "deepseek/deepseek-v3.2-speciale": {
@@ -741,17 +708,6 @@
       "cost": {
         "input": 5.5e-06,
         "output": 2.2e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Flash",
-        "constant": "DEEPSEEK_V3_2_SPECIALE",
-        "vendor": "deepseek",
-        "display": "DeepSeek V3.2 Speciale",
-        "description": "DeepSeek V3.2 Speciale - Enhanced reasoning model (no tool-use)",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "V3.2",
-        "doc_comment": "DeepSeek V3.2 Speciale - Enhanced reasoning with maxed-out capabilities"
       }
     },
     "deepseek/deepseek-v3.2-exp": {
@@ -772,17 +728,6 @@
       "cost": {
         "input": 2.7e-07,
         "output": 4e-07
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Pro",
-        "constant": "DEEPSEEK_V3_2_EXP",
-        "vendor": "deepseek",
-        "display": "DeepSeek V3.2 Exp",
-        "description": "Experimental DeepSeek V3.2 listing",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "V3.2-Exp",
-        "doc_comment": "DeepSeek V3.2 Exp - Experimental DeepSeek V3.2 listing"
       }
     },
     "deepseek/deepseek-chat-v3.1": {
@@ -803,17 +748,6 @@
       "cost": {
         "input": 2e-07,
         "output": 8e-07
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekV4Pro",
-        "constant": "DEEPSEEK_CHAT_V3_1",
-        "vendor": "deepseek",
-        "display": "DeepSeek Chat v3.1",
-        "description": "Advanced DeepSeek model via OpenRouter",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "2025-08-21",
-        "doc_comment": "DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter"
       }
     },
     "deepseek/deepseek-r1": {
