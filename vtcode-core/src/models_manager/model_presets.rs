@@ -708,44 +708,51 @@ fn anthropic_presets() -> Vec<ModelPreset> {
 fn deepseek_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "deepseek-reasoner".to_string(),
-            model: "deepseek-reasoner".to_string(),
-            display_name: "DeepSeek V3.2 Reasoner".to_string(),
-            description: "Thinking mode with structured reasoning".to_string(),
+            id: "deepseek-v4-pro".to_string(),
+            model: "deepseek-v4-pro".to_string(),
+            display_name: "DeepSeek V4 Pro".to_string(),
+            description: "High-performance reasoning model with advanced thinking capabilities"
+                .to_string(),
             provider: Provider::DeepSeek,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
                 ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
+                    effort: ReasoningEffortLevel::High,
                     description: "Balanced".to_string(),
                 },
                 ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
                 },
             ],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
-            context_window: Some(128_000),
+            context_window: Some(1_000_000),
         },
         ModelPreset {
-            id: "deepseek-chat".to_string(),
-            model: "deepseek-chat".to_string(),
-            display_name: "DeepSeek V3.2 Chat".to_string(),
-            description: "Fast non-thinking mode".to_string(),
+            id: "deepseek-v4-flash".to_string(),
+            model: "deepseek-v4-flash".to_string(),
+            display_name: "DeepSeek V4 Flash".to_string(),
+            description: "Fast inference model for cost-effective reasoning tasks".to_string(),
             provider: Provider::DeepSeek,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Fast".to_string(),
-            }],
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
-            context_window: Some(128_000),
+            context_window: Some(1_000_000),
         },
     ]
 }

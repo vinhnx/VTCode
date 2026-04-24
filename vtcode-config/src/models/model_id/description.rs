@@ -95,11 +95,11 @@ impl ModelId {
                 "GitHub Copilot Claude Sonnet 4.6 option for balanced coding and reasoning work"
             }
             // DeepSeek models
-            ModelId::DeepSeekChat => {
-                "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"
+            ModelId::DeepSeekV4Pro => {
+                "DeepSeek V4 Pro - High-performance reasoning model with advanced thinking capabilities (1M context, 384K max output)"
             }
-            ModelId::DeepSeekReasoner => {
-                "DeepSeek V3.2 - Thinking mode with integrated tool-use and reasoning capability"
+            ModelId::DeepSeekV4Flash => {
+                "DeepSeek V4 Flash - Fast inference model for cost-effective reasoning tasks (1M context, 384K max output)"
             }
             // Z.AI models
             ModelId::ZaiGlm5 => {

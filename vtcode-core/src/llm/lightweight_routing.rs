@@ -349,11 +349,11 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
             None
         }
         Provider::DeepSeek => {
-            if lower.contains("chat") {
+            if lower.contains("flash") || lower.contains("chat") {
                 return Some(trimmed_model.to_string());
             }
-            if lower.contains("reasoner") {
-                return Some(ModelId::DeepSeekChat.as_str().to_string());
+            if lower.contains("pro") || lower.contains("reasoner") {
+                return Some(trimmed_model.to_string());
             }
             None
         }
@@ -396,7 +396,7 @@ fn provider_default_lightweight_model(provider: Provider) -> Option<&'static str
         Provider::OpenAI => Some(ModelId::GPT5Mini.as_str()),
         Provider::Anthropic => Some(ModelId::ClaudeHaiku45.as_str()),
         Provider::Copilot => Some(ModelId::CopilotGPT54Mini.as_str()),
-        Provider::DeepSeek => Some(ModelId::DeepSeekChat.as_str()),
+        Provider::DeepSeek => Some(ModelId::DeepSeekV4Flash.as_str()),
         Provider::Gemini => Some(ModelId::Gemini3FlashPreview.as_str()),
         Provider::ZAI => Some(ModelId::ZaiGlm5.as_str()),
         Provider::Minimax => Some(ModelId::MinimaxM25.as_str()),

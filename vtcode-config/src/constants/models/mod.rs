@@ -45,8 +45,6 @@ pub const COPILOT: &str = copilot::DEFAULT_MODEL;
 pub const MINIMAX_M2_7: &str = minimax::MINIMAX_M2_7;
 pub const MINIMAX_M2_5: &str = minimax::MINIMAX_M2_5;
 pub const GLM_5: &str = zai::GLM_5;
-pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
-pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
 #[cfg(not(docsrs))]
 pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
 #[cfg(docsrs)]

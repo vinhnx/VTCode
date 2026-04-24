@@ -13,7 +13,7 @@ impl ModelId {
             ModelId::ClaudeOpus47,
             ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
-            ModelId::DeepSeekReasoner,
+            ModelId::DeepSeekV4Pro,
             ModelId::ZaiGlm5,
         ]
     }
@@ -36,7 +36,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus47,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
-            Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::DeepSeek => ModelId::DeepSeekV4Pro,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::MoonshotKimiK26,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
@@ -56,7 +56,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus47,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
-            Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::DeepSeek => ModelId::DeepSeekV4Pro,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::MoonshotKimiK26,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,

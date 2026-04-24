@@ -233,7 +233,7 @@ impl LLMProvider for DeepSeekProvider {
 
         // Codex-inspired robustness: Setting model_supports_reasoning to false
         // does NOT disable it for known reasoning models.
-        requested == models::deepseek::DEEPSEEK_REASONER
+        requested == models::deepseek::DEEPSEEK_V4_PRO
             || self
                 .model_behavior
                 .as_ref()

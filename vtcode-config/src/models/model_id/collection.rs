@@ -46,8 +46,8 @@ impl ModelId {
             ModelId::CopilotGPT54Mini,
             ModelId::CopilotClaudeSonnet46,
             // DeepSeek models
-            ModelId::DeepSeekChat,
-            ModelId::DeepSeekReasoner,
+            ModelId::DeepSeekV4Pro,
+            ModelId::DeepSeekV4Flash,
             // Z.AI models
             ModelId::ZaiGlm5,
             ModelId::ZaiGlm51,
