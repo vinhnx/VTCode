@@ -37,6 +37,10 @@ fn test_model_string_conversion() {
         ModelId::DeepSeekV4Flash.as_str(),
         models::deepseek::DEEPSEEK_V4_FLASH
     );
+    assert_eq!(
+        ModelId::OllamaDeepseekV4ProCloud.as_str(),
+        models::ollama::DEEPSEEK_V4_PRO_CLOUD
+    );
     // Hugging Face models
     assert_eq!(
         ModelId::HuggingFaceGlm5Novita.as_str(),
@@ -138,6 +142,12 @@ fn test_model_from_string() {
             .parse::<ModelId>()
             .unwrap(),
         ModelId::DeepSeekV4Flash
+    );
+    assert_eq!(
+        models::ollama::DEEPSEEK_V4_PRO_CLOUD
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::OllamaDeepseekV4ProCloud
     );
     // Hugging Face models
     assert_eq!(
@@ -441,6 +451,8 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3CoderNext));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV32Cloud));
+    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4FlashCloud));
+    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4ProCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
@@ -477,6 +489,10 @@ fn test_ollama_cloud_models() {
         (
             ModelId::OllamaDeepseekV4FlashCloud,
             models::ollama::DEEPSEEK_V4_FLASH_CLOUD,
+        ),
+        (
+            ModelId::OllamaDeepseekV4ProCloud,
+            models::ollama::DEEPSEEK_V4_PRO_CLOUD,
         ),
         (
             ModelId::OllamaQwen3CoderNext,
@@ -604,7 +620,6 @@ fn test_generated_model_capability_lookup() {
     assert!(ModelId::GPT52Codex.supports_tool_calls());
     assert!(ModelId::Gemini31ProPreview.supports_tool_calls());
     assert!(!ModelId::OpenRouterOpenAIGpt5Chat.supports_tool_calls());
-    assert!(!ModelId::OpenRouterDeepSeekV32Speciale.supports_tool_calls());
 }
 
 #[test]

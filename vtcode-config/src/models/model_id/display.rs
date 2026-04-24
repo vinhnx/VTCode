@@ -54,6 +54,7 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => "Qwen3-Coder-Next (cloud)",
             ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
             ModelId::OllamaDeepseekV4FlashCloud => "DeepSeek V4 Flash (cloud)",
+            ModelId::OllamaDeepseekV4ProCloud => "DeepSeek V4 Pro (cloud)",
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
