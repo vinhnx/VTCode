@@ -624,11 +624,11 @@ impl Tool for SimpleTool {
         }))
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "simple"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "A simple test tool"
     }
 

@@ -93,11 +93,11 @@ impl Default for AcpTool {
 
 #[async_trait]
 impl Tool for AcpTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "acp_call"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Call a remote agent via the Agent Communication Protocol (ACP). \
          Allows inter-agent communication for distributed task execution."
     }
@@ -159,11 +159,11 @@ impl AcpDiscoveryTool {
 
 #[async_trait]
 impl Tool for AcpDiscoveryTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "acp_discover"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Discover available agents and their capabilities. \
          Returns agent metadata including supported actions and endpoints."
     }
@@ -264,11 +264,11 @@ impl AcpHealthTool {
 
 #[async_trait]
 impl Tool for AcpHealthTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "acp_health"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Check the health status of remote agents. \
          Returns online/offline status and last seen timestamp."
     }

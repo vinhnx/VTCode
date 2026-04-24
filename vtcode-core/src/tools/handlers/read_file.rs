@@ -525,11 +525,11 @@ impl Tool for ReadFileHandler {
         }))
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "read_file"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Read file contents with optional line range, indentation-aware block selection, or batch multiple files"
     }
 

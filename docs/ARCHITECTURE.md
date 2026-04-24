@@ -197,6 +197,7 @@ pub trait CacheableTool: Tool {
 6. **Backward Compatibility** - All existing APIs remain functional
 7. **Measured Optimization** - Profile and benchmark before keeping performance-motivated complexity
 8. **Clear Separation** - Each module has single responsibility
+9. **Handle/Context Before Clever Ownership** - When modeling complex Rust state, start with explicit handles/IDs and an owning context. Reach for self-referential layouts, raw pointers, lifetime-branding tricks, or custom `Send`/`Sync` only when a simpler handle-based design is demonstrably insufficient, and document the invariant at the boundary
 
 ## Adding New Tools
 

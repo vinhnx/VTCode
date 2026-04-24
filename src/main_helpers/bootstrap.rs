@@ -63,8 +63,7 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
         cmd = cmd.color(choice);
     }
     cmd = cmd.styles(clap_help_styles());
-    let quick_start: &'static str = Box::leak(build_quick_start_help().into_boxed_str());
-    cmd = cmd.before_help(quick_start);
+    cmd = cmd.before_help(build_quick_start_help());
 
     let version_info = vtcode_core::cli::args::long_version();
     let version_leak: &'static str = Box::leak(version_info.into_boxed_str());

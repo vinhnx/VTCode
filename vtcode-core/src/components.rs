@@ -173,11 +173,11 @@ pub trait SandboxProvider<Ctx: Send + Sync>: Send + Sync {
 
 /// Provider trait for tool metadata.
 pub trait MetadataProvider<Ctx>: Send + Sync {
-    fn tool_name(_ctx: &Ctx) -> &'static str {
+    fn tool_name(_ctx: &Ctx) -> &str {
         "unknown"
     }
 
-    fn tool_description(_ctx: &Ctx) -> &'static str {
+    fn tool_description(_ctx: &Ctx) -> &str {
         ""
     }
 
@@ -538,11 +538,11 @@ impl<Ctx: HasExecutionCaches> CacheProvider<Ctx> for CachedResults {
 pub struct PassthroughMetadata;
 
 impl<Ctx: HasToolRef> MetadataProvider<Ctx> for PassthroughMetadata {
-    fn tool_name(ctx: &Ctx) -> &'static str {
+    fn tool_name(ctx: &Ctx) -> &str {
         ctx.tool().name()
     }
 
-    fn tool_description(ctx: &Ctx) -> &'static str {
+    fn tool_description(ctx: &Ctx) -> &str {
         ctx.tool().description()
     }
 
@@ -824,9 +824,9 @@ where
 }
 
 pub trait CanProvideToolMetadata: Send + Sync {
-    fn tool_name(&self) -> &'static str;
+    fn tool_name(&self) -> &str;
 
-    fn tool_description(&self) -> &'static str;
+    fn tool_description(&self) -> &str;
 
     fn parameter_schema(&self) -> Option<Value>;
 
@@ -858,11 +858,11 @@ where
     Ctx: HasComponent<MetadataComponent> + Send + Sync,
     ComponentProvider<Ctx, MetadataComponent>: MetadataProvider<Ctx>,
 {
-    fn tool_name(&self) -> &'static str {
+    fn tool_name(&self) -> &str {
         <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::tool_name(self)
     }
 
-    fn tool_description(&self) -> &'static str {
+    fn tool_description(&self) -> &str {
         <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::tool_description(self)
     }
 
@@ -985,11 +985,11 @@ where
         self.ctx.execute_tool_dual(self.name(), args).await
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         CanProvideToolMetadata::tool_name(&self.ctx)
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         CanProvideToolMetadata::tool_description(&self.ctx)
     }
 
@@ -1391,11 +1391,11 @@ where
     Ctx: HasToolRef,
     T: Tool + Send + Sync,
 {
-    fn tool_name(ctx: &Ctx) -> &'static str {
+    fn tool_name(ctx: &Ctx) -> &str {
         <PassthroughMetadata as MetadataProvider<Ctx>>::tool_name(ctx)
     }
 
-    fn tool_description(ctx: &Ctx) -> &'static str {
+    fn tool_description(ctx: &Ctx) -> &str {
         <PassthroughMetadata as MetadataProvider<Ctx>>::tool_description(ctx)
     }
 

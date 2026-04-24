@@ -495,11 +495,11 @@ impl Tool for WebFetchTool {
         self.run(args).await
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::WEB_FETCH
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Fetches content from a specified URL and returns an analyzed summary. Accepts: { url: string, prompt?: string, max_bytes?: number, timeout_secs?: number }. If 'prompt' is omitted, VT Code uses a safe default summary prompt so that simple 'fetch https://…' requests are handled by this built-in tool instead of delegating to external MCP tools."
     }
 }

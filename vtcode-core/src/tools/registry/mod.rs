@@ -242,11 +242,11 @@ mod tests {
             }))
         }
 
-        fn name(&self) -> &'static str {
+        fn name(&self) -> &str {
             CUSTOM_TOOL_NAME
         }
 
-        fn description(&self) -> &'static str {
+        fn description(&self) -> &str {
             "Custom echo tool for testing"
         }
     }
@@ -260,11 +260,11 @@ mod tests {
             }))
         }
 
-        fn name(&self) -> &'static str {
+        fn name(&self) -> &str {
             SLOW_TIMEOUT_TOOL_NAME
         }
 
-        fn description(&self) -> &'static str {
+        fn description(&self) -> &str {
             "Tool that intentionally exceeds low timeout ceilings"
         }
     }
