@@ -69,6 +69,7 @@ impl ModelId {
             | ModelId::OllamaQwen317b
             | ModelId::OllamaQwen3CoderNext
             | ModelId::OllamaDeepseekV32Cloud
+            | ModelId::OllamaDeepseekV4FlashCloud
             | ModelId::OllamaQwen3Next80bCloud
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaMinimaxM2Cloud

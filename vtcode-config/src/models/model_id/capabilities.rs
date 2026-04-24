@@ -460,6 +460,7 @@ impl ModelId {
             ModelId::OllamaQwen317b => "oss",
             ModelId::OllamaQwen3CoderNext => "qwen3-coder-next:cloud",
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
+            ModelId::OllamaDeepseekV4FlashCloud => "deepseek-v4-flash",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
