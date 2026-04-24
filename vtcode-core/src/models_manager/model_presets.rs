@@ -318,7 +318,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "GPT-5.3 variant optimized for agentic coding with xhigh reasoning"
                 .to_string(),
             provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(true, true),
             is_default: false,
             upgrade: None,
@@ -333,7 +333,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "GPT-5.2 variant optimized for agentic coding with xhigh reasoning"
                 .to_string(),
             provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(true, true),
             is_default: false,
             upgrade: None,
@@ -347,7 +347,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             display_name: "GPT-5.1 Codex".to_string(),
             description: "GPT-5.1 variant optimized for agentic coding".to_string(),
             provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(false, false),
             is_default: false,
             upgrade: None,
@@ -363,7 +363,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                 "Higher-compute GPT-5.1 Codex variant for longer-running engineering tasks"
                     .to_string(),
             provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(false, false),
             is_default: false,
             upgrade: None,
@@ -377,7 +377,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             display_name: "GPT-5 Codex".to_string(),
             description: "GPT-5 variant optimized for agentic coding".to_string(),
             provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(false, false),
             is_default: false,
             upgrade: None,
@@ -1125,6 +1125,16 @@ mod tests {
                 .iter()
                 .any(|preset| preset.effort == ReasoningEffortLevel::Max)
         );
+    }
+
+    #[test]
+    fn openai_codex_presets_default_to_high_reasoning() {
+        let codex = openai_presets()
+            .into_iter()
+            .find(|preset| preset.id == "gpt-5.3-codex")
+            .expect("gpt-5.3-codex preset");
+
+        assert_eq!(codex.default_reasoning_effort, ReasoningEffortLevel::High);
     }
 
     #[test]

@@ -24,12 +24,18 @@ const NONE_REASONING_EFFORT_MODELS: &[&str] = &[
     openai_models::GPT_5_4,
 ];
 const MEDIUM_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT_5, openai_models::GPT_5_4_PRO];
-const LOW_VERBOSITY_MODELS: &[&str] = &[
+const TEXT_VERBOSITY_MODELS: &[&str] = &[
     openai_models::GPT,
     openai_models::GPT_5_2,
     openai_models::GPT_5_4,
     openai_models::GPT_5_4_PRO,
     openai_models::GPT_5_3_CODEX,
+];
+const LOW_VERBOSITY_MODELS: &[&str] = &[
+    openai_models::GPT,
+    openai_models::GPT_5_2,
+    openai_models::GPT_5_4,
+    openai_models::GPT_5_4_PRO,
 ];
 const PHASE_REPLAY_MODELS: &[&str] = &[
     openai_models::GPT,
@@ -119,7 +125,9 @@ fn default_replay_instructions(model: &str) -> Option<String> {
 fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLevel> {
     if NONE_REASONING_EFFORT_MODELS.contains(&model) {
         Some(ReasoningEffortLevel::None)
-    } else if MEDIUM_REASONING_EFFORT_MODELS.contains(&model) || is_gpt5_codex_model(model) {
+    } else if is_gpt5_codex_model(model) {
+        Some(ReasoningEffortLevel::High)
+    } else if MEDIUM_REASONING_EFFORT_MODELS.contains(&model) {
         Some(ReasoningEffortLevel::Medium)
     } else {
         None
@@ -127,7 +135,7 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
 }
 
 fn supports_text_verbosity(model: &str) -> bool {
-    default_text_verbosity_for_model(model).is_some()
+    TEXT_VERBOSITY_MODELS.contains(&model)
 }
 
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {

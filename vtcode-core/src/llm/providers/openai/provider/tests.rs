@@ -964,15 +964,26 @@ fn responses_payload_ignores_configured_verbosity_for_gpt_5_2_codex() {
 }
 
 #[test]
-fn responses_payload_defaults_low_verbosity_for_gpt_5_3_codex() {
+fn responses_payload_omits_default_verbosity_for_gpt_5_3_codex() {
     let provider = native_openai_provider(models::openai::GPT_5_3_CODEX);
     let payload = responses_payload_for(models::openai::GPT_5_3_CODEX, &provider);
+    assert_absent(&payload, "text");
+}
+
+#[test]
+fn responses_payload_keeps_configured_verbosity_for_gpt_5_3_codex() {
+    let provider = native_openai_provider(models::openai::GPT_5_3_CODEX);
+    let mut request = sample_request(models::openai::GPT_5_3_CODEX);
+    request.verbosity = Some(crate::config::types::VerbosityLevel::High);
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
     assert_eq!(
         payload
             .get("text")
             .and_then(|t| t.get("verbosity"))
             .and_then(Value::as_str),
-        Some("low")
+        Some("high")
     );
 }
 
@@ -2337,6 +2348,21 @@ fn responses_payload_defaults_gpt_5_4_reasoning_to_none() {
             .and_then(|r| r.get("effort"))
             .and_then(Value::as_str),
         Some("none")
+    );
+}
+
+#[test]
+fn responses_payload_defaults_gpt_5_3_codex_reasoning_to_high() {
+    let payload = responses_payload_for(
+        models::openai::GPT_5_3_CODEX,
+        &native_openai_provider(models::openai::GPT_5_3_CODEX),
+    );
+    assert_eq!(
+        payload
+            .get("reasoning")
+            .and_then(|r| r.get("effort"))
+            .and_then(Value::as_str),
+        Some("high")
     );
 }
 
