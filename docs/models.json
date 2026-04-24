@@ -1944,6 +1944,37 @@
           "doc_comment": "DeepSeek V4 Flash - Fast inference model via OpenRouter"
         }
       },
+      "deepseek/deepseek-chat-v3.1": {
+        "id": "deepseek/deepseek-chat-v3.1",
+        "name": "DeepSeek: DeepSeek V3.1",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 163840,
+        "max_output_tokens": 163840,
+        "cost": {
+          "input": 2e-07,
+          "output": 8e-07
+        },
+        "vtcode": {
+          "variant": "OpenRouterDeepSeekChatV31",
+          "constant": "DEEPSEEK_CHAT_V3_1",
+          "vendor": "deepseek",
+          "display": "DeepSeek V3.1",
+          "description": "DeepSeek V3.1 chat model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "V3.1",
+          "doc_comment": "DeepSeek V3.1 - DeepSeek V3.1 chat model via OpenRouter"
+        }
+      },
       "deepseek/deepseek-v4-pro": {
         "id": "deepseek/deepseek-v4-pro",
         "name": "DeepSeek: V4 Pro",
