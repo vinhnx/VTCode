@@ -56,6 +56,13 @@ pub(crate) enum RecoveryMode {
     ToolFreeSynthesis,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolBudgetWarning {
+    pub used: usize,
+    pub max: usize,
+    pub remaining: usize,
+}
+
 impl From<TurnPhase> for TurnExecutionPhase {
     fn from(value: TurnPhase) -> Self {
         match value {
@@ -177,6 +184,24 @@ impl HarnessTurnState {
 
     pub(crate) fn record_tool_call(&mut self) {
         self.tool_calls = self.tool_calls.saturating_add(1);
+    }
+
+    pub(crate) fn record_tool_call_with_warning(
+        &mut self,
+        threshold: f64,
+    ) -> Option<ToolBudgetWarning> {
+        self.record_tool_call();
+        if !self.should_emit_tool_budget_warning(threshold) {
+            return None;
+        }
+
+        let warning = ToolBudgetWarning {
+            used: self.tool_calls,
+            max: self.max_tool_calls,
+            remaining: self.remaining_tool_calls(),
+        };
+        self.mark_tool_budget_warning_emitted();
+        Some(warning)
     }
 
     pub(crate) fn record_blocked_tool_call(&mut self) -> usize {
@@ -543,6 +568,29 @@ mod tests {
         state.mark_tool_budget_warning_emitted();
         assert!(!state.should_emit_tool_budget_warning(0.75));
         assert_eq!(state.remaining_tool_calls(), 1);
+    }
+
+    #[test]
+    fn harness_state_records_budget_warning_once_via_helper() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(state.record_tool_call_with_warning(0.75), None);
+        assert_eq!(state.record_tool_call_with_warning(0.75), None);
+        assert_eq!(
+            state.record_tool_call_with_warning(0.75),
+            Some(ToolBudgetWarning {
+                used: 3,
+                max: 4,
+                remaining: 1,
+            })
+        );
+        assert_eq!(state.record_tool_call_with_warning(0.75), None);
     }
 
     #[test]

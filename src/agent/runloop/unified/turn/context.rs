@@ -637,6 +637,13 @@ impl<'a> TurnProcessingContext<'a> {
         self.input_status_state.right = right;
     }
 
+    pub(crate) fn reset_input_to_default_placeholder(&mut self) {
+        crate::agent::runloop::unified::display::reset_inline_input(
+            self.handle,
+            self.default_placeholder.clone(),
+        );
+    }
+
     pub(crate) fn push_system_message(&mut self, content: impl Into<String>) {
         self.working_history
             .push(uni::Message::system(content.into()));

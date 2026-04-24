@@ -9,6 +9,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
+use vtcode_tui::app::InlineHandle;
 
 pub(crate) async fn persist_theme_preference(
     renderer: &mut AnsiRenderer,
@@ -58,6 +59,11 @@ fn persist_theme_config(workspace: &Path, theme_id: &str) -> Result<()> {
 pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
     let rendered = highlight_shell_user_input(message).unwrap_or_else(|| message.to_string());
     renderer.line(MessageStyle::User, &rendered)
+}
+
+pub(crate) fn reset_inline_input(handle: &InlineHandle, placeholder: Option<String>) {
+    handle.clear_input();
+    handle.set_placeholder(placeholder);
 }
 
 fn is_bash_keyword(token: &str) -> bool {
