@@ -650,7 +650,7 @@
         "output": 1.1e-06
       },
       "vtcode": {
-        "variant": "OpenRouterDeepseekChat",
+        "variant": "OpenRouterDeepSeekV4Flash",
         "constant": "DEEPSEEK_CHAT",
         "vendor": "deepseek",
         "display": "DeepSeek V3.2 Chat",
@@ -681,7 +681,7 @@
         "output": 1.1e-06
       },
       "vtcode": {
-        "variant": "OpenRouterDeepSeekV32",
+        "variant": "OpenRouterDeepSeekV4Flash",
         "constant": "DEEPSEEK_V3_2",
         "vendor": "deepseek",
         "display": "DeepSeek V3.2",
@@ -712,7 +712,7 @@
         "output": 2.2e-05
       },
       "vtcode": {
-        "variant": "OpenRouterDeepseekReasoner",
+        "variant": "OpenRouterDeepSeekV4Pro",
         "constant": "DEEPSEEK_REASONER",
         "vendor": "deepseek",
         "display": "DeepSeek V3.2 Reasoner",
@@ -743,7 +743,7 @@
         "output": 2.2e-05
       },
       "vtcode": {
-        "variant": "OpenRouterDeepSeekV32Speciale",
+        "variant": "OpenRouterDeepSeekV4Flash",
         "constant": "DEEPSEEK_V3_2_SPECIALE",
         "vendor": "deepseek",
         "display": "DeepSeek V3.2 Speciale",
@@ -774,7 +774,7 @@
         "output": 4e-07
       },
       "vtcode": {
-        "variant": "OpenRouterDeepSeekV32Exp",
+        "variant": "OpenRouterDeepSeekV4Pro",
         "constant": "DEEPSEEK_V3_2_EXP",
         "vendor": "deepseek",
         "display": "DeepSeek V3.2 Exp",
@@ -805,7 +805,7 @@
         "output": 8e-07
       },
       "vtcode": {
-        "variant": "OpenRouterDeepSeekChatV31",
+        "variant": "OpenRouterDeepSeekV4Pro",
         "constant": "DEEPSEEK_CHAT_V3_1",
         "vendor": "deepseek",
         "display": "DeepSeek Chat v3.1",
