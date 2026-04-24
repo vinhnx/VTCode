@@ -216,14 +216,30 @@ fn append_prompt_section(prompt: &mut String, section: &str) {
 
 fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
-        SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT
-            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), DEFAULT_MODE_DELTA)),
-        SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT
-            .get_or_init(|| build_mode_prompt(&build_contract_prompt(MINIMAL_CONTRACT_LINES), MINIMAL_MODE_DELTA)),
-        SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT
-            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), LIGHTWEIGHT_MODE_DELTA)),
-        SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT
-            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), SPECIALIZED_MODE_DELTA)),
+        SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT.get_or_init(|| {
+            build_mode_prompt(
+                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                DEFAULT_MODE_DELTA,
+            )
+        }),
+        SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT.get_or_init(|| {
+            build_mode_prompt(
+                &build_contract_prompt(MINIMAL_CONTRACT_LINES),
+                MINIMAL_MODE_DELTA,
+            )
+        }),
+        SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| {
+            build_mode_prompt(
+                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                LIGHTWEIGHT_MODE_DELTA,
+            )
+        }),
+        SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| {
+            build_mode_prompt(
+                &build_contract_prompt(DEFAULT_CONTRACT_LINES),
+                SPECIALIZED_MODE_DELTA,
+            )
+        }),
     }
 }
 

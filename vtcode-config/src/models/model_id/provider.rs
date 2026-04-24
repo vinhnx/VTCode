@@ -39,7 +39,7 @@ impl ModelId {
             | ModelId::CopilotGPT54
             | ModelId::CopilotGPT54Mini
             | ModelId::CopilotClaudeSonnet46 => Provider::Copilot,
-            ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
+            ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
@@ -96,12 +96,8 @@ impl ModelId {
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
-            | ModelId::OpenRouterDeepseekChat
-            | ModelId::OpenRouterDeepSeekV32
-            | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale
-            | ModelId::OpenRouterDeepSeekV32Exp
-            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekV4Pro
+            | ModelId::OpenRouterDeepSeekV4Flash
             | ModelId::OpenRouterDeepSeekR1
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss120bFree

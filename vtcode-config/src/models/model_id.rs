@@ -88,10 +88,10 @@ pub enum ModelId {
     CopilotClaudeSonnet46,
 
     // DeepSeek models
-    /// DeepSeek V3.2 Chat - Fast non-thinking mode
-    DeepSeekChat,
-    /// DeepSeek V3.2 Reasoner - Thinking mode with structured reasoning output
-    DeepSeekReasoner,
+    /// DeepSeek V4 Pro - High-performance reasoning model with advanced thinking
+    DeepSeekV4Pro,
+    /// DeepSeek V4 Flash - Fast inference model for cost-effective reasoning
+    DeepSeekV4Flash,
     // Hugging Face models
     /// DeepSeek V3.2 via Hugging Face router
     HuggingFaceDeepseekV32,
@@ -218,18 +218,10 @@ pub enum ModelId {
     OpenRouterQwen3Coder30bA3bInstruct,
     /// Qwen3 Coder Next - Next-generation Qwen3 coding model with enhanced reasoning
     OpenRouterQwen3CoderNext,
-    /// DeepSeek V3.2 Chat - Official chat model via OpenRouter
-    OpenRouterDeepseekChat,
-    /// DeepSeek V3.2 - Standard model with thinking support via OpenRouter
-    OpenRouterDeepSeekV32,
-    /// DeepSeek V3.2 Reasoner - Thinking mode via OpenRouter
-    OpenRouterDeepseekReasoner,
-    /// DeepSeek V3.2 Speciale - Enhanced reasoning model (no tool-use)
-    OpenRouterDeepSeekV32Speciale,
-    /// DeepSeek V3.2 Exp - Experimental DeepSeek V3.2 listing
-    OpenRouterDeepSeekV32Exp,
-    /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
-    OpenRouterDeepSeekChatV31,
+    /// DeepSeek V4 Pro - High-performance reasoning model via OpenRouter
+    OpenRouterDeepSeekV4Pro,
+    /// DeepSeek V4 Flash - Fast inference model via OpenRouter
+    OpenRouterDeepSeekV4Flash,
     /// DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought
     OpenRouterDeepSeekR1,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter

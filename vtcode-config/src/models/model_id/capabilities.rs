@@ -186,7 +186,7 @@ impl ModelId {
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
                 Some(ModelId::CopilotGPT54Mini)
             }
-            ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
+            ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
@@ -246,7 +246,7 @@ impl ModelId {
             | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
-            ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
+            ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus47
             | ModelId::ClaudeOpus46
@@ -310,7 +310,7 @@ impl ModelId {
                 | ModelId::OpenCodeGoGlm51
                 | ModelId::OpenCodeGoKimiK25
                 | ModelId::OpenCodeGoMinimaxM27
-                | ModelId::DeepSeekReasoner
+                | ModelId::DeepSeekV4Pro
                 | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
@@ -343,7 +343,7 @@ impl ModelId {
                 | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
                 | ModelId::OpenCodeGoMinimaxM25
-                | ModelId::DeepSeekChat
+                | ModelId::DeepSeekV4Flash
                 | ModelId::HuggingFaceStep35Flash
         )
     }
@@ -380,7 +380,7 @@ impl ModelId {
                 | ModelId::OpenCodeGoGlm51
                 | ModelId::OpenCodeGoKimiK25
                 | ModelId::OpenCodeGoMinimaxM27
-                | ModelId::DeepSeekReasoner
+                | ModelId::DeepSeekV4Pro
                 | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
@@ -444,7 +444,7 @@ impl ModelId {
             ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeMythosPreview => "preview",
             // DeepSeek generations
-            ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
+            ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => "4",
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
             ModelId::ZaiGlm51 => "5.1",

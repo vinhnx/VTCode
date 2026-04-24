@@ -129,7 +129,9 @@ impl Provider {
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::Copilot => false,
-            Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
+            Provider::DeepSeek => {
+                model == models::deepseek::DEEPSEEK_V4_PRO || model == "deepseek-reasoner"
+            }
             Provider::OpenRouter => {
                 if let Ok(model_id) = ModelId::from_str(model) {
                     if let Some(meta) = crate::models::openrouter_generated::metadata_for(model_id)

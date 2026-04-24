@@ -41,8 +41,8 @@ impl ModelId {
             ModelId::CopilotGPT54Mini => "GitHub Copilot GPT-5.4 Mini",
             ModelId::CopilotClaudeSonnet46 => "GitHub Copilot Claude Sonnet 4.6",
             // DeepSeek models
-            ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
-            ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
+            ModelId::DeepSeekV4Pro => "DeepSeek V4 Pro",
+            ModelId::DeepSeekV4Flash => "DeepSeek V4 Flash",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",

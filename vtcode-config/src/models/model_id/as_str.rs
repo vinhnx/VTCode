@@ -43,8 +43,8 @@ impl ModelId {
             ModelId::CopilotGPT54Mini => models::copilot::GPT_5_4_MINI,
             ModelId::CopilotClaudeSonnet46 => models::copilot::CLAUDE_SONNET_4_6,
             // DeepSeek models
-            ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
-            ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
+            ModelId::DeepSeekV4Pro => models::deepseek::DEEPSEEK_V4_PRO,
+            ModelId::DeepSeekV4Flash => models::deepseek::DEEPSEEK_V4_FLASH,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,

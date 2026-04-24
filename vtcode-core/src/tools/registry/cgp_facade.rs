@@ -56,7 +56,9 @@ impl RegistrationMetadataSnapshot {
     fn from_registration(registration: &ToolRegistration) -> Self {
         Self {
             name: Arc::<str>::from(registration.name()),
-            description: Arc::<str>::from(registration.metadata().description().unwrap_or_default()),
+            description: Arc::<str>::from(
+                registration.metadata().description().unwrap_or_default(),
+            ),
             parameter_schema: registration.parameter_schema().cloned(),
             config_schema: registration.config_schema().cloned(),
             state_schema: registration.state_schema().cloned(),

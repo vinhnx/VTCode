@@ -90,8 +90,8 @@ impl FromStr for ModelId {
             s if s == models::copilot::GPT_5_4_MINI => Ok(ModelId::CopilotGPT54Mini),
             s if s == models::copilot::CLAUDE_SONNET_4_6 => Ok(ModelId::CopilotClaudeSonnet46),
             // DeepSeek models
-            s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
-            s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
+            s if s == models::deepseek::DEEPSEEK_V4_PRO => Ok(ModelId::DeepSeekV4Pro),
+            s if s == models::deepseek::DEEPSEEK_V4_FLASH => Ok(ModelId::DeepSeekV4Flash),
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),
