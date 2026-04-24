@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.101.0 - 2026-04-24
+
+### Highlights
+### Other Changes
+#### Other
+
+- DeepSeek V4 Models identifiers and descriptions to reflect version changes (be3638ba) 
+#### Refactors
+
+- Change function signatures to return &str instead of &'static str (8b315ada) 
 ## 0.100.3 - 2026-04-21
 
 ### Highlights
