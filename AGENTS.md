@@ -1,64 +1,54 @@
 # AGENTS.md
 
-## Core rules
+## Use This File For
 
-- Start with `docs/ARCHITECTURE.md` when repo orientation matters.
-- Use Conventional Commits (`type(scope): subject`).
-- Prefer `cargo check`, `cargo nextest run`, `cargo fmt`, and `cargo clippy` for local verification.
-- **During development: ALWAYS use `./scripts/check-dev.sh`** — never `./scripts/check.sh` (too slow for daily coding).
+- Repo-wide workflow and placement decisions.
+- Open `docs/ARCHITECTURE.md` only when the task spans crates, touches runtime boundaries, or you need repo orientation.
+- Prefer module-local docs over broad repo exploration when working in one area.
 
-## Development Workflow
+## Core Rules
 
-### Active Development (use this 95% of the time)
-
-**Use `./scripts/check-dev.sh` for all daily coding tasks.** This is fast (~10-30s) and covers what you need:
-
-```bash
-# Quick check: fmt + clippy + compilation (default-members only)
-./scripts/check-dev.sh
-
-# Add tests to the mix
-./scripts/check-dev.sh --test
-
-# Full workspace scope when touching multiple crates
-./scripts/check-dev.sh --workspace
-
-# Add extra lints (structured logging, etc)
-./scripts/check-dev.sh --lints
-```
-
-### Release/PR Validation (rare, ~2-5m)
-
-**ONLY run `./scripts/check.sh` when:**
-- Preparing a release tag
-- Final PR review before merge
-- Explicitly requested by reviewer or CI
-
-```bash
-./scripts/check.sh
-```
-
-**Why?** `check.sh` runs the full comprehensive quality gate across the entire workspace. CI already runs these checks in parallel, so local `check.sh` is only for pre-release validation.
-
-## Repository shape
-
-- Repository: `vtcode`.
-- Main code lives in `src/`, `vtcode-core/`, `vtcode-tui/`, and `tests/`.
-- Match CI expectations in `.github/workflows/`.
-
-## `vtcode-core`
-
-- Resist adding new code to `vtcode-core`.
-- Prefer an existing smaller crate, or introduce one, when reusable logic does not need to live in `vtcode-core`.
-
-## Style
-
-- Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Keep changes surgical and behavior-preserving.
+- Use Conventional Commits (`type(scope): subject`).
+- Match CI expectations in `.github/workflows/`.
+- Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Measure before optimizing.
-- When Rust ownership or lifetimes get tangled, prefer explicit handles/IDs plus an owning context over self-referential layouts or clever shared-state tricks.
-- Treat raw pointers, custom `Send`/`Sync`, and lifetime-branding patterns as last-resort tools. Use them only when simpler handle-based designs are not sufficient, and document the invariant at the boundary.
+- When ownership or lifetimes get tangled, prefer explicit handles/IDs plus an owning context.
+- Do not reach for raw pointers, custom `Send`/`Sync`, or lifetime-branding patterns unless simpler handle-based designs are insufficient; document the invariant if you do.
 - If this repo includes or adds C/C++ surfaces, follow [`docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`](docs/development/CPP_CORE_GUIDELINES_ADOPTION.md).
+
+## Verification
+
+Use `./scripts/check-dev.sh` during development. Do not use `./scripts/check.sh` for routine iteration.
+
+| If you changed... | Run |
+| --- | --- |
+| A focused code path and you want the default fast gate | `./scripts/check-dev.sh` |
+| Logic covered by tests or you added tests | `./scripts/check-dev.sh --test` |
+| Multiple crates or shared code | `./scripts/check-dev.sh --workspace` |
+| Extra lint-sensitive code paths | `./scripts/check-dev.sh --lints` |
+| Release validation, final PR validation, or reviewer/CI explicitly asked | `./scripts/check.sh` |
+
+Use `cargo check`, `cargo nextest run`, `cargo fmt`, and `cargo clippy` when you need a narrower command for a specific crate or faster debugging loop.
+
+## Code Placement
+
+Repository shape:
+- Main code lives in `src/`, `vtcode-core/`, `vtcode-tui/`, and `tests/`.
+
+Choose placement before adding code:
+
+| Situation | Preferred location |
+| --- | --- |
+| Reusable logic that does not need to live in the core runtime | An existing smaller crate, or a new small crate |
+| Code tightly coupled to existing `vtcode-core` runtime responsibilities | `vtcode-core` |
+| Unsure whether new reusable logic belongs in `vtcode-core` | Keep it out of `vtcode-core` by default |
+
+## Implementation Notes
+
+- Prefer simple algorithms and control flow until the workload justifies extra complexity.
+- Keep new abstractions proportional to current use; do not generalize single-use code.
+- Preserve existing APIs and behavior unless the task requires a change.
 
 <!-- codemod-skill-discovery:begin -->
 ## Codemod Skill Discovery
