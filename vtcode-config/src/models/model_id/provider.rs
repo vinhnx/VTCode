@@ -99,6 +99,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepSeekV4Pro
             | ModelId::OpenRouterDeepSeekV4Flash
             | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b

@@ -239,9 +239,12 @@ impl Provider {
         let mut entries = Vec::with_capacity(self.models.len());
 
         for (model_id, spec) in &self.models {
-            let vtcode = spec.vtcode.as_ref().with_context(|| {
-                format!("Missing vtcode metadata for openrouter model '{model_id}'")
-            })?;
+            let Some(vtcode) = spec.vtcode.as_ref() else {
+                println!(
+                    "cargo:warning=Skipping openrouter model '{model_id}' without vtcode metadata"
+                );
+                continue;
+            };
 
             let const_name = vtcode.constant.trim().to_string();
             if const_name.is_empty() {

@@ -224,6 +224,8 @@ pub enum ModelId {
     OpenRouterDeepSeekV4Flash,
     /// DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought
     OpenRouterDeepSeekR1,
+    /// DeepSeek V3.1 - DeepSeek V3.1 chat model via OpenRouter
+    OpenRouterDeepSeekChatV31,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
     /// OpenAI gpt-oss-120b:free - Open-weight 120B reasoning model free tier via OpenRouter
