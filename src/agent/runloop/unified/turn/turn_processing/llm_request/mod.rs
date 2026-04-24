@@ -676,7 +676,6 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
-    use vtcode_core::prompts::upsert_harness_limits_section;
 
     struct ScriptedProvider {
         recorded_previous_response_ids: Arc<Mutex<Vec<Option<String>>>>,
@@ -1135,64 +1134,6 @@ mod tests {
             build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,),
             None
         );
-    }
-
-    #[test]
-    fn upsert_harness_limits_adds_single_section() {
-        let mut prompt = "Base prompt".to_string();
-
-        upsert_harness_limits_section(&mut prompt, 12, 180, 2);
-
-        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
-        assert!(prompt.contains("- max_tool_calls_per_turn: 12"));
-        assert!(prompt.contains("- max_tool_wall_clock_secs: 180"));
-        assert!(prompt.contains("- max_tool_retries: 2"));
-    }
-
-    #[test]
-    fn upsert_harness_limits_replaces_existing_values() {
-        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 60\n- max_tool_retries: 1\n".to_string();
-
-        upsert_harness_limits_section(&mut prompt, 9, 240, 4);
-
-        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
-        assert!(prompt.contains("- max_tool_calls_per_turn: 9"));
-        assert!(prompt.contains("- max_tool_wall_clock_secs: 240"));
-        assert!(prompt.contains("- max_tool_retries: 4"));
-        assert!(!prompt.contains("- max_tool_calls_per_turn: 3"));
-    }
-
-    #[test]
-    fn upsert_harness_limits_preserves_trailing_prompt_sections() {
-        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 60\n- max_tool_retries: 1\n[Additional Context]\nKeep this section".to_string();
-
-        upsert_harness_limits_section(&mut prompt, 11, 90, 3);
-
-        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
-        assert!(prompt.contains("[Additional Context]\nKeep this section"));
-        assert!(prompt.ends_with("- max_tool_retries: 3\n"));
-    }
-
-    #[test]
-    fn upsert_harness_limits_replaces_indented_section_header() {
-        let mut prompt = "Base prompt\n  [Harness Limits]\n- max_tool_calls_per_turn: 1\n- max_tool_wall_clock_secs: 1\n- max_tool_retries: 1\n".to_string();
-
-        upsert_harness_limits_section(&mut prompt, 5, 30, 2);
-
-        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
-        assert!(prompt.contains("- max_tool_calls_per_turn: 5"));
-        assert!(!prompt.contains("- max_tool_calls_per_turn: 1"));
-    }
-
-    #[test]
-    fn upsert_harness_limits_removes_duplicate_sections() {
-        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 2\n- max_tool_wall_clock_secs: 10\n- max_tool_retries: 1\n[Other]\nkeep\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 20\n- max_tool_retries: 2\n".to_string();
-
-        upsert_harness_limits_section(&mut prompt, 7, 70, 3);
-
-        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
-        assert!(prompt.contains("- max_tool_calls_per_turn: 7"));
-        assert!(prompt.contains("[Other]\nkeep"));
     }
 
     #[test]

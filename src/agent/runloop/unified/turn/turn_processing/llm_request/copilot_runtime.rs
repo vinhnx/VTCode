@@ -41,13 +41,15 @@ use crate::agent::runloop::unified::progress::{
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use crate::agent::runloop::unified::tool_call_safety::{
+    ToolCallSafetyValidator, invocation_id_from_call_id,
+};
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
 use crate::agent::runloop::unified::tool_pipeline::{
     PtyStreamRuntime, ToolExecutionStatus, run_tool_call_with_args,
 };
 use crate::agent::runloop::unified::tool_routing::{
-    HitlDecision, ToolPermissionFlow, ToolPermissionsContext, ensure_tool_permission,
+    HitlDecision, ToolPermissionFlow, ToolPermissionsContext, ensure_tool_permission_with_call_id,
     prompt_external_tool_permission,
 };
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
@@ -243,11 +245,12 @@ impl<'a> CopilotRuntimeHost<'a> {
             return Ok(tool_not_exposed_response(&request.tool_name));
         }
 
-        let preflight = self
+        let prepared = self
             .tool_registry
-            .preflight_validate_call(&request.tool_name, &request.arguments)
+            .admit_public_tool_call(&request.tool_name, &request.arguments)
             .with_context(|| format!("copilot tool preflight for '{}'", request.tool_name))?;
-        let canonical_tool_name = preflight.normalized_tool_name;
+        let canonical_tool_name = prepared.canonical_name;
+        let effective_arguments = prepared.effective_args;
 
         if !self
             .exposed_tool_names
@@ -257,7 +260,12 @@ impl<'a> CopilotRuntimeHost<'a> {
         }
 
         if let Some(response) = self
-            .prepare_vtcode_tool_execution(renderer, &canonical_tool_name, &request.arguments)
+            .prepare_vtcode_tool_execution(
+                renderer,
+                &request.tool_call_id,
+                &canonical_tool_name,
+                &effective_arguments,
+            )
             .await?
         {
             return Ok(response);
@@ -296,7 +304,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 &mut run_loop_ctx,
                 tool_item_id,
                 &canonical_tool_name,
-                &request.arguments,
+                &effective_arguments,
                 self.ctrl_c_state,
                 self.ctrl_c_notify,
                 self.default_placeholder.clone(),
@@ -312,7 +320,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             let (modified_files, last_stdout) = handle_pipeline_output(
                 &mut run_loop_ctx,
                 &canonical_tool_name,
-                &request.arguments,
+                &effective_arguments,
                 &pipeline_outcome,
                 self.vt_cfg,
             )
@@ -354,15 +362,17 @@ impl<'a> CopilotRuntimeHost<'a> {
     async fn prepare_vtcode_tool_execution(
         &mut self,
         renderer: &mut AnsiRenderer,
+        tool_call_id: &str,
         tool_name: &str,
         arguments: &Value,
     ) -> Result<Option<CopilotToolCallResponse>> {
+        let invocation_id = invocation_id_from_call_id(tool_call_id);
         self.safety_validator
-            .validate_call(tool_name, arguments)
+            .validate_call_with_invocation_id(tool_name, arguments, invocation_id)
             .await
             .with_context(|| format!("copilot tool safety validation for '{tool_name}'"))?;
 
-        match ensure_tool_permission(
+        match ensure_tool_permission_with_call_id(
             ToolPermissionsContext {
                 tool_registry: self.tool_registry,
                 renderer,
@@ -387,6 +397,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             },
             tool_name,
             Some(arguments),
+            Some(tool_call_id),
         )
         .await?
         {

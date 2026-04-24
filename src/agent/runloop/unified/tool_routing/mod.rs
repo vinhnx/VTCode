@@ -7,6 +7,7 @@ mod limit_prompts;
 mod permission_prompt;
 mod shell_approval;
 
+#[cfg(test)]
 use std::future::Future;
 use std::sync::Arc;
 
@@ -886,6 +887,7 @@ async fn persist_segment_approval_cache_keys(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn ensure_tool_permission<'a, S: UiSession + ?Sized>(
     ctx: ToolPermissionsContext<'a, S>,
     tool_name: &'a str,
