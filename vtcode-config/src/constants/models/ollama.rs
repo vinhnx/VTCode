@@ -9,6 +9,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GPT_OSS_20B_CLOUD,
     DEEPSEEK_V32_CLOUD,
     DEEPSEEK_V4_FLASH_CLOUD,
+    DEEPSEEK_V4_PRO_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
     GLM_5_CLOUD,
     GLM_5_1_CLOUD,
@@ -29,6 +30,7 @@ pub const REASONING_MODELS: &[&str] = &[
     QWEN3_1_7B,
     DEEPSEEK_V32_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
+    DEEPSEEK_V4_PRO_CLOUD,
     GLM_5_CLOUD,
     GLM_5_1_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
@@ -59,6 +61,7 @@ pub const QWEN3_1_7B: &str = "qwen3:1.7b";
 pub const QWEN3_CODER_NEXT: &str = "qwen3-coder-next:cloud";
 pub const DEEPSEEK_V32_CLOUD: &str = "deepseek-v3.2:cloud";
 pub const DEEPSEEK_V4_FLASH_CLOUD: &str = "deepseek-v4-flash:cloud";
+pub const DEEPSEEK_V4_PRO_CLOUD: &str = "deepseek-v4-pro:cloud";
 pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const GLM_5_CLOUD: &str = "glm-5:cloud";
 pub const GLM_5_1_CLOUD: &str = "glm-5.1:cloud";

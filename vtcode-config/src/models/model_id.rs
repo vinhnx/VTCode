@@ -166,6 +166,8 @@ pub enum ModelId {
     OllamaDeepseekV32Cloud,
     /// DeepSeek V4 Flash Cloud - Fast inference DeepSeek V4 Flash model via Ollama Cloud
     OllamaDeepseekV4FlashCloud,
+    /// DeepSeek V4 Pro Cloud - High-performance DeepSeek V4 Pro model via Ollama Cloud
+    OllamaDeepseekV4ProCloud,
     /// Qwen3 Next 80B Cloud - Next-generation Qwen3 80B via Ollama Cloud
     OllamaQwen3Next80bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud

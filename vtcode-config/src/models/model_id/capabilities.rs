@@ -187,6 +187,7 @@ impl ModelId {
                 Some(ModelId::CopilotGPT54Mini)
             }
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
+            ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
@@ -247,6 +248,7 @@ impl ModelId {
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
+            ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus47
             | ModelId::ClaudeOpus46
@@ -461,6 +463,7 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => "qwen3-coder-next:cloud",
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
             ModelId::OllamaDeepseekV4FlashCloud => "deepseek-v4-flash",
+            ModelId::OllamaDeepseekV4ProCloud => "deepseek-v4-pro",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",

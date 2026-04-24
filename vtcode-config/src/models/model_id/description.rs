@@ -130,6 +130,9 @@ impl ModelId {
             ModelId::OllamaDeepseekV4FlashCloud => {
                 "DeepSeek V4 Flash cloud deployment via Ollama with fast inference and efficient reasoning"
             }
+            ModelId::OllamaDeepseekV4ProCloud => {
+                "DeepSeek V4 Pro cloud deployment via Ollama with advanced thinking and strong reasoning"
+            }
             ModelId::OllamaQwen3Next80bCloud => {
                 "Qwen3 Next generation 80B model via Ollama Cloud with improved reasoning and long context"
             }
