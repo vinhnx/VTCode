@@ -886,11 +886,11 @@ impl Tool for PlanTaskTrackerTool {
         }
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::PLAN_TASK_TRACKER
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Plan-mode compatibility alias for adaptive task tracking. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add."
     }
 

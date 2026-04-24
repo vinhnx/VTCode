@@ -56,6 +56,8 @@
 - Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Keep changes surgical and behavior-preserving.
 - Measure before optimizing.
+- When Rust ownership or lifetimes get tangled, prefer explicit handles/IDs plus an owning context over self-referential layouts or clever shared-state tricks.
+- Treat raw pointers, custom `Send`/`Sync`, and lifetime-branding patterns as last-resort tools. Use them only when simpler handle-based designs are not sufficient, and document the invariant at the boundary.
 - If this repo includes or adds C/C++ surfaces, follow [`docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`](docs/development/CPP_CORE_GUIDELINES_ADOPTION.md).
 
 <!-- codemod-skill-discovery:begin -->

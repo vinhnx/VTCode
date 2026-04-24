@@ -41,36 +41,36 @@ pub const PLAN_MODE_TASK_TRACKER_LINE: &str =
 /// Shared reminder appended when presenting plans while still in Plan Mode.
 pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise. If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode` (or press `Shift+Tab`/`Alt+M` in interactive mode).";
 
-const CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
+const PROMPT_TITLE: &str = "# VT Code";
+const PROMPT_INTRO: &str = "You are VT Code. Be concise, direct, and safe.";
+const CONTRACT_HEADER: &str = "## Contract";
+const HANDLE_CONTEXT_PROMPT_LINE: &str =
+    "Prefer explicit handles plus an owning context when state relationships get tangled.";
 
-You are VT Code. Be concise, direct, and safe.
+const DEFAULT_CONTRACT_LINES: &[&str] = &[
+    "Start with `AGENTS.md`; inspect code and match local patterns. Use `@file` when helpful.",
+    "If context is missing, say so plainly, do not guess, and finish any unblocked portion first.",
+    "Take safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.",
+    HANDLE_CONTEXT_PROMPT_LINE,
+    "Keep control on the main thread. Delegate only bounded, independent work that will not block the next local step.",
+    "Prefer simple changes. Measure before optimizing.",
+    "Verify changes yourself; never claim a check passed unless you ran it.",
+    "Keep outputs concise and in the requested format. Keep user updates brief and high-signal.",
+    "Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction.",
+    "NEVER use emoji in any output. Use plain text only.",
+];
 
-## Contract
-
-- Start with `AGENTS.md`; inspect code and match local patterns. Use `@file` when helpful.
-- If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
-- Take safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.
-- Keep control on the main thread. Delegate only bounded, independent work that will not block the next local step.
-- Prefer simple changes. Measure before optimizing.
-- Verify changes yourself; never claim a check passed unless you ran it.
-- Keep outputs concise and in the requested format. Keep user updates brief and high-signal.
-- Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction.
-- NEVER use emoji in any output. Use plain text only."#;
-
-const MINIMAL_CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
-
-You are VT Code. Be concise, direct, and safe.
-
-## Contract
-
-- Start with `AGENTS.md`; inspect code first.
-- If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
-- Take safe, reversible steps without asking and verify changes yourself.
-- Keep delegation bounded and explicit.
-- Preserve task goal, touched files, and outcomes across compaction.
-- Use retrieved evidence for citation-sensitive work.
-- Keep outputs concise and in the requested format.
-- NEVER use emoji in any output. Use plain text only."#;
+const MINIMAL_CONTRACT_LINES: &[&str] = &[
+    "Start with `AGENTS.md`; inspect code first.",
+    "If context is missing, say so plainly, do not guess, and finish any unblocked portion first.",
+    HANDLE_CONTEXT_PROMPT_LINE,
+    "Take safe, reversible steps without asking and verify changes yourself.",
+    "Keep delegation bounded and explicit.",
+    "Preserve task goal, touched files, and outcomes across compaction.",
+    "Use retrieved evidence for citation-sensitive work.",
+    "Keep outputs concise and in the requested format.",
+    "NEVER use emoji in any output. Use plain text only.",
+];
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
@@ -217,14 +217,43 @@ fn append_prompt_section(prompt: &mut String, section: &str) {
 fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
         SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT
-            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, DEFAULT_MODE_DELTA)),
+            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), DEFAULT_MODE_DELTA)),
         SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT
-            .get_or_init(|| build_mode_prompt(MINIMAL_CANONICAL_SYSTEM_PROMPT, MINIMAL_MODE_DELTA)),
+            .get_or_init(|| build_mode_prompt(&build_contract_prompt(MINIMAL_CONTRACT_LINES), MINIMAL_MODE_DELTA)),
         SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT
-            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, LIGHTWEIGHT_MODE_DELTA)),
+            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), LIGHTWEIGHT_MODE_DELTA)),
         SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT
-            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, SPECIALIZED_MODE_DELTA)),
+            .get_or_init(|| build_mode_prompt(&build_contract_prompt(DEFAULT_CONTRACT_LINES), SPECIALIZED_MODE_DELTA)),
     }
+}
+
+fn build_contract_prompt(contract_lines: &[&str]) -> String {
+    let lines_len = contract_lines.iter().map(|line| line.len()).sum::<usize>();
+    let mut prompt = String::with_capacity(
+        PROMPT_TITLE.len()
+            + PROMPT_INTRO.len()
+            + CONTRACT_HEADER.len()
+            + lines_len
+            + contract_lines.len() * 3
+            + 8,
+    );
+    prompt.push_str(PROMPT_TITLE);
+    prompt.push_str("\n\n");
+    prompt.push_str(PROMPT_INTRO);
+    prompt.push_str("\n\n");
+    prompt.push_str(CONTRACT_HEADER);
+    prompt.push_str("\n\n");
+
+    for line in contract_lines {
+        prompt.push_str("- ");
+        prompt.push_str(line);
+        prompt.push('\n');
+    }
+
+    if !contract_lines.is_empty() {
+        prompt.pop();
+    }
+    prompt
 }
 
 fn build_mode_prompt(base_prompt: &str, mode_delta: &str) -> String {
@@ -858,6 +887,18 @@ mod tests {
         assert!(
             minimal_system_prompt().contains("Keep delegation bounded and explicit"),
             "Minimal prompt should preserve the delegation contract"
+        );
+    }
+
+    #[test]
+    fn test_prompts_prefer_handle_context_design_for_tangled_state() {
+        assert!(
+            default_system_prompt().contains(HANDLE_CONTEXT_PROMPT_LINE),
+            "Default prompt should prefer explicit handle/context designs for tangled state"
+        );
+        assert!(
+            minimal_system_prompt().contains(HANDLE_CONTEXT_PROMPT_LINE),
+            "Minimal prompt should keep the handle/context guidance"
         );
     }
 

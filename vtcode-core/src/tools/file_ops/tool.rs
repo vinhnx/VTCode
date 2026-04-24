@@ -129,11 +129,11 @@ impl Tool for FileOpsTool {
         self.execute_mode(mode, serde_json::to_value(input)?).await
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::LIST_FILES
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Enhanced file discovery tool with multiple modes: list (default), recursive, find_name, find_content, largest (size ranking), tree (visual directory structure)"
     }
 }

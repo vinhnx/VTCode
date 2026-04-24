@@ -1127,11 +1127,11 @@ impl Tool for EnterPlanModeTool {
         }))
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::ENTER_PLAN_MODE
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Enter Plan Mode to switch to read-only exploration. In Plan Mode, you can only read files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes."
     }
 
@@ -1388,11 +1388,11 @@ impl Tool for ExitPlanModeTool {
         }))
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::EXIT_PLAN_MODE
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Exit Plan Mode after finishing your plan. This signals that you're done planning and ready for user review. The plan file content will be shown to the user for approval. Only use this when the task requires planning implementation steps, not for research tasks."
     }
 

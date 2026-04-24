@@ -26,11 +26,11 @@ impl Tool for RequestUserInputTool {
         ))
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::REQUEST_USER_INPUT
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         request_user_input_description()
     }
 

@@ -137,11 +137,11 @@ impl Tool for McpProxyTool {
         self.client.execute_mcp_tool(&self.remote_name, &args).await
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "mcp_proxy"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "MCP tool proxy"
     }
 

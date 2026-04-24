@@ -143,11 +143,11 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
         }
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         self.name
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         self.description
     }
 

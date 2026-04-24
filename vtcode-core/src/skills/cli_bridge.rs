@@ -89,10 +89,6 @@ pub struct CliToolBridge {
     pub config: CliToolConfig,
     instructions: String,
     schema: Option<Value>,
-    /// Cached leaked name to satisfy Tool trait's &'static str requirement
-    static_name: &'static str,
-    /// Cached leaked description to satisfy Tool trait's &'static str requirement
-    static_description: &'static str,
 }
 
 impl CliToolBridge {
@@ -101,15 +97,10 @@ impl CliToolBridge {
         let instructions = Self::load_readme(&config)?;
         let schema = Self::load_schema(&config)?;
 
-        let static_name = Box::leak(config.name.clone().into_boxed_str());
-        let static_description = Box::leak(config.description.clone().into_boxed_str());
-
         Ok(CliToolBridge {
             config,
             instructions,
             schema,
-            static_name,
-            static_description,
         })
     }
 
@@ -422,12 +413,12 @@ impl CliToolBridge {
 
 #[async_trait]
 impl Tool for CliToolBridge {
-    fn name(&self) -> &'static str {
-        self.static_name
+    fn name(&self) -> &str {
+        &self.config.name
     }
 
-    fn description(&self) -> &'static str {
-        self.static_description
+    fn description(&self) -> &str {
+        &self.config.description
     }
 
     fn parameter_schema(&self) -> Option<Value> {

@@ -924,11 +924,11 @@ impl crate::tools::traits::Tool for SkillToolAdapter {
         Ok(result)
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "traditional_skill_tool"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Traditional VT Code skill adapter"
     }
 
@@ -1234,11 +1234,11 @@ mod tests {
             }))
         }
 
-        fn name(&self) -> &'static str {
+        fn name(&self) -> &str {
             "counting_skill_tool"
         }
 
-        fn description(&self) -> &'static str {
+        fn description(&self) -> &str {
             "Counts skill tool invocations"
         }
     }

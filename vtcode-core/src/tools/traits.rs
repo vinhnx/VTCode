@@ -55,10 +55,10 @@ pub trait Tool: Send + Sync {
     }
 
     /// Get the tool's name
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
 
     /// Get the tool's description
-    fn description(&self) -> &'static str;
+    fn description(&self) -> &str;
 
     /// Validate arguments before execution
     fn validate_args(&self, _args: &Value) -> Result<()> {

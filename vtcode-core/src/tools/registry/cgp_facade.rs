@@ -21,7 +21,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
 
-fn leak_static_str(value: impl Into<String>) -> &'static str {
+fn leak_pattern_str(value: impl Into<String>) -> &'static str {
     Box::leak(value.into().into_boxed_str())
 }
 
@@ -33,7 +33,7 @@ fn leak_patterns(patterns: &[String]) -> Option<&'static [&'static str]> {
     let leaked_patterns = patterns
         .iter()
         .cloned()
-        .map(leak_static_str)
+        .map(leak_pattern_str)
         .collect::<Vec<_>>()
         .into_boxed_slice();
     Some(Box::leak(leaked_patterns))
@@ -41,8 +41,8 @@ fn leak_patterns(patterns: &[String]) -> Option<&'static [&'static str]> {
 
 #[derive(Clone)]
 struct RegistrationMetadataSnapshot {
-    name: &'static str,
-    description: &'static str,
+    name: Arc<str>,
+    description: Arc<str>,
     parameter_schema: Option<Value>,
     config_schema: Option<Value>,
     state_schema: Option<Value>,
@@ -55,14 +55,8 @@ struct RegistrationMetadataSnapshot {
 impl RegistrationMetadataSnapshot {
     fn from_registration(registration: &ToolRegistration) -> Self {
         Self {
-            name: leak_static_str(registration.name().to_string()),
-            description: leak_static_str(
-                registration
-                    .metadata()
-                    .description()
-                    .unwrap_or_default()
-                    .to_string(),
-            ),
+            name: Arc::<str>::from(registration.name()),
+            description: Arc::<str>::from(registration.metadata().description().unwrap_or_default()),
             parameter_schema: registration.parameter_schema().cloned(),
             config_schema: registration.config_schema().cloned(),
             state_schema: registration.state_schema().cloned(),
@@ -80,12 +74,12 @@ impl RegistrationMetadataSnapshot {
         T: Tool + ?Sized,
     {
         Self {
-            name: leak_static_str(registration.name().to_string()),
+            name: Arc::<str>::from(registration.name()),
             description: registration
                 .metadata()
                 .description()
-                .map(|value| leak_static_str(value.to_string()))
-                .unwrap_or_else(|| tool.description()),
+                .map(Arc::<str>::from)
+                .unwrap_or_else(|| Arc::<str>::from(tool.description())),
             parameter_schema: registration
                 .parameter_schema()
                 .cloned()
@@ -140,12 +134,12 @@ impl Tool for RegistryFnTool {
         (self.executor)(&self.registry, args).await
     }
 
-    fn name(&self) -> &'static str {
-        self.metadata.name
+    fn name(&self) -> &str {
+        self.metadata.name.as_ref()
     }
 
-    fn description(&self) -> &'static str {
-        self.metadata.description
+    fn description(&self) -> &str {
+        self.metadata.description.as_ref()
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -208,12 +202,12 @@ where
         Ok(result)
     }
 
-    fn name(&self) -> &'static str {
-        self.metadata.name
+    fn name(&self) -> &str {
+        self.metadata.name.as_ref()
     }
 
-    fn description(&self) -> &'static str {
-        self.metadata.description
+    fn description(&self) -> &str {
+        self.metadata.description.as_ref()
     }
 
     fn validate_args(&self, args: &Value) -> Result<()> {
@@ -294,12 +288,12 @@ impl Tool for RegistrationBackedDynTool {
         Ok(result)
     }
 
-    fn name(&self) -> &'static str {
-        self.metadata.name
+    fn name(&self) -> &str {
+        self.metadata.name.as_ref()
     }
 
-    fn description(&self) -> &'static str {
-        self.metadata.description
+    fn description(&self) -> &str {
+        self.metadata.description.as_ref()
     }
 
     fn validate_args(&self, args: &Value) -> Result<()> {
@@ -503,14 +497,15 @@ impl ToolRegistry {
         mode: CgpRuntimeMode,
     ) -> Result<()> {
         let workspace = self.workspace_root_owned();
+        let tool_name = Arc::<str>::from(tool.name());
         let registration = match mode {
             CgpRuntimeMode::Interactive => ToolRegistration::from_cgp_tool(
-                tool.name(),
+                tool_name,
                 capability,
                 wrap_tool_interactive(tool, workspace),
             ),
             CgpRuntimeMode::Ci => ToolRegistration::from_cgp_tool(
-                tool.name(),
+                tool_name,
                 capability,
                 wrap_tool_ci(tool, workspace),
             ),
@@ -545,11 +540,11 @@ mod tests {
             }))
         }
 
-        fn name(&self) -> &'static str {
+        fn name(&self) -> &str {
             "dummy_cgp_test"
         }
 
-        fn description(&self) -> &'static str {
+        fn description(&self) -> &str {
             "A dummy tool for CGP facade tests"
         }
     }
@@ -597,11 +592,11 @@ mod tests {
                 Ok(SplitToolResult::simple(self.name(), "dual bridge"))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "bridge_trait_object"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "bridge fallback tool"
             }
         }
@@ -765,11 +760,11 @@ mod tests {
                 Ok(serde_json::json!({ "path": "bridge" }))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "native_cgp_factory_test"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "bridge fallback tool"
             }
         }
@@ -782,11 +777,11 @@ mod tests {
                 Ok(serde_json::json!({ "path": "native" }))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "native_cgp_factory_test"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "native factory tool"
             }
         }
@@ -834,11 +829,11 @@ mod tests {
                 }))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "late_cgp_test"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "late registration test"
             }
         }
@@ -887,11 +882,11 @@ mod tests {
                 Ok(serde_json::json!({ "path": "bridge" }))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "late_native_cgp_test"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "bridge fallback tool"
             }
         }
@@ -904,11 +899,11 @@ mod tests {
                 Ok(serde_json::json!({ "path": "late-native" }))
             }
 
-            fn name(&self) -> &'static str {
+            fn name(&self) -> &str {
                 "late_native_cgp_test"
             }
 
-            fn description(&self) -> &'static str {
+            fn description(&self) -> &str {
                 "native late tool"
             }
         }

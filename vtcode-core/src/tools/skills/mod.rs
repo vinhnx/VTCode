@@ -504,11 +504,11 @@ impl LoadSkillTool {
 
 #[async_trait]
 impl Tool for LoadSkillTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "load_skill"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Load detailed instructions for a specific traditional skill and activate its associated tool into your environment."
     }
 
@@ -623,11 +623,11 @@ impl ListSkillsTool {
 
 #[async_trait]
 impl Tool for ListSkillsTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "list_skills"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "List all available skills and system utilities. Use 'query' to filter by name, description, or routing hints, or 'variety' to filter by type ('agent_skill' or 'system_utility'). Traditional skills stay inactive until activated via 'load_skill'."
     }
 
@@ -794,11 +794,11 @@ impl LoadSkillResourceTool {
 
 #[async_trait]
 impl Tool for LoadSkillResourceTool {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "load_skill_resource"
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Access Level 3 resources (scripts, templates, technical docs) referenced in a skill's SKILL.md. Use this to read files from 'scripts/', 'references/', or 'assets/' when the high-level instructions require them."
     }
 

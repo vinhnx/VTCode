@@ -1014,11 +1014,11 @@ impl Tool for TaskTrackerTool {
         }
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         tools::TASK_TRACKER
     }
 
-    fn description(&self) -> &'static str {
+    fn description(&self) -> &str {
         "Adaptive task tracker for both Plan and Edit modes. Uses one checklist API (`create|update|list|add`) and mirrors tracker state between `.vtcode/tasks/current_task.md` and active plan sidecar files when available."
     }
 
