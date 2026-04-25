@@ -24,6 +24,11 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
 use vtcode_core::subagents::delegated_task_requires_clarification;
 
+struct DirectSubagentInvocation {
+    tool_name: &'static str,
+    args: serde_json::Value,
+}
+
 pub(crate) struct DirectToolContext<'a, 'b> {
     pub interaction_ctx: &'b mut InteractionLoopContext<'a>,
     pub input_status_state: &'b mut InputStatusState,
@@ -47,8 +52,9 @@ pub(crate) async fn handle_direct_tool_execution(
 ) -> Result<Option<InteractionOutcome>> {
     let normalized_input =
         normalize_direct_tool_mentions(input, &ctx.interaction_ctx.config.workspace);
-    if let Some(args) = detect_direct_subagent_spawn_input(&normalized_input, ctx).await? {
-        return execute_direct_tool_call(input, tools::SPAWN_AGENT, args, false, ctx).await;
+    if let Some(invocation) = detect_direct_subagent_spawn_input(&normalized_input, ctx).await? {
+        return execute_direct_tool_call(input, invocation.tool_name, invocation.args, false, ctx)
+            .await;
     }
     let Some(parsed) = parse_direct_tool_input(&normalized_input) else {
         return Ok(None);
@@ -123,8 +129,10 @@ pub(crate) async fn execute_direct_tool_call(
                 "Shell mode (!): executing command directly.",
             )?;
         }
-        if tool_name == tools::SPAWN_AGENT
-            && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
+        if matches!(
+            tool_name,
+            tools::SPAWN_AGENT | tools::SPAWN_BACKGROUND_SUBPROCESS
+        ) && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
         {
             controller.set_turn_delegation_hints_from_input(input).await;
         }
@@ -135,34 +143,64 @@ pub(crate) async fn execute_direct_tool_call(
             .push(uni::Message::user(input.to_string()));
 
         // 2. Inject assistant message with tool call to keep history valid for LLM
-        let tool_call_id = format!("direct_{}_{}", tool_name, t_ctx.ctx.working_history.len());
-        let tool_call = uni::ToolCall::function(
-            tool_call_id.clone(),
-            tool_name.to_string(),
-            serde_json::to_string(&args).unwrap_or_default(),
-        );
-        t_ctx
-            .ctx
-            .working_history
-            .push(uni::Message::assistant_with_tools(
-                String::new(),
-                vec![tool_call],
-            ));
+        let mut pending_tool = Some((tool_name.to_string(), args));
+        let mut consumed_fallback = false;
 
-        // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
-        let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, tool_name, args).await?;
+        while let Some((current_tool_name, current_args)) = pending_tool.take() {
+            let tool_call_id = format!(
+                "direct_{}_{}",
+                current_tool_name,
+                t_ctx.ctx.working_history.len()
+            );
+            let tool_call = uni::ToolCall::function(
+                tool_call_id.clone(),
+                current_tool_name.clone(),
+                serde_json::to_string(&current_args).unwrap_or_default(),
+            );
+            t_ctx
+                .ctx
+                .working_history
+                .push(uni::Message::assistant_with_tools(
+                    String::new(),
+                    vec![tool_call],
+                ));
+
+            // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
+            let outcome = handle_single_tool_call(
+                &mut t_ctx,
+                &tool_call_id,
+                &current_tool_name,
+                current_args,
+            )
+            .await?;
+
+            if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
+                return Ok(Some(InteractionOutcome::Exit {
+                    reason: vtcode_core::hooks::SessionEndReason::Exit,
+                }));
+            }
+
+            if !consumed_fallback
+                && let Some((fallback_tool, fallback_args)) = direct_tool_fallback(
+                    t_ctx.ctx.working_history,
+                    &tool_call_id,
+                    &current_tool_name,
+                )
+            {
+                consumed_fallback = true;
+                t_ctx.ctx.renderer.line(
+                    vtcode_core::utils::ansi::MessageStyle::Info,
+                    &format!("Retrying with tool-provided fallback `{fallback_tool}`."),
+                )?;
+                pending_tool = Some((fallback_tool, fallback_args));
+            }
+        }
 
         // 4. Cleanup UI and return outcome
         t_ctx.ctx.reset_input_to_default_placeholder();
         let restore_left = t_ctx.ctx.input_status_state.left.clone();
         let restore_right = t_ctx.ctx.input_status_state.right.clone();
         t_ctx.ctx.restore_input_status(restore_left, restore_right);
-
-        if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
-            return Ok(Some(InteractionOutcome::Exit {
-                reason: vtcode_core::hooks::SessionEndReason::Exit,
-            }));
-        }
 
         if let Some(reply) = generate_completion_reply_with_suggestions(
             t_ctx.ctx.working_history,
@@ -198,12 +236,16 @@ pub(crate) async fn execute_direct_tool_call(
 async fn detect_direct_subagent_spawn_input(
     input: &str,
     ctx: &DirectToolContext<'_, '_>,
-) -> Result<Option<serde_json::Value>> {
+) -> Result<Option<DirectSubagentInvocation>> {
     let Some(controller) = ctx.interaction_ctx.tool_registry.subagent_controller() else {
         return Ok(None);
     };
     let specs = controller.effective_specs().await;
-    Ok(direct_subagent_spawn_args(input, &specs))
+    let Some(args) = direct_subagent_spawn_args(input, &specs) else {
+        return Ok(None);
+    };
+    let tool_name = direct_subagent_tool_name(&args, &specs);
+    Ok(Some(DirectSubagentInvocation { tool_name, args }))
 }
 
 fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
@@ -295,11 +337,50 @@ fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<ser
             return Some(serde_json::json!({
                 "agent_type": spec.name.as_str(),
                 "message": message,
-                "background": task.background
+                "background": spec.background || task.background
             }));
         }
     }
     None
+}
+
+fn direct_subagent_tool_name(args: &serde_json::Value, specs: &[SubagentSpec]) -> &'static str {
+    let agent_type = args.get("agent_type").and_then(serde_json::Value::as_str);
+    let background_requested = args
+        .get("background")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if specs
+        .iter()
+        .any(|spec| Some(spec.name.as_str()) == agent_type && spec.background)
+        && background_requested
+    {
+        tools::SPAWN_BACKGROUND_SUBPROCESS
+    } else {
+        tools::SPAWN_AGENT
+    }
+}
+
+fn direct_tool_fallback(
+    history: &[uni::Message],
+    tool_call_id: &str,
+    current_tool_name: &str,
+) -> Option<(String, serde_json::Value)> {
+    let payload = history
+        .iter()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some(tool_call_id))
+        .and_then(|message| {
+            serde_json::from_str::<serde_json::Value>(message.get_text_content().as_ref()).ok()
+        })?;
+    let fallback_tool = payload
+        .get("fallback_tool")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|tool| !tool.is_empty() && *tool != current_tool_name)?
+        .to_string();
+    let fallback_args = payload.get("fallback_tool_args")?.clone();
+    Some((fallback_tool, fallback_args))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -563,10 +644,15 @@ mod tests {
     use std::fs;
 
     use super::normalize_direct_tool_mentions;
-    use super::{DirectToolInput, direct_subagent_spawn_args, parse_direct_tool_input};
+    use super::{
+        DirectToolInput, direct_subagent_spawn_args, direct_subagent_tool_name,
+        direct_tool_fallback, parse_direct_tool_input,
+    };
     use tempfile::TempDir;
     use vtcode_config::SubagentSource;
     use vtcode_config::SubagentSpec;
+    use vtcode_core::config::constants::tools;
+    use vtcode_core::llm::provider as uni;
 
     fn test_subagent_spec(name: &str) -> SubagentSpec {
         SubagentSpec {
@@ -804,10 +890,12 @@ mod tests {
     #[test]
     fn direct_subagent_spawn_args_uses_agent_initial_prompt_when_available() {
         let mut spec = test_subagent_spec("background-demo");
+        spec.background = true;
         spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
         let args = direct_subagent_spawn_args("run background-demo subagent", &[spec])
             .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "background-demo");
+        assert_eq!(args["background"], true);
         assert_eq!(
             args["message"],
             "Run the demo subprocess and report readiness."
@@ -817,13 +905,85 @@ mod tests {
     #[test]
     fn direct_subagent_spawn_args_falls_back_to_initial_prompt_for_vague_follow_up() {
         let mut spec = test_subagent_spec("background-demo");
+        spec.background = true;
         spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
         let args = direct_subagent_spawn_args("run background-demo subagent and demo", &[spec])
             .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "background-demo");
+        assert_eq!(args["background"], true);
         assert_eq!(
             args["message"],
             "Run the demo subprocess and report readiness."
+        );
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_defaults_background_specs_to_background_launches() {
+        let mut spec = test_subagent_spec("background-demo");
+        spec.background = true;
+        spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
+        let args = direct_subagent_spawn_args("run background-demo subagent", &[spec])
+            .expect("direct subagent spawn");
+        assert_eq!(args["agent_type"], "background-demo");
+        assert_eq!(args["background"], true);
+    }
+
+    #[test]
+    fn direct_subagent_tool_name_routes_background_specs_to_background_subprocess() {
+        let mut spec = test_subagent_spec("background-demo");
+        spec.background = true;
+        let args = serde_json::json!({
+            "agent_type": "background-demo",
+            "message": "run demo",
+            "background": true
+        });
+
+        assert_eq!(
+            direct_subagent_tool_name(&args, &[spec]),
+            tools::SPAWN_BACKGROUND_SUBPROCESS
+        );
+    }
+
+    #[test]
+    fn direct_subagent_tool_name_keeps_foreground_launches_on_spawn_agent() {
+        let mut spec = test_subagent_spec("background-demo");
+        spec.background = true;
+        let args = serde_json::json!({
+            "agent_type": "background-demo",
+            "message": "run demo",
+            "background": false
+        });
+
+        assert_eq!(
+            direct_subagent_tool_name(&args, &[spec]),
+            tools::SPAWN_AGENT
+        );
+    }
+
+    #[test]
+    fn direct_tool_fallback_reads_latest_tool_payload() {
+        let history = vec![uni::Message::tool_response(
+            "direct_spawn_agent_1".to_string(),
+            serde_json::json!({
+                "error": "boom",
+                "fallback_tool": tools::SPAWN_BACKGROUND_SUBPROCESS,
+                "fallback_tool_args": {
+                    "agent_type": "background-demo",
+                    "message": "run demo"
+                }
+            })
+            .to_string(),
+        )];
+
+        assert_eq!(
+            direct_tool_fallback(&history, "direct_spawn_agent_1", tools::SPAWN_AGENT),
+            Some((
+                tools::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
+                serde_json::json!({
+                    "agent_type": "background-demo",
+                    "message": "run demo"
+                }),
+            ))
         );
     }
 }

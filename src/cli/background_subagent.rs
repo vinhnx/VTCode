@@ -1,6 +1,9 @@
+use std::process::Stdio;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use vtcode_core::cli::args::BackgroundSubagentArgs;
 use vtcode_core::subagents::{SpawnAgentRequest, SubagentController, SubagentControllerConfig};
 use vtcode_core::tools::exec_session::ExecSessionManager;
@@ -8,12 +11,18 @@ use vtcode_core::tools::registry::PtySessionManager;
 
 use crate::startup::StartupContext;
 
+const BACKGROUND_DEMO_AGENT: &str = "background-demo";
+
 pub(crate) async fn handle_background_subagent_command(
     startup: &StartupContext,
     args: BackgroundSubagentArgs,
 ) -> Result<()> {
     if args.prompt.trim().is_empty() {
         bail!("background subagent prompt cannot be empty");
+    }
+
+    if args.agent_name == BACKGROUND_DEMO_AGENT {
+        return run_background_demo_subprocess(startup, &args).await;
     }
 
     let workspace_root = startup.agent_config.workspace.clone();
@@ -34,6 +43,7 @@ pub(crate) async fn handle_background_subagent_command(
         depth: 0,
         exec_sessions,
         pty_manager: pty_sessions.manager().clone(),
+        managed_background_runtime: true,
     })
     .await?;
 
@@ -92,5 +102,107 @@ pub(crate) async fn handle_background_subagent_command(
 
     loop {
         tokio::time::sleep(Duration::from_secs(3600)).await;
+    }
+}
+
+async fn run_background_demo_subprocess(
+    startup: &StartupContext,
+    args: &BackgroundSubagentArgs,
+) -> Result<()> {
+    let workspace_root = startup.agent_config.workspace.clone();
+    let script_path = workspace_root.join("scripts/demo-background-subagent.sh");
+    if !script_path.exists() {
+        bail!(
+            "background demo script not found at {}",
+            script_path.display()
+        );
+    }
+
+    let mut child = Command::new(&script_path)
+        .current_dir(&workspace_root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .with_context(|| format!("failed to start {}", script_path.display()))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .context("background demo subprocess did not expose stdout")?;
+    let stderr = child
+        .stderr
+        .take()
+        .context("background demo subprocess did not expose stderr")?;
+
+    let mut stdout_lines = BufReader::new(stdout).lines();
+    let readiness_line = tokio::time::timeout(Duration::from_secs(10), stdout_lines.next_line())
+        .await
+        .context("timed out waiting for background demo readiness")?
+        .context("failed to read background demo readiness line")?
+        .context("background demo subprocess exited before reporting readiness")?;
+
+    println!("background-subagent-summary: {}", readiness_line.trim());
+    println!(
+        "background-subagent-ready: {} {}",
+        args.agent_name, args.session_id
+    );
+
+    let stdout_task = tokio::spawn(async move {
+        while let Some(line) = stdout_lines
+            .next_line()
+            .await
+            .context("failed to read background demo stdout")?
+        {
+            println!("{line}");
+        }
+        Ok::<(), anyhow::Error>(())
+    });
+
+    let mut stderr_lines = BufReader::new(stderr).lines();
+    let stderr_task = tokio::spawn(async move {
+        while let Some(line) = stderr_lines
+            .next_line()
+            .await
+            .context("failed to read background demo stderr")?
+        {
+            eprintln!("{line}");
+        }
+        Ok::<(), anyhow::Error>(())
+    });
+
+    #[cfg(unix)]
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .context("failed to install SIGTERM handler for background demo")?;
+
+    #[cfg(unix)]
+    let shutdown_requested = async {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = sigterm.recv() => {},
+        }
+    };
+
+    #[cfg(not(unix))]
+    let shutdown_requested = tokio::signal::ctrl_c();
+
+    tokio::select! {
+        status = child.wait() => {
+            let status = status.context("failed waiting for background demo subprocess")?;
+            stdout_task.await.context("background demo stdout task panicked")??;
+            stderr_task.await.context("background demo stderr task panicked")??;
+            if status.success() {
+                Ok(())
+            } else {
+                bail!("background demo subprocess exited with status {status}");
+            }
+        }
+        _ = shutdown_requested => {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+            stdout_task.await.context("background demo stdout task panicked")??;
+            stderr_task.await.context("background demo stderr task panicked")??;
+            Ok(())
+        }
     }
 }

@@ -11,7 +11,7 @@ use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 use vtcode_collaboration_tool_specs::{
     close_agent_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
-    wait_agent_parameters,
+    spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 use vtcode_utility_tool_specs::{
     apply_patch_parameters, cron_create_parameters, cron_delete_parameters, cron_list_parameters,
@@ -179,6 +179,17 @@ pub(super) fn builtin_tool_registrations(
         )
         .with_parameter_schema(spawn_agent_parameters())
         .with_aliases(["agent", "delegate", "subagent"]),
+        ToolRegistration::new(
+            tools::SPAWN_BACKGROUND_SUBPROCESS,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::spawn_background_subprocess_executor,
+        )
+        .with_description(
+            "Launch a managed background subprocess for a background-enabled subagent. Use this for durable helpers that should outlive the current foreground turn instead of calling spawn_agent(background=true).",
+        )
+        .with_parameter_schema(spawn_background_subprocess_parameters())
+        .with_aliases(["background_subagent", "launch_background_helper"]),
         ToolRegistration::new(
             tools::SEND_INPUT,
             CapabilityLevel::Basic,
@@ -574,6 +585,18 @@ mod tests {
                 .description()
                 .expect("wait_agent description")
                 .contains("completed=false if the wait times out")
+        );
+
+        let spawn_background = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::SPAWN_BACKGROUND_SUBPROCESS)
+            .expect("spawn_background_subprocess registration should exist");
+        assert!(
+            spawn_background
+                .metadata()
+                .description()
+                .expect("spawn_background_subprocess description")
+                .contains("spawn_agent(background=true)")
         );
     }
 }

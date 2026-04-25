@@ -22,12 +22,37 @@ pub fn spawn_agent_parameters() -> Value {
             "reasoning_effort": {"type": "string", "description": "Optional subagent reasoning effort override."},
             "background": {
                 "type": "boolean",
-                "description": "Run the child as a background task. Prefer this for long-lived helper work instead of blocking the current foreground turn with `wait_agent`.",
+                "description": "Mark the delegated child thread as background-style work. This still creates a normal child agent thread in the current session; it does not launch the managed background subprocess runtime.",
                 "default": false
             },
             "max_turns": {
                 "type": "integer",
                 "description": "Optional turn limit for this child. Values below 2 are promoted to 2 so the child can recover from an initial blocked or denied tool call."
+            }
+        }
+    })
+}
+
+#[must_use]
+pub fn spawn_background_subprocess_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "agent_type": {"type": "string", "description": "Background-enabled subagent type or name to run."},
+            "message": {"type": "string", "description": "Task prompt for the managed background subprocess. Use this for durable helper work that should be launched once and then managed outside the current foreground turn."},
+            "items": {
+                "type": "array",
+                "description": "Structured context items for the background subprocess.",
+                "items": collaboration_input_item_schema()
+            },
+            "model": {
+                "type": "string",
+                "description": "Optional subagent model override. Omit this field to reuse the parent session model. VT Code only honors this override when the current user turn explicitly asks for that model."
+            },
+            "reasoning_effort": {"type": "string", "description": "Optional subagent reasoning effort override."},
+            "max_turns": {
+                "type": "integer",
+                "description": "Optional turn limit for the launched background subprocess task before it reports readiness. Values below 4 are promoted to 4 for background launches."
             }
         }
     })
@@ -200,6 +225,7 @@ mod tests {
     #[test]
     fn collaboration_schemas_expose_updated_agent_description_text() {
         let spawn = spawn_agent_parameters();
+        let spawn_background = spawn_background_subprocess_parameters();
         let send = send_input_parameters();
         let wait = wait_agent_parameters();
 
@@ -217,6 +243,18 @@ mod tests {
             send["properties"]["interrupt"]["description"],
             json!(
                 "When true, abort current child work and restart with this input. When false (default), queue the input; if the child is already running, it starts the child's next turn after the current turn completes."
+            )
+        );
+        assert_eq!(
+            spawn["properties"]["background"]["description"],
+            json!(
+                "Mark the delegated child thread as background-style work. This still creates a normal child agent thread in the current session; it does not launch the managed background subprocess runtime."
+            )
+        );
+        assert_eq!(
+            spawn_background["properties"]["message"]["description"],
+            json!(
+                "Task prompt for the managed background subprocess. Use this for durable helper work that should be launched once and then managed outside the current foreground turn."
             )
         );
         assert_eq!(

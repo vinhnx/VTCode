@@ -229,6 +229,7 @@ pub use ide_context::{
 };
 pub use subagents::{
     SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,
+    SpawnBackgroundSubprocessRequest as SubagentSpawnBackgroundSubprocessRequest,
     SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
     SubagentStatusEntry,
 };

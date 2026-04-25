@@ -63,6 +63,29 @@ pub fn check_completion_indicators(response_text: &str) -> bool {
         }
     }
 
+    // Strategy 3: Structured subagent markdown contract output.
+    // When the model produces the canonical "## Summary / ## Facts / ..." contract, it has
+    // finished its task even without an explicit done phrase.  Detect this by checking that
+    // the response opens with a "## Summary" heading (after stripping leading whitespace) and
+    // also contains a "## Facts" section.  Headers are matched line-by-line after trimming so
+    // CRLF, extra spaces, and capitalisation variations are handled uniformly.
+    {
+        let mut has_summary_header = false;
+        let mut has_facts_header = false;
+        for line in response_text.lines() {
+            let line_lower = line.trim().to_lowercase();
+            if line_lower == "## summary" || line_lower == "# summary" {
+                has_summary_header = true;
+            }
+            if line_lower == "## facts" || line_lower == "# facts" {
+                has_facts_header = true;
+            }
+            if has_summary_header && has_facts_header {
+                return true;
+            }
+        }
+    }
+
     false
 }
 
@@ -129,6 +152,36 @@ mod tests {
         ));
         assert!(!check_completion_indicators("Is the task done?"));
         assert!(!check_completion_indicators("random text"));
+    }
+
+    #[test]
+    fn subagent_markdown_contract_detected_as_complete() {
+        let contract = "## Summary\n- Background subprocess launched; PID 86065.\n\n## Facts\n- Script started at 2026-04-25T08:39:10Z.\n\n## Touched Files\n- None\n\n## Verification\n- Process confirmed.\n\n## Open Questions\n- None";
+        assert!(check_completion_indicators(contract));
+    }
+
+    #[test]
+    fn subagent_markdown_contract_with_crlf_detected_as_complete() {
+        let contract = "## Summary\r\n- Done.\r\n\r\n## Facts\r\n- Fact 1.\r\n";
+        assert!(check_completion_indicators(contract));
+    }
+
+    #[test]
+    fn subagent_markdown_contract_with_leading_whitespace_detected() {
+        let contract = "\n\n## Summary\n- item\n\n## Facts\n- fact\n";
+        assert!(check_completion_indicators(contract));
+    }
+
+    #[test]
+    fn document_with_only_summary_header_not_detected() {
+        let doc = "## Summary\n- This is a doc without a Facts section.\n";
+        assert!(!check_completion_indicators(doc));
+    }
+
+    #[test]
+    fn document_with_only_facts_header_not_detected() {
+        let doc = "## Facts\n- Fact without summary.\n";
+        assert!(!check_completion_indicators(doc));
     }
 
     #[test]

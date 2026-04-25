@@ -102,6 +102,8 @@ pub const PLAN_TASK_TRACKER: &str = "plan_task_tracker";
 // ============================================================
 /// Spawn a delegated child agent.
 pub const SPAWN_AGENT: &str = "spawn_agent";
+/// Launch a managed background subprocess that hosts a background-enabled subagent.
+pub const SPAWN_BACKGROUND_SUBPROCESS: &str = "spawn_background_subprocess";
 /// Send follow-up input to a delegated child agent.
 pub const SEND_INPUT: &str = "send_input";
 /// Wait for one or more delegated child agents to finish.

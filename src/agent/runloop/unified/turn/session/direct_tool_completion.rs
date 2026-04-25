@@ -204,6 +204,22 @@ fn latest_direct_tool_completion(history: &[uni::Message]) -> Option<DirectToolC
 }
 
 impl DirectToolCompletion<'_> {
+    fn is_spawn_tool(&self) -> bool {
+        self.tool_call.function.as_ref().is_some_and(|function| {
+            matches!(
+                function.name.as_str(),
+                tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS
+            )
+        })
+    }
+
+    fn is_background_spawn_tool(&self) -> bool {
+        self.tool_call
+            .function
+            .as_ref()
+            .is_some_and(|function| function.name == tool_names::SPAWN_BACKGROUND_SUBPROCESS)
+    }
+
     fn label(&self) -> String {
         let Some(function) = self.tool_call.function.as_ref() else {
             return "previous direct tool call".to_string();
@@ -211,7 +227,7 @@ impl DirectToolCompletion<'_> {
 
         let args = serde_json::from_str::<Value>(&function.arguments).ok();
         match function.name.as_str() {
-            tool_names::SPAWN_AGENT => self
+            tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS => self
                 .payload
                 .as_ref()
                 .and_then(|value| value.get("agent_name"))
@@ -283,19 +299,16 @@ impl DirectToolCompletion<'_> {
 
     fn status_text(&self, reply_kind: ReplyKind) -> String {
         let label = self.label();
-        let is_spawn_agent = self
-            .tool_call
-            .function
-            .as_ref()
-            .is_some_and(|function| function.name == tool_names::SPAWN_AGENT);
+        let is_spawn_tool = self.is_spawn_tool();
         let is_background_subagent = self
             .payload
             .as_ref()
             .and_then(|value| value.get("background"))
             .and_then(Value::as_bool)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            || self.is_background_spawn_tool();
         if self.has_error() {
-            if is_spawn_agent {
+            if is_spawn_tool {
                 return match reply_kind {
                     ReplyKind::Immediate => format!("`{label}` failed to start."),
                 };
@@ -304,7 +317,7 @@ impl DirectToolCompletion<'_> {
                 ReplyKind::Immediate => format!("`{label}` completed with an error."),
             };
         }
-        if is_spawn_agent {
+        if is_spawn_tool {
             let started = if is_background_subagent {
                 "started in the background"
             } else {
@@ -330,28 +343,19 @@ impl DirectToolCompletion<'_> {
     fn output_observation(&self) -> Option<String> {
         let payload = self.payload.as_ref()?;
         if self.has_error() {
-            if self
-                .tool_call
-                .function
-                .as_ref()
-                .is_some_and(|function| function.name == tool_names::SPAWN_AGENT)
-            {
+            if self.is_spawn_tool() {
                 return Some(
                     "The subagent did not start. Failure details are shown above.".to_string(),
                 );
             }
             return Some("Failure details are shown above.".to_string());
         }
-        if self
-            .tool_call
-            .function
-            .as_ref()
-            .is_some_and(|function| function.name == tool_names::SPAWN_AGENT)
-        {
+        if self.is_spawn_tool() {
             let background = payload
                 .get("background")
                 .and_then(Value::as_bool)
-                .unwrap_or(false);
+                .unwrap_or(false)
+                || self.is_background_spawn_tool();
             return Some(if background {
                 "The subagent is running without blocking this turn. Use `/agent` to inspect or continue it.".to_string()
             } else {
@@ -447,8 +451,29 @@ impl DirectToolCompletion<'_> {
                     None => Vec::new(),
                 }
             }
-            tool_names::SPAWN_AGENT => {
+            tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS => {
                 if self.has_error() {
+                    if self.error_message().as_deref().is_some_and(|message| {
+                        message.contains("Background subagents are disabled by configuration")
+                    }) {
+                        return vec![
+                            "Enable `[subagents.background] enabled = true` to use managed background subprocesses.".to_string(),
+                            "Ask me to launch the subagent in the foreground instead.".to_string(),
+                        ];
+                    }
+                    if self
+                        .payload
+                        .as_ref()
+                        .and_then(|value| value.get("fallback_tool"))
+                        .and_then(Value::as_str)
+                        == Some(tool_names::SPAWN_BACKGROUND_SUBPROCESS)
+                    {
+                        return vec![
+                            "Retry the subagent with `spawn_background_subprocess`.".to_string(),
+                            "Ask me to inspect or patch the direct subagent launch path."
+                                .to_string(),
+                        ];
+                    }
                     vec![
                         "Retry the subagent with a supported model or provider configuration.".to_string(),
                         "Ask me to inspect the spawn error and patch the underlying model handling.".to_string(),
@@ -596,6 +621,38 @@ mod tests {
     }
 
     #[test]
+    fn completion_reply_text_reports_started_background_subprocess() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_spawn_background_subprocess_1".to_string(),
+                    tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
+                    serde_json::json!({
+                        "agent_type":"background-demo",
+                        "message":"run demo",
+                    })
+                    .to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_spawn_background_subprocess_1".to_string(),
+                serde_json::json!({
+                    "agent_name":"background-demo",
+                    "status":"starting",
+                    "desired_enabled": true
+                })
+                .to_string(),
+            ),
+        ];
+
+        let text =
+            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        assert!(text.contains("`background-demo subagent` started in the background."));
+        assert!(text.contains("Use `/agent` to inspect or continue it."));
+    }
+
+    #[test]
     fn completion_reply_text_reports_failed_spawn_agent() {
         let history = vec![
             uni::Message::assistant_with_tools(
@@ -631,6 +688,79 @@ mod tests {
         assert!(
             text.contains("Retry the subagent with a supported model or provider configuration.")
         );
+    }
+
+    #[test]
+    fn completion_reply_text_reports_failed_spawn_agent_with_background_fallback() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_spawn_agent_1".to_string(),
+                    tool_names::SPAWN_AGENT.to_string(),
+                    serde_json::json!({
+                        "agent_type":"background-demo",
+                        "message":"run demo",
+                        "background": false
+                    })
+                    .to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_spawn_agent_1".to_string(),
+                serde_json::json!({
+                    "error": {
+                        "message": "spawn_agent no longer launches managed background helpers. Use spawn_background_subprocess for agent 'background-demo' instead."
+                    },
+                    "fallback_tool": tool_names::SPAWN_BACKGROUND_SUBPROCESS,
+                    "fallback_tool_args": {
+                        "agent_type": "background-demo",
+                        "message": "run demo"
+                    }
+                })
+                .to_string(),
+            ),
+        ];
+
+        let text =
+            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        assert!(text.contains("`background-demo subagent` failed to start."));
+        assert!(text.contains("Retry the subagent with `spawn_background_subprocess`."));
+        assert!(!text.contains("supported model or provider configuration"));
+    }
+
+    #[test]
+    fn completion_reply_text_reports_background_subprocess_config_error() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_spawn_background_subprocess_1".to_string(),
+                    tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
+                    serde_json::json!({
+                        "agent_type":"background-demo",
+                        "message":"run demo",
+                    })
+                    .to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_spawn_background_subprocess_1".to_string(),
+                serde_json::json!({
+                    "error": {
+                        "message": "Background subagents are disabled by configuration"
+                    }
+                })
+                .to_string(),
+            ),
+        ];
+
+        let text =
+            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        assert!(text.contains("`background-demo subagent` failed to start."));
+        assert!(text.contains("Enable `[subagents.background] enabled = true`"));
+        assert!(text.contains("launch the subagent in the foreground instead"));
+        assert!(!text.contains("supported model or provider configuration"));
     }
 
     #[test]

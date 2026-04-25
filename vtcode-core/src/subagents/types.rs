@@ -194,6 +194,22 @@ pub struct SpawnAgentRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SpawnBackgroundSubprocessRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default)]
+    pub items: Vec<SubagentInputItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_turns: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SendInputRequest {
     pub target: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -227,9 +243,19 @@ pub struct ChildRecord {
     pub(crate) stored_messages: Vec<Message>,
     pub(crate) last_prompt: Option<String>,
     pub(crate) queued_prompts: VecDeque<String>,
+    pub(crate) max_turns: Option<usize>,
+    pub(crate) model_override: Option<String>,
+    pub(crate) reasoning_override: Option<String>,
     pub(crate) thread_handle: Option<ThreadRuntimeHandle>,
     pub(crate) handle: Option<JoinHandle<()>>,
     pub(crate) notify: Arc<Notify>,
+}
+
+pub(crate) struct ChildRunRequest {
+    pub(crate) prompt: String,
+    pub(crate) max_turns: Option<usize>,
+    pub(crate) model_override: Option<String>,
+    pub(crate) reasoning_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,12 +383,21 @@ impl StatusEntryBuilder for ChildRecord {
 }
 
 impl ChildRecord {
-    /// Apply execution result to the record state. Returns the next queued
-    /// prompt if the child should continue looping.
-    pub(crate) fn apply_result(
-        &mut self,
-        execute: anyhow::Result<ChildRunResult>,
-    ) -> Option<String> {
+    pub(crate) fn dequeue_run(&mut self) -> Option<ChildRunRequest> {
+        let prompt = self.queued_prompts.pop_front()?;
+        self.status = SubagentStatus::Running;
+        self.updated_at = Utc::now();
+        Some(ChildRunRequest {
+            prompt,
+            max_turns: self.max_turns,
+            model_override: self.model_override.clone(),
+            reasoning_override: self.reasoning_override.clone(),
+        })
+    }
+
+    /// Apply execution result to the record state. Returns whether the child
+    /// still has queued work and should continue looping.
+    pub(crate) fn apply_result(&mut self, execute: anyhow::Result<ChildRunResult>) -> bool {
         match execute {
             Ok(result) => {
                 self.status = if result.outcome.is_success() {
@@ -384,15 +419,15 @@ impl ChildRecord {
                 self.error = Some(error.to_string());
             }
         }
-        let next = self.queued_prompts.pop_front();
-        if next.is_some() {
+        let has_more_work = !self.queued_prompts.is_empty();
+        if has_more_work {
             self.status = SubagentStatus::Queued;
             self.completed_at = None;
         } else if self.status.is_terminal() {
             self.completed_at = Some(Utc::now());
         }
         self.notify.notify_waiters();
-        next
+        has_more_work
     }
 
     /// Build the hook payload for a terminal run (no more queued prompts).

@@ -28,7 +28,8 @@ pub use acp_tool::{AcpDiscoveryTool, AcpHealthTool, AcpTool};
 
 pub use vtcode_collaboration_tool_specs::{
     close_agent_parameters, request_user_input_description, request_user_input_parameters,
-    resume_agent_parameters, send_input_parameters, spawn_agent_parameters, wait_agent_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 pub use vtcode_utility_tool_specs::{
     APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE,

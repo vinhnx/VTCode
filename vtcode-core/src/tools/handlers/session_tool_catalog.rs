@@ -584,6 +584,7 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::ENTER_PLAN_MODE
         | tools::EXIT_PLAN_MODE
         | tools::SPAWN_AGENT
+        | tools::SPAWN_BACKGROUND_SUBPROCESS
         | tools::SEND_INPUT
         | tools::WAIT_AGENT
         | tools::RESUME_AGENT

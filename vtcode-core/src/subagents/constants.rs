@@ -6,6 +6,7 @@ pub(crate) const SUBAGENT_MEMORY_LINE_LIMIT: usize = 200;
 pub(crate) const SUBAGENT_MEMORY_HIGHLIGHT_LIMIT: usize = 4;
 pub(crate) const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 3;
 pub(crate) const SUBAGENT_MIN_MAX_TURNS: usize = 2;
+pub(crate) const SUBAGENT_MIN_BACKGROUND_MAX_TURNS: usize = 4;
 pub(crate) const SUBAGENT_PREVIEW_LINES: usize = 24;
 
 pub(crate) const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
@@ -31,6 +32,7 @@ pub(crate) const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
 
 pub(crate) const SUBAGENT_TOOL_NAMES: &[&str] = &[
     tools::SPAWN_AGENT,
+    tools::SPAWN_BACKGROUND_SUBPROCESS,
     tools::SEND_INPUT,
     tools::WAIT_AGENT,
     tools::RESUME_AGENT,

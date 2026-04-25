@@ -1,13 +1,21 @@
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::constants::SUBAGENT_PREVIEW_LINES;
 use super::types::{PersistedBackgroundRecord, PersistedBackgroundState};
 use crate::utils::session_archive::{SessionListing, SessionSnapshot};
 
+const BACKGROUND_DEMO_AGENT: &str = "background-demo";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BackgroundLaunchSpec {
+    pub command: Vec<String>,
+    pub use_pty: bool,
+}
+
 // ─── Background State Persistence ──────────────────────────────────────────
 
-pub(crate) fn background_state_path(workspace_root: &Path) -> std::path::PathBuf {
+pub(crate) fn background_state_path(workspace_root: &Path) -> PathBuf {
     workspace_root
         .join(".vtcode")
         .join("state")
@@ -42,6 +50,41 @@ pub(crate) fn persist_background_state(
 
 // ─── Background Command Building ───────────────────────────────────────────
 
+pub(crate) fn build_background_launch_spec(
+    workspace_root: &Path,
+    agent_name: &str,
+    parent_session_id: &str,
+    session_id: &str,
+    prompt: &str,
+    max_turns: Option<usize>,
+    model_override: Option<&str>,
+    reasoning_override: Option<&str>,
+) -> Result<BackgroundLaunchSpec> {
+    if agent_name == BACKGROUND_DEMO_AGENT {
+        let script = workspace_root
+            .join("scripts")
+            .join("demo-background-subagent.sh");
+        return Ok(BackgroundLaunchSpec {
+            command: vec![script.to_string_lossy().into_owned()],
+            use_pty: false,
+        });
+    }
+
+    Ok(BackgroundLaunchSpec {
+        command: build_background_subagent_command(
+            workspace_root,
+            agent_name,
+            parent_session_id,
+            session_id,
+            prompt,
+            max_turns,
+            model_override,
+            reasoning_override,
+        )?,
+        use_pty: true,
+    })
+}
+
 pub fn build_background_subagent_command(
     workspace_root: &Path,
     agent_name: &str,
@@ -53,6 +96,8 @@ pub fn build_background_subagent_command(
     reasoning_override: Option<&str>,
 ) -> Result<Vec<String>> {
     let executable = std::env::current_exe().context("Failed to resolve current vtcode binary")?;
+    let executable =
+        resolve_background_subagent_executable_for_workspace(workspace_root, &executable);
     let mut command = vec![
         executable.to_string_lossy().into_owned(),
         "background-subagent".to_string(),
@@ -86,6 +131,26 @@ pub fn build_background_subagent_command(
     }
 
     Ok(command)
+}
+
+fn resolve_background_subagent_executable_for_workspace(
+    workspace_root: &Path,
+    current_exe: &Path,
+) -> PathBuf {
+    let workspace_target = workspace_root.join("target");
+    if current_exe.starts_with(&workspace_target) {
+        return current_exe.to_path_buf();
+    }
+
+    let binary_name = format!("vtcode{}", std::env::consts::EXE_SUFFIX);
+    for profile in ["debug", "release"] {
+        let candidate = workspace_target.join(profile).join(&binary_name);
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+
+    current_exe.to_path_buf()
 }
 
 pub fn background_record_id(agent_name: &str) -> String {
@@ -147,4 +212,74 @@ pub fn subagent_display_label(spec: &vtcode_config::SubagentSpec) -> String {
         .first()
         .cloned()
         .unwrap_or_else(|| spec.name.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_background_launch_spec, resolve_background_subagent_executable_for_workspace,
+    };
+    use std::fs;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    #[test]
+    fn prefers_workspace_built_binary_when_current_exe_is_external() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let workspace_root = temp_dir.path();
+        let candidate = workspace_root.join("target/debug/vtcode");
+        fs::create_dir_all(candidate.parent().expect("parent")).expect("mkdir");
+        fs::write(&candidate, b"binary").expect("write candidate");
+
+        let resolved = resolve_background_subagent_executable_for_workspace(
+            workspace_root,
+            Path::new("/usr/local/bin/vtcode"),
+        );
+
+        assert_eq!(resolved, candidate);
+    }
+
+    #[test]
+    fn keeps_current_exe_when_already_running_workspace_binary() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let workspace_root = temp_dir.path();
+        let current = workspace_root.join("target/debug/vtcode");
+        fs::create_dir_all(current.parent().expect("parent")).expect("mkdir");
+        fs::write(&current, b"binary").expect("write current");
+
+        let resolved =
+            resolve_background_subagent_executable_for_workspace(workspace_root, &current);
+
+        assert_eq!(resolved, current);
+    }
+
+    #[test]
+    fn background_demo_launch_uses_direct_script_pipe_session() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let workspace_root = temp_dir.path();
+
+        let launch = build_background_launch_spec(
+            workspace_root,
+            "background-demo",
+            "parent",
+            "child",
+            "Report readiness once.",
+            Some(4),
+            None,
+            None,
+        )
+        .expect("background demo launch");
+
+        assert!(!launch.use_pty);
+        assert_eq!(
+            launch.command,
+            vec![
+                workspace_root
+                    .join("scripts")
+                    .join("demo-background-subagent.sh")
+                    .to_string_lossy()
+                    .into_owned()
+            ]
+        );
+    }
 }

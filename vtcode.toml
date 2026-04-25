@@ -54,6 +54,15 @@ enabled = true
 default_mode = "auto"
 
 
+# Background Subagents
+# Managed background subprocess runtime settings.
+[subagents.background]
+# Enable managed background subprocesses for background-capable subagents.
+# Default: false
+# Type: `boolean`
+enabled = true
+
+
 # Provider Endpoints
 # Network and provider-specific API settings.
 [provider]
@@ -167,6 +176,8 @@ wait_agent = "allow"
 
 web_fetch = "allow"
 ast-grep = "allow"
+spawn_background_subprocess = "allow"
+close_agent = "allow"
 
 
 # Interface
@@ -183,4 +194,3 @@ items = [
     "app-name",
     "git-branch",
 ]
-

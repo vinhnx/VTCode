@@ -4,7 +4,10 @@ use vtcode_config::{
     HooksConfig, McpProviderConfig, PermissionMode, SubagentMcpServer, SubagentSpec,
 };
 
-use super::constants::{NON_MUTATING_TOOL_PREFIXES, SUBAGENT_MIN_MAX_TURNS, SUBAGENT_TOOL_NAMES};
+use super::constants::{
+    NON_MUTATING_TOOL_PREFIXES, SUBAGENT_MIN_BACKGROUND_MAX_TURNS, SUBAGENT_MIN_MAX_TURNS,
+    SUBAGENT_TOOL_NAMES,
+};
 use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
 use crate::config::models::ModelId;
@@ -54,6 +57,18 @@ pub fn build_child_config(
 
 pub fn normalize_child_max_turns(max_turns: Option<usize>) -> Option<usize> {
     max_turns.map(|value| value.max(SUBAGENT_MIN_MAX_TURNS))
+}
+
+pub fn normalize_background_child_max_turns(
+    max_turns: Option<usize>,
+    background: bool,
+) -> Option<usize> {
+    let normalized = normalize_child_max_turns(max_turns);
+    if background {
+        normalized.map(|value| value.max(SUBAGENT_MIN_BACKGROUND_MAX_TURNS))
+    } else {
+        normalized
+    }
 }
 
 pub fn prepare_child_runtime_config(

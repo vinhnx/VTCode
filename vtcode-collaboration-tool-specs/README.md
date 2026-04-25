@@ -18,7 +18,8 @@ assert_eq!(schema["type"], "object");
 
 | Function | Description |
 |---|---|
-| `spawn_agent_parameters()` | Schema for spawning a subagent with an optional model override and background flag. |
+| `spawn_agent_parameters()` | Schema for spawning a delegated child thread with an optional model override and background-style flag. |
+| `spawn_background_subprocess_parameters()` | Schema for launching a managed background subprocess for a background-enabled subagent. |
 | `send_input_parameters()` | Schema for sending follow-up input to a delegated child agent. |
 | `wait_agent_parameters()` | Schema for blocking until one or more child agents complete. |
 | `resume_agent_parameters()` | Schema for resuming a paused child agent. |

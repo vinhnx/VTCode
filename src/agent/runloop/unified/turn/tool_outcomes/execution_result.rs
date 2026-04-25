@@ -135,7 +135,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
             }
         }
         ToolExecutionStatus::Timeout { error } => {
-            handle_timeout(t_ctx, tool_call_id, tool_name, error).await?;
+            handle_timeout(t_ctx, tool_call_id, tool_name, args_val, error).await?;
         }
         ToolExecutionStatus::Cancelled => {
             handle_cancelled(t_ctx, tool_call_id, tool_name, args_val).await?;
@@ -277,6 +277,7 @@ async fn finalize_failed_tool_response(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
+    args_val: &serde_json::Value,
     error: &ToolExecutionError,
     failure_kind: &'static str,
 ) {
@@ -284,6 +285,7 @@ async fn finalize_failed_tool_response(
         t_ctx,
         tool_call_id,
         tool_name,
+        args_val,
         error.message.as_str(),
         failure_kind,
         Some(error),
@@ -403,7 +405,8 @@ async fn handle_failure<'a>(
         .await;
     }
 
-    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, error, "execution").await;
+    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "execution")
+        .await;
 
     if blocked_or_denied_failure {
         let streak = t_ctx.ctx.record_blocked_tool_call();
@@ -436,6 +439,7 @@ async fn handle_timeout(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
+    args_val: &serde_json::Value,
     error: &vtcode_core::tools::registry::ToolExecutionError,
 ) -> Result<()> {
     let (user_msg, _) = format_structured_tool_error_for_user(tool_name, error);
@@ -444,7 +448,7 @@ async fn handle_timeout(
 
     record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::Timeout).await;
 
-    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, error, "timeout").await;
+    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "timeout").await;
 
     Ok(())
 }
@@ -453,12 +457,13 @@ async fn push_tool_error_response(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
+    args_val: &serde_json::Value,
     error_msg: &str,
     failure_kind: &'static str,
     structured_error: Option<&ToolExecutionError>,
 ) {
     let (fallback_tool, fallback_tool_args) =
-        if let Some((tool, args)) = fallback_from_error(tool_name, error_msg) {
+        if let Some((tool, args)) = fallback_from_error(tool_name, error_msg, Some(args_val)) {
             (Some(tool), Some(args))
         } else {
             let fallback = t_ctx
@@ -607,7 +612,7 @@ mod tests {
     #[test]
     fn fallback_from_error_extracts_unified_exec_poll() {
         let error = "Tool failed. Use unified_exec with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
-        let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error);
+        let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error, None);
         assert_eq!(
             fallback,
             Some((
@@ -620,7 +625,7 @@ mod tests {
     #[test]
     fn fallback_from_error_recovers_unified_search_invalid_read_action() {
         let error = "Tool execution failed: Invalid action: read";
-        let fallback = fallback_from_error(tool_names::UNIFIED_SEARCH, error);
+        let fallback = fallback_from_error(tool_names::UNIFIED_SEARCH, error, None);
         assert_eq!(
             fallback,
             Some((
@@ -636,7 +641,7 @@ mod tests {
     #[test]
     fn fallback_from_error_extracts_read_file_for_patch_context_mismatch() {
         let error = "Tool 'apply_patch' execution failed: failed to locate expected lines in 'vtcode-exec-events/src/trace.rs': context mismatch";
-        let fallback = fallback_from_error(tool_names::APPLY_PATCH, error);
+        let fallback = fallback_from_error(tool_names::APPLY_PATCH, error, None);
         assert_eq!(
             fallback,
             Some((
@@ -653,12 +658,37 @@ mod tests {
     #[test]
     fn fallback_from_error_uses_task_tracker_list_for_update_argument_errors() {
         let error = "Tool 'task_tracker' execution failed: Tool execution failed: 'index' is required for 'update' (1-indexed)";
-        let fallback = fallback_from_error(tool_names::TASK_TRACKER, error);
+        let fallback = fallback_from_error(tool_names::TASK_TRACKER, error, None);
         assert_eq!(
             fallback,
             Some((
                 tool_names::TASK_TRACKER.to_string(),
                 serde_json::json!({"action": "list"}),
+            ))
+        );
+    }
+
+    #[test]
+    fn fallback_from_error_redirects_background_agent_spawn() {
+        let error = "spawn_agent no longer launches managed background helpers. Use spawn_background_subprocess for agent 'background-demo' instead.";
+        let fallback = fallback_from_error(
+            tool_names::SPAWN_AGENT,
+            error,
+            Some(&serde_json::json!({
+                "agent_type": "background-demo",
+                "message": "Run the demo.",
+                "background": false,
+                "fork_context": true
+            })),
+        );
+        assert_eq!(
+            fallback,
+            Some((
+                tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
+                serde_json::json!({
+                    "agent_type": "background-demo",
+                    "message": "Run the demo."
+                }),
             ))
         );
     }

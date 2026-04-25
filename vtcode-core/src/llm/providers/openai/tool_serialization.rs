@@ -108,6 +108,7 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::TASK_TRACKER
             | tools::PLAN_TASK_TRACKER
             | tools::SPAWN_AGENT
+            | tools::SPAWN_BACKGROUND_SUBPROCESS
             | tools::SEND_INPUT
             | tools::WAIT_AGENT
             | tools::RESUME_AGENT

@@ -59,6 +59,27 @@ impl ToolRegistry {
         })
     }
 
+    pub(crate) fn spawn_background_subprocess_executor(
+        &self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            self.execute_subagent_request::<
+                crate::subagents::SpawnBackgroundSubprocessRequest,
+                _,
+                _,
+                _,
+            >(
+                args,
+                "Invalid spawn_background_subprocess arguments",
+                |controller, request| async move {
+                    controller.spawn_background_subprocess(request).await
+                },
+            )
+            .await
+        })
+    }
+
     pub(crate) fn send_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             self.execute_subagent_request::<crate::subagents::SendInputRequest, _, _, _>(

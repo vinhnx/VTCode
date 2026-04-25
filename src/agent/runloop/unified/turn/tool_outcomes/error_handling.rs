@@ -458,6 +458,7 @@ fn extract_patch_target_path_from_error(error_msg: &str) -> Option<String> {
 pub(super) fn fallback_from_error(
     tool_name: &str,
     error_msg: &str,
+    args_val: Option<&serde_json::Value>,
 ) -> Option<(String, serde_json::Value)> {
     if tool_name == tool_names::UNIFIED_SEARCH
         && error_msg
@@ -521,5 +522,38 @@ pub(super) fn fallback_from_error(
         }
     }
 
+    if tool_name == tool_names::SPAWN_AGENT
+        && error_msg.contains("Use spawn_background_subprocess for agent '")
+    {
+        let mut fallback_args = args_val
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        fallback_args.remove("background");
+        fallback_args.remove("fork_context");
+
+        if !fallback_args.contains_key("agent_type")
+            && let Some(agent_name) = extract_background_subagent_name_from_error(error_msg)
+        {
+            fallback_args.insert(
+                "agent_type".to_string(),
+                serde_json::Value::String(agent_name),
+            );
+        }
+
+        return Some((
+            tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
+            serde_json::Value::Object(fallback_args),
+        ));
+    }
+
     None
+}
+
+fn extract_background_subagent_name_from_error(error_msg: &str) -> Option<String> {
+    let marker = "Use spawn_background_subprocess for agent '";
+    let start = error_msg.find(marker)? + marker.len();
+    let remaining = &error_msg[start..];
+    let end = remaining.find('\'')?;
+    Some(remaining[..end].to_string())
 }

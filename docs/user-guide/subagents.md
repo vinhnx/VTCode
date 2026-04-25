@@ -178,6 +178,7 @@ Compatibility alias mapping for imported `.claude` agents:
 | `Edit` | `edit_file` |
 | `Write` | `write_file` |
 | `Agent` or `Task` | `spawn_agent` |
+| Managed background helper | `spawn_background_subprocess` |
 
 ## Supported Fields
 
@@ -196,7 +197,7 @@ Only `name` and `description` are required.
 | `skills` | skills to preload into the child context | uses the same skill loader as the main session |
 | `mcpServers` | named or inline MCP servers | inline servers are scoped to the child config overlay |
 | `hooks` | child-local lifecycle hooks | use this for `PreToolUse`, `PostToolUse`, and `Stop` behavior inside the child thread |
-| `background` | default background execution for this agent | per-call `spawn_agent.background` can also request background mode |
+| `background` | marks an agent as eligible for the managed background subprocess flow | launch these agents with `spawn_background_subprocess`; `spawn_agent` stays foreground-only |
 | `maxTurns` | per-agent turn ceiling | can also be overridden per call |
 | `nickname_candidates` | preferred thread labels | shown in `/agent` and `/agents` thread lists |
 | `initialPrompt` | default task prompt when the spawn request omits one | useful for compatibility imports |
@@ -429,7 +430,7 @@ For a minimal demo pair, see [background-subagent-demo.md](../examples/backgroun
 
 Delegated child threads keep their own history. VT Code can continue them with follow-up input instead of starting from scratch. The runtime exposes `send_input`, `resume_agent`, `wait_agent`, and `close_agent` to the model for this purpose.
 
-`wait_agent` is a foreground wait on delegated child threads: it blocks the current turn until a child finishes or the timeout expires. Managed background subprocesses are different; keep using `Ctrl+B`, `/subprocesses`, the sidebar, or `Alt+S` for those instead of `wait_agent`.
+`wait_agent` is a foreground wait on delegated child threads: it blocks the current turn until a child finishes or the timeout expires. Managed background subprocesses are different; launch them with `spawn_background_subprocess` and manage them with `Ctrl+B`, `/subprocesses`, the sidebar, or `Alt+S` instead of `wait_agent`.
 
 ## Choose Between Main Thread And Subagents
 

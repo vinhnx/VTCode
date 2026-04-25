@@ -243,6 +243,7 @@ pub(crate) async fn initialize_session(
             depth: 0,
             exec_sessions: tool_registry.exec_session_manager(),
             pty_manager: tool_registry.pty_manager().clone(),
+            managed_background_runtime: false,
         })
         .await
         {
