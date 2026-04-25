@@ -29,6 +29,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 pub const RESPONSES_API_MODELS: &[&str] = &[
     GPT,
     GPT_5_5,
+    GPT_5_5_DATED,
     GPT_5_1,
     GPT_5,
     GPT_5_2,
@@ -51,6 +52,7 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
 pub const REASONING_MODELS: &[&str] = &[
     GPT,
     GPT_5_5,
+    GPT_5_5_DATED,
     GPT_5_1,
     GPT_5,
     GPT_5_2,

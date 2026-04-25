@@ -626,6 +626,26 @@ fn test_generated_model_capability_lookup() {
 }
 
 #[test]
+fn test_gpt_5_5_dated_alias_round_trips_to_gpt55_capabilities() {
+    assert_eq!(
+        ModelId::from_str(models::openai::GPT_5_5_DATED).unwrap(),
+        ModelId::GPT55
+    );
+    assert!(
+        models::openai::RESPONSES_API_MODELS.contains(&models::openai::GPT_5_5_DATED),
+        "dated GPT-5.5 alias should stay on the Responses API path"
+    );
+    assert!(
+        Provider::OpenAI.supports_reasoning_effort(models::openai::GPT_5_5_DATED),
+        "dated GPT-5.5 alias should inherit reasoning-effort support"
+    );
+    assert!(
+        Provider::OpenAI.supports_service_tier(models::openai::GPT_5_5_DATED),
+        "dated GPT-5.5 alias should inherit service-tier support"
+    );
+}
+
+#[test]
 fn test_model_helpers_include_curated_opencode_models() {
     let zen_models = model_helpers::supported_for("opencode-zen").expect("opencode zen helpers");
     assert!(zen_models.contains(&models::opencode_zen::GPT_5_4));

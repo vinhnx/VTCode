@@ -1109,6 +1109,40 @@ fn responses_payload_applies_gpt_5_5_addendum_only_for_gpt_5_5() {
 }
 
 #[test]
+fn responses_payload_treats_gpt_5_5_dated_alias_like_gpt_5_5() {
+    assert!(OpenAIProvider::is_responses_api_model(
+        models::openai::GPT_5_5_DATED
+    ));
+
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        None,
+        Some(models::openai::GPT_5_5_DATED.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5_5_DATED);
+    request.system_prompt = Some(Arc::new("You are a helpful assistant.".to_owned()));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("service_tier").and_then(Value::as_str),
+        Some("priority")
+    );
+    let instructions = payload
+        .get("instructions")
+        .and_then(Value::as_str)
+        .expect("instructions should exist");
+    assert!(instructions.contains("## GPT-5.5 OpenAI Addendum"));
+}
+
+#[test]
 fn responses_payload_includes_previous_response_and_optional_fields() {
     let provider = native_openai_provider(models::openai::GPT_5);
     let mut request = sample_request(models::openai::GPT_5);
