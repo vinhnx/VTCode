@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.104.1 - 2026-04-25
+
+### Highlights
+#### Bug Fixes
+
+- Handle dated GPT-5.5 alias in model routing (34079b94) 
+### Other Changes
+#### Other
+
+- Add DeepWiki badge to README (7b21006a) (@vinhnx)
+- Update config (59a5f22c) 
 ## 0.104.0 - 2026-04-25
 
 ### Highlights
