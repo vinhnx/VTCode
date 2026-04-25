@@ -13,7 +13,8 @@ impl ModelId {
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
-            ModelId::GPT5
+            ModelId::GPT55
+            | ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex
             | ModelId::GPT54
@@ -106,6 +107,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt55
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45

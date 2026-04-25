@@ -169,7 +169,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
                 Some(ModelId::Gemini31FlashLitePreview)
             }
-            ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
+            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT52
             | ModelId::GPT52Codex
@@ -239,7 +239,8 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
-            ModelId::GPT52
+            ModelId::GPT55
+            | ModelId::GPT52
             | ModelId::GPT54
             | ModelId::GPT54Pro
             | ModelId::GPT54Nano
@@ -288,6 +289,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
+                | ModelId::GPT55
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT52Codex
@@ -362,6 +364,7 @@ impl ModelId {
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini3FlashPreview
                 | ModelId::Gemini31FlashLitePreview
+                | ModelId::GPT55
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT52Codex
@@ -429,6 +432,7 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => "3.1-lite",
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
+            ModelId::GPT55 => "5.5",
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
             ModelId::GPT53Codex => "5.3",
@@ -501,7 +505,8 @@ impl ModelId {
     pub fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT52
+            ModelId::GPT55
+                | ModelId::GPT52
                 | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro

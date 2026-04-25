@@ -429,6 +429,7 @@ fn test_models_for_provider() {
     assert!(deepseek_models.contains(&ModelId::DeepSeekV4Flash));
 
     let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
+    assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIGpt55));
     for entry in openrouter_generated::ENTRIES {
         assert!(openrouter_models.contains(&entry.variant));
     }
@@ -586,6 +587,8 @@ fn test_generated_model_capability_lookup() {
     let openai_models = supported_models_for_provider("openai").expect("openai models");
     assert!(openai_models.contains(&models::GPT_5_4));
     assert!(catalog_provider_keys().contains(&"openai"));
+    let openrouter_models = supported_models_for_provider("openrouter").expect("openrouter models");
+    assert!(openrouter_models.contains(&"openai/gpt-5.5"));
     let opencode_zen_models =
         supported_models_for_provider("opencode-zen").expect("opencode zen models");
     assert!(opencode_zen_models.contains(&models::opencode_zen::GPT_5_4));

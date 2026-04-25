@@ -1,6 +1,8 @@
 pub const DEFAULT_MODEL: &str = "gpt-5.4";
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT,
+    "gpt-5.5",            // GPT-5.5 flagship model
+    "gpt-5.5-2026-04-23", // GPT-5.5 dated release (2026-04-23)
     "gpt-5.1",
     "gpt-5.4",
     "gpt-5.4-pro",
@@ -26,6 +28,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 /// Models that require the OpenAI Responses API
 pub const RESPONSES_API_MODELS: &[&str] = &[
     GPT,
+    GPT_5_5,
     GPT_5_1,
     GPT_5,
     GPT_5_2,
@@ -47,6 +50,7 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
 /// Models that support the OpenAI reasoning parameter payload
 pub const REASONING_MODELS: &[&str] = &[
     GPT,
+    GPT_5_5,
     GPT_5_1,
     GPT_5,
     GPT_5_2,
@@ -74,6 +78,8 @@ pub const HARMONY_MODELS: &[&str] = &[GPT_OSS_20B, GPT_OSS_120B];
 
 // Convenience constants for commonly used models
 pub const GPT: &str = "gpt";
+pub const GPT_5_5: &str = "gpt-5.5";
+pub const GPT_5_5_DATED: &str = "gpt-5.5-2026-04-23";
 pub const GPT_5_1: &str = "gpt-5.1";
 pub const GPT_5: &str = "gpt-5";
 pub const GPT_5_2: &str = "gpt-5.2";

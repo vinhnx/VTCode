@@ -21,6 +21,9 @@ impl ModelId {
                 "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }
             // OpenAI models
+            ModelId::GPT55 => {
+                "Next-gen OpenAI model with frontier reasoning and long context (2026-04-23 dated release)"
+            }
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
             ModelId::GPT52 => {
                 "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
@@ -230,6 +233,7 @@ impl ModelId {
             ModelId::OpenRouterMoonshotaiKimiK26 => {
                 "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter"
             }
+            ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 model accessed through OpenRouter",
             _ => unreachable!(),
         }
     }

@@ -22,6 +22,7 @@ pub const GEMINI_3_FLASH_PREVIEW: &str = google::GEMINI_3_FLASH_PREVIEW;
 pub const GPT: &str = openai::GPT;
 pub const GPT_5: &str = openai::GPT_5;
 pub const GPT_5_2: &str = openai::GPT_5_2;
+pub const GPT_5_5: &str = openai::GPT_5_5;
 pub const GPT_5_4: &str = openai::GPT_5_4;
 pub const GPT_5_4_PRO: &str = openai::GPT_5_4_PRO;
 pub const GPT_5_3_CODEX: &str = openai::GPT_5_3_CODEX;

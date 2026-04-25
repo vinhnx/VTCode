@@ -764,6 +764,44 @@ fn chat_completions_payload_uses_function_wrapper() {
 }
 
 #[test]
+fn chat_completions_applies_gpt_5_5_addendum_only_for_gpt_5_5() {
+    let provider = native_openai_provider(models::openai::GPT_5_5);
+    let mut request = sample_request(models::openai::GPT_5_5);
+    request.system_prompt = Some(Arc::new("You are a helpful assistant.".to_owned()));
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    let messages = payload
+        .get("messages")
+        .and_then(Value::as_array)
+        .expect("messages should exist");
+    let system_content = messages
+        .first()
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .expect("system content should be a string");
+    assert!(system_content.contains("You are a helpful assistant."));
+    assert!(system_content.contains("## GPT-5.5 OpenAI Addendum"));
+
+    let provider = native_openai_provider(models::openai::GPT_5_4);
+    let mut request = sample_request(models::openai::GPT_5_4);
+    request.system_prompt = Some(Arc::new("You are a helpful assistant.".to_owned()));
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    let messages = payload
+        .get("messages")
+        .and_then(Value::as_array)
+        .expect("messages should exist");
+    let system_content = messages
+        .first()
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .expect("system content should be a string");
+    assert!(!system_content.contains("## GPT-5.5 OpenAI Addendum"));
+}
+
+#[test]
 fn chat_completions_uses_max_completion_tokens_field() {
     let provider =
         compatible_endpoint_provider(models::openai::DEFAULT_MODEL, "https://api.openai.com/v1");
@@ -1040,6 +1078,34 @@ fn responses_payload_sets_instructions_from_system_prompt() {
             .and_then(Value::as_str),
         Some("user")
     );
+}
+
+#[test]
+fn responses_payload_applies_gpt_5_5_addendum_only_for_gpt_5_5() {
+    let provider = native_openai_provider(models::openai::GPT_5_5);
+    let mut request = sample_request(models::openai::GPT_5_5);
+    request.system_prompt = Some(Arc::new("You are a helpful assistant.".to_owned()));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let instructions = payload
+        .get("instructions")
+        .and_then(Value::as_str)
+        .expect("instructions should exist");
+    assert!(instructions.contains("You are a helpful assistant."));
+    assert!(instructions.contains("## GPT-5.5 OpenAI Addendum"));
+
+    let provider = native_openai_provider(models::openai::GPT_5_4);
+    let mut request = sample_request(models::openai::GPT_5_4);
+    request.system_prompt = Some(Arc::new("You are a helpful assistant.".to_owned()));
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let instructions = payload
+        .get("instructions")
+        .and_then(Value::as_str)
+        .expect("instructions should exist");
+    assert!(!instructions.contains("## GPT-5.5 OpenAI Addendum"));
 }
 
 #[test]

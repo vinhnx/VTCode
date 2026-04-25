@@ -47,6 +47,15 @@ const CONTRACT_HEADER: &str = "## Contract";
 const HANDLE_CONTEXT_PROMPT_LINE: &str =
     "Prefer explicit handles plus an owning context when state relationships get tangled.";
 
+const OPENAI_GPT55_CONTRACT_HEADER: &str = "## GPT-5.5 OpenAI Addendum";
+const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
+    "State the outcome, constraints, evidence, and output shape up front; avoid over-prescribing the path unless the exact steps matter.",
+    "If context is missing, say so plainly; use the smallest missing detail that would change the result, and finish any unblocked portion first.",
+    "Verify changes yourself with the smallest relevant check; never claim a check passed unless you ran it.",
+    "Before multi-step tool work, send a brief progress update that names the first step.",
+    "Use retrieved evidence for citation-sensitive work; use the minimum evidence sufficient to answer correctly, then stop.",
+];
+
 const DEFAULT_CONTRACT_LINES: &[&str] = &[
     "Start with `AGENTS.md`; inspect code and match local patterns. Use `@file` when helpful.",
     "If context is missing, say so plainly, do not guess, and finish any unblocked portion first.",
@@ -125,6 +134,25 @@ pub fn lightweight_instruction_text() -> String {
 
 pub fn specialized_instruction_text() -> String {
     specialized_system_prompt().to_string()
+}
+
+pub fn openai_gpt55_contract_addendum() -> String {
+    let lines_len = OPENAI_GPT55_CONTRACT_LINES
+        .iter()
+        .map(|line| line.len())
+        .sum::<usize>();
+    let mut prompt = String::with_capacity(
+        OPENAI_GPT55_CONTRACT_HEADER.len() + lines_len + OPENAI_GPT55_CONTRACT_LINES.len() * 3 + 8,
+    );
+    prompt.push_str(OPENAI_GPT55_CONTRACT_HEADER);
+    prompt.push_str("\n\n");
+    for line in OPENAI_GPT55_CONTRACT_LINES {
+        prompt.push_str("- ");
+        prompt.push_str(line);
+        prompt.push('\n');
+    }
+    prompt.pop();
+    prompt
 }
 
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
@@ -936,6 +964,18 @@ mod tests {
             prompt.contains("do not guess"),
             "Prompt should still preserve the uncertainty guardrail"
         );
+    }
+
+    #[test]
+    fn test_openai_gpt55_contract_addendum_is_specific() {
+        let addendum = openai_gpt55_contract_addendum();
+
+        assert!(addendum.contains(OPENAI_GPT55_CONTRACT_HEADER));
+        assert!(addendum.contains("outcome, constraints, evidence, and output shape"));
+        assert!(addendum.contains("smallest missing detail"));
+        assert!(addendum.contains("brief progress update"));
+        assert!(addendum.contains("minimum evidence sufficient"));
+        assert!(!default_system_prompt().contains(OPENAI_GPT55_CONTRACT_HEADER));
     }
 
     #[tokio::test]

@@ -32,6 +32,8 @@ pub enum ModelId {
     Gemini3FlashPreview,
 
     // OpenAI models
+    /// GPT-5.5 - Next-gen OpenAI model dated release (2026-04-23)
+    GPT55,
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
     GPT5,
     /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
@@ -238,6 +240,8 @@ pub enum ModelId {
     OpenRouterOpenAIGptOss20b,
     /// OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter
     OpenRouterOpenAIGpt5,
+    /// OpenAI GPT-5.5 - OpenAI GPT-5.5 model accessed through OpenRouter
+    OpenRouterOpenAIGpt55,
     /// OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use
     OpenRouterOpenAIGpt5Chat,
 

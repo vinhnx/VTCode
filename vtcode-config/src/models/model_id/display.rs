@@ -13,6 +13,7 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => "Gemini 3.1 Flash Lite Preview",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
+            ModelId::GPT55 => "GPT-5.5",
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT52 => "GPT-5.2",
             ModelId::GPT52Codex => "GPT-5.2 Codex",
@@ -80,6 +81,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
+            ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 (OpenRouter)",
             // OpenRouter models
             ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",

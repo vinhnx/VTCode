@@ -2,7 +2,7 @@
 
 VT Code routes OpenAI Responses models, including the GPT-5 family plus `o3` and `o4-mini`, through the Responses API. This guide focuses on the parts that matter in VT Code: reasoning continuity across tool calls, cache-friendly request shaping, encrypted reasoning for stateless workflows, and the config needed to turn those features on.
 
-VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract: concise structured outputs, reversible follow-through by default, dependency-aware tool use, completeness checks, verification before finalization, and grounding/citation rules that only activate when the task is research or citation sensitive.
+VT Code's default OpenAI profile keeps `gpt-5.5` on a compact execution contract: concise structured outputs, outcome-first follow-through by default, dependency-aware tool use, completeness checks, minimal validation loops, and grounding/citation rules that only activate when the task is research or citation sensitive.
 
 ## Key Concepts
 
