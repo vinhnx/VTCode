@@ -506,7 +506,10 @@ impl<'a> RunLoopContext<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HarnessTurnState, RecoveryMode, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId};
+    use super::{
+        HarnessTurnState, RecoveryMode, ToolBudgetWarning, TurnExecutionPhase, TurnId, TurnPhase,
+        TurnRunId,
+    };
     use std::time::{Duration, Instant};
 
     #[test]

@@ -47,6 +47,7 @@ use crate::agent::runloop::unified::tool_call_safety::{
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
 use crate::agent::runloop::unified::tool_pipeline::{
     PtyStreamRuntime, ToolExecutionStatus, run_tool_call_with_args,
+    validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt},
 };
 use crate::agent::runloop::unified::tool_routing::{
     HitlDecision, ToolPermissionFlow, ToolPermissionsContext, ensure_tool_permission_with_call_id,
@@ -367,10 +368,38 @@ impl<'a> CopilotRuntimeHost<'a> {
         arguments: &Value,
     ) -> Result<Option<CopilotToolCallResponse>> {
         let invocation_id = invocation_id_from_call_id(tool_call_id);
-        self.safety_validator
-            .validate_call_with_invocation_id(tool_name, arguments, invocation_id)
-            .await
-            .with_context(|| format!("copilot tool safety validation for '{tool_name}'"))?;
+        match validate_tool_call_with_limit_prompt(
+            self.safety_validator,
+            self.handle,
+            self.session,
+            self.ctrl_c_state,
+            self.ctrl_c_notify,
+            tool_name,
+            arguments,
+            invocation_id,
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(SafetyValidationFailure::SessionLimitNotIncreased) => {
+                return Ok(Some(denied_tool_response(
+                    tool_name,
+                    "session tool limit reached and not increased by user",
+                )));
+            }
+            Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => {
+                return Ok(Some(denied_tool_response(
+                    tool_name,
+                    &format!("failed while requesting a session tool-limit increase: {error}"),
+                )));
+            }
+            Err(SafetyValidationFailure::Validation(error)) => {
+                return Ok(Some(denied_tool_response(
+                    tool_name,
+                    &format!("safety validation failed: {error}"),
+                )));
+            }
+        }
 
         match ensure_tool_permission_with_call_id(
             self.tool_permissions_context(renderer),
