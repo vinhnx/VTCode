@@ -168,6 +168,8 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
 /// Adapter that wraps a Tool to implement ToolHandler trait.
 ///
 /// This allows existing vtcode tools to be used in the new Codex-style router.
+/// Prefer native or borrowed tool paths when you still own the concrete tool;
+/// this adapter keeps an `Arc<dyn Tool>` only for already-shared tool handles.
 pub struct ToolToHandlerAdapter {
     tool: Arc<dyn Tool>,
 }

@@ -69,6 +69,12 @@ impl ToolRegistry {
         self.inventory.file_ops_tool()
     }
 
+    /// Borrow the edited-file monitor without exposing shared ownership.
+    pub fn edited_file_monitor_ref(&self) -> &EditedFileMonitor {
+        self.edited_file_monitor.as_ref()
+    }
+
+    /// Get the shared edited-file monitor handle for callers that need to clone it.
     pub fn edited_file_monitor(&self) -> &Arc<EditedFileMonitor> {
         &self.edited_file_monitor
     }

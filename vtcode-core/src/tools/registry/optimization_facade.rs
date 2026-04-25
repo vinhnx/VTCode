@@ -15,7 +15,12 @@ impl ToolRegistry {
             || self.optimization_config.memory_pool.enabled
     }
 
-    /// Get memory pool for optimized allocations.
+    /// Borrow the memory pool for optimized allocations.
+    pub fn memory_pool_ref(&self) -> &MemoryPool {
+        self.memory_pool.as_ref()
+    }
+
+    /// Get the shared memory pool handle for callers that need to clone it.
     pub fn memory_pool(&self) -> &Arc<MemoryPool> {
         &self.memory_pool
     }

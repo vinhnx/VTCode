@@ -37,7 +37,7 @@ async fn test_real_tool_registry_optimizations() -> Result<()> {
     assert_eq!(cache_cap, 32); // Resized cache
 
     // Verify memory pool is available
-    let memory_pool = registry.memory_pool();
+    let memory_pool = registry.memory_pool_ref();
     let test_string = memory_pool.get_string();
     memory_pool.return_string(test_string);
 

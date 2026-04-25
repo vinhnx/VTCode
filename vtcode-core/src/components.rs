@@ -1264,9 +1264,12 @@ pub trait HasToolRef: Send + Sync {
     fn tool(&self) -> &dyn Tool;
 }
 
-/// Trait for contexts that carry an inner `Tool` reference for passthrough.
+/// Trait for contexts that can borrow an inner `Tool` for passthrough.
+///
+/// Keep shared ownership inside the bridge context; callers only need a borrowed
+/// `dyn Tool` to delegate metadata, validation, and execution.
 pub trait HasInnerTool: Send + Sync {
-    fn inner_tool(&self) -> &Arc<dyn Tool>;
+    fn inner_tool(&self) -> &dyn Tool;
 }
 
 impl<Ctx> HasToolRef for Ctx
@@ -1274,7 +1277,7 @@ where
     Ctx: HasInnerTool + Send + Sync,
 {
     fn tool(&self) -> &dyn Tool {
-        self.inner_tool().as_ref()
+        self.inner_tool()
     }
 }
 
@@ -1300,6 +1303,9 @@ impl<Ctx: HasToolRef> ExecuteProvider<Ctx> for PassthroughExecutor {
 /// Create a `ToolFacade` that wraps an existing `Arc<dyn Tool>` with
 /// CGP-wired approval, sandbox, and middleware for interactive sessions.
 ///
+/// Prefer `wrap_native_tool_interactive()` when you still own the concrete
+/// tool instance. Use this bridge when the tool is already shared elsewhere.
+///
 /// The returned facade implements `Tool` and can be registered directly
 /// with `ToolRegistration::from_tool()`.
 pub fn wrap_tool_interactive(
@@ -1315,6 +1321,9 @@ pub fn wrap_tool_interactive(
 
 /// Create a `ToolFacade` that wraps an existing `Arc<dyn Tool>` with
 /// CGP-wired auto-approval and no middleware for CI contexts.
+///
+/// Prefer `wrap_native_tool_ci()` when you still own the concrete tool
+/// instance. Use this bridge when the tool is already shared elsewhere.
 pub fn wrap_tool_ci(
     tool: Arc<dyn Tool>,
     workspace_root: PathBuf,
@@ -1326,11 +1335,12 @@ pub fn wrap_tool_ci(
     ToolFacade::new(ctx)
 }
 
-/// Bridge context: combines a runtime context with an inner `Tool` reference.
+/// Bridge context: combines a runtime context with shared tool ownership.
 ///
-/// This allows `PassthroughExecutor` to delegate to existing tool impls
-/// while the rest of the CGP pipeline (approval, sandbox, middleware)
-/// is provided by the runtime context's component wiring.
+/// This keeps the `Arc<dyn Tool>` inside the bridge while
+/// `PassthroughExecutor` only borrows `&dyn Tool`. The rest of the CGP
+/// pipeline (approval, sandbox, middleware) is provided by the runtime
+/// context's component wiring.
 pub struct ToolBridgeCtx<Runtime> {
     inner: Arc<dyn Tool>,
     /// The runtime context whose component wiring is inherited via
@@ -1347,8 +1357,8 @@ impl<Runtime: HasWorkspaceRoot> HasWorkspaceRoot for ToolBridgeCtx<Runtime> {
 }
 
 impl<Runtime: Send + Sync> HasInnerTool for ToolBridgeCtx<Runtime> {
-    fn inner_tool(&self) -> &Arc<dyn Tool> {
-        &self.inner
+    fn inner_tool(&self) -> &dyn Tool {
+        self.inner.as_ref()
     }
 }
 
@@ -1524,6 +1534,9 @@ where
 
 /// Wrap a concrete tool instance in an interactive CGP facade without
 /// erasing it to `Arc<dyn Tool>` first.
+///
+/// Prefer this path when the caller still owns the tool and does not need
+/// shared ownership.
 pub fn wrap_native_tool_interactive<T>(
     tool: T,
     workspace_root: PathBuf,
@@ -1536,6 +1549,9 @@ where
 
 /// Wrap a concrete tool instance in a CI CGP facade without
 /// erasing it to `Arc<dyn Tool>` first.
+///
+/// Prefer this path when the caller still owns the tool and does not need
+/// shared ownership.
 pub fn wrap_native_tool_ci<T>(
     tool: T,
     workspace_root: PathBuf,

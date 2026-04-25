@@ -649,7 +649,12 @@ const mcp = new MCPTools();
         &self.workspace_root
     }
 
-    /// Get the MCP client.
+    /// Borrow the MCP client without exposing shared ownership.
+    pub fn mcp_client_ref(&self) -> &dyn McpToolExecutor {
+        self.mcp_client.as_ref()
+    }
+
+    /// Get the shared MCP client handle for callers that need to clone it.
     pub fn mcp_client(&self) -> &Arc<dyn McpToolExecutor> {
         &self.mcp_client
     }

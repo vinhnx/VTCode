@@ -32,13 +32,20 @@ a per-turn struct and pass it through execution functions.
 
 ## Shared Ownership Rules
 
-Use `Arc<T>` for immutable or externally synchronized shared state.
+Prefer plain ownership and borrowing first. Shared ownership is an opt-in
+runtime cost, not the default shape for VT Code state.
 
-Use `Arc<Mutex<T>>` or `Arc<RwLock<T>>` only when shared mutable access is
-required.
+Use `Rc<T>` only for single-threaded graphs, callbacks, or other cases where
+multiple owners genuinely need to keep a value alive.
 
-For background tasks that should not keep parent state alive forever, prefer
-`Arc::downgrade()` and exit when upgrade fails.
+Use `Arc<T>` for immutable or externally synchronized shared state that crosses
+tasks or threads.
+
+Use `Rc<RefCell<T>>`, `Arc<Mutex<T>>`, or `Arc<RwLock<T>>` only when shared
+mutable access is required; keep the mutable surface area small and explicit.
+
+For back-references or background tasks that should not keep parent state alive
+forever, prefer `Weak<T>` / `Arc::downgrade()` and exit when upgrade fails.
 
 ## Background Task Lifecycle
 

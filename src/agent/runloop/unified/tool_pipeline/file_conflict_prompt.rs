@@ -82,7 +82,7 @@ where
         {
             OverlayWaitOutcome::Submitted(ConflictResolution::Reload) => {
                 registry
-                    .edited_file_monitor()
+                    .edited_file_monitor_ref()
                     .accept_disk_version(&conflict.absolute_path)
                     .await?;
                 return Ok(conflict_resolution_status(

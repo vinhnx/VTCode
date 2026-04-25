@@ -34,6 +34,9 @@ cargo ts                    # Alias for standard cargo test
 - **Config**: Read from `vtcode.toml` at runtime
 - **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
 - **Formatting**: 4-space indentation, early returns, simple variable names
+- **Ownership first**: Prefer owned values and borrows; reach for `Rc<T>` / `Arc<T>` only when multiple owners genuinely need to keep data alive
+- **Shared ownership**: `Rc<T>` is single-threaded; `Arc<T>` is for cross-thread/task sharing. Prefer immutable sharing before `RefCell`, `Mutex`, or `RwLock`
+- **Cycles**: Use `Weak<T>` / `Arc::downgrade()` for back-references or task-parent links so shared graphs can drop cleanly
 
 ## See Also
 

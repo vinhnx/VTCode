@@ -24,7 +24,7 @@ pub async fn handle_stats_command(
 
     let metrics = agent.performance_metrics();
     let tool_names = agent
-        .tool_registry()
+        .tool_registry_ref()
         .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
         .await;
 

@@ -105,13 +105,17 @@ context capabilities instead of raw component lookups. `ToolFacade` also uses
 `CanProvideToolMetadata` so direct CGP registrations preserve schema and policy
 metadata instead of falling back to `Tool` defaults.
 
+Ownership-first rule: prefer `wrap_native_tool_interactive()` /
+`wrap_native_tool_ci()` when you still own the concrete tool. Use the
+`Arc<dyn Tool>` bridge only when a tool instance is already shared elsewhere.
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
 │               Existing Tools                     │
 │  GrepTool, FileOpsTool, CommandTool, ...         │
-│  (Arc<dyn Tool>)                                 │
+│  (concrete tool or shared Arc<dyn Tool>)         │
 └──────────────────┬──────────────────────────────┘
                    │
          wrap_tool_interactive()
@@ -199,7 +203,9 @@ metadata instead of falling back to `Tool` defaults.
 
 ## Usage
 
-### Wrapping an existing tool
+### Wrapping an existing shared tool
+
+Use this path when the tool instance already has genuine shared ownership.
 
 ```rust
 use vtcode_core::components::wrap_tool_interactive;
@@ -337,8 +343,11 @@ implementation uses placeholder identifiers.
 The same metadata preservation now applies to the fallback `TraitObject`
 path. When a registration only carries an `Arc<dyn Tool>`, CGP wraps that
 tool in a registration-backed metadata shim before entering the bridge
-runtime. This keeps dynamic registrations such as MCP proxy tools aligned
-with the public registration name and schemas after CGP activation.
+runtime. This fallback is for registrations that already need shared
+ownership. Native wrappers remain the preferred path when the caller still
+owns the concrete tool instance. This keeps dynamic registrations such as MCP
+proxy tools aligned with the public registration name and schemas after CGP
+activation.
 
 Dynamic skill registrations follow the same model:
 
@@ -360,7 +369,8 @@ registry-function helpers such as `read_file`, `write_file`, and `apply_patch`.
 ## Native Tool Migration (Phase 7)
 
 Phase 7 starts by replacing the most direct `Arc<dyn Tool>` bridges with
-typed CGP contexts:
+typed CGP contexts so ownership stays concrete by default and shared handles
+remain the fallback path:
 
 - `TypedToolCtx<Runtime, T>` stores a concrete tool instance plus runtime policy
 - `TypedToolExecutor<T>` calls `T::execute` / `T::execute_dual` without trait-object indirection

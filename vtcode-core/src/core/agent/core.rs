@@ -155,7 +155,12 @@ impl Agent {
         &self.optimization_config
     }
 
-    /// Get the tool registry (now with integrated optimizations)
+    /// Borrow the tool registry (now with integrated optimizations).
+    pub fn tool_registry_ref(&self) -> &ToolRegistry {
+        self.tool_registry.as_ref()
+    }
+
+    /// Get the shared tool registry handle for callers that need to clone it.
     pub fn tool_registry(&self) -> &Arc<ToolRegistry> {
         &self.tool_registry
     }

@@ -71,7 +71,7 @@ async fn test_execute_tool_ref_memory_pool_integration() {
     registry.configure_optimizations(config);
 
     // Verify memory pool is accessible (just check it exists)
-    let _memory_pool = registry.memory_pool();
+    let _memory_pool = registry.memory_pool_ref();
 
     // Test memory pool usage during tool execution
     let args = json!({

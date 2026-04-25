@@ -351,6 +351,11 @@ impl Tool for RegistrationBackedDynTool {
     }
 }
 
+/// Fallback bridge for registrations that already carry shared tool ownership.
+///
+/// Prefer `wrap_registered_native_tool()` when the caller still owns the
+/// concrete tool instance and does not need to preserve an existing
+/// `Arc<dyn Tool>` handle.
 fn wrap_registered_trait_object_tool(
     registration: &ToolRegistration,
     tool: Arc<dyn Tool>,

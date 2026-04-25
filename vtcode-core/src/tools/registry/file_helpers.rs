@@ -232,7 +232,7 @@ impl ToolRegistry {
         let canonical_path = resolve_workspace_path(self.workspace_root(), &requested_path)
             .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?;
         let _mutation_lease = self
-            .edited_file_monitor()
+            .edited_file_monitor_ref()
             .acquire_mutation(&canonical_path)
             .await;
 
@@ -248,7 +248,7 @@ impl ToolRegistry {
         }
 
         let intended_content = self
-            .edited_file_monitor()
+            .edited_file_monitor_ref()
             .tracked_read_text(&canonical_path)
             .await
             .and_then(|content| {
@@ -256,7 +256,7 @@ impl ToolRegistry {
             });
 
         if let Some(conflict) = self
-            .edited_file_monitor()
+            .edited_file_monitor_ref()
             .detect_conflict(&canonical_path, intended_content, override_snapshot.clone())
             .await?
         {

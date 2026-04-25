@@ -33,12 +33,12 @@ impl ToolRegistry {
             let (path, result) = match write {
                 PlannedPatchWrite::Text { path, content } => {
                     let result = self
-                        .edited_file_monitor()
+                        .edited_file_monitor_ref()
                         .record_agent_write_text(&path, &content);
                     (path, result)
                 }
                 PlannedPatchWrite::Removal { path } => {
-                    let result = self.edited_file_monitor().record_agent_removal(&path);
+                    let result = self.edited_file_monitor_ref().record_agent_removal(&path);
                     (path, result)
                 }
             };
@@ -106,7 +106,7 @@ impl ToolRegistry {
     ) -> Result<Vec<MutationLease>> {
         let mut leases = Vec::new();
         for path in self.patch_mutation_paths(patch).await? {
-            leases.push(self.edited_file_monitor().acquire_mutation(&path).await);
+            leases.push(self.edited_file_monitor_ref().acquire_mutation(&path).await);
         }
         Ok(leases)
     }
@@ -116,7 +116,7 @@ impl ToolRegistry {
         operation: &crate::tools::editing::PatchOperation,
         override_snapshot: Option<crate::tools::edited_file_monitor::FileSnapshot>,
     ) -> Result<Option<crate::tools::edited_file_monitor::FileConflict>> {
-        let monitor = self.edited_file_monitor();
+        let monitor = self.edited_file_monitor_ref();
         match operation {
             crate::tools::editing::PatchOperation::AddFile { path, content } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
@@ -186,7 +186,7 @@ impl ToolRegistry {
             } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
                 let source_content = if let Some(content) = self
-                    .edited_file_monitor()
+                    .edited_file_monitor_ref()
                     .tracked_read_text(&canonical_path)
                     .await
                 {

@@ -13,6 +13,7 @@ semantic code analysis, and configurable safety policies.
 - **Semantic Workspace Model** — LLM-native code analysis and navigation across modern programming languages.
 - **Bash Shell Safety** — `tree-sitter-bash` integration for critical command validation and security enforcement.
 - **Tool System** — trait-driven registry for shell execution, file IO, search, and custom commands, with Tokio-powered concurrency and PTY streaming.
+- **Ownership-First Tool Bridging** — prefer native CGP wrappers and borrowed tool references; use `Arc<dyn Tool>` bridges only when tools genuinely need shared ownership.
 - **Configuration-First** — everything is driven by `vtcode.toml`, with model, safety, and automation constants centralized in `config::constants`.
 - **Safety & Observability** — workspace boundary enforcement, command allow/deny lists, human-in-the-loop confirmation, and structured event logging.
 

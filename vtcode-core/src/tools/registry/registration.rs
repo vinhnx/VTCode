@@ -283,6 +283,10 @@ impl ToolRegistration {
     /// specified runtime context's approval, metadata, sandbox, logging,
     /// cache, and retry providers.
     ///
+    /// Prefer `wrap_native_tool_interactive()` or `wrap_native_tool_ci()` when
+    /// the caller still owns the concrete tool instance. Use this bridge when the
+    /// tool already has genuine shared ownership.
+    ///
     /// # Example
     /// ```rust,ignore
     /// use vtcode_core::components::{InteractiveCtx, ToolBridgeCtx, wrap_tool_interactive};

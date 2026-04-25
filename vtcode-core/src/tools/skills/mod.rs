@@ -179,6 +179,9 @@ pub fn build_traditional_skill_tool_registration(
         .with_permission(ToolPolicy::Prompt)
         .with_prompt_path(SKILL_TOOL_PROMPT_PATH);
 
+    // Traditional skills already flow through shared fork executors, so keep
+    // the trait-object bridge here and let the native CGP factory handle the
+    // ownership-first path when runtime mode is known.
     let adapter: Arc<dyn Tool> = Arc::new(build_skill_tool_adapter(
         skill.clone(),
         fork_executor.clone(),

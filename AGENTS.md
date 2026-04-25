@@ -13,7 +13,10 @@
 - Match CI expectations in `.github/workflows/`.
 - Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Measure before optimizing.
-- When ownership or lifetimes get tangled, prefer explicit handles/IDs plus an owning context.
+- Prefer ownership and borrowing by default; introduce `Rc<T>`/`Arc<T>` only for genuine shared ownership.
+- When ownership or lifetimes get tangled, first prefer explicit handles/IDs plus an owning context.
+- Use `Rc<T>` only for single-threaded sharing and `Arc<T>` only for cross-thread/task sharing; prefer immutable sharing and narrowly scoped interior mutability.
+- Break back-references or task-parent links with `Weak<T>`/`Arc::downgrade()` so cycles do not leak memory or keep state alive unexpectedly.
 - Do not reach for raw pointers, custom `Send`/`Sync`, or lifetime-branding patterns unless simpler handle-based designs are insufficient; document the invariant if you do.
 - If this repo includes or adds C/C++ surfaces, follow [`docs/development/CPP_CORE_GUIDELINES_ADOPTION.md`](docs/development/CPP_CORE_GUIDELINES_ADOPTION.md).
 

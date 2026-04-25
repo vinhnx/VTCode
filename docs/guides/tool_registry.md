@@ -20,6 +20,11 @@ contains the following metadata:
 -   `handler`: either a registry executor function (for built-in tools) or an
     `Arc<dyn Tool>` instance.
 
+Ownership-first rule: when you still own the concrete tool instance, prefer
+`ToolRegistration::from_tool_instance()` or a native CGP wrapper. Reserve
+`Arc<dyn Tool>` registrations for tools that already have genuine shared
+ownership at runtime.
+
 `ToolRegistry::register_tool` accepts a `ToolRegistration` and updates the
 internal index as well as the policy manager. Built-in registrations live in
 `ToolRegistry::builtin_tool_registrations`, so the registry can initialise its
