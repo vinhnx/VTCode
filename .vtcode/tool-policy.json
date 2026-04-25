@@ -2,6 +2,7 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
+    "ast-grep",
     "close_agent",
     "cron_create",
     "cron_delete",
@@ -43,6 +44,7 @@
     "wait_agent": "prompt",
     "load_skill_resource": "allow",
     "load_skill": "allow",
+    "ast-grep": "allow",
     "list_files": "allow",
     "memory": "allow",
     "read_file": "allow"
@@ -194,7 +196,17 @@
     "allowed": [
       "find . -maxdepth 3 -type f -name '*.rs' '|' head -30 '&&' echo --- '&&' ls -la|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "find . -maxdepth -type f -name head echo --- ls -la|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "load_skill",
+      "ast-grep",
+      "ast-grep run --lang rust --pattern 'async fn $F' --no-ignore hidden --color never '--json=compact' . '2>&1' '|' head -100|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ast-grep run --lang rust --pattern --no-ignore hidden --color never . head|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ast-grep run --lang rust --pattern 'async fn $F' --no-ignore hidden --color never '--json=compact' . '2>&1'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ast-grep run --lang rust --pattern --no-ignore hidden --color never .|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cat .vtcode/context/tool_outputs/unified_exec_1777095461604713.txt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ast-grep run --lang rust --pattern 'async fn $F' --no-ignore hidden --color never '--json=compact' . '2>/dev/null' '|' head -200|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "grep -rn 'async fn' '--include=*.rs' . '|' grep -v target '|' grep -v .git '|' head -100|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "grep -rn . grep -v target grep -v .git head|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ],
     "prefixes": [],
     "regexes": []
