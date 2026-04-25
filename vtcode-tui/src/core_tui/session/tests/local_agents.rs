@@ -138,7 +138,7 @@ fn new_background_local_agent_does_not_auto_open_drawer() {
 }
 
 #[test]
-fn empty_local_agents_drawer_stays_open_after_last_entry_is_removed() {
+fn auto_opened_local_agents_drawer_closes_after_last_delegated_entry_is_removed() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
         entries: vec![sample_local_agent_entry(
@@ -146,6 +146,21 @@ fn empty_local_agents_drawer_stays_open_after_last_entry_is_removed() {
         )],
     });
 
+    session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
+
+    assert!(!session.local_agents_visible());
+}
+
+#[test]
+fn manually_opened_empty_local_agents_drawer_stays_open() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::LocalAgents(
+            app_types::LocalAgentsTransientRequest {
+                visible: Some(true),
+            },
+        )),
+    });
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
 
     assert!(session.local_agents_visible());

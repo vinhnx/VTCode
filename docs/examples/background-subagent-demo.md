@@ -5,7 +5,8 @@ tools:
   - unified_exec
 color: "white #2f6fed"
 background: true
-maxTurns: 1
+maxTurns: 2
+initialPrompt: Run `./scripts/demo-background-subagent.sh` in the workspace root, report one readiness line, then stop.
 ---
 
 Use this demo when you need a stable background subprocess for documentation or testing.

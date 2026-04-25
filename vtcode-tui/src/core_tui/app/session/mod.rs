@@ -53,6 +53,7 @@ pub struct AppSession {
     pub(crate) slash_palette: SlashPalette,
     pub(crate) history_picker_state: HistoryPickerState,
     local_agents_state: LocalAgentsState,
+    local_agents_auto_opened: bool,
     pub(crate) show_task_panel: bool,
     pub(crate) task_panel_lines: Vec<String>,
     pub(crate) diff_preview_state: Option<DiffPreviewState>,
@@ -92,6 +93,7 @@ impl AppSession {
             slash_palette: SlashPalette::with_commands(slash_commands),
             history_picker_state: HistoryPickerState::new(),
             local_agents_state: LocalAgentsState::default(),
+            local_agents_auto_opened: false,
             show_task_panel: false,
             task_panel_lines: Vec::new(),
             diff_preview_state: None,
@@ -208,6 +210,15 @@ impl AppSession {
     pub(crate) fn local_agents_visible(&self) -> bool {
         self.transient_host
             .is_visible(TransientSurface::LocalAgents)
+    }
+
+    pub(super) fn local_agents_loading_active(&self) -> bool {
+        self.local_agents_visible()
+            && self
+                .local_agents_state
+                .entries()
+                .iter()
+                .any(crate::core_tui::types::LocalAgentEntry::is_loading)
     }
 
     pub(crate) fn file_palette_visible(&self) -> bool {
@@ -446,9 +457,9 @@ impl AppSession {
                 if let Some(visible) = visible {
                     if visible {
                         self.ensure_inline_lists_visible_for_trigger();
-                        self.show_transient_surface(TransientSurface::LocalAgents);
+                        self.open_local_agents_drawer(false);
                     } else {
-                        self.close_transient_surface(TransientSurface::LocalAgents);
+                        self.close_local_agents_drawer(true);
                     }
                 } else {
                     self.core.mark_dirty();
@@ -480,10 +491,22 @@ impl AppSession {
             Some(TransientSurface::SlashPalette) => slash::clear_slash_suggestions(self),
             Some(TransientSurface::TaskPanel) => self.set_task_panel_visible(false),
             Some(TransientSurface::LocalAgents) => {
-                self.close_transient_surface(TransientSurface::LocalAgents);
+                self.close_local_agents_drawer(true);
             }
             None => {}
         }
+    }
+
+    pub(super) fn open_local_agents_drawer(&mut self, auto_opened: bool) {
+        self.local_agents_auto_opened = auto_opened;
+        self.show_transient_surface(TransientSurface::LocalAgents);
+    }
+
+    pub(super) fn close_local_agents_drawer(&mut self, clear_auto_opened: bool) {
+        if clear_auto_opened {
+            self.local_agents_auto_opened = false;
+        }
+        self.close_transient_surface(TransientSurface::LocalAgents);
     }
 
     pub(crate) fn sync_transient_focus(&mut self) {
@@ -524,11 +547,18 @@ impl AppSession {
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::SetLocalAgents { entries } => {
+                let has_delegated_entries = entries.iter().any(|entry| {
+                    entry.kind == crate::core_tui::types::LocalAgentKind::Delegated
+                });
                 let update = self.local_agents_state.set_entries(entries.clone());
                 self.core.set_local_agents(entries);
                 if update.has_new_delegated_entries && self.should_auto_open_local_agents() {
                     self.ensure_inline_lists_visible_for_trigger();
-                    self.show_transient_surface(TransientSurface::LocalAgents);
+                    self.open_local_agents_drawer(true);
+                } else if self.local_agents_auto_opened && !has_delegated_entries {
+                    self.close_local_agents_drawer(true);
+                } else if !self.local_agents_visible() && !has_delegated_entries {
+                    self.local_agents_auto_opened = false;
                 }
             }
             InlineCommand::SetInput(value) => {
@@ -719,6 +749,13 @@ impl TuiSessionDriver for AppSession {
 
     fn handle_tick(&mut self) {
         self.core.handle_tick();
+        if self.local_agents_loading_active()
+            && self.core.appearance.should_animate_progress_status()
+            && !self.core.is_shimmer_active()
+            && self.core.shimmer_state.update()
+        {
+            self.core.mark_dirty();
+        }
     }
 
     fn render(&mut self, frame: &mut Frame<'_>) {
@@ -762,11 +799,11 @@ impl TuiSessionDriver for AppSession {
     }
 
     fn is_running_activity(&self) -> bool {
-        self.core.is_running_activity()
+        self.core.is_running_activity() || self.local_agents_loading_active()
     }
 
     fn has_status_spinner(&self) -> bool {
-        self.core.has_status_spinner()
+        self.core.has_status_spinner() || self.local_agents_loading_active()
     }
 
     fn thinking_spinner_active(&self) -> bool {

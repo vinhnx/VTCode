@@ -2,7 +2,6 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
-    "ast-grep",
     "close_agent",
     "cron_create",
     "cron_delete",
@@ -40,11 +39,10 @@
     "list_skills": "allow",
     "resume_agent": "prompt",
     "send_input": "prompt",
-    "spawn_agent": "prompt",
-    "wait_agent": "prompt",
+    "spawn_agent": "allow",
+    "wait_agent": "allow",
     "load_skill_resource": "allow",
     "load_skill": "allow",
-    "ast-grep": "allow",
     "list_files": "allow",
     "memory": "allow",
     "read_file": "allow"
@@ -206,7 +204,10 @@
       "cat .vtcode/context/tool_outputs/unified_exec_1777095461604713.txt|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "ast-grep run --lang rust --pattern 'async fn $F' --no-ignore hidden --color never '--json=compact' . '2>/dev/null' '|' head -200|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "grep -rn 'async fn' '--include=*.rs' . '|' grep -v target '|' grep -v .git '|' head -100|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "grep -rn . grep -v target grep -v .git head|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "grep -rn . grep -v target grep -v .git head|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "sleep 5 '&&' echo 'Hello from background-demo!'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "sleep echo|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "wait_agent"
     ],
     "prefixes": [],
     "regexes": []

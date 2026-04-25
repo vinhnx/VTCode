@@ -8,6 +8,7 @@ use crate::core_tui::session::{inline_list::InlineListRow, list_panel::SharedLis
 use crate::core_tui::style::ratatui_color_from_ansi;
 use crate::core_tui::types::LocalAgentEntry;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
+use tui_shimmer::shimmer_spans_with_style_at_phase;
 
 struct LocalAgentsPanelModel {
     entries: Vec<LocalAgentEntry>,
@@ -212,9 +213,15 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
 
     let selected_entry = selected_index.and_then(|index| entries.get(index));
     let preview_text = selected_entry
-        .map(format_local_agent_preview)
+        .map(|entry| format_local_agent_preview(session, entry))
         .unwrap_or_else(|| {
-            "No local agents are running.\n\nUse /subprocesses to open this drawer later, or configure a background agent and press Ctrl+B.".to_string()
+            vec![
+                Line::from("No local agents are running."),
+                Line::default(),
+                Line::from(
+                    "Use /subprocesses to open this drawer later, or configure a background agent and press Ctrl+B.",
+                ),
+            ]
         });
 
     frame.render_widget(
@@ -225,34 +232,72 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     );
 }
 
-fn format_local_agent_preview(entry: &LocalAgentEntry) -> String {
-    let mut lines = vec![format!(
-        "{} · {} · {}",
-        entry.display_label,
-        entry.kind.as_str(),
-        entry.status
-    )];
+fn format_local_agent_preview(session: &Session, entry: &LocalAgentEntry) -> Vec<Line<'static>> {
+    let mut lines = vec![local_agent_title_line(session, entry)];
 
     if let Some(summary) = entry
         .summary
         .as_deref()
         .filter(|summary| !summary.trim().is_empty())
     {
-        lines.push(summary.to_string());
+        lines.push(local_agent_status_line(
+            session,
+            summary,
+            entry.is_loading(),
+        ));
     }
 
     if let Some(path) = entry.transcript_path.as_ref() {
-        lines.push(format!("Transcript: {}", path.display()));
+        lines.push(Line::from(format!("Transcript: {}", path.display())));
     }
 
-    lines.push(String::new());
-    if entry.preview.trim().is_empty() {
-        lines.push("Waiting for live transcript output...".to_string());
+    lines.push(Line::default());
+    let preview = if entry.preview.trim().is_empty() {
+        "Waiting for live transcript output..."
     } else {
-        lines.push(entry.preview.clone());
+        entry.preview.as_str()
+    };
+    lines.extend(preview.lines().map(|line| Line::from(line.to_string())));
+    lines
+}
+
+fn local_agent_title_line(session: &Session, entry: &LocalAgentEntry) -> Line<'static> {
+    let base = default_style(session);
+    let muted = base.add_modifier(Modifier::DIM);
+    let mut spans = vec![
+        Span::styled(entry.display_label.clone(), base),
+        Span::styled(" · ".to_string(), muted),
+        Span::styled(entry.kind.as_str().to_string(), muted),
+        Span::styled(" · ".to_string(), muted),
+    ];
+
+    if entry.is_loading() && session.core.appearance.should_animate_progress_status() {
+        spans.extend(shimmer_spans_with_style_at_phase(
+            &entry.status,
+            accent_style(session).add_modifier(Modifier::DIM),
+            session.core.shimmer_state.phase(),
+        ));
+    } else {
+        spans.push(Span::styled(
+            entry.status.clone(),
+            accent_style(session).add_modifier(Modifier::DIM),
+        ));
     }
 
-    lines.join("\n")
+    Line::from(spans)
+}
+
+fn local_agent_status_line(session: &Session, text: &str, shimmer: bool) -> Line<'static> {
+    let style = default_style(session).add_modifier(Modifier::DIM);
+    if shimmer && session.core.appearance.should_animate_progress_status() {
+        Line::from(shimmer_spans_with_style_at_phase(
+            text,
+            style,
+            session.core.shimmer_state.phase(),
+        ))
+    } else {
+        Line::from(Span::styled(text.to_string(), style))
+    }
 }
 
 fn truncate_row(text: String, max_chars: usize) -> String {
@@ -294,4 +339,45 @@ fn local_agents_divider_style(
     };
 
     fallback.fg(ratatui_color_from_ansi(color))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Session, format_local_agent_preview, local_agent_status_line};
+    use crate::core_tui::types::{InlineTheme, LocalAgentEntry, LocalAgentKind};
+    use std::time::Duration;
+
+    fn sample_entry(status: &str) -> LocalAgentEntry {
+        LocalAgentEntry {
+            id: "thread-1".to_string(),
+            display_label: "rust-engineer".to_string(),
+            agent_name: "rust-engineer".to_string(),
+            color: Some("cyan".to_string()),
+            kind: LocalAgentKind::Delegated,
+            status: status.to_string(),
+            summary: Some("Reviewing the workspace".to_string()),
+            preview: "assistant: reviewing the workspace".to_string(),
+            transcript_path: None,
+        }
+    }
+
+    #[test]
+    fn loading_preview_shimmers_status_lines() {
+        let mut session = Session::new(InlineTheme::default(), None, 14);
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(session.core.shimmer_state.update());
+
+        let animated = local_agent_status_line(&session, "Reviewing the workspace", true);
+        let static_line = local_agent_status_line(&session, "Reviewing the workspace", false);
+
+        assert_ne!(animated.spans, static_line.spans);
+    }
+
+    #[test]
+    fn terminal_preview_keeps_status_lines_static() {
+        let session = Session::new(InlineTheme::default(), None, 14);
+        let lines = format_local_agent_preview(&session, &sample_entry("completed"));
+
+        assert_eq!(lines[1].spans.len(), 1);
+    }
 }

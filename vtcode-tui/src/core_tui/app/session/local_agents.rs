@@ -3,7 +3,7 @@ use crate::core_tui::types::LocalAgentEntry;
 use hashbrown::HashSet;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{AppSession, InlineEvent, transient::TransientSurface};
+use super::{AppSession, InlineEvent};
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct LocalAgentsState {
@@ -190,7 +190,7 @@ impl AppSession {
                 .selected_local_agent_inspect_event()
                 .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
             KeyCode::Esc => {
-                self.close_transient_surface(TransientSurface::LocalAgents);
+                self.close_local_agents_drawer(true);
                 self.mark_dirty();
                 LocalAgentsKeyResult::Handled
             }

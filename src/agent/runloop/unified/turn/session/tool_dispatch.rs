@@ -285,9 +285,10 @@ fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<ser
             let message = match task.message {
                 Some(message) => {
                     if delegated_task_requires_clarification(message) {
-                        continue;
+                        spec.initial_prompt.clone()?
+                    } else {
+                        message.to_string()
                     }
-                    message.to_string()
                 }
                 None => spec.initial_prompt.clone()?,
             };
@@ -805,6 +806,19 @@ mod tests {
         let mut spec = test_subagent_spec("background-demo");
         spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
         let args = direct_subagent_spawn_args("run background-demo subagent", &[spec])
+            .expect("direct subagent spawn");
+        assert_eq!(args["agent_type"], "background-demo");
+        assert_eq!(
+            args["message"],
+            "Run the demo subprocess and report readiness."
+        );
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_falls_back_to_initial_prompt_for_vague_follow_up() {
+        let mut spec = test_subagent_spec("background-demo");
+        spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
+        let args = direct_subagent_spawn_args("run background-demo subagent and demo", &[spec])
             .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "background-demo");
         assert_eq!(

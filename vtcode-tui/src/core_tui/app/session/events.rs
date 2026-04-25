@@ -440,7 +440,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Down => {
             if session.should_open_local_agents_with_down(&key, has_control, has_alt, has_command) {
-                session.show_transient_surface(TransientSurface::LocalAgents);
+                session.open_local_agents_drawer(false);
                 session.mark_dirty();
                 return None;
             }

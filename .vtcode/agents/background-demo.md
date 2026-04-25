@@ -6,6 +6,7 @@ tools:
   - unified_search
 background: true
 maxTurns: 2
+initialPrompt: Run `./scripts/demo-background-subagent.sh` in the workspace root, report one readiness line, then stop.
 color: "white #2f6fed"
 ---
 

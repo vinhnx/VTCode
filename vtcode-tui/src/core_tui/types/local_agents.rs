@@ -28,3 +28,15 @@ pub struct LocalAgentEntry {
     pub preview: String,
     pub transcript_path: Option<PathBuf>,
 }
+
+impl LocalAgentEntry {
+    #[must_use]
+    pub fn is_loading(&self) -> bool {
+        match self.kind {
+            LocalAgentKind::Delegated => {
+                matches!(self.status.as_str(), "queued" | "running" | "waiting")
+            }
+            LocalAgentKind::Background => matches!(self.status.as_str(), "starting" | "running"),
+        }
+    }
+}
