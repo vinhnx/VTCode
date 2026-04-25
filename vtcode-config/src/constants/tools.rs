@@ -13,6 +13,11 @@ pub const UNIFIED_FILE: &str = "unified_file";
 // ============================================================
 pub const THINK: &str = "think";
 pub const SEARCH_TOOLS: &str = "search_tools";
+pub const MCP_SEARCH_TOOLS: &str = "mcp_search_tools";
+pub const MCP_GET_TOOL_DETAILS: &str = "mcp_get_tool_details";
+pub const MCP_LIST_SERVERS: &str = "mcp_list_servers";
+pub const MCP_CONNECT_SERVER: &str = "mcp_connect_server";
+pub const MCP_DISCONNECT_SERVER: &str = "mcp_disconnect_server";
 pub const WEB_SEARCH: &str = "web_search";
 pub const WEB_FETCH: &str = "web_fetch";
 pub const FETCH_URL: &str = "fetch_url";

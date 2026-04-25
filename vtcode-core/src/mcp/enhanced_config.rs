@@ -293,6 +293,7 @@ mod tests {
             tool_cache_capacity: 128,
             connection_timeout_seconds: 30,
             security: Default::default(),
+            lifecycle: Default::default(),
         }
     }
 

@@ -189,6 +189,10 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpToolInfo>>> {
+        if self.client.load_full().take_tool_list_changed() {
+            self.caches.lock().await.tools = None;
+        }
+
         if let Some(cache) = &self.caches.lock().await.tools {
             return Ok(Arc::clone(cache));
         }
@@ -331,6 +335,10 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpResourceInfo>>> {
+        if self.client.load_full().take_resource_list_changed() {
+            self.caches.lock().await.resources = None;
+        }
+
         if let Some(cache) = &self.caches.lock().await.resources {
             return Ok(Arc::clone(cache));
         }
@@ -420,6 +428,10 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpPromptInfo>>> {
+        if self.client.load_full().take_prompt_list_changed() {
+            self.caches.lock().await.prompts = None;
+        }
+
         if let Some(cache) = &self.caches.lock().await.prompts {
             return Ok(Arc::clone(cache));
         }

@@ -144,6 +144,9 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         | tools::PLAN_TASK_TRACKER
         | tools::GET_ERRORS
         | tools::SEARCH_TOOLS
+        | tools::MCP_SEARCH_TOOLS
+        | tools::MCP_GET_TOOL_DETAILS
+        | tools::MCP_LIST_SERVERS
         | tools::THINK => Some(ToolBehavior::function(
             if tool == tools::MEMORY {
                 ToolMutationModel::ByArgs(memory_tool_intent)
@@ -161,6 +164,11 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => Some(
             ToolBehavior::function(ToolMutationModel::Mutating, false, true),
         ),
+        tools::MCP_CONNECT_SERVER | tools::MCP_DISCONNECT_SERVER => Some(ToolBehavior::function(
+            ToolMutationModel::Mutating,
+            false,
+            false,
+        )),
         tools::RUN_PTY_CMD
         | tools::SEND_PTY_INPUT
         | tools::CREATE_PTY_SESSION

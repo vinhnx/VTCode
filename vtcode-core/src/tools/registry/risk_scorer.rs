@@ -212,13 +212,18 @@ impl ToolRiskScorer {
     fn base_risk_for_tool(tool_name: &str) -> u32 {
         match tool_name {
             // Read-only tools (base: 0)
-            tools::READ_FILE | tools::UNIFIED_SEARCH => 0,
+            tools::READ_FILE
+            | tools::UNIFIED_SEARCH
+            | tools::MCP_SEARCH_TOOLS
+            | tools::MCP_GET_TOOL_DETAILS
+            | tools::MCP_LIST_SERVERS => 0,
 
             // Safe metadata tools (base: 5)
             "file_info" | "status" | "logs" => 5,
 
             // Write tools (base: 20)
             tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE => 20,
+            tools::MCP_CONNECT_SERVER | tools::MCP_DISCONNECT_SERVER => 20,
 
             // Potentially risky write operations (base: 25)
             tools::APPLY_PATCH | tools::DELETE_FILE => 25,

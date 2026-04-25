@@ -370,6 +370,128 @@ impl McpClient {
         }
     }
 
+    /// Return configured MCP servers and their current connection state.
+    pub fn list_servers(&self) -> Vec<Value> {
+        let state = self.state.read();
+        self.config
+            .providers
+            .iter()
+            .map(|provider_config| {
+                let connected = state.providers.contains_key(&provider_config.name);
+                let (transport, target) = match &provider_config.transport {
+                    McpTransportConfig::Stdio(stdio) => {
+                        ("stdio", Value::String(stdio.command.clone()))
+                    }
+                    McpTransportConfig::Http(http) => {
+                        ("http", Value::String(http.endpoint.clone()))
+                    }
+                };
+
+                json!({
+                    "name": provider_config.name,
+                    "enabled": provider_config.enabled,
+                    "connected": connected,
+                    "connection_state": if connected { "connected" } else { "disconnected" },
+                    "transport": transport,
+                    "target": target,
+                })
+            })
+            .collect()
+    }
+
+    /// Return whether model-callable lifecycle tools are enabled by config.
+    pub fn allow_model_lifecycle_control(&self) -> bool {
+        self.config.lifecycle.allow_model_control
+    }
+
+    /// Connect one configured MCP server by name.
+    pub async fn connect_server(&self, server_name: &str) -> Result<()> {
+        if !self.config.enabled {
+            bail!("MCP support is disabled in the current configuration");
+        }
+
+        if self.state.read().providers.contains_key(server_name) {
+            return Ok(());
+        }
+
+        let provider_config = self
+            .config
+            .providers
+            .iter()
+            .find(|provider| provider.name == server_name)
+            .cloned()
+            .ok_or_else(|| anyhow!("MCP server '{}' is not configured", server_name))?;
+
+        if !provider_config.enabled {
+            bail!("MCP server '{}' is configured but disabled", server_name);
+        }
+
+        if let Some(reason) = self.requirement_mismatch_reason(&provider_config) {
+            bail!(
+                "Cannot connect MCP server '{}': {}",
+                provider_config.name,
+                reason
+            );
+        }
+
+        if matches!(provider_config.transport, McpTransportConfig::Http(_))
+            && !self.config.experimental_use_rmcp_client
+        {
+            bail!(
+                "Cannot connect MCP HTTP server '{}' while experimental_use_rmcp_client is disabled",
+                provider_config.name
+            );
+        }
+
+        let allowlist_snapshot = self.state.read().allowlist.clone();
+        let tool_timeout = self.tool_timeout();
+        let provider = self
+            .connect_and_initialize_provider(&provider_config, &allowlist_snapshot, tool_timeout)
+            .await?;
+
+        if let Err(err) = provider
+            .cached_tools_or_refresh(&allowlist_snapshot, tool_timeout)
+            .await
+        {
+            warn!(
+                "Connected MCP server '{}' but failed to refresh tools: {err}",
+                server_name
+            );
+        } else if let Some(cache) = provider.cached_tools().await {
+            self.record_tool_provider(&provider.name, &cache);
+        }
+
+        self.state
+            .write()
+            .providers
+            .insert(provider.name.clone(), Arc::new(provider));
+        Ok(())
+    }
+
+    /// Disconnect one active MCP server by name.
+    pub async fn disconnect_server(&self, server_name: &str) -> Result<()> {
+        let provider = {
+            let mut state = self.state.write();
+            let provider = state
+                .providers
+                .remove(server_name)
+                .ok_or_else(|| anyhow!("MCP server '{}' is not connected", server_name))?;
+            state
+                .tool_provider_index
+                .retain(|_, provider_name| provider_name != server_name);
+            state
+                .resource_provider_index
+                .retain(|_, provider_name| provider_name != server_name);
+            state
+                .prompt_provider_index
+                .retain(|_, provider_name| provider_name != server_name);
+            provider
+        };
+
+        provider.shutdown().await?;
+        Ok(())
+    }
+
     /// Sync MCP tool descriptions to files for dynamic context discovery
     ///
     /// This implements Cursor-style dynamic context discovery:
@@ -1224,5 +1346,47 @@ mod tests {
                 .requirement_mismatch_reason(&provider)
                 .is_some_and(|reason| reason.contains("not allowlisted"))
         );
+    }
+
+    #[test]
+    fn list_servers_includes_configured_provider_metadata() {
+        let mut config = base_config();
+        config.providers = vec![McpProviderConfig {
+            name: "calendar".to_string(),
+            transport: McpTransportConfig::Http(McpHttpServerConfig {
+                endpoint: "https://calendar.example/mcp".to_string(),
+                ..McpHttpServerConfig::default()
+            }),
+            ..McpProviderConfig::default()
+        }];
+
+        let client = McpClient::new(config);
+        let servers = client.list_servers();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0]["name"], "calendar");
+        assert_eq!(servers[0]["connected"], false);
+        assert_eq!(servers[0]["connection_state"], "disconnected");
+        assert_eq!(servers[0]["transport"], "http");
+        assert_eq!(servers[0]["target"], "https://calendar.example/mcp");
+    }
+
+    #[tokio::test]
+    async fn connect_server_rejects_unknown_server_name() {
+        let client = McpClient::new(base_config());
+        let err = client
+            .connect_server("missing")
+            .await
+            .expect_err("missing server should error");
+        assert!(err.to_string().contains("not configured"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_server_rejects_unknown_server_name() {
+        let client = McpClient::new(base_config());
+        let err = client
+            .disconnect_server("missing")
+            .await
+            .expect_err("missing server should error");
+        assert!(err.to_string().contains("not connected"));
     }
 }

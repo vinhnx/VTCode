@@ -9,6 +9,7 @@ use crate::tools::handlers::{
 use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
+use serde_json::json;
 use vtcode_collaboration_tool_specs::{
     close_agent_parameters, resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
     spawn_background_subprocess_parameters, wait_agent_parameters,
@@ -260,6 +261,59 @@ pub(super) fn builtin_tool_registrations(
             "show agent info",
             "fetch",
         ]),
+        ToolRegistration::new(
+            tools::MCP_SEARCH_TOOLS,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::mcp_search_tools_executor,
+        )
+        .with_description(
+            "Search only MCP tool catalogs with progressive detail levels. Use this to discover MCP capabilities without loading full schemas for every tool.",
+        )
+        .with_parameter_schema(mcp_search_tools_parameters())
+        .with_permission(ToolPolicy::Allow)
+        .with_aliases(["mcp_tool_search"]),
+        ToolRegistration::new(
+            tools::MCP_GET_TOOL_DETAILS,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::mcp_get_tool_details_executor,
+        )
+        .with_description(
+            "Fetch full MCP tool details for one specific MCP tool name, including its input schema.",
+        )
+        .with_parameter_schema(mcp_get_tool_details_parameters())
+        .with_permission(ToolPolicy::Allow)
+        .with_aliases(["mcp_tool_details"]),
+        ToolRegistration::new(
+            tools::MCP_LIST_SERVERS,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::mcp_list_servers_executor,
+        )
+        .with_description(
+            "List configured MCP servers and their current connection state.",
+        )
+        .with_parameter_schema(mcp_list_servers_parameters())
+        .with_permission(ToolPolicy::Allow),
+        ToolRegistration::new(
+            tools::MCP_CONNECT_SERVER,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::mcp_connect_server_executor,
+        )
+        .with_description("Connect one configured MCP server by name.")
+        .with_parameter_schema(mcp_server_name_parameters())
+        .with_permission(ToolPolicy::Prompt),
+        ToolRegistration::new(
+            tools::MCP_DISCONNECT_SERVER,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::mcp_disconnect_server_executor,
+        )
+        .with_description("Disconnect one active MCP server by name.")
+        .with_parameter_schema(mcp_server_name_parameters())
+        .with_permission(ToolPolicy::Prompt),
         // ============================================================
         // SHELL EXECUTION (1 tool - unified)
         // ============================================================
@@ -450,6 +504,67 @@ pub(super) fn builtin_tool_registrations(
     .map(with_builtin_behavior)
     .map(|registration| registration.with_catalog_source(ToolCatalogSource::Builtin))
     .collect()
+}
+
+fn mcp_search_tools_parameters() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Natural language query describing MCP capability to find."
+            },
+            "detail_level": {
+                "type": "string",
+                "enum": ["name", "name_description", "full"],
+                "description": "Response detail level: names only, names with descriptions, or full schema excerpts."
+            },
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 25,
+                "description": "Maximum number of results to return."
+            }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+    })
+}
+
+fn mcp_get_tool_details_parameters() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Exact MCP tool name to inspect."
+            }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+    })
+}
+
+fn mcp_list_servers_parameters() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+    })
+}
+
+fn mcp_server_name_parameters() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Configured MCP server name."
+            }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+    })
 }
 
 fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {

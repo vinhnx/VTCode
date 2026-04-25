@@ -1,6 +1,7 @@
 use super::ToolRegistry;
 use crate::mcp::{DetailLevel, ToolDiscovery};
-use anyhow::Result;
+use anyhow::{Result, anyhow, bail};
+use hashbrown::HashMap;
 use serde_json::{Value, json};
 
 impl ToolRegistry {
@@ -67,15 +68,11 @@ impl ToolRegistry {
             .unwrap_or("");
         let keyword_lower = (!keyword.is_empty()).then(|| keyword.to_lowercase());
 
-        let detail_level_str = args
-            .get("detail_level")
-            .and_then(|v| v.as_str())
-            .unwrap_or("name-and-description");
-        let detail_level = match detail_level_str {
-            "name-only" => DetailLevel::NameOnly,
-            "full" => DetailLevel::Full,
-            _ => DetailLevel::NameAndDescription,
-        };
+        let detail_level = parse_detail_level(
+            args.get("detail_level")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        );
 
         let mut results = Vec::new();
         let available_tools = self.available_tools().await;
@@ -128,6 +125,153 @@ impl ToolRegistry {
 
         Ok(json!({ "tools": results }))
     }
+
+    pub(super) async fn execute_mcp_search_tools(&self, args: Value) -> Result<Value> {
+        let query = args
+            .get("query")
+            .or_else(|| args.get("keyword"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("query is required"))?;
+        let detail_level = parse_detail_level(
+            args.get("detail_level")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        );
+        let max_results = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or(5)
+            .clamp(1, 25);
+
+        let mcp_client = self
+            .mcp_client()
+            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let discovery = ToolDiscovery::new(mcp_client.clone());
+        let mut mcp_results = discovery.search_tools(query, detail_level).await?;
+        if mcp_results.len() > max_results {
+            mcp_results.truncate(max_results);
+        }
+
+        let mut grouped: HashMap<String, Vec<Value>> = HashMap::new();
+        let mut provider_order = Vec::new();
+
+        let tools = mcp_results
+            .iter()
+            .map(|result| {
+                if !grouped.contains_key(&result.provider) {
+                    provider_order.push(result.provider.clone());
+                }
+                grouped
+                    .entry(result.provider.clone())
+                    .or_default()
+                    .push(result.to_json(detail_level));
+                result.to_json(detail_level)
+            })
+            .collect::<Vec<_>>();
+
+        let by_provider = provider_order
+            .into_iter()
+            .map(|provider| {
+                let tools = grouped.remove(&provider).unwrap_or_default();
+                json!({
+                    "provider": provider,
+                    "tools": tools
+                })
+            })
+            .collect::<Vec<_>>();
+        let available_servers = mcp_client
+            .list_servers()
+            .into_iter()
+            .filter(|server| server["connected"].as_bool() == Some(false))
+            .collect::<Vec<_>>();
+
+        Ok(json!({
+            "query": query,
+            "detail_level": detail_level.as_str(),
+            "count": tools.len(),
+            "tools": tools,
+            "by_provider": by_provider,
+            "available_servers": available_servers
+        }))
+    }
+
+    pub(super) async fn execute_mcp_get_tool_details(&self, args: Value) -> Result<Value> {
+        let tool_name = args
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("name is required"))?;
+
+        let mcp_client = self
+            .mcp_client()
+            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let discovery = ToolDiscovery::new(mcp_client);
+        let detail = discovery.get_tool_detail(tool_name).await?;
+
+        Ok(match detail {
+            Some(tool) => json!({
+                "found": true,
+                "tool": tool.to_json(DetailLevel::Full),
+            }),
+            None => json!({
+                "found": false,
+                "tool": Value::Null,
+            }),
+        })
+    }
+
+    pub(super) async fn execute_mcp_list_servers(&self, _args: Value) -> Result<Value> {
+        let mcp_client = self
+            .mcp_client()
+            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let servers = mcp_client.list_servers();
+        Ok(json!({
+            "count": servers.len(),
+            "servers": servers,
+        }))
+    }
+
+    pub(super) async fn execute_mcp_connect_server(&self, args: Value) -> Result<Value> {
+        let server_name = args
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("name is required"))?;
+        let mcp_client = self
+            .mcp_client()
+            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        if !mcp_client.allow_model_lifecycle_control() {
+            bail!(
+                "mcp_connect_server is disabled by config. Set [mcp.lifecycle].allow_model_control = true to enable."
+            );
+        }
+        mcp_client.connect_server(server_name).await?;
+        self.refresh_mcp_tools().await?;
+        Ok(json!({
+            "connected": true,
+            "name": server_name,
+        }))
+    }
+
+    pub(super) async fn execute_mcp_disconnect_server(&self, args: Value) -> Result<Value> {
+        let server_name = args
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("name is required"))?;
+        let mcp_client = self
+            .mcp_client()
+            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        if !mcp_client.allow_model_lifecycle_control() {
+            bail!(
+                "mcp_disconnect_server is disabled by config. Set [mcp.lifecycle].allow_model_control = true to enable."
+            );
+        }
+        mcp_client.disconnect_server(server_name).await?;
+        self.refresh_mcp_tools().await?;
+        Ok(json!({
+            "disconnected": true,
+            "name": server_name,
+        }))
+    }
 }
 
 fn matches_keyword(text: &str, keyword_lower: Option<&str>) -> bool {
@@ -136,4 +280,13 @@ fn matches_keyword(text: &str, keyword_lower: Option<&str>) -> bool {
     };
 
     text.to_lowercase().contains(keyword_lower)
+}
+
+fn parse_detail_level(raw: &str) -> DetailLevel {
+    match raw {
+        "name" | "name-only" => DetailLevel::NameOnly,
+        "name_description" | "name-and-description" => DetailLevel::NameAndDescription,
+        "full" => DetailLevel::Full,
+        _ => DetailLevel::NameAndDescription,
+    }
 }

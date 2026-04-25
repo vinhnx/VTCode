@@ -97,8 +97,9 @@ pub use loader::{
     merge_toml_values, merge_toml_values_with_origins,
 };
 pub use mcp::{
-    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
-    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig,
+    McpLifecycleConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
+    McpUiMode,
 };
 pub use models::{ModelId, OpenRouterMetadata};
 pub use optimization::{

@@ -71,6 +71,10 @@ pub struct McpClientConfig {
     /// Security configuration for MCP
     #[serde(default)]
     pub security: McpSecurityConfig,
+
+    /// Model-driven MCP lifecycle controls (connect/disconnect).
+    #[serde(default)]
+    pub lifecycle: McpLifecycleConfig,
 }
 
 /// Security configuration for MCP
@@ -170,9 +174,27 @@ impl Default for McpClientConfig {
             tool_timeout_seconds: None,
             experimental_use_rmcp_client: default_experimental_use_rmcp_client(),
             security: McpSecurityConfig::default(),
+            lifecycle: McpLifecycleConfig::default(),
             connection_pooling_enabled: default_connection_pooling_enabled(),
             connection_timeout_seconds: default_connection_timeout_seconds(),
             tool_cache_capacity: default_tool_cache_capacity(),
+        }
+    }
+}
+
+/// Lifecycle controls for MCP server management.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpLifecycleConfig {
+    /// Allow model-callable tools to connect/disconnect MCP servers at runtime.
+    #[serde(default = "default_allow_model_lifecycle_control")]
+    pub allow_model_control: bool,
+}
+
+impl Default for McpLifecycleConfig {
+    fn default() -> Self {
+        Self {
+            allow_model_control: default_allow_model_lifecycle_control(),
         }
     }
 }
@@ -740,6 +762,10 @@ fn default_connection_timeout_seconds() -> u64 {
     30
 }
 
+fn default_allow_model_lifecycle_control() -> bool {
+    false
+}
+
 fn default_mcp_server_bind() -> String {
     "127.0.0.1".into()
 }
@@ -813,6 +839,7 @@ mod tests {
         assert_eq!(config.max_concurrent_connections, 5);
         assert_eq!(config.request_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
+        assert!(!config.lifecycle.allow_model_control);
         assert!(config.providers.is_empty());
         assert!(!config.requirements.enforce);
         assert!(config.requirements.allowed_stdio_commands.is_empty());

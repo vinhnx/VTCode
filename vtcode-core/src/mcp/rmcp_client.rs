@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
@@ -40,6 +41,7 @@ pub(crate) struct RmcpClient {
     provider_name: String,
     state: Mutex<ClientState>,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    list_changed_state: Arc<ListChangedState>,
     /// Handle for the background stderr reader task (stdio transports only).
     /// Stored so we can abort it when the client is shut down or replaced.
     stderr_task: Option<tokio::task::JoinHandle<()>>,
@@ -61,6 +63,39 @@ enum ClientState {
 enum PendingTransport {
     ChildProcess(TokioChildProcess),
     StreamableHttp(StreamableHttpClientTransport<rmcp_reqwest::Client>),
+}
+
+#[derive(Default)]
+struct ListChangedState {
+    tools: AtomicBool,
+    resources: AtomicBool,
+    prompts: AtomicBool,
+}
+
+impl ListChangedState {
+    fn mark_tools_changed(&self) {
+        self.tools.store(true, Ordering::Relaxed);
+    }
+
+    fn mark_resources_changed(&self) {
+        self.resources.store(true, Ordering::Relaxed);
+    }
+
+    fn mark_prompts_changed(&self) {
+        self.prompts.store(true, Ordering::Relaxed);
+    }
+
+    fn take_tools_changed(&self) -> bool {
+        self.tools.swap(false, Ordering::Relaxed)
+    }
+
+    fn take_resources_changed(&self) -> bool {
+        self.resources.swap(false, Ordering::Relaxed)
+    }
+
+    fn take_prompts_changed(&self) -> bool {
+        self.prompts.swap(false, Ordering::Relaxed)
+    }
 }
 
 impl RmcpClient {
@@ -126,6 +161,7 @@ impl RmcpClient {
                 transport: Some(PendingTransport::ChildProcess(transport)),
             }),
             elicitation_handler,
+            list_changed_state: Arc::new(ListChangedState::default()),
             stderr_task,
         })
     }
@@ -166,6 +202,7 @@ impl RmcpClient {
                 transport: Some(PendingTransport::StreamableHttp(transport)),
             }),
             elicitation_handler,
+            list_changed_state: Arc::new(ListChangedState::default()),
             stderr_task: None,
         })
     }
@@ -179,6 +216,7 @@ impl RmcpClient {
             self.provider_name.clone(),
             params,
             self.elicitation_handler.clone(),
+            Arc::clone(&self.list_changed_state),
         );
         let service_handler = ElicitationClientService::new(handler.clone());
 
@@ -362,6 +400,18 @@ impl RmcpClient {
         let guard = self.state.lock().await;
         matches!(&*guard, ClientState::Ready { service } if !service.is_closed())
     }
+
+    pub(super) fn take_tool_list_changed(&self) -> bool {
+        self.list_changed_state.take_tools_changed()
+    }
+
+    pub(super) fn take_resource_list_changed(&self) -> bool {
+        self.list_changed_state.take_resources_changed()
+    }
+
+    pub(super) fn take_prompt_list_changed(&self) -> bool {
+        self.list_changed_state.take_prompts_changed()
+    }
 }
 
 impl Drop for RmcpClient {
@@ -440,6 +490,7 @@ struct LoggingClientHandler {
     provider: String,
     initialize_params: InitializeRequestParams,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    list_changed_state: Arc<ListChangedState>,
 }
 
 impl LoggingClientHandler {
@@ -447,11 +498,13 @@ impl LoggingClientHandler {
         provider_name: String,
         params: InitializeRequestParams,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+        list_changed_state: Arc<ListChangedState>,
     ) -> Self {
         Self {
             provider: provider_name,
             initialize_params: params,
             elicitation_handler,
+            list_changed_state,
         }
     }
 
@@ -729,6 +782,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
+        self.list_changed_state.mark_resources_changed();
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported resource list change"
@@ -740,6 +794,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
+        self.list_changed_state.mark_tools_changed();
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported tool list change"
@@ -751,6 +806,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
+        self.list_changed_state.mark_prompts_changed();
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported prompt list change"
@@ -961,6 +1017,27 @@ mod tests {
                 "_meta": { "persist": "always" }
             })
         );
+    }
+
+    #[test]
+    fn list_changed_state_consumes_signals_once() {
+        let state = ListChangedState::default();
+
+        assert!(!state.take_tools_changed());
+        assert!(!state.take_resources_changed());
+        assert!(!state.take_prompts_changed());
+
+        state.mark_tools_changed();
+        state.mark_resources_changed();
+        state.mark_prompts_changed();
+
+        assert!(state.take_tools_changed());
+        assert!(state.take_resources_changed());
+        assert!(state.take_prompts_changed());
+
+        assert!(!state.take_tools_changed());
+        assert!(!state.take_resources_changed());
+        assert!(!state.take_prompts_changed());
     }
 
     fn form_request(meta: Option<Meta>) -> CreateElicitationRequestParams {

@@ -794,6 +794,32 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_get_errors(args).await })
     }
 
+    pub(super) fn mcp_search_tools_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_mcp_search_tools(args).await })
+    }
+
+    pub(super) fn mcp_get_tool_details_executor(
+        &self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_mcp_get_tool_details(args).await })
+    }
+
+    pub(super) fn mcp_list_servers_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_mcp_list_servers(args).await })
+    }
+
+    pub(super) fn mcp_connect_server_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_mcp_connect_server(args).await })
+    }
+
+    pub(super) fn mcp_disconnect_server_executor(
+        &self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_mcp_disconnect_server(args).await })
+    }
+
     pub(super) fn apply_patch_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_apply_patch(args).await })
     }
