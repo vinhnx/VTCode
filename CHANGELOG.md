@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.104.0 - 2026-04-25
+
+### Highlights
+#### Features
+
+- Update tool policies and default model configuration (fea8947a) 
+- Enhance tool call safety validation and refactor permission checks (87f47eec) 
+- Add tool budget warning handling and input reset functionality (bea41f6c) 
+- Add tool call validation with session limit handling in CopilotRuntimeHost (a4d420b6) 
+- Add support for GPT-5.5 model and update related configurations (3296c4ce) 
+### Other Changes
+#### Refactors
+
+- Streamline tool policies and update reasoning effort defaults for OpenAI models (15e635af) 
+- Reorganize AGENTS.md for clarity and improved workflow guidance (4732382c) 
 ## 0.103.3 - 2026-04-24
 
 ### Highlights
