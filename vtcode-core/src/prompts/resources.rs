@@ -1,8 +1,11 @@
 //! Shared prompt resource discovery for system prompt layers and prompt templates.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::{OnceLock, RwLock};
+use std::time::{Duration, SystemTime};
 
+use dunce::canonicalize as normalize_path;
 use serde::Deserialize;
 use tokio::fs;
 use tracing::warn;
@@ -11,6 +14,15 @@ const PROMPTS_DIR: &str = ".vtcode/prompts";
 const TEMPLATES_DIR: &str = "templates";
 const SYSTEM_PROMPT_FILENAME: &str = "system.md";
 const APPEND_SYSTEM_PROMPT_FILENAME: &str = "append-system.md";
+const PROMPT_RESOURCE_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const PROMPT_RESOURCE_CACHE_MAX_ENTRIES: usize = 32;
+
+static SYSTEM_PROMPT_LAYERS_CACHE: OnceLock<
+    RwLock<HashMap<PromptResourceCacheKey, CachedSystemPromptLayers>>,
+> = OnceLock::new();
+static PROMPT_TEMPLATES_CACHE: OnceLock<
+    RwLock<HashMap<PromptResourceCacheKey, CachedPromptTemplates>>,
+> = OnceLock::new();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptTemplate {
@@ -41,6 +53,173 @@ struct PromptResourceOptions<'a> {
 #[derive(Debug, Clone, Default, Deserialize)]
 struct PromptTemplateFrontmatter {
     description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PromptResourceCacheKey {
+    workspace_root: PathBuf,
+    home_dir: Option<PathBuf>,
+}
+
+impl PromptResourceCacheKey {
+    fn new(options: &PromptResourceOptions<'_>) -> Self {
+        Self {
+            workspace_root: normalize_cache_path(options.workspace_root),
+            home_dir: options.home_dir.as_deref().map(normalize_cache_path),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CachedPromptTemplates {
+    templates: Vec<PromptTemplate>,
+    timestamp: SystemTime,
+}
+
+impl CachedPromptTemplates {
+    fn is_expired(&self) -> bool {
+        self.timestamp
+            .elapsed()
+            .unwrap_or(PROMPT_RESOURCE_CACHE_TTL)
+            > PROMPT_RESOURCE_CACHE_TTL
+    }
+}
+
+#[derive(Clone)]
+struct CachedSystemPromptLayers {
+    layers: SystemPromptLayers,
+    timestamp: SystemTime,
+}
+
+impl CachedSystemPromptLayers {
+    fn is_expired(&self) -> bool {
+        self.timestamp
+            .elapsed()
+            .unwrap_or(PROMPT_RESOURCE_CACHE_TTL)
+            > PROMPT_RESOURCE_CACHE_TTL
+    }
+}
+
+fn normalize_cache_path(path: &Path) -> PathBuf {
+    normalize_path(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn system_prompt_layers_cache()
+-> &'static RwLock<HashMap<PromptResourceCacheKey, CachedSystemPromptLayers>> {
+    SYSTEM_PROMPT_LAYERS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn prompt_templates_cache()
+-> &'static RwLock<HashMap<PromptResourceCacheKey, CachedPromptTemplates>> {
+    PROMPT_TEMPLATES_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn get_cached_system_prompt_layers(key: &PromptResourceCacheKey) -> Option<SystemPromptLayers> {
+    match system_prompt_layers_cache().read() {
+        Ok(cache) => cache
+            .get(key)
+            .filter(|cached| !cached.is_expired())
+            .map(|cached| cached.layers.clone()),
+        Err(_) => {
+            warn!("system prompt layers cache lock poisoned while reading cache");
+            None
+        }
+    }
+}
+
+fn cache_system_prompt_layers(key: PromptResourceCacheKey, layers: &SystemPromptLayers) {
+    match system_prompt_layers_cache().write() {
+        Ok(mut cache) => {
+            if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES && !cache.contains_key(&key) {
+                let expired: Vec<_> = cache
+                    .iter()
+                    .filter(|(_, value)| value.is_expired())
+                    .map(|(cache_key, _)| cache_key.clone())
+                    .collect();
+                for cache_key in expired {
+                    cache.remove(&cache_key);
+                }
+
+                if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES {
+                    let oldest_key = cache
+                        .iter()
+                        .min_by_key(|(_, value)| value.timestamp)
+                        .map(|(cache_key, _)| cache_key.clone());
+                    if let Some(oldest_key) = oldest_key {
+                        cache.remove(&oldest_key);
+                    }
+                }
+            }
+
+            cache.insert(
+                key,
+                CachedSystemPromptLayers {
+                    layers: layers.clone(),
+                    timestamp: SystemTime::now(),
+                },
+            );
+        }
+        Err(_) => warn!("system prompt layers cache lock poisoned while writing cache"),
+    }
+}
+
+fn get_cached_prompt_templates(key: &PromptResourceCacheKey) -> Option<Vec<PromptTemplate>> {
+    match prompt_templates_cache().read() {
+        Ok(cache) => cache
+            .get(key)
+            .filter(|cached| !cached.is_expired())
+            .map(|cached| cached.templates.clone()),
+        Err(_) => {
+            warn!("prompt templates cache lock poisoned while reading cache");
+            None
+        }
+    }
+}
+
+fn cache_prompt_templates(key: PromptResourceCacheKey, templates: &[PromptTemplate]) {
+    match prompt_templates_cache().write() {
+        Ok(mut cache) => {
+            if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES && !cache.contains_key(&key) {
+                let expired: Vec<_> = cache
+                    .iter()
+                    .filter(|(_, value)| value.is_expired())
+                    .map(|(cache_key, _)| cache_key.clone())
+                    .collect();
+                for cache_key in expired {
+                    cache.remove(&cache_key);
+                }
+
+                if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES {
+                    let oldest_key = cache
+                        .iter()
+                        .min_by_key(|(_, value)| value.timestamp)
+                        .map(|(cache_key, _)| cache_key.clone());
+                    if let Some(oldest_key) = oldest_key {
+                        cache.remove(&oldest_key);
+                    }
+                }
+            }
+
+            cache.insert(
+                key,
+                CachedPromptTemplates {
+                    templates: templates.to_vec(),
+                    timestamp: SystemTime::now(),
+                },
+            );
+        }
+        Err(_) => warn!("prompt templates cache lock poisoned while writing cache"),
+    }
+}
+
+#[cfg(test)]
+fn clear_prompt_resource_caches() {
+    if let Ok(mut cache) = system_prompt_layers_cache().write() {
+        cache.clear();
+    }
+    if let Ok(mut cache) = prompt_templates_cache().write() {
+        cache.clear();
+    }
 }
 
 pub async fn resolve_system_prompt_layers(workspace_root: &Path) -> SystemPromptLayers {
@@ -164,6 +343,19 @@ impl<'a> PromptResourceOptions<'a> {
 async fn resolve_system_prompt_layers_with_options(
     options: PromptResourceOptions<'_>,
 ) -> SystemPromptLayers {
+    let cache_key = PromptResourceCacheKey::new(&options);
+    if let Some(cached) = get_cached_system_prompt_layers(&cache_key) {
+        return cached;
+    }
+
+    let layers = resolve_system_prompt_layers_uncached(&options).await;
+    cache_system_prompt_layers(cache_key, &layers);
+    layers
+}
+
+async fn resolve_system_prompt_layers_uncached(
+    options: &PromptResourceOptions<'_>,
+) -> SystemPromptLayers {
     let mut layers = SystemPromptLayers::default();
 
     let user_system_path = options
@@ -206,6 +398,19 @@ async fn resolve_system_prompt_layers_with_options(
 async fn discover_prompt_templates_with_options(
     options: PromptResourceOptions<'_>,
 ) -> Vec<PromptTemplate> {
+    let cache_key = PromptResourceCacheKey::new(&options);
+    if let Some(cached) = get_cached_prompt_templates(&cache_key) {
+        return cached;
+    }
+
+    let templates = discover_prompt_templates_uncached(&options).await;
+    cache_prompt_templates(cache_key, &templates);
+    templates
+}
+
+async fn discover_prompt_templates_uncached(
+    options: &PromptResourceOptions<'_>,
+) -> Vec<PromptTemplate> {
     let mut discovered = BTreeMap::new();
 
     if let Some(home) = options.home_dir.as_deref() {
@@ -228,29 +433,14 @@ async fn find_prompt_template_with_options(
     options: PromptResourceOptions<'_>,
     name: &str,
 ) -> Option<PromptTemplate> {
-    let template_path = |root: &Path| {
-        root.join(PROMPTS_DIR)
-            .join(TEMPLATES_DIR)
-            .join(format!("{name}.md"))
-    };
-
     if !is_safe_template_name(name) {
         return None;
     }
 
-    let workspace_path = template_path(options.workspace_root);
-    if let Some(template) = load_prompt_template(&workspace_path, name.to_string()).await {
-        return Some(template);
-    }
-
-    if let Some(home) = options.home_dir.as_deref() {
-        let user_path = template_path(home);
-        if let Some(template) = load_prompt_template(&user_path, name.to_string()).await {
-            return Some(template);
-        }
-    }
-
-    None
+    discover_prompt_templates_with_options(options)
+        .await
+        .into_iter()
+        .find(|template| template.name == name)
 }
 
 async fn merge_prompt_templates(
@@ -393,6 +583,7 @@ fn is_safe_template_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     async fn discover_with_roots(workspace: &Path, home: Option<&Path>) -> Vec<PromptTemplate> {
         discover_prompt_templates_with_options(PromptResourceOptions {
@@ -423,6 +614,82 @@ mod tests {
             name,
         )
         .await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn system_layers_reuse_process_wide_cache_until_cleared() {
+        clear_prompt_resource_caches();
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let home = tempfile::TempDir::new().expect("home");
+        let workspace_prompts = workspace.path().join(PROMPTS_DIR);
+        std::fs::create_dir_all(&workspace_prompts).expect("workspace prompts");
+        std::fs::write(
+            workspace_prompts.join(SYSTEM_PROMPT_FILENAME),
+            "workspace system override",
+        )
+        .expect("write workspace system");
+
+        let first = layers_with_roots(workspace.path(), Some(home.path())).await;
+        assert_eq!(
+            first.override_body.as_deref(),
+            Some("workspace system override")
+        );
+
+        std::fs::remove_file(workspace_prompts.join(SYSTEM_PROMPT_FILENAME))
+            .expect("remove workspace system");
+
+        let second = layers_with_roots(workspace.path(), Some(home.path())).await;
+        assert_eq!(
+            second.override_body.as_deref(),
+            Some("workspace system override")
+        );
+
+        clear_prompt_resource_caches();
+
+        let third = layers_with_roots(workspace.path(), Some(home.path())).await;
+        assert_eq!(third.override_body, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn prompt_template_discovery_reuses_process_wide_cache_until_cleared() {
+        clear_prompt_resource_caches();
+
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let home = tempfile::TempDir::new().expect("home");
+        let workspace_templates = workspace.path().join(PROMPTS_DIR).join(TEMPLATES_DIR);
+        std::fs::create_dir_all(&workspace_templates).expect("workspace templates");
+        std::fs::write(
+            workspace_templates.join("cache-test.md"),
+            "# Cache test\n\nBody",
+        )
+        .expect("write workspace template");
+
+        let first = discover_with_roots(workspace.path(), Some(home.path())).await;
+        assert!(first.iter().any(|template| template.name == "cache-test"));
+
+        std::fs::remove_file(workspace_templates.join("cache-test.md"))
+            .expect("remove workspace template");
+
+        let second = discover_with_roots(workspace.path(), Some(home.path())).await;
+        assert!(second.iter().any(|template| template.name == "cache-test"));
+        assert!(
+            find_with_roots(workspace.path(), Some(home.path()), "cache-test")
+                .await
+                .is_some()
+        );
+
+        clear_prompt_resource_caches();
+
+        let third = discover_with_roots(workspace.path(), Some(home.path())).await;
+        assert!(!third.iter().any(|template| template.name == "cache-test"));
+        assert!(
+            find_with_roots(workspace.path(), Some(home.path()), "cache-test")
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]

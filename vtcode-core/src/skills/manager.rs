@@ -1,6 +1,9 @@
 #[cfg(test)]
 use crate::skills::loader::discover_skill_metadata_lightweight_hermetic;
-use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
+use crate::skills::loader::{
+    SkillLoaderConfig, clear_lightweight_skill_metadata_cache, discover_skill_metadata_lightweight,
+    load_skills,
+};
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use crate::skills::system::uninstall_system_skills;
@@ -183,6 +186,7 @@ impl SkillsManager {
         } else {
             tracing::warn!("skills metadata cache lock poisoned while clearing cache");
         }
+        clear_lightweight_skill_metadata_cache();
     }
 
     /// Get current cache size (for testing/diagnostics)
@@ -333,6 +337,7 @@ fn find_git_root(path: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
 
@@ -400,6 +405,55 @@ mod tests {
 
         manager.clear_cache();
         assert_eq!(manager.cache_size(), 0);
+    }
+
+    #[test]
+    #[serial]
+    fn test_skills_manager_clear_cache_clears_lightweight_discovery_cache() {
+        clear_lightweight_skill_metadata_cache();
+
+        let temp_home = TempDir::new().unwrap();
+        let workspace = TempDir::new().unwrap();
+        let manager = SkillsManager::new(temp_home.path().to_path_buf());
+        let skill_dir = workspace.path().join(".agents/skills/clear-cache-skill");
+
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: clear-cache-skill\ndescription: clear cache test\n---\n# Body\n",
+        )
+        .unwrap();
+
+        let first = manager.skills_metadata_lightweight_hermetic(workspace.path());
+        assert!(
+            first
+                .skills
+                .iter()
+                .any(|skill| skill.name == "clear-cache-skill"),
+            "expected first discovery to find test skill",
+        );
+
+        fs::remove_dir_all(&skill_dir).unwrap();
+
+        let second = manager.skills_metadata_lightweight_hermetic(workspace.path());
+        assert!(
+            second
+                .skills
+                .iter()
+                .any(|skill| skill.name == "clear-cache-skill"),
+            "expected cached discovery to preserve removed skill before clear_cache",
+        );
+
+        manager.clear_cache();
+
+        let third = manager.skills_metadata_lightweight_hermetic(workspace.path());
+        assert!(
+            !third
+                .skills
+                .iter()
+                .any(|skill| skill.name == "clear-cache-skill"),
+            "expected clear_cache to flush lightweight discovery cache",
+        );
     }
 
     #[test]

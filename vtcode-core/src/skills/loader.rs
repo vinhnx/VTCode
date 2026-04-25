@@ -11,12 +11,14 @@ use crate::skills::system::{install_system_skills, system_cache_root_dir};
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
 use anyhow::{Context, Result};
 use dunce::canonicalize as normalize_path;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use serde::Deserialize;
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::error;
+use std::sync::{OnceLock, RwLock};
+use std::time::{Duration, SystemTime};
+use tracing::{error, warn};
 
 // Config for loader
 #[derive(Debug, Clone)]
@@ -32,6 +34,117 @@ pub struct SkillRoot {
     pub scope: SkillScope,
     pub is_tool_root: bool,
     pub is_plugin_root: bool,
+}
+
+const LIGHTWEIGHT_SKILL_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const LIGHTWEIGHT_SKILL_CACHE_MAX_ENTRIES: usize = 32;
+
+static LIGHTWEIGHT_SKILL_METADATA_CACHE: OnceLock<
+    RwLock<HashMap<LightweightSkillCacheKey, CachedLightweightSkillOutcome>>,
+> = OnceLock::new();
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct LightweightSkillCacheKey {
+    codex_home: PathBuf,
+    cwd: PathBuf,
+    project_root: Option<PathBuf>,
+    include_bundled_system_skills: bool,
+    home_dir: Option<PathBuf>,
+}
+
+impl LightweightSkillCacheKey {
+    fn new(config: &SkillLoaderConfig, home_dir: Option<&Path>) -> Self {
+        Self {
+            codex_home: normalize_cache_path(&config.codex_home),
+            cwd: normalize_cache_path(&config.cwd),
+            project_root: config.project_root.as_deref().map(normalize_cache_path),
+            include_bundled_system_skills: config.include_bundled_system_skills,
+            home_dir: home_dir.map(normalize_cache_path),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CachedLightweightSkillOutcome {
+    outcome: SkillLoadOutcome,
+    timestamp: SystemTime,
+}
+
+impl CachedLightweightSkillOutcome {
+    fn is_expired(&self) -> bool {
+        self.timestamp
+            .elapsed()
+            .unwrap_or(LIGHTWEIGHT_SKILL_CACHE_TTL)
+            > LIGHTWEIGHT_SKILL_CACHE_TTL
+    }
+}
+
+fn normalize_cache_path(path: &Path) -> PathBuf {
+    normalize_path(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn lightweight_skill_metadata_cache()
+-> &'static RwLock<HashMap<LightweightSkillCacheKey, CachedLightweightSkillOutcome>> {
+    LIGHTWEIGHT_SKILL_METADATA_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn get_cached_lightweight_skill_outcome(
+    key: &LightweightSkillCacheKey,
+) -> Option<SkillLoadOutcome> {
+    match lightweight_skill_metadata_cache().read() {
+        Ok(cache) => cache
+            .get(key)
+            .filter(|cached| !cached.is_expired())
+            .map(|cached| cached.outcome.clone()),
+        Err(_) => {
+            warn!("lightweight skill metadata cache lock poisoned while reading cache");
+            None
+        }
+    }
+}
+
+fn cache_lightweight_skill_outcome(key: LightweightSkillCacheKey, outcome: &SkillLoadOutcome) {
+    match lightweight_skill_metadata_cache().write() {
+        Ok(mut cache) => {
+            if cache.len() >= LIGHTWEIGHT_SKILL_CACHE_MAX_ENTRIES && !cache.contains_key(&key) {
+                let expired: Vec<_> = cache
+                    .iter()
+                    .filter(|(_, value)| value.is_expired())
+                    .map(|(cache_key, _)| cache_key.clone())
+                    .collect();
+
+                for cache_key in expired {
+                    cache.remove(&cache_key);
+                }
+
+                if cache.len() >= LIGHTWEIGHT_SKILL_CACHE_MAX_ENTRIES {
+                    let oldest_key = cache
+                        .iter()
+                        .min_by_key(|(_, value)| value.timestamp)
+                        .map(|(cache_key, _)| cache_key.clone());
+                    if let Some(oldest_key) = oldest_key {
+                        cache.remove(&oldest_key);
+                    }
+                }
+            }
+
+            cache.insert(
+                key,
+                CachedLightweightSkillOutcome {
+                    outcome: outcome.clone(),
+                    timestamp: SystemTime::now(),
+                },
+            );
+        }
+        Err(_) => warn!("lightweight skill metadata cache lock poisoned while writing cache"),
+    }
+}
+
+pub(crate) fn clear_lightweight_skill_metadata_cache() {
+    match lightweight_skill_metadata_cache().write() {
+        Ok(mut cache) => cache.clear(),
+        Err(_) => warn!("lightweight skill metadata cache lock poisoned while clearing cache"),
+    }
 }
 
 pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
@@ -69,6 +182,20 @@ fn load_skills_with_home_dir(
 /// Internal helper for lightweight discovery with explicit home directory.
 /// Useful for hermetic tests.
 fn discover_skill_metadata_lightweight_with_home_dir(
+    config: &SkillLoaderConfig,
+    home_dir: Option<&Path>,
+) -> SkillLoadOutcome {
+    let cache_key = LightweightSkillCacheKey::new(config, home_dir);
+    if let Some(cached) = get_cached_lightweight_skill_outcome(&cache_key) {
+        return cached;
+    }
+
+    let outcome = discover_skill_metadata_lightweight_uncached(config, home_dir);
+    cache_lightweight_skill_outcome(cache_key, &outcome);
+    outcome
+}
+
+fn discover_skill_metadata_lightweight_uncached(
     config: &SkillLoaderConfig,
     home_dir: Option<&Path>,
 ) -> SkillLoadOutcome {
@@ -1004,6 +1131,7 @@ mod tests {
     use crate::skills::CommandSkillBackend;
     use crate::skills::command_skills::command_skill_specs;
     use crate::skills::system::{install_system_skills, system_cache_root_dir};
+    use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
     use tempfile::tempdir;
@@ -1066,6 +1194,62 @@ mod tests {
         };
         let mentions = detect_skill_mentions_with_options("Use $sql-checker", &skills, &options);
         assert!(mentions.is_empty());
+    }
+
+    #[test]
+    #[serial]
+    fn lightweight_metadata_discovery_reuses_process_wide_cache() {
+        clear_lightweight_skill_metadata_cache();
+
+        let codex_home = tempdir().expect("codex home");
+        let workspace = tempdir().expect("workspace");
+        let skill_dir = workspace
+            .path()
+            .join(".agents/skills/process-wide-cache-skill");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: process-wide-cache-skill\ndescription: process-wide cache test\n---\n# Body\n",
+        )
+        .expect("write skill");
+
+        let config = SkillLoaderConfig {
+            codex_home: codex_home.path().to_path_buf(),
+            cwd: workspace.path().to_path_buf(),
+            project_root: Some(workspace.path().to_path_buf()),
+            include_bundled_system_skills: false,
+        };
+
+        let first = discover_skill_metadata_lightweight_hermetic(&config);
+        assert!(
+            first
+                .skills
+                .iter()
+                .any(|skill| skill.name == "process-wide-cache-skill"),
+            "expected first discovery to find test skill",
+        );
+
+        fs::remove_dir_all(&skill_dir).expect("remove cached skill dir");
+
+        let second = discover_skill_metadata_lightweight_hermetic(&config);
+        assert!(
+            second
+                .skills
+                .iter()
+                .any(|skill| skill.name == "process-wide-cache-skill"),
+            "expected cached discovery to preserve removed skill until cache is cleared",
+        );
+
+        clear_lightweight_skill_metadata_cache();
+
+        let third = discover_skill_metadata_lightweight_hermetic(&config);
+        assert!(
+            !third
+                .skills
+                .iter()
+                .any(|skill| skill.name == "process-wide-cache-skill"),
+            "expected cleared cache to force rediscovery",
+        );
     }
 
     #[tokio::test]
