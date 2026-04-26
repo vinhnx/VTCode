@@ -33,7 +33,8 @@ pub(crate) const OPENAI_PROVIDER: &str = "openai";
 pub(crate) const OPENROUTER_PROVIDER: &str = "openrouter";
 pub(crate) const COPILOT_PROVIDER: &str = "copilot";
 const DEFAULT_OPENROUTER_CALLBACK_PORT: u16 = 8484;
-const DEFAULT_FLOW_TIMEOUT_SECS: u64 = 300;
+const DEFAULT_FLOW_TIMEOUT_SECS: u64 =
+    vtcode_config::constants::execution::DEFAULT_AUTH_FLOW_TIMEOUT_SECS;
 const OPENAI_MANUAL_PLACEHOLDER: &str = "http://localhost:1455/auth/callback?code=...&state=...";
 
 #[derive(Debug, Clone)]

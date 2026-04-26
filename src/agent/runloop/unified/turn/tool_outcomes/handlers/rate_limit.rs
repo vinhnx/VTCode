@@ -9,7 +9,8 @@ use super::super::helpers::push_tool_response;
 use super::ValidationResult;
 
 const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
-const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
+const MAX_RATE_LIMIT_WAIT: Duration =
+    Duration::from_secs(vtcode_config::constants::execution::MAX_RATE_LIMIT_WAIT_SECS);
 
 fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> String {
     serde_json::json!({

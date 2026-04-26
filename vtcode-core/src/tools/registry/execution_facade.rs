@@ -25,7 +25,6 @@ use crate::tools::safety_gateway::{
 };
 use crate::ui::search::fuzzy_match;
 
-use super::LOOP_THROTTLE_MAX_MS;
 use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
 use super::normalize_tool_output;
@@ -33,6 +32,7 @@ use super::{
     ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError,
     ToolExecutionOutcome, ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
 };
+use vtcode_config::constants::execution::{LOOP_THROTTLE_MAX_MS, LOOP_THROTTLE_REGISTRY_BASE_MS};
 
 const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
 // Tools should never recursively re-enter themselves in a single task.
@@ -992,7 +992,8 @@ impl ToolRegistry {
             self.execution_history.detect_loop(&tool_name, args)
         };
         if is_loop && repeat_count > 1 {
-            let delay_ms = (25 * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
+            let delay_ms =
+                (LOOP_THROTTLE_REGISTRY_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
             if delay_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
@@ -1037,7 +1038,8 @@ impl ToolRegistry {
                     }
                 }
 
-                let delay_ms = (75 * repeat_count as u64).min(500);
+                let delay_ms = (LOOP_THROTTLE_REGISTRY_BASE_MS * repeat_count as u64)
+                    .min(LOOP_THROTTLE_MAX_MS);
                 if delay_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }

@@ -169,7 +169,9 @@ fn append_transient_turn_notes(
     let mut transient_system_notes = Vec::with_capacity(2);
 
     if let Some(note) = {
-        let stale_paths = tool_registry.edited_file_monitor_ref().stale_tracked_paths();
+        let stale_paths = tool_registry
+            .edited_file_monitor_ref()
+            .stale_tracked_paths();
         build_tracked_file_freshness_note(workspace, &stale_paths)
     } {
         transient_system_notes.push(note.clone());

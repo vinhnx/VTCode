@@ -3,7 +3,7 @@ use chrono::{DateTime, Local, Utc};
 use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::PermissionMode;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::{
     CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata,
 };
@@ -161,12 +161,7 @@ pub(super) fn persist_mode_settings(
         return Ok(());
     };
 
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     let mut config = manager.config().clone();
 
     config.permissions.default_mode = mode;

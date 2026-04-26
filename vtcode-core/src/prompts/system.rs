@@ -392,7 +392,7 @@ pub async fn generate_system_instruction_with_config(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
-    let cache_key = cache_key(project_root, vtcode_config);
+    let cache_key = cache_key(project_root, vtcode_config, None);
     let instruction = match PROMPT_CACHE.get(&cache_key) {
         Some(cached) => cached,
         None => {
@@ -412,7 +412,7 @@ pub async fn generate_system_instruction_with_guidelines(
     _config: &SystemPromptConfig,
     project_root: &Path,
 ) -> Content {
-    let cache_key = cache_key(project_root, None);
+    let cache_key = cache_key(project_root, None, None);
     let instruction = match PROMPT_CACHE.get(&cache_key) {
         Some(cached) => cached,
         None => {
@@ -450,7 +450,17 @@ pub async fn apply_output_style(
     }
 }
 
-fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeConfig>) -> String {
+/// Build a cache key for the system prompt.
+///
+/// `catalog_epoch` is the tool-catalog version at the time of the request. When
+/// the tool set changes (e.g. plan mode is toggled, MCP tools are refreshed), the
+/// epoch advances and the old cached prompt is superseded rather than served stale.
+/// Pass `None` to get the same behaviour as before epoch tracking was introduced.
+fn cache_key(
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    catalog_epoch: Option<u64>,
+) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -474,6 +484,10 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
     } else {
         "default".hash(&mut hasher);
     }
+
+    // Invalidate the cached prompt when the tool catalog changes (plan mode toggle,
+    // MCP refresh, permission grant/revoke).
+    catalog_epoch.unwrap_or(0).hash(&mut hasher);
 
     format!("sys_prompt:{:016x}", hasher.finish())
 }

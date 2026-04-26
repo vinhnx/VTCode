@@ -4,6 +4,22 @@ use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
 use vtcode_core::review::{ReviewSpec, build_review_spec};
 
+/// Iterate over whitespace-separated tokens in `args`, normalising each to
+/// lowercase ASCII before passing it to `f`.  Returns the first `Err` produced
+/// by `f`, or `Ok(())` once all tokens have been consumed.
+///
+/// This is the single place that encodes the "split on whitespace, lowercase,
+/// then match" idiom shared by every simple flag-parsing function.
+pub(super) fn for_each_token(
+    args: &str,
+    mut f: impl FnMut(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    for raw in args.split_whitespace() {
+        f(&raw.to_ascii_lowercase())?;
+    }
+    Ok(())
+}
+
 pub(super) fn split_command_and_args(input: &str) -> (&str, &str) {
     if let Some((idx, _)) = input.char_indices().find(|(_, ch)| ch.is_whitespace()) {
         let (command, rest) = input.split_at(idx);

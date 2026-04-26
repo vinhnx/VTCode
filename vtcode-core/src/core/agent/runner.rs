@@ -49,6 +49,7 @@ mod helpers;
 mod optimizer;
 mod orchestration;
 mod output;
+mod prompt_alignment;
 mod retry;
 mod summarize;
 mod summary;

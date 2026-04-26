@@ -1,10 +1,10 @@
 use super::AgentRunner;
-use super::constants::IDLE_TURN_LIMIT;
 use super::continuation::{
     CompletionAssessment, ContinuationController, VerificationResult, is_review_like_task,
 };
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
+use super::prompt_alignment;
 use crate::config::build_openai_prompt_cache_key;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
@@ -292,8 +292,8 @@ impl AgentRunner {
 
             let run_started_at = std::time::Instant::now();
             let is_simple_task = Self::is_simple_task(task, contexts);
-            let tool_snapshot = self.build_universal_tool_snapshot().await?;
-            let request_tools = tool_snapshot.snapshot.clone();
+            let mut tool_snapshot = self.build_universal_tool_snapshot().await?;
+            let mut request_tools = tool_snapshot.snapshot.clone();
             let prompt_tools = request_tools
                 .clone()
                 .unwrap_or_else(|| Arc::new(Vec::new()));
@@ -353,6 +353,41 @@ impl AgentRunner {
 
             // Prepare conversation with task context
             let system_instruction = Arc::new(system_prompt);
+
+            // Alignment guard: system prompt, tool catalog, and plan-mode flag must agree.
+            // A mismatch means the snapshot was built with stale plan-mode state; self-heal
+            // by re-snapshotting so the LLM receives a consistent tool list.
+            let plan_mode_now = self.tool_registry.is_plan_mode();
+            match prompt_alignment::validate_prompt_catalog_alignment(
+                &system_instruction,
+                &tool_snapshot,
+                plan_mode_now,
+            ) {
+                Ok(()) => {}
+                Err(prompt_alignment::AlignmentError::PlanModeMismatch {
+                    snapshot_plan_mode,
+                    registry_plan_mode,
+                }) => {
+                    warn!(
+                        snapshot_plan_mode,
+                        registry_plan_mode,
+                        "prompt/catalog plan-mode mismatch; re-snapshotting tool catalog"
+                    );
+                    let refreshed = self.build_universal_tool_snapshot().await?;
+                    request_tools = refreshed.snapshot.clone();
+                    tool_snapshot = refreshed;
+                }
+                Err(prompt_alignment::AlignmentError::MutatingToolInPlanModePrompt {
+                    tool_name,
+                }) => {
+                    // Canary metric — should never fire after Phase 2-F/G.
+                    warn!(
+                        tool = %tool_name,
+                        "canary: mutating tool found in plan-mode system prompt"
+                    );
+                }
+            }
+
             let mut conversation = conversation_from_messages(&self.bootstrap_messages);
             conversation.extend(build_conversation(task, contexts));
 
@@ -632,13 +667,15 @@ impl AgentRunner {
                 .request;
                 let previous_response_chain_present = request.previous_response_id.is_some();
                 let sent_messages = request.messages.clone();
+                // Compute timeout before the call to avoid simultaneous mutable/immutable
+                // borrows of `self` (provider_client vs config).
+                let streaming_timeout = self
+                    .config()
+                    .timeouts
+                    .ceiling_duration(self.config().timeouts.streaming_ceiling_seconds);
 
                 let turn_output = runtime
-                    .run_turn_once(
-                        &mut self.provider_client,
-                        request,
-                        Some(std::time::Duration::from_secs(60)),
-                    )
+                    .run_turn_once(&mut self.provider_client, request, streaming_timeout)
                     .await?;
                 event_recorder.record_thread_events(runtime.take_emitted_events());
                 let response = turn_output.response;
@@ -963,7 +1000,8 @@ impl AgentRunner {
                     } else if !runtime.state.is_completed {
                         runtime.state.consecutive_idle_turns =
                             runtime.state.consecutive_idle_turns.saturating_add(1);
-                        if runtime.state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
+                        let idle_turn_limit = self.config().agent.idle_turn_limit;
+                        if runtime.state.consecutive_idle_turns >= idle_turn_limit {
                             let warning_message = format!(
                                 "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
                                 runtime.state.consecutive_idle_turns

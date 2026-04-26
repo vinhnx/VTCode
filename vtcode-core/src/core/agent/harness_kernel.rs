@@ -252,14 +252,9 @@ impl ExecutionFailure {
 
     pub fn from_anyhow(error: &anyhow::Error) -> Self {
         let category = vtcode_commons::classify_anyhow_error(error);
-        let retryable = matches!(
-            category,
-            vtcode_commons::ErrorCategory::RateLimit
-                | vtcode_commons::ErrorCategory::Timeout
-                | vtcode_commons::ErrorCategory::Network
-                | vtcode_commons::ErrorCategory::ServiceUnavailable
-                | vtcode_commons::ErrorCategory::CircuitOpen
-        );
+        // Delegate to the canonical authority in vtcode-commons so that any new
+        // retryable category added there is automatically honoured here.
+        let retryable = category.is_retryable();
         let retry_after = None;
         let directive = if retryable {
             RecoveryDirective::Retry { delay: retry_after }

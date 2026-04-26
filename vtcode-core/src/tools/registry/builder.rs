@@ -152,7 +152,6 @@ impl ToolRegistry {
 
             output_spooler,
 
-            plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             plan_mode_state,
             safety_gateway: Arc::new(SafetyGateway::default()),
             cgp_runtime_mode: Arc::new(RwLock::new(None)),

@@ -2,6 +2,29 @@
 /// Used when no timeout is specified or when 0 is passed
 pub const DEFAULT_TIMEOUT_SECS: u64 = 600;
 
+/// Base throttle delay (ms) for the agent runner loop between repeated identical tool calls.
+pub const LOOP_THROTTLE_BASE_MS: u64 = 75;
+/// Base throttle delay (ms) for repeated calls inside the tool registry execution facade.
+pub const LOOP_THROTTLE_REGISTRY_BASE_MS: u64 = 25;
+/// Maximum throttle delay (ms) ceiling applied to both the runner loop and the registry facade.
+pub const LOOP_THROTTLE_MAX_MS: u64 = 500;
+
+/// Default tool execution ceiling in seconds (matches TimeoutsConfig::default_ceiling_seconds).
+pub const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 180;
+/// Maximum wait in seconds when a tool is rate-limited before surfacing an error.
+pub const MAX_RATE_LIMIT_WAIT_SECS: u64 = 5;
+/// Default OAuth / auth-flow timeout in seconds.
+pub const DEFAULT_AUTH_FLOW_TIMEOUT_SECS: u64 = 300;
+
+/// Maximum number of consecutive idle turns before the agent runner aborts.
+pub const IDLE_TURN_LIMIT: usize = 3;
+
+/// Maximum recent error records kept per agent session for recovery diagnostics.
+pub const DEFAULT_MAX_RECENT_ERRORS: usize = 10;
+
+/// Maximum number of simultaneously open tool circuit breakers before the agent pauses.
+pub const DEFAULT_MAX_OPEN_CIRCUITS: usize = 3;
+
 /// Maximum allowed timeout (1 hour)
 /// Any user-specified timeout above this is capped
 pub const MAX_TIMEOUT_SECS: u64 = 3600;

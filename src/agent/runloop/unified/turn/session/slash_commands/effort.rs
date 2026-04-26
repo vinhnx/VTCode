@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use anyhow::Result;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::models_manager::{ModelPreset, builtin_model_presets};
@@ -250,12 +250,7 @@ fn persist_effort_preference(
     vt_cfg: &mut Option<VTCodeConfig>,
     effort: ReasoningEffortLevel,
 ) -> Result<()> {
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load vtcode configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     let mut config = manager.config().clone();
     config.agent.reasoning_effort = effort;
     manager.save_config(&config)?;

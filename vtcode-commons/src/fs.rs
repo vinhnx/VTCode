@@ -67,6 +67,42 @@ pub fn serialize_json_pretty_with_context<T: Serialize>(data: &T, context: &str)
         .with_context(|| format!("Failed to pretty-serialize JSON for {}", context))
 }
 
+/// Parse JSON into a typed value, returning `None` on failure.
+///
+/// Intended for non-critical, best-effort parsing where a missing or malformed
+/// value should be silently ignored. Use `parse_json_with_context` when the
+/// caller needs an actionable error.
+#[must_use]
+#[inline]
+pub fn try_parse_json<T: for<'de> Deserialize<'de>>(input: &str) -> Option<T> {
+    serde_json::from_str(input).ok()
+}
+
+/// Parse JSON into an untyped `Value`, returning `None` on failure.
+///
+/// Same semantics as `try_parse_json` but avoids a type annotation at the call
+/// site when only dynamic inspection is needed.
+#[must_use]
+#[inline]
+pub fn try_parse_json_value(input: &str) -> Option<serde_json::Value> {
+    serde_json::from_str(input).ok()
+}
+
+/// Parse JSON into a typed value, falling back to `Default` on failure.
+///
+/// A parse failure is logged at `debug` level with the provided `label` so the
+/// failure is visible in traces without being fatal.
+#[inline]
+pub fn parse_json_or_default<T: for<'de> Deserialize<'de> + Default>(
+    input: &str,
+    label: &str,
+) -> T {
+    serde_json::from_str(input).unwrap_or_else(|err| {
+        tracing::debug!(label, %err, "JSON parse failed, using default");
+        T::default()
+    })
+}
+
 /// Canonicalize path with context
 pub fn canonicalize_with_context(path: &Path, context: &str) -> Result<PathBuf> {
     path.canonicalize().with_context(|| {

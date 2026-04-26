@@ -13,6 +13,7 @@ use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, To
 use crate::llm::provider::ToolCall;
 use anyhow::Result;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 use vtcode_commons::ErrorCategory;
@@ -51,7 +52,7 @@ fn snapshot_circuit_diagnostics(
 
 fn record_circuit_transition(
     runner: &AgentRunner,
-    error_recovery: &std::sync::Arc<
+    error_recovery: &Arc<
         parking_lot::Mutex<crate::core::agent::error_recovery::ErrorRecoveryState>,
     >,
     tool_name: &str,
@@ -181,29 +182,59 @@ fn finish_successful_tool_output(
     );
 }
 
+/// The outcome of evaluating whether a tool failure should halt further tool
+/// calls in the current turn.
+#[must_use]
+#[derive(Debug, Clone, PartialEq)]
+enum ToolHaltDecision {
+    /// Continue executing remaining tool calls normally.
+    Continue,
+    /// Stop dispatching further tool calls and surface a warning.
+    Halt {
+        /// Human-readable reason appended to session warnings.
+        warning: &'static str,
+        /// Whether the session's tool-loop-limit counter should be incremented.
+        mark_loop_limit: bool,
+    },
+}
+
+/// Pure classification function: maps an `ErrorCategory` to a halt decision
+/// without touching any mutable state. This is the single place that encodes
+/// which error categories should abort the current tool-call sequence.
+#[inline]
+fn classify_halt_decision(category: ErrorCategory) -> ToolHaltDecision {
+    match category {
+        ErrorCategory::RateLimit => ToolHaltDecision::Halt {
+            warning: "Tool was rate limited; halting further tool calls this turn.",
+            mark_loop_limit: true,
+        },
+        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation => {
+            ToolHaltDecision::Halt {
+                warning: "Tool denied by policy; halting further tool calls this turn.",
+                mark_loop_limit: false,
+            }
+        }
+        _ => ToolHaltDecision::Continue,
+    }
+}
+
 fn apply_tool_failure_halt_policy(
     session_state: &mut crate::core::agent::session::AgentSessionState,
     category: ErrorCategory,
 ) -> bool {
-    if matches!(category, ErrorCategory::RateLimit) {
-        session_state
-            .warnings
-            .push("Tool was rate limited; halting further tool calls this turn.".into());
-        session_state.mark_tool_loop_limit_hit();
-        return true;
+    match classify_halt_decision(category) {
+        ToolHaltDecision::Continue => false,
+        ToolHaltDecision::Halt {
+            warning,
+            mark_loop_limit,
+        } => {
+            session_state.warnings.push(warning.into());
+            if mark_loop_limit {
+                session_state.mark_tool_loop_limit_hit();
+            }
+            true
+        }
     }
-
-    if matches!(
-        category,
-        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
-    ) {
-        session_state
-            .warnings
-            .push("Tool denied by policy; halting further tool calls this turn.".into());
-        return true;
-    }
-
-    false
 }
 
 fn align_prepared_batches(
@@ -371,9 +402,16 @@ impl AgentRunner {
     ) -> Result<bool> {
         use futures::future::join_all;
 
+        let max_parallel = self.config().agent.harness.max_parallel_tool_calls;
+        // Build a semaphore only when a finite concurrency cap is configured.
+        // `0` means unlimited — matches the pre-semaphore behaviour.
+        let semaphore: Option<Arc<tokio::sync::Semaphore>> =
+            (max_parallel > 0).then(|| Arc::new(tokio::sync::Semaphore::new(max_parallel)));
+
         info!(
             agent = %self.agent_type,
             count = prepared_calls.len(),
+            max_parallel,
             "Executing parallel tool calls"
         );
 
@@ -386,7 +424,19 @@ impl AgentRunner {
             let runner = self;
             let prepared = call.prepared.clone();
             let circuit_before = snapshot_circuit_diagnostics(runner, &name);
+            let sem = semaphore.clone();
             futures.push(async move {
+                // Acquire a concurrency slot when the cap is in force.  The permit
+                // is held for the duration of tool execution and released on drop.
+                let _permit = if let Some(s) = sem {
+                    Some(
+                        s.acquire_owned()
+                            .await
+                            .expect("parallel tool semaphore closed unexpectedly"),
+                    )
+                } else {
+                    None
+                };
                 let result = runner.execute_prepared_tool_internal(&prepared).await;
                 (
                     name,

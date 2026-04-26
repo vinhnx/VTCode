@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
-use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tools::registry::ToolRegistry;
 
 use super::permission_prompt::{
@@ -98,12 +97,7 @@ pub(super) async fn persist_shell_approval_prefix_rule(
         .await
         .context("Failed to persist shell approval prefix to tool policy")?;
     let workspace_root = tool_registry.workspace_root().clone();
-    let mut manager = ConfigManager::load_from_workspace(&workspace_root).with_context(|| {
-        format!(
-            "Failed to load configuration for workspace {}",
-            workspace_root.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(&workspace_root)?;
     let mut config = manager.config().clone();
 
     if !config

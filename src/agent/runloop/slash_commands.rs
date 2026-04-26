@@ -845,19 +845,15 @@ fn parse_update_args(args: &str) -> std::result::Result<(bool, bool, bool), Stri
     let mut install = false;
     let mut force = false;
 
-    for token in args.split_whitespace() {
-        match token.to_ascii_lowercase().as_str() {
+    parsing::for_each_token(args, |token| {
+        match token {
             "check" | "--check" => check_only = true,
             "install" | "--install" => install = true,
             "force" | "--force" => force = true,
-            "" => {}
-            _ => {
-                return Err(
-                    "Usage: /update [check|install] [--force]\nExamples: /update, /update check, /update install --force".to_string(),
-                );
-            }
+            _ => return Err("Usage: /update [check|install] [--force]\nExamples: /update, /update check, /update install --force".to_string()),
         }
-    }
+        Ok(())
+    })?;
 
     if check_only && install {
         return Err("Use either 'check' or 'install', not both.".to_string());
@@ -872,10 +868,9 @@ fn parse_effort_args(
     let mut persist = false;
     let mut level = None;
 
-    for token in args.split_whitespace() {
-        match token.to_ascii_lowercase().as_str() {
+    parsing::for_each_token(args, |token| {
+        match token {
             "--persist" | "persist" => persist = true,
-            "" => {}
             _ => {
                 let Some(parsed) = ReasoningEffortLevel::parse(token) else {
                     return Err(format!("Unknown effort value '{}'", token));
@@ -885,7 +880,8 @@ fn parse_effort_args(
                 }
             }
         }
-    }
+        Ok(())
+    })?;
 
     Ok((level, persist))
 }
@@ -903,11 +899,10 @@ fn parse_doctor_args(
     let mut quick = false;
     let mut full = false;
 
-    for token in args.split_whitespace() {
-        match token.to_ascii_lowercase().as_str() {
+    parsing::for_each_token(args, |token| {
+        match token {
             "--quick" | "-q" | "quick" => quick = true,
             "--full" | "full" => full = true,
-            "" => {}
             _ => {
                 return Err(
                     "Usage: /doctor [--quick|--full]\nExamples: /doctor, /doctor --quick"
@@ -915,7 +910,8 @@ fn parse_doctor_args(
                 );
             }
         }
-    }
+        Ok(())
+    })?;
 
     if quick && full {
         return Err("Use either --quick or --full, not both.".to_string());

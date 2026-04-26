@@ -1,4 +1,5 @@
 mod bootstrap;
+mod config_helpers;
 mod debug_routing;
 mod ide;
 mod prompt_input;
@@ -9,6 +10,7 @@ pub(crate) use bootstrap::{
     build_augmented_cli_command, debug_runtime_flag_enabled, resolve_runtime_color_policy,
     resolve_startup_context,
 };
+pub(crate) use config_helpers::load_workspace_config;
 pub(crate) use debug_routing::configure_debug_session_routing;
 pub(crate) use ide::detect_available_ide;
 pub(crate) use prompt_input::build_print_prompt;

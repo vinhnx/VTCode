@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use vtcode_config::auth::CustomApiKeyStorage;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::utils::dot_config::update_model_preference;
 
@@ -19,12 +19,7 @@ pub(super) async fn persist_selection(
     workspace: &std::path::Path,
     selection: &ModelSelectionResult,
 ) -> Result<VTCodeConfig> {
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load vtcode configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     let mut config = manager.config().clone();
     config.agent.provider = selection.provider.clone();
     apply_api_key_state(&mut config, selection);
@@ -43,12 +38,7 @@ pub(crate) async fn persist_lightweight_selection(
     workspace: &std::path::Path,
     model: &str,
 ) -> Result<VTCodeConfig> {
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load vtcode configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     let mut config = manager.config().clone();
     config.agent.small_model.enabled = true;
     config.agent.small_model.model = model.to_string();

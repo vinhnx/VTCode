@@ -107,9 +107,6 @@ use parking_lot::Mutex; // Use parking_lot for better performance
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-// Match agent runner throttle ceiling
-const LOOP_THROTTLE_MAX_MS: u64 = 500;
-
 use crate::mcp::McpClient;
 use crate::subagents::SubagentController;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
@@ -177,10 +174,9 @@ pub struct ToolRegistry {
     /// Output spooler for dynamic context discovery (large outputs to files)
     output_spooler: Arc<super::output_spooler::ToolOutputSpooler>,
 
-    /// Plan mode: read-only enforcement for planning sessions
-    plan_read_only_mode: Arc<std::sync::atomic::AtomicBool>,
-
     /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
+    /// and read-only enforcement. This is the single source of truth for plan mode;
+    /// use `is_plan_mode()` / `enable_plan_mode()` / `disable_plan_mode()` as accessors.
     plan_mode_state: PlanModeState,
     /// Canonical safety gateway shared across registry execution surfaces.
     safety_gateway: Arc<SafetyGateway>,

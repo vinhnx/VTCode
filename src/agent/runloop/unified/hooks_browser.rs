@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::{HookCommandConfig, HookGroupConfig, LifecycleHooksConfig};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
@@ -46,8 +46,7 @@ pub(crate) fn create_hooks_palette_state(
     workspace: &Path,
     vt_snapshot: &Option<VTCodeConfig>,
 ) -> Result<HooksPaletteState> {
-    let manager =
-        ConfigManager::load_from_workspace(workspace).context("Failed to load configuration")?;
+    let manager = crate::main_helpers::load_workspace_config(workspace)?;
     let has_config_file = manager.config_path().is_some();
     let source_path = manager
         .config_path()

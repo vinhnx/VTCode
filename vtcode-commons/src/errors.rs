@@ -15,13 +15,6 @@ pub const ERR_GET_METADATA: &str = "failed to read file metadata";
 pub const ERR_CANONICALIZE_PATH: &str = "failed to canonicalize path";
 pub const ERR_READ_SYMLINK: &str = "failed to read symlink";
 
-// Session/State errors
-pub const ERR_CREATE_SESSION_DIR: &str = "failed to create session directory";
-pub const ERR_READ_SESSION: &str = "failed to read session";
-pub const ERR_WRITE_SESSION: &str = "failed to write session";
-pub const ERR_DELETE_SESSION: &str = "failed to delete session";
-pub const ERR_ARCHIVE_SESSION: &str = "failed to archive session";
-
 // Skill/Tool errors
 pub const ERR_CREATE_SKILLS_DIR: &str = "failed to create skills directory";
 pub const ERR_CREATE_SKILL_DIR: &str = "failed to create skill directory";

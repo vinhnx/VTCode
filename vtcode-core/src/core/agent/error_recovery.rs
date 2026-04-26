@@ -3,8 +3,10 @@ use std::time::Instant;
 
 use crate::tools::circuit_breaker::{CircuitState, ToolCircuitDiagnostics};
 
-pub const DEFAULT_MAX_RECENT_ERRORS: usize = 10;
-pub const DEFAULT_MAX_OPEN_CIRCUITS: usize = 3;
+// Re-export from vtcode-config so call sites outside this module keep compiling.
+pub use vtcode_config::constants::execution::{
+    DEFAULT_MAX_OPEN_CIRCUITS, DEFAULT_MAX_RECENT_ERRORS,
+};
 
 #[derive(Debug, Clone)]
 pub struct ErrorRecoveryState {

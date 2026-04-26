@@ -1,4 +1,4 @@
-use crate::constants::{defaults, llm_generation, prompt_budget};
+use crate::constants::{defaults, execution, llm_generation, prompt_budget};
 use crate::types::{
     ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
     VerbosityLevel,
@@ -64,6 +64,11 @@ pub struct AgentConfig {
     /// Maximum number of conversation turns before auto-termination
     #[serde(default = "default_max_conversation_turns")]
     pub max_conversation_turns: usize,
+
+    /// Maximum consecutive idle turns (no tool calls, no meaningful response) before
+    /// the agent runner treats the session as stalled and aborts the loop.
+    #[serde(default = "default_idle_turn_limit")]
+    pub idle_turn_limit: usize,
 
     /// Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
     /// Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -340,6 +345,10 @@ pub struct AgentHarnessConfig {
     /// Maximum retries for retryable tool errors
     #[serde(default = "default_harness_max_tool_retries")]
     pub max_tool_retries: u32,
+    /// Maximum number of tool calls that may execute concurrently within a single parallel batch.
+    /// Set to `0` to disable the cap (unlimited concurrency).  Default: 4.
+    #[serde(default = "default_harness_max_parallel_tool_calls")]
+    pub max_parallel_tool_calls: usize,
     /// Enable automatic context compaction when token pressure crosses threshold.
     ///
     /// Disabled by default. When disabled, no automatic compaction is triggered.
@@ -377,6 +386,7 @@ impl Default for AgentHarnessConfig {
             max_tool_calls_per_turn: default_harness_max_tool_calls_per_turn(),
             max_tool_wall_clock_secs: default_harness_max_tool_wall_clock_secs(),
             max_tool_retries: default_harness_max_tool_retries(),
+            max_parallel_tool_calls: default_harness_max_parallel_tool_calls(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             auto_compaction_threshold_tokens: None,
             tool_result_clearing: ToolResultClearingConfig::default(),
@@ -599,6 +609,7 @@ impl Default for AgentConfig {
             todo_planning_mode: default_todo_planning_mode(),
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
+            idle_turn_limit: default_idle_turn_limit(),
             reasoning_effort: default_reasoning_effort(),
             verbosity: default_verbosity(),
             temperature: default_temperature(),
@@ -711,6 +722,11 @@ const fn default_max_conversation_turns() -> usize {
 }
 
 #[inline]
+const fn default_idle_turn_limit() -> usize {
+    execution::IDLE_TURN_LIMIT
+}
+
+#[inline]
 fn default_reasoning_effort() -> ReasoningEffortLevel {
     ReasoningEffortLevel::None
 }
@@ -783,6 +799,11 @@ const fn default_harness_max_tool_wall_clock_secs() -> u64 {
 #[inline]
 const fn default_harness_max_tool_retries() -> u32 {
     defaults::DEFAULT_MAX_TOOL_RETRIES
+}
+
+#[inline]
+const fn default_harness_max_parallel_tool_calls() -> usize {
+    4 // Cap parallel fan-out at 4; set to 0 in vtcode.toml to remove the limit.
 }
 
 #[inline]

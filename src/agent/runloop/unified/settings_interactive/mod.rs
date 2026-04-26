@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use super::config_section_headings::heading_for_path;
 use anyhow::{Context, Result, anyhow, bail};
 use toml::Value as TomlValue;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::{InlineListSearchConfig, InlineListSelection};
 
@@ -67,8 +67,7 @@ pub(crate) fn create_settings_palette_state(
     workspace: &Path,
     vt_snapshot: &Option<VTCodeConfig>,
 ) -> Result<SettingsPaletteState> {
-    let manager =
-        ConfigManager::load_from_workspace(workspace).context("Failed to load configuration")?;
+    let manager = crate::main_helpers::load_workspace_config(workspace)?;
     let has_config_file = manager.config_path().is_some();
     let source_path = manager
         .config_path()

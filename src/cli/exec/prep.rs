@@ -5,7 +5,6 @@ use std::str::FromStr;
 use vtcode_core::cli::args::{ExecResumeArgs, ExecSubcommand};
 use vtcode_core::cli::input_hardening::validate_agent_safe_text;
 use vtcode_core::config::VTCodeConfig;
-use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::threads::{
@@ -363,12 +362,7 @@ async fn load_exec_vt_config(
         return Ok(base.clone());
     }
 
-    let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load VT Code configuration for archived workspace '{}'",
-            workspace.display()
-        )
-    })?;
+    let manager = crate::main_helpers::load_workspace_config(workspace)?;
     Ok(manager.config().clone())
 }
 

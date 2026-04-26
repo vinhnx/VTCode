@@ -25,7 +25,7 @@ use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::PermissionMode;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{Provider, model_catalog_entry};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::validator::{
@@ -329,12 +329,7 @@ async fn persist_runtime_selection(
         config.provider.openai.service_tier = None;
     }
 
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load vtcode configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
+    let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     manager.save_config(config)?;
     update_model_preference(&selection.provider, &selection.model)
         .await
@@ -501,6 +496,7 @@ mod validation_tests {
     use std::path::Path;
     use std::sync::LazyLock;
     use tokio::sync::Mutex;
+    use vtcode_config::ConfigManager;
     use vtcode_config::OpenAIPreferredMethod;
     use vtcode_config::auth::AuthCredentialsStoreMode;
     use vtcode_core::cli::args::Cli;
