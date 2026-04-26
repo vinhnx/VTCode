@@ -127,21 +127,19 @@ impl AgentRunner {
                 self.agent_type.to_string().to_uppercase()
             );
 
-            let mut deny_regex_patterns: Vec<String> = cfg.commands.deny_regex.clone();
-            if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
-                deny_regex_patterns.extend(extra.split(',').filter_map(|entry| {
-                    let trimmed = entry.trim();
-                    (!trimmed.is_empty()).then(|| trimmed.to_owned())
-                }));
-            }
+            let extend_from_env = |base: &[String], suffix: &str| -> Vec<String> {
+                let mut out = base.to_vec();
+                if let Ok(extra) = std::env::var(format!("{}{}", agent_prefix, suffix)) {
+                    out.extend(extra.split(',').filter_map(|entry| {
+                        let trimmed = entry.trim();
+                        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+                    }));
+                }
+                out
+            };
 
-            let mut deny_glob_patterns: Vec<String> = cfg.commands.deny_glob.clone();
-            if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
-                deny_glob_patterns.extend(extra.split(',').filter_map(|entry| {
-                    let trimmed = entry.trim();
-                    (!trimmed.is_empty()).then(|| trimmed.to_owned())
-                }));
-            }
+            let deny_regex_patterns = extend_from_env(&cfg.commands.deny_regex, "DENY_REGEX");
+            let deny_glob_patterns = extend_from_env(&cfg.commands.deny_glob, "DENY_GLOB");
 
             self.tool_registry
                 .check_shell_policy(&cmd_text, &deny_regex_patterns, &deny_glob_patterns)

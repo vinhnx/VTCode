@@ -1,15 +1,5 @@
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
-use crate::llm::provider::LLMResponse;
-
-#[allow(dead_code)]
-pub(super) struct ProviderResponseSummary {
-    pub(super) response: LLMResponse,
-    pub(super) content: String,
-    pub(super) reasoning: Option<String>,
-    pub(super) agent_message_streamed: bool,
-    pub(super) reasoning_recorded: bool,
-}
 
 pub(super) struct ToolFailureContext<'a> {
     pub(super) agent_prefix: &'a str,

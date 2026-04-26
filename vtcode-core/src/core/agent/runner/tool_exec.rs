@@ -6,7 +6,7 @@ use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
 };
 use crate::core::agent::harness_kernel::{
-    PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
+    PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall, reduce_tool_result,
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
@@ -459,7 +459,7 @@ impl AgentRunner {
                         info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
 
-                    let optimized_result = self.optimize_tool_result(&name, result);
+                    let optimized_result = reduce_tool_result(&name, result);
                     let tool_result = serde_json::to_string(&optimized_result)?;
 
                     self.update_last_paths_from_args(&name, &args, &mut runtime.state);
@@ -577,7 +577,7 @@ impl AgentRunner {
                     info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                 }
 
-                let optimized_result = self.optimize_tool_result(&name, result);
+                let optimized_result = reduce_tool_result(&name, result);
                 let tool_result = serde_json::to_string(&optimized_result)?;
 
                 self.update_last_paths_from_args(&name, &args, &mut runtime.state);

@@ -665,6 +665,10 @@ impl AgentRunner {
                     tool_catalog_hash,
                 })
                 .request;
+                // Cheap pre-flight: catch malformed requests (empty system
+                // prompt, no messages, duplicate tool names, missing required
+                // properties) before paying for an API round-trip.
+                self.validate_llm_request(&request)?;
                 let previous_response_chain_present = request.previous_response_id.is_some();
                 let sent_messages = request.messages.clone();
                 // Compute timeout before the call to avoid simultaneous mutable/immutable
@@ -929,7 +933,7 @@ impl AgentRunner {
                     .filter(|tool_calls| !tool_calls.is_empty())
                     .cloned()
                 {
-                    self.handle_tool_calls(
+                    self.execute_tool_call_batches(
                         tool_calls,
                         &mut runtime,
                         &mut event_recorder,

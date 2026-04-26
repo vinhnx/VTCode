@@ -80,7 +80,6 @@ impl AgentRunner {
 
     /// Validate LLM request before sending to provider.
     /// Catches configuration errors early to avoid wasted API calls.
-    #[allow(dead_code)]
     pub(super) fn validate_llm_request(&self, request: &LLMRequest) -> Result<()> {
         // Validate system prompt presence
         if request
@@ -113,7 +112,6 @@ impl AgentRunner {
     }
 
     /// Validate a single tool definition for schema correctness.
-    #[allow(dead_code)]
     fn validate_tool_definition(
         &self,
         tool: &ToolDefinition,
