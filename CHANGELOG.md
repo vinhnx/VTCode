@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.104.2 - 2026-04-26
+
+### Highlights
+#### Features
+
+- Update default model and add ast-grep tool support (d2599e7a) 
+- Enhance local agents functionality and improve demo scripts (fea4eaf2) 
+- Implement caching for lightweight skill metadata and system prompt layers (4ba51c73) 
+- Enhance ownership management and borrowing practices across tools and registries (c606e2d4) 
+- Add MCP lifecycle controls and related tool functionalities (c186f725) 
+- Update tool policies and available tools in tool-policy.json (cd016ae5) 
+### Other Changes
+#### Other
+
+- Add support for spawning background subprocesses and related configurations (17665666) 
+- Refactor configuration loading and improve error handling across modules (b7be8464) 
 ## 0.104.1 - 2026-04-25
 
 ### Highlights
