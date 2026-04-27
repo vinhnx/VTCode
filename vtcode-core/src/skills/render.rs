@@ -225,12 +225,15 @@ mod tests {
             short_description: None,
             path: PathBuf::from("/path/to/hidden-skill"),
             scope: crate::skills::model::SkillScope::System,
-            manifest: Some(crate::skills::types::SkillManifest {
-                name: "hidden-skill".to_string(),
-                description: "Hidden from model activation".to_string(),
-                disable_model_invocation: Some(true),
-                ..Default::default()
-            }),
+            manifest: Some(
+                crate::skills::types::SkillManifest {
+                    name: "hidden-skill".to_string(),
+                    description: "Hidden from model activation".to_string(),
+                    disable_model_invocation: Some(true),
+                    ..Default::default()
+                }
+                .into(),
+            ),
         };
         let normal_skill = SkillMetadata {
             name: "repo-skill".to_string(),

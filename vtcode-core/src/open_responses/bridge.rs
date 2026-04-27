@@ -124,7 +124,7 @@ impl ResponseBuilder {
                 if self.response.status.is_terminal() {
                     return;
                 }
-                self.response.usage = Some(OpenUsage::from_exec_usage(&evt.usage));
+                self.response.usage = Some(OpenUsage::from_exec_usage(&evt.usage).into());
                 self.response.status = ResponseStatus::Completed;
                 self.response.complete();
                 emitter.response_completed(self.response.clone());
@@ -253,7 +253,7 @@ impl ResponseBuilder {
             }
             NormalizedStreamEvent::Usage { usage } => {
                 self.ensure_normalized_response_started(emitter);
-                self.response.usage = Some(OpenUsage::from_llm_usage(usage));
+                self.response.usage = Some(OpenUsage::from_llm_usage(usage).into());
             }
             NormalizedStreamEvent::Done { response } => {
                 self.ensure_normalized_response_started(emitter);
@@ -886,7 +886,7 @@ impl ResponseBuilder {
         emitter: &mut E,
     ) {
         if let Some(usage) = response.usage.as_ref() {
-            self.response.usage = Some(OpenUsage::from_llm_usage(usage));
+            self.response.usage = Some(OpenUsage::from_llm_usage(usage).into());
         }
         if !response.model.trim().is_empty() {
             self.response.model = response.model.clone();

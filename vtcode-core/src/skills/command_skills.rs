@@ -518,7 +518,7 @@ pub fn merge_built_in_command_skill_metadata(skills: &mut Vec<SkillMetadata>) {
                 short_description: None,
                 path: skill_ctx.path().clone(),
                 scope: SkillScope::System,
-                manifest: Some(skill_ctx.manifest().clone()),
+                manifest: Some(skill_ctx.manifest().clone().into()),
             }),
     );
     skills.sort_by(|left, right| left.name.cmp(&right.name));

@@ -251,7 +251,7 @@ pub fn convert_to_anthropic_format(
         tool_choice: final_tool_choice,
         thinking: thinking_val,
         reasoning: reasoning_val,
-        output_config,
+        output_config: output_config.map(Into::into),
         context_management: request.context_management.clone(),
         stream: request.stream,
     };

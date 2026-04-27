@@ -208,7 +208,7 @@ pub fn test_skills_prompt_generation() {
         short_description: None,
         path: PathBuf::from("/tmp/test"),
         scope: SkillScope::User,
-        manifest: Some(manifest),
+        manifest: Some(manifest.into()),
     };
 
     skills.push(skill);
@@ -252,7 +252,7 @@ mod tests {
             short_description: None,
             path: PathBuf::from("/tmp/test-skill"),
             scope: SkillScope::User,
-            manifest: Some(manifest),
+            manifest: Some(manifest.into()),
         };
 
         skills.push(skill);
@@ -287,7 +287,7 @@ mod tests {
                 short_description: None,
                 path: PathBuf::from(format!("/path/to/skill-{}", i)),
                 scope: SkillScope::User,
-                manifest: Some(manifest),
+                manifest: Some(manifest.into()),
             };
 
             skills.push(skill);
@@ -325,7 +325,7 @@ mod tests {
             short_description: None,
             path: PathBuf::from("/tmp/test-xml-skill"),
             scope: SkillScope::User,
-            manifest: Some(manifest),
+            manifest: Some(manifest.into()),
         };
 
         skills.push(skill);
@@ -365,7 +365,7 @@ mod tests {
             short_description: None,
             path: PathBuf::from("/tmp/test"),
             scope: SkillScope::User,
-            manifest: Some(manifest),
+            manifest: Some(manifest.into()),
         };
 
         skills.push(skill);
@@ -395,7 +395,7 @@ mod tests {
             short_description: None,
             path: PathBuf::from("/tmp/test"),
             scope: SkillScope::User,
-            manifest: Some(manifest),
+            manifest: Some(manifest.into()),
         };
 
         skills.push(skill);

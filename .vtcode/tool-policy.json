@@ -33,9 +33,9 @@
     "mcp_search_tools": "allow",
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
-    "task_tracker": "allow",
-    "unified_exec": "allow",
-    "unified_file": "allow",
+    "task_tracker": "prompt",
+    "unified_exec": "prompt",
+    "unified_file": "prompt",
     "unified_search": "allow",
     "list_files": "allow",
     "memory": "allow",
@@ -185,9 +185,7 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [
-      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null"
-    ],
+    "allowed": [],
     "prefixes": [],
     "regexes": []
   }

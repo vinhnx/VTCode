@@ -221,7 +221,7 @@ impl ToOpenResponse for crate::llm::provider::LLMResponse {
 
         // Add usage if available
         if let Some(usage) = &self.usage {
-            response.usage = Some(OpenUsage::from_llm_usage(usage));
+            response.usage = Some(OpenUsage::from_llm_usage(usage).into());
         }
 
         // Add content as message item if present

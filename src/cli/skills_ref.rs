@@ -63,7 +63,7 @@ pub async fn handle_skills_ref_to_prompt(paths: &[PathBuf]) -> Result<()> {
                         short_description: None,
                         path: path.clone(),
                         scope: SkillScope::User,
-                        manifest: Some(manifest),
+                        manifest: Some(manifest.into()),
                     });
                 }
                 Err(e) => {

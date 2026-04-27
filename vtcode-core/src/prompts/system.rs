@@ -1478,11 +1478,16 @@ mod tests {
                 short_description: None,
                 path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
                 scope: SkillScope::System,
-                manifest: Some(SkillManifest {
-                    when_to_use: Some("Use when creating or updating a skill.".to_string()),
-                    when_not_to_use: Some("Avoid for unrelated implementation work.".to_string()),
-                    ..SkillManifest::default()
-                }),
+                manifest: Some(
+                    SkillManifest {
+                        when_to_use: Some("Use when creating or updating a skill.".to_string()),
+                        when_not_to_use: Some(
+                            "Avoid for unrelated implementation work.".to_string(),
+                        ),
+                        ..SkillManifest::default()
+                    }
+                    .into(),
+                ),
             });
 
         let result =

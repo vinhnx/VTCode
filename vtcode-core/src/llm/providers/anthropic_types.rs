@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,8 +20,12 @@ pub struct AnthropicRequest {
     pub thinking: Option<ThinkingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_config: Option<AnthropicOutputConfig>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_boxed_output_config_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub output_config: Option<Box<AnthropicOutputConfig>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_management: Option<Value>,
     pub stream: bool,
@@ -389,6 +393,16 @@ pub struct AnthropicOutputConfig {
     pub format: Option<AnthropicOutputFormat>,
 }
 
+impl AnthropicOutputConfig {
+    fn is_empty(&self) -> bool {
+        self.effort.is_none() && self.task_budget.is_none() && self.format.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicTaskBudget {
     #[serde(rename = "type")]
@@ -417,6 +431,16 @@ pub struct CountTokensRequest {
     pub thinking: Option<ThinkingConfig>,
 }
 
+fn deserialize_boxed_output_config_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<AnthropicOutputConfig>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<AnthropicOutputConfig>::deserialize(deserializer)
+        .map(|value| value.and_then(AnthropicOutputConfig::into_boxed_if_non_empty))
+}
+
 /// Response from Anthropic's count_tokens endpoint
 #[derive(Debug, Deserialize)]
 pub struct CountTokensResponse {
@@ -425,7 +449,10 @@ pub struct CountTokensResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnthropicContentBlock, AnthropicStreamEvent, TextCitation};
+    use super::{
+        AnthropicContentBlock, AnthropicOutputConfig, AnthropicRequest, AnthropicStreamEvent,
+        TextCitation,
+    };
 
     #[test]
     fn stream_content_block_start_thinking_allows_missing_signature() {
@@ -580,5 +607,31 @@ mod tests {
             }
             other => panic!("expected text block with citations, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn empty_output_config_deserializes_to_none() {
+        let request: AnthropicRequest = serde_json::from_str(
+            r#"{
+                "model": "claude-sonnet",
+                "messages": [],
+                "max_tokens": 128,
+                "output_config": {},
+                "stream": false
+            }"#,
+        )
+        .expect("should deserialize request");
+
+        assert!(request.output_config.is_none());
+    }
+
+    #[test]
+    fn boxed_output_config_is_smaller_than_inline_option() {
+        use std::mem::size_of;
+
+        assert!(
+            size_of::<Option<Box<AnthropicOutputConfig>>>()
+                < size_of::<Option<AnthropicOutputConfig>>()
+        );
     }
 }

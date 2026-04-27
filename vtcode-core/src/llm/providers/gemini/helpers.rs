@@ -312,7 +312,7 @@ impl GeminiProvider {
                     None
                 }
             },
-            generation_config: Some(generation_config),
+            generation_config: Some(generation_config.into()),
         })
     }
 

@@ -3,7 +3,7 @@
 //! The Request is the top-level object sent to the API,
 //! containing input items, tool definitions, and model parameters.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use super::{MessageRole, OutputItem};
@@ -41,7 +41,7 @@ pub struct Request {
 
     /// Truncation configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub truncation: Option<TruncationConfig>,
+    pub truncation: Option<Box<TruncationConfig>>,
 
     /// Maximum output tokens allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,8 +84,12 @@ pub struct Request {
     pub service_tier: Option<String>,
 
     /// Reasoning configuration.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<ReasoningConfig>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_reasoning_config_opt"
+    )]
+    pub reasoning: Option<Box<ReasoningConfig>>,
 
     /// Whether to store the request/response.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,6 +114,16 @@ pub struct ReasoningConfig {
     /// Reasoning effort level (low, medium, high).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
+}
+
+impl ReasoningConfig {
+    fn is_empty(&self) -> bool {
+        self.effort.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
 }
 
 /// Truncation configuration for the request.
@@ -163,6 +177,16 @@ impl Request {
     }
 }
 
+fn deserialize_boxed_reasoning_config_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<ReasoningConfig>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<ReasoningConfig>::deserialize(deserializer)
+        .map(|value| value.and_then(ReasoningConfig::into_boxed_if_non_empty))
+}
+
 /// Tool choice options.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -213,5 +237,26 @@ mod tests {
         assert!(json.contains("\"model\":\"gpt-5\""));
         assert!(json.contains("\"input\":["));
         assert!(json.contains("\"type\":\"message\""));
+    }
+
+    #[test]
+    fn empty_reasoning_config_deserializes_to_none() {
+        let req: Request = serde_json::from_str(
+            r#"{
+                "model": "gpt-5",
+                "input": [],
+                "reasoning": {}
+            }"#,
+        )
+        .unwrap();
+
+        assert!(req.reasoning.is_none());
+    }
+
+    #[test]
+    fn boxed_reasoning_config_is_smaller_than_inline_option() {
+        use std::mem::size_of;
+
+        assert!(size_of::<Option<Box<ReasoningConfig>>>() < size_of::<Option<ReasoningConfig>>());
     }
 }

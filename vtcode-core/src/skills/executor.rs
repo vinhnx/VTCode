@@ -1568,10 +1568,13 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test".to_string(),
-            network_policy: Some(SkillNetworkPolicy {
-                allowed_domains: vec!["api.example.com".to_string()],
-                denied_domains: vec!["blocked.example.com".to_string()],
-            }),
+            network_policy: Some(
+                SkillNetworkPolicy {
+                    allowed_domains: vec!["api.example.com".to_string()],
+                    denied_domains: vec!["blocked.example.com".to_string()],
+                }
+                .into(),
+            ),
             vtcode_native: Some(true),
             ..Default::default()
         };
@@ -1626,10 +1629,13 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test".to_string(),
-            network_policy: Some(SkillNetworkPolicy {
-                allowed_domains: vec!["example.com".to_string()],
-                denied_domains: vec![],
-            }),
+            network_policy: Some(
+                SkillNetworkPolicy {
+                    allowed_domains: vec!["example.com".to_string()],
+                    denied_domains: vec![],
+                }
+                .into(),
+            ),
             vtcode_native: Some(true),
             ..Default::default()
         };
@@ -1652,10 +1658,13 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test".to_string(),
-            network_policy: Some(SkillNetworkPolicy {
-                allowed_domains: vec!["api.example.com".to_string()],
-                denied_domains: vec![],
-            }),
+            network_policy: Some(
+                SkillNetworkPolicy {
+                    allowed_domains: vec!["api.example.com".to_string()],
+                    denied_domains: vec![],
+                }
+                .into(),
+            ),
             vtcode_native: Some(true),
             ..Default::default()
         };
@@ -1685,10 +1694,13 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test".to_string(),
-            network_policy: Some(SkillNetworkPolicy {
-                allowed_domains: vec!["docs.rs".to_string()],
-                denied_domains: vec!["example.com".to_string()],
-            }),
+            network_policy: Some(
+                SkillNetworkPolicy {
+                    allowed_domains: vec!["docs.rs".to_string()],
+                    denied_domains: vec!["example.com".to_string()],
+                }
+                .into(),
+            ),
             vtcode_native: Some(true),
             ..Default::default()
         };
@@ -1727,7 +1739,7 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
-            permissions: permission_profile,
+            permissions: permission_profile.map(Into::into),
             vtcode_native: Some(true),
             ..Default::default()
         };
@@ -1743,10 +1755,13 @@ mod tests {
     #[test]
     fn skill_command_permissions_inject_additional_permissions() {
         let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(SkillFileSystemPermissions {
-                read: vec![PathBuf::from("references")],
-                write: vec![PathBuf::from("outputs")],
-            }),
+            file_system: Some(
+                SkillFileSystemPermissions {
+                    read: vec![PathBuf::from("references")],
+                    write: vec![PathBuf::from("outputs")],
+                }
+                .into(),
+            ),
         }));
 
         let merged =
@@ -1769,10 +1784,13 @@ mod tests {
     #[test]
     fn skill_command_permissions_merge_existing_permissions() {
         let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(SkillFileSystemPermissions {
-                read: vec![PathBuf::from("references")],
-                write: vec![PathBuf::from("outputs")],
-            }),
+            file_system: Some(
+                SkillFileSystemPermissions {
+                    read: vec![PathBuf::from("references")],
+                    write: vec![PathBuf::from("outputs")],
+                }
+                .into(),
+            ),
         }));
 
         let merged = merge_skill_command_permissions(
@@ -1801,10 +1819,13 @@ mod tests {
     #[test]
     fn skill_command_permissions_ignore_require_escalated() {
         let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(SkillFileSystemPermissions {
-                read: Vec::new(),
-                write: vec![PathBuf::from("outputs")],
-            }),
+            file_system: Some(
+                SkillFileSystemPermissions {
+                    read: Vec::new(),
+                    write: vec![PathBuf::from("outputs")],
+                }
+                .into(),
+            ),
         }));
         let original = serde_json::json!({
             "command": "pwd",

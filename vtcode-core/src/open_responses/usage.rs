@@ -3,7 +3,7 @@
 //! Provides a unified usage model that can bridge from VT Code's internal
 //! usage tracking to the Open Responses specification.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Token usage statistics for a response.
 ///
@@ -21,12 +21,20 @@ pub struct OpenUsage {
     pub total_tokens: u64,
 
     /// Detailed breakdown of input token usage.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_tokens_details: Option<InputTokensDetails>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_input_tokens_details_opt"
+    )]
+    pub input_tokens_details: Option<Box<InputTokensDetails>>,
 
     /// Detailed breakdown of output token usage.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_tokens_details: Option<OutputTokensDetails>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_output_tokens_details_opt"
+    )]
+    pub output_tokens_details: Option<Box<OutputTokensDetails>>,
 }
 
 /// Detailed breakdown of input token usage.
@@ -45,6 +53,16 @@ pub struct InputTokensDetails {
     pub text_tokens: Option<u64>,
 }
 
+impl InputTokensDetails {
+    fn is_empty(&self) -> bool {
+        self.cached_tokens.is_none() && self.audio_tokens.is_none() && self.text_tokens.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
 /// Detailed breakdown of output token usage.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputTokensDetails {
@@ -59,6 +77,16 @@ pub struct OutputTokensDetails {
     /// Number of tokens used for text output.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_tokens: Option<u64>,
+}
+
+impl OutputTokensDetails {
+    fn is_empty(&self) -> bool {
+        self.reasoning_tokens.is_none() && self.audio_tokens.is_none() && self.text_tokens.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
 }
 
 impl OpenUsage {
@@ -86,7 +114,7 @@ impl OpenUsage {
             output_tokens: usage.completion_tokens as u64,
             total_tokens: usage.total_tokens as u64,
             input_tokens_details: if details.cached_tokens.is_some() {
-                Some(details)
+                Some(Box::new(details))
             } else {
                 None
             },
@@ -97,11 +125,11 @@ impl OpenUsage {
     /// Creates usage from VT Code's exec events usage type.
     pub fn from_exec_usage(usage: &vtcode_exec_events::Usage) -> Self {
         let input_details = if usage.cached_input_tokens > 0 {
-            Some(InputTokensDetails {
+            Some(Box::new(InputTokensDetails {
                 cached_tokens: Some(usage.cached_input_tokens),
                 audio_tokens: None,
                 text_tokens: None,
-            })
+            }))
         } else {
             None
         };
@@ -114,6 +142,26 @@ impl OpenUsage {
             output_tokens_details: None,
         }
     }
+}
+
+fn deserialize_boxed_input_tokens_details_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<InputTokensDetails>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<InputTokensDetails>::deserialize(deserializer)
+        .map(|value| value.and_then(InputTokensDetails::into_boxed_if_non_empty))
+}
+
+fn deserialize_boxed_output_tokens_details_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<OutputTokensDetails>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<OutputTokensDetails>::deserialize(deserializer)
+        .map(|value| value.and_then(OutputTokensDetails::into_boxed_if_non_empty))
 }
 
 #[cfg(test)]
@@ -161,6 +209,36 @@ mod tests {
                 .input_tokens_details
                 .and_then(|details| details.cached_tokens),
             Some(400)
+        );
+    }
+
+    #[test]
+    fn empty_details_deserialize_to_none() {
+        let usage: OpenUsage = serde_json::from_str(
+            r#"{
+                "input_tokens": 1,
+                "output_tokens": 2,
+                "total_tokens": 3,
+                "input_tokens_details": {},
+                "output_tokens_details": {}
+            }"#,
+        )
+        .unwrap();
+
+        assert!(usage.input_tokens_details.is_none());
+        assert!(usage.output_tokens_details.is_none());
+    }
+
+    #[test]
+    fn boxed_details_are_smaller_than_inline_options() {
+        use std::mem::size_of;
+
+        assert!(
+            size_of::<Option<Box<InputTokensDetails>>>() < size_of::<Option<InputTokensDetails>>()
+        );
+        assert!(
+            size_of::<Option<Box<OutputTokensDetails>>>()
+                < size_of::<Option<OutputTokensDetails>>()
         );
     }
 }

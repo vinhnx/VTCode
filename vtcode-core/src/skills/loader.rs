@@ -470,7 +470,7 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                             short_description: None,
                             path: path.clone(),
                             scope: root.scope,
-                            manifest: Some(manifest),
+                            manifest: Some(manifest.into()),
                         });
                     }
                     Err(err) => {
@@ -547,7 +547,7 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                                 short_description: None,
                                 path: path.clone(),
                                 scope: root.scope,
-                                manifest: Some(manifest),
+                                manifest: Some(manifest.into()),
                             });
                         }
                         Err(err) => {

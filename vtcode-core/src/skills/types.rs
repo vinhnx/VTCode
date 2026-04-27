@@ -4,7 +4,7 @@
 //! skill metadata, manifest parsing, and resource management.
 
 use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value as JsonValue;
 use std::path::PathBuf;
 
@@ -37,8 +37,12 @@ pub struct SkillNetworkPolicy {
 /// Additional sandbox permissions requested by a skill.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct SkillPermissionProfile {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub file_system: Option<SkillFileSystemPermissions>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_boxed_file_system_permissions_opt"
+    )]
+    pub file_system: Option<Box<SkillFileSystemPermissions>>,
 }
 
 /// Skill-scoped filesystem permission additions.
@@ -150,11 +154,55 @@ pub struct SkillManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "network")]
     #[serde(alias = "network_policy")]
-    pub network_policy: Option<SkillNetworkPolicy>,
+    pub network_policy: Option<Box<SkillNetworkPolicy>>,
     /// Optional additive sandbox permissions for command tools.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(alias = "permission_profile")]
-    pub permissions: Option<SkillPermissionProfile>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "permission_profile",
+        deserialize_with = "deserialize_boxed_permission_profile_opt"
+    )]
+    pub permissions: Option<Box<SkillPermissionProfile>>,
+}
+
+impl SkillPermissionProfile {
+    fn is_empty(&self) -> bool {
+        self.file_system.is_none()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
+impl SkillFileSystemPermissions {
+    fn is_empty(&self) -> bool {
+        self.read.is_empty() && self.write.is_empty()
+    }
+
+    fn into_boxed_if_non_empty(self) -> Option<Box<Self>> {
+        (!self.is_empty()).then_some(Box::new(self))
+    }
+}
+
+fn deserialize_boxed_permission_profile_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<SkillPermissionProfile>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<SkillPermissionProfile>::deserialize(deserializer)
+        .map(|value| value.and_then(SkillPermissionProfile::into_boxed_if_non_empty))
+}
+
+fn deserialize_boxed_file_system_permissions_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<Box<SkillFileSystemPermissions>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<SkillFileSystemPermissions>::deserialize(deserializer)
+        .map(|value| value.and_then(SkillFileSystemPermissions::into_boxed_if_non_empty))
 }
 
 impl Default for SkillManifest {
@@ -690,5 +738,54 @@ mod tests {
             ..Default::default()
         };
         assert!(m.validate().is_ok());
+    }
+
+    #[test]
+    fn empty_permissions_deserialize_to_none() {
+        let manifest: SkillManifest = serde_json::from_str(
+            r#"{
+                "name": "test-skill",
+                "description": "Test description",
+                "permissions": {},
+                "network": {}
+            }"#,
+        )
+        .expect("manifest should deserialize");
+
+        assert!(manifest.permissions.is_none());
+        assert!(manifest.network_policy.is_some());
+    }
+
+    #[test]
+    fn empty_file_system_permissions_deserialize_to_none() {
+        let manifest: SkillManifest = serde_json::from_str(
+            r#"{
+                "name": "test-skill",
+                "description": "Test description",
+                "permissions": {
+                    "file_system": {}
+                }
+            }"#,
+        )
+        .expect("manifest should deserialize");
+
+        assert!(manifest.permissions.is_none());
+    }
+
+    #[test]
+    fn boxed_skill_fields_are_smaller_than_inline_options() {
+        use std::mem::size_of;
+
+        assert!(
+            size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>()
+        );
+        assert!(
+            size_of::<Option<Box<SkillPermissionProfile>>>()
+                < size_of::<Option<SkillPermissionProfile>>()
+        );
+        assert!(
+            size_of::<Option<Box<SkillFileSystemPermissions>>>()
+                < size_of::<Option<SkillFileSystemPermissions>>()
+        );
     }
 }

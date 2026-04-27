@@ -117,13 +117,15 @@ pub struct Response {
     pub output: Vec<OutputItem>,
 
     /// Error that occurred, if the response failed.
-    pub error: Option<OpenResponseError>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Box<OpenResponseError>>,
 
     /// Tools that were available to the model.
     pub tools: Option<Vec<ToolDefinition>>,
 
     /// Token usage statistics.
-    pub usage: Option<OpenUsage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Box<OpenUsage>>,
 
     /// Whether parallel tool calls were allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -215,7 +217,7 @@ impl Response {
     /// Marks the response as failed with the given error.
     pub fn fail(&mut self, error: OpenResponseError) {
         self.status = ResponseStatus::Failed;
-        self.error = Some(error);
+        self.error = Some(error.into());
         self.completed_at = Some(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -238,7 +240,7 @@ impl Response {
 
     /// Sets the usage statistics.
     pub fn with_usage(mut self, usage: OpenUsage) -> Self {
-        self.usage = Some(usage);
+        self.usage = Some(usage.into());
         self
     }
 
@@ -323,5 +325,15 @@ mod tests {
         let id2 = generate_response_id();
         assert_ne!(id1, id2);
         assert!(id1.starts_with("resp_"));
+    }
+
+    #[test]
+    fn boxed_sparse_fields_are_smaller_than_inline_options() {
+        use std::mem::size_of;
+
+        assert!(size_of::<Option<Box<OpenUsage>>>() < size_of::<Option<OpenUsage>>());
+        assert!(
+            size_of::<Option<Box<OpenResponseError>>>() < size_of::<Option<OpenResponseError>>()
+        );
     }
 }

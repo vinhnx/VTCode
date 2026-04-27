@@ -131,7 +131,7 @@ pub struct SkillContextEntry {
     pub instructions: Option<String>,
 
     /// Full skill object (loaded on demand)
-    pub skill: Option<Skill>,
+    pub skill: Option<Box<Skill>>,
 
     /// Usage tracking
     pub usage: ContextUsage,
@@ -328,7 +328,7 @@ impl ContextManager {
             level: ContextLevel::Full,
             manifest: skill.manifest.clone(),
             instructions: Some(skill.instructions.clone()),
-            skill: Some(skill),
+            skill: Some(skill.into()),
             usage: ContextUsage {
                 access_count: 0,
                 last_access: std::time::Instant::now(),
@@ -610,6 +610,25 @@ mod tests {
         let manager = ContextManager::new();
         assert_eq!(manager.get_token_usage(), 0);
         assert_eq!(manager.get_active_skills().len(), 0);
+    }
+
+    #[test]
+    fn boxed_skill_entry_is_smaller_than_inline_option() {
+        use std::mem::size_of;
+
+        assert!(size_of::<Option<Box<Skill>>>() < size_of::<Option<Skill>>());
+        assert!(size_of::<SkillContextEntry>() < size_of::<SkillContextEntryInlineSkill>());
+    }
+
+    #[allow(dead_code)]
+    struct SkillContextEntryInlineSkill {
+        name: String,
+        level: ContextLevel,
+        manifest: SkillManifest,
+        instructions: Option<String>,
+        skill: Option<Skill>,
+        usage: ContextUsage,
+        memory_size: usize,
     }
 
     #[test]
