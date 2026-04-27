@@ -3014,6 +3014,38 @@
         },
         "context": 131072
       },
+      "deepseek-v4-flash:cloud": {
+        "id": "deepseek-v4-flash:cloud",
+        "name": "DeepSeek V4 Flash (cloud)",
+        "description": "Fast inference DeepSeek V4 Flash model via Ollama Cloud",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "deepseek-v4-pro:cloud": {
+        "id": "deepseek-v4-pro:cloud",
+        "name": "DeepSeek V4 Pro (cloud)",
+        "description": "High-performance DeepSeek V4 Pro model via Ollama Cloud",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
       "qwen3-coder:480b-cloud": {
         "id": "qwen3-coder:480b-cloud",
         "name": "Qwen3 Coder 480B (cloud)",
