@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.0 - 2026-04-27
+
+### Highlights
+### Other Changes
+#### Other
+
+- Add deepseek-v4-pro:cloud under Ollama provider (512f260b) 
+#### Refactors
+
+- Streamline tool handling and validation logic, remove unused code (477319a0) 
+- Update skill manifest handling and permissions to use boxed types (aab2d60c) 
 ## 0.104.2 - 2026-04-26
 
 ### Highlights
