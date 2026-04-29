@@ -772,6 +772,31 @@ mod tests {
 
     #[test]
     #[serial]
+    #[cfg(unix)]
+    fn credential_storage_file_mode_restricts_existing_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = TestAuthDirGuard::new();
+        let storage = CredentialStorage::new("vtcode", "test_key");
+
+        storage
+            .store_with_mode("secret_api_key", AuthCredentialsStoreMode::File)
+            .expect("store initial credential");
+
+        let path = storage.file_path().expect("credential path");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+            .expect("broaden existing credential permissions");
+
+        storage
+            .store_with_mode("secret_api_key_updated", AuthCredentialsStoreMode::File)
+            .expect("rewrite credential");
+
+        let metadata = fs::metadata(path).expect("read credential metadata");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    #[serial]
     fn custom_api_key_load_migrates_legacy_auth_json() {
         let _guard = TestAuthDirGuard::new();
         let legacy_path = legacy_auth_storage_path().expect("legacy auth path");
