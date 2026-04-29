@@ -22,14 +22,6 @@ pub(super) struct ObservabilityFields {
 }
 
 impl AgentRunner {
-    pub(super) fn user_facing_tool_error_message(
-        &self,
-        _tool_name: &str,
-        error: &ToolExecutionError,
-    ) -> String {
-        error.user_message()
-    }
-
     pub(super) fn observability_fields(
         &self,
         model: &str,
@@ -111,7 +103,7 @@ impl AgentRunner {
         error: &ToolExecutionError,
         tool_response_id: Option<&str>,
     ) {
-        let failure_text = self.user_facing_tool_error_message(tool_name, error);
+        let failure_text = error.user_message();
         if !self.quiet {
             println!(
                 "{} {} {}",

@@ -141,6 +141,71 @@ fn reject_tool_call(
     event_recorder.tool_rejected(tool_name, args, Some(tool_call_id), detail);
 }
 
+/// Reject a tool call whose arguments could not be parsed or admitted.
+///
+/// Logs at error level, pushes a structured tool error onto the conversation,
+/// and emits the rejection lifecycle events.
+fn reject_invalid_args(
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    agent_prefix: &str,
+    tool_name: &str,
+    tool_call_id: &str,
+    args: Option<&serde_json::Value>,
+    err: &dyn std::fmt::Display,
+    is_gemini: bool,
+    log_msg: &'static str,
+) {
+    let detail = format!("Invalid arguments for tool '{tool_name}': {err}");
+    error!(agent = %agent_prefix, tool = %tool_name, error = %err, "{log_msg}");
+    reject_tool_call(
+        runtime,
+        event_recorder,
+        tool_name,
+        args,
+        tool_call_id,
+        &detail,
+    );
+    runtime
+        .state
+        .push_tool_error(tool_call_id.to_string(), tool_name, detail, is_gemini);
+}
+
+/// Reject a tool call that policy or feature gating disallows.
+///
+/// Records the warning on the session, logs at warn level (unless quiet), and
+/// emits the rejection lifecycle events.
+fn reject_denied_tool(
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    agent_prefix: &str,
+    tool_name: &str,
+    tool_call_id: &str,
+    args: Option<&serde_json::Value>,
+    is_gemini: bool,
+    quiet: bool,
+) {
+    let detail = format!("Tool execution denied: {tool_name}");
+    if !quiet {
+        warn!(agent = %agent_prefix, tool = %tool_name, message = %detail);
+    }
+    runtime.state.warnings.push(detail.clone());
+    runtime.state.push_tool_error(
+        tool_call_id.to_string(),
+        tool_name,
+        detail.clone(),
+        is_gemini,
+    );
+    reject_tool_call(
+        runtime,
+        event_recorder,
+        tool_name,
+        args,
+        tool_call_id,
+        &detail,
+    );
+}
+
 fn emit_failed_tool_outputs_for_completed_invocations(
     event_recorder: &mut ExecEventRecorder,
     lifecycle_events: &[ThreadEvent],
@@ -277,21 +342,16 @@ impl AgentRunner {
         let args = match call.execution_arguments() {
             Ok(args) => args,
             Err(err) => {
-                let error_msg = format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
-                reject_tool_call(
+                reject_invalid_args(
                     runtime,
                     event_recorder,
+                    agent_prefix,
                     &requested_name,
-                    None,
                     call.id.as_str(),
-                    &error_msg,
-                );
-                runtime.state.push_tool_error(
-                    call.id.clone(),
-                    &requested_name,
-                    error_msg,
+                    None,
+                    &err,
                     is_gemini,
+                    "Invalid tool arguments",
                 );
                 return Ok(RunnerCallAdmission::Rejected);
             }
@@ -301,49 +361,31 @@ impl AgentRunner {
             .await
             .is_none()
         {
-            let detail = format!("Tool execution denied: {}", requested_name);
-            if !self.quiet {
-                warn!(
-                    agent = %agent_prefix,
-                    tool = %requested_name,
-                    message = %detail
-                );
-            }
-            runtime.state.warnings.push(detail.clone());
-            runtime.state.push_tool_error(
-                call.id.clone(),
-                &requested_name,
-                detail.clone(),
-                is_gemini,
-            );
-            reject_tool_call(
+            reject_denied_tool(
                 runtime,
                 event_recorder,
+                agent_prefix,
                 &requested_name,
-                Some(&args),
                 &call.id,
-                &detail,
+                Some(&args),
+                is_gemini,
+                self.quiet,
             );
             return Ok(RunnerCallAdmission::Rejected);
         }
         let prepared = match self.admit_tool_call(&requested_name, &args, &mut runtime.state) {
             Ok(prepared) => prepared,
             Err(err) => {
-                let error_msg = format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
-                reject_tool_call(
+                reject_invalid_args(
                     runtime,
                     event_recorder,
+                    agent_prefix,
                     &requested_name,
-                    Some(&args),
                     call.id.as_str(),
-                    &error_msg,
-                );
-                runtime.state.push_tool_error(
-                    call.id.clone(),
-                    &requested_name,
-                    error_msg,
+                    Some(&args),
+                    &err,
                     is_gemini,
+                    "Tool admission failed",
                 );
                 return Ok(RunnerCallAdmission::Rejected);
             }
@@ -358,28 +400,15 @@ impl AgentRunner {
         }
 
         if !self.is_valid_tool(&prepared.canonical_name).await {
-            let detail = format!("Tool execution denied: {}", prepared.canonical_name);
-            if !self.quiet {
-                warn!(
-                    agent = %agent_prefix,
-                    tool = %prepared.canonical_name,
-                    message = %detail
-                );
-            }
-            runtime.state.warnings.push(detail.clone());
-            runtime.state.push_tool_error(
-                call.id.clone(),
-                &prepared.canonical_name,
-                detail.clone(),
-                is_gemini,
-            );
-            reject_tool_call(
+            reject_denied_tool(
                 runtime,
                 event_recorder,
+                agent_prefix,
                 &prepared.canonical_name,
-                Some(&prepared.effective_args),
                 &call.id,
-                &detail,
+                Some(&prepared.effective_args),
+                is_gemini,
+                self.quiet,
             );
             return Ok(RunnerCallAdmission::Rejected);
         }
@@ -487,7 +516,7 @@ impl AgentRunner {
                 }
                 Err(e) => {
                     let category = e.category;
-                    let failure_text = self.user_facing_tool_error_message(&name, &e);
+                    let failure_text = e.user_message();
                     error!(
                         agent = %agent_prefix,
                         tool = %name,

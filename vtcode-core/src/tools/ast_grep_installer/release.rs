@@ -19,7 +19,7 @@ pub(super) struct ReleaseAsset {
 #[derive(Debug, Clone, Copy)]
 pub(super) struct PlatformAssetSpec {
     pub(super) candidate_triples: &'static [&'static str],
-    pub(super) archive_ext: &'static str,
+    pub(super) archive_exts: &'static [&'static str],
 }
 
 #[derive(Debug, Clone)]
@@ -45,23 +45,23 @@ pub(super) fn current_platform_asset_spec() -> Result<PlatformAssetSpec> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "x86_64") => Ok(PlatformAssetSpec {
             candidate_triples: &["x86_64-apple-darwin"],
-            archive_ext: ".tar.gz",
+            archive_exts: &[".zip", ".tar.gz"],
         }),
         ("macos", "aarch64") => Ok(PlatformAssetSpec {
             candidate_triples: &["aarch64-apple-darwin"],
-            archive_ext: ".tar.gz",
+            archive_exts: &[".zip", ".tar.gz"],
         }),
         ("linux", "x86_64") => Ok(PlatformAssetSpec {
             candidate_triples: &["x86_64-unknown-linux-musl", "x86_64-unknown-linux-gnu"],
-            archive_ext: ".tar.gz",
+            archive_exts: &[".zip", ".tar.gz"],
         }),
         ("linux", "aarch64") => Ok(PlatformAssetSpec {
             candidate_triples: &["aarch64-unknown-linux-musl", "aarch64-unknown-linux-gnu"],
-            archive_ext: ".tar.gz",
+            archive_exts: &[".zip", ".tar.gz"],
         }),
         ("windows", "x86_64") => Ok(PlatformAssetSpec {
             candidate_triples: &["x86_64-pc-windows-msvc"],
-            archive_ext: ".zip",
+            archive_exts: &[".zip"],
         }),
         _ => bail!("Unsupported platform for VT Code-managed ast-grep install"),
     }
@@ -75,7 +75,7 @@ pub(super) fn select_release_asset(
         if let Some(asset) = release
             .assets
             .iter()
-            .find(|asset| asset_matches_target(&asset.name, triple, platform.archive_ext))
+            .find(|asset| asset_matches_target(&asset.name, triple, platform.archive_exts))
         {
             return Ok(SelectedAsset {
                 tag_name: release.tag_name.clone(),
@@ -90,10 +90,12 @@ pub(super) fn select_release_asset(
     )
 }
 
-pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_ext: &str) -> bool {
+pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_exts: &[&str]) -> bool {
     let name = asset_name.to_ascii_lowercase();
     name.contains(triple)
-        && name.ends_with(archive_ext)
+        && archive_exts
+            .iter()
+            .any(|archive_ext| name.ends_with(archive_ext))
         && !name.ends_with(".sha256")
         && !name.contains("checksum")
         && !name.ends_with(".sig")
@@ -246,7 +248,7 @@ mod tests {
         };
         let platform = PlatformAssetSpec {
             candidate_triples: &["x86_64-unknown-linux-musl", "x86_64-unknown-linux-gnu"],
-            archive_ext: ".tar.gz",
+            archive_exts: &[".zip", ".tar.gz"],
         };
 
         let selected = select_release_asset(&release, &platform).expect("selected asset");
@@ -257,21 +259,47 @@ mod tests {
     }
 
     #[test]
+    fn release_asset_selection_accepts_zip_assets() {
+        let release = ReleaseInfo {
+            tag_name: "v0.42.1".to_string(),
+            assets: vec![ReleaseAsset {
+                name: "app-aarch64-apple-darwin.zip".to_string(),
+                browser_download_url: "https://example.com/macos".to_string(),
+            }],
+        };
+        let platform = PlatformAssetSpec {
+            candidate_triples: &["aarch64-apple-darwin"],
+            archive_exts: &[".zip", ".tar.gz"],
+        };
+
+        let selected = select_release_asset(&release, &platform).expect("selected asset");
+        assert_eq!(
+            selected.asset.browser_download_url,
+            "https://example.com/macos"
+        );
+    }
+
+    #[test]
     fn asset_matching_filters_checksum_files() {
         assert!(asset_matches_target(
             "app-aarch64-apple-darwin.tar.gz",
             "aarch64-apple-darwin",
-            ".tar.gz"
+            &[".zip", ".tar.gz"]
+        ));
+        assert!(asset_matches_target(
+            "app-aarch64-apple-darwin.zip",
+            "aarch64-apple-darwin",
+            &[".zip", ".tar.gz"]
         ));
         assert!(!asset_matches_target(
             "app-aarch64-apple-darwin.tar.gz.sha256",
             "aarch64-apple-darwin",
-            ".tar.gz"
+            &[".zip", ".tar.gz"]
         ));
         assert!(!asset_matches_target(
             "checksums.txt",
             "aarch64-apple-darwin",
-            ".tar.gz"
+            &[".zip", ".tar.gz"]
         ));
     }
 

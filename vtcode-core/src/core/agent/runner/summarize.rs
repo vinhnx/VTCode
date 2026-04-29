@@ -64,13 +64,7 @@ impl AgentRunner {
             split_at,
             summarize_list(&session_state.modified_files),
             summarize_list(&session_state.executed_commands),
-            summarize_list(
-                &session_state
-                    .warnings
-                    .iter()
-                    .map(|w| w.to_string())
-                    .collect::<Vec<_>>()
-            ),
+            summarize_list(&session_state.warnings),
         );
 
         // Include history file reference in summary if available
@@ -86,24 +80,19 @@ impl AgentRunner {
         let spec_summary = read_spec_summary(&self._workspace);
         let contract_summary = read_contract_summary(&self._workspace);
         let evaluation_summary = read_evaluation_summary(&self._workspace);
-        let summary = match (spec_summary, contract_summary, evaluation_summary) {
-            (None, None, None) => summary,
-            (spec_summary, contract_summary, evaluation_summary) => {
-                let mut enriched = summary;
-                if let Some(spec_summary) = spec_summary {
-                    enriched.push_str("\n\n");
-                    enriched.push_str(&spec_summary);
-                }
-                if let Some(contract_summary) = contract_summary {
-                    enriched.push('\n');
-                    enriched.push_str(&contract_summary);
-                }
-                if let Some(evaluation_summary) = evaluation_summary {
-                    enriched.push('\n');
-                    enriched.push_str(&evaluation_summary);
-                }
-                enriched
+        let summary = {
+            let mut enriched = summary;
+            // Spec is appended after a blank line; the contract and evaluation
+            // each on their own line, matching the prior render shape.
+            if let Some(spec) = spec_summary {
+                enriched.push_str("\n\n");
+                enriched.push_str(&spec);
             }
+            for extra in [contract_summary, evaluation_summary].into_iter().flatten() {
+                enriched.push('\n');
+                enriched.push_str(&extra);
+            }
+            enriched
         };
 
         let mut new_conversation = Vec::with_capacity(1 + preserve_recent_turns);

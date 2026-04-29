@@ -167,36 +167,30 @@ impl EvaluatorResponse {
     }
 
     fn effective_summary(&self) -> String {
+        use std::fmt::Write as _;
+
         let mut summary = self.summary.trim().to_string();
         let missing_criteria = self.missing_criteria();
         let invalid_criteria = self.invalid_criteria();
         let failing_criteria = self.failing_criteria();
-        if !missing_criteria.is_empty() {
+
+        let mut append_clause = |labels: &[String], prefix: &str| {
+            if labels.is_empty() {
+                return;
+            }
             if !summary.is_empty() {
                 summary.push(' ');
             }
-            summary.push_str(&format!(
-                "Scorecard incomplete: missing {}.",
-                missing_criteria.join(", ")
-            ));
-        }
-        if !invalid_criteria.is_empty() {
-            if !summary.is_empty() {
-                summary.push(' ');
-            }
-            summary.push_str(&format!(
-                "Scorecard invalid (scores must be 1-5): {}.",
-                invalid_criteria.join(", ")
-            ));
-        }
+            // Allocation-free: writes directly into the existing String buffer.
+            let _ = write!(summary, "{prefix}: {}.", labels.join(", "));
+        };
+
+        append_clause(&missing_criteria, "Scorecard incomplete: missing");
+        append_clause(&invalid_criteria, "Scorecard invalid (scores must be 1-5)");
         if !failing_criteria.is_empty() {
-            if !summary.is_empty() {
-                summary.push(' ');
-            }
-            summary.push_str(&format!(
-                "Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required): {}.",
-                failing_criteria.join(", ")
-            ));
+            let prefix =
+                format!("Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required)");
+            append_clause(&failing_criteria, &prefix);
         }
 
         if summary.is_empty() {
@@ -515,15 +509,22 @@ impl AgentRunner {
         Vec::new()
     }
 
-    async fn request_planner_response(&mut self, task: &Task) -> Result<PlannerResponse> {
+    /// Issue a tool-less, single-turn JSON-only request against the active
+    /// provider and decode the response into `T`. Used by harness sub-roles
+    /// (planner, evaluator) that need structured output with no tool calls.
+    async fn request_json_only<T>(
+        &mut self,
+        system_prompt: &'static str,
+        user_prompt: String,
+        temperature: f32,
+        max_tokens: u32,
+        request_label: &'static str,
+        parse_label: &'static str,
+    ) -> Result<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
         let model = self.get_selected_model();
-        let system_prompt = "You are the VT Code exec harness planner. Expand the task into a concise execution spec, a concrete execution contract, and a tracker. Return strict JSON only with keys: spec_markdown, contract_markdown, task_title, items. Keep spec_markdown high-level and implementation-agnostic. Use contract_markdown and items to define observable done conditions and verification. Each item must include description, outcome, and verify; files is optional. Keep scope tight to the user request and do not invent speculative work.";
-        let user_prompt = format!(
-            "Plan this task.\n\nTitle: {}\nDescription: {}\nInstructions: {}\n\nProduce:\n- a concise execution spec\n- a concrete execution contract with observable done signals\n- tracker items with explicit verification commands\n\nReturn JSON only.",
-            task.title,
-            task.description,
-            task.instructions.as_deref().unwrap_or("(none)")
-        );
         let response = self
             .provider_client
             .generate(LLMRequest {
@@ -532,14 +533,32 @@ impl AgentRunner {
                 tools: Some(std::sync::Arc::new(Vec::<ToolDefinition>::new())),
                 model,
                 stream: false,
-                temperature: Some(0.2),
-                max_tokens: Some(1600),
+                temperature: Some(temperature),
+                max_tokens: Some(max_tokens),
                 ..Default::default()
             })
             .await
-            .context("planner request failed")?;
-        parse_json_response::<PlannerResponse>(response.content.unwrap_or_default().as_str())
-            .context("parse planner response")
+            .context(request_label)?;
+        parse_json_response::<T>(response.content.unwrap_or_default().as_str()).context(parse_label)
+    }
+
+    async fn request_planner_response(&mut self, task: &Task) -> Result<PlannerResponse> {
+        const SYSTEM_PROMPT: &str = "You are the VT Code exec harness planner. Expand the task into a concise execution spec, a concrete execution contract, and a tracker. Return strict JSON only with keys: spec_markdown, contract_markdown, task_title, items. Keep spec_markdown high-level and implementation-agnostic. Use contract_markdown and items to define observable done conditions and verification. Each item must include description, outcome, and verify; files is optional. Keep scope tight to the user request and do not invent speculative work.";
+        let user_prompt = format!(
+            "Plan this task.\n\nTitle: {}\nDescription: {}\nInstructions: {}\n\nProduce:\n- a concise execution spec\n- a concrete execution contract with observable done signals\n- tracker items with explicit verification commands\n\nReturn JSON only.",
+            task.title,
+            task.description,
+            task.instructions.as_deref().unwrap_or("(none)")
+        );
+        self.request_json_only(
+            SYSTEM_PROMPT,
+            user_prompt,
+            0.2,
+            1600,
+            "planner request failed",
+            "parse planner response",
+        )
+        .await
     }
 
     async fn request_evaluator_response(
@@ -548,7 +567,6 @@ impl AgentRunner {
         session_state: &AgentSessionState,
         verification_results: &[VerificationResult],
     ) -> Result<EvaluatorResponse> {
-        let model = self.get_selected_model();
         let spec_content =
             tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
                 .await
@@ -564,7 +582,7 @@ impl AgentRunner {
         let changed_files =
             load_changed_file_snapshots(&self._workspace, &session_state.modified_files).await;
         let verification_summary = format_verification_results(verification_results);
-        let system_prompt = "You are the VT Code exec harness evaluator. You are not the builder. Judge the candidate skeptically and prefer failing borderline cases. Return strict JSON only with keys verdict, summary, high_severity_findings, scorecard, findings, unmet_contract_items, residual_risks, required_tracker_updates. The scorecard must contain 1-5 scores for contract_fidelity, functionality, code_quality, and verification_integrity. Use verdict=pass only when every provided score is at least 4, the tracker/spec/contract all agree, verification evidence is credible, and there are no high-severity issues.";
+        const SYSTEM_PROMPT: &str = "You are the VT Code exec harness evaluator. You are not the builder. Judge the candidate skeptically and prefer failing borderline cases. Return strict JSON only with keys verdict, summary, high_severity_findings, scorecard, findings, unmet_contract_items, residual_risks, required_tracker_updates. The scorecard must contain 1-5 scores for contract_fidelity, functionality, code_quality, and verification_integrity. Use verdict=pass only when every provided score is at least 4, the tracker/spec/contract all agree, verification evidence is credible, and there are no high-severity issues.";
         let user_prompt = format!(
             "Evaluate this run against the current execution contract.\n\nTask title: {}\nTask description: {}\n\nCurrent spec:\n{}\n\nCurrent contract:\n{}\n\nCurrent tracker:\n{}\n\nVerification results:\n{}\n\nModified files:\n{}\n\nWarnings:\n{}\n\nScoring guidance:\n- contract_fidelity: Did the implementation satisfy the spec and contract rather than a looser interpretation?\n- functionality: Do the implemented paths actually work beyond stubs and happy-path claims?\n- code_quality: Are the changes coherent, scoped, and consistent with local patterns?\n- verification_integrity: Do the tracker state and verification evidence really justify completion?\n\nReturn JSON only.",
             task.title,
@@ -576,22 +594,15 @@ impl AgentRunner {
             changed_files,
             format_string_list(&session_state.warnings)
         );
-        let response = self
-            .provider_client
-            .generate(LLMRequest {
-                messages: vec![Message::user(user_prompt)],
-                system_prompt: Some(std::sync::Arc::new(system_prompt.to_string())),
-                tools: Some(std::sync::Arc::new(Vec::<ToolDefinition>::new())),
-                model,
-                stream: false,
-                temperature: Some(0.1),
-                max_tokens: Some(1800),
-                ..Default::default()
-            })
-            .await
-            .context("evaluator request failed")?;
-        parse_json_response::<EvaluatorResponse>(response.content.unwrap_or_default().as_str())
-            .context("parse evaluator response")
+        self.request_json_only(
+            SYSTEM_PROMPT,
+            user_prompt,
+            0.1,
+            1800,
+            "evaluator request failed",
+            "parse evaluator response",
+        )
+        .await
     }
 
     fn render_evaluation(&self, evaluation: &EvaluatorResponse) -> String {
