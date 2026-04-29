@@ -63,6 +63,10 @@ impl AstGrepStatus {
         if !InstallationCache::is_stale(&paths)
             && let Ok(cache) = InstallationCache::load(&paths)
             && cache.status == "failed"
+            && !cache
+                .failure_reason
+                .as_deref()
+                .is_some_and(should_retry_without_cooldown)
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
             bail!(
@@ -107,5 +111,32 @@ impl AstGrepStatus {
                 Err(err)
             }
         }
+    }
+}
+
+fn should_retry_without_cooldown(failure_reason: &str) -> bool {
+    failure_reason.contains("No ast-grep release asset matched the current platform")
+        || failure_reason.contains("Unsupported platform for VT Code-managed ast-grep install")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_retry_without_cooldown;
+
+    #[test]
+    fn platform_mismatch_failures_do_not_enter_cooldown() {
+        assert!(should_retry_without_cooldown(
+            "No ast-grep release asset matched the current platform (aarch64-apple-darwin)"
+        ));
+        assert!(should_retry_without_cooldown(
+            "Unsupported platform for VT Code-managed ast-grep install"
+        ));
+    }
+
+    #[test]
+    fn unrelated_failures_still_use_cooldown() {
+        assert!(!should_retry_without_cooldown(
+            "Failed to fetch ast-grep release metadata"
+        ));
     }
 }

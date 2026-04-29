@@ -17,29 +17,34 @@ impl AgentRunner {
         args: &Value,
         session_state: &mut AgentSessionState,
     ) -> bool {
-        if let Some(warning) = self.loop_detector.lock().record_call(name, args) {
-            if self.loop_detector.lock().is_hard_limit_exceeded(name) {
-                if !self.quiet {
-                    println!("{}", style(&warning).red().bold());
-                }
-                session_state.warnings.push(warning.clone());
-                session_state.conversation.push(Content {
-                    role: ROLE_USER.to_owned(),
-                    parts: vec![Part::Text {
-                        text: warning,
-                        thought_signature: None,
-                    }],
-                });
-                session_state.is_completed = true;
-                session_state.outcome = TaskOutcome::LoopDetected;
-                return true;
-            }
-            if !self.quiet {
-                println!("{}", style(&warning).red().bold());
-            }
-            session_state.warnings.push(warning);
+        let (warning, hard_limit) = {
+            let mut detector = self.loop_detector.lock();
+            let warning = detector.record_call(name, args);
+            let hard_limit = warning.is_some() && detector.is_hard_limit_exceeded(name);
+            (warning, hard_limit)
+        };
+        let Some(warning) = warning else {
+            return false;
+        };
+        if !self.quiet {
+            println!("{}", style(&warning).red().bold());
         }
-        false
+        if hard_limit {
+            session_state.warnings.push(warning.clone());
+            session_state.conversation.push(Content {
+                role: ROLE_USER.to_owned(),
+                parts: vec![Part::Text {
+                    text: warning,
+                    thought_signature: None,
+                }],
+            });
+            session_state.is_completed = true;
+            session_state.outcome = TaskOutcome::LoopDetected;
+            true
+        } else {
+            session_state.warnings.push(warning);
+            false
+        }
     }
 
     pub(super) fn normalize_tool_args(
@@ -53,7 +58,7 @@ impl AgentRunner {
         };
 
         let mut normalized = obj.clone();
-        let workspace_path = self._workspace.to_string_lossy().to_string();
+        let workspace_path = self._workspace.to_string_lossy().into_owned();
         let fallback_dir = session_state
             .last_dir_path
             .clone()
@@ -73,18 +78,11 @@ impl AgentRunner {
             normalized.insert("path".to_string(), Value::String(fallback_dir));
         }
 
-        if name == tools::READ_FILE
-            && !normalized.contains_key("file_path")
-            && !normalized.contains_key("path")
-            && let Some(last_file) = session_state.last_file_path.clone()
-        {
-            normalized.insert("path".to_string(), Value::String(last_file));
-        }
-
         if matches!(
             name,
-            tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
+            tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
         ) && !normalized.contains_key("path")
+            && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
             && let Some(last_file) = session_state.last_file_path.clone()
         {
             normalized.insert("path".to_string(), Value::String(last_file));
@@ -103,26 +101,28 @@ impl AgentRunner {
         args: &Value,
         session_state: &mut AgentSessionState,
     ) {
-        if let Some(path) = args.get("file_path").and_then(|value| value.as_str()) {
-            session_state.last_file_path = Some(path.to_string());
+        let remember_file = |state: &mut AgentSessionState, path: &str| {
+            state.last_file_path = Some(path.to_string());
             if let Some(parent) = Path::new(path).parent() {
-                session_state.last_dir_path = Some(parent.to_string_lossy().to_string());
+                state.last_dir_path = Some(parent.to_string_lossy().into_owned());
             }
+        };
+
+        if let Some(path) = args.get("file_path").and_then(|value| value.as_str()) {
+            remember_file(session_state, path);
             return;
         }
 
-        if let Some(path) = args.get("path").and_then(|value| value.as_str()) {
-            if matches!(
-                name,
-                tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
-            ) {
-                session_state.last_file_path = Some(path.to_string());
-                if let Some(parent) = Path::new(path).parent() {
-                    session_state.last_dir_path = Some(parent.to_string_lossy().to_string());
-                }
-            } else {
-                session_state.last_dir_path = Some(path.to_string());
-            }
+        let Some(path) = args.get("path").and_then(|value| value.as_str()) else {
+            return;
+        };
+        if matches!(
+            name,
+            tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
+        ) {
+            remember_file(session_state, path);
+        } else {
+            session_state.last_dir_path = Some(path.to_string());
         }
     }
 }

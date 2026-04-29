@@ -79,72 +79,71 @@ impl AgentRunner {
     }
 
     /// Validate LLM request before sending to provider.
-    /// Catches configuration errors early to avoid wasted API calls.
+    ///
+    /// Cheap pre-flight gate: catches malformed requests (empty system prompt,
+    /// no messages, duplicate tool names, or required schema fields missing
+    /// from properties) before paying for an API round-trip. Borrows-only;
+    /// no allocations beyond the pre-sized name set.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first invariant violation encountered.
     pub(super) fn validate_llm_request(&self, request: &LLMRequest) -> Result<()> {
-        // Validate system prompt presence
         if request
             .system_prompt
             .as_ref()
             .is_none_or(|s| s.trim().is_empty())
         {
-            return Err(anyhow!("System prompt cannot be empty"));
+            return Err(anyhow!("system prompt cannot be empty"));
         }
-
-        // Validate message history
         if request.messages.is_empty() {
-            return Err(anyhow!("Message history cannot be empty"));
+            return Err(anyhow!("message history cannot be empty"));
         }
-
-        // Validate tools if present
-        if let Some(tools) = &request.tools {
-            let mut seen_names = HashSet::new();
-            for tool in tools.iter() {
-                self.validate_tool_definition(tool, &mut seen_names)?;
-            }
-        }
-
-        // Validate model is specified
         if request.model.trim().is_empty() {
-            return Err(anyhow!("Model identifier cannot be empty"));
+            return Err(anyhow!("model identifier cannot be empty"));
+        }
+
+        if let Some(tools) = request.tools.as_deref() {
+            let mut seen: HashSet<&str> = HashSet::with_capacity(tools.len());
+            for tool in tools {
+                validate_tool_definition(tool, &mut seen)?;
+            }
         }
 
         Ok(())
     }
+}
 
-    /// Validate a single tool definition for schema correctness.
-    fn validate_tool_definition(
-        &self,
-        tool: &ToolDefinition,
-        seen_names: &mut HashSet<String>,
-    ) -> Result<()> {
-        if let Some(func) = &tool.function {
-            // Check name is not empty
-            if func.name.trim().is_empty() {
-                return Err(anyhow!("Tool function name cannot be empty"));
-            }
-            // Check for duplicate names
-            if !seen_names.insert(func.name.clone()) {
-                return Err(anyhow!("Duplicate tool name: {}", func.name));
-            }
-            // Validate parameters schema if it's an object
-            if let Some(obj) = func.parameters.as_object()
-                && let Some(required) = obj.get("required")
-                && let Some(required_arr) = required.as_array()
-                && let Some(props) = obj.get("properties").and_then(|p| p.as_object())
-            {
-                for req in required_arr {
-                    if let Some(req_name) = req.as_str()
-                        && !props.contains_key(req_name)
-                    {
-                        return Err(anyhow!(
-                            "Tool '{}' has required field '{}' not in properties",
-                            func.name,
-                            req_name
-                        ));
-                    }
-                }
+/// Validate a single tool definition for schema correctness.
+///
+/// Borrows the tool name into `seen` to detect duplicates without cloning.
+fn validate_tool_definition<'a>(
+    tool: &'a ToolDefinition,
+    seen: &mut HashSet<&'a str>,
+) -> Result<()> {
+    let Some(func) = tool.function.as_ref() else {
+        return Ok(());
+    };
+
+    let name = func.name.as_str();
+    if name.trim().is_empty() {
+        return Err(anyhow!("tool function name cannot be empty"));
+    }
+    if !seen.insert(name) {
+        return Err(anyhow!("duplicate tool name: {name}"));
+    }
+
+    if let Some(obj) = func.parameters.as_object()
+        && let Some(required_arr) = obj.get("required").and_then(|v| v.as_array())
+        && let Some(props) = obj.get("properties").and_then(|p| p.as_object())
+    {
+        for req in required_arr.iter().filter_map(|v| v.as_str()) {
+            if !props.contains_key(req) {
+                return Err(anyhow!(
+                    "tool '{name}' has required field '{req}' not in properties"
+                ));
             }
         }
-        Ok(())
     }
+    Ok(())
 }

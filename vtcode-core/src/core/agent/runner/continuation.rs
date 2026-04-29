@@ -160,14 +160,11 @@ impl ContinuationController {
             .collect::<Vec<_>>();
 
         if !incomplete_items.is_empty() {
+            let joined = incomplete_items.join(", ");
             return Ok(CompletionAssessment::Continue {
-                reason: format!(
-                    "Task tracker is incomplete: {}.",
-                    incomplete_items.join(", ")
-                ),
+                reason: format!("Task tracker is incomplete: {joined}."),
                 prompt: format!(
-                    "Continue working. Do not stop yet. The task tracker still has incomplete steps: {}. Complete the remaining steps before finishing.",
-                    incomplete_items.join(", ")
+                    "Continue working. Do not stop yet. The task tracker still has incomplete steps: {joined}. Complete the remaining steps before finishing."
                 ),
             });
         }
@@ -201,6 +198,7 @@ impl ContinuationController {
     ) -> Result<CompletionAssessment> {
         let first_failure = results.iter().find(|result| !result.success);
         if let Some(failure) = first_failure {
+            let summary = build_verification_failure_summary(failure);
             if self.manages_internal_scaffold {
                 self.update_internal_step(2, "in_progress", None, None, None)
                     .await?;
@@ -208,14 +206,14 @@ impl ContinuationController {
                     3,
                     "blocked",
                     None,
-                    Some(build_verification_failure_summary(failure)),
+                    Some(summary.clone()),
                     Some(vec![failure.command.clone()]),
                 )
                 .await?;
             }
 
             return Ok(CompletionAssessment::Continue {
-                reason: build_verification_failure_summary(failure),
+                reason: summary,
                 prompt: build_verification_failure_prompt(failure),
             });
         }

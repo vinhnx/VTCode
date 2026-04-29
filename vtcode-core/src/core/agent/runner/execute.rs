@@ -278,9 +278,7 @@ impl AgentRunner {
             );
             event_recorder.turn_started();
             self.runner_println(format_args!(
-                "{} {}",
-                agent_prefix,
-                self.create_progress_message("thinking", None)
+                "{agent_prefix} Analyzing request and planning approach..."
             ));
 
             self.runner_println(format_args!(

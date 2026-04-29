@@ -334,6 +334,10 @@ impl VTCodeConfig {
             .join("rule-tests")
             .join("examples")
             .join("no-console-log-test.yml");
+        let ast_grep_snapshot_path = workspace
+            .join("rule-tests")
+            .join("__snapshots__")
+            .join("no-console-log-snapshot.yml");
 
         crate::loader::bootstrap::ensure_parent_dir(&config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&gitignore_path)?;
@@ -341,6 +345,7 @@ impl VTCodeConfig {
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_rule_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&ast_grep_test_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&ast_grep_snapshot_path)?;
 
         let mut created_files = Vec::new();
 
@@ -396,6 +401,11 @@ impl VTCodeConfig {
                 &ast_grep_test_path,
                 Self::default_ast_grep_example_test_template(),
                 "rule-tests/examples/no-console-log-test.yml",
+            ),
+            (
+                &ast_grep_snapshot_path,
+                Self::default_ast_grep_example_snapshot_template(),
+                "rule-tests/__snapshots__/no-console-log-snapshot.yml",
             ),
         ];
 
@@ -1077,6 +1087,11 @@ target/, build/, dist/, node_modules/, vendor/
     }
 
     #[cfg(feature = "bootstrap")]
+    fn default_ast_grep_example_snapshot_template() -> &'static str {
+        "id: no-console-log\nsnapshots:\n  ? |\n    function greet(name) {\n      console.log(name);\n    }\n  : labels:\n    - source: console.log(name)\n      style: primary\n      start: 25\n      end: 42\n"
+    }
+
+    #[cfg(feature = "bootstrap")]
     /// Create sample configuration file
     pub fn create_sample_config<P: AsRef<Path>>(output: P) -> Result<()> {
         let output = output.as_ref();
@@ -1127,6 +1142,11 @@ mod tests {
                 .iter()
                 .any(|entry| entry == "rule-tests/examples/no-console-log-test.yml")
         );
+        assert!(
+            created
+                .iter()
+                .any(|entry| entry == "rule-tests/__snapshots__/no-console-log-snapshot.yml")
+        );
 
         assert!(workspace.path().join("sgconfig.yml").exists());
         assert!(
@@ -1139,6 +1159,12 @@ mod tests {
             workspace
                 .path()
                 .join("rule-tests/examples/no-console-log-test.yml")
+                .exists()
+        );
+        assert!(
+            workspace
+                .path()
+                .join("rule-tests/__snapshots__/no-console-log-snapshot.yml")
                 .exists()
         );
     }
