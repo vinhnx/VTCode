@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::storage_paths::auth_storage_dir;
+use crate::storage_paths::{auth_storage_dir, write_private_file};
 use crate::{OpenAIAuthConfig, OpenAIPreferredMethod};
 
 pub use super::credentials::AuthCredentialsStoreMode;
@@ -865,14 +865,8 @@ fn clear_session_from_keyring() -> Result<()> {
 fn save_session_to_file(session: &OpenAIChatGptSession) -> Result<()> {
     let encrypted = encrypt_session(session)?;
     let path = get_session_path()?;
-    fs::write(&path, serde_json::to_vec_pretty(&encrypted)?)
-        .context("failed to persist openai session file")?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
-            .context("failed to set openai session file permissions")?;
-    }
+    let payload = serde_json::to_vec_pretty(&encrypted)?;
+    write_private_file(&path, &payload).context("failed to persist openai session file")?;
     Ok(())
 }
 
@@ -1200,6 +1194,24 @@ mod tests {
         assert!(resolved.using_chatgpt());
         clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
             .expect("clear session");
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(unix)]
+    fn file_storage_uses_private_permissions() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = TestAuthDirGuard::new();
+        let session = sample_session();
+
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
+            .expect("save session");
+
+        let metadata =
+            fs::metadata(get_session_path().expect("session path")).expect("read session metadata");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 
     #[test]

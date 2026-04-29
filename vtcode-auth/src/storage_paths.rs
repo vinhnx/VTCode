@@ -1,5 +1,7 @@
 use anyhow::{Context, Result, anyhow};
-use std::path::PathBuf;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::{LazyLock, Mutex};
 
@@ -13,7 +15,7 @@ pub(crate) fn auth_storage_dir() -> Result<PathBuf> {
         .map_err(|_| anyhow!("auth storage override mutex poisoned"))?
         .clone()
     {
-        std::fs::create_dir_all(&path).context("failed to create auth directory")?;
+        fs::create_dir_all(&path).context("failed to create auth directory")?;
         return Ok(path);
     }
 
@@ -22,7 +24,7 @@ pub(crate) fn auth_storage_dir() -> Result<PathBuf> {
         .join(".vtcode")
         .join("auth");
 
-    std::fs::create_dir_all(&auth_dir).context("failed to create auth directory")?;
+    fs::create_dir_all(&auth_dir).context("failed to create auth directory")?;
     Ok(auth_dir)
 }
 
@@ -33,7 +35,7 @@ pub(crate) fn legacy_auth_storage_path() -> Result<PathBuf> {
         .map_err(|_| anyhow!("auth storage override mutex poisoned"))?
         .clone()
     {
-        std::fs::create_dir_all(&path).context("failed to create auth directory")?;
+        fs::create_dir_all(&path).context("failed to create auth directory")?;
         return Ok(path.join("auth.json"));
     }
 
@@ -41,8 +43,35 @@ pub(crate) fn legacy_auth_storage_path() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("could not determine home directory"))?
         .join(".vtcode");
 
-    std::fs::create_dir_all(&base_dir).context("failed to create auth directory")?;
+    fs::create_dir_all(&base_dir).context("failed to create auth directory")?;
     Ok(base_dir.join("auth.json"))
+}
+
+#[cfg(unix)]
+pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
+    use std::fs::OpenOptions;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("failed to open private file {}", path.display()))?;
+    file.write_all(contents)
+        .with_context(|| format!("failed to write private file {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("failed to sync private file {}", path.display()))?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("failed to set permissions on {}", path.display()))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
+    fs::write(path, contents)
+        .with_context(|| format!("failed to write private file {}", path.display()))
 }
 
 #[cfg(test)]
