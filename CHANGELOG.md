@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.1 - 2026-04-29
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix ast-grep dependencies install (21585180) 
 ## 0.105.0 - 2026-04-27
 
 ### Highlights
