@@ -37,7 +37,7 @@ use std::path::PathBuf;
 
 pub use super::credentials::AuthCredentialsStoreMode;
 use super::pkce::PkceChallenge;
-use crate::storage_paths::auth_storage_dir;
+use crate::storage_paths::{auth_storage_dir, write_private_file};
 
 /// OpenRouter API endpoints
 const OPENROUTER_AUTH_URL: &str = "https://openrouter.ai/auth";
@@ -339,16 +339,7 @@ fn save_oauth_token_file(token: &OpenRouterToken) -> Result<()> {
     let encrypted = encrypt_token(token)?;
     let json =
         serde_json::to_string_pretty(&encrypted).context("Failed to serialize encrypted token")?;
-
-    fs::write(&path, json).context("Failed to write token file")?;
-
-    // Set restrictive permissions on Unix
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = fs::Permissions::from_mode(0o600);
-        fs::set_permissions(&path, perms).context("Failed to set token file permissions")?;
-    }
+    write_private_file(&path, json.as_bytes()).context("Failed to write token file")?;
 
     tracing::info!("OAuth token saved to {}", path.display());
     Ok(())
@@ -617,6 +608,39 @@ fn humanize_duration(seconds: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
+    use serial_test::serial;
+
+    struct TestAuthDirGuard {
+        temp_dir: Option<TempDir>,
+        previous: Option<PathBuf>,
+    }
+
+    impl TestAuthDirGuard {
+        fn new() -> Self {
+            let temp_dir = TempDir::new().expect("create temp auth dir");
+            let previous = crate::storage_paths::auth_storage_dir_override_for_tests()
+                .expect("read auth dir override");
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(
+                temp_dir.path().to_path_buf(),
+            ))
+            .expect("set temp auth dir override");
+            Self {
+                temp_dir: Some(temp_dir),
+                previous,
+            }
+        }
+    }
+
+    impl Drop for TestAuthDirGuard {
+        fn drop(&mut self) {
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(self.previous.clone())
+                .expect("restore auth dir override");
+            if let Some(temp_dir) = self.temp_dir.take() {
+                temp_dir.close().expect("remove temp auth dir");
+            }
+        }
+    }
 
     #[test]
     fn test_auth_url_generation() {
@@ -698,5 +722,58 @@ mod tests {
         let display = status.display_string();
         assert!(display.contains("Authenticated"));
         assert!(display.contains("My App"));
+    }
+
+    #[test]
+    #[serial]
+    fn file_storage_round_trips_without_plaintext() {
+        let _guard = TestAuthDirGuard::new();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let token = OpenRouterToken {
+            api_key: "sk-test-key-12345".to_string(),
+            obtained_at: now,
+            expires_at: Some(now + 86400),
+            label: Some("Test Token".to_string()),
+        };
+
+        save_oauth_token_with_mode(&token, AuthCredentialsStoreMode::File).expect("save token");
+        let loaded =
+            load_oauth_token_with_mode(AuthCredentialsStoreMode::File).expect("load token");
+        assert_eq!(
+            loaded.as_ref().map(|value| &value.api_key),
+            Some(&token.api_key)
+        );
+
+        let stored =
+            fs::read_to_string(get_token_path().expect("token path")).expect("read token file");
+        assert!(!stored.contains(&token.api_key));
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(unix)]
+    fn file_storage_uses_private_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = TestAuthDirGuard::new();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let token = OpenRouterToken {
+            api_key: "sk-test-key-12345".to_string(),
+            obtained_at: now,
+            expires_at: Some(now + 86400),
+            label: Some("Test Token".to_string()),
+        };
+
+        save_oauth_token_with_mode(&token, AuthCredentialsStoreMode::File).expect("save token");
+
+        let metadata =
+            fs::metadata(get_token_path().expect("token path")).expect("read token metadata");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 }

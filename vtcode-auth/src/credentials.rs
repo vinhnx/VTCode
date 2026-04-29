@@ -36,6 +36,7 @@ use std::fs;
 
 use crate::storage_paths::auth_storage_dir;
 use crate::storage_paths::legacy_auth_storage_path;
+use crate::storage_paths::write_private_file;
 
 const ENCRYPTED_CREDENTIAL_VERSION: u8 = 1;
 
@@ -302,15 +303,7 @@ impl CredentialStorage {
         let encrypted = encrypt_credential(value)?;
         let payload = serde_json::to_vec_pretty(&encrypted)
             .context("failed to serialize encrypted credential")?;
-        fs::write(&path, payload).context("failed to write encrypted credential file")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
-                .context("failed to set credential file permissions")?;
-        }
+        write_private_file(&path, &payload).context("failed to write encrypted credential file")?;
 
         Ok(())
     }
@@ -757,6 +750,24 @@ mod tests {
             .load_with_mode(AuthCredentialsStoreMode::Keyring)
             .expect("load credential");
         assert_eq!(loaded.as_deref(), Some("secret_api_key"));
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(unix)]
+    fn credential_storage_file_mode_uses_private_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = TestAuthDirGuard::new();
+        let storage = CredentialStorage::new("vtcode", "test_key");
+
+        storage
+            .store_with_mode("secret_api_key", AuthCredentialsStoreMode::File)
+            .expect("store encrypted credential");
+
+        let metadata = fs::metadata(storage.file_path().expect("credential path"))
+            .expect("read credential metadata");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 
     #[test]
