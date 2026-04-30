@@ -28,10 +28,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::llm::{
-    factory::{ProviderConfig, create_provider_with_config, infer_provider},
-    provider as uni,
-};
+use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider};
+use vtcode_core::llm::provider as uni;
 
 use vtcode_core::models::ModelId;
 use vtcode_core::subagents::{SubagentController, SubagentControllerConfig};
@@ -45,10 +43,6 @@ use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_noti
 
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
-
-use std::collections::BTreeSet;
-
-use vtcode_config::auth::CopilotAuthConfig;
 
 #[allow(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
@@ -101,37 +95,6 @@ pub(crate) fn resolve_provider_label(
     }
 
     key.to_string()
-}
-
-fn prompt_visible_tool_names(
-    provider_name: &str,
-    vt_cfg: Option<&VTCodeConfig>,
-    tool_defs: &[uni::ToolDefinition],
-) -> Vec<String> {
-    let mut names = tool_defs
-        .iter()
-        .filter_map(tool_definition_name)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-
-    if !provider_name.eq_ignore_ascii_case(vtcode_core::copilot::COPILOT_PROVIDER_KEY) {
-        return names;
-    }
-
-    let allowlist: BTreeSet<_> = vt_cfg
-        .map(|cfg| cfg.auth.copilot.vtcode_tool_allowlist.clone())
-        .unwrap_or_else(|| CopilotAuthConfig::default().vtcode_tool_allowlist)
-        .into_iter()
-        .collect();
-    names.retain(|name| allowlist.contains(name));
-    names
-}
-
-fn tool_definition_name(tool: &uni::ToolDefinition) -> Option<&str> {
-    tool.function
-        .as_ref()
-        .map(|function| function.name.as_str())
-        .or_else(|| (!tool.tool_type.is_empty()).then_some(tool.function_name()))
 }
 
 pub(crate) async fn initialize_session(
@@ -317,10 +280,6 @@ pub(crate) async fn initialize_session(
     .await;
 
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
-    let available_tools = {
-        let tool_defs = tools.read().await;
-        prompt_visible_tool_names(provider_client.name(), vt_cfg, tool_defs.as_slice())
-    };
     let available_subagents = if let Some(controller) = subagent_controller.as_ref() {
         controller
             .effective_specs()
@@ -337,7 +296,6 @@ pub(crate) async fn initialize_session(
     let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
-        &available_tools,
         &available_subagents,
     )
     .await;
@@ -596,72 +554,4 @@ async fn apply_workspace_trust_prompt_policy(
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::prompt_visible_tool_names;
-    use vtcode_core::config::loader::VTCodeConfig;
-    use vtcode_core::llm::provider::ToolDefinition;
-
-    #[test]
-    fn prompt_visible_tool_names_keep_all_tools_for_non_copilot() {
-        let tool_defs = vec![
-            ToolDefinition::function(
-                "unified_search".to_string(),
-                "Search project files".to_string(),
-                json!({"type": "object"}),
-            ),
-            ToolDefinition::function(
-                "request_user_input".to_string(),
-                "Request user input".to_string(),
-                json!({"type": "object"}),
-            ),
-        ];
-
-        let names = prompt_visible_tool_names("openai", None, &tool_defs);
-
-        assert_eq!(names, vec!["unified_search", "request_user_input"]);
-    }
-
-    #[test]
-    fn prompt_visible_tool_names_filter_to_copilot_allowlist() {
-        let tool_defs = vec![
-            ToolDefinition::function(
-                "unified_search".to_string(),
-                "Search project files".to_string(),
-                json!({"type": "object"}),
-            ),
-            ToolDefinition::function(
-                "request_user_input".to_string(),
-                "Request user input".to_string(),
-                json!({"type": "object"}),
-            ),
-        ];
-        let mut cfg = VTCodeConfig::default();
-        cfg.auth.copilot.vtcode_tool_allowlist = vec!["unified_search".to_string()];
-
-        let names = prompt_visible_tool_names(
-            vtcode_core::copilot::COPILOT_PROVIDER_KEY,
-            Some(&cfg),
-            &tool_defs,
-        );
-
-        assert_eq!(names, vec!["unified_search"]);
-    }
-
-    #[test]
-    fn prompt_visible_tool_names_include_native_tool_types() {
-        let tool_defs = vec![
-            ToolDefinition::web_search(json!({})),
-            ToolDefinition::google_maps(json!({})),
-            ToolDefinition::url_context(json!({})),
-        ];
-
-        let names = prompt_visible_tool_names("gemini", None, &tool_defs);
-
-        assert_eq!(names, vec!["web_search", "google_maps", "url_context"]);
-    }
 }

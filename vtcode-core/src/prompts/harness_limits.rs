@@ -29,7 +29,7 @@ fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usi
     section_start.map(|start| (start, prompt.len()))
 }
 
-/// Keep prompt guidance aligned with runtime harness enforcement limits.
+/// Keep prompt guidance aligned with the selected user-visible harness limits.
 ///
 /// This operation is idempotent: existing `[Harness Limits]` sections are removed before
 /// inserting the current values.

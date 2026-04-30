@@ -187,6 +187,7 @@ async fn execute_parallel_group<'a, 'b>(
                     Some(&reporter),
                     max_retries,
                     exec_settlement_mode_for_tool_call(true, &name, &args),
+                    false,
                 )
                 .await;
             (call_id, name, args, status, start_time, circuit_before)

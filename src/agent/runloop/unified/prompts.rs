@@ -19,11 +19,10 @@ fn fallback_base_system_prompt(vt_cfg: Option<&vtcode_core::config::VTCodeConfig
 pub(crate) async fn read_system_prompt(
     workspace: &Path,
     session_addendum: Option<&str>,
-    available_tools: &[String],
     available_subagents: &[(String, String, bool)],
 ) -> String {
     let mut prompt_context =
-        PromptContext::from_workspace_tools(workspace, available_tools.iter().cloned());
+        PromptContext::from_workspace_tools(workspace, std::iter::empty::<String>());
     prompt_context.load_available_skills();
 
     // Load configuration
@@ -126,7 +125,6 @@ mod tests {
         let prompt = read_system_prompt(
             workspace.path(),
             None,
-            &[],
             &[(
                 "explorer".to_string(),
                 "Read-only repo explorer".to_string(),

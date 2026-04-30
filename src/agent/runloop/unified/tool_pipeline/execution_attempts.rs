@@ -67,6 +67,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         max_tool_retries,
         false,
         ExecSettlementMode::Manual,
+        false,
     )
     .await
 }
@@ -80,6 +81,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
     exec_settlement_mode: ExecSettlementMode,
+    safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
     execute_tool_with_timeout_ref_mode(
         registry,
@@ -91,6 +93,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
         max_tool_retries,
         true,
         exec_settlement_mode,
+        safety_prevalidated,
     )
     .await
 }
@@ -105,6 +108,7 @@ async fn execute_tool_with_timeout_ref_mode(
     max_tool_retries: usize,
     prevalidated: bool,
     exec_settlement_mode: ExecSettlementMode,
+    safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
     let created_local_reporter = progress_reporter.is_none();
     let fallback_progress_reporter = ProgressReporter::new();
@@ -145,6 +149,7 @@ async fn execute_tool_with_timeout_ref_mode(
         &retry_policy,
         prevalidated,
         exec_settlement_mode,
+        safety_prevalidated,
     )
     .await;
 
@@ -167,6 +172,7 @@ async fn execute_tool_with_progress(
     retry_policy: &RetryPolicy,
     prevalidated: bool,
     exec_settlement_mode: ExecSettlementMode,
+    safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
     let deadline = Instant::now() + tool_timeout;
     let kernel_max_retries = if retry_allowed {
@@ -188,6 +194,7 @@ async fn execute_tool_with_progress(
         None,
         retry_policy,
         kernel_max_retries,
+        safety_prevalidated,
     )
     .await;
 
@@ -230,6 +237,7 @@ async fn run_attempt_with_logging(
     retry_delay: Option<Duration>,
     retry_policy: &RetryPolicy,
     kernel_max_retries: usize,
+    safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
     let attempt_start = Instant::now();
     let status = run_single_tool_attempt(
@@ -244,6 +252,7 @@ async fn run_attempt_with_logging(
         exec_settlement_mode,
         retry_policy,
         kernel_max_retries,
+        safety_prevalidated,
     )
     .await;
 
@@ -273,6 +282,7 @@ async fn run_single_tool_attempt(
     exec_settlement_mode: ExecSettlementMode,
     retry_policy: &RetryPolicy,
     kernel_max_retries: usize,
+    safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
@@ -333,7 +343,7 @@ async fn run_single_tool_attempt(
                 .with_max_retries(kernel_max_retries)
                 .with_prevalidated(prevalidated)
                 .with_exec_settlement_mode(exec_settlement_mode)
-                .with_safety_prevalidated(false);
+                .with_safety_prevalidated(safety_prevalidated);
             policy.retry_base_delay = retry_policy.initial_delay;
             policy.retry_max_delay = retry_policy.max_delay;
             policy.retry_multiplier = retry_policy.multiplier;
@@ -545,8 +555,11 @@ mod tests {
     use anyhow::anyhow;
     use serde_json::json;
     use tempfile::TempDir;
+    use tokio::sync::Notify;
+    use vtcode_core::tools::{SafetyContext, ToolInvocationId};
 
     use super::*;
+    use crate::agent::runloop::unified::state::CtrlCState;
 
     #[test]
     fn first_retry_backoff_is_non_zero_and_meaningful() {
@@ -640,5 +653,51 @@ mod tests {
             vtcode_core::config::constants::tools::WRITE_FILE,
             &json!({"path": "scratch.txt", "content": "x"})
         ));
+    }
+
+    #[tokio::test]
+    async fn prevalidated_execution_does_not_consume_safety_budget_twice() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let read_path = temp_dir.path().join("README.md");
+        tokio::fs::write(&read_path, "hello")
+            .await
+            .expect("write file");
+
+        let gateway = registry.safety_gateway();
+        gateway.set_limits(1, 10);
+        gateway.start_turn();
+
+        let safety_result = gateway
+            .check_and_record_with_id(
+                &SafetyContext::new("test-session"),
+                vtcode_core::config::constants::tools::READ_FILE,
+                &json!({ "path": read_path }),
+                Some(ToolInvocationId::new()),
+            )
+            .await;
+        assert!(matches!(
+            safety_result.decision,
+            vtcode_core::tools::SafetyDecision::Allow
+                | vtcode_core::tools::SafetyDecision::NeedsApproval(_)
+        ));
+
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let status = execute_tool_with_timeout_ref_prevalidated(
+            &registry,
+            vtcode_core::config::constants::tools::READ_FILE,
+            &json!({ "path": read_path }),
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            0,
+            ExecSettlementMode::Manual,
+            true,
+        )
+        .await;
+
+        assert!(matches!(status, ToolExecutionStatus::Success { .. }));
+        assert_eq!(gateway.get_stats().turn_count, 1);
     }
 }

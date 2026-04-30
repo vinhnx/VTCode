@@ -339,6 +339,12 @@ pub fn build_harness_request_plan(input: HarnessRequestPlanInput) -> HarnessRequ
 
 pub fn stable_system_prefix_hash(system_prompt: &str) -> u64 {
     let stable_prefix = system_prompt
+        .split("\n## Active Tools\n")
+        .next()
+        .unwrap_or(system_prompt)
+        .split("\n[Runtime Tool Catalog]\n")
+        .next()
+        .unwrap_or(system_prompt)
         .split("\n[Runtime Context]\n")
         .next()
         .unwrap_or(system_prompt)
@@ -812,6 +818,38 @@ mod tests {
 
         assert!(names.contains(&tools::UNIFIED_SEARCH));
         assert!(!names.contains(&tools::REQUEST_USER_INPUT));
+    }
+
+    #[test]
+    fn filter_tool_definitions_hides_mutating_only_tools_in_plan_mode() {
+        let tools = Arc::new(vec![
+            function_tool(tools::UNIFIED_SEARCH),
+            function_tool(tools::UNIFIED_FILE),
+            function_tool(tools::APPLY_PATCH),
+            function_tool(tools::WRITE_FILE),
+        ]);
+
+        let filtered =
+            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let names: Vec<&str> = filtered.iter().map(|tool| tool.function_name()).collect();
+
+        assert!(names.contains(&tools::UNIFIED_SEARCH));
+        assert!(names.contains(&tools::UNIFIED_FILE));
+        assert!(!names.contains(&tools::APPLY_PATCH));
+        assert!(!names.contains(&tools::WRITE_FILE));
+    }
+
+    #[test]
+    fn stable_prefix_hash_ignores_runtime_tool_sections() {
+        let base = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 5";
+        let with_runtime_sections = format!(
+            "{base}\n\n## Active Tools\n- Mode: read-only.\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 2\n- available_tools: 3\n- request_user_input_enabled: false"
+        );
+
+        assert_eq!(
+            stable_system_prefix_hash(base),
+            stable_system_prefix_hash(&with_runtime_sections)
+        );
     }
 
     #[test]

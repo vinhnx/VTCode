@@ -180,6 +180,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
     exec_settlement_mode: ExecSettlementMode,
+    safety_prevalidated: bool,
 ) -> RuntimeToolExecution {
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
@@ -273,6 +274,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         progress_reporter.as_ref(),
         max_tool_retries,
         exec_settlement_mode,
+        safety_prevalidated,
     )
     .await;
 

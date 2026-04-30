@@ -56,6 +56,7 @@ pub(super) async fn resolve_file_conflict_status<S>(
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
+    safety_prevalidated: bool,
 ) -> Result<ToolExecutionStatus>
 where
     S: UiSession + ?Sized,
@@ -113,6 +114,7 @@ where
                     vt_cfg,
                     max_tool_retries,
                     ExecSettlementMode::Manual,
+                    safety_prevalidated,
                 )
                 .await;
             }
@@ -437,6 +439,7 @@ mod tests {
             None,
             None,
             0,
+            false,
         )
         .await?;
 
@@ -485,6 +488,7 @@ mod tests {
             None,
             None,
             0,
+            false,
         )
         .await?;
 
@@ -540,6 +544,7 @@ mod tests {
             None,
             None,
             0,
+            false,
         )
         .await?;
 
@@ -594,6 +599,7 @@ mod tests {
             None,
             None,
             0,
+            false,
         )
         .await?;
 

@@ -47,7 +47,7 @@ mod execute_checks;
 mod helpers;
 mod orchestration;
 mod output;
-mod prompt_alignment;
+pub mod prompt_alignment;
 mod retry;
 mod summarize;
 mod summary;

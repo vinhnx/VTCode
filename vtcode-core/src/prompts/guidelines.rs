@@ -1,5 +1,9 @@
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
+use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 
 const TOOL_UNIFIED_EXEC: &str = tools::UNIFIED_EXEC;
 const TOOL_UNIFIED_FILE: &str = tools::UNIFIED_FILE;
@@ -7,6 +11,9 @@ const TOOL_UNIFIED_SEARCH: &str = tools::UNIFIED_SEARCH;
 const TOOL_READ_FILE: &str = tools::READ_FILE;
 const TOOL_LIST_FILES: &str = tools::LIST_FILES;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
+const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
+const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
+const TOOL_PLAN_TASK_TRACKER: &str = tools::PLAN_TASK_TRACKER;
 
 /// Generate compact cross-tool guidance based on the tools available in the session.
 pub fn generate_tool_guidelines(
@@ -55,6 +62,98 @@ pub fn generate_tool_guidelines(
     }
 
     format!("\n\n## Active Tools\n{}", lines.join("\n"))
+}
+
+pub fn append_runtime_tool_prompt_sections(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    include_catalog_metadata: bool,
+) {
+    let available_tools = snapshot_tool_names(tool_snapshot);
+    let guidelines = generate_runtime_tool_guidelines(&available_tools, tool_snapshot.plan_mode);
+    if !guidelines.is_empty() {
+        prompt.push_str(&guidelines);
+    }
+
+    if include_catalog_metadata && tool_snapshot.snapshot.is_some() {
+        let _ = writeln!(
+            prompt,
+            "\n[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}\n- request_user_input_enabled: {}",
+            tool_snapshot.version,
+            tool_snapshot.epoch,
+            tool_snapshot.available_tools(),
+            tool_snapshot.request_user_input_enabled,
+        );
+    }
+}
+
+fn generate_runtime_tool_guidelines(available_tools: &[String], plan_mode: bool) -> String {
+    if !plan_mode {
+        return generate_tool_guidelines(available_tools, None);
+    }
+
+    let has_exec = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_EXEC);
+    let has_file = available_tools.iter().any(|tool| tool == TOOL_UNIFIED_FILE);
+    let has_search = available_tools
+        .iter()
+        .any(|tool| tool == TOOL_UNIFIED_SEARCH);
+    let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
+    let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
+    let has_request_user_input = available_tools
+        .iter()
+        .any(|tool| tool == TOOL_REQUEST_USER_INPUT);
+    let has_task_tracker = available_tools
+        .iter()
+        .any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER | TOOL_PLAN_TASK_TRACKER));
+
+    let mut lines = vec![
+        "- Mode: read-only. Stay within the plan-mode tool list and use only read-safe actions."
+            .to_string(),
+    ];
+    if let Some(browse_guidance) =
+        browse_tool_guidance(has_search, has_file, has_list_files, has_read_file)
+    {
+        lines.push(browse_guidance);
+    }
+    if has_file {
+        lines.push("- In Plan Mode, use `unified_file` only for read-style access.".to_string());
+    }
+    if has_exec {
+        lines.push(
+            "- In Plan Mode, use `unified_exec` only for read-only verification, poll, or inspect actions."
+                .to_string(),
+        );
+    }
+    if has_task_tracker {
+        lines.push("- Keep `task_tracker` updated as you refine the plan.".to_string());
+    }
+    if has_request_user_input {
+        lines.push(
+            "- Use `request_user_input` only for material blockers that remain after repository exploration."
+                .to_string(),
+        );
+    }
+    if has_search || has_file || has_exec {
+        lines.push(
+            "- If calls repeat without progress, tighten the plan instead of retrying identically."
+                .to_string(),
+        );
+    }
+
+    format!("\n\n## Active Tools\n{}", lines.join("\n"))
+}
+
+fn snapshot_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> Vec<String> {
+    let Some(snapshot) = tool_snapshot.snapshot.as_ref() else {
+        return Vec::new();
+    };
+
+    snapshot
+        .iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn browse_tool_guidance(
@@ -255,5 +354,50 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         let approx_tokens = guidelines.len() / 4;
         assert!(approx_tokens < 110, "got ~{} tokens", approx_tokens);
+    }
+
+    #[test]
+    fn plan_mode_runtime_guidance_keeps_unified_file_read_only() {
+        let tools = vec![
+            TOOL_UNIFIED_FILE.to_string(),
+            TOOL_UNIFIED_EXEC.to_string(),
+            TOOL_UNIFIED_SEARCH.to_string(),
+        ];
+        let guidelines = generate_runtime_tool_guidelines(&tools, true);
+
+        assert!(guidelines.contains("Mode: read-only"));
+        assert!(guidelines.contains("`unified_file` only for read-style access"));
+        assert!(guidelines.contains("`unified_exec` only for read-only verification"));
+        assert!(!guidelines.contains("Read before edit"));
+    }
+
+    #[test]
+    fn runtime_tool_prompt_sections_include_catalog_metadata() {
+        let mut prompt = "Base prompt".to_string();
+        let snapshot = SessionToolCatalogSnapshot::new(
+            7,
+            9,
+            true,
+            false,
+            Some(std::sync::Arc::new(vec![
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_UNIFIED_SEARCH.to_string(),
+                    "Search".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_UNIFIED_FILE.to_string(),
+                    "File".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+            ])),
+            false,
+        );
+
+        append_runtime_tool_prompt_sections(&mut prompt, &snapshot, true);
+
+        assert!(prompt.contains("## Active Tools"));
+        assert!(prompt.contains("[Runtime Tool Catalog]"));
+        assert!(prompt.contains("request_user_input_enabled: false"));
     }
 }

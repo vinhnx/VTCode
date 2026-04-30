@@ -368,6 +368,7 @@ pub(crate) async fn run_tool_call_with_args(
         vt_cfg,
         max_tool_retries,
         exec_settlement_mode_for_tool_call(prevalidated, name, &effective_args),
+        !prevalidated,
     )
     .await;
     let execution_status = resolve_file_conflict_status(
@@ -385,6 +386,7 @@ pub(crate) async fn run_tool_call_with_args(
         harness_emitter.cloned(),
         vt_cfg,
         max_tool_retries,
+        !prevalidated,
     )
     .await?;
 

@@ -22,7 +22,9 @@ pub use cache_aware::sort_tool_definitions;
 pub use config::SystemPromptConfig;
 pub use context::PromptContext;
 pub use generator::{SystemPromptGenerator, generate_system_instruction_with_config};
-pub use guidelines::{generate_tool_guidelines, infer_capability_level};
+pub use guidelines::{
+    append_runtime_tool_prompt_sections, generate_tool_guidelines, infer_capability_level,
+};
 pub use harness_limits::upsert_harness_limits_section;
 pub use resources::{
     PromptTemplate, apply_system_prompt_layers, discover_prompt_templates, expand_prompt_template,

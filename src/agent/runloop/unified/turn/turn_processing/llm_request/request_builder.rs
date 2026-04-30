@@ -11,11 +11,12 @@ use vtcode_core::core::agent::harness_kernel::{
     HarnessRequestPlanInput, SessionToolCatalogSnapshot, build_harness_request_plan,
     stable_system_prefix_hash,
 };
+use vtcode_core::core::agent::runner::prompt_alignment;
 use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_responses_continuation_request,
     supports_responses_chaining,
 };
-use vtcode_core::prompts::upsert_harness_limits_section;
+use vtcode_core::prompts::{append_runtime_tool_prompt_sections, upsert_harness_limits_section};
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
@@ -207,15 +208,21 @@ async fn assemble_prompt(
             .await
     };
 
-    if tool_snapshot.snapshot.as_ref().is_some()
-        && !input.turn.prompt_cache_shaping_mode.is_enabled()
-    {
-        let _ = writeln!(
-            system_prompt,
-            "\n[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}",
-            tool_snapshot.version,
-            tool_snapshot.epoch,
-            tool_snapshot.available_tools()
+    append_runtime_tool_prompt_sections(
+        &mut system_prompt,
+        &tool_snapshot,
+        !input.turn.prompt_cache_shaping_mode.is_enabled(),
+    );
+
+    if let Err(error) = prompt_alignment::validate_prompt_catalog_alignment(
+        &system_prompt,
+        &tool_snapshot,
+        input.turn.plan_mode,
+        input.turn.request_user_input_enabled,
+    ) {
+        tracing::warn!(
+            error = ?error,
+            "prompt/catalog alignment mismatch during unified request assembly"
         );
     }
 

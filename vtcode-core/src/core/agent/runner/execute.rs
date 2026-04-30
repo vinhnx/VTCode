@@ -356,10 +356,14 @@ impl AgentRunner {
             // A mismatch means the snapshot was built with stale plan-mode state; self-heal
             // by re-snapshotting so the LLM receives a consistent tool list.
             let plan_mode_now = self.tool_registry.is_plan_mode();
+            let request_user_input_enabled = self
+                .features()
+                .request_user_input_enabled(plan_mode_now, false);
             match prompt_alignment::validate_prompt_catalog_alignment(
                 &system_instruction,
                 &tool_snapshot,
                 plan_mode_now,
+                request_user_input_enabled,
             ) {
                 Ok(()) => {}
                 Err(prompt_alignment::AlignmentError::PlanModeMismatch {
@@ -374,6 +378,27 @@ impl AgentRunner {
                     let refreshed = self.build_universal_tool_snapshot().await?;
                     request_tools = refreshed.snapshot.clone();
                     tool_snapshot = refreshed;
+                }
+                Err(prompt_alignment::AlignmentError::RequestUserInputMismatch {
+                    snapshot_request_user_input_enabled,
+                    runtime_request_user_input_enabled,
+                }) => {
+                    warn!(
+                        snapshot_request_user_input_enabled,
+                        runtime_request_user_input_enabled,
+                        "prompt/catalog request-user-input mismatch; re-snapshotting tool catalog"
+                    );
+                    let refreshed = self.build_universal_tool_snapshot().await?;
+                    request_tools = refreshed.snapshot.clone();
+                    tool_snapshot = refreshed;
+                }
+                Err(prompt_alignment::AlignmentError::PlanModePromptPolicyMismatch {
+                    expected_line,
+                }) => {
+                    warn!(
+                        expected_line = %expected_line,
+                        "canary: plan-mode prompt policy line mismatch"
+                    );
                 }
                 Err(prompt_alignment::AlignmentError::MutatingToolInPlanModePrompt {
                     tool_name,

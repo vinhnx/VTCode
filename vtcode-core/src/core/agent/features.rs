@@ -1,5 +1,6 @@
 use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
+use crate::tools::tool_intent::{ToolMutationModel, builtin_tool_behavior};
 
 /// Lifecycle stage for a feature gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,12 +82,15 @@ impl FeatureSet {
 
     pub fn tool_enabled_for_mode(
         tool_name: &str,
-        _plan_mode: bool,
+        plan_mode: bool,
         request_user_input_enabled: bool,
     ) -> bool {
         match tool_name {
             tools::REQUEST_USER_INPUT => request_user_input_enabled,
-            _ => true,
+            _ if !plan_mode => true,
+            _ => builtin_tool_behavior(tool_name)
+                .map(|behavior| !matches!(behavior.mutation_model, ToolMutationModel::Mutating))
+                .unwrap_or(true),
         }
     }
 
@@ -134,6 +138,18 @@ mod tests {
 
         assert!(!features.request_user_input_enabled(false, true));
         assert!(!features.request_user_input_enabled(true, true));
+    }
+
+    #[test]
+    fn plan_mode_hides_mutating_only_tools_but_keeps_conditional_tools() {
+        let cfg = VTCodeConfig::default();
+        let features = FeatureSet::from_config(Some(&cfg));
+
+        assert!(!features.allows_tool_name(tools::APPLY_PATCH, true, true));
+        assert!(!features.allows_tool_name(tools::WRITE_FILE, true, true));
+        assert!(features.allows_tool_name(tools::UNIFIED_FILE, true, true));
+        assert!(features.allows_tool_name(tools::UNIFIED_EXEC, true, true));
+        assert!(features.allows_tool_name(tools::TASK_TRACKER, true, true));
     }
 
     #[test]

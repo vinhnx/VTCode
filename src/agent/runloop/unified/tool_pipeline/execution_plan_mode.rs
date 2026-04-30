@@ -95,6 +95,7 @@ pub(super) async fn handle_enter_plan_mode(
         None,
         max_tool_retries,
         ExecSettlementMode::Manual,
+        false,
     )
     .await;
 
@@ -168,6 +169,7 @@ pub(super) async fn handle_exit_plan_mode(
         None,
         max_tool_retries,
         ExecSettlementMode::Manual,
+        false,
     )
     .await;
 
@@ -419,6 +421,7 @@ async fn handle_enter_pending_confirmation(
         None,
         max_tool_retries,
         ExecSettlementMode::Manual,
+        false,
     )
     .await;
 
