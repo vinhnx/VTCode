@@ -126,6 +126,10 @@ fn cache_file_path() -> Result<PathBuf> {
 }
 
 #[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "These updater cache tests serialize environment mutation with env_guard, but Rust 2024 still requires unsafe set_var/remove_var calls."
+)]
 mod tests {
     use super::*;
     use std::env;
@@ -139,14 +143,36 @@ mod tests {
             .expect("env lock")
     }
 
+    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: updater cache tests hold `env_guard()` before mutating the process
+        // environment, so these calls are serialized.
+        unsafe {
+            env::set_var(key, value);
+        }
+    }
+
+    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: updater cache tests hold `env_guard()` before mutating the process
+        // environment, so these calls are serialized.
+        unsafe {
+            env::remove_var(key);
+        }
+    }
+
+    fn restore_env_var<T: AsRef<std::ffi::OsStr>>(key: &str, previous: Option<T>) {
+        if let Some(previous) = previous {
+            set_env_var(key, previous);
+        } else {
+            remove_env_var(key);
+        }
+    }
+
     #[test]
     fn empty_legacy_cache_file_uses_file_metadata() {
         let _guard = env_guard();
         let temp_dir = TempDir::new().expect("temp dir");
         let previous = env::var_os("XDG_CACHE_HOME");
-        unsafe {
-            env::set_var("XDG_CACHE_HOME", temp_dir.path());
-        }
+        set_env_var("XDG_CACHE_HOME", temp_dir.path());
 
         let cache_file = cache_file_path().expect("cache path");
         std::fs::write(&cache_file, "").expect("write legacy cache");
@@ -156,13 +182,7 @@ mod tests {
         assert!(snapshot.latest_version.is_none());
         assert!(!snapshot.latest_was_newer);
 
-        unsafe {
-            if let Some(value) = previous {
-                env::set_var("XDG_CACHE_HOME", value);
-            } else {
-                env::remove_var("XDG_CACHE_HOME");
-            }
-        }
+        restore_env_var("XDG_CACHE_HOME", previous);
     }
 
     #[test]
@@ -170,9 +190,7 @@ mod tests {
         let _guard = env_guard();
         let temp_dir = TempDir::new().expect("temp dir");
         let previous = env::var_os("XDG_CACHE_HOME");
-        unsafe {
-            env::set_var("XDG_CACHE_HOME", temp_dir.path());
-        }
+        set_env_var("XDG_CACHE_HOME", temp_dir.path());
 
         let version = Version::parse("0.113.0").expect("version");
         record_successful_check(Some(&version), true).expect("write cache");
@@ -182,12 +200,6 @@ mod tests {
         assert!(snapshot.latest_was_newer);
         assert!(snapshot.last_checked.is_some());
 
-        unsafe {
-            if let Some(value) = previous {
-                env::set_var("XDG_CACHE_HOME", value);
-            } else {
-                env::remove_var("XDG_CACHE_HOME");
-            }
-        }
+        restore_env_var("XDG_CACHE_HOME", previous);
     }
 }

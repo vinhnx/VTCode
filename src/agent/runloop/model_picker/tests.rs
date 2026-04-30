@@ -89,7 +89,7 @@ fn model_picker_lists_new_openai_codex_models() {
 
 #[test]
 fn subagent_model_shortcuts_include_expected_aliases() {
-    let shortcuts = super::subagent_model_shortcuts()
+    let shortcuts = subagent_model_shortcuts()
         .iter()
         .map(|(shortcut, _)| *shortcut)
         .collect::<Vec<_>>();
@@ -116,52 +116,49 @@ fn subagent_dynamic_model_filter_keeps_only_parseable_model_ids() {
         ..Default::default()
     };
 
-    let indexes = super::parseable_subagent_dynamic_indexes(&registry);
+    let indexes = parseable_subagent_dynamic_indexes(&registry);
     assert_eq!(indexes, vec![0]);
 }
 
 #[test]
 fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
-    let supported = super::subagent_reasoning_levels("gpt-5.2", true);
+    let supported = subagent_reasoning_levels("gpt-5.2", true);
     assert!(supported.contains(&ReasoningEffortLevel::XHigh));
     assert!(!supported.contains(&ReasoningEffortLevel::Max));
 
-    let opus = super::subagent_reasoning_levels("claude-opus-4-7", true);
+    let opus = subagent_reasoning_levels("claude-opus-4-7", true);
     assert!(opus.contains(&ReasoningEffortLevel::XHigh));
     assert!(opus.contains(&ReasoningEffortLevel::Max));
 
-    let shortcut = super::subagent_reasoning_levels("haiku", true);
+    let shortcut = subagent_reasoning_levels("haiku", true);
     assert!(!shortcut.contains(&ReasoningEffortLevel::XHigh));
     assert!(!shortcut.contains(&ReasoningEffortLevel::Max));
 
-    let unsupported = super::subagent_reasoning_levels("gpt-4.1", true);
+    let unsupported = subagent_reasoning_levels("gpt-4.1", true);
     assert!(!unsupported.contains(&ReasoningEffortLevel::XHigh));
     assert!(!unsupported.contains(&ReasoningEffortLevel::Max));
 }
 
 #[test]
 fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
-    let shortcut = super::SubagentModelTarget::Shortcut {
+    let shortcut = SubagentModelTarget::Shortcut {
         model: "Haiku".to_string(),
     };
     assert_eq!(
-        super::normalized_subagent_reasoning(&shortcut, Some("high")),
+        normalized_subagent_reasoning(&shortcut, Some("high")),
         Some("high".to_string())
     );
     assert_eq!(
-        super::normalized_subagent_reasoning(&shortcut, Some("xhigh")),
+        normalized_subagent_reasoning(&shortcut, Some("xhigh")),
         None
     );
+    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("max")), None);
     assert_eq!(
-        super::normalized_subagent_reasoning(&shortcut, Some("max")),
-        None
-    );
-    assert_eq!(
-        super::normalized_subagent_reasoning(&shortcut, Some("bogus")),
+        normalized_subagent_reasoning(&shortcut, Some("bogus")),
         None
     );
 
-    let concrete = super::SubagentModelTarget::Concrete(selection::selection_from_dynamic(
+    let concrete = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::OpenAI,
         "gpt-5.2",
         "gpt-5.2",
@@ -169,11 +166,11 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
     ));
     assert_eq!(
-        super::normalized_subagent_reasoning(&concrete, Some("xhigh")),
+        normalized_subagent_reasoning(&concrete, Some("xhigh")),
         Some("xhigh".to_string())
     );
 
-    let opus = super::SubagentModelTarget::Concrete(selection::selection_from_dynamic(
+    let opus = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::Anthropic,
         "claude-opus-4-7",
         "claude-opus-4-7",
@@ -181,7 +178,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
     ));
     assert_eq!(
-        super::normalized_subagent_reasoning(&opus, Some("max")),
+        normalized_subagent_reasoning(&opus, Some("max")),
         Some("max".to_string())
     );
 }
@@ -189,7 +186,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
 #[test]
 fn preferred_subagent_model_selection_canonicalizes_shortcuts() {
     let registry = DynamicModelRegistry::default();
-    let selection = super::preferred_subagent_model_selection(&registry, "HaIkU");
+    let selection = preferred_subagent_model_selection(&registry, "HaIkU");
 
     assert_eq!(
         selection,
@@ -206,7 +203,7 @@ fn model_search_value_includes_provider_model_aliases() {
         "tools".to_string(),
         "image".to_string(),
     ];
-    let value = super::rendering::model_search_value(
+    let value = model_search_value(
         Provider::OpenAI,
         "GPT-5.2",
         "gpt-5.2",
@@ -234,7 +231,7 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         model: "gpt-5-mini".to_string(),
     });
 
-    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
+    let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
         .expect("custom provider should parse");
 
     assert_eq!(detail.provider_key, "mycorp");
@@ -261,7 +258,7 @@ fn parse_model_selection_marks_command_auth_custom_provider_as_keyless() {
         model: "gpt-5-mini".to_string(),
     });
 
-    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
+    let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
         .expect("custom provider should parse");
 
     assert!(!detail.requires_api_key);
@@ -275,7 +272,7 @@ fn static_model_subtitle_formats_current_capabilities() {
         .find(|option| option.model == ModelId::GPT54)
         .expect("gpt-5.4 option should exist");
 
-    let subtitle = super::rendering::static_model_subtitle(option, "openai", "gpt-5.4");
+    let subtitle = static_model_subtitle(option, "openai", "gpt-5.4");
 
     assert_eq!(
         subtitle,
@@ -285,8 +282,7 @@ fn static_model_subtitle_formats_current_capabilities() {
 
 #[test]
 fn static_model_search_terms_include_modalities_and_tool_state() {
-    let terms =
-        super::rendering::static_model_search_terms(ModelId::OpenRouterOpenAIGpt5Chat, false);
+    let terms = static_model_search_terms(ModelId::OpenRouterOpenAIGpt5Chat, false);
 
     assert!(terms.iter().any(|term| term == "no tools"));
     assert!(terms.iter().any(|term| term == "no-tools"));
@@ -299,7 +295,7 @@ fn static_model_search_terms_include_modalities_and_tool_state() {
 
 #[test]
 fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
-    let subtitle = super::rendering::dynamic_model_subtitle(
+    let subtitle = dynamic_model_subtitle(
         Provider::Ollama,
         "custom-local-model",
         false,
@@ -312,13 +308,13 @@ fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
 
 #[test]
 fn current_model_line_shows_effective_anthropic_context_window() {
-    let line = super::rendering::current_model_line("anthropic", "claude-sonnet-4-6");
+    let line = rendering::current_model_line("anthropic", "claude-sonnet-4-6");
     assert_eq!(line, "Current: anthropic / claude-sonnet-4-6 • Context: 1M");
 }
 
 #[test]
 fn step_one_header_lines_explain_codex_runtime_configuration() {
-    let lines = super::rendering::step_one_header_lines("codex", "gpt-5.3-codex");
+    let lines = rendering::step_one_header_lines("codex", "gpt-5.3-codex");
 
     assert!(
         lines.iter().any(|line| line.contains("/config codex")),
@@ -413,7 +409,7 @@ fn preferred_model_selection_matches_current_custom_provider() {
         auth: None,
         model: "gpt-5-mini".to_string(),
     };
-    picker.custom_providers = vec![selection::selection_from_custom_provider(&config)];
+    picker.custom_providers = vec![selection_from_custom_provider(&config)];
 
     let selection = picker.preferred_model_selection();
     let Some(InlineListSelection::CustomProvider(index)) = selection else {
@@ -434,7 +430,7 @@ fn read_workspace_env_returns_value_when_present() -> Result<()> {
     let dir = tempdir()?;
     let env_path = dir.path().join(".env");
     fs::write(&env_path, "OPENAI_API_KEY=sk-test\n")?;
-    let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+    let value = read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
     assert_eq!(value, Some("sk-test".to_string()));
     Ok(())
 }
@@ -442,7 +438,7 @@ fn read_workspace_env_returns_value_when_present() -> Result<()> {
 #[test]
 fn read_workspace_env_returns_none_when_missing_file() -> Result<()> {
     let dir = tempdir()?;
-    let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+    let value = read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
     assert_eq!(value, None);
     Ok(())
 }
@@ -452,14 +448,14 @@ fn read_workspace_env_returns_none_when_key_absent() -> Result<()> {
     let dir = tempdir()?;
     let env_path = dir.path().join(".env");
     fs::write(&env_path, "OTHER_KEY=value\n")?;
-    let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+    let value = read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
     assert_eq!(value, None);
     Ok(())
 }
 
 #[test]
 fn selection_marks_openai_service_tier_support_for_supported_models() {
-    let detail = selection::selection_from_option(
+    let detail = selection_from_option(
         MODEL_OPTIONS
             .iter()
             .find(|option| option.id == "gpt-5.2")
@@ -471,7 +467,7 @@ fn selection_marks_openai_service_tier_support_for_supported_models() {
 
 #[test]
 fn selection_omits_openai_service_tier_support_for_gpt_oss() {
-    let detail = selection::selection_from_option(
+    let detail = selection_from_option(
         MODEL_OPTIONS
             .iter()
             .find(|option| option.id == "gpt-oss-20b")
@@ -489,25 +485,25 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(!selection::supports_gpt5_none_reasoning("gpt-5.1-codex"));
     assert!(!selection::supports_gpt5_none_reasoning("gpt-5-codex"));
 
-    assert!(!selection::supports_xhigh_reasoning("gpt"));
-    assert!(selection::supports_xhigh_reasoning("gpt-5.2"));
-    assert!(selection::supports_xhigh_reasoning("gpt-5.2-codex"));
-    assert!(selection::supports_xhigh_reasoning("gpt-5.3-codex"));
-    assert!(selection::supports_xhigh_reasoning("claude-opus-4-7"));
-    assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex"));
-    assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex-max"));
+    assert!(!supports_xhigh_reasoning("gpt"));
+    assert!(supports_xhigh_reasoning("gpt-5.2"));
+    assert!(supports_xhigh_reasoning("gpt-5.2-codex"));
+    assert!(supports_xhigh_reasoning("gpt-5.3-codex"));
+    assert!(supports_xhigh_reasoning("claude-opus-4-7"));
+    assert!(!supports_xhigh_reasoning("gpt-5.1-codex"));
+    assert!(!supports_xhigh_reasoning("gpt-5.1-codex-max"));
 
-    assert!(selection::supports_max_reasoning("claude-opus-4-7"));
-    assert!(selection::supports_max_reasoning("claude-sonnet-4-6"));
-    assert!(selection::supports_max_reasoning("claude-opus-4-6"));
-    assert!(selection::supports_max_reasoning("claude-mythos-preview"));
-    assert!(!selection::supports_max_reasoning("gpt-5.4"));
+    assert!(supports_max_reasoning("claude-opus-4-7"));
+    assert!(supports_max_reasoning("claude-sonnet-4-6"));
+    assert!(supports_max_reasoning("claude-opus-4-6"));
+    assert!(supports_max_reasoning("claude-mythos-preview"));
+    assert!(!supports_max_reasoning("gpt-5.4"));
 }
 
 #[test]
 fn build_result_uses_selected_service_tier() {
     let mut picker = base_picker_state("openai", "gpt-5.2");
-    picker.selection = Some(selection::SelectionDetail {
+    picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),
@@ -534,7 +530,7 @@ fn build_result_uses_selected_service_tier() {
 #[test]
 fn build_result_uses_selected_flex_service_tier() {
     let mut picker = base_picker_state("openai", "gpt-5.2");
-    picker.selection = Some(selection::SelectionDetail {
+    picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),
@@ -561,7 +557,7 @@ fn build_result_uses_selected_flex_service_tier() {
 #[tokio::test]
 async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
     let mut picker = base_picker_state("openai", "gpt-5.2");
-    picker.selection = Some(selection::SelectionDetail {
+    picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),

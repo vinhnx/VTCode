@@ -325,7 +325,7 @@ fn render_error_common(
     error_type: &str,
 ) -> Result<()> {
     let err_msg = format!("Tool '{}' {}: {}", name, error_type, error);
-    renderer.line(vtcode_core::utils::ansi::MessageStyle::Error, &err_msg)?;
+    renderer.line(MessageStyle::Error, &err_msg)?;
     Ok(())
 }
 
@@ -549,7 +549,7 @@ mod tests {
     #[tokio::test]
     async fn test_renderer_records_tool_and_collects_modified_files() {
         // Setup a stdout renderer
-        let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout();
+        let mut renderer = AnsiRenderer::stdout();
 
         // Prepare session stats and mcp state
         let mut stats = SessionStats::default();
@@ -595,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_renderer_records_mcp_event_for_mcp_tool() {
-        let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout();
+        let mut renderer = AnsiRenderer::stdout();
 
         // Note: tests involving `apply_turn_outcome` live in `turn/turn_loop.rs` and can be added there
         let mut stats = SessionStats::default();
@@ -635,7 +635,7 @@ mod tests {
 
     #[tokio::test]
     async fn spooled_exec_output_keeps_transcript_at_reference_only() {
-        let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout();
+        let mut renderer = AnsiRenderer::stdout();
         let mut stats = SessionStats::default();
         let mut mcp = McpPanelState::default();
         let handle = dummy_handle();
@@ -702,7 +702,7 @@ mod tests {
         let workspace = tmp.path().to_path_buf();
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
-        let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
         let permissions_state = Arc::new(RwLock::new(
             vtcode_core::config::PermissionsConfig::default(),
         ));
@@ -728,8 +728,8 @@ mod tests {
         }
 
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-        let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);
         let tools = Arc::new(RwLock::new(Vec::new()));
@@ -901,7 +901,7 @@ mod tests {
         let workspace = tmp.path().to_path_buf();
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
-        let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
         let permissions_state = Arc::new(RwLock::new(
             vtcode_core::config::PermissionsConfig::default(),
         ));
@@ -920,8 +920,8 @@ mod tests {
 
         let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-        let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel = McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
         let traj = TrajectoryLogger::new(&workspace);
         let tools = Arc::new(RwLock::new(Vec::new()));

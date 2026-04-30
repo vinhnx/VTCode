@@ -384,7 +384,7 @@ mod tests {
             events: event_rx,
         };
         let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
-        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_state = Arc::new(CtrlCState::new());
         let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
         let mut ctrl_c_notice_displayed = false;
         let default_placeholder = None;

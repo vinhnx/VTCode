@@ -690,10 +690,7 @@ mod tests {
                 args,
                 is_bang_prefix,
             } => {
-                assert_eq!(
-                    tool_name,
-                    vtcode_core::config::constants::tools::UNIFIED_EXEC
-                );
+                assert_eq!(tool_name, tools::UNIFIED_EXEC);
                 assert_eq!(args["action"], "run");
                 assert_eq!(args["command"], "echo hello");
                 assert!(is_bang_prefix);
@@ -732,10 +729,7 @@ mod tests {
                 args,
                 is_bang_prefix,
             } => {
-                assert_eq!(
-                    tool_name,
-                    vtcode_core::config::constants::tools::UNIFIED_EXEC
-                );
+                assert_eq!(tool_name, tools::UNIFIED_EXEC);
                 assert_eq!(args["command"], "cargo check");
                 assert!(!is_bang_prefix);
             }
@@ -805,10 +799,7 @@ mod tests {
             DirectToolInput::Execute {
                 tool_name, args, ..
             } => {
-                assert_eq!(
-                    tool_name,
-                    vtcode_core::config::constants::tools::UNIFIED_FILE
-                );
+                assert_eq!(tool_name, tools::UNIFIED_FILE);
                 assert_eq!(args["action"], "read");
                 assert_eq!(args["path"], "/tmp/example.md");
                 assert_eq!(args["condense"], false);
@@ -827,10 +818,7 @@ mod tests {
             DirectToolInput::Execute {
                 tool_name, args, ..
             } => {
-                assert_eq!(
-                    tool_name,
-                    vtcode_core::config::constants::tools::UNIFIED_FILE
-                );
+                assert_eq!(tool_name, tools::UNIFIED_FILE);
                 assert_eq!(args["action"], "read");
                 assert_eq!(args["path"], "/tmp/example.md");
                 assert_eq!(args["condense"], false);

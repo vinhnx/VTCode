@@ -377,7 +377,8 @@ pub struct OpenAIManualCompactionConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct OpenAIConfig {
-    /// Enable Responses API WebSocket transport for non-streaming requests.
+    /// Enable Responses API WebSocket transport for non-streaming requests on
+    /// native OpenAI and OpenAI-compatible Responses endpoints.
     /// This is an opt-in path designed for long-running, tool-heavy workflows.
     #[serde(default)]
     pub websocket_mode: bool,

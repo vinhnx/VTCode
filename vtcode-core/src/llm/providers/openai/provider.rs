@@ -407,7 +407,7 @@ impl OpenAIProvider {
 
     fn websocket_mode_enabled(&self, model: &str) -> bool {
         self.websocket_mode
-            && self.is_native_openai_api()
+            && !self.is_chatgpt_backend()
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 

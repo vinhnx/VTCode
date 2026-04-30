@@ -244,7 +244,7 @@ fn format_diff_line_with_gutter_and_syntax(
             .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
             .effects(Effects::DIMMED),
     };
-    let reset = anstyle::Reset;
+    let reset = Reset;
     let raw_line = line.numbered_text(line_number_width);
     let mut out = String::with_capacity(raw_line.len() + 32);
     out.push_str(&marker_style.render().to_string());

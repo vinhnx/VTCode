@@ -29,7 +29,7 @@ pub(super) fn split_command_and_args(input: &str) -> (&str, &str) {
     }
 }
 
-pub(super) fn parse_prompt_template_args(args: &str) -> std::result::Result<Vec<String>, String> {
+pub(super) fn parse_prompt_template_args(args: &str) -> Result<Vec<String>, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(Vec::new());
@@ -39,9 +39,7 @@ pub(super) fn parse_prompt_template_args(args: &str) -> std::result::Result<Vec<
         .map_err(|err| format!("Failed to parse template arguments: {}", err))
 }
 
-pub(super) fn parse_compact_command(
-    args: &str,
-) -> std::result::Result<CompactConversationCommand, String> {
+pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCommand, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(CompactConversationCommand::Run {
@@ -64,7 +62,7 @@ pub(super) fn parse_compact_command(
 
     while index < tokens.len() {
         let token = &tokens[index];
-        let next_value = |flag: &str, index: &mut usize| -> std::result::Result<String, String> {
+        let next_value = |flag: &str, index: &mut usize| -> Result<String, String> {
             let Some(value) = tokens.get(*index + 1) else {
                 return Err(format!("Missing value for {}", flag));
             };
@@ -182,7 +180,7 @@ pub(super) fn parse_compact_command(
 
 pub(super) fn parse_session_log_export_format(
     args: &str,
-) -> std::result::Result<SessionLogExportFormat, String> {
+) -> Result<SessionLogExportFormat, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(SessionLogExportFormat::Both);
@@ -215,7 +213,7 @@ pub(super) fn parse_session_log_export_format(
     }
 }
 
-pub(super) fn parse_review_spec(args: &str) -> std::result::Result<ReviewSpec, String> {
+pub(super) fn parse_review_spec(args: &str) -> Result<ReviewSpec, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return build_review_spec(false, None, Vec::new(), None).map_err(|err| err.to_string());
@@ -287,7 +285,7 @@ pub(super) fn parse_review_spec(args: &str) -> std::result::Result<ReviewSpec, S
     build_review_spec(last_diff, target, files, style).map_err(|err| err.to_string())
 }
 
-pub(super) fn parse_analyze_scope(args: &str) -> std::result::Result<Option<String>, String> {
+pub(super) fn parse_analyze_scope(args: &str) -> Result<Option<String>, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(None);

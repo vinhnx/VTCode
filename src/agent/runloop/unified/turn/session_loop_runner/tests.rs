@@ -548,7 +548,7 @@ async fn checkpoint_session_archive_start_writes_initial_snapshot() {
         .expect("startup checkpoint");
 
     let snapshot: SessionSnapshot =
-        serde_json::from_str(&std::fs::read_to_string(archive_path).expect("read archive"))
+        serde_json::from_str(&fs::read_to_string(archive_path).expect("read archive"))
             .expect("parse archive");
     assert_eq!(snapshot.total_messages, 1);
     assert_eq!(snapshot.messages.len(), 1);

@@ -206,7 +206,7 @@ pub async fn handle_trajectory_command(
     if !summary.class_counts.is_empty() {
         println!("\n{}", style("Classes").bold());
         let mut classes: Vec<_> = summary.class_counts.into_iter().collect();
-        classes.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
+        classes.sort_by_key(|(_, c)| Reverse(*c));
         let total_class_usage: usize = classes.iter().map(|(_, c)| *c).sum();
         for (i, (k, v)) in classes.into_iter().take(top).enumerate() {
             let percentage = if total_class_usage > 0 {
@@ -222,7 +222,7 @@ pub async fn handle_trajectory_command(
     if !summary.model_counts.is_empty() {
         println!("\n{}", style("Models").bold());
         let mut models: Vec<_> = summary.model_counts.into_iter().collect();
-        models.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
+        models.sort_by_key(|(_, c)| Reverse(*c));
         let total_model_usage: usize = models.iter().map(|(_, c)| *c).sum();
         for (i, (k, v)) in models.into_iter().take(top).enumerate() {
             let percentage = if total_model_usage > 0 {

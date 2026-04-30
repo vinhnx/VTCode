@@ -763,10 +763,7 @@ fn request_choice_item(
     }
 }
 
-fn persist_editor_workflow_choices(
-    workspace: &std::path::Path,
-    choices: EditorWorkflowChoices,
-) -> Result<()> {
+fn persist_editor_workflow_choices(workspace: &Path, choices: EditorWorkflowChoices) -> Result<()> {
     let mut manager = ConfigManager::load_from_workspace(workspace)?;
     let mut config = manager.config().clone();
     config.tools.editor.enabled = choices.enabled;

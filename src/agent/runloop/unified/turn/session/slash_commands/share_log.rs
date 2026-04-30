@@ -1403,7 +1403,7 @@ mod tests {
             sample_event_record(
                 2,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                    item: vtcode_core::exec::events::ThreadItem {
+                    item: ThreadItem {
                         id: "msg-1".to_string(),
                         details: ThreadItemDetails::AgentMessage(AgentMessageItem {
                             text: "assistant reply".to_string(),
@@ -1467,7 +1467,7 @@ mod tests {
             sample_event_record(
                 1,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                    item: vtcode_core::exec::events::ThreadItem {
+                    item: ThreadItem {
                         id: "msg-1".to_string(),
                         details: ThreadItemDetails::AgentMessage(AgentMessageItem {
                             text: "<script>alert('xss')</script>".to_string(),
@@ -1478,7 +1478,7 @@ mod tests {
             sample_event_record(
                 2,
                 ThreadEvent::ItemStarted(ItemStartedEvent {
-                    item: vtcode_core::exec::events::ThreadItem {
+                    item: ThreadItem {
                         id: "tool-1".to_string(),
                         details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
                             tool_name: "exec_command".to_string(),
@@ -1699,7 +1699,7 @@ mod tests {
             &sample_event_record(
                 7,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                    item: vtcode_core::exec::events::ThreadItem {
+                    item: ThreadItem {
                         id: "cmd-1".to_string(),
                         details: ThreadItemDetails::CommandExecution(Box::new(
                             CommandExecutionItem {
@@ -1715,7 +1715,7 @@ mod tests {
             ),
             "item.completed",
             "completed",
-            &vtcode_core::exec::events::ThreadItem {
+            &ThreadItem {
                 id: "cmd-1".to_string(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "cargo check".to_string(),

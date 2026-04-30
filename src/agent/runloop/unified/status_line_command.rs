@@ -201,6 +201,10 @@ impl StatusLineGit {
 }
 
 #[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "Status line payload tests mutate IDE context environment variables under #[serial], but Rust 2024 still requires unsafe set_var/remove_var calls."
+)]
 mod tests {
     use super::StatusLineCommandPayload;
     use serde_json::Value;
@@ -209,6 +213,22 @@ mod tests {
     use tempfile::TempDir;
     use vtcode_core::ide_context::{IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR};
 
+    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: all env-mutating tests in this module are marked `#[serial]`, so these process
+        // environment updates do not race with one another.
+        unsafe {
+            env::set_var(key, value);
+        }
+    }
+
+    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: all env-mutating tests in this module are marked `#[serial]`, so these process
+        // environment updates do not race with one another.
+        unsafe {
+            env::remove_var(key);
+        }
+    }
+
     #[test]
     #[serial]
     fn payload_includes_dominant_workspace_language() {
@@ -216,10 +236,8 @@ mod tests {
         fs::create_dir_all(workspace.path().join("src")).expect("create src");
         fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-            env::remove_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
+        remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
 
         let payload =
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
@@ -234,10 +252,8 @@ mod tests {
             Value::String("Rust".to_string())
         );
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-            env::remove_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
+        remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
     }
 
     #[test]
@@ -267,9 +283,7 @@ mod tests {
         )
         .expect("write snapshot");
 
-        unsafe {
-            env::set_var(IDE_CONTEXT_ENV_VAR, &snapshot_path);
-        }
+        set_env_var(IDE_CONTEXT_ENV_VAR, &snapshot_path);
 
         let payload =
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
@@ -280,9 +294,7 @@ mod tests {
             Value::String("Python".to_string())
         );
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
     }
 
     #[test]
@@ -312,9 +324,7 @@ mod tests {
         )
         .expect("write snapshot");
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
 
         let payload =
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);

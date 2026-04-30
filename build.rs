@@ -1,3 +1,16 @@
+#[cfg(target_os = "macos")]
+#[expect(
+    unsafe_code,
+    reason = "Rust 2024 requires unsafe process-environment mutation in build.rs, and this helper runs before any VT Code threads exist."
+)]
+fn remove_build_env_var(key: &str) {
+    // SAFETY: build scripts run in a dedicated process before any application worker threads
+    // exist, so mutating the process environment here cannot race with other VT Code code.
+    unsafe {
+        std::env::remove_var(key);
+    }
+}
+
 fn main() {
     // Suppress macOS malloc warnings in build output
     // IMPORTANT: Only remove vars, never set them to "0" as that triggers
@@ -5,19 +18,21 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         // Unset all malloc-related environment variables that might cause warnings
-        unsafe {
-            std::env::remove_var("MallocStackLogging");
-            std::env::remove_var("MallocStackLoggingDirectory");
-            std::env::remove_var("MallocScribble");
-            std::env::remove_var("MallocGuardEdges");
-            std::env::remove_var("MallocCheckHeapStart");
-            std::env::remove_var("MallocCheckHeapEach");
-            std::env::remove_var("MallocCheckHeapAbort");
-            std::env::remove_var("MallocCheckHeapSleep");
-            std::env::remove_var("MallocErrorAbort");
-            std::env::remove_var("MallocCorruptionAbort");
-            std::env::remove_var("MallocHelpOptions");
-            std::env::remove_var("MallocStackLoggingNoCompact");
+        for key in [
+            "MallocStackLogging",
+            "MallocStackLoggingDirectory",
+            "MallocScribble",
+            "MallocGuardEdges",
+            "MallocCheckHeapStart",
+            "MallocCheckHeapEach",
+            "MallocCheckHeapAbort",
+            "MallocCheckHeapSleep",
+            "MallocErrorAbort",
+            "MallocCorruptionAbort",
+            "MallocHelpOptions",
+            "MallocStackLoggingNoCompact",
+        ] {
+            remove_build_env_var(key);
         }
     }
 

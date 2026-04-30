@@ -826,7 +826,7 @@ fn build_schedule_prompt_step(
     }
 }
 
-fn format_task_time(value: Option<chrono::DateTime<chrono::Utc>>) -> String {
+fn format_task_time(value: Option<chrono::DateTime<Utc>>) -> String {
     value
         .map(|value| {
             value

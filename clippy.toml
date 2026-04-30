@@ -53,3 +53,10 @@ ignore-interior-mutability = [
     "tokio::sync::Mutex",
     "tokio::sync::RwLock",
 ]
+
+# Test-only relaxations that keep future stricter lint rollouts focused on production code.
+allow-indexing-slicing-in-tests = true
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true

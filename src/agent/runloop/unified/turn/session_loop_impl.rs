@@ -122,7 +122,7 @@ impl Drop for TerminalCleanupGuard {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(50);
-        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        std::thread::sleep(Duration::from_millis(delay_ms));
     }
 }
 

@@ -475,9 +475,7 @@ impl<'a> PaletteCoordinator<'a> {
                     },
                     InlineListSelection::Session(session_id),
                 ) => {
-                    crate::agent::runloop::unified::palettes::show_fork_mode_palette(
-                        renderer, session_id,
-                    )?;
+                    show_fork_mode_palette(renderer, session_id)?;
                     *self.state = Some(ActivePalette::ForkMode {
                         session_id: session_id.clone(),
                         listings: listings.clone(),

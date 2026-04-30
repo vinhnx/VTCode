@@ -639,7 +639,7 @@ async fn pick_skill_name(
 
     Ok(action
         .strip_prefix(SKILL_PICK_PREFIX)
-        .map(std::string::ToString::to_string))
+        .map(ToString::to_string))
 }
 
 #[derive(Clone, Copy)]

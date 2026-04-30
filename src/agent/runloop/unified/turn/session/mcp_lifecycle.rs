@@ -110,7 +110,7 @@ pub(crate) async fn handle_mcp_updates(
     }
 
     if *mcp_catalog_initialized && last_mcp_refresh.elapsed() >= refresh_interval {
-        *last_mcp_refresh = std::time::Instant::now();
+        *last_mcp_refresh = Instant::now();
 
         if matches!(
             decide_refresh_action(*pending_mcp_refresh, false),

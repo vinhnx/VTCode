@@ -490,7 +490,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     full_auto: bool,
     plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<ResumeSession>,
-    steering_receiver: &mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    steering_receiver: &mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
     let _terminal_cleanup_guard = TerminalCleanupGuard::new();
 
@@ -898,7 +898,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
         let mut pending_mcp_refresh = false;
-        let mut last_mcp_refresh = std::time::Instant::now();
+        let mut last_mcp_refresh = Instant::now();
         let startup_update_requested_restart =
             if let Some(notice) = startup_update_cached_notice.as_ref() {
                 display_update_notice(
@@ -1547,8 +1547,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         // Skip persistent memory on interrupt-exits (it makes LLM API calls which
         // delay shutdown significantly). For normal exits, cap it with a timeout.
         if !matches!(session_end_reason, SessionEndReason::Exit) {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
+            match timeout(
+                Duration::from_secs(5),
                 vtcode_core::persistent_memory::finalize_persistent_memory(
                     &config,
                     vt_cfg.as_ref(),

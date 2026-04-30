@@ -80,7 +80,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
-    pub last_forced_redraw: &'a mut std::time::Instant,
+    pub last_forced_redraw: &'a mut Instant,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub runtime_steering: &'a mut RuntimeSteering,

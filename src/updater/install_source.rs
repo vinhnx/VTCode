@@ -75,7 +75,7 @@ impl InstallSource {
 }
 
 pub(super) fn detect_install_source() -> InstallSource {
-    let exe = match std::env::current_exe() {
+    let exe = match env::current_exe() {
         Ok(path) => path,
         Err(_) => return InstallSource::Standalone,
     };

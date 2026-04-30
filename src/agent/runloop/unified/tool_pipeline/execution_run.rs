@@ -459,7 +459,7 @@ async fn check_tool_safety(
     invocation_id: ToolInvocationId,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-) -> std::result::Result<(), ToolExecutionStatus> {
+) -> Result<(), ToolExecutionStatus> {
     let Some(safety_validator) = ctx.safety_validator else {
         return Ok(());
     };
@@ -510,7 +510,7 @@ async fn check_tool_permission(
     lifecycle_hooks: Option<&LifecycleHookEngine>,
     skip_confirmations: bool,
     vt_cfg: Option<&VTCodeConfig>,
-) -> std::result::Result<Option<Value>, ToolExecutionStatus> {
+) -> Result<Option<Value>, ToolExecutionStatus> {
     let permissions_ctx = build_tool_permissions_context(
         ctx,
         ctrl_c_state,

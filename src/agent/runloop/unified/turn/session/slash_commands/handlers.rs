@@ -375,7 +375,7 @@ fn resolve_prompt_boundary_in_history(
         let message = &history[index];
         let matches_prompt =
             prompt_text.is_none_or(|text| message.content.as_text().trim() == text);
-        if message.role == uni::MessageRole::User && matches_prompt {
+        if message.role == MessageRole::User && matches_prompt {
             return Some(index);
         }
     }
@@ -385,8 +385,7 @@ fn resolve_prompt_boundary_in_history(
             .iter()
             .enumerate()
             .filter(|(_, message)| {
-                message.role == uni::MessageRole::User
-                    && message.content.as_text().trim() == prompt_text
+                message.role == MessageRole::User && message.content.as_text().trim() == prompt_text
             })
             .min_by_key(|(index, _)| {
                 metadata

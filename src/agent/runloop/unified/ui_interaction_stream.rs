@@ -432,7 +432,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
 
     let mut token_count = 0;
     let mut reasoning_token_count = 0;
-    let mut last_progress_update = std::time::Instant::now();
+    let mut last_progress_update = Instant::now();
     let mut reasoning_emitted = false;
     let mut harmony_stream_mode = false;
     let mut harmony_raw_stream = String::new();
@@ -600,10 +600,10 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 if !spinner_message_updated {
                     spinner.update_message("Receiving response...");
                     spinner_message_updated = true;
-                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
+                } else if last_progress_update.elapsed() >= Duration::from_millis(500) {
                     spinner
                         .update_message(format!("Receiving response... ({} tokens)", token_count));
-                    last_progress_update = std::time::Instant::now();
+                    last_progress_update = Instant::now();
                 }
                 finish_spinner(&mut spinner_active, false);
                 if visible_delta.is_empty() {
@@ -651,12 +651,12 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 if !spinner_message_updated {
                     spinner.update_message("Processing reasoning...");
                     spinner_message_updated = true;
-                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
+                } else if last_progress_update.elapsed() >= Duration::from_millis(500) {
                     spinner.update_message(format!(
                         "Processing reasoning... ({} tokens)",
                         reasoning_token_count
                     ));
-                    last_progress_update = std::time::Instant::now();
+                    last_progress_update = Instant::now();
                 }
                 finish_spinner(&mut spinner_active, false);
                 reasoning_accumulated.push_str(&delta);
