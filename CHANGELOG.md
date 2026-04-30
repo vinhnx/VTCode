@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.2 - 2026-04-30
+
+### Highlights
+#### Features
+
+- Add tempfile dependency and enhance credential file permissions handling (6c198b3a) 
+- Enhance tool execution safety and prompt alignment handling (60c35814) 
+### Other Changes
+#### Other
+
+- Enhance OpenAI Response's API websocket provider logic and tests; clarify documentation and comments. (7368a946) 
+#### Refactors
+
+- Replace direct file writes with write_private_file for secure permissions (0319c5e7) 
 ## 0.105.1 - 2026-04-29
 
 ### Highlights
