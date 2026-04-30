@@ -561,7 +561,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            tools::UNIFIED_EXEC,
             &json!({"action":"run","command":"cargo check"}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);
@@ -581,7 +581,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::READ_FILE,
+            tools::READ_FILE,
             &json!({"path":"src/main.rs"}),
         );
         assert_eq!(tracker.consecutive_navigations, 1);
@@ -611,7 +611,7 @@ mod tests {
             update_repetition_tracker(
                 &mut tracker,
                 &success,
-                vtcode_core::config::constants::tools::READ_FILE,
+                tools::READ_FILE,
                 &json!({"path":"src/main.rs"}),
             );
         }
@@ -641,7 +641,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::PLAN_TASK_TRACKER,
+            tools::PLAN_TASK_TRACKER,
             &json!({"action":"create","items":["step"]}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);
@@ -661,7 +661,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::TASK_TRACKER,
+            tools::TASK_TRACKER,
             &json!({"action":"create","items":["step"]}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);
@@ -681,7 +681,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            tools::UNIFIED_FILE,
             &json!({"action":"write","path":".vtcode/plans/my-plan.md","content":"text"}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);
@@ -701,7 +701,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            tools::UNIFIED_FILE,
             &json!({"action":"write","path":"src/lib.rs","content":"text"}),
         );
         assert_eq!(tracker.consecutive_mutations, 1);
@@ -728,19 +728,19 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            tools::UNIFIED_SEARCH,
             &json!({"action":"structural","pattern":"fn $name(...)", "lang":"rust", "globs":["vtcode-tui/**/*.rs"]}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            tools::UNIFIED_SEARCH,
             &json!({"action":"grep","pattern":"-> Result","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            tools::UNIFIED_SEARCH,
             &json!({"action":"grep","pattern":"Result<","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
         );
 
@@ -765,7 +765,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &guided,
-            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            tools::UNIFIED_SEARCH,
             &json!({"action":"structural","pattern":"async fn $NAME($$$ARGS)", "lang":"rust", "path":"src/agent"}),
         );
 
@@ -777,7 +777,7 @@ mod tests {
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
             error: vtcode_core::tools::registry::ToolExecutionError::new(
-                vtcode_core::config::constants::tools::UNIFIED_FILE.to_string(),
+                tools::UNIFIED_FILE.to_string(),
                 vtcode_core::tools::registry::ToolErrorType::ResourceNotFound,
                 "Resource not found: vtcode-tui/src/main.rs".to_string(),
             ),
@@ -786,13 +786,13 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"vtcode-tui/src/main.rs"}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            tools::UNIFIED_FILE,
             &json!({"action":"read","path":"vtcode-tui/src/main.rs","offset":40}),
         );
 
@@ -816,13 +816,13 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            tools::UNIFIED_EXEC,
             &json!({"action":"run","command":"grep -n '-> Result' vtcode-tui/src/**/*.rs"}),
         );
         update_repetition_tracker(
             &mut tracker,
             &miss,
-            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            tools::UNIFIED_EXEC,
             &json!({"action":"run","command":"grep -n \"-> Result\" vtcode-tui/src/**/*.rs"}),
         );
 

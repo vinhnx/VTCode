@@ -76,7 +76,7 @@ impl fmt::Debug for McpInitStatus {
 }
 
 impl Display for McpInitStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             McpInitStatus::Disabled => write!(f, "MCP is disabled"),
             McpInitStatus::Initializing { progress } => write!(f, "MCP initializing: {}", progress),

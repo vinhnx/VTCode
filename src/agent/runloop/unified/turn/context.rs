@@ -176,13 +176,13 @@ pub(crate) struct TurnOutcomeContext<'a> {
 }
 
 pub(crate) struct ToolContext<'a> {
-    pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
+    pub tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
-    pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
-    pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
+    pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
@@ -199,8 +199,7 @@ pub(crate) struct LLMContext<'a> {
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub vt_cfg: Option<&'a VTCodeConfig>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
-    pub decision_ledger:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 }
 
@@ -245,14 +244,13 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub session_stats: &'a mut SessionStats,
     pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
-    pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
+    pub tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
-    pub decision_ledger:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub working_history: &'a mut Vec<uni::Message>,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
-    pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
@@ -264,8 +262,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub session: &'a mut vtcode_tui::app::InlineSession,
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
-    pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
+    pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
     pub safety_validator:
         &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
@@ -740,7 +738,7 @@ impl<'a> TurnProcessingContext<'a> {
 
         let metadata = vtcode_core::turn_metadata::build_turn_metadata_value_with_timeout(
             &self.config.workspace,
-            std::time::Duration::from_millis(250),
+            Duration::from_millis(250),
         )
         .await?;
         *self.turn_metadata_cache = Some(metadata.clone());

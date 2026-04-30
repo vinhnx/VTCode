@@ -28,6 +28,9 @@ exclude = [
 ]
 default-run = "vtcode"
 
+[lints]
+workspace = true
+
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]
 base64 = "0.22.1"
@@ -142,14 +145,33 @@ rust.unsafe_code = "warn"
 rust.unstable_features = "warn"
 
 [workspace.lints.clippy]
-# Refined lint profile aligned with current clippy/rustc versions.
-# Keep high-value correctness and safety checks strict, avoid obsolete lint names.
+# Curated article-inspired rollout: enable the tripwires that are already clean in vtcode today,
+# and keep noisier slicing/unwrap/panic lints for a dedicated cleanup pass.
 dbg_macro = "warn"
 todo = "warn"
+unimplemented = "warn"
+
+# Silent async failure / concurrency hazards
+let_underscore_future = "warn"
+await_holding_lock = "warn"
+await_holding_refcell_ref = "warn"
 
 # Unsafe hygiene: unsafe remains visible and requires explicit rationale.
 undocumented_unsafe_blocks = "warn"
 multiple_unsafe_ops_per_block = "warn"
+unnecessary_safety_doc = "warn"
+unnecessary_safety_comment = "warn"
+mem_forget = "warn"
+
+# Numeric tripwires with low current noise.
+lossy_float_literal = "warn"
+invalid_upcast_comparisons = "warn"
+
+# Easy-to-avoid correctness hazards.
+rc_mutex = "warn"
+iter_not_returning_iterator = "warn"
+expl_impl_clone_on_copy = "warn"
+infallible_try_from = "warn"
 
 
 [dependencies]

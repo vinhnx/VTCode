@@ -558,7 +558,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let execute = context
         .process_event(
             InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
-                vtcode_tui::app::InlineListSelection::PlanApprovalExecute,
+                InlineListSelection::PlanApprovalExecute,
             ))),
             &mut queue,
         )
@@ -567,7 +567,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let auto = context
         .process_event(
             InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
-                vtcode_tui::app::InlineListSelection::PlanApprovalAutoAccept,
+                InlineListSelection::PlanApprovalAutoAccept,
             ))),
             &mut queue,
         )
@@ -576,7 +576,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let edit = context
         .process_event(
             InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
-                vtcode_tui::app::InlineListSelection::PlanApprovalEditPlan,
+                InlineListSelection::PlanApprovalEditPlan,
             ))),
             &mut queue,
         )

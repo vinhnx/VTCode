@@ -488,6 +488,10 @@ fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
 }
 
 #[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "Startup tests serialize process-environment mutation with ENV_LOCK, but Rust 2024 still requires unsafe set_var/remove_var calls."
+)]
 mod validation_tests {
     use super::*;
     use assert_fs::TempDir;
@@ -502,6 +506,22 @@ mod validation_tests {
     use vtcode_core::cli::args::Cli;
 
     static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: tests take `ENV_LOCK` before mutating process-global environment variables, so
+        // these mutations are serialized.
+        unsafe {
+            std::env::set_var(key, value);
+        }
+    }
+
+    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: tests take `ENV_LOCK` before mutating process-global environment variables, so
+        // these mutations are serialized.
+        unsafe {
+            std::env::remove_var(key);
+        }
+    }
 
     fn write_fake_executable(path: &Path) {
         fs::write(path, "#!/bin/sh\nexit 0\n").expect("write fake executable");
@@ -715,12 +735,11 @@ mod validation_tests {
 
     #[tokio::test]
     async fn cli_model_override_updates_merged_startup_config() {
+        let _env_guard = ENV_LOCK.lock().await;
         let temp = TempDir::new().expect("temp dir");
         let workspace = temp.path().to_path_buf();
 
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "test");
-        }
+        set_env_var("OPENAI_API_KEY", "test");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -745,12 +764,11 @@ mod validation_tests {
 
     #[tokio::test]
     async fn cli_override_with_non_responses_model_warns() {
+        let _env_guard = ENV_LOCK.lock().await;
         let temp = TempDir::new().expect("temp dir");
         let workspace = temp.path().to_path_buf();
 
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "test");
-        }
+        set_env_var("OPENAI_API_KEY", "test");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -775,12 +793,11 @@ mod validation_tests {
 
     #[tokio::test]
     async fn cli_override_with_hosted_shell_on_non_responses_model_warns() {
+        let _env_guard = ENV_LOCK.lock().await;
         let temp = TempDir::new().expect("temp dir");
         let workspace = temp.path().to_path_buf();
 
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "test");
-        }
+        set_env_var("OPENAI_API_KEY", "test");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -802,12 +819,11 @@ mod validation_tests {
 
     #[tokio::test]
     async fn cli_override_with_responses_model_no_warn() {
+        let _env_guard = ENV_LOCK.lock().await;
         let temp = TempDir::new().expect("temp dir");
         let workspace = temp.path().to_path_buf();
 
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "test");
-        }
+        set_env_var("OPENAI_API_KEY", "test");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -857,10 +873,8 @@ mod validation_tests {
         config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
         save_workspace_config(&workspace, &config);
 
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "test-openai-key");
-            std::env::remove_var("GITHUB_TOKEN");
-        }
+        set_env_var("OPENAI_API_KEY", "test-openai-key");
+        remove_env_var("GITHUB_TOKEN");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -902,10 +916,8 @@ mod validation_tests {
         config.auth.copilot.command = Some(fake_copilot.display().to_string());
         save_workspace_config(&workspace, &config);
 
-        unsafe {
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::set_var("GITHUB_TOKEN", "test-github-token");
-        }
+        remove_env_var("OPENAI_API_KEY");
+        set_env_var("GITHUB_TOKEN", "test-github-token");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",
@@ -939,10 +951,8 @@ mod validation_tests {
         config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
         save_workspace_config(&workspace, &config);
 
-        unsafe {
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("GITHUB_TOKEN");
-        }
+        remove_env_var("OPENAI_API_KEY");
+        remove_env_var("GITHUB_TOKEN");
         let args = Cli::parse_from([
             "vtcode",
             "--workspace",

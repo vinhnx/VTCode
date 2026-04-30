@@ -129,7 +129,7 @@ async fn interrupt_parallel_group<F>(
     log_message: &str,
 ) -> TurnHandlerOutcome
 where
-    F: futures::Future,
+    F: Future,
 {
     terminate_group_exec_sessions_if_needed(registry, group_has_exec_sessions, log_message).await;
     while execution_futures.next().await.is_some() {}

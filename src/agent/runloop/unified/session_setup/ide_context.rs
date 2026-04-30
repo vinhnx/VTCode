@@ -472,6 +472,10 @@ fn compute_snapshot_digest(snapshot: Option<&EditorContextSnapshot>) -> Option<u
 }
 
 #[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "IDE context tests mutate environment variables under #[serial], but Rust 2024 still requires unsafe set_var/remove_var calls."
+)]
 mod tests {
     use super::{
         IdeContextBridge, VSCODE_COMPATIBLE_JSON_FILE, configured_snapshot,
@@ -486,6 +490,22 @@ mod tests {
     use tempfile::TempDir;
     use vtcode_config::IdeContextConfig;
     use vtcode_core::ide_context::{EditorContextSnapshot, IDE_CONTEXT_ENV_VAR};
+
+    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: the env-mutating tests in this module are marked `#[serial]`, so these process
+        // environment updates do not race with one another.
+        unsafe {
+            env::set_var(key, value);
+        }
+    }
+
+    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: the env-mutating tests in this module are marked `#[serial]`, so these process
+        // environment updates do not race with one another.
+        unsafe {
+            env::remove_var(key);
+        }
+    }
 
     #[test]
     fn preferred_language_uses_snapshot_before_workspace_fallback() {
@@ -573,9 +593,7 @@ mod tests {
         )
         .expect("write snapshot");
 
-        unsafe {
-            env::set_var(IDE_CONTEXT_ENV_VAR, &path);
-        }
+        set_env_var(IDE_CONTEXT_ENV_VAR, &path);
 
         let mut bridge = IdeContextBridge::new(temp.path());
         let (_, first_state) = bridge.refresh().expect("refresh");
@@ -585,9 +603,7 @@ mod tests {
         let (_, second_state) = bridge.refresh().expect("refresh");
         assert!(!second_state.changed);
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
     }
 
     #[test]
@@ -612,9 +628,7 @@ mod tests {
         )
         .expect("write workspace snapshot");
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
 
         let mut bridge = IdeContextBridge::new(workspace.path());
         let (_, state) = bridge.refresh().expect("refresh");
@@ -793,18 +807,14 @@ mod tests {
         )
         .expect("write snapshot");
 
-        unsafe {
-            env::set_var(IDE_CONTEXT_ENV_VAR, &path);
-        }
+        set_env_var(IDE_CONTEXT_ENV_VAR, &path);
 
         assert_eq!(
             preferred_display_language_for_workspace(workspace.path()),
             Some("Python".to_string())
         );
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
     }
 
     #[test]
@@ -829,9 +839,7 @@ mod tests {
         )
         .expect("write snapshot");
 
-        unsafe {
-            env::remove_var(IDE_CONTEXT_ENV_VAR);
-        }
+        remove_env_var(IDE_CONTEXT_ENV_VAR);
 
         assert_eq!(
             preferred_display_language_for_workspace(workspace.path()),

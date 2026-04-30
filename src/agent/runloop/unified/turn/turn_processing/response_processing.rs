@@ -989,10 +989,7 @@ Open questions for alignment:
                     .first()
                     .map(|call| call.tool_name())
                     .expect("function name expected");
-                assert_eq!(
-                    name,
-                    vtcode_core::config::constants::tools::REQUEST_USER_INPUT
-                );
+                assert_eq!(name, tools::REQUEST_USER_INPUT);
             }
             _ => panic!("Expected tool calls"),
         }

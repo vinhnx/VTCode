@@ -161,7 +161,7 @@ pub(crate) async fn synthesize_plan_mode_interview_args(
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
     plan_state: Option<PlanModeState>,
-) -> Option<serde_json::Value> {
+) -> Option<Value> {
     let plan_context = load_plan_draft_context(plan_state).await;
     let context = collect_interview_research_context(
         working_history,
@@ -712,7 +712,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
     response_text: Option<&str>,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     conversation_len: usize,
-    synthesized_interview_args: Option<serde_json::Value>,
+    synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
     let allow_interview = plan_mode_interview_ready(session_stats);
     let need_state = interview_need_state(response_text, session_stats);
@@ -1182,7 +1182,7 @@ fn build_adaptive_fallback_interview_args(
     response_text: Option<&str>,
     plan_validation: Option<PlanValidationReport>,
     tracker_summary: Option<TaskTrackerSummary>,
-) -> Option<serde_json::Value> {
+) -> Option<Value> {
     let validation = plan_validation.or_else(|| extract_plan_validation(response_text));
     let mut questions = Vec::new();
     let needs_task_metadata = tracker_summary.as_ref().is_some_and(|summary| {
@@ -1388,7 +1388,7 @@ fn inject_plan_mode_interview(
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     conversation_len: usize,
     _response_text: Option<&str>,
-    synthesized_interview_args: Option<serde_json::Value>,
+    synthesized_interview_args: Option<Value>,
 ) -> TurnProcessingResult {
     use vtcode_core::config::constants::tools;
 

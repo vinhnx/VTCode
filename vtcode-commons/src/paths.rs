@@ -206,7 +206,7 @@ pub fn file_name_from_path(path: &str) -> String {
 /// nearest existing parent directory, canonicalizing that, and then appending
 /// the remaining path components.
 ///
-/// # Safety
+/// # Security
 /// This function is critical for security. It prevents symlink escapes by:
 /// 1. Finding the nearest existing ancestor directory
 /// 2. Canonicalizing that directory (resolves symlinks)

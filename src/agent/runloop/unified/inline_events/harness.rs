@@ -414,7 +414,7 @@ mod tests {
 
         let payload = std::fs::read_to_string(&path).expect("read log");
         let line = payload.lines().next().expect("line");
-        let value: serde_json::Value = serde_json::from_str(line).expect("json");
+        let value: Value = serde_json::from_str(line).expect("json");
 
         assert_eq!(
             value.get("schema_version").and_then(|v| v.as_str()),

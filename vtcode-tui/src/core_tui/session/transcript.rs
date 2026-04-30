@@ -78,7 +78,7 @@ impl TranscriptReflowCache {
         }
 
         let mut current_offset = if start_index > 0 && start_index <= self.row_offsets.len() {
-            // This case shouldn't happen with truncate above, but for safety:
+            // This branch is defensive if callers request a partially updated prefix.
             self.row_offsets[start_index - 1] + self.messages[start_index - 1].lines.len()
         } else if start_index > 0 && !self.row_offsets.is_empty() {
             // After truncate(start_index), the last element is at start_index - 1

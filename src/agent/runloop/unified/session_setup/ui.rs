@@ -970,7 +970,7 @@ fn apply_persistent_memory_header_guide(
 }
 
 pub(crate) fn apply_ide_context_snapshot(
-    context_manager: &mut crate::agent::runloop::unified::context_manager::ContextManager,
+    context_manager: &mut context_manager::ContextManager,
     header_context: &mut InlineHeaderContext,
     handle: &InlineHandle,
     workspace: &std::path::Path,
@@ -990,7 +990,7 @@ pub(crate) fn apply_ide_context_snapshot(
 }
 
 pub(crate) fn ide_context_status_label(
-    context_manager: &crate::agent::runloop::unified::context_manager::ContextManager,
+    context_manager: &context_manager::ContextManager,
     workspace: &std::path::Path,
     vt_cfg: Option<&VTCodeConfig>,
     snapshot: Option<&vtcode_core::EditorContextSnapshot>,
@@ -1007,7 +1007,7 @@ pub(crate) fn ide_context_status_label(
 }
 
 pub(crate) fn ide_context_status_label_from_bridge(
-    context_manager: &crate::agent::runloop::unified::context_manager::ContextManager,
+    context_manager: &context_manager::ContextManager,
     workspace: &std::path::Path,
     vt_cfg: Option<&VTCodeConfig>,
     ide_context_bridge: Option<&IdeContextBridge>,
@@ -1647,13 +1647,12 @@ mod tests {
     #[test]
     fn ide_context_status_label_respects_session_override() {
         let workspace = assert_fs::TempDir::new().expect("workspace");
-        let mut context_manager =
-            crate::agent::runloop::unified::context_manager::ContextManager::new(
-                "sys".into(),
-                (),
-                Arc::new(RwLock::new(HashMap::new())),
-                None,
-            );
+        let mut context_manager = context_manager::ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
         context_manager.set_workspace_root(workspace.path());
 
         let snapshot = EditorContextSnapshot {

@@ -337,7 +337,7 @@ fn test_context_manager() -> ContextManager {
     ContextManager::new(
         "You are VT Code.".to_string(),
         (),
-        std::sync::Arc::new(RwLock::new(HashMap::new())),
+        Arc::new(RwLock::new(HashMap::new())),
         None,
     )
 }
@@ -926,7 +926,7 @@ fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_out
 
 #[test]
 fn legacy_memory_envelope_deserializes_with_new_fields_defaulted() {
-    let envelope: super::SessionMemoryEnvelope = serde_json::from_value(json!({
+    let envelope: SessionMemoryEnvelope = serde_json::from_value(json!({
         "session_id": "session-alpha",
         "summary": "Persisted summary",
         "task_summary": "Task tracker",
@@ -981,9 +981,9 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     )
     .expect("write eval");
 
-    let prior_envelope = super::SessionMemoryEnvelope {
+    let prior_envelope = SessionMemoryEnvelope {
         session_id: "session-alpha".to_string(),
-        schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+        schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary: "Prior summary".to_string(),
         objective: Some("Keep continuity".to_string()),
         task_summary: Some("Older task summary".to_string()),
@@ -1326,9 +1326,9 @@ fn inject_latest_memory_envelope_rehydrates_resume_history() {
     let history_dir = temp.path().join(".vtcode").join("history");
     fs::create_dir_all(&history_dir).expect("history dir");
     let envelope_path = history_dir.join("resume-session_001.memory.json");
-    let envelope = super::SessionMemoryEnvelope {
+    let envelope = SessionMemoryEnvelope {
         session_id: "resume-session".to_string(),
-        schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+        schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary: "Persisted summary".to_string(),
         objective: None,
         task_summary: Some("Tracker: - [ ] Follow up".to_string()),
@@ -1373,9 +1373,9 @@ fn inject_latest_memory_envelope_is_session_scoped() {
         ("session-beta", "Beta summary"),
     ] {
         let envelope_path = history_dir.join(format!("{session_id}_0001.memory.json"));
-        let envelope = super::SessionMemoryEnvelope {
+        let envelope = SessionMemoryEnvelope {
             session_id: session_id.to_string(),
-            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+            schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
             summary: summary.to_string(),
             objective: None,
             task_summary: None,
@@ -1417,9 +1417,9 @@ fn inject_latest_memory_envelope_requires_exact_session_prefix_match() {
         ("session-a_0001.memory.json", "Exact summary"),
         ("session-alpha_0002.memory.json", "Wrong summary"),
     ] {
-        let envelope = super::SessionMemoryEnvelope {
+        let envelope = SessionMemoryEnvelope {
             session_id: "session-a".to_string(),
-            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+            schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
             summary: summary.to_string(),
             objective: None,
             task_summary: None,
@@ -1511,7 +1511,7 @@ async fn persisted_envelope_uses_recorded_touched_files_only() {
 
     let envelope_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
         .expect("envelope path");
-    let envelope: super::SessionMemoryEnvelope =
+    let envelope: SessionMemoryEnvelope =
         serde_json::from_str(&fs::read_to_string(envelope_path).expect("read envelope"))
             .expect("parse envelope");
 
@@ -1535,9 +1535,9 @@ fn inject_latest_memory_envelope_uses_exact_session_id_when_prefixes_collide() {
         (session_alpha, "Alpha summary", "0001"),
         (session_beta, "Beta summary", "0002"),
     ] {
-        let envelope = super::SessionMemoryEnvelope {
+        let envelope = SessionMemoryEnvelope {
             session_id: session_id.to_string(),
-            schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+            schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
             summary: summary.to_string(),
             objective: None,
             task_summary: None,
@@ -1615,9 +1615,9 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
     let temp = tempdir().expect("tempdir");
     let history_dir = temp.path().join(".vtcode").join("history");
     fs::create_dir_all(&history_dir).expect("history dir");
-    let source_envelope = super::SessionMemoryEnvelope {
+    let source_envelope = SessionMemoryEnvelope {
         session_id: "session-source".to_string(),
-        schema_version: Some(super::SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
+        schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary: "Prior source summary".to_string(),
         objective: Some("Keep the source session moving".to_string()),
         task_summary: Some("Tracker: keep going".to_string()),

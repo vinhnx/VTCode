@@ -225,6 +225,10 @@ fn check_ripgrep_availability() {
 }
 
 #[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "These validation tests serialize environment mutation with workspace_guard, but Rust 2024 still requires unsafe set_var/remove_var calls."
+)]
 mod tests {
     use super::*;
     use assert_fs::TempDir;
@@ -237,6 +241,30 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
             .lock()
             .expect("workspace lock")
+    }
+
+    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: validation tests hold `workspace_guard()` before mutating process-global
+        // environment variables, so these mutations are serialized.
+        unsafe {
+            env::set_var(key, value);
+        }
+    }
+
+    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
+        // SAFETY: validation tests hold `workspace_guard()` before mutating process-global
+        // environment variables, so these mutations are serialized.
+        unsafe {
+            env::remove_var(key);
+        }
+    }
+
+    fn restore_env_var<T: AsRef<std::ffi::OsStr>>(key: &str, previous: Option<T>) {
+        if let Some(previous) = previous {
+            set_env_var(key, previous);
+        } else {
+            remove_env_var(key);
+        }
     }
 
     #[test]
@@ -341,9 +369,7 @@ mod tests {
         let _guard = workspace_guard();
         let temp_dir = TempDir::new()?;
         let previous_config_dir = env::var("VTCODE_CONFIG").ok();
-        unsafe {
-            env::set_var("VTCODE_CONFIG", temp_dir.path());
-        }
+        set_env_var("VTCODE_CONFIG", temp_dir.path());
 
         let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
@@ -355,13 +381,7 @@ mod tests {
 
         assert_eq!(config.agent.provider, "openai");
 
-        unsafe {
-            if let Some(previous) = previous_config_dir {
-                env::set_var("VTCODE_CONFIG", previous);
-            } else {
-                env::remove_var("VTCODE_CONFIG");
-            }
-        }
+        restore_env_var("VTCODE_CONFIG", previous_config_dir);
         Ok(())
     }
 }

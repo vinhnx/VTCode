@@ -76,6 +76,19 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[expect(
+    unsafe_code,
+    reason = "Rust 2024 requires unsafe process-environment mutation, and VT Code clears these macOS malloc variables before starting any worker threads."
+)]
+fn remove_runtime_env_var(key: &str) {
+    // SAFETY: this runs on the dedicated main thread before any Tokio runtime or worker threads
+    // exist, so there is no concurrent environment access yet.
+    unsafe {
+        std::env::remove_var(key);
+    }
+}
+
 fn bootstrap_main() -> Result<BootstrapOutcome> {
     let launch_argv = std::env::args_os().collect::<Vec<_>>();
     let launch_cwd = std::env::current_dir().context("failed to resolve current directory")?;
@@ -87,22 +100,22 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     // which corrupts the TUI display
     #[cfg(target_os = "macos")]
     {
-        // SAFETY: this runs on the dedicated main thread before any Tokio runtime or
-        // worker threads exist, so there is no concurrent environment access yet.
-        unsafe {
-            std::env::remove_var("MallocStackLogging");
-            std::env::remove_var("MallocStackLoggingDirectory");
-            std::env::remove_var("MallocScribble");
-            std::env::remove_var("MallocGuardEdges");
-            std::env::remove_var("MallocCheckHeapStart");
-            std::env::remove_var("MallocCheckHeapEach");
-            std::env::remove_var("MallocCheckHeapAbort");
-            std::env::remove_var("MallocCheckHeapSleep");
-            std::env::remove_var("MallocErrorAbort");
-            std::env::remove_var("MallocCorruptionAbort");
-            std::env::remove_var("MallocStackLoggingNoCompact");
-            std::env::remove_var("MallocDoNotProtectSentinel");
-            std::env::remove_var("MallocQuiet");
+        for key in [
+            "MallocStackLogging",
+            "MallocStackLoggingDirectory",
+            "MallocScribble",
+            "MallocGuardEdges",
+            "MallocCheckHeapStart",
+            "MallocCheckHeapEach",
+            "MallocCheckHeapAbort",
+            "MallocCheckHeapSleep",
+            "MallocErrorAbort",
+            "MallocCorruptionAbort",
+            "MallocStackLoggingNoCompact",
+            "MallocDoNotProtectSentinel",
+            "MallocQuiet",
+        ] {
+            remove_runtime_env_var(key);
         }
     }
 

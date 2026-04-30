@@ -204,6 +204,7 @@ impl OpenAIProvider {
                     }
                     Err(err) => {
                         *session_guard = None;
+                        self.clear_nonpersistent_websocket_continuation();
                         if !retried_reconnect && is_websocket_reconnect_error(&err) {
                             retried_reconnect = true;
                             continue;
@@ -232,6 +233,7 @@ impl OpenAIProvider {
                 }
                 Err(err) => {
                     *session_guard = None;
+                    self.clear_nonpersistent_websocket_continuation();
                     if !retried_active_response && is_websocket_active_response_error(&err) {
                         tracing::warn!(
                             model = %request.model,
@@ -249,7 +251,6 @@ impl OpenAIProvider {
                         continue;
                     }
                     if !retried_reconnect && is_websocket_reconnect_error(&err) {
-                        self.clear_nonpersistent_websocket_continuation();
                         retried_reconnect = true;
                         continue;
                     }
@@ -895,6 +896,24 @@ mod tests {
         )
     }
 
+    fn websocket_test_custom_provider(base_url: String) -> OpenAIProvider {
+        OpenAIProvider::from_custom_config(
+            "mycorp".to_string(),
+            "MyCorp".to_string(),
+            Some("test-key".to_string()),
+            Some("gpt-5.2".to_string()),
+            Some(base_url),
+            None,
+            None,
+            Some(OpenAIConfig {
+                websocket_mode: true,
+                ..Default::default()
+            }),
+            None,
+            None,
+        )
+    }
+
     fn websocket_test_request() -> LLMRequest {
         LLMRequest {
             model: "gpt-5.2".to_string(),
@@ -977,6 +996,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn websocket_custom_provider_uses_compatible_transport() {
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![vec![
+            ScriptedReply::Completed {
+                response_id: "resp_warmup",
+                text: "",
+            },
+            ScriptedReply::Completed {
+                response_id: "resp_final",
+                text: "compat ok",
+            },
+        ]])
+        .await
+        else {
+            return;
+        };
+        let compatible_base_url = base_url.replacen("api.openai.com", "compat.example", 1);
+        let provider = websocket_test_custom_provider(compatible_base_url);
+
+        let response = LLMProvider::generate(&provider, websocket_test_request())
+            .await
+            .expect("custom compatible provider should use websocket mode");
+
+        assert_eq!(response.content.as_deref(), Some("compat ok"));
+        {
+            let recorded = recorded.lock().expect("recorded lock");
+            assert_eq!(recorded.len(), 2);
+            assert_eq!(
+                recorded[0].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert!(recorded[0].get("previous_response_id").is_none());
+            assert_eq!(
+                recorded[1]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_warmup")
+            );
+        }
+        handle.await.expect("server task");
+    }
+
+    #[tokio::test]
     async fn websocket_reconnects_after_active_response_error() {
         let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
             vec![ScriptedReply::Error {
@@ -1015,6 +1076,61 @@ mod tests {
                     .get("previous_response_id")
                     .and_then(Value::as_str),
                 Some("resp_cached")
+            );
+        }
+        handle.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn websocket_failed_turn_drops_nonpersistent_continuation_before_retry() {
+        let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
+            vec![ScriptedReply::Error {
+                code: "invalid_request_error",
+                message: "Conversation already has an active response in progress: resp_active.",
+            }],
+            vec![
+                ScriptedReply::Completed {
+                    response_id: "resp_warmup",
+                    text: "",
+                },
+                ScriptedReply::Completed {
+                    response_id: "resp_after_reset",
+                    text: "reset ok",
+                },
+            ],
+        ])
+        .await
+        else {
+            return;
+        };
+        let provider = websocket_test_provider(base_url);
+        let request = websocket_test_request();
+        seed_continuation_cache(&provider, &request, "resp_cached", false);
+
+        let response = LLMProvider::generate(&provider, request)
+            .await
+            .expect("failed turn should restart nonpersistent continuation cleanly");
+
+        assert_eq!(response.content.as_deref(), Some("reset ok"));
+        {
+            let recorded = recorded.lock().expect("recorded lock");
+            assert_eq!(recorded.len(), 3);
+            assert_eq!(
+                recorded[0]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_cached")
+            );
+            assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(
+                recorded[1].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert_eq!(
+                recorded[2]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_warmup")
             );
         }
         handle.await.expect("server task");

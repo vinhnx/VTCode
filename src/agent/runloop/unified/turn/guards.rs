@@ -22,7 +22,7 @@ use vtcode_core::tools::validation_cache::ValidationCache;
 /// Optimization: Uses static slices for required params to avoid allocations
 pub(crate) fn validate_tool_args_security(
     name: &str,
-    args: &serde_json::Value,
+    args: &Value,
     validation_cache: Option<&Arc<ValidationCache>>,
     tool_registry: Option<&vtcode_core::tools::ToolRegistry>,
 ) -> Option<Vec<String>> {

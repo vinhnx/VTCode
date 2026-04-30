@@ -21,9 +21,7 @@ async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
 }
 
 /// Helper function to create test renderer with default config
-fn create_test_renderer(
-    handle: &vtcode_tui::app::InlineHandle,
-) -> vtcode_core::utils::ansi::AnsiRenderer {
+fn create_test_renderer(handle: &InlineHandle) -> AnsiRenderer {
     AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
 }
 
@@ -55,9 +53,9 @@ fn build_harness_state_with(
 /// Helper function to create common test context components
 struct TestContext {
     registry: ToolRegistry,
-    renderer: vtcode_core::utils::ansi::AnsiRenderer,
-    session: vtcode_tui::app::InlineSession,
-    handle: vtcode_tui::app::InlineHandle,
+    renderer: AnsiRenderer,
+    session: InlineSession,
+    handle: InlineHandle,
     approval_recorder: vtcode_core::tools::ApprovalRecorder,
     permissions_state: Arc<tokio::sync::RwLock<PermissionsConfig>>,
     workspace: std::path::PathBuf,

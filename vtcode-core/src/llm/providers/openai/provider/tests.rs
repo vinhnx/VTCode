@@ -2360,7 +2360,7 @@ fn prompt_cache_retention_excluded_when_not_set_and_for_unsupported_models() {
 }
 
 #[test]
-fn provider_from_config_respects_prompt_cache_and_websocket() {
+fn provider_from_config_respects_prompt_cache_and_websocket_gating() {
     let mut pc = PromptCachingConfig::default();
     pc.providers.openai.prompt_cache_retention = Some("in_memory".to_owned());
     let provider = OpenAIProvider::from_config(
@@ -2379,7 +2379,7 @@ fn provider_from_config_respects_prompt_cache_and_websocket() {
         Some("in_memory".to_owned())
     );
 
-    let provider_ws = OpenAIProvider::from_config(
+    let native_ws = OpenAIProvider::from_config(
         Some("key".to_string()),
         None,
         Some(models::openai::GPT_5_2.to_string()),
@@ -2393,7 +2393,72 @@ fn provider_from_config_respects_prompt_cache_and_websocket() {
         }),
         None,
     );
-    assert!(provider_ws.websocket_mode_enabled(models::openai::GPT_5_2));
+    assert!(native_ws.websocket_mode_enabled(models::openai::GPT_5_2));
+
+    let compatible_ws = OpenAIProvider::from_config(
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            websocket_mode: true,
+            ..Default::default()
+        }),
+        None,
+    );
+    assert!(compatible_ws.websocket_mode_enabled(models::openai::GPT_5_2));
+
+    let custom_ws = OpenAIProvider::from_custom_config(
+        "mycorp".to_string(),
+        "MyCorp".to_string(),
+        Some("key".to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        Some(OpenAIConfig {
+            websocket_mode: true,
+            ..Default::default()
+        }),
+        None,
+        None,
+    );
+    assert!(custom_ws.websocket_mode_enabled(models::openai::GPT_5_2));
+
+    let chatgpt_ws = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            websocket_mode: true,
+            ..Default::default()
+        }),
+        None,
+    );
+    assert!(!chatgpt_ws.websocket_mode_enabled(models::openai::GPT_5_2));
+
+    let xai_ws = OpenAIProvider::from_config(
+        Some("key".to_string()),
+        None,
+        Some(models::openai::GPT_5_2.to_string()),
+        Some("https://api.x.ai/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            websocket_mode: true,
+            ..Default::default()
+        }),
+        None,
+    );
+    assert!(!xai_ws.websocket_mode_enabled(models::openai::GPT_5_2));
 }
 
 // ─── Max Tokens & Reasoning ──────────────────────────────────────────────────

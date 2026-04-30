@@ -132,7 +132,7 @@ impl ToolCallSafetyValidator {
         &self,
         tool_name: &str,
         args: &Value,
-    ) -> std::result::Result<(), SafetyError> {
+    ) -> Result<(), SafetyError> {
         self.validate_call_with_invocation_id(tool_name, args, ToolInvocationId::new())
             .await
     }
@@ -143,7 +143,7 @@ impl ToolCallSafetyValidator {
         tool_name: &str,
         args: &Value,
         invocation_id: ToolInvocationId,
-    ) -> std::result::Result<(), SafetyError> {
+    ) -> Result<(), SafetyError> {
         let result = self
             .safety_gateway
             .check_and_record_with_id(&self.gateway_ctx, tool_name, args, Some(invocation_id))

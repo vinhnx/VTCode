@@ -98,7 +98,7 @@ impl MockGeminiResponses {
                             "text": chunk
                         }]
                     },
-                    "finishReason": if i == chunks.len() - 1 { serde_json::Value::String("STOP".to_string()) } else { serde_json::Value::Null }
+                    "finishReason": if i == chunks.len() - 1 { Value::String("STOP".to_string()) } else { Value::Null }
                 }]
             })
         }).collect()

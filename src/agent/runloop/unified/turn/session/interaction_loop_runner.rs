@@ -443,10 +443,7 @@ fn resolve_full_path_for_alias(alias: &str, workspace: &Path) -> Option<String> 
     Some(resolved.to_string_lossy().to_string())
 }
 
-fn apply_live_theme_and_appearance(
-    handle: &vtcode_tui::app::InlineHandle,
-    cfg: &vtcode_core::config::loader::VTCodeConfig,
-) {
+fn apply_live_theme_and_appearance(handle: &vtcode_tui::app::InlineHandle, cfg: &VTCodeConfig) {
     let color_config = theme::ColorAccessibilityConfig {
         minimum_contrast: cfg.ui.minimum_contrast,
         bold_is_bright: cfg.ui.bold_is_bright,
@@ -584,7 +581,7 @@ pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
 ) -> Result<InteractionOutcome> {
-    const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+    const MCP_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
     let mut last_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
     let mut last_input_activity_at = Instant::now();
     let mut last_durable_scheduler_poll = Instant::now() - DURABLE_SCHEDULER_POLL_INTERVAL;
@@ -803,7 +800,7 @@ pub(super) async fn run_interaction_loop_impl(
 
         if durable_scheduler_run
             .as_ref()
-            .is_some_and(tokio::task::JoinHandle::is_finished)
+            .is_some_and(JoinHandle::is_finished)
         {
             let Some(task) = durable_scheduler_run.take() else {
                 tracing::debug!("Durable scheduler task finished but handle was already consumed");

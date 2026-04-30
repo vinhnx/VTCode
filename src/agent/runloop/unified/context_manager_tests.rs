@@ -194,10 +194,7 @@ async fn request_editor_context_message_includes_active_editor_context_block() {
         ..EditorContextSnapshot::default()
     };
 
-    manager.set_editor_context_snapshot(
-        Some(snapshot),
-        Some(&vtcode_config::IdeContextConfig::default()),
-    );
+    manager.set_editor_context_snapshot(Some(snapshot), Some(&IdeContextConfig::default()));
     let prompt = manager
         .build_system_prompt(SystemPromptParams {
             full_auto: false,
@@ -254,9 +251,9 @@ async fn request_editor_context_message_skips_disallowed_provider_family() {
         }),
         ..EditorContextSnapshot::default()
     };
-    let config = vtcode_config::IdeContextConfig {
+    let config = IdeContextConfig {
         provider_mode: vtcode_config::IdeContextProviderMode::VscodeCompatible,
-        ..vtcode_config::IdeContextConfig::default()
+        ..IdeContextConfig::default()
     };
 
     manager.set_editor_context_snapshot(Some(snapshot), Some(&config));
@@ -297,10 +294,7 @@ async fn request_editor_context_message_respects_session_local_ide_toggle() {
         ..EditorContextSnapshot::default()
     };
 
-    manager.set_editor_context_snapshot(
-        Some(snapshot),
-        Some(&vtcode_config::IdeContextConfig::default()),
-    );
+    manager.set_editor_context_snapshot(Some(snapshot), Some(&IdeContextConfig::default()));
 
     let enabled_prompt = manager
         .build_system_prompt(SystemPromptParams {

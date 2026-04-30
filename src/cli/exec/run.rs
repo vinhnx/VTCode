@@ -114,10 +114,7 @@ pub(super) async fn handle_exec_command_impl(
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
 ) -> Result<()> {
-    if config
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if config.provider.eq_ignore_ascii_case(CODEX_PROVIDER) {
         return handle_codex_exec_command_impl(config, vt_cfg, options).await;
     }
 
@@ -314,7 +311,7 @@ async fn handle_codex_exec_command_impl(
             },
             "threadId": completed.thread_id,
         });
-        serde_json::to_writer_pretty(&mut std::io::stdout().lock(), &payload)?;
+        serde_json::to_writer_pretty(&mut io::stdout().lock(), &payload)?;
         println!();
     } else {
         println!("{}", completed.output);

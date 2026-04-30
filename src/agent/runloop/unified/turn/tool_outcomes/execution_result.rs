@@ -107,7 +107,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         false
     };
 
-    self::record_tool_execution(
+    record_tool_execution(
         t_ctx.ctx,
         tool_name,
         tool_start_time,
@@ -440,7 +440,7 @@ async fn handle_timeout(
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
-    error: &vtcode_core::tools::registry::ToolExecutionError,
+    error: &ToolExecutionError,
 ) -> Result<()> {
     let (user_msg, _) = format_structured_tool_error_for_user(tool_name, error);
     notify_structured_failure(tool_name, &user_msg, Some("timeout")).await;

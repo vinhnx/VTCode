@@ -114,7 +114,7 @@ pub(crate) struct TestTurnProcessingBacking {
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
     traj: TrajectoryLogger,
-    turn_metadata_cache: Option<Option<serde_json::Value>>,
+    turn_metadata_cache: Option<Option<Value>>,
 }
 
 impl TestTurnProcessingBacking {

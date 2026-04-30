@@ -37,13 +37,17 @@ fn unavailable_error() -> anyhow::Error {
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+#[expect(
+    unsafe_code,
+    reason = "This module is the deliberate FFI boundary for the packaged Ghostty runtime and wraps its unsafe calls in a safe rendering API."
+)]
 mod platform {
     use super::{
         Context, GhosttyRenderOutput, GhosttyRenderRequest, Library, OnceLock, Path, PathBuf,
         Result, anyhow, c_int, c_uint, c_void, unavailable_error,
     };
     use std::cmp;
-    use std::mem;
+    use std::mem::size_of;
 
     const GHOSTTY_SUCCESS: c_int = 0;
     const GHOSTTY_OUT_OF_SPACE: c_int = -3;
@@ -254,11 +258,12 @@ mod platform {
                 max_scrollback: request.scrollback_lines,
             };
 
-            // SAFETY: `raw` points to writable storage and `options` matches the upstream layout.
-            ensure_success(
-                unsafe { (api.terminal_new)(std::ptr::null(), &mut raw, options) },
-                "failed to create Ghostty terminal",
-            )?;
+            let create_result = {
+                // SAFETY: `raw` points to writable storage and `options` matches the upstream
+                // layout expected by the Ghostty runtime.
+                unsafe { (api.terminal_new)(std::ptr::null(), &mut raw, options) }
+            };
+            ensure_success(create_result, "failed to create Ghostty terminal")?;
             if raw.is_null() {
                 return Err(anyhow!(
                     "failed to create Ghostty terminal: Ghostty returned null"
@@ -324,28 +329,28 @@ mod platform {
         cell: GhosttyCell,
     ) -> Result<()> {
         let mut wide = 0u32;
-        // SAFETY: `wide` points to writable storage for the requested cell width field.
-        ensure_success(
-            unsafe { (api.cell_get)(cell, GHOSTTY_CELL_DATA_WIDE, (&mut wide as *mut u32).cast()) },
-            "failed to read Ghostty cell width",
-        )?;
+        let wide_result = {
+            // SAFETY: `wide` points to writable storage for the requested cell width field.
+            unsafe { (api.cell_get)(cell, GHOSTTY_CELL_DATA_WIDE, (&mut wide as *mut u32).cast()) }
+        };
+        ensure_success(wide_result, "failed to read Ghostty cell width")?;
 
         if wide == GHOSTTY_CELL_WIDE_SPACER_TAIL || wide == GHOSTTY_CELL_WIDE_SPACER_HEAD {
             return Ok(());
         }
 
         let mut has_text = false;
-        // SAFETY: `has_text` points to writable storage for the requested boolean field.
-        ensure_success(
+        let has_text_result = {
+            // SAFETY: `has_text` points to writable storage for the requested boolean field.
             unsafe {
                 (api.cell_get)(
                     cell,
                     GHOSTTY_CELL_DATA_HAS_TEXT,
                     (&mut has_text as *mut bool).cast(),
                 )
-            },
-            "failed to read Ghostty cell text flag",
-        )?;
+            }
+        };
+        ensure_success(has_text_result, "failed to read Ghostty cell text flag")?;
 
         if !has_text {
             output.push(' ');
@@ -359,8 +364,8 @@ mod platform {
         };
         if grapheme_result == GHOSTTY_OUT_OF_SPACE && grapheme_len > 0 {
             let mut codepoints = vec![0u32; grapheme_len];
-            // SAFETY: `codepoints` provides writable storage for the reported grapheme length.
-            ensure_success(
+            let grapheme_fill_result = {
+                // SAFETY: `codepoints` provides writable storage for the reported grapheme length.
                 unsafe {
                     (api.grid_ref_graphemes)(
                         grid_ref,
@@ -368,7 +373,10 @@ mod platform {
                         codepoints.len(),
                         &mut grapheme_len,
                     )
-                },
+                }
+            };
+            ensure_success(
+                grapheme_fill_result,
                 "failed to read Ghostty grapheme cluster",
             )?;
 
@@ -379,17 +387,17 @@ mod platform {
         }
 
         let mut codepoint = 0u32;
-        // SAFETY: `codepoint` points to writable storage for the requested codepoint field.
-        ensure_success(
+        let codepoint_result = {
+            // SAFETY: `codepoint` points to writable storage for the requested codepoint field.
             unsafe {
                 (api.cell_get)(
                     cell,
                     GHOSTTY_CELL_DATA_CODEPOINT,
                     (&mut codepoint as *mut u32).cast(),
                 )
-            },
-            "failed to read Ghostty codepoint",
-        )?;
+            }
+        };
+        ensure_success(codepoint_result, "failed to read Ghostty codepoint")?;
 
         push_codepoint(output, codepoint);
         Ok(())
@@ -479,17 +487,17 @@ mod platform {
 
     fn query_total_rows(api: &GhosttyApi, terminal: GhosttyTerminal, rows: u16) -> Result<u32> {
         let mut scrollbar = GhosttyTerminalScrollbar::default();
-        // SAFETY: `scrollbar` points to writable storage for the requested result type.
-        ensure_success(
+        let scrollbar_result = {
+            // SAFETY: `scrollbar` points to writable storage for the requested result type.
             unsafe {
                 (api.terminal_get)(
                     terminal,
                     GHOSTTY_TERMINAL_DATA_SCROLLBAR,
                     (&mut scrollbar as *mut GhosttyTerminalScrollbar).cast(),
                 )
-            },
-            "failed to query Ghostty scrollbar state",
-        )?;
+            }
+        };
+        ensure_success(scrollbar_result, "failed to query Ghostty scrollbar state")?;
 
         let total_rows = cmp::max(scrollbar.total, u64::from(rows));
         u32::try_from(total_rows)
@@ -595,7 +603,7 @@ mod platform {
         // Ghostty. This mirrors the upstream `sized!` helper from `libghostty-rs`.
         unsafe {
             let size_ptr = (&mut value as *mut T).cast::<usize>();
-            *size_ptr = mem::size_of::<T>();
+            *size_ptr = size_of::<T>();
         }
         value
     }

@@ -390,7 +390,7 @@ impl ModelPickerState {
 
     pub async fn persist_selection(
         &self,
-        workspace: &std::path::Path,
+        workspace: &Path,
         selection: &ModelSelectionResult,
     ) -> Result<VTCodeConfig> {
         config_persistence::persist_selection(workspace, selection).await
