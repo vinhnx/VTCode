@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.5 - 2026-05-01
+
+### Highlights
+### Other Changes
+#### Other
+
+- Remove keyring dependency and add platform-specific keyring stores (fef8f0a2) 
+#### Refactors
+
+- Reorganize imports and improve relaunch logic (91a841e1) 
 ## 0.105.4 - 2026-05-01
 
 ### Highlights
