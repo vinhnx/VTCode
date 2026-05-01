@@ -8113,6 +8113,7 @@ dependencies = [
  "fs2",
  "hostname",
  "keyring",
+ "keyring-core",
  "nix 0.31.2",
  "reqwest 0.12.28",
  "ring",

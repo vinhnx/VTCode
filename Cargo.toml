@@ -55,6 +55,7 @@ mimalloc = { version = "0.1", default-features = false }
 hashbrown = { version = "0.17", features = ["serde"] }
 rustc-hash = "2.1"
 keyring = "4"
+keyring-core = "1"
 libloading = "0.9"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }

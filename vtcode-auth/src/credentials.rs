@@ -109,7 +109,7 @@ impl AuthCredentialsStoreMode {
 pub(crate) fn is_keyring_functional() -> bool {
     // Create a test entry with a unique name to avoid conflicts
     let test_user = format!("test_{}", std::process::id());
-    let entry = match keyring::Entry::new("vtcode", &test_user) {
+    let entry = match keyring_entry("vtcode", &test_user) {
         Ok(e) => e,
         Err(_) => return false,
     };
@@ -126,6 +126,17 @@ pub(crate) fn is_keyring_functional() -> bool {
     let _ = entry.delete_credential();
 
     functional
+}
+
+pub(crate) fn keyring_entry(
+    service: &str,
+    user: &str,
+) -> keyring_core::Result<keyring_core::Entry> {
+    if keyring_core::get_default_store().is_none() {
+        keyring::use_native_store(cfg!(target_os = "linux"))?;
+    }
+
+    keyring_core::Entry::new(service, user)
 }
 
 /// Generic credential storage interface.
@@ -185,8 +196,8 @@ impl CredentialStorage {
 
     /// Store credential in OS keyring.
     fn store_keyring(&self, value: &str) -> Result<()> {
-        let entry = keyring::Entry::new(&self.service, &self.user)
-            .context("Failed to access OS keyring")?;
+        let entry =
+            keyring_entry(&self.service, &self.user).context("Failed to access OS keyring")?;
 
         entry
             .set_password(value)
@@ -232,14 +243,14 @@ impl CredentialStorage {
 
     /// Load credential from OS keyring.
     fn load_keyring(&self) -> Result<Option<String>> {
-        let entry = match keyring::Entry::new(&self.service, &self.user) {
+        let entry = match keyring_entry(&self.service, &self.user) {
             Ok(e) => e,
             Err(_) => return Ok(None),
         };
 
         match entry.get_password() {
             Ok(value) => Ok(Some(value)),
-            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(e) => Err(anyhow!("Failed to read from keyring: {}", e)),
         }
     }
@@ -278,7 +289,7 @@ impl CredentialStorage {
 
     /// Clear credential from OS keyring.
     fn clear_keyring(&self) -> Result<()> {
-        let entry = match keyring::Entry::new(&self.service, &self.user) {
+        let entry = match keyring_entry(&self.service, &self.user) {
             Ok(e) => e,
             Err(_) => return Ok(()),
         };
@@ -291,7 +302,7 @@ impl CredentialStorage {
                     self.user
                 );
             }
-            Err(keyring::Error::NoEntry) => {}
+            Err(keyring_core::Error::NoEntry) => {}
             Err(e) => return Err(anyhow!("Failed to clear keyring entry: {}", e)),
         }
 
