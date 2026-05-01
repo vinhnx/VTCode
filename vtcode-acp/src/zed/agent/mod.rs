@@ -1,6 +1,6 @@
+use crate::acp;
 use crate::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
 use crate::tooling::AcpToolRegistry;
-use crate::acp;
 use hashbrown::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

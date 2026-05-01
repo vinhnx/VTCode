@@ -158,9 +158,7 @@ impl AcpToolRegistry {
             tools::READ_FILE => crate::acp::ToolKind::Read,
             tools::GREP_FILE | tools::LIST_FILES => crate::acp::ToolKind::Search,
             tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => crate::acp::ToolKind::Execute,
-            tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => {
-                crate::acp::ToolKind::Edit
-            }
+            tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => crate::acp::ToolKind::Edit,
             tools::DELETE_FILE => crate::acp::ToolKind::Delete,
             tools::WEB_FETCH => crate::acp::ToolKind::Fetch,
             _ => crate::acp::ToolKind::Other,
