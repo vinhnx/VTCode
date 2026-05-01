@@ -209,8 +209,7 @@ mod tests {
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id
-                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
@@ -264,8 +263,7 @@ mod tests {
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id
-                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
@@ -342,8 +340,7 @@ mod tests {
             ReasoningEffortLevel::XHigh
         );
         assert!(response.config_options.iter().any(|option| {
-            option.id
-                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)

@@ -1,9 +1,9 @@
+use crate::acp;
+use crate::acp::Client;
 use crate::register_acp_connection;
 use crate::workspace::{
     DefaultWorkspaceTrustSynchronizer, WorkspaceTrustSyncOutcome, WorkspaceTrustSynchronizer,
 };
-use crate::acp;
-use crate::acp::Client;
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use tokio::sync::mpsc;

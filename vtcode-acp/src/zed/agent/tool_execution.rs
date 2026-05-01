@@ -1,11 +1,11 @@
 use super::ZedAgent;
+use crate::acp;
+use crate::acp::{AgentSideConnection, Client};
 use crate::reports::{
     TOOL_ERROR_LABEL, TOOL_RESPONSE_KEY_MESSAGE, TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL,
     TOOL_SUCCESS_LABEL, ToolExecutionReport,
 };
 use crate::tooling::{SupportedTool, ToolDescriptor};
-use crate::acp;
-use crate::acp::{AgentSideConnection, Client};
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::sync::Arc;

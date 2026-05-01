@@ -1,7 +1,7 @@
 use super::ZedAgent;
-use crate::acp_connection;
 use crate::acp;
 use crate::acp::AgentSideConnection;
+use crate::acp_connection;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::str::FromStr;

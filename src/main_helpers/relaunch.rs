@@ -1,6 +1,9 @@
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(not(unix))]
+use std::process::Stdio;
 use std::sync::{LazyLock, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,9 +73,10 @@ pub(crate) fn perform_queued_runtime_relaunch() {
         .map(format_manual_restart_command)
         .unwrap_or_else(|| "vtcode".to_string());
     let mut last_error: Option<String> = None;
+    prepare_for_runtime_relaunch();
 
     for attempt in attempts {
-        match spawn_relaunch_attempt(&attempt, &cwd) {
+        match launch_relaunch_attempt(&attempt, &cwd) {
             Ok(_) => std::process::exit(0),
             Err(err) => {
                 last_error = Some(format!("{}: {}", attempt.program.to_string_lossy(), err));
@@ -87,7 +91,25 @@ pub(crate) fn perform_queued_runtime_relaunch() {
     }
 }
 
-fn spawn_relaunch_attempt(attempt: &RelaunchAttempt, cwd: &Path) -> std::io::Result<()> {
+fn prepare_for_runtime_relaunch() {
+    vtcode_core::utils::trace_writer::flush_trace_log();
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+}
+
+#[cfg(unix)]
+fn launch_relaunch_attempt(attempt: &RelaunchAttempt, cwd: &Path) -> std::io::Result<()> {
+    use std::os::unix::process::CommandExt;
+
+    // Replace the current process in place so the restarted TUI keeps the same
+    // controlling terminal instead of racing a sibling process for raw-mode setup.
+    let mut command = Command::new(&attempt.program);
+    command.args(&attempt.args).current_dir(cwd);
+    Err(command.exec())
+}
+
+#[cfg(not(unix))]
+fn launch_relaunch_attempt(attempt: &RelaunchAttempt, cwd: &Path) -> std::io::Result<()> {
     let mut command = Command::new(&attempt.program);
     command
         .args(&attempt.args)
