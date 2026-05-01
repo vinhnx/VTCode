@@ -24,7 +24,7 @@ exec-events = ["dep:vtcode-exec-events"]
 anyhow = { workspace = true }
 bytes = "1.11"
 hashbrown = { workspace = true }
-lru = "0.16"
+lru = "0.18"
 parking_lot = "0.12"
 path-clean = { workspace = true }
 shell-escape = "0.1"
