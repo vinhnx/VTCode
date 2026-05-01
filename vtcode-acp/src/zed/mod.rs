@@ -200,40 +200,40 @@ mod tests {
         let config_options = response.config_options.unwrap();
         assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("architect")
+                            == crate::acp::SessionConfigValueId::new("architect")
                 )
         }));
         assert!(config_options.iter().any(|option| {
             option.id
-                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("high")
+                            == crate::acp::SessionConfigValueId::new("high")
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("openai")
+                            == crate::acp::SessionConfigValueId::new("openai")
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4")
+                            == crate::acp::SessionConfigValueId::new("gpt-5.4")
                 )
         }));
     }
@@ -255,40 +255,40 @@ mod tests {
         let config_options = response.config_options.unwrap();
         assert_eq!(config_options.len(), 4);
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("code")
+                            == crate::acp::SessionConfigValueId::new("code")
                 )
         }));
         assert!(config_options.iter().any(|option| {
             option.id
-                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("low")
+                            == crate::acp::SessionConfigValueId::new("low")
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("openai")
+                            == crate::acp::SessionConfigValueId::new("openai")
                 )
         }));
         assert!(config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4")
+                            == crate::acp::SessionConfigValueId::new("gpt-5.4")
                 )
         }));
     }
@@ -311,12 +311,12 @@ mod tests {
         let session = agent.session_handle(&session_id).unwrap();
         assert_eq!(session.data.borrow().current_mode, SessionMode::Architect);
         assert!(response.config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("architect")
+                            == crate::acp::SessionConfigValueId::new("architect")
                 )
         }));
     }
@@ -343,12 +343,12 @@ mod tests {
         );
         assert!(response.config_options.iter().any(|option| {
             option.id
-                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("xhigh")
+                            == crate::acp::SessionConfigValueId::new("xhigh")
                 )
         }));
     }
@@ -373,21 +373,21 @@ mod tests {
         assert_eq!(session.data.borrow().provider, "anthropic");
         assert_eq!(session.data.borrow().model, anthropic_default);
         assert!(response.config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PROVIDER_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("anthropic")
+                            == crate::acp::SessionConfigValueId::new("anthropic")
                 )
         }));
         assert!(response.config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new(anthropic_default)
+                            == crate::acp::SessionConfigValueId::new(anthropic_default)
                 )
         }));
     }
@@ -411,12 +411,12 @@ mod tests {
         assert_eq!(session.data.borrow().provider, "openai");
         assert_eq!(session.data.borrow().model, "gpt-5.4-mini");
         assert!(response.config_options.iter().any(|option| {
-            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
+            option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_MODEL_ID)
                 && matches!(
                     &option.kind,
                     SessionConfigKind::Select(select)
                         if select.current_value
-                            == agent_client_protocol::SessionConfigValueId::new("gpt-5.4-mini")
+                            == crate::acp::SessionConfigValueId::new("gpt-5.4-mini")
                 )
         }));
     }

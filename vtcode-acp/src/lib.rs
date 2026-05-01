@@ -19,6 +19,10 @@ pub mod transport;
 pub mod workspace;
 mod zed;
 
+pub(crate) mod acp {
+    pub(crate) use agent_client_protocol::*;
+}
+
 pub use capabilities::{
     AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials, AuthMethod,
     AuthRequirements, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo,
@@ -43,22 +47,21 @@ pub use client::{AcpClient, AcpClientBuilder};
 #[deprecated(since = "0.60.0", note = "Use jsonrpc module types instead")]
 pub use messages::{AcpMessage, AcpRequest, AcpResponse};
 
-use agent_client_protocol::AgentSideConnection;
 use std::sync::{Arc, OnceLock};
 
-static ACP_CONNECTION: OnceLock<Arc<AgentSideConnection>> = OnceLock::new();
+static ACP_CONNECTION: OnceLock<Arc<acp::AgentSideConnection>> = OnceLock::new();
 
 /// Register the global ACP connection from the host protocol.
 ///
 /// Returns `Err` with the provided connection if one has already been
 /// registered. Callers may drop the returned connection or reuse it as needed.
 pub fn register_acp_connection(
-    connection: Arc<AgentSideConnection>,
-) -> Result<(), Arc<AgentSideConnection>> {
+    connection: Arc<acp::AgentSideConnection>,
+) -> Result<(), Arc<acp::AgentSideConnection>> {
     ACP_CONNECTION.set(connection)
 }
 
 /// Retrieve the registered ACP connection, if available.
-pub fn acp_connection() -> Option<Arc<AgentSideConnection>> {
+pub fn acp_connection() -> Option<Arc<acp::AgentSideConnection>> {
     ACP_CONNECTION.get().cloned()
 }

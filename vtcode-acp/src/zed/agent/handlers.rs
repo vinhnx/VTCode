@@ -6,7 +6,7 @@ use super::super::helpers::{
 };
 use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
-use agent_client_protocol as acp;
+use crate::acp;
 use anyhow::Result;
 use futures::StreamExt;
 use serde_json::json;

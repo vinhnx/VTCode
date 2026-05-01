@@ -1,5 +1,6 @@
 use super::ZedAgent;
-use agent_client_protocol::{self as acp, Client};
+use crate::acp;
+use agent_client_protocol::Client;
 use anyhow::Result;
 use percent_encoding::percent_decode_str;
 use std::path::PathBuf;

@@ -18,11 +18,11 @@ pub enum SupportedTool {
 }
 
 impl SupportedTool {
-    pub fn kind(&self) -> agent_client_protocol::ToolKind {
+    pub fn kind(&self) -> crate::acp::ToolKind {
         match self {
-            Self::ReadFile => agent_client_protocol::ToolKind::Read,
-            Self::ListFiles => agent_client_protocol::ToolKind::Search,
-            Self::SwitchMode => agent_client_protocol::ToolKind::Other,
+            Self::ReadFile => crate::acp::ToolKind::Read,
+            Self::ListFiles => crate::acp::ToolKind::Search,
+            Self::SwitchMode => crate::acp::ToolKind::Other,
         }
     }
 
@@ -58,10 +58,10 @@ pub enum ToolDescriptor {
 }
 
 impl ToolDescriptor {
-    pub fn kind(self) -> agent_client_protocol::ToolKind {
+    pub fn kind(self) -> crate::acp::ToolKind {
         match self {
             Self::Acp(tool) => tool.kind(),
-            Self::Local => agent_client_protocol::ToolKind::Other,
+            Self::Local => crate::acp::ToolKind::Other,
         }
     }
 }
@@ -153,17 +153,17 @@ impl AcpToolRegistry {
         render_title(descriptor, function_name, args)
     }
 
-    pub fn tool_kind(&self, function_name: &str) -> agent_client_protocol::ToolKind {
+    pub fn tool_kind(&self, function_name: &str) -> crate::acp::ToolKind {
         match function_name {
-            tools::READ_FILE => agent_client_protocol::ToolKind::Read,
-            tools::GREP_FILE | tools::LIST_FILES => agent_client_protocol::ToolKind::Search,
-            tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => agent_client_protocol::ToolKind::Execute,
+            tools::READ_FILE => crate::acp::ToolKind::Read,
+            tools::GREP_FILE | tools::LIST_FILES => crate::acp::ToolKind::Search,
+            tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => crate::acp::ToolKind::Execute,
             tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => {
-                agent_client_protocol::ToolKind::Edit
+                crate::acp::ToolKind::Edit
             }
-            tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
-            tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
-            _ => agent_client_protocol::ToolKind::Other,
+            tools::DELETE_FILE => crate::acp::ToolKind::Delete,
+            tools::WEB_FETCH => crate::acp::ToolKind::Fetch,
+            _ => crate::acp::ToolKind::Other,
         }
     }
 

@@ -1,4 +1,4 @@
-use agent_client_protocol as acp;
+use crate::acp;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 

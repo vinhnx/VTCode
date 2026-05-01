@@ -1,6 +1,6 @@
 use crate::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
 use crate::tooling::AcpToolRegistry;
-use agent_client_protocol as acp;
+use crate::acp;
 use hashbrown::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

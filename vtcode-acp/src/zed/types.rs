@@ -1,4 +1,4 @@
-use agent_client_protocol as acp;
+use crate::acp;
 use std::cell::{Cell, RefCell};
 use std::mem::discriminant;
 use std::rc::Rc;

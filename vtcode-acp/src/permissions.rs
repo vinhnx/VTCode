@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use agent_client_protocol as acp;
-use agent_client_protocol::{Client, Error as AcpError};
+use crate::acp;
+use crate::acp::{Client, Error as AcpError};
 use async_trait::async_trait;
 use serde_json::Value;
 use tracing::{error, warn};

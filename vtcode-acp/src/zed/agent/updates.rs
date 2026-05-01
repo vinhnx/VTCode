@@ -1,7 +1,7 @@
 use super::super::helpers::build_available_commands;
 use super::super::types::{NotificationEnvelope, PlanProgress};
 use super::ZedAgent;
-use agent_client_protocol as acp;
+use crate::acp;
 use anyhow::Result;
 use tokio::sync::oneshot;
 use vtcode_core::prompts::discover_prompt_templates;

@@ -1,4 +1,4 @@
-use agent_client_protocol as acp;
+use crate::acp;
 use std::collections::HashSet;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;

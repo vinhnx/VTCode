@@ -9,7 +9,8 @@ use crate::tooling::{
     TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_SUMMARY_MAX_ITEMS, TOOL_LIST_FILES_URI_ARG,
     TOOL_READ_FILE_LIMIT_ARG, TOOL_READ_FILE_LINE_ARG,
 };
-use agent_client_protocol::{self as acp, AgentSideConnection, Client};
+use crate::acp;
+use crate::acp::{AgentSideConnection, Client};
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::path::PathBuf;
