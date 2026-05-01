@@ -82,18 +82,39 @@ jobs:
       - name: Build (${{ matrix.target }})
         run: cross build --release --target ${{ matrix.target }}
         shell: bash
+        env:
+          RUSTFLAGS: "-C target-cpu=x86-64"
 
       - name: Verify Linux TLS linkage
         shell: bash
         run: |
-          if cargo tree -e normal -i native-tls --target ${{ matrix.target }}; then
-            echo "✗ native-tls detected in Linux dependency graph" >&2
-            exit 1
-          fi
-          if cargo tree -e normal -i openssl-sys --target ${{ matrix.target }}; then
-            echo "✗ openssl-sys detected in Linux dependency graph" >&2
-            exit 1
-          fi
+          set -euo pipefail
+
+          check_absent() {
+            local package="$1"
+            local tree_output
+
+            set +e
+            tree_output="$(cargo tree -e normal -i "$package" --target "${{ matrix.target }}" 2>&1)"
+            local status=$?
+            set -e
+
+            if printf '%s\n' "$tree_output" | grep -Eq "^${package} v"; then
+              echo "✗ ${package} detected in Linux dependency graph" >&2
+              printf '%s\n' "$tree_output" >&2
+              exit 1
+            fi
+
+            if [ "$status" -ne 0 ] \
+              && ! printf '%s\n' "$tree_output" | grep -Eq "nothing to print\\.|did not match any packages"; then
+              echo "✗ Failed to inspect ${package} dependency graph" >&2
+              printf '%s\n' "$tree_output" >&2
+              exit "$status"
+            fi
+          }
+
+          check_absent native-tls
+          check_absent openssl-sys
           echo "✓ Linux dependency graph is rustls-only (no native-tls/openssl-sys)"
 
       - name: Check Binary
