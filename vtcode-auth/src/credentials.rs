@@ -128,12 +128,48 @@ pub(crate) fn is_keyring_functional() -> bool {
     functional
 }
 
+fn ensure_native_keyring_store() -> keyring_core::Result<()> {
+    if keyring_core::get_default_store().is_some() {
+        return Ok(());
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let store = dbus_secret_service_keyring_store::Store::new_with_configuration(
+        &std::collections::HashMap::new(),
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let store = apple_native_keyring_store::keychain::Store::new_with_configuration(
+        &std::collections::HashMap::new(),
+    )?;
+
+    #[cfg(target_os = "windows")]
+    let store = windows_native_keyring_store::Store::new_with_configuration(
+        &std::collections::HashMap::new(),
+    )?;
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "macos",
+        target_os = "windows"
+    )))]
+    {
+        return Err(keyring_core::Error::NotSupportedByStore(
+            "VT Code does not have a native keyring store configured for this platform".to_string(),
+        ));
+    }
+
+    keyring_core::set_default_store(store);
+    Ok(())
+}
+
 pub(crate) fn keyring_entry(
     service: &str,
     user: &str,
 ) -> keyring_core::Result<keyring_core::Entry> {
     if keyring_core::get_default_store().is_none() {
-        keyring::use_native_store(cfg!(target_os = "linux"))?;
+        ensure_native_keyring_store()?;
     }
 
     keyring_core::Entry::new(service, user)
