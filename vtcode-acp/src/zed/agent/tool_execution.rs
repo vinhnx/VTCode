@@ -2,13 +2,13 @@ use super::ZedAgent;
 use crate::acp;
 use crate::acp::{AgentSideConnection, Client};
 use crate::reports::{
-    TOOL_ERROR_LABEL, TOOL_RESPONSE_KEY_MESSAGE, TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL,
-    TOOL_SUCCESS_LABEL, ToolExecutionReport,
+    TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL, TOOL_SUCCESS_LABEL, ToolExecutionReport,
 };
 use crate::tooling::{SupportedTool, ToolDescriptor};
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use tokio::time::Instant;
 use vtcode_core::config::constants::tools;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
@@ -24,160 +24,192 @@ impl ZedAgent {
         calls: &[ProviderToolCall],
     ) -> Result<Vec<ToolCallResult>, acp::Error> {
         if calls.is_empty() {
-            return Ok(Vec::with_capacity(0)); // Use with_capacity(0) instead of Vec::new()
+            return Ok(Vec::new());
         }
 
         let Some(client) = self.client() else {
             return Ok(calls
                 .iter()
-                .map(|call| ToolCallResult {
-                    tool_call_id: call.id.clone(),
-                    llm_response: json!({
-                        TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
-                        TOOL_RESPONSE_KEY_TOOL: call
-                            .function
-                            .as_ref()
-                            .map(|function| function.name.as_str())
-                            .unwrap_or("unknown"),
-                        TOOL_RESPONSE_KEY_MESSAGE: "Client connection unavailable",
-                    })
-                    .to_string(),
+                .map(|call| {
+                    Self::tool_call_result_from_report(
+                        call,
+                        ToolExecutionReport::failure(
+                            Self::tool_name_from_call(call),
+                            "Client connection unavailable",
+                        ),
+                    )
                 })
                 .collect());
         };
 
-        let mut results = Vec::with_capacity(calls.len()); // Pre-allocate for all tool call results
+        let mut results = Vec::with_capacity(calls.len());
 
         for call in calls {
-            let Some(func_ref) = call.function.as_ref() else {
-                results.push(ToolCallResult {
-                    tool_call_id: call.id.clone(),
-                    llm_response: json!({
-                        TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
-                        TOOL_RESPONSE_KEY_TOOL: "unknown",
-                        TOOL_RESPONSE_KEY_MESSAGE: "Malformed tool call: missing function payload",
-                    })
-                    .to_string(),
-                });
-                continue;
-            };
-            let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
-            let args_value_result: Result<Value, _> = serde_json::from_str(&func_ref.arguments);
-            let args_value_for_input = args_value_result.as_ref().ok().cloned();
-            let title = match (tool_descriptor, args_value_for_input.as_ref()) {
-                (Some(descriptor), Some(args)) => {
-                    self.acp_tool_registry
-                        .render_title(descriptor, &func_ref.name, args)
-                }
-                (Some(descriptor), None) => {
-                    let null_args = Value::Null;
-                    self.acp_tool_registry
-                        .render_title(descriptor, &func_ref.name, &null_args)
-                }
-                (None, _) => format!("{} (unsupported)", func_ref.name),
-            };
-
-            let call_id = acp::ToolCallId::new(Arc::from(call.id.clone()));
-            let kind = tool_descriptor
-                .map(|d| d.kind())
-                .unwrap_or_else(|| self.acp_tool_registry.tool_kind(&func_ref.name));
-            let initial_call = acp::ToolCall::new(call_id.clone(), title)
-                .kind(kind)
-                .status(acp::ToolCallStatus::Pending)
-                .raw_input(args_value_for_input.clone());
-
-            self.send_update(
-                session_id,
-                acp::SessionUpdate::ToolCall(initial_call.clone()),
-            )
-            .await?;
-
-            let permission_override = if session.cancel_flag.get() {
-                None
-            } else if let (Some(ToolDescriptor::Acp(tool_kind)), Ok(args_value)) =
-                (tool_descriptor, args_value_result.as_ref())
-            {
-                self.permission_prompter
-                    .request_tool_permission(
-                        client.as_ref(),
-                        session_id,
-                        &initial_call,
-                        tool_kind,
-                        args_value,
-                    )
-                    .await?
-            } else {
-                None
-            };
-
-            if tool_descriptor.is_some()
-                && permission_override.is_none()
-                && !session.cancel_flag.get()
-            {
-                let in_progress_fields =
-                    acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
-                let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
-                self.send_update(
-                    session_id,
-                    acp::SessionUpdate::ToolCallUpdate(progress_update),
-                )
-                .await?;
-            }
-
-            let mut report = if let Some(report) = permission_override {
-                report
-            } else if session.cancel_flag.get() {
-                ToolExecutionReport::cancelled(&func_ref.name)
-            } else {
-                match (tool_descriptor, args_value_result) {
-                    (Some(descriptor), Ok(args_value)) => {
-                        self.execute_descriptor(
-                            descriptor,
-                            &func_ref.name,
-                            &client,
-                            session_id,
-                            &args_value,
-                        )
-                        .await
-                    }
-                    (None, Ok(_)) => {
-                        ToolExecutionReport::failure(&func_ref.name, "Unsupported tool")
-                    }
-                    (_, Err(error)) => ToolExecutionReport::failure(
-                        &func_ref.name,
-                        &format!("Invalid JSON arguments: {error}"),
-                    ),
-                }
-            };
-
-            if session.cancel_flag.get() && matches!(report.status, acp::ToolCallStatus::Completed)
-            {
-                report = ToolExecutionReport::cancelled(&func_ref.name);
-            }
-
-            let mut update_fields = acp::ToolCallUpdateFields::default().status(report.status);
-            if !report.content.is_empty() {
-                update_fields = update_fields.content(report.content.clone());
-            }
-            if !report.locations.is_empty() {
-                update_fields = update_fields.locations(report.locations.clone());
-            }
-            if let Some(raw_output) = &report.raw_output {
-                update_fields = update_fields.raw_output(raw_output.clone());
-            }
-
-            let update = acp::ToolCallUpdate::new(call_id.clone(), update_fields);
-
-            self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update))
-                .await?;
-
-            results.push(ToolCallResult {
-                tool_call_id: call.id.clone(),
-                llm_response: report.llm_response,
-            });
+            self.pace_tool_call(session).await;
+            results.push(
+                self.execute_tool_call(session, session_id, call, client.as_ref())
+                    .await?,
+            );
         }
 
         Ok(results)
+    }
+
+    async fn execute_tool_call(
+        &self,
+        session: &SessionHandle,
+        session_id: &acp::SessionId,
+        call: &ProviderToolCall,
+        client: &AgentSideConnection,
+    ) -> Result<ToolCallResult, acp::Error> {
+        let Some(func_ref) = call.function.as_ref() else {
+            return Ok(Self::tool_call_result_from_report(
+                call,
+                ToolExecutionReport::failure(
+                    "unknown",
+                    "Malformed tool call: missing function payload",
+                ),
+            ));
+        };
+        let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
+        let args_value_result: Result<Value, _> = serde_json::from_str(&func_ref.arguments);
+        let args_value_for_input = args_value_result.as_ref().ok().cloned();
+        let title = match (tool_descriptor, args_value_for_input.as_ref()) {
+            (Some(descriptor), Some(args)) => {
+                self.acp_tool_registry
+                    .render_title(descriptor, &func_ref.name, args)
+            }
+            (Some(descriptor), None) => {
+                let null_args = Value::Null;
+                self.acp_tool_registry
+                    .render_title(descriptor, &func_ref.name, &null_args)
+            }
+            (None, _) => format!("{} (unsupported)", func_ref.name),
+        };
+
+        let call_id = acp::ToolCallId::new(Arc::from(call.id.clone()));
+        let kind = tool_descriptor
+            .map(|d| d.kind())
+            .unwrap_or_else(|| self.acp_tool_registry.tool_kind(&func_ref.name));
+        let initial_call = acp::ToolCall::new(call_id.clone(), title)
+            .kind(kind)
+            .status(acp::ToolCallStatus::Pending)
+            .raw_input(args_value_for_input.clone());
+
+        self.send_update(
+            session_id,
+            acp::SessionUpdate::ToolCall(initial_call.clone()),
+        )
+        .await?;
+
+        let permission_override = if session.cancel_flag.get() {
+            None
+        } else if let (Some(ToolDescriptor::Acp(tool_kind)), Ok(args_value)) =
+            (tool_descriptor, args_value_result.as_ref())
+        {
+            self.permission_prompter
+                .request_tool_permission(client, session_id, &initial_call, tool_kind, args_value)
+                .await?
+        } else {
+            None
+        };
+
+        if tool_descriptor.is_some() && permission_override.is_none() && !session.cancel_flag.get()
+        {
+            let in_progress_fields =
+                acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
+            let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
+            self.send_update(
+                session_id,
+                acp::SessionUpdate::ToolCallUpdate(progress_update),
+            )
+            .await?;
+        }
+
+        let mut report = if let Some(report) = permission_override {
+            report
+        } else if session.cancel_flag.get() {
+            ToolExecutionReport::cancelled(&func_ref.name)
+        } else {
+            match (tool_descriptor, args_value_result) {
+                (Some(descriptor), Ok(args_value)) => {
+                    self.execute_descriptor(
+                        descriptor,
+                        &func_ref.name,
+                        client,
+                        session_id,
+                        &args_value,
+                    )
+                    .await
+                }
+                (None, Ok(_)) => ToolExecutionReport::failure(&func_ref.name, "Unsupported tool"),
+                (_, Err(error)) => ToolExecutionReport::failure(
+                    &func_ref.name,
+                    &format!("Invalid JSON arguments: {error}"),
+                ),
+            }
+        };
+
+        if session.cancel_flag.get() && matches!(report.status, acp::ToolCallStatus::Completed) {
+            report = ToolExecutionReport::cancelled(&func_ref.name);
+        }
+
+        let update = acp::ToolCallUpdate::new(call_id, Self::update_fields_from_report(&report));
+        self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update))
+            .await?;
+
+        Ok(Self::tool_call_result_from_report(call, report))
+    }
+
+    async fn pace_tool_call(&self, session: &SessionHandle) {
+        let Some(delay) = self.tool_call_delay else {
+            return;
+        };
+
+        let sleep_for = {
+            let data = session.data.borrow();
+            data.last_tool_call_at.and_then(|last_call| {
+                let elapsed = last_call.elapsed();
+                (elapsed < delay).then_some(delay - elapsed)
+            })
+        };
+
+        if let Some(duration) = sleep_for {
+            tokio::time::sleep(duration).await;
+        }
+
+        session.data.borrow_mut().last_tool_call_at = Some(Instant::now());
+    }
+
+    fn tool_name_from_call(call: &ProviderToolCall) -> &str {
+        call.function
+            .as_ref()
+            .map(|function| function.name.as_str())
+            .unwrap_or("unknown")
+    }
+
+    fn tool_call_result_from_report(
+        call: &ProviderToolCall,
+        report: ToolExecutionReport,
+    ) -> ToolCallResult {
+        ToolCallResult {
+            tool_call_id: call.id.clone(),
+            llm_response: report.llm_response,
+        }
+    }
+
+    fn update_fields_from_report(report: &ToolExecutionReport) -> acp::ToolCallUpdateFields {
+        let mut fields = acp::ToolCallUpdateFields::default().status(report.status);
+        if !report.content.is_empty() {
+            fields = fields.content(report.content.clone());
+        }
+        if !report.locations.is_empty() {
+            fields = fields.locations(report.locations.clone());
+        }
+        if let Some(raw_output) = &report.raw_output {
+            fields = fields.raw_output(raw_output.clone());
+        }
+        fields
     }
 
     async fn execute_descriptor(
@@ -256,7 +288,7 @@ impl ZedAgent {
             .map_err(|error| format!("Failed to create terminal: {error}"))?;
         let terminal_id = response.terminal_id;
 
-        let mut content = Vec::with_capacity(5); // Pre-allocate for typical content sections
+        let mut content = Vec::with_capacity(2);
         let summary = match location_display.as_deref() {
             Some(".") | None => format!("Started terminal command: {command_display}"),
             Some(location) => {
@@ -279,11 +311,7 @@ impl ZedAgent {
             }
         });
 
-        Ok(ToolExecutionReport::success(
-            content,
-            Vec::with_capacity(0),
-            payload,
-        )) // Use with_capacity(0)
+        Ok(ToolExecutionReport::success(content, Vec::new(), payload))
     }
 
     async fn execute_acp_tool(

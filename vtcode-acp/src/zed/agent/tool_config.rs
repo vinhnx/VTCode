@@ -50,6 +50,17 @@ impl ZedAgent {
         }
     }
 
+    pub(super) fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
+        self.tool_loop_limit > 0 && completed_tool_loops >= self.tool_loop_limit
+    }
+
+    pub(super) fn tool_loop_limit_message(&self) -> String {
+        format!(
+            "Reached maximum tool loops ({}); stopping this turn to avoid an unsafe autonomous loop.",
+            self.tool_loop_limit
+        )
+    }
+
     pub(super) fn client_supports_read_text_file(&self) -> bool {
         self.client_capabilities
             .borrow()

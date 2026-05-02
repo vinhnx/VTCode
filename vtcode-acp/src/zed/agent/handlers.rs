@@ -386,6 +386,7 @@ impl acp::Agent for ZedAgent {
                 }
             }
         } else {
+            let mut tool_loop_count = 0usize;
             loop {
                 if session.cancel_flag.get() {
                     stop_reason = acp::StopReason::Cancelled;
@@ -417,6 +418,27 @@ impl acp::Agent for ZedAgent {
                         .clone()
                         .filter(|calls| !calls.is_empty())
                 {
+                    if self.tool_loop_limit_reached(tool_loop_count) {
+                        let message = self.tool_loop_limit_message();
+                        if plan.has_context_step()
+                            && !plan.context_completed()
+                            && plan.complete_context()
+                        {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
+                        if plan.start_response() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
+                        self.send_update(
+                            &args.session_id,
+                            acp::SessionUpdate::AgentMessageChunk(text_chunk(message.clone())),
+                        )
+                        .await?;
+                        assistant_message = message;
+                        stop_reason = acp::StopReason::EndTurn;
+                        break;
+                    }
+                    tool_loop_count = tool_loop_count.saturating_add(1);
                     if plan.start_context() {
                         self.send_plan_update(&args.session_id, &plan).await?;
                     }

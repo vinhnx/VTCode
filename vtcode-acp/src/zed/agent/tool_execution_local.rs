@@ -20,21 +20,15 @@ use vtcode_core::tools::traits::Tool;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 use vtcode_core::utils::path::ensure_path_within_workspace;
 
+const RESTRICTED_LOCAL_TOOLS: &[&str] = &["debug_agent", "analyze_agent", "execute_code"];
+
 impl ZedAgent {
     pub(super) async fn execute_local_tool(
         &self,
         tool_name: &str,
         args: &Value,
     ) -> ToolExecutionReport {
-        // SECURITY FIX: Block sensitive tools from external ACP clients
-        // These are internal diagnostic and code execution tools that should not be exposed
-        let restricted_tools = [
-            "debug_agent",   // Internal diagnostic tool
-            "analyze_agent", // Internal diagnostic tool
-            "execute_code",  // Code execution tool - dangerous for external clients
-        ];
-
-        if restricted_tools.contains(&tool_name) {
+        if RESTRICTED_LOCAL_TOOLS.contains(&tool_name) {
             warn!(
                 tool = tool_name,
                 "Attempted execution of restricted tool from external ACP client"
@@ -65,7 +59,7 @@ impl ZedAgent {
                     TOOL_RESPONSE_KEY_TOOL: tool_name,
                     "result": output.clone(),
                 });
-                ToolExecutionReport::success(content, Vec::with_capacity(0), payload) // Use with_capacity(0)
+                ToolExecutionReport::success(content, Vec::new(), payload)
             }
             Err(error) => {
                 warn!(%error, tool = tool_name, "Failed to execute local tool");
@@ -274,7 +268,7 @@ impl ZedAgent {
     }
 
     fn list_files_content(output: &Value) -> Vec<acp::ToolCallContent> {
-        let mut lines = Vec::with_capacity(100); // Pre-allocate for typical line count
+        let mut lines = Vec::new();
 
         if let (Some(count), Some(total)) = (
             output.get("count").and_then(Value::as_u64),
@@ -342,7 +336,7 @@ impl ZedAgent {
             .get(TOOL_LIST_FILES_ITEMS_KEY)
             .and_then(Value::as_array)
         else {
-            return Vec::with_capacity(0); // Use with_capacity(0) instead of Vec::new()
+            return Vec::new();
         };
 
         items
