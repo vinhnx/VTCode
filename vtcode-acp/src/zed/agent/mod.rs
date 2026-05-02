@@ -5,6 +5,7 @@ use hashbrown::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::warn;
 use vtcode_core::config::ToolDocumentationMode;
@@ -41,6 +42,8 @@ pub(crate) struct ZedAgent {
     thread_manager: ThreadManager,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
     title: Option<String>,
+    tool_loop_limit: usize,
+    tool_call_delay: Option<Duration>,
 }
 
 impl ZedAgent {
@@ -55,6 +58,8 @@ impl ZedAgent {
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
+        let tool_loop_limit = tools_config.max_tool_loops;
+        let tool_call_delay = Self::tool_call_delay_for_rate(tools_config.max_tool_rate_per_second);
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
             Some(FileOpsTool::new(
@@ -94,7 +99,7 @@ impl ZedAgent {
         Self {
             config,
             system_prompt,
-            sessions: Rc::new(RefCell::new(HashMap::with_capacity(10))), // Pre-allocate for typical session count
+            sessions: Rc::new(RefCell::new(HashMap::with_capacity(10))),
             next_session_id: Cell::new(0),
             session_update_tx,
             acp_tool_registry,
@@ -104,6 +109,14 @@ impl ZedAgent {
             thread_manager: ThreadManager::new(),
             client_capabilities: Rc::new(RefCell::new(None)),
             title,
+            tool_loop_limit,
+            tool_call_delay,
         }
+    }
+
+    fn tool_call_delay_for_rate(max_per_second: Option<usize>) -> Option<Duration> {
+        let rate = max_per_second.filter(|rate| *rate > 0)?;
+        let nanos = 1_000_000_000u64.saturating_div(rate as u64).max(1);
+        Some(Duration::from_nanos(nanos))
     }
 }

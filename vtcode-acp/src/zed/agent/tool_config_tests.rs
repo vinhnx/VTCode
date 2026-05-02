@@ -4,6 +4,7 @@ use assert_fs::TempDir;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::core::PromptCachingConfig;
@@ -18,6 +19,10 @@ use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::{MessageRole, ToolDefinition};
 
 async fn build_agent(workspace: &Path) -> ZedAgent {
+    build_agent_with_tools_config(workspace, ToolsConfig::default()).await
+}
+
+async fn build_agent_with_tools_config(workspace: &Path, tools_config: ToolsConfig) -> ZedAgent {
     let core_config = CoreAgentConfig {
         model: "test-model".to_string(),
         api_key: String::new(),
@@ -55,13 +60,44 @@ async fn build_agent(workspace: &Path) -> ZedAgent {
     ZedAgent::new(
         core_config,
         zed_config,
-        ToolsConfig::default(),
+        tools_config,
         CommandsConfig::default(),
         String::new(),
         tx,
         Some("Zed".to_string()),
     )
     .await
+}
+
+#[test]
+fn tool_call_delay_for_rate_ignores_unset_or_zero_limits() {
+    assert_eq!(ZedAgent::tool_call_delay_for_rate(None), None);
+    assert_eq!(ZedAgent::tool_call_delay_for_rate(Some(0)), None);
+}
+
+#[test]
+fn tool_call_delay_for_rate_uses_per_second_interval() {
+    assert_eq!(
+        ZedAgent::tool_call_delay_for_rate(Some(4)),
+        Some(Duration::from_millis(250))
+    );
+}
+
+#[tokio::test]
+async fn tool_loop_limit_uses_tools_config() {
+    let temp = TempDir::new().unwrap();
+    let mut tools_config = ToolsConfig::default();
+    tools_config.max_tool_loops = 2;
+    let agent = build_agent_with_tools_config(temp.path(), tools_config).await;
+
+    assert!(!agent.tool_loop_limit_reached(0));
+    assert!(!agent.tool_loop_limit_reached(1));
+    assert!(agent.tool_loop_limit_reached(2));
+    assert!(
+        agent
+            .tool_loop_limit_message()
+            .contains("maximum tool loops (2)")
+    );
 }
 
 fn definition_names(definitions: Vec<ToolDefinition>) -> Vec<String> {

@@ -3,6 +3,7 @@ use std::cell::{Cell, RefCell};
 use std::mem::discriminant;
 use std::rc::Rc;
 use tokio::sync::oneshot;
+use tokio::time::Instant;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::ThreadRuntimeHandle;
@@ -35,7 +36,7 @@ pub(crate) struct PlanProgress {
 
 impl PlanProgress {
     pub(crate) fn new(include_context_step: bool) -> Self {
-        let mut entries = Vec::with_capacity(3); // Pre-allocate for typical plan entries (analyze, gather, respond)
+        let mut entries = Vec::with_capacity(3);
 
         let analyze_index = entries.len();
         entries.push(acp::PlanEntry::new(
@@ -168,6 +169,7 @@ pub(crate) struct SessionData {
     pub(crate) reasoning_effort: ReasoningEffortLevel,
     pub(crate) provider: String,
     pub(crate) model: String,
+    pub(crate) last_tool_call_at: Option<Instant>,
 }
 
 pub(crate) struct NotificationEnvelope {

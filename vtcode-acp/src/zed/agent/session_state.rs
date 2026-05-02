@@ -121,6 +121,7 @@ impl ZedAgent {
                 reasoning_effort,
                 provider,
                 model,
+                last_tool_call_at: None,
             })),
             cancel_flag: Rc::new(Cell::new(false)),
         }
@@ -362,7 +363,7 @@ impl ZedAgent {
     }
 
     pub(super) fn resolved_messages(&self, session: &SessionHandle) -> Vec<Message> {
-        let mut messages = Vec::with_capacity(10); // Pre-allocate for typical message count
+        let mut messages = Vec::with_capacity(10);
         if !self.system_prompt.trim().is_empty() {
             messages.push(Message::system(self.system_prompt.clone()));
         }
@@ -401,7 +402,7 @@ impl ZedAgent {
             FinishReason::ContentFilter | FinishReason::Refusal | FinishReason::Error(_) => {
                 acp::StopReason::Refusal
             }
-            FinishReason::Pause => acp::StopReason::EndTurn, // Map Pause to EndTurn as a fallback for ACP
+            FinishReason::Pause => acp::StopReason::EndTurn,
         }
     }
 
