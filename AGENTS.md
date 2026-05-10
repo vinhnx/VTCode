@@ -24,31 +24,32 @@
 
 Use `./scripts/check-dev.sh` during development. Do not use `./scripts/check.sh` for routine iteration.
 
-| If you changed... | Run |
-| --- | --- |
-| A focused code path and you want the default fast gate | `./scripts/check-dev.sh` |
-| Logic covered by tests or you added tests | `./scripts/check-dev.sh --test` |
-| Multiple crates or shared code | `./scripts/check-dev.sh --workspace` |
-| Extra lint-sensitive code paths | `./scripts/check-dev.sh --lints` |
-| GitHub workflows or workflow-security-sensitive scripts | `./scripts/check.sh workflow-security` |
-| Ast-grep rules or scan scaffolding (`sgconfig.yml`, `rules/`) | `vtcode check ast-grep` |
-| PTY/TUI harness paths called out in `docs/harness/QUALITY_SCORE.md` | `./scripts/check.sh harness` |
-| Release validation, final PR validation, or reviewer/CI explicitly asked | `./scripts/check.sh` |
+| If you changed...                                                        | Run                                    |
+| ------------------------------------------------------------------------ | -------------------------------------- |
+| A focused code path and you want the default fast gate                   | `./scripts/check-dev.sh`               |
+| Logic covered by tests or you added tests                                | `./scripts/check-dev.sh --test`        |
+| Multiple crates or shared code                                           | `./scripts/check-dev.sh --workspace`   |
+| Extra lint-sensitive code paths                                          | `./scripts/check-dev.sh --lints`       |
+| GitHub workflows or workflow-security-sensitive scripts                  | `./scripts/check.sh workflow-security` |
+| Ast-grep rules or scan scaffolding (`sgconfig.yml`, `rules/`)            | `vtcode check ast-grep`                |
+| PTY/TUI harness paths called out in `docs/harness/QUALITY_SCORE.md`      | `./scripts/check.sh harness`           |
+| Release validation, final PR validation, or reviewer/CI explicitly asked | `./scripts/check.sh`                   |
 
 Use `cargo check`, `cargo nextest run`, `cargo fmt`, and `cargo clippy` when you need a narrower command for a specific crate or faster debugging loop.
 
 ## Code Placement
 
 Repository shape:
+
 - Main code lives in `src/`, `vtcode-core/`, `vtcode-tui/`, and `tests/`.
 
 Choose placement before adding code:
 
-| Situation | Preferred location |
-| --- | --- |
-| Reusable logic that does not need to live in the core runtime | An existing smaller crate, or a new small crate |
-| Code tightly coupled to existing `vtcode-core` runtime responsibilities | `vtcode-core` |
-| Unsure whether new reusable logic belongs in `vtcode-core` | Keep it out of `vtcode-core` by default |
+| Situation                                                               | Preferred location                              |
+| ----------------------------------------------------------------------- | ----------------------------------------------- |
+| Reusable logic that does not need to live in the core runtime           | An existing smaller crate, or a new small crate |
+| Code tightly coupled to existing `vtcode-core` runtime responsibilities | `vtcode-core`                                   |
+| Unsure whether new reusable logic belongs in `vtcode-core`              | Keep it out of `vtcode-core` by default         |
 
 ## Implementation Notes
 
@@ -56,8 +57,20 @@ Choose placement before adding code:
 - Keep new abstractions proportional to current use; do not generalize single-use code.
 - Preserve existing APIs and behavior unless the task requires a change.
 
+## Command Output
+
+Protect context usage. **Any command with unknown or potentially large output must be byte-capped.**
+
+Default pattern:
+
+```bash
+COMMAND 2>&1 | head -c 4000
+```
+
 <!-- codemod-skill-discovery:begin -->
+
 ## Codemod Skill Discovery
+
 This section is managed by `codemod` CLI.
 
 - Core skill: `.agents/skills/codemod/SKILL.md`
