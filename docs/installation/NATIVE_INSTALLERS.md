@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 
 ### How It Works
 
-1. Detects OS (macOS/Linux) and architecture (x86_64/aarch64)
+1. Detects OS (macOS/Linux) and architecture
 2. Fetches latest version from GitHub API (or uses specified version)
 3. Downloads release tarball from GitHub Releases
 4. Extracts and installs to `$VTCode_INSTALL_DIR/vtcode`
@@ -38,8 +38,10 @@ This differs from the optional search tools flow:
 ### Supported Platforms
 
 - macOS 10.15+ (Intel & Apple Silicon)
-- Linux x86_64, aarch64
+- Linux x86_64
 - WSL (use install.ps1 for native Windows)
+
+Linux `aarch64` hosts are detected by the installer, but native `aarch64` release artifacts are not published by default in current release workflow.
 
 ---
 

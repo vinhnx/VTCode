@@ -174,13 +174,32 @@ fetch_recent_releases() {
     response=$(cat "$response_file")
     rm -f "$response_file"
 
-    if [[ -z "$response" || "$response" == "[]" ]]; then
-        log_error "Failed to fetch releases info from GitHub API or no releases found"
-        log_info "Ensure you have internet connection and GitHub is accessible"
-        exit 1
+    if [[ -n "$response" && "$response" != "[]" ]]; then
+        echo "$response"
+        return 0
     fi
 
-    echo "$response"
+    return 1
+}
+
+fetch_latest_release_tag_fallback() {
+    local location
+    location=$(curl -fsSIL --connect-timeout 10 "https://github.com/$REPO/releases/latest" \
+        | tr -d '\r' \
+        | awk '/^location:/ {print $2}' \
+        | tail -n1)
+
+    if [[ -z "$location" ]]; then
+        return 1
+    fi
+
+    local tag
+    tag=$(echo "$location" | sed -nE 's|.*/tag/([^/]+)$|\1|p')
+    if [[ -z "$tag" ]]; then
+        return 1
+    fi
+
+    echo "$tag"
 }
 
 # Extract download URL for the detected platform
@@ -467,7 +486,20 @@ main() {
 
     # Fetch recent releases
     local all_releases
-    all_releases=$(fetch_recent_releases)
+    if all_releases=$(fetch_recent_releases); then
+        log_info "Fetched release metadata from GitHub API"
+    else
+        log_warning "Failed to fetch release metadata from GitHub API"
+        log_info "Falling back to the latest release redirect endpoint"
+        local fallback_tag=""
+        fallback_tag=$(fetch_latest_release_tag_fallback || true)
+        if [[ -z "$fallback_tag" ]]; then
+            log_error "Could not resolve a release tag from GitHub"
+            log_info "Ensure github.com is reachable, or install via: cargo install vtcode"
+            exit 1
+        fi
+        all_releases="[{\"tag_name\":\"$fallback_tag\"}]"
+    fi
 
     # Find the most recent release with assets for this platform
     local release_tag=""
