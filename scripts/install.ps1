@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $Repo = "vinhnx/vtcode"
 $BinName = "vtcode.exe"
-$GitHubAPI = "https://api.github.com/repos/$Repo/releases/latest"
+$GitHubAPI = "https://api.github.com/repos/$Repo/releases?per_page=10"
 $GitHubReleases = "https://github.com/$Repo/releases/download"
 
 # Logging functions
@@ -50,9 +50,9 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force > $null
 }
 
-# Fetch latest release from GitHub API
-function Get-LatestRelease {
-    Write-Info "Fetching latest VT Code release from GitHub..."
+# Fetch recent releases from GitHub API
+function Get-RecentReleases {
+    Write-Info "Fetching recent VT Code releases from GitHub..."
     
     try {
         $response = Invoke-RestMethod -Uri $GitHubAPI -ErrorAction Stop
@@ -65,23 +65,53 @@ function Get-LatestRelease {
     }
 }
 
-# Get platform-specific download URL
-function Get-DownloadUrl {
-    param([object]$Release)
-    
-    $ReleaseTag = $Release.tag_name
-    Write-Info "Latest version: $ReleaseTag"
-    
-    # Windows always uses x86_64-pc-windows-msvc
-    $Platform = "x86_64-pc-windows-msvc"
-    $Filename = "vtcode-$ReleaseTag-$Platform.zip"
-    $DownloadUrl = "$GitHubReleases/$ReleaseTag/$Filename"
-    
-    return @{
-        Url = $DownloadUrl
-        Tag = $ReleaseTag
-        Filename = $Filename
+function Get-DownloadFilename {
+    param([string]$ReleaseTag)
+
+    $VersionTag = $ReleaseTag
+    if ($VersionTag.StartsWith("v")) {
+        $VersionTag = $VersionTag.Substring(1)
     }
+    return "vtcode-$VersionTag-x86_64-pc-windows-msvc.zip"
+}
+
+function Test-AssetAvailable {
+    param([string]$Url)
+
+    try {
+        Invoke-WebRequest -Uri $Url -Method Head -ErrorAction Stop > $null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+# Select latest release that actually has Windows asset
+function Get-DownloadUrl {
+    param([array]$Releases)
+
+    foreach ($Release in $Releases) {
+        $ReleaseTag = $Release.tag_name
+        if ([string]::IsNullOrEmpty($ReleaseTag)) {
+            continue
+        }
+
+        $Filename = Get-DownloadFilename -ReleaseTag $ReleaseTag
+        $DownloadUrl = "$GitHubReleases/$ReleaseTag/$Filename"
+        if (Test-AssetAvailable -Url $DownloadUrl) {
+            Write-Info "Found compatible version: $ReleaseTag"
+            return @{
+                Url = $DownloadUrl
+                Tag = $ReleaseTag
+                Filename = $Filename
+            }
+        }
+    }
+
+    Write-Error "No recent releases include a Windows native binary asset"
+    Write-Info "Use cargo fallback: cargo install vtcode"
+    exit 1
 }
 
 # Download binary with progress
@@ -296,11 +326,11 @@ function Main {
     $TempDir = New-Item -ItemType Directory -Path "$env:TEMP\vtcode-install-$(Get-Random)" -Force
     
     try {
-        # Fetch latest release
-        $Release = Get-LatestRelease
+        # Fetch recent releases
+        $Releases = Get-RecentReleases
         
-        # Get download URL
-        $DownloadInfo = Get-DownloadUrl $Release
+        # Get latest compatible download URL
+        $DownloadInfo = Get-DownloadUrl $Releases
         
         # Download binary
         $ArchivePath = Join-Path $TempDir "vtcode-binary.zip"
