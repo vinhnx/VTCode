@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.8 - 2026-05-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update AGENTs guide (c5b71a50) 
+#### Refactors
+
+- Update installer scripts to fetch recent releases and improve error handling  (1f45415f) (@vinhnx)
+- Convert async functions to inline-delegating wrappers to reduce coroutine state machine overhead (5ea90914) 
 ## 0.105.7 - 2026-05-07
 
 ### Highlights
