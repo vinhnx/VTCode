@@ -4,6 +4,7 @@ use super::types::{EnhancedCacheEntry, EnhancedCacheStats};
 use once_cell::sync::Lazy;
 use quick_cache::sync::Cache;
 use serde_json::Value;
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -87,8 +88,8 @@ impl FileCache {
     }
 
     /// Cache file content
-    pub async fn put_file(&self, key: String, value: Value) {
-        self.put_file_arc(key, Arc::new(value)).await
+    pub fn put_file(&self, key: String, value: Value) -> impl Future<Output = ()> + '_ {
+        self.put_file_arc(key, Arc::new(value))
     }
 
     /// Cache file content with pre-wrapped Arc for zero-copy insertion
@@ -132,8 +133,8 @@ impl FileCache {
     }
 
     /// Cache directory listing
-    pub async fn put_directory(&self, key: String, value: Value) {
-        self.put_directory_arc(key, Arc::new(value)).await
+    pub fn put_directory(&self, key: String, value: Value) -> impl Future<Output = ()> + '_ {
+        self.put_directory_arc(key, Arc::new(value))
     }
 
     /// Cache directory listing with pre-wrapped Arc

@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::future::Future;
 use std::path::PathBuf;
 use tokio::fs;
 
@@ -191,16 +192,20 @@ fn edit_not_found_error(
 }
 
 impl ToolRegistry {
-    pub async fn read_file(&self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::READ_FILE, args).await
+    /// Inline-delegating wrapper that returns the inner future directly to
+    /// avoid an extra coroutine state machine (audit section 16).
+    pub fn read_file(&self, args: Value) -> impl Future<Output = Result<Value>> + '_ {
+        self.execute_tool(tools::READ_FILE, args)
     }
 
-    pub async fn write_file(&self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::WRITE_FILE, args).await
+    /// Inline-delegating wrapper. See [`Self::read_file`].
+    pub fn write_file(&self, args: Value) -> impl Future<Output = Result<Value>> + '_ {
+        self.execute_tool(tools::WRITE_FILE, args)
     }
 
-    pub async fn create_file(&self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::CREATE_FILE, args).await
+    /// Inline-delegating wrapper. See [`Self::read_file`].
+    pub fn create_file(&self, args: Value) -> impl Future<Output = Result<Value>> + '_ {
+        self.execute_tool(tools::CREATE_FILE, args)
     }
 
     pub async fn edit_file(&self, args: Value) -> Result<Value> {
@@ -291,8 +296,9 @@ impl ToolRegistry {
             .await
     }
 
-    pub async fn delete_file(&self, _args: Value) -> Result<Value> {
-        self.execute_tool(tools::DELETE_FILE, _args).await
+    /// Inline-delegating wrapper. See [`Self::read_file`].
+    pub fn delete_file(&self, args: Value) -> impl Future<Output = Result<Value>> + '_ {
+        self.execute_tool(tools::DELETE_FILE, args)
     }
 
     pub async fn grep_file(&self, args: Value) -> Result<Value> {

@@ -1,6 +1,7 @@
 //! ToolRegistry construction helpers.
 
 use std::borrow::Cow;
+use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -55,27 +56,30 @@ fn load_workspace_spooler_config(workspace_root: &Path) -> SpoolerConfig {
 }
 
 impl ToolRegistry {
-    pub async fn new(workspace_root: PathBuf) -> Self {
-        Self::build(workspace_root, PtyConfig::default()).await
+    pub fn new(workspace_root: PathBuf) -> impl Future<Output = Self> {
+        Self::build(workspace_root, PtyConfig::default())
     }
 
-    pub async fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
-        Self::build(workspace_root, pty_config).await
+    pub fn new_with_config(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+    ) -> impl Future<Output = Self> {
+        Self::build(workspace_root, pty_config)
     }
 
-    pub async fn new_with_custom_policy(
+    pub fn new_with_custom_policy(
         workspace_root: PathBuf,
         policy_manager: ToolPolicyManager,
-    ) -> Self {
-        Self::build_with_policy(workspace_root, PtyConfig::default(), Some(policy_manager)).await
+    ) -> impl Future<Output = Self> {
+        Self::build_with_policy(workspace_root, PtyConfig::default(), Some(policy_manager))
     }
 
-    pub async fn new_with_custom_policy_and_config(
+    pub fn new_with_custom_policy_and_config(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
         policy_manager: ToolPolicyManager,
-    ) -> Self {
-        Self::build_with_policy(workspace_root, pty_config, Some(policy_manager)).await
+    ) -> impl Future<Output = Self> {
+        Self::build_with_policy(workspace_root, pty_config, Some(policy_manager))
     }
 
     async fn build(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {

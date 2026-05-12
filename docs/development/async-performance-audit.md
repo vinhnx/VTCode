@@ -219,6 +219,52 @@ Updated `src/agent/runloop/unified/tool_pipeline/execution_runtime.rs`:
 - removed manual post-await restoration path in favor of drop-based restoration
 - added focused unit test `progress_callback_guard_restores_previous_on_drop`
 
+### 16) Async state-machine bloat patterns (Tweede Golf, May 2026)
+
+Reference: <https://tweedegolf.nl/en/blog/237/async-rust-never-left-the-mvp-state>
+Upstream Project Goal: <https://rust-lang.github.io/rust-project-goals/2026/async-statemachine-optimisation.html>
+
+The article identifies four sources of bloat in the futures that `rustc` generates today, all rooted in the MIR `coroutine_resume` lowering:
+
+1. The `Returned` state always panics on re-poll (overhead even when callers are well-behaved).
+2. Async blocks with no `.await` still receive a 3-state machine and discriminant switch.
+3. Pure-delegation futures (`async fn bar() { foo(blah).await }`) are not inlined; `bar` gets its own state machine that wraps `foo`'s.
+4. `match` arms that each end in `.await` produce one duplicated suspend state per arm even when the saved type is identical.
+
+The article's measured wins (2-5% binary size on embedded; ~3% perf on x86 with `smol`) are from compiler-side hacks. Source-level workarounds are explicitly characterized as ugly noise the compiler should obviate. We therefore adopt the following policy rather than mass rewrites:
+
+#### Policy
+
+- Track the upstream Project Goal in this audit; revisit on each `rustup` toolchain bump.
+- For NEW code in `vtcode-core` and `vtcode-tools` runtime hot paths:
+  - Do not write `async fn` for a body that contains no `.await` unless required by a trait signature; use a plain `fn` instead.
+  - For pure single-step delegations (`async fn x(a) { y(a).await }`) on free or inherent functions, prefer `fn x(a) -> impl Future<Output = T> + use<'_, ...>` so the wrapper state machine is elided. Do not apply this to `#[async_trait]` impls, ACP/Codex protocol handlers, or any caller that spawns the future on a multi-thread runtime where `Send` inference would regress.
+  - When a `match` chooses between calls of the same async fn that differ only in arguments (article's "Collapsing states" example), hoist the differing argument into a `let` and `.await` once after the match.
+- Do not rewrite existing code purely for these patterns. The compiler fix is the right intervention; opportunistic rewrites are acceptable when a file is already being edited for another reason.
+
+#### Scan summary (snapshot)
+
+A scoped scan (`async fn` whose body contains no `.await`, excluding `#[test]`/`#[tokio::test]`/`async_trait` macros) found 214 candidates. The vast majority are trait method implementations whose `async` keyword is mandated by the trait signature and cannot be removed. Genuine pure-delegation candidates (single inner `.await`, free or inherent fn, not a trait impl) cluster in:
+
+- [vtcode-core/src/tools/registry/builder.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/builder.rs) — five `ToolRegistry::new*` constructors all delegate to `Self::build_with_policy(...).await`.
+- [vtcode-core/src/tools/registry/pty_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/pty_facade.rs#L43-L49) — `terminate_all_pty_sessions_async`, `terminate_all_exec_sessions_async`.
+- [vtcode-core/src/tools/registry/harness_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/harness_facade.rs#L82-L88) — `harness_exec_session_completed`, `terminate_harness_exec_session`.
+- [vtcode-core/src/tools/registry/file_helpers.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/file_helpers.rs) — `read_file`, `write_file`, `create_file`, `delete_file` thin wrappers around `execute_tool`.
+- [vtcode-core/src/tools/registry/execution_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/execution_facade.rs#L266) — `execute_public_tool_request`, `execute_tool`.
+- [vtcode-core/src/tools/cache.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/cache.rs) — `put_file`, `put_directory` arc wrappers.
+- [vtcode-core/src/llm/providers/openai/provider/provider_impl.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs#L101-L115) — `stream`, `stream_normalized`, `generate` delegations.
+- [vtcode-core/src/project_doc.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/project_doc.rs#L112-L125) — `get_user_instructions`, `build_instruction_appendix`.
+- [vtcode-core/src/tools/file_ops/path_policy.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/file_ops/path_policy.rs#L267) — `normalize_user_path`.
+- [vtcode-core/src/tools/file_ops/write.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/file_ops/write.rs#L48) — `write_file` wrapper around `write_file_internal`.
+
+Pattern 4 ("Collapsing states") yielded one match in `vtcode-core/src/mcp/cli.rs:164`, but each arm calls a *different* function (`run_list`, `run_get`, `run_add`, …) so the saved suspend types differ and there is nothing to collapse. No source change is warranted.
+
+#### Status
+
+- Documented and applied opportunistically in touched runtime files (per policy above), focused on pure-delegation wrappers in `vtcode-core`.
+- Re-scan after the next `rust-toolchain.toml` bump to see how many candidates the upstream `coroutine_resume` work has obsoleted.
+- If the upstream Project Goal lands an `unwind = abort` / `panic = abort` switch that drops the `Panicked` state, evaluate whether `release-profile-strict` should opt in for binary-size sensitive embeds (tracked here, not actioned).
+
 ## Validation
 
 Executed:

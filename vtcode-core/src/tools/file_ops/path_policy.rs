@@ -264,7 +264,12 @@ impl FileOpsTool {
     }
 
     /// Public helper to normalize and validate a user-provided path against the workspace root.
-    pub async fn normalize_user_path(&self, path: &str) -> Result<PathBuf> {
-        self.normalize_and_validate_user_path(path).await
+    /// Inline-delegating wrapper that returns the inner future directly to
+    /// avoid an extra coroutine state machine (audit section 16).
+    pub fn normalize_user_path<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> impl Future<Output = Result<PathBuf>> + 'a {
+        self.normalize_and_validate_user_path(path)
     }
 }

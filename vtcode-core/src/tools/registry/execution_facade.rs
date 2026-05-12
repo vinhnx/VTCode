@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::future::Future;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::task::Id as TokioTaskId;
@@ -263,11 +264,13 @@ impl ToolRegistry {
         }
     }
 
-    pub async fn execute_public_tool_request(
+    /// Inline-delegating wrapper that returns the inner future directly to
+    /// avoid an extra coroutine state machine (audit section 16).
+    pub fn execute_public_tool_request(
         &self,
         request: ToolExecutionRequest,
-    ) -> ToolExecutionOutcome {
-        self.execute_tool_request_internal(request).await
+    ) -> impl Future<Output = ToolExecutionOutcome> + '_ {
+        self.execute_tool_request_internal(request)
     }
 
     pub async fn execute_prepared_public_tool_request(
