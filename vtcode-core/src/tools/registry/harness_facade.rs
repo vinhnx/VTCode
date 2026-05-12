@@ -1,5 +1,6 @@
 //! Harness context accessors for ToolRegistry.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -79,12 +80,23 @@ impl ToolRegistry {
             .await
     }
 
-    pub async fn harness_exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
-        self.exec_sessions.is_session_completed(session_id).await
+    /// Inline-delegating wrapper over
+    /// [`crate::tools::exec_session::ExecSessionManager::is_session_completed`].
+    /// Returns the inner future directly (audit section 16).
+    pub fn harness_exec_session_completed<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<Option<i32>>> + 'a {
+        self.exec_sessions.is_session_completed(session_id)
     }
 
-    pub async fn terminate_harness_exec_session(&self, session_id: &str) -> Result<()> {
-        self.exec_sessions.terminate_session(session_id).await
+    /// Inline-delegating wrapper over
+    /// [`crate::tools::exec_session::ExecSessionManager::terminate_session`].
+    pub fn terminate_harness_exec_session<'a>(
+        &'a self,
+        session_id: &'a str,
+    ) -> impl Future<Output = Result<()>> + 'a {
+        self.exec_sessions.terminate_session(session_id)
     }
 
     pub async fn close_harness_exec_session(&self, session_id: &str) -> Result<()> {

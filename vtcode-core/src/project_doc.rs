@@ -1,4 +1,5 @@
 use std::fmt::Write as _;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -109,16 +110,19 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
     .await
 }
 
-pub async fn get_user_instructions(
-    config: &AgentConfig,
-    active_dir: &Path,
-    _skills: Option<&[SkillMetadata]>,
-) -> Option<String> {
-    build_instruction_appendix(config, active_dir).await
+pub fn get_user_instructions<'a>(
+    config: &'a AgentConfig,
+    active_dir: &'a Path,
+    _skills: Option<&'a [SkillMetadata]>,
+) -> impl Future<Output = Option<String>> + 'a {
+    build_instruction_appendix(config, active_dir)
 }
 
-pub async fn build_instruction_appendix(config: &AgentConfig, active_dir: &Path) -> Option<String> {
-    build_instruction_appendix_with_context(config, active_dir, &[]).await
+pub fn build_instruction_appendix<'a>(
+    config: &'a AgentConfig,
+    active_dir: &'a Path,
+) -> impl Future<Output = Option<String>> + 'a {
+    build_instruction_appendix_with_context(config, active_dir, &[])
 }
 
 pub async fn build_instruction_appendix_with_context(

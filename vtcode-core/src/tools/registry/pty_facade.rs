@@ -1,5 +1,6 @@
 //! PTY-related ToolRegistry accessors.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -40,12 +41,17 @@ impl ToolRegistry {
         self.pty_sessions.terminate_all();
     }
 
-    pub async fn terminate_all_pty_sessions_async(&self) -> Result<()> {
-        self.pty_sessions.terminate_all_async().await
+    /// Inline-delegating wrapper over [`pty::PtySessionManager::terminate_all_async`].
+    /// Returns the inner future directly to avoid an extra coroutine state machine
+    /// (per the async-state-machine bloat audit, section 16).
+    pub fn terminate_all_pty_sessions_async(&self) -> impl Future<Output = Result<()>> + '_ {
+        self.pty_sessions.terminate_all_async()
     }
 
-    pub async fn terminate_all_exec_sessions_async(&self) -> Result<()> {
-        self.exec_sessions.terminate_all_sessions_async().await
+    /// Inline-delegating wrapper over
+    /// [`crate::tools::exec_session::ExecSessionManager::terminate_all_sessions_async`].
+    pub fn terminate_all_exec_sessions_async(&self) -> impl Future<Output = Result<()>> + '_ {
+        self.exec_sessions.terminate_all_sessions_async()
     }
 
     pub fn exec_session_manager(&self) -> ExecSessionManager {

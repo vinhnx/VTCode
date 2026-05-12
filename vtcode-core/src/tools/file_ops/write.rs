@@ -12,6 +12,7 @@ use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context};
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::borrow::Cow;
+use std::future::Future;
 use std::io::ErrorKind;
 use tokio::io::AsyncWriteExt;
 
@@ -44,9 +45,11 @@ async fn create_text_file(path: &std::path::Path, content: &str) -> Result<(), s
 }
 
 impl FileOpsTool {
-    /// Write file with various modes and chunking support for large content
-    pub async fn write_file(&self, args: Value) -> Result<Value> {
-        self.write_file_internal(args, true).await
+    /// Write file with various modes and chunking support for large content.
+    /// Inline-delegating wrapper that returns the inner future directly to
+    /// avoid an extra coroutine state machine (audit section 16).
+    pub fn write_file(&self, args: Value) -> impl Future<Output = Result<Value>> + '_ {
+        self.write_file_internal(args, true)
     }
 
     pub(crate) async fn write_file_internal(

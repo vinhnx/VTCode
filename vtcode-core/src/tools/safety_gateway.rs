@@ -10,6 +10,7 @@
 
 use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -535,16 +536,18 @@ impl SafetyGateway {
         classify_tool_intent(tool_name, args).mutating
     }
 
-    /// Main entry point: check safety for a tool invocation
+    /// Main entry point: check safety for a tool invocation.
     ///
-    /// Returns a SafetyDecision indicating whether execution can proceed.
-    pub async fn check_safety(
-        &self,
-        ctx: &SafetyContext,
-        tool_name: &str,
-        args: &Value,
-    ) -> SafetyDecision {
-        self.check_safety_with_id(ctx, tool_name, args, None).await
+    /// Returns a [`SafetyDecision`] indicating whether execution can proceed.
+    /// Inline-delegating wrapper that returns the inner future directly to
+    /// avoid an extra coroutine state machine (audit section 16).
+    pub fn check_safety<'a>(
+        &'a self,
+        ctx: &'a SafetyContext,
+        tool_name: &'a str,
+        args: &'a Value,
+    ) -> impl Future<Output = SafetyDecision> + 'a {
+        self.check_safety_with_id(ctx, tool_name, args, None)
     }
 
     /// Check safety with explicit invocation ID for correlation
