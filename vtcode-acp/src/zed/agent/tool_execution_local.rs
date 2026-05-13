@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
+use vtcode_core::tools::registry::{ExecutionPolicySnapshot, ToolExecutionRequest};
 use vtcode_core::tools::traits::Tool;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 use vtcode_core::utils::path::ensure_path_within_workspace;
@@ -27,6 +28,7 @@ impl ZedAgent {
         &self,
         tool_name: &str,
         args: &Value,
+        call_id: &str,
     ) -> ToolExecutionReport {
         if RESTRICTED_LOCAL_TOOLS.contains(&tool_name) {
             warn!(
@@ -39,20 +41,15 @@ impl ZedAgent {
             );
         }
 
-        let result = self
+        let policy =
+            ExecutionPolicySnapshot::default().with_invocation_id(Some(call_id.to_string()));
+        let request = ToolExecutionRequest::new(tool_name, args.clone()).with_policy(policy);
+        let outcome = self
             .local_tool_registry
-            .execute_public_tool_ref(tool_name, args)
+            .execute_public_tool_request(request)
             .await;
-        match result {
-            Ok(output) => {
-                if let Some(error_value) = output.get("error") {
-                    let message = error_value
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("Tool execution failed");
-                    return ToolExecutionReport::failure(tool_name, message);
-                }
-
+        match (outcome.output, outcome.error) {
+            (Some(output), None) => {
                 let content = self.render_local_tool_content(tool_name, &output);
                 let payload = json!({
                     TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
@@ -61,11 +58,20 @@ impl ZedAgent {
                 });
                 ToolExecutionReport::success(content, Vec::new(), payload)
             }
-            Err(error) => {
-                warn!(%error, tool = tool_name, "Failed to execute local tool");
-                let message = format!("Unable to execute {tool_name}: {error}");
+            (_, Some(error)) => {
+                let message = error.user_message();
+                warn!(
+                    error = %message,
+                    tool = tool_name,
+                    attempts = outcome.attempts,
+                    "Failed to execute local tool"
+                );
                 ToolExecutionReport::failure(tool_name, &message)
             }
+            (None, None) => ToolExecutionReport::failure(
+                tool_name,
+                "Tool execution finished without output or error",
+            ),
         }
     }
 

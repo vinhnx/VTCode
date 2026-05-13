@@ -17,6 +17,24 @@ use crate::reports::{
 
 use super::tooling::{SupportedTool, ToolDescriptor, ToolRegistryProvider};
 
+#[derive(Clone, Copy, Debug)]
+pub struct PermissionToolContext<'a> {
+    name: &'a str,
+    kind: acp::ToolKind,
+    action_label: &'a str,
+}
+
+impl<'a> PermissionToolContext<'a> {
+    #[must_use]
+    pub fn new(name: &'a str, kind: acp::ToolKind, action_label: &'a str) -> Self {
+        Self {
+            name,
+            kind,
+            action_label,
+        }
+    }
+}
+
 #[async_trait(?Send)]
 pub trait AcpPermissionPrompter {
     fn permission_options(
@@ -31,6 +49,15 @@ pub trait AcpPermissionPrompter {
         session_id: &acp::SessionId,
         call: &acp::ToolCall,
         tool: SupportedTool,
+        args: &Value,
+    ) -> Result<Option<ToolExecutionReport>, AcpError>;
+
+    async fn request_named_tool_permission(
+        &self,
+        client: &dyn Client,
+        session_id: &acp::SessionId,
+        call: &acp::ToolCall,
+        tool: PermissionToolContext<'_>,
         args: &Value,
     ) -> Result<Option<ToolExecutionReport>, AcpError>;
 }
@@ -55,20 +82,8 @@ where
             tool.default_title().to_string()
         }
     }
-}
 
-#[async_trait(?Send)]
-impl<P> AcpPermissionPrompter for DefaultPermissionPrompter<P>
-where
-    P: ToolRegistryProvider,
-{
-    fn permission_options(
-        &self,
-        tool: SupportedTool,
-        args: Option<&Value>,
-    ) -> Vec<acp::PermissionOption> {
-        let action_label = self.render_action_label(tool, args);
-
+    fn permission_options_for_action(&self, action_label: &str) -> Vec<acp::PermissionOption> {
         let allow_once_option = acp::PermissionOption::new(
             acp::PermissionOptionId::from(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
             format!("{TOOL_PERMISSION_ALLOW_PREFIX} {action_label} once"),
@@ -100,6 +115,21 @@ where
             deny_always_option,
         ]
     }
+}
+
+#[async_trait(?Send)]
+impl<P> AcpPermissionPrompter for DefaultPermissionPrompter<P>
+where
+    P: ToolRegistryProvider,
+{
+    fn permission_options(
+        &self,
+        tool: SupportedTool,
+        args: Option<&Value>,
+    ) -> Vec<acp::PermissionOption> {
+        let action_label = self.render_action_label(tool, args);
+        self.permission_options_for_action(&action_label)
+    }
 
     async fn request_tool_permission(
         &self,
@@ -109,22 +139,41 @@ where
         tool: SupportedTool,
         args: &Value,
     ) -> Result<Option<ToolExecutionReport>, AcpError> {
+        let action_label = self.render_action_label(tool, Some(args));
+        self.request_named_tool_permission(
+            client,
+            session_id,
+            call,
+            PermissionToolContext::new(tool.function_name(), tool.kind(), &action_label),
+            args,
+        )
+        .await
+    }
+
+    async fn request_named_tool_permission(
+        &self,
+        client: &dyn Client,
+        session_id: &acp::SessionId,
+        call: &acp::ToolCall,
+        tool: PermissionToolContext<'_>,
+        args: &Value,
+    ) -> Result<Option<ToolExecutionReport>, AcpError> {
         let fields = acp::ToolCallUpdateFields::default()
             .title(call.title.clone())
-            .kind(tool.kind())
+            .kind(tool.kind)
             .status(acp::ToolCallStatus::Pending)
             .raw_input(args.clone());
 
         let request = acp::RequestPermissionRequest::new(
             session_id.clone(),
             acp::ToolCallUpdate::new(call.tool_call_id.clone(), fields),
-            self.permission_options(tool, Some(args)),
+            self.permission_options_for_action(tool.action_label),
         );
 
         match client.request_permission(request).await {
             Ok(response) => match response.outcome {
                 acp::RequestPermissionOutcome::Cancelled => Ok(Some(ToolExecutionReport::failure(
-                    tool.function_name(),
+                    tool.name,
                     TOOL_PERMISSION_CANCELLED_MESSAGE,
                 ))),
                 acp::RequestPermissionOutcome::Selected(outcome) => {
@@ -137,26 +186,26 @@ where
                         || option_id_str == TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID
                     {
                         Ok(Some(ToolExecutionReport::failure(
-                            tool.function_name(),
+                            tool.name,
                             TOOL_PERMISSION_DENIED_MESSAGE,
                         )))
                     } else {
                         warn!("{}", TOOL_PERMISSION_UNKNOWN_OPTION_LOG);
                         Ok(Some(ToolExecutionReport::failure(
-                            tool.function_name(),
+                            tool.name,
                             TOOL_PERMISSION_DENIED_MESSAGE,
                         )))
                     }
                 }
                 _ => Ok(Some(ToolExecutionReport::failure(
-                    tool.function_name(),
+                    tool.name,
                     TOOL_PERMISSION_DENIED_MESSAGE,
                 ))),
             },
             Err(error) => {
                 error!(%error, "{}", TOOL_PERMISSION_REQUEST_FAILURE_LOG);
                 Ok(Some(ToolExecutionReport::failure(
-                    tool.function_name(),
+                    tool.name,
                     TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
                 )))
             }

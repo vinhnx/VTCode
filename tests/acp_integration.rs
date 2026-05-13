@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use agent_client_protocol as acp;
 use serde_json::Value;
-use vtcode::acp::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
+use vtcode::acp::permissions::{
+    AcpPermissionPrompter, DefaultPermissionPrompter, PermissionToolContext,
+};
 use vtcode::acp::reports::{
     TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID,
     TOOL_PERMISSION_CANCELLED_MESSAGE, TOOL_PERMISSION_DENIED_MESSAGE,
@@ -14,6 +16,7 @@ use vtcode::acp::tooling::{
     SupportedTool, TOOL_LIST_FILES_MODE_ARG, TOOL_LIST_FILES_PATH_ARG, TOOL_READ_FILE_PATH_ARG,
     TOOL_READ_FILE_URI_ARG, ToolDescriptor, ToolRegistryProvider,
 };
+use vtcode_core::config::constants::tools;
 
 #[path = "acp_fixtures.rs"]
 mod acp_fixtures;
@@ -246,6 +249,46 @@ async fn permission_denied_flow_returns_failure_report() {
 
     assert_eq!(report.status, acp::ToolCallStatus::Failed);
     assert!(report.llm_response.contains(TOOL_PERMISSION_DENIED_MESSAGE));
+}
+
+#[tokio::test]
+async fn named_permission_uses_local_tool_label_and_kind() {
+    let fixture = read_file_permission();
+    let client = FakeClient::new(FakeOutcome::Allow);
+    let prompter = prompter();
+    let action_label = "Run command cargo check";
+    let arguments = serde_json::json!({
+        "action": "run",
+        "command": "cargo check",
+    });
+
+    let report = prompter
+        .request_named_tool_permission(
+            &client,
+            &fixture.session_id,
+            &fixture.tool_call,
+            PermissionToolContext::new(tools::UNIFIED_EXEC, acp::ToolKind::Execute, action_label),
+            &arguments,
+        )
+        .await
+        .expect("permission request should succeed");
+
+    assert!(report.is_none(), "allowed flow must not short-circuit");
+
+    let requests = client.recorded_requests();
+    assert_eq!(requests.len(), 1);
+    let request = &requests[0];
+    assert_eq!(request.tool_call.fields.kind, Some(acp::ToolKind::Execute));
+    assert_eq!(
+        request.tool_call.fields.raw_input.as_ref(),
+        Some(&arguments)
+    );
+    assert!(
+        request
+            .options
+            .iter()
+            .any(|option| option.name.contains(action_label) && option.name.starts_with("Allow"))
+    );
 }
 
 #[tokio::test]

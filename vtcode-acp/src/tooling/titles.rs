@@ -5,6 +5,7 @@ use super::schemas::{
     TOOL_LIST_FILES_CONTENT_PATTERN_ARG, TOOL_LIST_FILES_NAME_PATTERN_ARG,
     TOOL_LIST_FILES_PATH_ARG, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG,
 };
+use vtcode_core::tools::registry::labels::tool_action_label;
 
 pub(super) fn render_title(
     descriptor: ToolDescriptor,
@@ -58,7 +59,7 @@ pub(super) fn render_title(
                 .map(|mode| format!("Switch to {mode} mode"))
                 .unwrap_or_else(|| tool.default_title().to_string()),
         },
-        ToolDescriptor::Local => format_local_title(function_name),
+        ToolDescriptor::Local => tool_action_label(function_name, args),
     }
 }
 
@@ -84,13 +85,4 @@ fn truncate_middle(input: &str, max_len: usize) -> String {
         .rev()
         .collect();
     format!("{front}…{back}")
-}
-
-fn format_local_title(name: &str) -> String {
-    let formatted = name.replace('_', " ");
-    let mut chars = formatted.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => formatted,
-    }
 }

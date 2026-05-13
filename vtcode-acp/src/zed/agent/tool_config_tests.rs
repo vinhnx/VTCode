@@ -1,8 +1,10 @@
 use super::ZedAgent;
+use crate::tooling::ToolDescriptor;
 use crate::zed::types::{NotificationEnvelope, ToolRuntime};
 use assert_fs::TempDir;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -267,6 +269,124 @@ async fn read_only_modes_hide_local_tools() {
     assert!(code_names.contains(&"unified_search".to_string()));
     assert!(code_names.contains(&"unified_file".to_string()));
     assert!(code_names.contains(&"unified_exec".to_string()));
+}
+
+#[tokio::test]
+async fn local_tool_execution_uses_registry_request_path() {
+    let temp = TempDir::new().unwrap();
+    fs::create_dir(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src").join("sample.txt"), "hello").unwrap();
+    let agent = build_agent(temp.path()).await;
+
+    let report = agent
+        .execute_local_tool(
+            tools::UNIFIED_SEARCH,
+            &json!({
+                "action": "list",
+                "path": "src",
+            }),
+            "call-local-list",
+        )
+        .await;
+
+    assert_eq!(report.status, crate::acp::ToolCallStatus::Completed);
+    let payload = report.raw_output.expect("successful tool output");
+    assert_eq!(payload["status"], "success");
+    assert_eq!(payload["tool"], tools::UNIFIED_SEARCH);
+    assert!(payload["result"].to_string().contains("sample.txt"));
+}
+
+#[tokio::test]
+async fn local_tool_execution_reports_registry_failure() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent(temp.path()).await;
+
+    let report = agent
+        .execute_local_tool("unknown_tool", &json!({}), "call-local-missing")
+        .await;
+
+    assert_eq!(report.status, crate::acp::ToolCallStatus::Failed);
+    assert!(report.llm_response.contains("unknown_tool"));
+}
+
+#[tokio::test]
+async fn local_tool_metadata_uses_core_action_labels_and_kinds() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent(temp.path()).await;
+    let exec_args = json!({
+        "action": "run",
+        "command": "cargo check",
+    });
+    let search_args = json!({
+        "action": "list",
+        "path": "src",
+    });
+    let read_args = json!({
+        "action": "read",
+        "path": "src/lib.rs",
+    });
+    let write_args = json!({
+        "action": "write",
+        "path": "src/lib.rs",
+        "content": "updated",
+    });
+
+    assert_eq!(
+        agent.acp_tool_registry.render_title(
+            ToolDescriptor::Local,
+            tools::UNIFIED_EXEC,
+            &exec_args
+        ),
+        "Run command"
+    );
+    assert_eq!(
+        agent
+            .acp_tool_registry
+            .tool_kind_for_call(tools::UNIFIED_EXEC, Some(&exec_args)),
+        crate::acp::ToolKind::Execute
+    );
+    assert_eq!(
+        agent.acp_tool_registry.render_title(
+            ToolDescriptor::Local,
+            tools::UNIFIED_SEARCH,
+            &search_args
+        ),
+        "List files"
+    );
+    assert_eq!(
+        agent
+            .acp_tool_registry
+            .tool_kind_for_call(tools::UNIFIED_SEARCH, Some(&search_args)),
+        crate::acp::ToolKind::Search
+    );
+    assert_eq!(
+        agent.acp_tool_registry.render_title(
+            ToolDescriptor::Local,
+            tools::UNIFIED_FILE,
+            &read_args
+        ),
+        "Read file"
+    );
+    assert_eq!(
+        agent
+            .acp_tool_registry
+            .tool_kind_for_call(tools::UNIFIED_FILE, Some(&read_args)),
+        crate::acp::ToolKind::Read
+    );
+    assert_eq!(
+        agent.acp_tool_registry.render_title(
+            ToolDescriptor::Local,
+            tools::UNIFIED_FILE,
+            &write_args
+        ),
+        "Write file"
+    );
+    assert_eq!(
+        agent
+            .acp_tool_registry
+            .tool_kind_for_call(tools::UNIFIED_FILE, Some(&write_args)),
+        crate::acp::ToolKind::Edit
+    );
 }
 
 #[tokio::test]
