@@ -54,6 +54,8 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 
 See `install.ps1` for details.
 
+Windows release builds are currently not guaranteed on every release because the Windows pipeline still depends on `cross`, Docker, and GitHub Actions minutes, which are costlier than the Linux path.
+
 The Windows installer currently ships only the VT Code binary. Ghostty VT remains unsupported there, so Windows continues to use `legacy_vt100`.
 
 As on macOS/Linux, Ghostty VT is a packaged runtime-library add-on rather than a VT Code-managed dependency command.

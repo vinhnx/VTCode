@@ -20,7 +20,9 @@
 
 **Native Installer (Recommended)** - No dependencies, instant setup:
 The default macOS/Linux installer also attempts the recommended [ripgrep](https://github.com/BurntSushi/ripgrep) + [ast-grep](https://ast-grep.github.io/) bundle for enhanced semantic grep and programming language-level understanding (optional).
-Official macOS/Linux release archives bundle `ghostty-vt/` runtime libraries for richer PTY screen snapshots. VT Code still falls back to the built-in `legacy_vt100` backend when those assets are unavailable in non-release or custom installs.
+
+> [!TIP]
+> Official macOS/Linux release archives bundle `ghostty-vt/` runtime libraries for richer PTY screen snapshots. VT Code still falls back to the built-in `legacy_vt100` backend when those assets are unavailable in non-release or custom installs.
 
 **macOS & Linux:**
 
@@ -36,6 +38,9 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
+
+> [!NOTE]
+> Windows installs are currently best-effort and may lag behind macOS/Linux release builds. The current release pipeline is still being tuned for `cross`-based Windows builds, and Windows build minutes can be costly, so Windows artifacts may not be available in every release.
 
 **Alternative Installation Methods:**
 

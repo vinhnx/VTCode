@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       build_windows:
-        description: 'Also build Windows x86_64 artifact (higher runner cost)'
+        description: 'Also build Windows x86_64 artifact (disabled by default; higher runner cost)'
         required: false
         type: boolean
         default: false
@@ -155,6 +155,8 @@ jobs:
           compression-level: 6
 
   build-windows:
+    # Windows builds are intentionally opt-in because they are costlier and still
+    # depend on the cross/Docker release path.
     if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     needs: validate-release-input
