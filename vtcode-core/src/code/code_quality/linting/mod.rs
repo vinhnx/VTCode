@@ -1,7 +1,3 @@
-pub mod clippy;
-pub mod eslint;
-pub mod pylint;
-
 use crate::code::code_quality::config::{LintConfig, LintSeverity};
 use serde_json::Value;
 use std::path::{Path, PathBuf};

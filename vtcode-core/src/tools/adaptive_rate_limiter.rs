@@ -138,10 +138,19 @@ impl AdaptiveRateLimiter {
             .copied()
             .unwrap_or(Priority::Normal);
 
-        let bucket = inner
-            .buckets
-            .entry(tool_name.to_string())
-            .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
+        if !inner.buckets.contains_key(tool_name) {
+            inner.buckets.insert(
+                tool_name.to_owned(),
+                TokenBucket::new(self.default_capacity, self.default_refill_rate),
+            );
+        }
+        let Some(bucket) = inner.buckets.get_mut(tool_name) else {
+            warn!(
+                "adaptive rate limiter failed to resolve bucket after insertion for '{}'",
+                tool_name
+            );
+            return Err(Duration::from_millis(100));
+        };
         let cost = priority.weight();
 
         if bucket.try_acquire(cost) {

@@ -17,7 +17,6 @@ pub mod api;
 pub(crate) mod capabilities;
 pub mod compat;
 mod headers;
-mod message_parser;
 mod prompt_cache;
 mod provider;
 mod request_builder;

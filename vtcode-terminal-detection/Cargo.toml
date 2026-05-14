@@ -14,5 +14,9 @@ documentation = "https://docs.rs/vtcode-terminal-detection"
 anyhow = { workspace = true }
 dirs = { workspace = true }
 
+[lib]
+doctest = false
+
 [lints]
 workspace = true
+

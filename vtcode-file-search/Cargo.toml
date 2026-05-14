@@ -15,6 +15,7 @@ path = "src/main.rs"
 [lib]
 name = "vtcode_file_search"
 path = "src/lib.rs"
+doctest = false
 
 [dependencies]
 anyhow = { workspace = true }

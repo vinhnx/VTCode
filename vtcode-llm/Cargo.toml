@@ -45,5 +45,9 @@ vtcode-core = { path = "../vtcode-core", version = "0.105.11", default-features 
 futures = { workspace = true }
 assert_fs = { workspace = true }
 
+[lib]
+doctest = false
+
 [lints]
 workspace = true
+

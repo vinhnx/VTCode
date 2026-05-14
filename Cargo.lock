@@ -1708,15 +1708,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "editor-command"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233f7e1e39795915a24f5eac451b7f4e73b090ca60dd5d2bc7a06cc929e021b1"
-dependencies = [
- "shell-words",
-]
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3188,15 +3179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libmimalloc-sys"
-version = "0.1.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d1eacfa31c33ec25e873c136ba5669f00f9866d0688bea7be4d3f7e43067df6"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "libredox"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3359,15 +3341,6 @@ name = "micromap"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
-
-[[package]]
-name = "mimalloc"
-version = "0.1.50"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3627c4272df786b9260cabaa46aec1d59c93ede723d4c3ef646c503816b0640"
-dependencies = [
- "libmimalloc-sys",
-]
 
 [[package]]
 name = "mime"
@@ -6042,17 +6015,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-test"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
-dependencies = [
- "futures-core",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
 name = "tokio-tungstenite"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6642,7 +6604,6 @@ version = "0.105.11"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
- "anstyle-crossterm",
  "anyhow",
  "assert_cmd",
  "assert_fs",
@@ -6661,7 +6622,6 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "memchr",
- "mimalloc",
  "notify 6.1.1",
  "once_cell",
  "predicates",
@@ -6688,7 +6648,6 @@ dependencies = [
  "tracing-subscriber",
  "unicode-width",
  "url",
- "uuid",
  "vtcode-acp",
  "vtcode-auth",
  "vtcode-commons",
@@ -6771,10 +6730,8 @@ dependencies = [
  "serde",
  "shell-escape",
  "tokio",
- "tokio-test",
  "vtcode-commons",
  "vtcode-exec-events",
- "winapi",
 ]
 
 [[package]]
@@ -6826,7 +6783,6 @@ dependencies = [
  "dotenvy",
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
- "nix 0.31.2",
  "notify 8.2.0",
  "once_cell",
  "regex",
@@ -6865,7 +6821,6 @@ dependencies = [
  "axum",
  "base64",
  "bytes",
- "catppuccin",
  "chrono",
  "clap",
  "colorchoice-clap",
@@ -6874,7 +6829,6 @@ dependencies = [
  "dialoguer",
  "dirs",
  "dunce",
- "editor-command",
  "flate2",
  "futures",
  "futures-lite",
@@ -6931,7 +6885,6 @@ dependencies = [
  "tokio-tungstenite",
  "tokio-util",
  "toml",
- "toml_edit",
  "tower",
  "tower-http",
  "tracing",
@@ -7116,7 +7069,6 @@ dependencies = [
  "anstyle-ls",
  "anyhow",
  "better-panic",
- "catppuccin",
  "chrono",
  "color-eyre",
  "criterion",
@@ -7125,7 +7077,6 @@ dependencies = [
  "hashbrown 0.17.0",
  "human-panic",
  "humantime",
- "insta",
  "line-clipping",
  "nucleo-matcher",
  "once_cell",

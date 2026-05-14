@@ -1,7 +1,3 @@
-pub mod black;
-pub mod prettier;
-pub mod rustfmt;
-
 use crate::code::code_quality::config::FormatConfig;
 use std::path::Path;
 use std::process::Command;

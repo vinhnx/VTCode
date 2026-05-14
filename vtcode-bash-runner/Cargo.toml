@@ -45,19 +45,14 @@ vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.105.11", opt
 libc = { workspace = true }
 nix = { version = "0.31", features = ["user", "signal", "process"] }
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = [
-    "processthreadsapi",
-    "winnt",
-    "handleapi",
-] }
+[lib]
+doctest = false
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 assert_fs = { workspace = true }
-tokio-test = "0.4"
 
 [package.metadata.cargo-machete]
 ignored = ["tokio-test", "winapi"]
@@ -70,3 +65,4 @@ required-features = ["dry-run"]
 all-features = true
 default-target = "x86_64-unknown-linux-gnu"
 rustdoc-args = ["--cfg", "docsrs"]
+

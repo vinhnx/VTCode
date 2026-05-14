@@ -39,11 +39,6 @@ tempfile = { workspace = true }
 walkdir = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
-# Unix-specific dependencies
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["user"] }
-
-
 [features]
 default = ["bootstrap"]
 bootstrap = []

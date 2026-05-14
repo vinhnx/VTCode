@@ -2,11 +2,15 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
+    "close_agent",
     "cron_create",
     "cron_delete",
     "cron_list",
     "enter_plan_mode",
     "exit_plan_mode",
+    "list_skills",
+    "load_skill",
+    "load_skill_resource",
     "mcp_connect_server",
     "mcp_disconnect_server",
     "mcp_get_tool_details",
@@ -14,10 +18,15 @@
     "mcp_search_tools",
     "plan_task_tracker",
     "request_user_input",
+    "resume_agent",
+    "send_input",
+    "spawn_agent",
+    "spawn_background_subprocess",
     "task_tracker",
     "unified_exec",
     "unified_file",
-    "unified_search"
+    "unified_search",
+    "wait_agent"
   ],
   "policies": {
     "apply_patch": "prompt",
@@ -28,7 +37,7 @@
     "exit_plan_mode": "prompt",
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
-    "task_tracker": "allow",
+    "task_tracker": "prompt",
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
@@ -37,9 +46,18 @@
     "mcp_get_tool_details": "allow",
     "mcp_list_servers": "allow",
     "mcp_search_tools": "allow",
+    "close_agent": "prompt",
+    "list_skills": "allow",
+    "resume_agent": "prompt",
+    "send_input": "prompt",
+    "spawn_agent": "prompt",
+    "spawn_background_subprocess": "prompt",
+    "wait_agent": "prompt",
+    "load_skill_resource": "allow",
+    "load_skill": "allow",
     "list_files": "allow",
-    "memory": "allow",
-    "read_file": "allow"
+    "read_file": "allow",
+    "memory": "allow"
   },
   "constraints": {},
   "mcp": {
@@ -185,7 +203,18 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [],
+    "allowed": [
+      "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt -- --check '2>&1'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt -- --check '2>&1' '|' head -50|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo fmt -- --check head|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
+    ],
     "prefixes": [],
     "regexes": []
   }
