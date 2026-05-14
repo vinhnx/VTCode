@@ -10,6 +10,7 @@ publish = false
 [lib]
 name = "vtcode_lmstudio"
 path = "src/lib.rs"
+doctest = false
 
 [dependencies]
 reqwest = { workspace = true }
