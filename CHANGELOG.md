@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.105.12 - 2026-05-14
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update document about lacking support of Windows build (1757d58d) (@vinhnx)
+#### Refactors
+
+- Clean up unused dependencies and empty files via cargo-shear  (a45d5063) (@vinhnx)
 ## 0.105.11 - 2026-05-12
 
 ### Highlights
