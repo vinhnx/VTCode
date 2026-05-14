@@ -587,46 +587,46 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 }
 
 #[cfg(test)]
+pub(crate) fn collect_inline_output(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_core::ui::InlineCommand>,
+) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    while let Ok(command) = receiver.try_recv() {
+        match command {
+            vtcode_core::ui::InlineCommand::AppendLine { segments, .. } => {
+                lines.push(
+                    segments
+                        .into_iter()
+                        .map(|segment| segment.text)
+                        .collect::<String>(),
+                );
+            }
+            vtcode_core::ui::InlineCommand::ReplaceLast {
+                lines: replacement_lines,
+                ..
+            } => {
+                lines.extend(replacement_lines.into_iter().map(|line| {
+                    line.into_iter()
+                        .map(|segment| segment.text)
+                        .collect::<String>()
+                }));
+            }
+            _ => {}
+        }
+    }
+    lines.join("\n")
+}
+
+#[cfg(test)]
 mod tests {
     use serde_json::json;
-    use tokio::sync::mpsc::UnboundedReceiver;
-    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_core::ui::InlineHandle;
     use vtcode_core::utils::ansi::AnsiRenderer;
 
     use super::{
-        preferred_follow_up_rendered_body, render_tool_output,
+        collect_inline_output, preferred_follow_up_rendered_body, render_tool_output,
         should_render_unified_exec_terminal_panel, spooled_output_hint, tracker_summary_lines,
     };
-
-    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        while let Ok(command) = receiver.try_recv() {
-            match command {
-                InlineCommand::AppendLine { segments, .. } => {
-                    lines.push(
-                        segments
-                            .into_iter()
-                            .map(|segment| segment.text)
-                            .collect::<String>(),
-                    );
-                }
-                InlineCommand::ReplaceLast {
-                    lines: replacement_lines,
-                    ..
-                } => {
-                    for line in replacement_lines {
-                        lines.push(
-                            line.into_iter()
-                                .map(|segment| segment.text)
-                                .collect::<String>(),
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-        lines.join("\n")
-    }
 
     #[test]
     fn unified_exec_terminal_panel_detects_command_payload() {

@@ -675,48 +675,19 @@ pub(crate) async fn render_stream_section(
 
 #[cfg(test)]
 mod tests {
-    use tokio::sync::mpsc::UnboundedReceiver;
-    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_core::ui::InlineHandle;
     use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
     use anstyle::AnsiColor;
     use vtcode_commons::diff_preview::{DiffDisplayKind, DiffDisplayLine};
+
+    use crate::agent::runloop::tool_output::collect_inline_output;
 
     use super::{
         HiddenLinesNoticeKind, MAX_LINE_LENGTH, collect_run_command_preview,
         format_diff_line_with_gutter_and_syntax, hidden_lines_notice, language_hint_from_path,
         render_preview_line, strip_ansi_codes,
     };
-
-    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        while let Ok(command) = receiver.try_recv() {
-            match command {
-                InlineCommand::AppendLine { segments, .. } => {
-                    lines.push(
-                        segments
-                            .into_iter()
-                            .map(|segment| segment.text)
-                            .collect::<String>(),
-                    );
-                }
-                InlineCommand::ReplaceLast {
-                    lines: replacement_lines,
-                    ..
-                } => {
-                    for line in replacement_lines {
-                        lines.push(
-                            line.into_iter()
-                                .map(|segment| segment.text)
-                                .collect::<String>(),
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-        lines.join("\n")
-    }
 
     #[test]
     fn run_command_preview_uses_head_tail_three_lines() {

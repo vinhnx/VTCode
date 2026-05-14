@@ -221,40 +221,11 @@ pub(super) fn select_stream_lines_streaming(
 
 #[cfg(test)]
 mod markdown_block_tests {
-    use tokio::sync::mpsc::UnboundedReceiver;
-    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_core::ui::InlineHandle;
+
+    use crate::agent::runloop::tool_output::collect_inline_output;
 
     use super::*;
-
-    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        while let Ok(command) = receiver.try_recv() {
-            match command {
-                InlineCommand::AppendLine { segments, .. } => {
-                    lines.push(
-                        segments
-                            .into_iter()
-                            .map(|segment| segment.text)
-                            .collect::<String>(),
-                    );
-                }
-                InlineCommand::ReplaceLast {
-                    lines: replacement_lines,
-                    ..
-                } => {
-                    for line in replacement_lines {
-                        lines.push(
-                            line.into_iter()
-                                .map(|segment| segment.text)
-                                .collect::<String>(),
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-        lines.join("\n")
-    }
 
     #[test]
     fn build_markdown_code_block_includes_language_header() {
