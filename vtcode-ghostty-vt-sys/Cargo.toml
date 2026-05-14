@@ -18,5 +18,9 @@ libloading = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+[lib]
+doctest = false
+
 [lints]
 workspace = true
+

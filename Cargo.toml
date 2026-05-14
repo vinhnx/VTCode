@@ -46,12 +46,10 @@ serde = { version = "1.0", features = ["derive"] }
 regex = "1.12"
 num_cpus = "1.16"
 clap = { version = "4.6", features = ["derive"] }
-pretty_assertions = "1.4"
 libc = "0.2"
 rand = "0.10"
 semver = "1.0"
 fs2 = "0.4"
-mimalloc = { version = "0.1", default-features = false }
 hashbrown = { version = "0.17", features = ["serde"] }
 rustc-hash = "2.1"
 keyring-core = "1"
@@ -195,7 +193,6 @@ futures = { workspace = true }
 walkdir = { workspace = true }
 itertools = { workspace = true }
 memchr = { workspace = true }
-mimalloc = { workspace = true }
 tempfile = { workspace = true }
 once_cell = { workspace = true }
 chrono = { workspace = true } # For timestamp handling in CLI
@@ -209,9 +206,7 @@ dirs = { workspace = true }
 sha2 = { workspace = true }
 # ANSI styling
 anstyle = { workspace = true }
-anstyle-crossterm = { workspace = true }
 colorchoice = "1.0"
-agent-client-protocol = { workspace = true }
 shell-words = { workspace = true }
 dialoguer = { workspace = true }
 crossterm = { workspace = true }
@@ -227,7 +222,6 @@ reqwest = { workspace = true }
 semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8" }
-uuid = { workspace = true }
 serde-saphyr = { workspace = true }
 
 [features]
@@ -319,6 +313,7 @@ assert_cmd = "2.1"
 predicates = "3.1"
 insta = "1.39"
 serial_test = { workspace = true }
+agent-client-protocol = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["anstyle-crossterm"]

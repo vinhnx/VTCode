@@ -43,9 +43,13 @@ assert_fs = { workspace = true }
 tokio = { workspace = true }
 criterion = { workspace = true }
 
+[lib]
+doctest = false
+
 [lints]
 workspace = true
 
 [[bench]]
 name = "cache_bench"
 harness = false
+

@@ -1,5 +1,4 @@
 pub mod analyzer;
-pub mod scope;
 
 pub use analyzer::ContextAnalyzer;
 
