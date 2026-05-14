@@ -1,4 +1,3 @@
-
 use crate::code::code_quality::config::FormatConfig;
 use std::path::Path;
 use std::process::Command;

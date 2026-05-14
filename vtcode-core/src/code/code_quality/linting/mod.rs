@@ -1,4 +1,3 @@
-
 use crate::code::code_quality::config::{LintConfig, LintSeverity};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
