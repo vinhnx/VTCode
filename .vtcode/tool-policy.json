@@ -212,7 +212,8 @@
       "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ],
     "prefixes": [],
     "regexes": []
