@@ -24,6 +24,29 @@ fn next_request_id() -> String {
     format!("req-{id}")
 }
 
+/// Cache-line padded atomic counter for stats updated by concurrent tool runs.
+///
+/// Padding keeps independent counters from sharing a cache line, avoiding the
+/// false-sharing slowdown that can otherwise appear under high parallelism.
+#[repr(align(64))]
+struct PaddedAtomicU64(AtomicU64);
+
+impl PaddedAtomicU64 {
+    fn new(value: u64) -> Self {
+        Self(AtomicU64::new(value))
+    }
+
+    #[inline]
+    fn fetch_add(&self, value: u64, ordering: Ordering) -> u64 {
+        self.0.fetch_add(value, ordering)
+    }
+
+    #[inline]
+    fn load(&self, ordering: Ordering) -> u64 {
+        self.0.load(ordering)
+    }
+}
+
 /// Thread-safe snapshot of executor state.
 #[derive(Clone, Debug)]
 pub struct ExecutorStats {
@@ -41,25 +64,25 @@ pub struct ExecutorStats {
 /// Avoids RwLock contention on the hot path. Duration tracking uses
 /// total + count so the average is computed accurately on read.
 struct AtomicStats {
-    total_calls: AtomicU64,
-    successful_calls: AtomicU64,
-    failed_calls: AtomicU64,
-    cache_hits: AtomicU64,
-    cache_misses: AtomicU64,
-    total_duration_ms: AtomicU64,
-    duration_count: AtomicU64,
+    total_calls: PaddedAtomicU64,
+    successful_calls: PaddedAtomicU64,
+    failed_calls: PaddedAtomicU64,
+    cache_hits: PaddedAtomicU64,
+    cache_misses: PaddedAtomicU64,
+    total_duration_ms: PaddedAtomicU64,
+    duration_count: PaddedAtomicU64,
 }
 
 impl AtomicStats {
     fn new() -> Self {
         Self {
-            total_calls: AtomicU64::new(0),
-            successful_calls: AtomicU64::new(0),
-            failed_calls: AtomicU64::new(0),
-            cache_hits: AtomicU64::new(0),
-            cache_misses: AtomicU64::new(0),
-            total_duration_ms: AtomicU64::new(0),
-            duration_count: AtomicU64::new(0),
+            total_calls: PaddedAtomicU64::new(0),
+            successful_calls: PaddedAtomicU64::new(0),
+            failed_calls: PaddedAtomicU64::new(0),
+            cache_hits: PaddedAtomicU64::new(0),
+            cache_misses: PaddedAtomicU64::new(0),
+            total_duration_ms: PaddedAtomicU64::new(0),
+            duration_count: PaddedAtomicU64::new(0),
         }
     }
 

@@ -103,3 +103,60 @@ fn pty_session_guard_max_sessions() {
         .expect("session 3 after freeing slot");
     assert_eq!(manager.active_sessions(), 2);
 }
+
+/// Test that concurrent session starts cannot overshoot the configured limit.
+#[test]
+fn pty_session_guard_max_sessions_under_concurrency() {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier, mpsc};
+    use std::thread;
+    use vtcode_core::config::PtyConfig;
+    use vtcode_core::tools::registry::PtySessionManager;
+
+    let config = PtyConfig {
+        enabled: true,
+        max_sessions: 1,
+        ..Default::default()
+    };
+    let manager = Arc::new(PtySessionManager::new(PathBuf::from("."), config));
+    let attempts = 16;
+    let start = Arc::new(Barrier::new(attempts + 1));
+    let release_successful_guard = Arc::new(AtomicBool::new(false));
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let mut handles = Vec::with_capacity(attempts);
+    for _ in 0..attempts {
+        let manager = Arc::clone(&manager);
+        let start = Arc::clone(&start);
+        let release_successful_guard = Arc::clone(&release_successful_guard);
+        let result_tx = result_tx.clone();
+
+        handles.push(thread::spawn(move || {
+            start.wait();
+            let result = manager.start_session();
+            let started = result.is_ok();
+            result_tx.send(started).expect("send start result");
+
+            if let Ok(_guard) = result {
+                while !release_successful_guard.load(Ordering::Relaxed) {
+                    thread::yield_now();
+                }
+            }
+        }));
+    }
+    drop(result_tx);
+
+    start.wait();
+    let started = (0..attempts)
+        .filter(|_| result_rx.recv().expect("receive start result"))
+        .count();
+    release_successful_guard.store(true, Ordering::Relaxed);
+
+    for handle in handles {
+        handle.join().expect("join worker");
+    }
+
+    assert_eq!(started, 1);
+    assert_eq!(manager.active_sessions(), 0);
+}

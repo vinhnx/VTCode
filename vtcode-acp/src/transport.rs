@@ -171,7 +171,7 @@ impl StdioTransport {
     /// Returns [`AcpError::Timeout`] if the peer does not reply in time, or
     /// [`AcpError::Internal`] if the transport is shut down.
     pub async fn call(&self, method: &str, params: Value) -> AcpResult<Value> {
-        let id = self.request_counter.fetch_add(1, Ordering::SeqCst);
+        let id = self.request_counter.fetch_add(1, Ordering::Relaxed);
         let id_value = Value::from(id);
         let pending_key = response_id_key(&id_value);
         let (tx, rx) = oneshot::channel();

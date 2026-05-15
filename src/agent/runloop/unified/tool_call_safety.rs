@@ -13,9 +13,11 @@ use std::sync::Mutex;
 use thiserror::Error;
 #[cfg(test)]
 use vtcode_core::config::constants::tools;
+#[cfg(test)]
+use vtcode_core::tools::SafetyGatewayConfig;
 use vtcode_core::tools::{
-    RiskLevel, SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
-    SafetyGatewayConfig, ToolInvocationId, WorkspaceTrust,
+    SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
+    ToolInvocationId,
 };
 
 /// Safety violation errors
@@ -51,27 +53,25 @@ struct TestRateLimits {
     per_minute: Option<usize>,
 }
 
+fn configure_runloop_safety_gateway(safety_gateway: &SafetyGateway) {
+    // The interactive runloop already applies short-window adaptive throttling.
+    // Keep the shared gateway focused on turn/session budgets so the same tool
+    // call path is not rate-limited twice with competing policies.
+    safety_gateway.set_rate_limit_enforcement(false);
+}
+
 impl ToolCallSafetyValidator {
     pub(crate) fn new() -> Self {
-        // The runloop enforces adaptive per-tool throttling separately.
-        // Keep SafetyGateway focused on turn/session budgets by default.
-        let gateway_config = SafetyGatewayConfig {
-            max_per_turn: 10,
-            max_per_session: 100,
-            plan_mode_active: false,
-            workspace_trust: WorkspaceTrust::Trusted,
-            approval_risk_threshold: RiskLevel::Medium,
-            enforce_rate_limits: false,
-            ..SafetyGatewayConfig::default()
-        };
+        let safety_gateway = Arc::new(SafetyGateway::default());
+        configure_runloop_safety_gateway(safety_gateway.as_ref());
         #[cfg(test)]
         let test_rate_limits = TestRateLimits {
-            per_second: gateway_config.rate_limit_per_second,
-            per_minute: gateway_config.rate_limit_per_minute,
+            per_second: SafetyGatewayConfig::default().rate_limit_per_second,
+            per_minute: SafetyGatewayConfig::default().rate_limit_per_minute,
         };
 
         Self {
-            safety_gateway: Arc::new(SafetyGateway::with_config(gateway_config)),
+            safety_gateway,
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
             #[cfg(test)]
             test_rate_limits: Mutex::new(test_rate_limits),
@@ -79,6 +79,7 @@ impl ToolCallSafetyValidator {
     }
 
     pub(crate) fn with_gateway(safety_gateway: Arc<SafetyGateway>) -> Self {
+        configure_runloop_safety_gateway(safety_gateway.as_ref());
         #[cfg(test)]
         let test_rate_limits = TestRateLimits {
             per_second: SafetyGatewayConfig::default().rate_limit_per_second,
@@ -250,6 +251,29 @@ mod tests {
         assert!(
             validator
                 .validate_call("delete_file", &json!({}))
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_gateway_disables_duplicate_short_window_rate_limits() {
+        let gateway = Arc::new(SafetyGateway::default());
+        gateway.set_limits(10, 10);
+        gateway.set_rate_limits(1, Some(1));
+
+        let validator = ToolCallSafetyValidator::with_gateway(gateway);
+        validator.start_turn();
+
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
                 .await
                 .is_ok()
         );

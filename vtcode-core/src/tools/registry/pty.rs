@@ -16,11 +16,14 @@ pub struct PtySessionGuard {
 
 impl Drop for PtySessionGuard {
     fn drop(&mut self) {
-        let current = self.active_sessions.load(Ordering::SeqCst);
-        if current > 0 {
-            self.active_sessions.fetch_sub(1, Ordering::SeqCst);
-        }
+        decrement_active_sessions(&self.active_sessions);
     }
+}
+
+fn decrement_active_sessions(active_sessions: &AtomicUsize) {
+    let _ = active_sessions.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+        current.checked_sub(1)
+    });
 }
 
 #[derive(Clone)]
@@ -54,40 +57,53 @@ impl PtySessionManager {
             return false;
         }
 
-        self.active_sessions.load(Ordering::SeqCst) < self.config.max_sessions
+        self.active_sessions.load(Ordering::Relaxed) < self.config.max_sessions
     }
 
     /// Start a PTY session and return an RAII guard that will automatically decrement
     /// the session count when dropped, even if an error occurs during execution.
     pub fn start_session(&self) -> Result<PtySessionGuard> {
-        if !self.can_start_session() {
+        if !self.config.enabled {
             return Err(anyhow!(
                 "Maximum PTY sessions ({}) exceeded. Current active sessions: {}",
                 self.config.max_sessions,
-                self.active_sessions.load(Ordering::SeqCst)
+                self.active_sessions.load(Ordering::Relaxed)
             ));
         }
 
-        self.active_sessions.fetch_add(1, Ordering::SeqCst);
-        Ok(PtySessionGuard {
-            active_sessions: Arc::clone(&self.active_sessions),
-        })
-    }
+        loop {
+            let current = self.active_sessions.load(Ordering::Relaxed);
+            if current >= self.config.max_sessions {
+                return Err(anyhow!(
+                    "Maximum PTY sessions ({}) exceeded. Current active sessions: {}",
+                    self.config.max_sessions,
+                    current
+                ));
+            }
 
-    pub fn end_session(&self) {
-        let current = self.active_sessions.load(Ordering::SeqCst);
-        if current > 0 {
-            self.active_sessions.fetch_sub(1, Ordering::SeqCst);
+            if self
+                .active_sessions
+                .compare_exchange_weak(current, current + 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return Ok(PtySessionGuard {
+                    active_sessions: Arc::clone(&self.active_sessions),
+                });
+            }
         }
     }
 
+    pub fn end_session(&self) {
+        decrement_active_sessions(&self.active_sessions);
+    }
+
     pub fn active_sessions(&self) -> usize {
-        self.active_sessions.load(Ordering::SeqCst)
+        self.active_sessions.load(Ordering::Relaxed)
     }
 
     pub fn terminate_all(&self) {
         self.manager.terminate_all_sessions();
-        self.active_sessions.store(0, Ordering::SeqCst);
+        self.active_sessions.store(0, Ordering::Relaxed);
     }
 
     pub async fn terminate_all_async(&self) -> Result<()> {
