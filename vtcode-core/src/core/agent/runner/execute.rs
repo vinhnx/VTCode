@@ -25,16 +25,15 @@ use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
-    FinishReason, Message, ToolCall, prepare_responses_continuation_request,
-    supports_responses_chaining, ToolDefinition,
+    FinishReason, Message, ToolCall, ToolDefinition, prepare_responses_continuation_request,
+    supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections,
-    append_runtime_tool_prompt_sections,
-    upsert_harness_limits_section,
+    append_runtime_tool_prompt_sections, upsert_harness_limits_section,
 };
 use crate::utils::colors::style;
 use anyhow::Result;
@@ -203,10 +202,15 @@ impl AgentRunner {
         prompt
     }
 
-    async fn build_runtime_prompt_bundle(&self, is_simple_task: bool) -> Result<RuntimePromptBundle> {
+    async fn build_runtime_prompt_bundle(
+        &self,
+        is_simple_task: bool,
+    ) -> Result<RuntimePromptBundle> {
         let tool_snapshot = self.build_universal_tool_snapshot().await?;
         let request_tools = tool_snapshot.snapshot.clone();
-        let prompt_tools = request_tools.clone().unwrap_or_else(|| Arc::new(Vec::new()));
+        let prompt_tools = request_tools
+            .clone()
+            .unwrap_or_else(|| Arc::new(Vec::new()));
         let mut system_prompt = self
             .compose_task_system_prompt(prompt_tools, is_simple_task)
             .await;
@@ -301,7 +305,9 @@ impl AgentRunner {
             new_version = current_version,
             "Tool catalog changed mid-task; refreshing runtime prompt bundle"
         );
-        *bundle = self.build_validated_runtime_prompt_bundle(is_simple_task).await?;
+        *bundle = self
+            .build_validated_runtime_prompt_bundle(is_simple_task)
+            .await?;
         Ok(true)
     }
 

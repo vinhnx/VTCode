@@ -579,6 +579,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Scope, Implemented Refactors, Duplication Intentionally Left Alone, Expected Benefits, Verification
   - **User Questions**: "What can you tell me about DRY/KISS Duplication Audit?", "How does Scope work?", "How does Implemented Refactors work?"
 
+- **File**: `docs/harness/exec-plans/active/001-tui-runloop-decomposition.md`
+  - **Content**: EP-001: TUI Runloop and Slash Command Decomposition
+  - **Topics**: Goal, Context, Steps, Decision Log, Retrospective
+  - **User Questions**: "What can you tell me about EP-001: TUI Runloop and Slash Command Decomposition?", "How does Goal work?", "How does Context work?"
+
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
   - **Topics**: Why Exec Plans?, Exec Plans vs Plan Mode, Directory Structure, Mandatory Sections, Template
