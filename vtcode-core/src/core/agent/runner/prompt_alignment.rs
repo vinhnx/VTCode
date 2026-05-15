@@ -34,6 +34,27 @@ pub enum AlignmentError {
     /// transition + catalog epoch in the prompt cache key).  If it fires, treat it
     /// as a canary metric indicating stale prompt generation.
     MutatingToolInPlanModePrompt { tool_name: &'static str },
+    /// The prompt's runtime tool metadata does not match the live snapshot.
+    PromptCatalogMetadataMismatch {
+        field: &'static str,
+        prompt_value: String,
+        snapshot_value: String,
+    },
+}
+
+impl AlignmentError {
+    #[must_use]
+    pub const fn should_rebuild_runtime_prompt(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Default)]
+struct RuntimeToolCatalogMetadata {
+    version: Option<u64>,
+    epoch: Option<u64>,
+    available_tools: Option<usize>,
+    request_user_input_enabled: Option<bool>,
 }
 
 /// Validate consistency between the system prompt, tool catalog, and plan mode flag.
@@ -65,6 +86,10 @@ pub fn validate_prompt_catalog_alignment(
         });
     }
 
+    if let Some(metadata) = parse_runtime_tool_catalog_metadata(system_instruction) {
+        validate_runtime_tool_catalog_metadata(&metadata, tool_snapshot)?;
+    }
+
     // Canary: mutating tool signatures that must never appear in a plan-mode prompt.
     // After Phase 2-F/G these should be unreachable; the check is intentionally cheap.
     if plan_mode {
@@ -90,6 +115,84 @@ pub fn validate_prompt_catalog_alignment(
                 return Err(AlignmentError::MutatingToolInPlanModePrompt { tool_name: hint });
             }
         }
+    }
+
+    Ok(())
+}
+
+fn parse_runtime_tool_catalog_metadata(
+    system_instruction: &str,
+) -> Option<RuntimeToolCatalogMetadata> {
+    let start = system_instruction.rfind("[Runtime Tool Catalog]")?;
+    let mut metadata = RuntimeToolCatalogMetadata::default();
+
+    for line in system_instruction[start..].lines().skip(1) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('[') && !trimmed.starts_with("- ") {
+            break;
+        }
+
+        let Some(entry) = trimmed.strip_prefix("- ") else {
+            continue;
+        };
+        let Some((key, value)) = entry.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+
+        match key.trim() {
+            "version" => metadata.version = value.parse().ok(),
+            "epoch" => metadata.epoch = value.parse().ok(),
+            "available_tools" => metadata.available_tools = value.parse().ok(),
+            "request_user_input_enabled" => {
+                metadata.request_user_input_enabled = value.parse().ok();
+            }
+            _ => {}
+        }
+    }
+
+    Some(metadata)
+}
+
+fn validate_runtime_tool_catalog_metadata(
+    metadata: &RuntimeToolCatalogMetadata,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+) -> Result<(), AlignmentError> {
+    validate_metadata_value("version", metadata.version, tool_snapshot.version)?;
+    validate_metadata_value("epoch", metadata.epoch, tool_snapshot.epoch)?;
+    validate_metadata_value(
+        "available_tools",
+        metadata.available_tools,
+        tool_snapshot.available_tools(),
+    )?;
+    validate_metadata_value(
+        "request_user_input_enabled",
+        metadata.request_user_input_enabled,
+        tool_snapshot.request_user_input_enabled,
+    )?;
+
+    Ok(())
+}
+
+fn validate_metadata_value<T>(
+    field: &'static str,
+    prompt_value: Option<T>,
+    snapshot_value: T,
+) -> Result<(), AlignmentError>
+where
+    T: Copy + PartialEq + ToString,
+{
+    if let Some(prompt_value) = prompt_value
+        && prompt_value != snapshot_value
+    {
+        return Err(AlignmentError::PromptCatalogMetadataMismatch {
+            field,
+            prompt_value: prompt_value.to_string(),
+            snapshot_value: snapshot_value.to_string(),
+        });
     }
 
     Ok(())
@@ -201,5 +304,28 @@ mod tests {
                 expected_line: PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
             }
         );
+    }
+
+    #[test]
+    fn runtime_tool_catalog_metadata_mismatch_detected() {
+        let prompt = "normal prompt\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 1\n- available_tools: 1\n- request_user_input_enabled: false";
+
+        let err = validate_prompt_catalog_alignment(prompt, &snapshot(false), false, false)
+            .expect_err("runtime tool metadata mismatch should be detected");
+        assert_eq!(
+            err,
+            AlignmentError::PromptCatalogMetadataMismatch {
+                field: "available_tools",
+                prompt_value: "1".to_string(),
+                snapshot_value: "0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_tool_catalog_metadata_matches_snapshot() {
+        let prompt = "normal prompt\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 1\n- available_tools: 0\n- request_user_input_enabled: false";
+
+        assert!(validate_prompt_catalog_alignment(prompt, &snapshot(false), false, false).is_ok());
     }
 }

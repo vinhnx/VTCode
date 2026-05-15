@@ -142,7 +142,7 @@ impl AcpClientV2 {
 
     /// Get the next request ID
     fn next_request_id(&self) -> JsonRpcId {
-        let id = self.request_counter.fetch_add(1, Ordering::SeqCst);
+        let id = self.request_counter.fetch_add(1, Ordering::Relaxed);
         JsonRpcId::Number(id as i64)
     }
 

@@ -16,7 +16,9 @@ use crate::core::agent::conversation::{
 };
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::harness_artifacts::existing_harness_artifact_paths;
-use crate::core::agent::harness_kernel::{HarnessRequestPlanInput, build_harness_request_plan};
+use crate::core::agent::harness_kernel::{
+    HarnessRequestPlanInput, SessionToolCatalogSnapshot, build_harness_request_plan,
+};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
@@ -24,13 +26,14 @@ use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
     FinishReason, Message, ToolCall, prepare_responses_continuation_request,
-    supports_responses_chaining,
+    supports_responses_chaining, ToolDefinition,
 };
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections,
+    append_runtime_tool_prompt_sections,
     upsert_harness_limits_section,
 };
 use crate::utils::colors::style;
@@ -154,7 +157,154 @@ fn estimate_session_cost_usd(
     ModelResolver::estimate_cost(pricing, &usage)
 }
 
+struct RuntimePromptBundle {
+    system_instruction: Arc<String>,
+    tool_snapshot: SessionToolCatalogSnapshot,
+    request_tools: Option<Arc<Vec<ToolDefinition>>>,
+}
+
 impl AgentRunner {
+    async fn compose_task_system_prompt(
+        &self,
+        prompt_tools: Arc<Vec<ToolDefinition>>,
+        is_simple_task: bool,
+    ) -> String {
+        if !is_simple_task {
+            return self.system_prompt.clone();
+        }
+
+        let mut config = self.config().clone();
+        config.agent.system_prompt_mode = SystemPromptMode::Minimal;
+        let mut prompt_context = PromptContext::from_workspace_tools(
+            self._workspace.as_path(),
+            prompt_tools
+                .iter()
+                .map(|tool| tool.function_name().to_string()),
+        );
+        prompt_context.load_available_skills();
+
+        let mut prompt = compose_system_instruction_text(
+            self._workspace.as_path(),
+            Some(&config),
+            Some(&prompt_context),
+        )
+        .await;
+        let mut appendix_config = config.agent.clone();
+        if !config.memories_enabled() {
+            appendix_config.persistent_memory.enabled = false;
+        }
+        if let Some(appendix) =
+            build_instruction_appendix(&appendix_config, self._workspace.as_path()).await
+        {
+            prompt.push_str("\n\n# INSTRUCTIONS\n");
+            prompt.push_str(&appendix);
+        }
+
+        prompt
+    }
+
+    async fn build_runtime_prompt_bundle(&self, is_simple_task: bool) -> Result<RuntimePromptBundle> {
+        let tool_snapshot = self.build_universal_tool_snapshot().await?;
+        let request_tools = tool_snapshot.snapshot.clone();
+        let prompt_tools = request_tools.clone().unwrap_or_else(|| Arc::new(Vec::new()));
+        let mut system_prompt = self
+            .compose_task_system_prompt(prompt_tools, is_simple_task)
+            .await;
+
+        let plan_mode = self.tool_registry.is_plan_mode();
+        let request_user_input_enabled =
+            self.features().request_user_input_enabled(plan_mode, false);
+        let full_auto_active = self
+            .tool_registry
+            .current_full_auto_allowlist()
+            .await
+            .is_some();
+
+        append_runtime_mode_sections(
+            &mut system_prompt,
+            RuntimePromptContract {
+                full_auto: full_auto_active,
+                plan_mode,
+                request_user_input_enabled,
+            },
+        );
+        upsert_harness_limits_section(
+            &mut system_prompt,
+            self.config().agent.harness.max_tool_calls_per_turn,
+            self.config().agent.harness.max_tool_wall_clock_secs,
+            self.config().agent.harness.max_tool_retries,
+        );
+        append_runtime_tool_prompt_sections(&mut system_prompt, &tool_snapshot, true);
+
+        Ok(RuntimePromptBundle {
+            system_instruction: Arc::new(system_prompt),
+            tool_snapshot,
+            request_tools,
+        })
+    }
+
+    async fn build_validated_runtime_prompt_bundle(
+        &self,
+        is_simple_task: bool,
+    ) -> Result<RuntimePromptBundle> {
+        let mut bundle = self.build_runtime_prompt_bundle(is_simple_task).await?;
+        let mut alignment_error = prompt_alignment::validate_prompt_catalog_alignment(
+            &bundle.system_instruction,
+            &bundle.tool_snapshot,
+            self.tool_registry.is_plan_mode(),
+            self.features()
+                .request_user_input_enabled(self.tool_registry.is_plan_mode(), false),
+        )
+        .err();
+
+        if alignment_error
+            .as_ref()
+            .is_some_and(prompt_alignment::AlignmentError::should_rebuild_runtime_prompt)
+        {
+            warn!(
+                error = ?alignment_error,
+                "prompt/catalog alignment mismatch; rebuilding runtime prompt bundle"
+            );
+            bundle = self.build_runtime_prompt_bundle(is_simple_task).await?;
+            alignment_error = prompt_alignment::validate_prompt_catalog_alignment(
+                &bundle.system_instruction,
+                &bundle.tool_snapshot,
+                self.tool_registry.is_plan_mode(),
+                self.features()
+                    .request_user_input_enabled(self.tool_registry.is_plan_mode(), false),
+            )
+            .err();
+        }
+
+        if let Some(error) = alignment_error {
+            warn!(
+                error = ?error,
+                "prompt/catalog alignment mismatch persisted after rebuild"
+            );
+        }
+
+        Ok(bundle)
+    }
+
+    async fn refresh_runtime_prompt_bundle_if_catalog_changed(
+        &self,
+        bundle: &mut RuntimePromptBundle,
+        is_simple_task: bool,
+    ) -> Result<bool> {
+        let current_version = self.tool_registry.tool_catalog_state().current_version();
+        if current_version == bundle.tool_snapshot.version {
+            return Ok(false);
+        }
+
+        debug!(
+            old_version = bundle.tool_snapshot.version,
+            new_version = current_version,
+            "Tool catalog changed mid-task; refreshing runtime prompt bundle"
+        );
+        *bundle = self.build_validated_runtime_prompt_bundle(is_simple_task).await?;
+        Ok(true)
+    }
+
     async fn resolve_completion_acceptance(
         &mut self,
         effective_task: &Task,
@@ -290,43 +440,9 @@ impl AgentRunner {
 
             let run_started_at = std::time::Instant::now();
             let is_simple_task = Self::is_simple_task(task, contexts);
-            let mut tool_snapshot = self.build_universal_tool_snapshot().await?;
-            let mut request_tools = tool_snapshot.snapshot.clone();
-            let prompt_tools = request_tools
-                .clone()
-                .unwrap_or_else(|| Arc::new(Vec::new()));
-
-            let mut system_prompt = if is_simple_task {
-                // One-time clone for simple tasks to override prompt mode (not per-turn)
-                let mut config = self.config().clone();
-                config.agent.system_prompt_mode = SystemPromptMode::Minimal;
-                let mut prompt_context = PromptContext::from_workspace_tools(
-                    self._workspace.as_path(),
-                    prompt_tools
-                        .iter()
-                        .map(|tool| tool.function_name().to_string()),
-                );
-                prompt_context.load_available_skills();
-                let mut prompt = compose_system_instruction_text(
-                    self._workspace.as_path(),
-                    Some(&config),
-                    Some(&prompt_context),
-                )
-                .await;
-                let mut appendix_config = config.agent.clone();
-                if !config.memories_enabled() {
-                    appendix_config.persistent_memory.enabled = false;
-                }
-                if let Some(appendix) =
-                    build_instruction_appendix(&appendix_config, self._workspace.as_path()).await
-                {
-                    prompt.push_str("\n\n# INSTRUCTIONS\n");
-                    prompt.push_str(&appendix);
-                }
-                prompt
-            } else {
-                self.system_prompt.clone()
-            };
+            let prompt_bundle = self
+                .build_validated_runtime_prompt_bundle(is_simple_task)
+                .await?;
 
             let review_like = is_review_like_task(task);
             let full_auto_active = self
@@ -334,82 +450,6 @@ impl AgentRunner {
                 .current_full_auto_allowlist()
                 .await
                 .is_some();
-            append_runtime_mode_sections(
-                &mut system_prompt,
-                RuntimePromptContract {
-                    full_auto: full_auto_active,
-                    plan_mode: self.tool_registry.is_plan_mode(),
-                    request_user_input_enabled: false,
-                },
-            );
-            upsert_harness_limits_section(
-                &mut system_prompt,
-                self.config().agent.harness.max_tool_calls_per_turn,
-                self.config().agent.harness.max_tool_wall_clock_secs,
-                self.config().agent.harness.max_tool_retries,
-            );
-
-            // Prepare conversation with task context
-            let system_instruction = Arc::new(system_prompt);
-
-            // Alignment guard: system prompt, tool catalog, and plan-mode flag must agree.
-            // A mismatch means the snapshot was built with stale plan-mode state; self-heal
-            // by re-snapshotting so the LLM receives a consistent tool list.
-            let plan_mode_now = self.tool_registry.is_plan_mode();
-            let request_user_input_enabled = self
-                .features()
-                .request_user_input_enabled(plan_mode_now, false);
-            match prompt_alignment::validate_prompt_catalog_alignment(
-                &system_instruction,
-                &tool_snapshot,
-                plan_mode_now,
-                request_user_input_enabled,
-            ) {
-                Ok(()) => {}
-                Err(prompt_alignment::AlignmentError::PlanModeMismatch {
-                    snapshot_plan_mode,
-                    registry_plan_mode,
-                }) => {
-                    warn!(
-                        snapshot_plan_mode,
-                        registry_plan_mode,
-                        "prompt/catalog plan-mode mismatch; re-snapshotting tool catalog"
-                    );
-                    let refreshed = self.build_universal_tool_snapshot().await?;
-                    request_tools = refreshed.snapshot.clone();
-                    tool_snapshot = refreshed;
-                }
-                Err(prompt_alignment::AlignmentError::RequestUserInputMismatch {
-                    snapshot_request_user_input_enabled,
-                    runtime_request_user_input_enabled,
-                }) => {
-                    warn!(
-                        snapshot_request_user_input_enabled,
-                        runtime_request_user_input_enabled,
-                        "prompt/catalog request-user-input mismatch; re-snapshotting tool catalog"
-                    );
-                    let refreshed = self.build_universal_tool_snapshot().await?;
-                    request_tools = refreshed.snapshot.clone();
-                    tool_snapshot = refreshed;
-                }
-                Err(prompt_alignment::AlignmentError::PlanModePromptPolicyMismatch {
-                    expected_line,
-                }) => {
-                    warn!(
-                        expected_line = %expected_line,
-                        "canary: plan-mode prompt policy line mismatch"
-                    );
-                }
-                Err(prompt_alignment::AlignmentError::MutatingToolInPlanModePrompt {
-                    tool_name,
-                }) => {
-                    // Canary metric — should never fire after Phase 2-F/G.
-                    warn!(
-                        tool = %tool_name,
-                        "canary: mutating tool found in plan-mode system prompt"
-                    );
-                }
-            }
 
             let mut conversation = conversation_from_messages(&self.bootstrap_messages);
             conversation.extend(build_conversation(task, contexts));
@@ -473,10 +513,7 @@ impl AgentRunner {
                 event_recorder,
                 run_started_at,
                 is_simple_task,
-                request_tools,
-                tool_snapshot.tool_catalog_hash,
-                tool_snapshot.version,
-                system_instruction,
+                prompt_bundle,
                 preserve_recent_turns,
                 max_tool_loops,
                 max_context_tokens,
@@ -492,10 +529,7 @@ impl AgentRunner {
             mut event_recorder,
             run_started_at,
             is_simple_task,
-            mut request_tools,
-            mut tool_catalog_hash,
-            mut tool_catalog_version,
-            system_instruction,
+            mut prompt_bundle,
             preserve_recent_turns,
             max_tool_loops,
             max_context_tokens,
@@ -659,8 +693,8 @@ impl AgentRunner {
 
                 let request = build_harness_request_plan(HarnessRequestPlanInput {
                     messages: request_messages,
-                    system_prompt: system_instruction.as_ref().clone(),
-                    tools: request_tools.clone(),
+                    system_prompt: prompt_bundle.system_instruction.as_ref().clone(),
+                    tools: prompt_bundle.request_tools.clone(),
                     model: turn_model.clone(),
                     max_tokens,
                     temperature,
@@ -685,7 +719,7 @@ impl AgentRunner {
                         Some(&self.session_id),
                     ),
                     prompt_cache_profile: None,
-                    tool_catalog_hash,
+                    tool_catalog_hash: prompt_bundle.tool_snapshot.tool_catalog_hash,
                 })
                 .request;
                 // Cheap pre-flight: catch malformed requests (empty system
@@ -970,23 +1004,12 @@ impl AgentRunner {
 
                 // Refresh tool definitions if the catalog was mutated during tool
                 // execution (e.g. tools.load / tools.unload / skill activation).
-                // The version is bumped by `note_explicit_refresh` on every
-                // register_tool / unregister_tool call; we only re-snapshot when
-                // it has actually changed.
-                {
-                    let current_version = self.tool_registry.tool_catalog_state().current_version();
-                    if current_version != tool_catalog_version {
-                        debug!(
-                            old_version = tool_catalog_version,
-                            new_version = current_version,
-                            "Tool catalog changed mid-task; refreshing tool snapshot"
-                        );
-                        let refreshed = self.build_universal_tool_snapshot().await?;
-                        request_tools = refreshed.snapshot.clone();
-                        tool_catalog_hash = refreshed.tool_catalog_hash;
-                        tool_catalog_version = refreshed.version;
-                    }
-                }
+                let _ = self
+                    .refresh_runtime_prompt_bundle_if_catalog_changed(
+                        &mut prompt_bundle,
+                        is_simple_task,
+                    )
+                    .await?;
 
                 let had_effective_shell_tool_call =
                     effective_tool_calls.as_ref().is_some_and(|calls| {
