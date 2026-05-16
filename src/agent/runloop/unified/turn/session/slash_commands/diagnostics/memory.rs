@@ -8,6 +8,8 @@
 
 #[path = "memory/config_persistence.rs"]
 mod config_persistence;
+#[path = "memory/navigation.rs"]
+mod navigation;
 #[path = "memory/presentation.rs"]
 mod presentation;
 #[path = "memory/prompts.rs"]
@@ -37,9 +39,8 @@ use self::presentation::{
     format_path_list, memory_lightweight_route_info, render_common_memory_status,
     show_memory_actions_modal,
 };
+use self::navigation::handle_memory_navigation_action;
 use self::prompts::{prompt_optional_text, prompt_required_text};
-use super::super::apps::launch_editor_from_context;
-use super::super::show_settings_at_path_from_context;
 use super::super::ui::wait_for_list_modal_selection;
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -198,6 +199,10 @@ async fn handle_memory_action(
     memory_status: &PersistentMemoryStatus,
     _config_mode: bool,
 ) -> Result<Option<SlashCommandControl>> {
+    if let Some(control) = handle_memory_navigation_action(ctx, action_key, memory_status).await? {
+        return Ok(Some(control));
+    }
+
     if let Some(selection) = action_key.strip_prefix(MEMORY_LIGHTWEIGHT_MODEL_PREFIX) {
         let model = match selection {
             "auto" => String::new(),
@@ -486,27 +491,6 @@ async fn handle_memory_action(
             drop(spinner);
             ctx.renderer
                 .line(MessageStyle::Info, "Rebuilt memory summary and registry.")?;
-        }
-        "open_settings_section" => {
-            return show_settings_at_path_from_context(ctx, Some("agent.persistent_memory"))
-                .await
-                .map(Some);
-        }
-        "open_summary" => {
-            return launch_editor_from_context(
-                ctx,
-                Some(memory_status.summary_file.display().to_string()),
-            )
-            .await
-            .map(Some);
-        }
-        "open_directory" => {
-            return launch_editor_from_context(
-                ctx,
-                Some(memory_status.directory.display().to_string()),
-            )
-            .await
-            .map(Some);
         }
         _ => bail!("Unknown memory action: {}", action_key),
     }
