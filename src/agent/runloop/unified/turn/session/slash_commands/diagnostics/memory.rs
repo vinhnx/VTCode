@@ -6,8 +6,8 @@ use vtcode_core::config::current_config_defaults;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::llm::{
-    LightweightFeature, LightweightRouteSource, auto_lightweight_model,
-    lightweight_model_choices, resolve_lightweight_route,
+    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
+    resolve_lightweight_route,
 };
 use vtcode_core::persistent_memory::{
     PersistentMemoryStatus, cleanup_persistent_memory, persistent_memory_status,
@@ -25,13 +25,13 @@ use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 
-use super::{SlashCommandContext, SlashCommandControl};
 use super::super::apps::launch_editor_from_context;
 use super::super::config_toml::{
     ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value,
 };
 use super::super::show_settings_at_path_from_context;
 use super::super::ui::wait_for_list_modal_selection;
+use super::{SlashCommandContext, SlashCommandControl};
 
 const MEMORY_ACTION_PREFIX: &str = "memory.action.";
 const MEMORY_ACTION_BACK: &str = "memory.action.back";
@@ -142,9 +142,7 @@ pub(super) async fn render_memory_status_lines(
     Ok(())
 }
 
-pub(super) async fn render_memory_config_lines(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<()> {
+pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
     let agent_config = ctx
         .vt_cfg
         .as_ref()
@@ -395,8 +393,7 @@ fn show_memory_actions_modal(
     items.push(InlineListItem {
         title: toggle_title("Auto-write", memory_status.auto_write),
         subtitle: Some(
-            "Write one rollout summary at session finalization, then consolidate it."
-                .to_string(),
+            "Write one rollout summary at session finalization, then consolidate it.".to_string(),
         ),
         badge: Some("Toggle".to_string()),
         indent: 0,
@@ -424,7 +421,10 @@ fn show_memory_actions_modal(
         search_value: Some("memory lightweight model toggle".to_string()),
     });
     items.push(InlineListItem {
-        title: format!("Memory Triage Model ({})", lightweight_route.configured_label),
+        title: format!(
+            "Memory Triage Model ({})",
+            lightweight_route.configured_label
+        ),
         subtitle: Some(format!(
             "Effective route: {}",
             lightweight_route.effective_label
@@ -474,25 +474,27 @@ fn show_memory_actions_modal(
         ))),
         search_value: Some("memory lightweight model main".to_string()),
     });
-    items.extend(lightweight_route.choices.iter().map(|model| InlineListItem {
-        title: model.clone(),
-        subtitle: Some("Explicit same-provider lightweight model.".to_string()),
-        badge: Some(
-            if lightweight_route
-                .configured_label
-                .eq_ignore_ascii_case(model.as_str())
-            {
-                "Current".to_string()
-            } else {
-                "Model".to_string()
-            },
-        ),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}{model}",
-            MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
-        ))),
-        search_value: Some(format!("memory lightweight triage {}", model)),
+    items.extend(lightweight_route.choices.iter().map(|model| {
+        InlineListItem {
+            title: model.clone(),
+            subtitle: Some("Explicit same-provider lightweight model.".to_string()),
+            badge: Some(
+                if lightweight_route
+                    .configured_label
+                    .eq_ignore_ascii_case(model.as_str())
+                {
+                    "Current".to_string()
+                } else {
+                    "Model".to_string()
+                },
+            ),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}{model}",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some(format!("memory lightweight triage {}", model)),
+        }
     }));
     items.extend([
         InlineListItem {
@@ -1307,18 +1309,20 @@ async fn prompt_text(
     )
     .await?;
     let value = match outcome {
-        WizardModalOutcome::Submitted(selections) => selections.into_iter().find_map(|selection| {
-            match selection {
-                InlineListSelection::RequestUserInputAnswer {
-                    question_id,
-                    selected,
-                    other,
-                } if question_id == MEMORY_PROMPT_QUESTION_ID => {
-                    other.or_else(|| selected.first().cloned())
-                }
-                _ => None,
-            }
-        }),
+        WizardModalOutcome::Submitted(selections) => {
+            selections
+                .into_iter()
+                .find_map(|selection| match selection {
+                    InlineListSelection::RequestUserInputAnswer {
+                        question_id,
+                        selected,
+                        other,
+                    } if question_id == MEMORY_PROMPT_QUESTION_ID => {
+                        other.or_else(|| selected.first().cloned())
+                    }
+                    _ => None,
+                })
+        }
         WizardModalOutcome::Cancelled { .. } => None,
     };
 

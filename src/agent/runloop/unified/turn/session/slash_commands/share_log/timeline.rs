@@ -7,9 +7,8 @@ use serde_json::Value;
 use serde_json::json;
 use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{
-    CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus,
-    PatchChangeKind, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ToolCallStatus, Usage,
+    CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus, PatchChangeKind,
+    ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, Usage,
 };
 use vtcode_core::llm::provider as uni;
 
