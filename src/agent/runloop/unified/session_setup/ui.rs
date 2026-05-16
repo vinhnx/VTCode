@@ -2,32 +2,30 @@
 //! - Entrypoint: `initialize_session_ui` owns session bootstrap, inline header wiring, and TUI session launch.
 //! - Common changes:
 //!   - Local-agent sidebar refresh and preview logic live in `ui/local_agents.rs`.
+//!   - Header assembly, OpenAI notices, and IDE snapshot wiring live in `ui/header_context.rs`.
 //!   - Persistent-memory guide and header badges live in `ui/persistent_memory.rs`.
-//!   - Resume rendering still lives in this root until the next TD-005 split.
+//!   - Resume rendering and transcript projection live in `ui/resume_render.rs`.
 //! - Constraints: TD-005 is active for this surface; keep this file as an orchestration root and prefer responsibility-named support modules for new helper clusters.
 //! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode inline_events::tests`
 
+mod header_context;
 mod local_agents;
 mod persistent_memory;
+mod resume_render;
 
 use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
 };
-use crate::agent::runloop::unified::session_setup::ide_context::{
-    IdeContextBridge, status_line_editor_label, tui_header_summary,
-};
+use crate::agent::runloop::unified::session_setup::ide_context::IdeContextBridge;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
 use crate::agent::runloop::unified::turn::utils::{
     append_additional_context, render_hook_messages,
 };
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
-use crate::agent::runloop::unified::{context_manager, palettes, state};
+use crate::agent::runloop::unified::{context_manager, state};
 use anyhow::{Context, Result};
-use chrono::Local;
-use hashbrown::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use tokio::sync::{Notify, mpsc::UnboundedSender};
@@ -37,10 +35,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
-use vtcode_core::llm::provider as uni;
-use vtcode_core::notifications::{
-    set_global_notification_hook_engine, set_global_terminal_focused,
-};
+use vtcode_core::notifications::{set_global_notification_hook_engine, set_global_terminal_focused};
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
@@ -52,14 +47,16 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_tui::app::{
-    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineHeaderContext, SessionOptions, SlashCommandItem, spawn_session_with_options,
+    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
+    SlashCommandItem, spawn_session_with_options,
 };
 
 pub(crate) use self::local_agents::refresh_local_agents;
-use self::persistent_memory::{
-    apply_persistent_memory_header_guide, load_persistent_memory_status,
+pub(crate) use self::header_context::{
+    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
 };
+use self::header_context::initialize_header_context;
+use self::resume_render::render_resume_state_if_present;
 
 #[cfg(test)]
 use self::local_agents::{
@@ -69,9 +66,19 @@ use self::local_agents::{
 #[cfg(test)]
 use self::persistent_memory::{persistent_memory_guide_lines, persistent_memory_header_badge};
 #[cfg(test)]
+use self::persistent_memory::apply_persistent_memory_header_guide;
+#[cfg(test)]
+use self::resume_render::{build_structured_resume_lines, infer_legacy_line_style};
+#[cfg(test)]
+use self::header_context::ide_context_status_label;
+#[cfg(test)]
+use vtcode_core::llm::provider as uni;
+#[cfg(test)]
 use vtcode_core::persistent_memory::PersistentMemoryStatus;
 #[cfg(test)]
 use vtcode_core::subagents::SubagentStatusEntry;
+#[cfg(test)]
+use vtcode_tui::app::InlineHeaderContext;
 #[cfg(test)]
 use vtcode_tui::app::InlineHeaderStatusTone;
 
@@ -376,77 +383,21 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    let persistent_memory_status = load_persistent_memory_status(config, vt_cfg);
-    if let Err(err) = persistent_memory_status.as_ref() {
-        warn!(
-            workspace = %config.workspace.display(),
-            error = ?err,
-            "Failed to load persistent memory status for TUI guide"
-        );
-        renderer.line(
-            MessageStyle::Warning,
-            "Persistent memory is enabled, but VT Code couldn't load the TUI memory guide.",
-        )?;
-    }
-    let persistent_memory_status = persistent_memory_status.ok().flatten();
-
-    if let Some(notice) = session_state.session_bootstrap.search_tools_notice.as_ref() {
-        notice.render(&mut renderer)?;
-    }
-    maybe_render_openai_priority_notice(&mut renderer, config, vt_cfg)?;
-
-    handle.set_theme(theme_spec.clone());
-    palettes::apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
 
-    let reasoning_label = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
-        .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-
-    let mode_label = match (config.ui_surface, full_auto) {
-        (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
-    };
-    let mut header_context = build_inline_header_context(
+    let header_context = initialize_header_context(
+        &mut renderer,
+        &handle,
+        &mut context_manager,
+        &mut ide_context_bridge,
         config,
         vt_cfg,
         &session_state.session_bootstrap,
+        &*session_state.provider_client,
         header_provider_label,
-        config.model.clone(),
-        session_state
-            .provider_client
-            .effective_context_size(&config.model),
-        mode_label,
-        reasoning_label.clone(),
+        full_auto,
     )
     .await?;
-    if let Some(memory_status) = persistent_memory_status.as_ref() {
-        apply_persistent_memory_header_guide(&mut header_context, memory_status);
-    }
-
-    let initial_editor_snapshot = if let Some(bridge) = ide_context_bridge.as_mut() {
-        match bridge.refresh() {
-            Ok((snapshot, _)) => snapshot,
-            Err(err) => {
-                warn!("Failed to refresh IDE context snapshot: {}", err);
-                None
-            }
-        }
-    } else {
-        None
-    };
-    apply_ide_context_snapshot(
-        &mut context_manager,
-        &mut header_context,
-        &handle,
-        config.workspace.as_path(),
-        vt_cfg,
-        initial_editor_snapshot,
-    );
 
     let mut startup_update_notice_rx = None;
     let mut startup_update_task_guard = None;
@@ -507,397 +458,6 @@ pub(crate) async fn initialize_session_ui(
         startup_update_notice_rx,
         startup_update_task_guard,
     })
-}
-
-fn maybe_render_openai_priority_notice(
-    renderer: &mut AnsiRenderer,
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-) -> Result<()> {
-    if !config.provider.eq_ignore_ascii_case("openai") {
-        return Ok(());
-    }
-
-    let default_auth = vtcode_auth::OpenAIAuthConfig::default();
-    let auth_cfg = vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
-    let storage_mode = vt_cfg
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default();
-    let api_key = vtcode_core::config::api_keys::get_api_key(
-        "openai",
-        &vtcode_core::config::api_keys::ApiKeySources::default(),
-    )
-    .ok();
-    let overview =
-        vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
-    let Some(notice) = overview.notice.as_deref() else {
-        return Ok(());
-    };
-
-    renderer.line(MessageStyle::Info, notice)?;
-    if let Some(recommendation) = overview.recommendation.as_deref() {
-        renderer.line(MessageStyle::Output, recommendation)?;
-    }
-    Ok(())
-}
-
-pub(crate) fn apply_ide_context_snapshot(
-    context_manager: &mut context_manager::ContextManager,
-    header_context: &mut InlineHeaderContext,
-    handle: &InlineHandle,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&VTCodeConfig>,
-    snapshot: Option<vtcode_core::EditorContextSnapshot>,
-) {
-    let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
-    context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
-    let effective_ide_context_config =
-        context_manager.effective_ide_context_config_with_base(ide_context_config);
-    header_context.editor_context = tui_header_summary(
-        workspace,
-        Some(&effective_ide_context_config),
-        snapshot.as_ref(),
-    );
-    handle.set_header_context(header_context.clone());
-}
-
-pub(crate) fn ide_context_status_label(
-    context_manager: &context_manager::ContextManager,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&VTCodeConfig>,
-    snapshot: Option<&vtcode_core::EditorContextSnapshot>,
-    source: Option<&std::path::Path>,
-) -> Option<String> {
-    let effective_ide_context_config =
-        context_manager.effective_ide_context_config_with_base(vt_cfg.map(|cfg| &cfg.ide_context));
-    status_line_editor_label(
-        workspace,
-        Some(&effective_ide_context_config),
-        snapshot,
-        source,
-    )
-}
-
-pub(crate) fn ide_context_status_label_from_bridge(
-    context_manager: &context_manager::ContextManager,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&VTCodeConfig>,
-    ide_context_bridge: Option<&IdeContextBridge>,
-) -> Option<String> {
-    ide_context_bridge.and_then(|bridge| {
-        ide_context_status_label(
-            context_manager,
-            workspace,
-            vt_cfg,
-            bridge.snapshot(),
-            bridge.snapshot_source(),
-        )
-    })
-}
-
-fn render_resume_state_if_present(
-    renderer: &mut AnsiRenderer,
-    resume_state: Option<&ResumeSession>,
-    supports_reasoning: bool,
-) -> Result<()> {
-    let Some(session) = resume_state else {
-        return Ok(());
-    };
-
-    let ended_local = session
-        .snapshot()
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
-    let action = if session.is_fork() {
-        "Forking"
-    } else {
-        "Resuming"
-    };
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{} session {} · ended {} · {} messages",
-            action,
-            session.identifier(),
-            ended_local,
-            session.message_count()
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Previous archive: {}", session.path().display()),
-    )?;
-    if session.is_fork() {
-        renderer.line(MessageStyle::Info, "Starting independent forked session")?;
-    }
-
-    if !session.history().is_empty() {
-        renderer.line(MessageStyle::Info, "Conversation history:")?;
-        let lines = build_structured_resume_lines(session.history(), supports_reasoning);
-        render_resume_lines(renderer, &lines)?;
-    } else if !session.snapshot().transcript.is_empty() {
-        renderer.line(
-            MessageStyle::Info,
-            "Conversation history (legacy transcript):",
-        )?;
-        let lines = build_legacy_resume_lines(&session.snapshot().transcript);
-        render_resume_lines(renderer, &lines)?;
-    }
-    renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(())
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct ResumeRenderLine {
-    style: MessageStyle,
-    text: String,
-}
-
-impl ResumeRenderLine {
-    fn new(style: MessageStyle, text: impl Into<String>) -> Self {
-        Self {
-            style,
-            text: text.into(),
-        }
-    }
-}
-
-fn render_resume_lines(renderer: &mut AnsiRenderer, lines: &[ResumeRenderLine]) -> Result<()> {
-    for line in lines {
-        renderer.line(line.style, &line.text)?;
-    }
-    Ok(())
-}
-
-fn build_structured_resume_lines(
-    history: &[uni::Message],
-    supports_reasoning: bool,
-) -> Vec<ResumeRenderLine> {
-    let mut lines = Vec::new();
-    let mut tool_name_by_call_id: HashMap<String, String> = HashMap::new();
-
-    for (index, message) in history.iter().enumerate() {
-        if index > 0 {
-            push_resume_spacing(&mut lines);
-        }
-        match message.role {
-            uni::MessageRole::User => {
-                push_content_lines(&mut lines, MessageStyle::User, &message.content);
-            }
-            uni::MessageRole::Assistant => {
-                let mut rendered_any = false;
-
-                if let Some(tool_calls) = &message.tool_calls {
-                    for tool_call in tool_calls {
-                        rendered_any = true;
-                        let tool_name = tool_call
-                            .function
-                            .as_ref()
-                            .map(|function| function.name.clone())
-                            .unwrap_or_else(|| "unknown".to_string());
-                        if !tool_call.id.trim().is_empty() {
-                            tool_name_by_call_id.insert(tool_call.id.clone(), tool_name.clone());
-                        }
-
-                        lines.push(ResumeRenderLine::new(
-                            MessageStyle::Tool,
-                            format_resume_tool_header(&tool_name, Some(tool_call.id.as_str())),
-                        ));
-
-                        if let Some(function) = &tool_call.function {
-                            let args_block = format_tool_arguments_for_resume(&function.arguments);
-                            if !args_block.is_empty() {
-                                lines.push(ResumeRenderLine::new(
-                                    MessageStyle::ToolDetail,
-                                    args_block,
-                                ));
-                            }
-                        } else if let Some(text) = tool_call.text.as_deref()
-                            && !text.trim().is_empty()
-                        {
-                            lines.push(ResumeRenderLine::new(
-                                MessageStyle::ToolDetail,
-                                text.trim().to_string(),
-                            ));
-                        }
-                    }
-                }
-
-                let reasoning_text = if supports_reasoning {
-                    message
-                        .reasoning
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|text| !text.is_empty())
-                        .map(str::to_string)
-                        .or_else(|| {
-                            message
-                                .reasoning_details
-                                .as_deref()
-                                .and_then(
-                                    vtcode_core::llm::providers::common::extract_reasoning_text_from_detail_values,
-                                )
-                        })
-                } else {
-                    None
-                };
-
-                if let Some(reasoning) = reasoning_text {
-                    rendered_any = true;
-                    lines.push(ResumeRenderLine::new(MessageStyle::Reasoning, reasoning));
-                }
-
-                if let Some(content) = project_content_text(&message.content) {
-                    rendered_any = true;
-                    lines.push(ResumeRenderLine::new(MessageStyle::Response, content));
-                }
-
-                if !rendered_any {
-                    lines.push(ResumeRenderLine::new(
-                        MessageStyle::Response,
-                        "Assistant: [no content]",
-                    ));
-                }
-            }
-            uni::MessageRole::Tool => {
-                let call_id = message.tool_call_id.as_deref();
-                let tool_name = call_id
-                    .and_then(|id| tool_name_by_call_id.get(id))
-                    .cloned()
-                    .or_else(|| message.origin_tool.clone())
-                    .unwrap_or_else(|| "tool".to_string());
-                lines.push(ResumeRenderLine::new(
-                    MessageStyle::Tool,
-                    format_resume_tool_header(&tool_name, call_id),
-                ));
-                push_content_lines(&mut lines, MessageStyle::ToolOutput, &message.content);
-            }
-            uni::MessageRole::System => {
-                lines.push(ResumeRenderLine::new(MessageStyle::Info, "System:"));
-                push_content_lines(&mut lines, MessageStyle::Info, &message.content);
-            }
-        }
-    }
-
-    lines
-}
-
-fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
-    let tool_name = vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(tool_name)
-        .unwrap_or(tool_name);
-    match tool_call_id {
-        Some(id) if !id.trim().is_empty() && tool_name.trim().eq_ignore_ascii_case("tool") => {
-            format!("Tool [tool_call_id: {}]:", id)
-        }
-        Some(id) if !id.trim().is_empty() => {
-            format!("Tool {} [tool_call_id: {}]:", tool_name, id)
-        }
-        _ if tool_name.trim().eq_ignore_ascii_case("tool") => "Tool:".to_string(),
-        _ => format!("Tool {}:", tool_name),
-    }
-}
-
-fn format_tool_arguments_for_resume(arguments: &str) -> String {
-    let trimmed = arguments.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-
-    match serde_json::from_str::<serde_json::Value>(trimmed) {
-        Ok(value) => serde_json::to_string_pretty(&value)
-            .map(|pretty| format!("```json\n{}\n```", pretty))
-            .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed)),
-        Err(_) => format!("```text\n{}\n```", trimmed),
-    }
-}
-
-fn push_resume_spacing(lines: &mut Vec<ResumeRenderLine>) {
-    if lines.last().is_none_or(|line| !line.text.is_empty()) {
-        lines.push(ResumeRenderLine::new(MessageStyle::Info, ""));
-    }
-}
-
-fn push_content_lines(
-    lines: &mut Vec<ResumeRenderLine>,
-    style: MessageStyle,
-    content: &uni::MessageContent,
-) {
-    if let Some(projected) = project_content_text(content) {
-        lines.push(ResumeRenderLine::new(style, projected));
-    } else {
-        lines.push(ResumeRenderLine::new(style, "[no textual content]"));
-    }
-}
-
-fn project_content_text(content: &uni::MessageContent) -> Option<String> {
-    match content {
-        uni::MessageContent::Text(text) => (!text.trim().is_empty()).then(|| text.clone()),
-        uni::MessageContent::Parts(parts) => {
-            let mut fragments = Vec::new();
-            for part in parts {
-                match part {
-                    uni::ContentPart::Text { text } => {
-                        if !text.trim().is_empty() {
-                            fragments.push(text.clone());
-                        }
-                    }
-                    uni::ContentPart::Image { mime_type, .. } => {
-                        fragments.push(format!("[image content: {}]", mime_type));
-                    }
-                    uni::ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
-                        if let Some(name) = filename {
-                            fragments.push(format!("[file attachment: {}]", name));
-                        } else if let Some(id) = file_id {
-                            fragments.push(format!("[file attachment id: {}]", id));
-                        } else if let Some(url) = file_url {
-                            fragments.push(format!("[file attachment url: {}]", url));
-                        } else {
-                            fragments.push("[file attachment]".to_string());
-                        }
-                    }
-                }
-            }
-
-            (!fragments.is_empty()).then(|| fragments.join("\n"))
-        }
-    }
-}
-
-fn build_legacy_resume_lines(transcript: &[String]) -> Vec<ResumeRenderLine> {
-    transcript
-        .iter()
-        .map(|line| ResumeRenderLine::new(infer_legacy_line_style(line), line.clone()))
-        .collect()
-}
-
-fn infer_legacy_line_style(line: &str) -> MessageStyle {
-    let trimmed = line.trim_start();
-    if trimmed.is_empty() {
-        return MessageStyle::Info;
-    }
-
-    if trimmed.contains("You:") {
-        return MessageStyle::User;
-    }
-    if trimmed.contains("Assistant:") {
-        return MessageStyle::Response;
-    }
-    if trimmed.contains("System:") {
-        return MessageStyle::Info;
-    }
-    if trimmed.contains("Tool ")
-        || trimmed.contains("[tool_call_id:")
-        || trimmed.contains("\"tool_call_id\"")
-    {
-        return MessageStyle::ToolOutput;
-    }
-    MessageStyle::Info
 }
 
 #[cfg(test)]
