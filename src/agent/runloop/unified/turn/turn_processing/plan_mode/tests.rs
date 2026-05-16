@@ -1,6 +1,9 @@
 use super::*;
+use super::interview_context::TaskTrackerSummary;
+use super::interview_context::line_has_open_decision_marker;
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::config::constants::tools;
+use vtcode_core::tools::handlers::plan_mode::PlanValidationReport;
 
 fn tool_calls_result(
     tool_calls: Vec<uni::ToolCall>,

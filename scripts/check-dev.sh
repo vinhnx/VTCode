@@ -150,6 +150,17 @@ run_structured_logging_lint() {
     fi
 }
 
+run_agent_legibility_lint() {
+    print_status "Running agent legibility lint..."
+    if python3 scripts/check_agent_legibility.py --mode warn; then
+        print_success "Agent legibility lint completed."
+        return 0
+    else
+        print_error "Agent legibility lint failed unexpectedly."
+        return 1
+    fi
+}
+
 print_usage() {
     echo "VT Code Fast Development Check Script"
     echo ""
@@ -163,7 +174,7 @@ print_usage() {
     echo "Options:"
     echo "  --test, -t          Also run tests (slower)"
     echo "  --workspace, -w     Run checks on full workspace (default: default-members only)"
-    echo "  --lints, -l         Run extra lints (structured logging, etc)"
+    echo "  --lints, -l         Run extra lints (structured logging, agent legibility)"
     echo "  --help, -h          Show this help message"
     echo ""
     echo "Examples:"
@@ -229,6 +240,7 @@ main() {
     # Run extra lints if requested
     if [ "$RUN_EXTRA_LINTS" = true ]; then
         run_structured_logging_lint || ((FAILED_CHECKS++))
+        run_agent_legibility_lint || ((FAILED_CHECKS++))
     fi
 
     # Run tests if requested (always last, as they're the slowest)

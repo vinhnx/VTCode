@@ -237,6 +237,17 @@ run_zen_governance() {
     fi
 }
 
+run_agent_legibility_checks() {
+    print_status "Running agent legibility checks (warn mode)..."
+    if python3 scripts/check_agent_legibility.py --mode warn; then
+        print_success "Agent legibility checks completed."
+        return 0
+    else
+        print_error "Agent legibility checks failed unexpectedly."
+        return 1
+    fi
+}
+
 # Run Miri (detect undefined behavior)
 run_miri() {
     print_status "Running Miri (detecting Undefined Behavior/aliasing issues)..."
@@ -276,6 +287,7 @@ main() {
     run_workflow_security_lint || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
     run_zen_governance || ((failed_checks++))
+    run_agent_legibility_checks || ((failed_checks++))
     run_ast_grep_scan || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_build || ((failed_checks++))
@@ -341,6 +353,7 @@ case "${1:-}" in
         echo "  harness - Run focused PTY/TUI harness regression tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
+        echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  miri    - Run Miri to detect Undefined Behavior (slow)"
@@ -350,6 +363,9 @@ case "${1:-}" in
         ;;
     "zen")
         run_zen_governance
+        ;;
+    "legibility")
+        run_agent_legibility_checks
         ;;
     "ast-grep"|"astgrep")
         run_ast_grep_scan required

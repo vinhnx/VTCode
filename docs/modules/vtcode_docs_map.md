@@ -661,8 +661,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/harness/QUALITY_SCORE.md`
   - **Content**: Quality Score
-  - **Topics**: Scoring Method, LLM System, Tool System, Configuration, Security
-  - **User Questions**: "What can you tell me about Quality Score?", "How does Scoring Method work?", "How does LLM System work?"
+  - **Topics**: Snapshot, Dimensions, Scoring Method, LLM System, Tool System
+  - **User Questions**: "What can you tell me about Quality Score?", "How does Snapshot work?", "How does Dimensions work?"
 
 - **File**: `docs/installation/QUICK_REFERENCE.md`
   - **Content**: Quick Reference
