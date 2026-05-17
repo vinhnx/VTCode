@@ -59,7 +59,7 @@ impl ZedAgent {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
         let tool_loop_limit = tools_config.max_tool_loops;
-        let tool_call_delay = Self::tool_call_delay_for_rate(tools_config.max_tool_rate_per_second);
+        let tool_call_delay = tools_config.tool_call_delay();
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
             Some(FileOpsTool::new(
@@ -112,11 +112,5 @@ impl ZedAgent {
             tool_loop_limit,
             tool_call_delay,
         }
-    }
-
-    fn tool_call_delay_for_rate(max_per_second: Option<usize>) -> Option<Duration> {
-        let rate = max_per_second.filter(|rate| *rate > 0)?;
-        let nanos = 1_000_000_000u64.saturating_div(rate as u64).max(1);
-        Some(Duration::from_nanos(nanos))
     }
 }

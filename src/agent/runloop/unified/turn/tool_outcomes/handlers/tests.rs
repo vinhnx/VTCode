@@ -6,6 +6,7 @@ use super::looping::{
     low_signal_family_key, shell_run_signature, spool_chunk_read_path,
     task_tracker_create_signature,
 };
+use super::recovery;
 use super::{
     ToolOutcomeContext, ValidationResult, apply_reused_read_only_loop_metadata,
     build_tool_budget_exhausted_reason, build_tool_permissions_context,
@@ -13,7 +14,6 @@ use super::{
     enforce_repeated_shell_run_guard, handle_prepared_tool_call, handle_single_tool_call,
     max_consecutive_blocked_tool_calls_per_turn, validate_tool_call,
 };
-use super::recovery;
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};

@@ -8,6 +8,7 @@ use super::prompt_alignment;
 use crate::config::build_openai_prompt_cache_key;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
+use crate::config::tool_loop_limit_reached;
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
 use crate::core::agent::blocked_handoff::write_blocked_handoff;
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
@@ -58,10 +59,6 @@ fn record_terminal_turn_event(
             },
         ));
     }
-}
-
-fn tool_loop_limit_reached(loop_count: usize, max_tool_loops: usize) -> bool {
-    max_tool_loops > 0 && loop_count >= max_tool_loops
 }
 
 fn emit_blocked_handoff_events(

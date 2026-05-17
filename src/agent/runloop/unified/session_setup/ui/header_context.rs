@@ -16,18 +16,31 @@ use super::persistent_memory::{
     apply_persistent_memory_header_guide, load_persistent_memory_status,
 };
 
+pub(super) struct HeaderContextInit<'a> {
+    pub(super) config: &'a CoreAgentConfig,
+    pub(super) vt_cfg: Option<&'a VTCodeConfig>,
+    pub(super) session_bootstrap: &'a SessionBootstrap,
+    pub(super) provider_client: &'a dyn uni::LLMProvider,
+    pub(super) header_provider_label: String,
+    pub(super) full_auto: bool,
+}
+
 pub(super) async fn initialize_header_context(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     context_manager: &mut context_manager::ContextManager,
     ide_context_bridge: &mut Option<IdeContextBridge>,
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-    session_bootstrap: &SessionBootstrap,
-    provider_client: &dyn uni::LLMProvider,
-    header_provider_label: String,
-    full_auto: bool,
+    init: HeaderContextInit<'_>,
 ) -> Result<InlineHeaderContext> {
+    let HeaderContextInit {
+        config,
+        vt_cfg,
+        session_bootstrap,
+        provider_client,
+        header_provider_label,
+        full_auto,
+    } = init;
+
     let persistent_memory_status = load_persistent_memory_status(config, vt_cfg);
     if let Err(err) = persistent_memory_status.as_ref() {
         warn!(
@@ -47,7 +60,9 @@ pub(super) async fn initialize_header_context(
     }
     maybe_render_openai_priority_notice(renderer, config, vt_cfg)?;
 
-    handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(&vtcode_core::ui::theme::active_styles()));
+    handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(
+        &vtcode_core::ui::theme::active_styles(),
+    ));
     palettes::apply_prompt_style(handle);
 
     let reasoning_label = vt_cfg
@@ -57,9 +72,7 @@ pub(super) async fn initialize_header_context(
 
     let mode_label = match (config.ui_surface, full_auto) {
         (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
-        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => {
-            "inline".to_string()
-        }
+        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
         (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
         (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
         (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),

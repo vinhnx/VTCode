@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::core::PromptCachingConfig;
+use vtcode_core::config::tool_call_delay_for_rate;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
@@ -73,14 +74,14 @@ async fn build_agent_with_tools_config(workspace: &Path, tools_config: ToolsConf
 
 #[test]
 fn tool_call_delay_for_rate_ignores_unset_or_zero_limits() {
-    assert_eq!(ZedAgent::tool_call_delay_for_rate(None), None);
-    assert_eq!(ZedAgent::tool_call_delay_for_rate(Some(0)), None);
+    assert_eq!(tool_call_delay_for_rate(None), None);
+    assert_eq!(tool_call_delay_for_rate(Some(0)), None);
 }
 
 #[test]
 fn tool_call_delay_for_rate_uses_per_second_interval() {
     assert_eq!(
-        ZedAgent::tool_call_delay_for_rate(Some(4)),
+        tool_call_delay_for_rate(Some(4)),
         Some(Duration::from_millis(250))
     );
 }

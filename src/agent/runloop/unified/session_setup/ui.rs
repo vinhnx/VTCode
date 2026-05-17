@@ -35,7 +35,9 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
-use vtcode_core::notifications::{set_global_notification_hook_engine, set_global_terminal_focused};
+use vtcode_core::notifications::{
+    set_global_notification_hook_engine, set_global_terminal_focused,
+};
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
@@ -51,26 +53,26 @@ use vtcode_tui::app::{
     SlashCommandItem, spawn_session_with_options,
 };
 
-pub(crate) use self::local_agents::refresh_local_agents;
+use self::header_context::{HeaderContextInit, initialize_header_context};
 pub(crate) use self::header_context::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
 };
-use self::header_context::initialize_header_context;
+pub(crate) use self::local_agents::refresh_local_agents;
 use self::resume_render::render_resume_state_if_present;
 
+#[cfg(test)]
+use self::header_context::ide_context_status_label;
 #[cfg(test)]
 use self::local_agents::{
     background_local_agent_preview_placeholder, delegated_local_agent_preview_placeholder,
     visible_background_local_agents, visible_delegated_local_agents,
 };
 #[cfg(test)]
-use self::persistent_memory::{persistent_memory_guide_lines, persistent_memory_header_badge};
-#[cfg(test)]
 use self::persistent_memory::apply_persistent_memory_header_guide;
 #[cfg(test)]
-use self::resume_render::{build_structured_resume_lines, infer_legacy_line_style};
+use self::persistent_memory::{persistent_memory_guide_lines, persistent_memory_header_badge};
 #[cfg(test)]
-use self::header_context::ide_context_status_label;
+use self::resume_render::{build_structured_resume_lines, infer_legacy_line_style};
 #[cfg(test)]
 use vtcode_core::llm::provider as uni;
 #[cfg(test)]
@@ -390,12 +392,14 @@ pub(crate) async fn initialize_session_ui(
         &handle,
         &mut context_manager,
         &mut ide_context_bridge,
-        config,
-        vt_cfg,
-        &session_state.session_bootstrap,
-        &*session_state.provider_client,
-        header_provider_label,
-        full_auto,
+        HeaderContextInit {
+            config,
+            vt_cfg,
+            session_bootstrap: &session_state.session_bootstrap,
+            provider_client: &*session_state.provider_client,
+            header_provider_label,
+            full_auto,
+        },
     )
     .await?;
 

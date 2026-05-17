@@ -23,18 +23,16 @@ mod interview_payload;
 use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
+use interview_context::load_plan_draft_context;
 use interview_context::{
     collect_interview_research_context, has_open_decision_markers, select_best_plan_validation,
 };
-use interview_context::load_plan_draft_context;
 use interview_forcing::{
     filter_interview_tool_calls, inject_plan_mode_interview, maybe_append_plan_mode_reminder,
     strip_assistant_text, turn_result_has_interview_tool_call,
 };
 use interview_payload::{build_adaptive_fallback_interview_args, single_line};
-use interview_payload::{
-    parse_interview_payload_from_text, sanitize_generated_interview_payload,
-};
+use interview_payload::{parse_interview_payload_from_text, sanitize_generated_interview_payload};
 
 #[cfg(test)]
 use interview_context::InterviewResearchContext;

@@ -242,42 +242,11 @@ impl TaskRunState {
     /// A split point is safe if no tool response in the "keep" set (index..len)
     /// has its corresponding tool call in the "discard" set (0..index).
     pub fn find_safe_split_point(&self, preferred_split_at: usize) -> usize {
-        if preferred_split_at == 0 || preferred_split_at >= self.conversation.len() {
-            return preferred_split_at;
-        }
-
-        let mut call_indices: HashMap<&str, usize> = HashMap::new();
-        for (i, msg) in self.conversation_messages.iter().enumerate() {
-            if let Some(tool_calls) = &msg.tool_calls {
-                for call in tool_calls {
-                    call_indices.insert(&call.id, i);
-                }
-            }
-        }
-
-        let mut safe_split_at = preferred_split_at;
-
-        loop {
-            if safe_split_at == 0 {
-                break;
-            }
-
-            let has_orphan = ((safe_split_at + 1)..self.conversation_messages.len()).any(|i| {
-                self.conversation_messages
-                    .get(i)
-                    .and_then(|msg| msg.tool_call_id.as_ref())
-                    .and_then(|id| call_indices.get(id.as_str()))
-                    .is_some_and(|&call_idx| call_idx <= safe_split_at)
-            });
-
-            if !has_orphan {
-                break;
-            }
-
-            safe_split_at -= 1;
-        }
-
-        safe_split_at
+        safe_history_split_point(
+            &self.conversation_messages,
+            self.conversation.len(),
+            preferred_split_at,
+        )
     }
 
     pub fn finalize_outcome(&mut self, max_turns: usize) {
@@ -596,6 +565,49 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
         missing_outputs,
         orphan_outputs,
     }
+}
+
+/// Find a split point that keeps tool-call outputs paired with their calls.
+pub fn safe_history_split_point(
+    messages: &[Message],
+    conversation_len: usize,
+    preferred_split_at: usize,
+) -> usize {
+    if preferred_split_at == 0 || preferred_split_at >= conversation_len {
+        return preferred_split_at;
+    }
+
+    let mut call_indices: HashMap<&str, usize> = HashMap::new();
+    for (i, msg) in messages.iter().enumerate() {
+        if let Some(tool_calls) = &msg.tool_calls {
+            for call in tool_calls {
+                call_indices.insert(&call.id, i);
+            }
+        }
+    }
+
+    let mut safe_split_at = preferred_split_at;
+    loop {
+        if safe_split_at == 0 {
+            break;
+        }
+
+        let has_orphan = ((safe_split_at + 1)..messages.len()).any(|i| {
+            messages
+                .get(i)
+                .and_then(|msg| msg.tool_call_id.as_ref())
+                .and_then(|id| call_indices.get(id.as_str()))
+                .is_some_and(|&call_idx| call_idx <= safe_split_at)
+        });
+
+        if !has_orphan {
+            break;
+        }
+
+        safe_split_at -= 1;
+    }
+
+    safe_split_at
 }
 
 /// Ensure all tool calls have corresponding outputs in the message list.

@@ -1,13 +1,15 @@
 use serde_json::{Value, json};
 use vtcode_core::llm::provider as uni;
 
-use super::{CUSTOM_NOTE_POLICY, PLAN_MODE_REMINDER};
+use super::super::response_processing::prepare_tool_calls;
 use super::interview_context::InterviewResearchContext;
 use super::interview_payload::build_fallback_question;
-use super::super::response_processing::prepare_tool_calls;
+use super::{CUSTOM_NOTE_POLICY, PLAN_MODE_REMINDER};
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 
-pub(super) fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessingResult {
+pub(super) fn strip_assistant_text(
+    processing_result: TurnProcessingResult,
+) -> TurnProcessingResult {
     match processing_result {
         TurnProcessingResult::ToolCalls {
             tool_calls,
@@ -151,7 +153,9 @@ pub(super) fn inject_plan_mode_interview(
     }
 }
 
-pub(super) fn turn_result_has_interview_tool_call(processing_result: &TurnProcessingResult) -> bool {
+pub(super) fn turn_result_has_interview_tool_call(
+    processing_result: &TurnProcessingResult,
+) -> bool {
     use vtcode_core::config::constants::tools;
 
     let TurnProcessingResult::ToolCalls { tool_calls, .. } = processing_result else {

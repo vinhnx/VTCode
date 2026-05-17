@@ -174,7 +174,9 @@ pub(super) fn collect_interview_research_context(
         _ => false,
     };
 
-    let mut open_decision_hints = response_text.map(extract_open_decision_hints).unwrap_or_default();
+    let mut open_decision_hints = response_text
+        .map(extract_open_decision_hints)
+        .unwrap_or_default();
     if let Some(plan_validation) = preferred_validation.as_ref() {
         for decision in plan_validation
             .open_decisions

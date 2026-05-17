@@ -30,8 +30,7 @@ fn sample_memory_status() -> PersistentMemoryStatus {
 
 #[test]
 fn structured_resume_lines_preserve_tool_context() {
-    let mut assistant =
-        uni::Message::assistant("cargo fmt completed successfully.".to_string());
+    let mut assistant = uni::Message::assistant("cargo fmt completed successfully.".to_string());
     assistant.reasoning = Some("Need to run formatter before checks.".to_string());
     assistant.tool_calls = Some(vec![uni::ToolCall::function(
         "call_123".to_string(),
@@ -51,9 +50,11 @@ fn structured_resume_lines_preserve_tool_context() {
 
     let lines = build_structured_resume_lines(&history, true);
 
-    assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::User && line.text.contains("run cargo fmt")
-    }));
+    assert!(
+        lines.iter().any(|line| {
+            line.style == MessageStyle::User && line.text.contains("run cargo fmt")
+        })
+    );
     assert!(!lines.iter().any(|line| line.text == "You:"));
     assert!(!lines.iter().any(|line| line.text == "Assistant:"));
     assert!(lines.iter().any(|line| {

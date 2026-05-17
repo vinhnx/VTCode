@@ -791,7 +791,9 @@ fn blocked_or_denied_failure_detects_guardable_errors() {
 
 #[test]
 fn blocked_or_denied_failure_ignores_runtime_execution_failures() {
-    assert!(!is_blocked_or_denied_failure("command exited with status 1"));
+    assert!(!is_blocked_or_denied_failure(
+        "command exited with status 1"
+    ));
     assert!(!is_blocked_or_denied_failure(
         "stream request timed out after 30000ms"
     ));

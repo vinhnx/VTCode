@@ -314,9 +314,8 @@ impl acp::Agent for ZedAgent {
                 .await
                 .map_err(acp::Error::into_internal_error)?;
 
-            if plan.start_response() {
-                self.send_plan_update(&args.session_id, &plan).await?;
-            }
+            self.advance_plan_to_response(&args.session_id, &mut plan)
+                .await?;
 
             while let Some(event) = stream.next().await {
                 let event = event.map_err(acp::Error::into_internal_error)?;
@@ -420,15 +419,8 @@ impl acp::Agent for ZedAgent {
                 {
                     if self.tool_loop_limit_reached(tool_loop_count) {
                         let message = self.tool_loop_limit_message();
-                        if plan.has_context_step()
-                            && !plan.context_completed()
-                            && plan.complete_context()
-                        {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
-                        if plan.start_response() {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
+                        self.advance_plan_to_response(&args.session_id, &mut plan)
+                            .await?;
                         self.send_update(
                             &args.session_id,
                             acp::SessionUpdate::AgentMessageChunk(text_chunk(message.clone())),
@@ -478,15 +470,8 @@ impl acp::Agent for ZedAgent {
 
                 if let Some(content) = &response.content {
                     if !content.is_empty() {
-                        if plan.has_context_step()
-                            && !plan.context_completed()
-                            && plan.complete_context()
-                        {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
-                        if plan.start_response() {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
+                        self.advance_plan_to_response(&args.session_id, &mut plan)
+                            .await?;
                         if session.cancel_flag.get() {
                             stop_reason = acp::StopReason::Cancelled;
                             break;
@@ -695,6 +680,21 @@ impl acp::Agent for ZedAgent {
 }
 
 impl ZedAgent {
+    async fn advance_plan_to_response(
+        &self,
+        session_id: &acp::SessionId,
+        plan: &mut PlanProgress,
+    ) -> Result<(), acp::Error> {
+        if plan.has_context_step() && !plan.context_completed() && plan.complete_context() {
+            self.send_plan_update(session_id, plan).await?;
+        }
+        if plan.start_response() {
+            self.send_plan_update(session_id, plan).await?;
+        }
+
+        Ok(())
+    }
+
     fn resolve_api_key_for_provider(&self, provider: &str) -> String {
         if provider.eq_ignore_ascii_case(&self.config.provider) && !self.config.api_key.is_empty() {
             return self.config.api_key.clone();

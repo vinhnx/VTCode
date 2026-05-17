@@ -193,6 +193,7 @@ impl AgentSessionState {
 
     pub fn register_tool_loop(&mut self) -> usize {
         self.consecutive_tool_loops += 1;
+        self.max_tool_loop_streak = self.max_tool_loop_streak.max(self.consecutive_tool_loops);
         self.consecutive_tool_loops
     }
 
@@ -249,6 +250,9 @@ impl AgentSessionState {
     }
 
     pub fn mark_tool_loop_limit_hit(&mut self) {
+        if self.tool_loop_limit_hit {
+            return;
+        }
         self.tool_loop_limit_hit = true;
         self.outcome = TaskOutcome::tool_loop_limit_reached(
             self.constraints.max_tool_loops,
@@ -277,42 +281,11 @@ impl AgentSessionState {
 
     /// Find a safe split point for history trimming that doesn't break tool call/output pairs.
     pub fn find_safe_split_point(&self, preferred_split_at: usize) -> usize {
-        if preferred_split_at == 0 || preferred_split_at >= self.conversation.len() {
-            return preferred_split_at;
-        }
-
-        let mut call_indices: HashMap<&str, usize> = HashMap::new();
-        for (i, msg) in self.messages.iter().enumerate() {
-            if let Some(tool_calls) = &msg.tool_calls {
-                for call in tool_calls {
-                    call_indices.insert(&call.id, i);
-                }
-            }
-        }
-
-        let mut safe_split_at = preferred_split_at;
-
-        loop {
-            if safe_split_at == 0 {
-                break;
-            }
-
-            let has_orphan = ((safe_split_at + 1)..self.messages.len()).any(|i| {
-                self.messages
-                    .get(i)
-                    .and_then(|msg| msg.tool_call_id.as_ref())
-                    .and_then(|id| call_indices.get(id.as_str()))
-                    .is_some_and(|&call_idx| call_idx <= safe_split_at)
-            });
-
-            if !has_orphan {
-                break;
-            }
-
-            safe_split_at -= 1;
-        }
-
-        safe_split_at
+        crate::core::agent::state::safe_history_split_point(
+            &self.messages,
+            self.conversation.len(),
+            preferred_split_at,
+        )
     }
 
     /// Normalize history to enforce call/output pairing invariants.
@@ -455,6 +428,20 @@ mod tests {
         state.clear_previous_response_chain();
         assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), None);
         assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
+    }
+
+    #[test]
+    fn register_tool_loop_tracks_current_and_max_streak() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+
+        assert_eq!(state.register_tool_loop(), 1);
+        assert_eq!(state.register_tool_loop(), 2);
+        assert_eq!(state.consecutive_tool_loops, 2);
+        assert_eq!(state.max_tool_loop_streak, 2);
+
+        state.reset_tool_loop_guard();
+        assert_eq!(state.register_tool_loop(), 1);
+        assert_eq!(state.max_tool_loop_streak, 2);
     }
 
     #[test]

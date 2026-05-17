@@ -5,8 +5,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
-    POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 

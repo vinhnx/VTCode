@@ -2,6 +2,10 @@
 
 use std::fmt::Write as _;
 
+use super::{
+    REDACTION_NOTICE, SUMMARY_PREVIEW_LIMIT, TIMELINE_SOURCE_CONVERSATION_FALLBACK,
+    TIMELINE_SOURCE_THREAD_EVENTS, TimelineExport, TimelineRow,
+};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -9,10 +13,6 @@ use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{
     CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus,
     ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, Usage,
-};
-use super::{
-    REDACTION_NOTICE, SUMMARY_PREVIEW_LIMIT, TIMELINE_SOURCE_CONVERSATION_FALLBACK,
-    TIMELINE_SOURCE_THREAD_EVENTS, TimelineExport, TimelineRow,
 };
 
 pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) -> Vec<TimelineRow> {
@@ -735,8 +735,7 @@ pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport 
     redacted.workspace = super::super::redact_sensitive_text(&redacted.workspace);
     redacted.thread_id = super::super::redact_sensitive_text(&redacted.thread_id);
     if let Some(outcome_code) = &redacted.overview.outcome_code {
-        redacted.overview.outcome_code =
-            Some(super::super::redact_sensitive_text(outcome_code));
+        redacted.overview.outcome_code = Some(super::super::redact_sensitive_text(outcome_code));
     }
     for row in &mut redacted.rows {
         row.title = super::super::redact_sensitive_text(&row.title);

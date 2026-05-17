@@ -49,4 +49,7 @@ pub use sandbox::{
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};
-pub use tools::{EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig};
+pub use tools::{
+    EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig, tool_call_delay_for_rate,
+    tool_loop_limit_reached,
+};

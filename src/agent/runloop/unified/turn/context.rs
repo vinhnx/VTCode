@@ -45,9 +45,8 @@ use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(crate) use self::runtime_context::{
-    LLMContext, ToolContext, TurnHandlerOutcome, TurnOutcomeContext,
-    TurnProcessingContext, TurnProcessingContextParts, TurnProcessingResult,
-    TurnProcessingState, UIContext,
+    LLMContext, ToolContext, TurnHandlerOutcome, TurnOutcomeContext, TurnProcessingContext,
+    TurnProcessingContextParts, TurnProcessingResult, TurnProcessingState, UIContext,
 };
 
 #[derive(Clone, Debug)]

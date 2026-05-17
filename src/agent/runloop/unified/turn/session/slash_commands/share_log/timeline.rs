@@ -18,9 +18,9 @@ use vtcode_core::llm::provider as uni;
 #[path = "timeline/presentation.rs"]
 mod presentation;
 
-use presentation::{timeline_rows_from_messages, timeline_rows_from_thread_events};
 #[cfg(test)]
 use presentation::timeline_row_from_item;
+use presentation::{timeline_rows_from_messages, timeline_rows_from_thread_events};
 
 const TIMELINE_SOURCE_THREAD_EVENTS: &str = "thread_events";
 const TIMELINE_SOURCE_CONVERSATION_FALLBACK: &str = "conversation_fallback";

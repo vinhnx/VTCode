@@ -1,3 +1,4 @@
+use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
     HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
     POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery,
@@ -6,7 +7,6 @@ use super::{
     maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
     prepare_post_tool_tool_free_recovery, run_turn_loop,
 };
-use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use anyhow::anyhow;

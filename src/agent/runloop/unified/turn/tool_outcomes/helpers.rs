@@ -347,7 +347,6 @@ pub(crate) fn update_repetition_tracker(
     }
 
     let canonical_name = canonical_tool_name(name);
-    let canonical_name = canonical_name.as_ref();
     let signature_key = signature_key_for(canonical_name, args);
     loop_tracker.record(signature_key);
     let low_signal_family =

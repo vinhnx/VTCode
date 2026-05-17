@@ -41,6 +41,7 @@ pub use core::{
     GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionMode, PermissionsConfig,
     PersistentMemoryConfig, PromptCachingConfig, ProviderPromptCachingConfig, ScheduledTasksConfig,
     SecurityConfig, ToolPolicy, ToolsConfig, build_openai_prompt_cache_key,
+    tool_call_delay_for_rate, tool_loop_limit_reached,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use crate::constants::{defaults, tools};
 use crate::core::plugins::PluginRuntimeConfig;
@@ -157,6 +158,34 @@ impl Default for ToolsConfig {
     }
 }
 
+impl ToolsConfig {
+    #[inline]
+    pub fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
+        tool_loop_limit_reached(completed_tool_loops, self.max_tool_loops)
+    }
+
+    #[inline]
+    pub fn tool_call_delay(&self) -> Option<Duration> {
+        tool_call_delay_for_rate(self.max_tool_rate_per_second)
+    }
+}
+
+#[inline]
+pub const fn tool_loop_limit_reached(completed_tool_loops: usize, max_tool_loops: usize) -> bool {
+    max_tool_loops > 0 && completed_tool_loops >= max_tool_loops
+}
+
+#[inline]
+pub fn tool_call_delay_for_rate(max_per_second: Option<usize>) -> Option<Duration> {
+    let rate = max_per_second?;
+    if rate == 0 {
+        return None;
+    }
+
+    let nanos = 1_000_000_000u64.saturating_div(rate as u64).max(1);
+    Some(Duration::from_nanos(nanos))
+}
+
 const DEFAULT_BLOCKLIST_PATH: &str = "~/.vtcode/web_fetch_blocklist.json";
 const DEFAULT_WHITELIST_PATH: &str = "~/.vtcode/web_fetch_whitelist.json";
 const DEFAULT_AUDIT_LOG_PATH: &str = "~/.vtcode/web_fetch_audit.log";
@@ -278,6 +307,36 @@ mod tests {
         assert!(config.editor.enabled);
         assert!(config.editor.preferred_editor.is_empty());
         assert!(config.editor.suspend_tui);
+    }
+
+    #[test]
+    fn disabled_tool_loop_limit_never_trips() {
+        assert!(!tool_loop_limit_reached(1, 0));
+        assert!(!tool_loop_limit_reached(32, 0));
+        assert!(tool_loop_limit_reached(2, 2));
+    }
+
+    #[test]
+    fn tools_config_reports_tool_loop_limit() {
+        let mut config = ToolsConfig::default();
+        config.max_tool_loops = 2;
+
+        assert!(!config.tool_loop_limit_reached(1));
+        assert!(config.tool_loop_limit_reached(2));
+    }
+
+    #[test]
+    fn tool_call_delay_for_rate_ignores_unset_or_zero_limits() {
+        assert_eq!(tool_call_delay_for_rate(None), None);
+        assert_eq!(tool_call_delay_for_rate(Some(0)), None);
+    }
+
+    #[test]
+    fn tool_call_delay_for_rate_uses_per_second_interval() {
+        assert_eq!(
+            tool_call_delay_for_rate(Some(4)),
+            Some(Duration::from_millis(250))
+        );
     }
 
     #[test]

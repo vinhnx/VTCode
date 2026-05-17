@@ -317,7 +317,9 @@ fn llm_retry_attempts_respects_upper_bound() {
 
 #[test]
 fn stream_timeout_error_detection_matches_common_messages() {
-    assert!(is_stream_timeout_error("Stream request timed out after 75s"));
+    assert!(is_stream_timeout_error(
+        "Stream request timed out after 75s"
+    ));
     assert!(is_stream_timeout_error(
         "Streaming request timed out after configured timeout"
     ));
@@ -426,16 +428,10 @@ fn prompt_cache_shaping_mode_respects_gemini_mode_off() {
 #[test]
 fn openai_prompt_cache_key_uses_stable_session_identifier() {
     let lineage_id = "lineage-abc-123";
-    let first = build_openai_prompt_cache_key(
-        true,
-        &OpenAIPromptCacheKeyMode::Session,
-        Some(lineage_id),
-    );
-    let second = build_openai_prompt_cache_key(
-        true,
-        &OpenAIPromptCacheKeyMode::Session,
-        Some(lineage_id),
-    );
+    let first =
+        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
+    let second =
+        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
 
     assert_eq!(first, Some("vtcode:openai:lineage-abc-123".to_string()));
     assert_eq!(first, second);
@@ -448,11 +444,7 @@ fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
         None
     );
     assert_eq!(
-        build_openai_prompt_cache_key(
-            false,
-            &OpenAIPromptCacheKeyMode::Session,
-            Some("lineage-1"),
-        ),
+        build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("lineage-1"),),
         None
     );
     assert_eq!(

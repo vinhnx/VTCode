@@ -35,11 +35,11 @@ use self::config_persistence::{
     set_workspace_memory_line_limit, set_workspace_small_model_for_memory,
     set_workspace_small_model_model,
 };
+use self::navigation::handle_memory_navigation_action;
 use self::presentation::{
     format_path_list, memory_lightweight_route_info, render_common_memory_status,
     show_memory_actions_modal,
 };
-use self::navigation::handle_memory_navigation_action;
 use self::prompts::{prompt_optional_text, prompt_required_text};
 use super::super::ui::wait_for_list_modal_selection;
 use super::{SlashCommandContext, SlashCommandControl};

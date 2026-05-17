@@ -6,6 +6,7 @@ use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tracing::warn;
+use vtcode_core::config::tool_loop_limit_reached;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
@@ -51,7 +52,7 @@ impl ZedAgent {
     }
 
     pub(super) fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
-        self.tool_loop_limit > 0 && completed_tool_loops >= self.tool_loop_limit
+        tool_loop_limit_reached(completed_tool_loops, self.tool_loop_limit)
     }
 
     pub(super) fn tool_loop_limit_message(&self) -> String {

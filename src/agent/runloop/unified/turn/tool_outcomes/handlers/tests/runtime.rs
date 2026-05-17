@@ -42,12 +42,8 @@ async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
     let args = json!({"path":"src/main.rs"});
     ctx.activate_recovery("loop detector");
 
-    let outcome = enforce_blocked_tool_call_guard(
-        &mut ctx,
-        "blocked_recovery",
-        tool_names::READ_FILE,
-        &args,
-    );
+    let outcome =
+        enforce_blocked_tool_call_guard(&mut ctx, "blocked_recovery", tool_names::READ_FILE, &args);
 
     assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
 }
@@ -269,9 +265,14 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
 
-    let second = handle_single_tool_call(&mut outcome_ctx, "read_twice", tool_names::UNIFIED_FILE, args)
-        .await
-        .expect("duplicate readonly call should be reused");
+    let second = handle_single_tool_call(
+        &mut outcome_ctx,
+        "read_twice",
+        tool_names::UNIFIED_FILE,
+        args,
+    )
+    .await
+    .expect("duplicate readonly call should be reused");
 
     assert!(second.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);

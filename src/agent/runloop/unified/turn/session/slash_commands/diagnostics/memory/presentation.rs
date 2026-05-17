@@ -1,14 +1,13 @@
 use vtcode_core::llm::{
-    LightweightFeature, LightweightRouteSource, auto_lightweight_model,
-    lightweight_model_choices, resolve_lightweight_route,
+    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
+    resolve_lightweight_route,
 };
 use vtcode_core::persistent_memory::PersistentMemoryStatus;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
 use super::{
-    MEMORY_ACTION_BACK, MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX,
-    SlashCommandContext,
+    MEMORY_ACTION_BACK, MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX, SlashCommandContext,
 };
 
 pub(super) struct MemoryLightweightRouteInfo {
@@ -32,7 +31,11 @@ pub(super) fn render_common_memory_status(
             } else {
                 "disabled"
             },
-            if memory_status.auto_write { "on" } else { "off" }
+            if memory_status.auto_write {
+                "on"
+            } else {
+                "off"
+            }
         ),
     )?;
     ctx.renderer.line(
@@ -179,7 +182,11 @@ pub(super) fn show_memory_actions_modal(
     lines.push(format!(
         "Memory {} • auto-write {} • triage {} • pending rollouts {} • cleanup {}",
         if memory_status.enabled { "on" } else { "off" },
-        if memory_status.auto_write { "on" } else { "off" },
+        if memory_status.auto_write {
+            "on"
+        } else {
+            "off"
+        },
         lightweight_route.configured_label,
         memory_status.pending_rollout_summaries,
         if memory_status.cleanup_status.needed {
@@ -241,7 +248,10 @@ pub(super) fn show_memory_actions_modal(
         search_value: Some("memory lightweight model toggle".to_string()),
     });
     items.push(InlineListItem {
-        title: format!("Memory Triage Model ({})", lightweight_route.configured_label),
+        title: format!(
+            "Memory Triage Model ({})",
+            lightweight_route.configured_label
+        ),
         subtitle: Some(format!(
             "Effective route: {}",
             lightweight_route.effective_label
@@ -291,25 +301,27 @@ pub(super) fn show_memory_actions_modal(
         ))),
         search_value: Some("memory lightweight model main".to_string()),
     });
-    items.extend(lightweight_route.choices.iter().map(|model| InlineListItem {
-        title: model.clone(),
-        subtitle: Some("Explicit same-provider lightweight model.".to_string()),
-        badge: Some(
-            if lightweight_route
-                .configured_label
-                .eq_ignore_ascii_case(model.as_str())
-            {
-                "Current".to_string()
-            } else {
-                "Model".to_string()
-            },
-        ),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{}{}{model}",
-            MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
-        ))),
-        search_value: Some(format!("memory lightweight triage {}", model)),
+    items.extend(lightweight_route.choices.iter().map(|model| {
+        InlineListItem {
+            title: model.clone(),
+            subtitle: Some("Explicit same-provider lightweight model.".to_string()),
+            badge: Some(
+                if lightweight_route
+                    .configured_label
+                    .eq_ignore_ascii_case(model.as_str())
+                {
+                    "Current".to_string()
+                } else {
+                    "Model".to_string()
+                },
+            ),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}{model}",
+                MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX
+            ))),
+            search_value: Some(format!("memory lightweight triage {}", model)),
+        }
     }));
     items.extend([
         InlineListItem {
