@@ -174,24 +174,28 @@ impl MessageContent {
         match self {
             MessageContent::Text(text) => std::borrow::Cow::Borrowed(text),
             MessageContent::Parts(parts) => {
-                // Optimize: Filter and collect text parts first
-                let text_parts: Vec<&str> =
-                    parts.iter().filter_map(|part| part.as_text()).collect();
+                let mut first_text = None;
+                let mut text_count = 0usize;
+                let mut total_len = 0usize;
 
-                if text_parts.is_empty() {
+                for text in parts.iter().filter_map(ContentPart::as_text) {
+                    if first_text.is_none() {
+                        first_text = Some(text);
+                    }
+                    text_count += 1;
+                    total_len += text.len();
+                }
+
+                if text_count == 0 {
                     return std::borrow::Cow::Borrowed("");
                 }
-
-                // Single part optimization - avoid allocation
-                if text_parts.len() == 1 {
-                    return std::borrow::Cow::Borrowed(text_parts[0]);
+                if text_count == 1 {
+                    return std::borrow::Cow::Borrowed(first_text.unwrap_or(""));
                 }
 
-                // Pre-calculate capacity to avoid reallocations
-                let total_len = text_parts.iter().map(|s| s.len()).sum::<usize>();
                 let mut result = String::with_capacity(total_len);
-                for part in text_parts {
-                    result.push_str(part);
+                for text in parts.iter().filter_map(ContentPart::as_text) {
+                    result.push_str(text);
                 }
                 std::borrow::Cow::Owned(result)
             }
@@ -723,6 +727,26 @@ mod tests {
         let content = MessageContent::Parts(parts);
 
         assert_eq!(content.as_text().as_ref() as &str, "Andrej Karpathy's");
+    }
+
+    #[test]
+    fn message_content_parts_with_single_text_stays_borrowed() {
+        let content = MessageContent::Parts(vec![ContentPart::text("borrowed".to_string())]);
+
+        assert!(matches!(
+            content.as_text(),
+            std::borrow::Cow::Borrowed("borrowed")
+        ));
+    }
+
+    #[test]
+    fn message_content_parts_without_text_stays_borrowed_empty() {
+        let content = MessageContent::Parts(vec![ContentPart::image(
+            "encoded".to_string(),
+            "image/png".to_string(),
+        )]);
+
+        assert!(matches!(content.as_text(), std::borrow::Cow::Borrowed("")));
     }
 
     #[test]

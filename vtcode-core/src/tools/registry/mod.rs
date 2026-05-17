@@ -63,8 +63,6 @@ mod tool_executor_impl;
 mod unified_actions;
 mod utils;
 
-use std::borrow::Cow;
-
 pub use approval_recorder::ApprovalRecorder;
 pub use cgp_facade::CgpRuntimeMode;
 pub use cgp_facade::native_cgp_tool_factory;
@@ -147,7 +145,7 @@ pub struct ToolRegistry {
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
     runtime_sandbox_config: Arc<RwLock<vtcode_config::SandboxConfig>>,
-    agent_type: Arc<RwLock<Cow<'static, str>>>,
+    agent_type: Arc<RwLock<String>>,
     // PTY Session Management
     active_pty_sessions: Arc<RwLock<Option<Arc<std::sync::atomic::AtomicUsize>>>>,
 
