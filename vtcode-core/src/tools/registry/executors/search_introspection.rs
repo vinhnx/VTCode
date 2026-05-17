@@ -52,11 +52,16 @@ impl ToolRegistry {
 
     pub(super) async fn execute_agent_info(&self) -> Result<Value> {
         let available_tools = self.available_tools().await;
+        let agent_type = self
+            .agent_type
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         Ok(json!({
             "tools_registered": available_tools,
             "workspace_root": self.workspace_root_str(),
             "available_tools_count": available_tools.len(),
-            "agent_type": self.agent_type,
+            "agent_type": agent_type,
         }))
     }
 

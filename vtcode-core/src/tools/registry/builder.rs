@@ -1,6 +1,5 @@
 //! ToolRegistry construction helpers.
 
-use std::borrow::Cow;
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
@@ -145,7 +144,7 @@ impl ToolRegistry {
             runtime_sandbox_config: Arc::new(RwLock::new(
                 super::sandbox_facade::runtime_sandbox_config_default(),
             )),
-            agent_type: Arc::new(RwLock::new(Cow::Borrowed("unknown"))),
+            agent_type: Arc::new(RwLock::new("unknown".to_owned())),
             cached_available_tools: Arc::new(RwLock::new(None)),
             progress_callback: Arc::new(RwLock::new(None)),
             active_pty_sessions: Arc::new(RwLock::new(None)),
