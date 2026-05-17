@@ -47,7 +47,7 @@ impl ToolRegistry {
 
         // Keep adaptive task tracker available in all modes; retain plan alias.
         let canonical = canonical_tool_name(tool_name);
-        match canonical.as_ref() {
+        match canonical {
             tools::TASK_TRACKER => return true,
             tools::PLAN_TASK_TRACKER => return true,
             _ => {}
@@ -79,7 +79,7 @@ impl ToolRegistry {
         use crate::tools::names::canonical_tool_name;
 
         let canonical = canonical_tool_name(tool_name);
-        let normalized = canonical.as_ref();
+        let normalized = canonical;
 
         // Only check file-writing tools
         let file_writing_tools = [

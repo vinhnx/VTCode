@@ -298,7 +298,7 @@ fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
     use vtcode_core::tools::tool_intent::unified_file_action;
 
     let canonical = canonical_tool_name(name);
-    match canonical.as_ref() {
+    match canonical {
         tool_names::PLAN_TASK_TRACKER | tool_names::TASK_TRACKER => true,
         tool_names::UNIFIED_FILE => {
             if !unified_file_action(args)

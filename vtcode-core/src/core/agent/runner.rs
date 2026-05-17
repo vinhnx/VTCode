@@ -570,7 +570,6 @@ impl AgentRunner {
             .iter()
             .filter(|tool_name| {
                 let canonical = crate::tools::names::canonical_tool_name(tool_name);
-                let canonical = canonical.as_ref();
 
                 !matches!(
                     canonical,

@@ -35,7 +35,7 @@ impl ToolRegistry {
     pub async fn suggest_fallback_tool(&self, failed_tool: &str) -> Option<String> {
         let available = self.available_tools().await;
         let failed = canonical_tool_name(failed_tool);
-        let failed_name: &str = failed.as_ref();
+        let failed_name = failed;
         let seed = self.resolve_fallback_seed_tool(failed_name);
 
         if seed != failed_name && available.iter().any(|tool| tool == &seed) {

@@ -75,7 +75,7 @@ impl ToolPolicyGateway {
     pub fn apply_policy_constraints(&self, name: &str, args: &Value) -> Result<Value> {
         let mut args = args.clone();
         let canonical = canonical_tool_name(name);
-        let normalized = canonical.as_ref();
+        let normalized = canonical;
         let unified_file_read =
             normalized == tools::UNIFIED_FILE && unified_file_action_is(&args, "read");
         let unified_search_list =
@@ -176,7 +176,7 @@ impl ToolPolicyGateway {
     pub async fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let canonical = canonical_tool_name(tool_name);
         if let Some(ref mut manager) = self.tool_policy {
-            manager.set_policy(canonical.as_ref(), policy).await
+            manager.set_policy(canonical, policy).await
         } else {
             Err(anyhow::anyhow!("Tool policy manager not initialized"))
         }
@@ -218,7 +218,7 @@ impl ToolPolicyGateway {
         let canonical = canonical_tool_name(tool_name);
         self.tool_policy
             .as_ref()
-            .map(|tp| tp.get_policy(canonical.as_ref()))
+            .map(|tp| tp.get_policy(canonical))
             .unwrap_or(ToolPolicy::Allow)
     }
 
@@ -262,14 +262,14 @@ impl ToolPolicyGateway {
         {
             for tool in available_tools {
                 let canonical = canonical_tool_name(tool);
-                normalized.insert(canonical.into_owned());
+                normalized.insert(canonical.to_owned());
             }
         } else {
             for tool in allowed_tools {
                 let trimmed = tool.trim();
                 if !trimmed.is_empty() {
                     let canonical = canonical_tool_name(trimmed);
-                    normalized.insert(canonical.into_owned());
+                    normalized.insert(canonical.to_owned());
                 }
             }
         }
@@ -293,7 +293,7 @@ impl ToolPolicyGateway {
         let canonical = canonical_tool_name(name);
         self.full_auto_allowlist
             .as_ref()
-            .map(|allowlist| allowlist.contains(&*canonical))
+            .map(|allowlist| allowlist.contains(canonical))
             .unwrap_or(true)
     }
 
@@ -308,7 +308,7 @@ impl ToolPolicyGateway {
         default_permission: ToolPolicy,
     ) -> Result<ToolPermissionDecision> {
         let canonical = canonical_tool_name(name);
-        let normalized = canonical.as_ref();
+        let normalized = canonical;
 
         // In safe mode (tools_policy), high-risk tools always require a prompt
         // regardless of persisted policy
@@ -393,7 +393,7 @@ impl ToolPolicyGateway {
 
     pub fn take_preapproved(&mut self, name: &str) -> bool {
         let canonical = canonical_tool_name(name);
-        let was_preapproved = self.preapproved_tools.remove(&*canonical);
+        let was_preapproved = self.preapproved_tools.remove(canonical);
         tracing::trace!(
             "take_preapproved: tool='{}', canonical='{}', was_preapproved={}, remaining={:?}",
             name,
@@ -406,7 +406,7 @@ impl ToolPolicyGateway {
 
     pub fn preapprove(&mut self, name: &str) {
         let canonical = canonical_tool_name(name);
-        let canonical_owned = canonical.into_owned();
+        let canonical_owned = canonical.to_owned();
         self.preapproved_tools.insert(canonical_owned.clone());
         tracing::trace!(
             "preapprove: tool='{}', canonical='{}', preapproved_tools={:?}",
@@ -419,7 +419,7 @@ impl ToolPolicyGateway {
     pub async fn should_execute_tool(&mut self, name: &str) -> Result<ToolExecutionDecision> {
         let canonical = canonical_tool_name(name);
         if let Some(policy_manager) = self.tool_policy.as_mut() {
-            policy_manager.should_execute_tool(canonical.as_ref()).await
+            policy_manager.should_execute_tool(canonical).await
         } else {
             Ok(ToolExecutionDecision::Allowed)
         }

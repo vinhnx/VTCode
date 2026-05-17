@@ -41,7 +41,7 @@ impl ToolRegistry {
             "list_dir" | "list_directory" => {
                 crate::config::constants::tools::UNIFIED_SEARCH.to_string()
             }
-            _ => canonical_tool_name(name).into_owned(),
+            _ => canonical_tool_name(name).to_owned(),
         }
     }
 

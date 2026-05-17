@@ -108,7 +108,7 @@ impl ToolIntent {
 
 pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
     let canonical = canonical_tool_name(tool_name);
-    builtin_tool_behavior_canonical(canonical.as_ref())
+    builtin_tool_behavior_canonical(canonical)
 }
 
 fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
@@ -187,23 +187,23 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
 
 pub fn is_parallel_safe_call(tool_name: &str, args: &Value) -> bool {
     let canonical = canonical_tool_name(tool_name);
-    if let Some(behavior) = builtin_tool_behavior_canonical(canonical.as_ref()) {
+    if let Some(behavior) = builtin_tool_behavior_canonical(canonical) {
         return behavior.supports_parallel_calls && !behavior.classify(args).mutating;
     }
 
-    !classify_tool_intent(canonical.as_ref(), args).mutating
+    !classify_tool_intent(canonical, args).mutating
 }
 
 pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     let canonical = canonical_tool_name(tool_name);
-    builtin_tool_behavior_canonical(canonical.as_ref())
+    builtin_tool_behavior_canonical(canonical)
         .map(|behavior| behavior.classify(args))
         .unwrap_or_else(ToolIntent::mutating)
 }
 
 pub fn is_edited_file_conflict_guarded_call(tool_name: &str, args: &Value) -> bool {
     let canonical = canonical_tool_name(tool_name);
-    match canonical.as_ref() {
+    match canonical {
         tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH => true,
         tools::UNIFIED_FILE => unified_file_action(args)
             .map(is_edited_file_conflict_guarded_unified_file_action)

@@ -13,6 +13,7 @@
 - Match CI expectations in `.github/workflows/`.
 - Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Measure before optimizing.
+- In hot Rust paths, treat `Cow` as conditional ownership, not a free borrow: if values are always borrowed or stored in dense token/AST-style enums, prefer `&str`/slices and compact variants unless measurement shows `Cow` pays for itself.
 - Prefer ownership and borrowing by default; introduce `Rc<T>`/`Arc<T>` only for genuine shared ownership.
 - When ownership or lifetimes get tangled, first prefer explicit handles/IDs plus an owning context.
 - Use `Rc<T>` only for single-threaded sharing and `Arc<T>` only for cross-thread/task sharing; prefer immutable sharing and narrowly scoped interior mutability.

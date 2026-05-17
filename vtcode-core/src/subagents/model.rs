@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use anyhow::{Context, Result};
 use vtcode_config::SubagentSpec;
 
@@ -227,12 +225,12 @@ fn handle_model_override_failure(
     }))
 }
 
-fn normalize_subagent_model_alias(model: &str) -> Cow<'_, str> {
+fn normalize_subagent_model_alias(model: &str) -> &str {
     match model.trim() {
-        "claude-haiku-4.5" => Cow::Borrowed(models::anthropic::CLAUDE_HAIKU_4_5),
-        "claude-sonnet-4.6" => Cow::Borrowed(models::anthropic::CLAUDE_SONNET_4_6),
-        "claude-opus-4.7" => Cow::Borrowed(models::anthropic::CLAUDE_OPUS_4_7),
-        other => Cow::Borrowed(other),
+        "claude-haiku-4.5" => models::anthropic::CLAUDE_HAIKU_4_5,
+        "claude-sonnet-4.6" => models::anthropic::CLAUDE_SONNET_4_6,
+        "claude-opus-4.7" => models::anthropic::CLAUDE_OPUS_4_7,
+        other => other,
     }
 }
 

@@ -29,7 +29,7 @@ fn shell_command_accesses_network(command_words: &[String]) -> bool {
 
 fn tool_accesses_network(tool_name: &str, tool_args: Option<&Value>) -> bool {
     let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
-    match canonical.as_ref() {
+    match canonical {
         "web_search" | "fetch_url" | "unified_search:web" => true,
         vtcode_core::config::constants::tools::UNIFIED_EXEC => {
             vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))

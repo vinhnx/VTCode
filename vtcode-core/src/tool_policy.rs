@@ -614,14 +614,13 @@ impl ToolPolicyManager {
 
         self.config
             .policies
-            .insert(canonical.into_owned(), runtime_policy);
+            .insert(canonical.to_owned(), runtime_policy);
     }
 
     fn resolve_config_policy(tools_config: &ToolsConfig, tool_name: &str) -> ConfigToolPolicy {
         let canonical = canonical_tool_name(tool_name);
-        let lookup: &str = &canonical;
 
-        if let Some(policy) = tools_config.policies.get(lookup) {
+        if let Some(policy) = tools_config.policies.get(canonical) {
             return *policy;
         }
 
@@ -660,7 +659,7 @@ impl ToolPolicyManager {
         let mut seen = HashSet::with_capacity(tools.len());
 
         for tool in tools {
-            let canonical = canonical_tool_name(&tool).into_owned();
+            let canonical = canonical_tool_name(&tool).to_owned();
             if seen.insert(canonical.clone()) {
                 canonical_tools.push(canonical);
             }
@@ -866,7 +865,7 @@ impl ToolPolicyManager {
 
         self.config
             .policies
-            .get(&*canonical)
+            .get(canonical)
             .cloned()
             .unwrap_or(ToolPolicy::Prompt)
     }
@@ -874,7 +873,7 @@ impl ToolPolicyManager {
     /// Get optional constraints for a specific tool
     pub fn get_constraints(&self, tool_name: &str) -> Option<&ToolConstraints> {
         let canonical = canonical_tool_name(tool_name);
-        self.config.constraints.get(&*canonical)
+        self.config.constraints.get(canonical)
     }
 
     /// Check if tool should be executed based on policy
@@ -903,11 +902,11 @@ impl ToolPolicyManager {
 
         let canonical = canonical_tool_name(tool_name);
 
-        match self.get_policy(canonical.as_ref()) {
+        match self.get_policy(canonical) {
             ToolPolicy::Allow => Ok(ToolExecutionDecision::Allowed),
             ToolPolicy::Deny => Ok(ToolExecutionDecision::Denied),
             ToolPolicy::Prompt => {
-                let canonical_name = canonical.as_ref();
+                let canonical_name = canonical;
                 if AUTO_ALLOW_TOOLS.contains(&canonical_name) {
                     self.set_policy(canonical_name, ToolPolicy::Allow).await?;
                     return Ok(ToolExecutionDecision::Allowed);
@@ -925,7 +924,7 @@ impl ToolPolicyManager {
 
     pub fn is_auto_allow_tool(tool_name: &str) -> bool {
         let canonical = canonical_tool_name(tool_name);
-        AUTO_ALLOW_TOOLS.contains(&canonical.as_ref())
+        AUTO_ALLOW_TOOLS.contains(&canonical)
     }
 
     /// Prompt user for tool execution permission using the configured handler.
@@ -948,7 +947,7 @@ impl ToolPolicyManager {
             return self.set_mcp_tool_policy(&provider, &tool, policy).await;
         }
 
-        let canonical = canonical_tool_name(tool_name).into_owned();
+        let canonical = canonical_tool_name(tool_name).to_owned();
         self.config
             .policies
             .insert(canonical.clone(), policy.clone());
@@ -961,7 +960,7 @@ impl ToolPolicyManager {
         tool_name: &str,
         policy: ToolPolicy,
     ) -> Result<()> {
-        let canonical = canonical_tool_name(tool_name).into_owned();
+        let canonical = canonical_tool_name(tool_name).to_owned();
         self.config.policies.insert(canonical, policy);
         self.save_config().await
     }

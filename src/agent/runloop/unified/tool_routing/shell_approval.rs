@@ -89,7 +89,7 @@ pub(super) fn approval_learning_target(
     }
 
     ApprovalLearningTarget {
-        approval_key: vtcode_core::tools::names::canonical_tool_name(tool_name).into_owned(),
+        approval_key: vtcode_core::tools::names::canonical_tool_name(tool_name).to_owned(),
         display_label: default_learning_label.to_string(),
     }
 }
