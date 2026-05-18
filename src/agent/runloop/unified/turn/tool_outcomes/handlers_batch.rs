@@ -375,7 +375,7 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
     Ok(None)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
     ctx: &'b mut TurnProcessingContext<'a>,
     repeated_tool_attempts: &'b mut super::super::helpers::LoopTracker,

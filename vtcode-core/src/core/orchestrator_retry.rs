@@ -26,7 +26,7 @@ pub struct RetryConfig {
     pub backoff_multiplier: f64,
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
@@ -38,7 +38,7 @@ impl Default for RetryConfig {
     }
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl From<RetryConfig> for RetryPolicy {
     fn from(config: RetryConfig) -> Self {
         RetryPolicy::from_retries(
@@ -99,7 +99,7 @@ impl RetryManager {
     }
 
     /// Create a new retry manager with custom configuration (backward compat)
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     pub fn with_config(config: RetryConfig) -> Self {
         Self::with_policy(config.into())
     }
@@ -294,7 +294,7 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
+#[expect(deprecated)]
 mod tests {
     use super::*;
     use crate::error::{ErrorCode, VtCodeError};

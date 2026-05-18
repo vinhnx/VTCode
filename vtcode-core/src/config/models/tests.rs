@@ -170,7 +170,7 @@ fn test_model_from_string() {
         ModelId::OpenCodeGoKimiK25
     );
     // Invalid model
-    assert!("invalid-model".parse::<ModelId>().is_err());
+    "invalid-model".parse::<ModelId>().unwrap_err();
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn test_provider_parsing() {
         Provider::OpenCodeGo
     );
     assert_eq!("lmstudio".parse::<Provider>().unwrap(), Provider::LmStudio);
-    assert!("invalid-provider".parse::<Provider>().is_err());
+    "invalid-provider".parse::<Provider>().unwrap_err();
 }
 
 #[test]

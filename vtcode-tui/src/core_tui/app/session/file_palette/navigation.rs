@@ -52,7 +52,7 @@ impl FilePalette {
 
     /// Get the best matching file entry based on current filter query
     /// Used for Tab autocomplete - returns the first filtered file if any exist
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn get_best_match(&self) -> Option<&FileEntry> {
         // Return the first file in filtered results (already sorted by score)
         self.filtered_files.first()

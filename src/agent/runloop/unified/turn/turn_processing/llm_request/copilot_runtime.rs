@@ -88,7 +88,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
 }
 
 impl<'a> CopilotRuntimeHost<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(super) fn new(
         tool_registry: &'a mut ToolRegistry,
         tool_result_cache: &'a Arc<RwLock<vtcode_core::tools::ToolResultCache>>,
@@ -708,7 +708,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         }
 
         if tool_update.finished {
-            let state = self.observed_tool_calls.get(&tool_call_id).unwrap();
+            let state = &self.observed_tool_calls[&tool_call_id];
             let status = match update.status {
                 CopilotObservedToolCallStatus::Completed => ToolCallStatus::Completed,
                 CopilotObservedToolCallStatus::Failed => ToolCallStatus::Failed,

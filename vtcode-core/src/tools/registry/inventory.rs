@@ -81,7 +81,7 @@ impl ToolInventory {
     }
 
     /// Get alias usage metrics for debugging and analytics
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn alias_metrics(&self) -> AliasMetrics {
         self.alias_metrics
             .lock()
@@ -91,7 +91,7 @@ impl ToolInventory {
     }
 
     /// Reset alias metrics
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn reset_alias_metrics(&self) {
         if let Ok(mut m) = self.alias_metrics.lock() {
             *m = AliasMetrics::default();
@@ -358,7 +358,7 @@ impl ToolInventory {
     }
 
     /// Get all registered aliases with their canonical targets
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn all_aliases(&self) -> Vec<(String, String)> {
         self.state
             .read()
@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn test_cleanup_uses_frequently_used_snapshot() {
         let inventory = make_test_inventory();
-        let stale = Instant::now() - Duration::from_secs(3601);
+        let stale = Instant::now().checked_sub(Duration::from_secs(3601)).unwrap();
 
         for idx in 0..1001 {
             let name = format!("tool_{idx}");
@@ -703,7 +703,7 @@ mod tests {
         {
             let mut state = inventory.state.write().unwrap();
             state.frequently_used.insert("tool_0".to_string());
-            state.last_cache_cleanup = Instant::now() - Duration::from_secs(301);
+            state.last_cache_cleanup = Instant::now().checked_sub(Duration::from_secs(301)).unwrap();
         }
 
         inventory.cleanup_cache_if_needed();

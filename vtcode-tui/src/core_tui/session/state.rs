@@ -798,7 +798,7 @@ impl Session {
 
     /// Handle scroll down event
     #[inline]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn handle_scroll_down(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
@@ -811,7 +811,7 @@ impl Session {
 
     /// Handle scroll up event
     #[inline]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn handle_scroll_up(
         &mut self,
         events: &UnboundedSender<InlineEvent>,

@@ -585,7 +585,7 @@ pub(super) fn render_session_timeline_html(
     Ok(html)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn timeline_row(
     sequence: u64,
     source: &str,

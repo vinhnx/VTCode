@@ -785,6 +785,6 @@ mod tests {
             )],
         );
 
-        assert!(message.validate_for_provider("anthropic").is_ok());
+        message.validate_for_provider("anthropic").unwrap();
     }
 }

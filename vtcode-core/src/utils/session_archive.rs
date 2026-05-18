@@ -381,31 +381,31 @@ pub struct SessionMessage {
 
 impl Eq for SessionMessage {}
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn boxed_non_empty_string(value: Option<String>) -> Option<Box<String>> {
     value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
 }
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn boxed_non_empty_vec<T>(value: Option<Vec<T>>) -> Option<Box<Vec<T>>> {
     value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
 }
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn clone_non_empty_boxed_string(value: &Option<Box<String>>) -> Option<String> {
     value
         .as_deref()
         .and_then(|value| (!value.is_empty()).then_some(value.to_owned()))
 }
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn clone_non_empty_boxed_vec<T: Clone>(value: &Option<Box<Vec<T>>>) -> Option<Vec<T>> {
     value
         .as_deref()
         .and_then(|value| (!value.is_empty()).then_some(value.clone()))
 }
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn deserialize_boxed_non_empty_string_opt<'de, D>(
     deserializer: D,
 ) -> Result<Option<Box<String>>, D::Error>
@@ -415,7 +415,7 @@ where
     Option::<String>::deserialize(deserializer).map(boxed_non_empty_string)
 }
 
-#[allow(clippy::box_collection)]
+#[expect(clippy::box_collection)]
 fn deserialize_boxed_non_empty_vec_opt<'de, D, T>(
     deserializer: D,
 ) -> Result<Option<Box<Vec<T>>>, D::Error>

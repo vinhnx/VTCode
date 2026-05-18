@@ -44,7 +44,7 @@ use support::{
 };
 use tokio::sync::{Notify, mpsc};
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,

@@ -30,5 +30,5 @@ async fn test_plugin_system_compilation() {
     };
 
     // Validate the manifest - this should compile
-    assert!(PluginValidator::validate_manifest(&manifest).is_ok());
+    PluginValidator::validate_manifest(&manifest).unwrap();
 }

@@ -86,7 +86,7 @@ pub struct SkillDiscovery {
 
 #[derive(Debug, Clone)]
 struct DiscoveryCacheEntry {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     timestamp: std::time::SystemTime,
     skills: Vec<SkillContext>,
     tools: Vec<CliToolConfig>,
@@ -434,7 +434,7 @@ impl SkillDiscovery {
     }
 
     /// Get cached discovery result for path
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn get_cached(&self, path: &Path) -> Option<&DiscoveryCacheEntry> {
         self.cache.get(path).and_then(|entry| {
             // Check if cache is still valid (5 minutes)
@@ -448,7 +448,7 @@ impl SkillDiscovery {
     }
 
     /// Cache discovery result
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn cache_result(
         &mut self,
         path: PathBuf,
@@ -551,7 +551,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
 pub struct ProgressiveSkillLoader {
     discovery: SkillDiscovery,
     skill_cache: HashMap<String, crate::skills::types::Skill>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     tool_cache: HashMap<String, CliToolBridge>,
 }
 
@@ -661,6 +661,6 @@ mod tests {
 
         // Should handle empty directory gracefully
         let result = loader.discovery.discover_all(temp_dir.path()).await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 }

@@ -7,7 +7,7 @@ use crate::config::constants::ui;
 
 impl Session {
     /// Create a message divider line
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn message_divider_line(
         &self,
         width: usize,
@@ -23,7 +23,7 @@ impl Session {
     }
 
     /// Get the style for a message divider
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         self.styles.message_divider_style(kind)
     }
@@ -34,7 +34,7 @@ impl Session {
     /// - Todo/checkbox items (completed items are dimmed)
     /// - List items with consistent formatting
     /// - Diff lines with background colors
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn justify_wrapped_lines(
         &self,
         lines: Vec<Line<'static>>,
@@ -118,7 +118,7 @@ impl Session {
     }
 
     /// Check if a message line should be justified
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn should_justify_message_line(
         &self,
         line: &Line<'static>,
@@ -154,7 +154,7 @@ impl Session {
     }
 
     /// Justify a message line by distributing spaces
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn justify_message_line(
         &self,
         line: &Line<'static>,
@@ -169,7 +169,7 @@ impl Session {
     }
 
     /// Check if a line is a diff line (has diff markers and background color)
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn is_diff_line(&self, line: &Line<'static>) -> bool {
         if line.spans.is_empty() {
             return false;
@@ -185,7 +185,7 @@ impl Session {
     }
 
     /// Pad a diff line to full width
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
         if max_width == 0 || line.spans.is_empty() {
             return line.clone();

@@ -965,7 +965,7 @@ mod tests {
             .send_message("Session started", &manager.get_config_sync())
             .await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[cfg(target_os = "macos")]
@@ -1001,7 +1001,7 @@ mod tests {
 
         // This should not panic
         let result = manager.send_notification(event).await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -1015,7 +1015,7 @@ mod tests {
 
         // This should not panic
         let result = manager.send_notification(event).await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]
@@ -1039,7 +1039,7 @@ mod tests {
 
         // This should not send notification when disabled
         let result = manager.send_notification(event).await;
-        assert!(result.is_ok()); // Should not error, but notification won't be sent
+        result.unwrap(); // Should not error, but notification won't be sent
 
         // Verify the setting worked by checking the config
         let current_config = manager.get_config().await;

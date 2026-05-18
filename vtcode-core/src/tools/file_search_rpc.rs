@@ -388,7 +388,7 @@ mod tests {
     fn test_parse_invalid_rpc_request() {
         let invalid_json = "not valid json";
         let result = parse_rpc_request(invalid_json);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

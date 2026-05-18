@@ -229,7 +229,7 @@ mod tests {
                 .map(|resolution| resolution.registration_name().to_string()),
             Some(tools::UNIFIED_EXEC.to_string())
         );
-        assert!(assembly.resolve_public_tool("exec_code").is_err());
+        assembly.resolve_public_tool("exec_code").unwrap_err();
     }
 
     #[test]

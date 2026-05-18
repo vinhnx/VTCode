@@ -28,7 +28,7 @@ impl OperationEffect {
     }
 }
 
-#[allow(clippy::enum_variant_names)]
+#[expect(clippy::enum_variant_names)]
 pub(crate) enum OperationState {
     AddedFile {
         path: PathBuf,

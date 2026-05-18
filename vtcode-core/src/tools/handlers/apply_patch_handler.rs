@@ -363,7 +363,7 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
 ///
 /// This checks if a shell command is actually an apply_patch invocation
 /// and handles it through the apply_patch handler instead.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub async fn intercept_apply_patch(
     command: &[String],
     ctx: InterceptApplyPatchContext<'_>,

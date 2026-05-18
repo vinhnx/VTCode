@@ -27,7 +27,7 @@ pub enum ResultCompleteness {
 
 impl ResultCompleteness {
     /// Deprecated: prefer using the `Display` impl; `ToString` is derived from Display.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn to_static_str(&self) -> &'static str {
         match self {
             Self::Complete => "complete",

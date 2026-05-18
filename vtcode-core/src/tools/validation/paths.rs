@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn allows_macos_temp_paths_under_var_folders() {
-        assert!(validate_path_safety("/var/folders/ab/cd/tmp123/file.txt").is_ok());
+        validate_path_safety("/var/folders/ab/cd/tmp123/file.txt").unwrap();
     }
 
     #[test]
@@ -39,12 +39,12 @@ mod tests {
 
     #[test]
     fn allows_non_critical_prefix_matches() {
-        assert!(validate_path_safety("/varnish/cache/file").is_ok());
+        validate_path_safety("/varnish/cache/file").unwrap();
     }
 
     #[test]
     fn allows_var_tmp_paths() {
-        assert!(validate_path_safety("/var/tmp/vtcode/run.log").is_ok());
+        validate_path_safety("/var/tmp/vtcode/run.log").unwrap();
     }
 
     #[test]
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn allows_subdirectory_listing_requests() {
         for candidate in [Some("src"), Some("./src"), Some("/workspace/src")] {
-            assert!(validate_non_root_listing_path(candidate).is_ok());
+            validate_non_root_listing_path(candidate).unwrap();
         }
     }
 }

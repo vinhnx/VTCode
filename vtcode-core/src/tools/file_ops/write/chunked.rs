@@ -10,7 +10,7 @@ use tracing::info;
 
 impl FileOpsTool {
     /// Write large file in chunks for atomicity and memory efficiency
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn write_file_chunked(
         &self,
         file_path: &Path,

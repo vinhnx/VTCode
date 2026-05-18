@@ -278,7 +278,7 @@ pub fn supports_vision(model: &str, default_model: &str) -> bool {
         || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub fn is_claude_model(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model).is_some()
 }

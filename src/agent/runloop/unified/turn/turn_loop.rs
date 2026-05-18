@@ -118,7 +118,7 @@ pub(crate) struct TurnLoopContext<'a> {
 }
 
 impl<'a> TurnLoopContext<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,

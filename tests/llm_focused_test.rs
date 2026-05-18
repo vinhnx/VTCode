@@ -71,10 +71,10 @@ fn test_unified_client_creation() {
     // Test creating providers directly using the factory
     let gemini =
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
-    assert!(gemini.is_ok());
+    gemini.unwrap();
 
     let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
-    assert!(openai.is_ok());
+    openai.unwrap();
 
     let anthropic = create_provider_for_model(
         models::CLAUDE_SONNET_4_6,
@@ -82,7 +82,7 @@ fn test_unified_client_creation() {
         None,
         None,
     );
-    assert!(anthropic.is_ok());
+    anthropic.unwrap();
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_QWEN3_CODER,
@@ -90,7 +90,7 @@ fn test_unified_client_creation() {
         None,
         None,
     );
-    assert!(openrouter.is_ok());
+    openrouter.unwrap();
 
     let moonshot = create_provider_for_model(
         models::moonshot::DEFAULT_MODEL,
@@ -98,15 +98,15 @@ fn test_unified_client_creation() {
         None,
         None,
     );
-    assert!(moonshot.is_ok());
+    moonshot.unwrap();
 
     let ollama =
         create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
-    assert!(ollama.is_ok());
+    ollama.unwrap();
 
     let lmstudio =
         create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None, None);
-    assert!(lmstudio.is_ok());
+    lmstudio.unwrap();
 }
 
 #[test]
@@ -159,5 +159,5 @@ fn test_anthropic_tool_message_handling() {
     };
 
     // Validate request shape instead of internal conversion
-    assert!(anthropic.validate_request(&request).is_ok());
+    anthropic.validate_request(&request).unwrap();
 }

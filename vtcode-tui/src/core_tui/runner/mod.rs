@@ -29,7 +29,7 @@ pub trait TuiSessionDriver {
     type Event;
 
     fn handle_command(&mut self, command: Self::Command);
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,

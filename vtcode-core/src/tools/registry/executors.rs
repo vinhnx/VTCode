@@ -972,7 +972,7 @@ mod shell_preference_tests {
             zsh_path: None,
             ..PtyConfig::default()
         };
-        assert!(resolve_shell_preference_with_zsh_fork(Some("/bin/bash"), &config).is_err());
+        resolve_shell_preference_with_zsh_fork(Some("/bin/bash"), &config).unwrap_err();
     }
 
     #[cfg(unix)]
@@ -1341,7 +1341,7 @@ mod unified_action_error_tests {
         assert!(preview.truncated);
         assert_eq!(preview.raw_output, "a🙂b");
         assert_eq!(preview.output, "a\n[Output truncated]");
-        assert!(std::str::from_utf8(preview.output.as_bytes()).is_ok());
+        std::str::from_utf8(preview.output.as_bytes()).unwrap();
     }
 
     #[test]

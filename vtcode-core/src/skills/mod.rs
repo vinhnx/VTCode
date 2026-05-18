@@ -122,7 +122,7 @@ pub mod locations;
 pub mod manager;
 pub mod manifest;
 pub mod model;
-#[allow(unsafe_code)]
+#[expect(unsafe_code)]
 pub mod native_plugin;
 pub mod prompt_integration;
 pub mod render;

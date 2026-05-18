@@ -252,7 +252,7 @@ impl Session {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn delete_word_forward(&mut self) {
         self.input_manager.delete_word_forward();
         self.refresh_input_edit_state();
@@ -385,7 +385,7 @@ impl Session {
     }
 
     /// Navigate to previous history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn navigate_history_previous(&mut self) -> bool {
         if let Some(previous) = self.input_manager.go_to_previous_history() {
             self.input_manager.apply_history_entry(previous);
@@ -396,7 +396,7 @@ impl Session {
     }
 
     /// Navigate to next history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn navigate_history_next(&mut self) -> bool {
         if let Some(next) = self.input_manager.go_to_next_history() {
             self.input_manager.apply_history_entry(next);

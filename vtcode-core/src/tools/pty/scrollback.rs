@@ -322,22 +322,22 @@ impl PtyScrollback {
         output
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn has_overflow(&self) -> bool {
         self.overflow_detected
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn current_size_bytes(&self) -> usize {
         self.current_bytes
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn usage_percent(&self) -> f64 {
         (self.current_bytes as f64 / self.max_bytes as f64) * 100.0
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn metrics(&self) -> ScrollbackMetrics {
         ScrollbackMetrics {
             current_bytes: self.current_bytes,
@@ -357,7 +357,7 @@ impl PtyScrollback {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) struct ScrollbackMetrics {
     pub(super) current_bytes: usize,
     pub(super) max_bytes: usize,

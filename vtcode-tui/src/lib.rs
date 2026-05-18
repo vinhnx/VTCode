@@ -3,9 +3,9 @@
 //! The migrated implementation source lives in `src/core_tui/`.
 //! Public API is exported directly from this crate.
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 mod cache;
-#[allow(dead_code)]
+#[expect(dead_code)]
 mod config;
 mod options;
 pub mod ui;

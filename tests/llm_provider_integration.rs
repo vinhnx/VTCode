@@ -41,10 +41,10 @@ fn test_provider_creation() {
     // Test creating providers
     let gemini =
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
-    assert!(gemini.is_ok());
+    gemini.unwrap();
 
     let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
-    assert!(openai.is_ok());
+    openai.unwrap();
 
     let anthropic = create_provider_for_model(
         models::CLAUDE_SONNET_4_6,
@@ -52,7 +52,7 @@ fn test_provider_creation() {
         None,
         None,
     );
-    assert!(anthropic.is_ok());
+    anthropic.unwrap();
 }
 
 #[test]
@@ -60,10 +60,10 @@ fn test_unified_client_creation() {
     // Test creating providers for different models
     let gemini_client =
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
-    assert!(gemini_client.is_ok());
+    gemini_client.unwrap();
 
     let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
-    assert!(openai_client.is_ok());
+    openai_client.unwrap();
 
     let anthropic_client = create_provider_for_model(
         models::CLAUDE_SONNET_4_6,
@@ -71,7 +71,7 @@ fn test_unified_client_creation() {
         None,
         None,
     );
-    assert!(anthropic_client.is_ok());
+    anthropic_client.unwrap();
 }
 
 #[test]

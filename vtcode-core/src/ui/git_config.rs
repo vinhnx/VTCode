@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn test_parse_git_config_missing_file() {
         let result = GitColorConfig::from_git_config(Path::new("/nonexistent/.git/config"));
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

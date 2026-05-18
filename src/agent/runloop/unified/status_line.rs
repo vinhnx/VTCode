@@ -85,7 +85,7 @@ pub(crate) fn update_context_budget(
     state.context_remaining_tokens = Some(remaining);
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn update_input_status_if_changed(
     handle: &InlineHandle,
     workspace: &Path,
@@ -277,7 +277,7 @@ pub(crate) async fn update_input_status_if_changed(
 
 /// Build model status with all context indicators including spooled files
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn build_model_status_with_context_and_spooled(
     thread_context: Option<&str>,
     ide_context_source: Option<&str>,
@@ -301,7 +301,7 @@ fn build_model_status_with_context_and_spooled(
     ))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn auto_status_components(
     thread_context: Option<&str>,
     ide_context_source: Option<&str>,

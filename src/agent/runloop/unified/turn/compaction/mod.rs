@@ -313,7 +313,7 @@ pub(crate) async fn build_summarized_fork_history(
     Ok(compacted)
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) async fn compact_history_in_place(
     provider: &dyn LLMProvider,
     model: &str,

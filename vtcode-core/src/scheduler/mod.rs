@@ -1033,7 +1033,7 @@ impl ServiceManager {
         {
             return Some(Self::SystemdUser);
         }
-        #[allow(unreachable_code)]
+        #[expect(unreachable_code)]
         None
     }
 }

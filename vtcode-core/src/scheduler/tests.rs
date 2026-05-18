@@ -60,9 +60,9 @@ fn cron5_supports_vixie_or_semantics() {
 
 #[test]
 fn cron5_rejects_extended_syntax() {
-    assert!(Cron5::parse("0 9 ? * *").is_err());
-    assert!(Cron5::parse("0 9 * JAN *").is_err());
-    assert!(Cron5::parse("0 9 * * MON").is_err());
+    Cron5::parse("0 9 ? * *").unwrap_err();
+    Cron5::parse("0 9 * JAN *").unwrap_err();
+    Cron5::parse("0 9 * * MON").unwrap_err();
 }
 
 #[test]

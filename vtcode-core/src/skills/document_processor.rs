@@ -392,6 +392,6 @@ mod tests {
         let result = processor
             .process_document(Path::new("/nonexistent/document.pdf"))
             .await;
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }

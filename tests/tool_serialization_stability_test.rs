@@ -236,7 +236,7 @@ mod tests {
         });
         let current = baseline.clone();
 
-        assert!(validate_schema_stability("test", &current, &baseline).is_ok());
+        validate_schema_stability("test", &current, &baseline).unwrap();
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod tests {
             "description": "Test tool"
         });
 
-        assert!(validate_whitespace_consistency(&schema).is_ok());
+        validate_whitespace_consistency(&schema).unwrap();
     }
 
     #[test]
@@ -274,7 +274,7 @@ mod tests {
             "description": "Test tool"
         });
 
-        assert!(validate_encoding_invariants(&schema).is_ok());
+        validate_encoding_invariants(&schema).unwrap();
     }
 
     #[test]

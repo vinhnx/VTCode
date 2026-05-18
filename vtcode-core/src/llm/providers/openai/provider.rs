@@ -203,7 +203,7 @@ impl OpenAIProvider {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn from_config(
         api_key: Option<String>,
         openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
@@ -231,7 +231,7 @@ impl OpenAIProvider {
     }
 
     /// Create a custom OpenAI-compatible provider with overridden identity.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn from_custom_config(
         provider_key: String,
         display_name: String,

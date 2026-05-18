@@ -173,7 +173,7 @@ mod validation_tests {
             "required": ["name", "age"],
             "additionalProperties": false
         });
-        assert!(validate_anthropic_schema(&schema).is_ok());
+        validate_anthropic_schema(&schema).unwrap();
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod validation_tests {
             effort: Some("max".to_string()),
             ..Default::default()
         };
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+        validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).unwrap();
 
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
@@ -237,7 +237,7 @@ mod validation_tests {
             effort: Some("max".to_string()),
             ..Default::default()
         };
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+        validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).unwrap();
 
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
@@ -245,7 +245,7 @@ mod validation_tests {
             effort: Some("max".to_string()),
             ..Default::default()
         };
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+        validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).unwrap();
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod validation_tests {
             ..Default::default()
         };
 
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+        validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).unwrap();
     }
 
     #[test]
@@ -297,7 +297,7 @@ mod validation_tests {
             ..Default::default()
         };
 
-        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+        validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).unwrap();
     }
 
     #[test]
@@ -1095,7 +1095,7 @@ mod request_builder_tests {
             model: models::anthropic::DEFAULT_MODEL,
         };
 
-        assert!(convert_to_anthropic_format(&request, &ctx).is_err());
+        convert_to_anthropic_format(&request, &ctx).unwrap_err();
     }
 
     #[test]

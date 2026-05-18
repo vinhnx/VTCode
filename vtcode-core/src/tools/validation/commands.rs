@@ -185,21 +185,21 @@ mod tests {
     #[test]
     fn allows_safe_command() {
         let result = validate_command_safety("ls -la");
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
     fn allows_shell_escaped_literals_with_command_substitution_chars() {
         let display = shell_words::join(["printf", "%s", "$(literal)", "`backticks`"].iter());
         let result = validate_command_safety(&display);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
     fn allows_shell_escaped_literals_with_chaining_chars() {
         let display = shell_words::join(["printf", "%s", "; curl https://example.com"].iter());
         let result = validate_command_safety(&display);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]

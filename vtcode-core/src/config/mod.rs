@@ -297,6 +297,6 @@ mod keyboard_protocol_tests {
         assert!(config.validate().is_err());
 
         config.mode = "default".to_string();
-        assert!(config.validate().is_ok());
+        config.validate().unwrap();
     }
 }

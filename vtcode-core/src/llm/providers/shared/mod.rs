@@ -39,25 +39,25 @@ pub trait StreamTelemetry: Send + Sync {
 }
 
 #[derive(Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct NoopStreamTelemetry;
 
 impl StreamTelemetry for NoopStreamTelemetry {}
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFragment {
     Content(String),
     Reasoning(String),
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Default, Debug)]
 pub struct StreamDelta {
     fragments: Vec<StreamFragment>,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl StreamDelta {
     pub fn push_content(&mut self, text: &str) {
         if text.is_empty() {
@@ -852,7 +852,7 @@ pub(crate) fn collect_tool_references_from_tool_search_output(
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub fn append_text_with_reasoning(
     text: &str,
     aggregated_content: &mut String,
@@ -929,7 +929,7 @@ pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub fn apply_tool_call_delta_from_content(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,
@@ -938,7 +938,7 @@ pub fn apply_tool_call_delta_from_content(
     apply_tool_call_delta_with_index(builders, container, telemetry, None, None);
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn apply_tool_call_delta_with_index(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,

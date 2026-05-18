@@ -351,7 +351,7 @@ mod tests {
     fn test_container_add_skill() {
         let mut container = SkillContainer::new();
         let spec = SkillSpec::custom("skill1");
-        assert!(container.add_skill(spec).is_ok());
+        container.add_skill(spec).unwrap();
         assert_eq!(container.len(), 1);
     }
 
@@ -360,7 +360,7 @@ mod tests {
         let mut container = SkillContainer::new();
         for i in 0..8 {
             let spec = SkillSpec::custom(format!("skill{}", i));
-            assert!(container.add_skill(spec).is_ok());
+            container.add_skill(spec).unwrap();
         }
         assert_eq!(container.len(), 8);
 
@@ -377,7 +377,7 @@ mod tests {
             SkillSpec::custom("skill2"),
             SkillSpec::custom("skill3"),
         ];
-        assert!(container.add_skills(specs).is_ok());
+        container.add_skills(specs).unwrap();
         assert_eq!(container.len(), 3);
     }
 
@@ -397,8 +397,8 @@ mod tests {
     #[test]
     fn test_container_duplicate_skill_ids() {
         let mut container = SkillContainer::new();
-        assert!(container.add_skill(SkillSpec::custom("dup")).is_ok());
-        assert!(container.add_skill(SkillSpec::custom("dup")).is_ok());
+        container.add_skill(SkillSpec::custom("dup")).unwrap();
+        container.add_skill(SkillSpec::custom("dup")).unwrap();
         assert!(container.validate().is_err());
     }
 
@@ -451,7 +451,7 @@ mod tests {
                 .add_skill(SkillSpec::custom(format!("skill{}", i)))
                 .ok();
         }
-        assert!(container.validate().is_ok());
+        container.validate().unwrap();
     }
 
     #[test]

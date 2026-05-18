@@ -967,7 +967,7 @@ impl Session {
         format!("{} {:>3}%", ui::SCROLL_INDICATOR_FORMAT, percent)
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn create_git_status_spans(&self, text: &str, default_style: Style) -> Vec<Span<'static>> {
         if let Some((branch_part, indicator_part)) = text.rsplit_once(" | ") {
             let mut spans = Vec::new();

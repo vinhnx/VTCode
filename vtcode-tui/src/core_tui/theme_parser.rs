@@ -162,13 +162,13 @@ mod tests {
     fn test_parse_git_fails_on_invalid() {
         let parser = ThemeConfigParser::default();
         let result = parser.parse_git_style("unknown-color");
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
     fn test_parse_ls_colors_fails_on_invalid() {
         let parser = ThemeConfigParser::default();
         let result = parser.parse_ls_colors("invalid");
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }

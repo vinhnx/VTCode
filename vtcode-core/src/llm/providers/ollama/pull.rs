@@ -160,7 +160,7 @@ mod tests {
         let mut reporter = CliPullProgressReporter::new();
         let event = OllamaPullEvent::Status("verifying".to_string());
         let result = reporter.on_event(&event);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
@@ -172,6 +172,6 @@ mod tests {
             completed: Some(500_000_000),
         };
         let result = reporter.on_event(&event);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 }

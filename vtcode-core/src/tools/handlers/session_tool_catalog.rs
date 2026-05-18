@@ -488,7 +488,7 @@ impl ToolCatalogEntry {
         ))
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         public_name: String,
         registration_name: String,

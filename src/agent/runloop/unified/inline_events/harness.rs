@@ -318,7 +318,7 @@ pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn thread_completed_event(
     thread_id: impl Into<String>,
     session_id: impl Into<String>,

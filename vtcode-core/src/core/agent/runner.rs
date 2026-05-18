@@ -251,7 +251,7 @@ impl AgentRunner {
     }
 
     /// Create an agent runner with a prebuilt thread bootstrap, preloaded config, and runtime auth.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new_with_thread_bootstrap_and_config_with_openai_auth(
         agent_type: AgentType,
         model: ModelId,
@@ -279,7 +279,7 @@ impl AgentRunner {
         .await
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn new_with_thread_bootstrap_internal(
         agent_type: AgentType,
         model: ModelId,

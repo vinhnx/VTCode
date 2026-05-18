@@ -450,14 +450,14 @@ fn test_convert_harmony_args_rejects_empty_command_string() {
 fn test_convert_harmony_args_rejects_whitespace_only_command() {
     let parsed = serde_json::json!({ "cmd": "   " });
     let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-    assert!(result.is_err());
+    result.unwrap_err();
 }
 
 #[test]
 fn test_convert_harmony_args_rejects_empty_executable_in_array() {
     let parsed = serde_json::json!({ "cmd": ["", "arg1"] });
     let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-    assert!(result.is_err());
+    result.unwrap_err();
 }
 
 #[test]

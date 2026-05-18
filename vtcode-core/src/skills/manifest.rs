@@ -292,7 +292,7 @@ This is the instruction section.
     fn test_parse_missing_frontmatter() {
         let content = "This is not valid";
         let result = parse_skill_content(content);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
@@ -310,7 +310,7 @@ permissions:
 "#;
 
         let result = parse_skill_content(content);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
@@ -324,7 +324,7 @@ missing_required_fields: true
 "#;
 
         let result = parse_skill_content(content);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

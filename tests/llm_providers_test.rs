@@ -127,13 +127,13 @@ fn test_provider_creation() {
     // Test creating providers directly
     let gemini =
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
-    assert!(gemini.is_ok());
+    gemini.unwrap();
 
     let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
-    assert!(openai.is_ok());
+    openai.unwrap();
 
     let openai_reasoning = create_provider_for_model("o4-mini", "test_key".to_string(), None, None);
-    assert!(openai_reasoning.is_ok());
+    openai_reasoning.unwrap();
 
     let anthropic = create_provider_for_model(
         models::CLAUDE_SONNET_4_6,
@@ -141,7 +141,7 @@ fn test_provider_creation() {
         None,
         None,
     );
-    assert!(anthropic.is_ok());
+    anthropic.unwrap();
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_QWEN3_CODER,
@@ -149,7 +149,7 @@ fn test_provider_creation() {
         None,
         None,
     );
-    assert!(openrouter.is_ok());
+    openrouter.unwrap();
 
     let moonshot = create_provider_for_model(
         models::moonshot::DEFAULT_MODEL,
@@ -157,11 +157,11 @@ fn test_provider_creation() {
         None,
         None,
     );
-    assert!(moonshot.is_ok());
+    moonshot.unwrap();
 
     let ollama =
         create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
-    assert!(ollama.is_ok());
+    ollama.unwrap();
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None, None);
@@ -339,7 +339,7 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    assert!(gemini.validate_request(&valid_gemini_request).is_ok());
+    gemini.validate_request(&valid_gemini_request).unwrap();
 
     let valid_openai_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -347,7 +347,7 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    assert!(openai.validate_request(&valid_openai_request).is_ok());
+    openai.validate_request(&valid_openai_request).unwrap();
 
     let valid_anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -355,7 +355,7 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
+    anthropic.validate_request(&valid_anthropic_request).unwrap();
 
     let legacy_anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -363,11 +363,8 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    assert!(
-        anthropic
-            .validate_request(&legacy_anthropic_request)
-            .is_ok()
-    );
+    anthropic
+            .validate_request(&legacy_anthropic_request).unwrap();
 
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
@@ -398,7 +395,7 @@ fn test_anthropic_tool_message_handling() {
 
     // Use the public validator as a proxy for ensuring request shape is acceptable
     // (internal conversion is implementation detail and not tested directly here)
-    assert!(anthropic.validate_request(&request).is_ok());
+    anthropic.validate_request(&request).unwrap();
 }
 
 #[test]

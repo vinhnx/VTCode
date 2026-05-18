@@ -5,7 +5,7 @@ impl Session {
         self.scroll_manager.offset()
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn scroll_to_top(&mut self) {
         self.mark_scrolling();
         self.ensure_scroll_metrics();
@@ -18,7 +18,7 @@ impl Session {
         self.mark_dirty();
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn scroll_to_bottom(&mut self) {
         self.mark_scrolling();
         self.ensure_scroll_metrics();

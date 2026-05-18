@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn malformed_cached_json_is_rejected() {
-        assert!(parse_cached_output("{not-valid-json").is_err());
+        parse_cached_output("{not-valid-json").unwrap_err();
     }
 
     #[test]

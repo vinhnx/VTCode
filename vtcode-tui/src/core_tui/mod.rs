@@ -55,7 +55,7 @@ pub fn spawn_session(
 }
 
 /// Spawn session with optional custom prompts pre-loaded
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn spawn_session_with_prompts(
     theme: InlineTheme,
     placeholder: Option<String>,
@@ -87,7 +87,7 @@ pub fn spawn_session_with_prompts(
 }
 
 /// Spawn session with host-injected UI options.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn spawn_session_with_prompts_and_options(
     theme: InlineTheme,
     placeholder: Option<String>,

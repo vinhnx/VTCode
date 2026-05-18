@@ -70,7 +70,7 @@ pub fn maybe_parse_apply_patch_from_command(command: &[String]) -> Option<String
 ///
 /// This function checks if a shell command is attempting to apply a patch
 /// and redirects it through the proper patch application flow.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub async fn intercept_apply_patch(
     command: &[String],
     cwd: &Path,

@@ -223,7 +223,7 @@ pub(crate) async fn handle_prepared_tool_call<'a, 'b>(
     handle_tool_call_inner(t_ctx, tool_call.call_id(), tool_call.tool_name(), args_val).await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_call_id: &str,

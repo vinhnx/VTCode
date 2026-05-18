@@ -161,7 +161,7 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
     };
 
     let mut client = McpClient::new(config);
-    assert!(client.initialize().await.is_ok());
+    client.initialize().await.unwrap();
 
     let status = client.get_status();
     assert_eq!(

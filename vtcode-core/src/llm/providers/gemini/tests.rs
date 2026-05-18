@@ -1726,7 +1726,7 @@ mod caching_tests {
             ..Default::default()
         };
         let res = provider.convert_to_gemini_request(&request);
-        assert!(res.is_ok());
+        res.unwrap();
     }
 
     #[test]

@@ -220,6 +220,6 @@ mod tests {
     #[test]
     fn test_unknown_terminal_error() {
         let result = generate_config(TerminalType::Unknown);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }

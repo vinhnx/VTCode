@@ -11,7 +11,7 @@ impl AgentRunner {
         !(stdout_is_terminal && stderr_is_terminal)
     }
 
-    #[allow(clippy::print_stdout)]
+    #[expect(clippy::print_stdout)]
     fn print_final_message_to_stdout(text: &str) {
         if text.trim().is_empty() {
             return;

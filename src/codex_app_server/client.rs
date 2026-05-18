@@ -233,7 +233,7 @@ impl CodexAppServerClient {
         self.request("review/start", params.as_json())
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn command_exec(
         &self,
         params: CodexCommandExecRequest,
@@ -791,14 +791,14 @@ pub(crate) struct CodexTurn {
     pub(crate) id: String,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct CodexTurnSteerResponse {
     #[serde(rename = "turnId")]
     pub(crate) turn_id: String,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct CodexReviewStartResponse {
     #[serde(rename = "reviewThreadId")]
@@ -821,7 +821,7 @@ impl CodexReviewStartRequest {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub(crate) enum CodexReviewTarget {
@@ -870,7 +870,7 @@ pub(crate) struct CodexCollaborationModeSettings {
     pub(crate) reasoning_effort: Option<String>,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct CodexCommandExecRequest {
     pub(crate) command: Vec<String>,
@@ -888,7 +888,7 @@ impl CodexCommandExecRequest {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct CodexCommandExecResponse {
     #[serde(rename = "exitCode")]

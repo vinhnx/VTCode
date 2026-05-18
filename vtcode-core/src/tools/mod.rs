@@ -195,7 +195,7 @@ pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
 mod install_support;
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub mod middleware; // Deprecated - prefer async_middleware
 pub mod optimized_registry;
 pub mod output_spooler;
@@ -290,7 +290,7 @@ pub use improvements_errors::{
     ObservabilityContext, ObservabilitySink,
 };
 pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
-#[allow(deprecated)]
+#[expect(deprecated)]
 #[deprecated(
     since = "0.1.0",
     note = "Use async_middleware types instead: AsyncMiddleware, AsyncMiddlewareChain, etc."

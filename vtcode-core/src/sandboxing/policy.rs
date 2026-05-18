@@ -1082,7 +1082,7 @@ mod tests {
         assert!(read_only.can_set(&full).is_err());
 
         // Can downgrade from full
-        assert!(full.can_set(&read_only).is_ok());
+        full.can_set(&read_only).unwrap();
     }
 
     #[test]

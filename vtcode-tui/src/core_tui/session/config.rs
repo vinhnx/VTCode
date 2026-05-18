@@ -142,7 +142,7 @@ impl AppearanceConfig {
     }
 
     /// Check if footer should be shown based on ui_mode
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn should_show_footer(&self) -> bool {
         match self.ui_mode {
             UiMode::Full => true,
@@ -278,13 +278,13 @@ impl Default for CustomizationConfig {
 
 impl SessionConfig {
     /// Creates a new default configuration
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Loads configuration from a file
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn load_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = read_file_with_context_sync(Path::new(path), "session config file").map_err(
             |err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) },
@@ -294,7 +294,7 @@ impl SessionConfig {
     }
 
     /// Saves configuration to a file
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
         write_file_with_context_sync(Path::new(path), &content, "session config file").map_err(
@@ -304,7 +304,7 @@ impl SessionConfig {
     }
 
     /// Updates a specific configuration value by key
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn set_value(&mut self, key: &str, value: &str) -> Result<(), String> {
         // This is a simplified version - in a real implementation, we'd have more sophisticated
         // parsing and validation for different configuration types
@@ -325,7 +325,7 @@ impl SessionConfig {
     }
 
     /// Gets a configuration value by key
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn get_value(&self, key: &str) -> Option<String> {
         match key {
             "behavior.max_input_lines" => Some(self.behavior.max_input_lines.to_string()),
@@ -335,7 +335,7 @@ impl SessionConfig {
     }
 
     /// Validates the configuration to ensure all values are within acceptable ranges
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let config = SessionConfig::new();
-        assert!(config.validate().is_ok());
+        config.validate().unwrap();
 
         // Test invalid history size
         let mut invalid_config = config.clone();

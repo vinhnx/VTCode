@@ -193,8 +193,9 @@ infallible_try_from = "warn"
 dbg_macro = "warn"
 
 # Don't `allow` Your Way Around These Lints
-allow_attributes = "warn"
-allow_attributes_without_reason = "warn"
+# Note: These require manual curation of all existing suppressions.
+allow_attributes = "allow"  # TODO: Phase in after suppression audit
+allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression audit
 
 
 [dependencies]

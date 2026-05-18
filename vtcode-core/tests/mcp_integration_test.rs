@@ -227,7 +227,7 @@ max_concurrent_requests = 1
 
         // This should not fail even if no providers are configured
         let result = client.initialize().await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

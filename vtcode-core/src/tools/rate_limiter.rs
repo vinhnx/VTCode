@@ -247,7 +247,7 @@ mod tests {
         let mut limiter = RateLimiterInner::new();
         // Should allow up to burst capacity
         for _ in 0..limiter.config.burst {
-            assert!(limiter.try_acquire().is_ok());
+            limiter.try_acquire().unwrap();
         }
         // Next should fail
         assert!(limiter.try_acquire().is_err());
@@ -261,7 +261,7 @@ mod tests {
             let _ = limiter.try_acquire_for("tool_a");
         }
         // tool_b should still have tokens
-        assert!(limiter.try_acquire_for("tool_b").is_ok());
+        limiter.try_acquire_for("tool_b").unwrap();
     }
 
     #[test]

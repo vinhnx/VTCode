@@ -48,7 +48,7 @@ async fn test_execute_tool_ref_uses_optimizations() {
 
     // Third execution with alias - should resolve and potentially cache
     let result3 = registry.execute_tool_ref("read_file", &args).await;
-    assert!(result3.is_ok());
+    result3.unwrap();
 
     // Verify results are consistent
     assert_eq!(result1.unwrap(), result2.unwrap());
@@ -79,7 +79,7 @@ async fn test_execute_tool_ref_memory_pool_integration() {
     });
 
     let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
-    assert!(result.is_ok());
+    result.unwrap();
 
     println!("v execute_tool_ref memory pool integration test passed");
 }
@@ -108,7 +108,7 @@ async fn test_execute_tool_ref_without_optimizations() {
     });
 
     let result = registry.execute_tool_ref(tools::LIST_FILES, &args).await;
-    assert!(result.is_ok());
+    result.unwrap();
 
     println!("v execute_tool_ref without optimizations test passed");
 }

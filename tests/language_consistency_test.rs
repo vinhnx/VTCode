@@ -143,7 +143,7 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Script {
     Latin,
-    #[allow(non_camel_case_types)]
+    #[expect(non_camel_case_types)]
     Cjk,
     Cyrillic,
     Arabic,
@@ -220,7 +220,7 @@ mod unit_tests {
             }
         });
 
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -248,7 +248,7 @@ mod unit_tests {
         });
 
         // Should warn but not fail
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -264,7 +264,7 @@ It should maintain consistent language throughout.
 More content in the same language.
 "#;
 
-        assert!(validate_markdown_language_consistency(markdown).is_ok());
+        validate_markdown_language_consistency(markdown).unwrap();
     }
 
     #[test]
@@ -280,7 +280,7 @@ This is in English.
 "#;
 
         // Should warn about language switching
-        assert!(validate_markdown_language_consistency(markdown).is_ok());
+        validate_markdown_language_consistency(markdown).unwrap();
     }
 
     #[test]
@@ -342,7 +342,7 @@ This is in English.
             }
         });
 
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -354,7 +354,7 @@ This is in English.
             ]
         });
 
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -369,7 +369,7 @@ This is in English.
         });
 
         // Should pass - emojis in values are acceptable
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -398,7 +398,7 @@ This is in English.
         });
 
         // Should pass - this is expected in code contexts
-        assert!(validate_json_language_consistency(&json).is_ok());
+        validate_json_language_consistency(&json).unwrap();
     }
 
     #[test]
@@ -414,9 +414,9 @@ This is in English.
             }
         });
 
-        assert!(validate_json_language_consistency(&empty_object).is_ok());
-        assert!(validate_json_language_consistency(&empty_array).is_ok());
-        assert!(validate_json_language_consistency(&mixed).is_ok());
+        validate_json_language_consistency(&empty_object).unwrap();
+        validate_json_language_consistency(&empty_array).unwrap();
+        validate_json_language_consistency(&mixed).unwrap();
     }
 
     #[test]

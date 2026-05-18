@@ -360,7 +360,7 @@ impl RequestProcessor {
 
 /// Common model resolution utilities
 pub struct ModelResolver {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     provider_name: &'static str,
     default_model: &'static str,
     supported_models: &'static [&'static str],
@@ -453,7 +453,7 @@ mod tests {
         assert_eq!(resolver.resolve_model(None), "default-model");
         assert_eq!(resolver.resolve_model(Some("custom".to_string())), "custom");
 
-        assert!(resolver.validate_model("model1").is_ok());
+        resolver.validate_model("model1").unwrap();
         assert!(resolver.validate_model("unsupported").is_err());
     }
 }

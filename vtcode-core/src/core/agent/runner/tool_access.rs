@@ -27,7 +27,7 @@ impl AgentRunner {
             .then_some(canonical_name)
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn validate_and_normalize_tool_name(
         &self,
         tool_name: &str,
@@ -82,7 +82,7 @@ impl AgentRunner {
     /// Execute a tool by name with given arguments.
     /// This is the public API that includes validation; for internal use after
     /// validation, prefer `execute_tool_internal`.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
         let prepared = self
             .tool_registry
@@ -176,7 +176,7 @@ impl AgentRunner {
 
     /// Internal tool execution, skipping validation.
     /// Use when `is_valid_tool` has already been called by the caller.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn execute_tool_internal(
         &self,
         tool_name: &str,

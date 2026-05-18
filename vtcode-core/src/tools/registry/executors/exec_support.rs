@@ -46,7 +46,7 @@ const PTY_DENY_PREFIXES: &[&str] = &[
 
 const PTY_DENY_STANDALONE: &[&str] = &["python", "python3", "bash", "sh", "zsh", "fish"];
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 const PTY_ALLOW_PREFIXES: &[&str] = &[
     "pwd",
     "whoami",

@@ -1346,7 +1346,7 @@ pub struct ToolBridgeCtx<Runtime> {
     /// The runtime context whose component wiring is inherited via
     /// the blanket `HasComponent` impl below. Accessed at the type
     /// level, not at runtime — the compiler doesn't see field reads.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     runtime: Runtime,
 }
 

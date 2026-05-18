@@ -165,7 +165,7 @@ pub(super) fn is_info_box_line(message: &MessageLine) -> bool {
 
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines.
 /// Returns Cow to avoid allocation when no changes are needed.
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     // Quick check: if no triple newlines, return borrowed
     if !text.contains("\n\n\n") {
@@ -256,7 +256,7 @@ fn truncate_line_to_width_internal(line: Line<'static>, max_width: usize) -> Lin
 ///
 /// This is a re-export from the centralized line_truncation module for
 /// consistent ellipsis handling across the TUI.
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn truncate_line_with_ellipsis(line: Line<'static>, max_width: usize) -> Line<'static> {
     super::super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow(line, max_width)
 }

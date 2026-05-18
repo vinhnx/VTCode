@@ -459,7 +459,7 @@ mod tests {
             .await;
 
         let result = LMStudioClient::try_from_base_url(&server.uri()).await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

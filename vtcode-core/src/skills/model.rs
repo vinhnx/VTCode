@@ -54,7 +54,7 @@ mod tests {
         assert!(size_of::<SkillMetadata>() < size_of::<SkillMetadataInlineManifest>());
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct SkillMetadataInlineManifest {
         name: String,
         description: String,

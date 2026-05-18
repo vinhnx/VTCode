@@ -19,14 +19,14 @@ pub fn rate_limiter_benchmark(c: &mut Criterion) {
 
 fn simulated_tool_outcome_clone(c: &mut Criterion) {
     // Simulate the ToolPipelineOutcome structure
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct ExecutionStatus {
         output: Option<String>,
         stdout: Option<String>,
         modified_files: Vec<String>,
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct PipelineOutcome {
         status: ExecutionStatus,
         stdout: Option<String>,

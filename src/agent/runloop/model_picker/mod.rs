@@ -85,7 +85,7 @@ const SUBAGENT_SHORTCUTS: [(&str, &str); 5] = [
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)]
+#[expect(clippy::enum_variant_names)]
 enum PickerStep {
     AwaitModel,
     AwaitReasoning,
@@ -150,7 +150,7 @@ pub(crate) enum ModelPickerStart {
 }
 
 impl ModelPickerState {
-    #[allow(clippy::new_ret_no_self)]
+    #[expect(clippy::new_ret_no_self)]
     pub(crate) async fn new(
         renderer: &mut AnsiRenderer,
         vt_cfg: Option<VTCodeConfig>,

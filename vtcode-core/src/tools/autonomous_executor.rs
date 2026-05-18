@@ -702,7 +702,7 @@ mod tests {
 
         let args = json!({"action": "list", "path": "src/core/"});
         let result = executor.validate_args(tools::UNIFIED_SEARCH, &args);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
@@ -853,7 +853,7 @@ mod tests {
         // /tmp/vtcode should be allowed
         let args = json!({"path": "/tmp/vtcode/test.txt"});
         let result = executor.validate_args(tools::WRITE_FILE, &args);
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
@@ -957,6 +957,6 @@ mod tests {
         let args = json!({"path": "src/../lib/file.rs"});
         let result = executor.validate_args(tools::WRITE_FILE, &args);
         // This should succeed but log a warning
-        assert!(result.is_ok());
+        result.unwrap();
     }
 }

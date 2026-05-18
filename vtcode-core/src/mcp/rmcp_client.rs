@@ -302,7 +302,7 @@ impl RmcpClient {
         Ok(resources)
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn list_all_resource_templates(
         &self,
         timeout: Option<Duration>,

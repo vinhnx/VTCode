@@ -8,7 +8,7 @@ pub(crate) fn tool_catalog_change_notifier(
     tool_catalog.change_notifier()
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn should_expose_tool_in_mode(
     tool: &vtcode_core::llm::provider::ToolDefinition,
     plan_mode: bool,
@@ -21,7 +21,7 @@ pub(crate) fn should_expose_tool_in_mode(
     )
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn filter_tools_for_mode(
     tools: Option<Arc<Vec<vtcode_core::llm::provider::ToolDefinition>>>,
     plan_mode: bool,

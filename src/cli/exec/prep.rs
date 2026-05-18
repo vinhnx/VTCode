@@ -487,7 +487,7 @@ mod tests {
             true,
         );
 
-        assert!(result.is_ok());
+        result.unwrap();
         assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
     }
 

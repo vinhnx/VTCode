@@ -66,7 +66,7 @@ pub struct SessionRuntimeParams<'a, Resume> {
 }
 
 impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         agent_config: &'a CoreAgentConfig,
         vt_config: Option<VTCodeConfig>,

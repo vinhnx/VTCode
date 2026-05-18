@@ -215,7 +215,7 @@ pub struct DiffRenderer {
     show_line_numbers: bool,
     context_lines: usize,
     use_colors: bool,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) palette: GitDiffPalette,
     // Pre-rendered ANSI codes for performance (cached)
     cached_styles: CachedStyles,
@@ -422,7 +422,7 @@ impl DiffRenderer {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
             // CRITICAL: Apply style and reset without including newlines in the styled block

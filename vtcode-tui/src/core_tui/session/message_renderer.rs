@@ -8,7 +8,7 @@ use crate::config::constants::ui;
 // Note: format_tool_parameters and simplify_tool_display are available in super::text_utils
 // if needed for future use.
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn render_message_spans(
     line: &MessageLine,
     theme: &InlineTheme,
@@ -80,7 +80,7 @@ pub(crate) fn render_message_spans(
     spans
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn agent_prefix_spans(
     line: &MessageLine,
     theme: &InlineTheme,
@@ -110,7 +110,7 @@ pub(crate) fn agent_prefix_spans(
     spans
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
     // Render tool output without header decorations - just display segments directly
     let mut spans = Vec::with_capacity(line.segments.len());
@@ -121,7 +121,7 @@ pub(crate) fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> V
     spans
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn render_styled_action_text(
     spans: &mut Vec<Span<'static>>,
     action: &str,
@@ -141,7 +141,7 @@ fn render_styled_action_text(
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn strip_tool_status_prefix(text: &str) -> &str {
     let trimmed = text.trim_start();
     const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];

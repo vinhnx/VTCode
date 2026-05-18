@@ -407,7 +407,7 @@ pub(crate) struct RunLoopContext<'a> {
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub safety_validator: Option<&'a Arc<ToolCallSafetyValidator>>,
     pub traj: &'a TrajectoryLogger,
     pub harness_state: &'a mut HarnessTurnState,
@@ -423,7 +423,7 @@ pub(crate) struct AutoModeRuntimeContext<'a> {
 }
 
 impl<'a> RunLoopContext<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,
@@ -463,7 +463,7 @@ impl<'a> RunLoopContext<'a> {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new_with_auto_mode_context(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,
@@ -707,7 +707,7 @@ mod tests {
             1,
         );
         state.set_turn_timeout_secs(60);
-        state.turn_started_at = Instant::now() - Duration::from_secs(45);
+        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(45)).unwrap();
 
         assert!(!state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
 
@@ -725,7 +725,7 @@ mod tests {
             1,
         );
         state.set_turn_timeout_secs(60);
-        state.turn_started_at = Instant::now() - Duration::from_secs(50);
+        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(50)).unwrap();
         state.record_tool_call();
         state.activate_recovery("loop detector");
 

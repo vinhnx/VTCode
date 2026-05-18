@@ -274,7 +274,7 @@ pub fn render_modal_list(
 }
 
 /// Render wizard tabs header showing steps with completion status
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub fn render_wizard_tabs(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -353,7 +353,7 @@ fn inline_editor_for_step(step: &WizardStepState) -> Option<ModalInlineEditor> {
 }
 
 /// Render wizard modal body including tabs, question, and list
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn render_wizard_modal_body(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -516,7 +516,7 @@ pub(crate) fn render_wizard_modal_body(
     outcome
 }
 
-#[allow(clippy::const_is_empty)]
+#[expect(clippy::const_is_empty)]
 fn modal_list_summary_line(
     list: &ModalListState,
     styles: &ModalRenderStyles,

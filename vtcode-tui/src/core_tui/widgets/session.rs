@@ -181,7 +181,7 @@ struct SessionLayout {
     main: Rect,
     sidebar: Option<Rect>,
     footer: Rect,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     mode: LayoutMode,
 }
 
@@ -389,7 +389,7 @@ impl<'a> SessionWidget<'a> {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn has_input_status(session: &Session) -> bool {
     let left_present = session
         .input_status_left

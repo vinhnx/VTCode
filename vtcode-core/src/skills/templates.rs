@@ -878,7 +878,7 @@ mod tests {
         variables.insert("skill_name".to_string(), "test-skill".to_string());
         variables.insert("description".to_string(), "Test skill".to_string());
 
-        assert!(engine.validate_variables(template, &variables).is_ok());
+        engine.validate_variables(template, &variables).unwrap();
 
         // Test invalid skill name
         variables.insert("skill_name".to_string(), "Invalid Skill Name!".to_string());

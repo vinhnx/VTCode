@@ -235,7 +235,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(build_tools(&request, &None, &mut 0).is_err());
+        build_tools(&request, &None, &mut 0).unwrap_err();
     }
 
     #[test]

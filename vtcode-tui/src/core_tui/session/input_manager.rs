@@ -68,7 +68,7 @@ pub struct InputManager {
     last_escape_time: Option<Instant>,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl InputManager {
     /// Creates a new input manager
     pub fn new() -> Self {

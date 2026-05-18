@@ -113,7 +113,7 @@ mod tests {
         let mut mcp_client = McpClient::new(mcp_config);
 
         // Initialize the client
-        assert!(mcp_client.initialize().await.is_ok());
+        mcp_client.initialize().await.unwrap();
 
         // Check that we can list tools
         let tools = mcp_client.list_tools().await.unwrap();
@@ -224,7 +224,7 @@ max_concurrent_requests = 2
         let mut client = McpClient::new(config);
 
         // Initialize should succeed but do nothing
-        assert!(client.initialize().await.is_ok());
+        client.initialize().await.unwrap();
 
         // Should have no providers
         let status = client.get_status();
@@ -356,7 +356,7 @@ max_concurrent_requests = 1
         }];
 
         let mut mcp_client = McpClient::new(mcp_config);
-        assert!(mcp_client.initialize().await.is_ok());
+        mcp_client.initialize().await.unwrap();
 
         let status = mcp_client.get_status();
         assert!(status.enabled);
@@ -393,7 +393,7 @@ max_concurrent_requests = 1
             .and_then(|v| v.as_str());
         assert_eq!(first_text, Some("echo:hello"));
 
-        assert!(mcp_client.shutdown().await.is_ok());
+        mcp_client.shutdown().await.unwrap();
 
         let shutdown_status = mcp_client.get_status();
         assert_eq!(shutdown_status.provider_count, 0);
@@ -405,7 +405,7 @@ max_concurrent_requests = 1
     #[tokio::test]
     async fn test_http_provider_missing_api_key_env_is_not_initialized() {
         const MISSING_API_KEY_ENV: &str = "MCP_TEST_MISSING_API_KEY_9A3F65";
-        assert!(std::env::var(MISSING_API_KEY_ENV).is_err());
+        std::env::var(MISSING_API_KEY_ENV).unwrap_err();
 
         let mcp_config = McpClientConfig {
             enabled: true,
@@ -429,7 +429,7 @@ max_concurrent_requests = 1
         };
 
         let mut mcp_client = McpClient::new(mcp_config);
-        assert!(mcp_client.initialize().await.is_ok());
+        mcp_client.initialize().await.unwrap();
 
         let status = mcp_client.get_status();
         assert_eq!(status.provider_count, 0);
@@ -448,12 +448,12 @@ max_concurrent_requests = 1
         assert!(script_path.exists(), "mock MCP server script should exist");
 
         let mut mcp_client = McpClient::new(build_mock_mcp_config(&script_path));
-        assert!(mcp_client.initialize().await.is_ok());
+        mcp_client.initialize().await.unwrap();
         assert_eq!(mcp_client.list_tools().await.unwrap().len(), 1);
-        assert!(mcp_client.shutdown().await.is_ok());
+        mcp_client.shutdown().await.unwrap();
 
         // A fresh initialize after shutdown should reconnect and rebuild indices.
-        assert!(mcp_client.initialize().await.is_ok());
+        mcp_client.initialize().await.unwrap();
         let tools = mcp_client.list_tools().await.unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "echo");
@@ -484,9 +484,9 @@ max_concurrent_requests = 1
         assert!(script_path.exists(), "mock MCP server script should exist");
 
         let mut mcp_client = McpClient::new(build_mock_mcp_config(&script_path));
-        assert!(mcp_client.initialize().await.is_ok());
-        assert!(mcp_client.shutdown().await.is_ok());
-        assert!(mcp_client.shutdown().await.is_ok());
+        mcp_client.initialize().await.unwrap();
+        mcp_client.shutdown().await.unwrap();
+        mcp_client.shutdown().await.unwrap();
 
         let status = mcp_client.get_status();
         assert_eq!(status.provider_count, 0);

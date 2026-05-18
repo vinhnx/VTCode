@@ -209,19 +209,13 @@ mod tests {
 
     #[test]
     fn alignment_ok_when_plan_modes_match() {
-        assert!(
-            validate_prompt_catalog_alignment("normal prompt", &snapshot(false), false, false)
-                .is_ok()
-        );
-        assert!(
-            validate_prompt_catalog_alignment(
+        validate_prompt_catalog_alignment("normal prompt", &snapshot(false), false, false).unwrap();
+        validate_prompt_catalog_alignment(
                 PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
                 &snapshot(true),
                 true,
                 false,
-            )
-            .is_ok()
-        );
+            ).unwrap();
     }
 
     #[test]
@@ -260,15 +254,12 @@ mod tests {
     #[test]
     fn no_false_positive_in_normal_mode_with_apply_patch() {
         // Mentioning apply_patch in a normal-mode prompt is fine.
-        assert!(
-            validate_prompt_catalog_alignment(
+        validate_prompt_catalog_alignment(
                 "you may call apply_patch",
                 &snapshot(false),
                 false,
                 false
-            )
-            .is_ok()
-        );
+            ).unwrap();
     }
 
     #[test]
@@ -326,6 +317,6 @@ mod tests {
     fn runtime_tool_catalog_metadata_matches_snapshot() {
         let prompt = "normal prompt\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 1\n- available_tools: 0\n- request_user_input_enabled: false";
 
-        assert!(validate_prompt_catalog_alignment(prompt, &snapshot(false), false, false).is_ok());
+        validate_prompt_catalog_alignment(prompt, &snapshot(false), false, false).unwrap();
     }
 }

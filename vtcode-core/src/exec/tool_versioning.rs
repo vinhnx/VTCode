@@ -326,8 +326,8 @@ mod tests {
         assert_eq!(patch, 3);
 
         // Invalid formats
-        assert!(ToolVersion::from_string("1.2").is_err());
-        assert!(ToolVersion::from_string("invalid").is_err());
+        ToolVersion::from_string("1.2").unwrap_err();
+        ToolVersion::from_string("invalid").unwrap_err();
     }
 
     #[test]

@@ -26,11 +26,8 @@ fn tool_definition_function_uses_sanitized_description() {
 
 #[test]
 fn file_search_tool_definition_requires_object_config() {
-    assert!(
-        ToolDefinition::file_search(json!({"vector_store_ids": ["vs_docs"]}))
-            .validate()
-            .is_ok()
-    );
+    ToolDefinition::file_search(json!({"vector_store_ids": ["vs_docs"]}))
+            .validate().unwrap();
     assert!(
         ToolDefinition::file_search(json!(["vs_docs"]))
             .validate()
@@ -40,25 +37,19 @@ fn file_search_tool_definition_requires_object_config() {
 
 #[test]
 fn mcp_tool_definition_requires_object_config() {
-    assert!(
-        ToolDefinition::mcp(json!({
+    ToolDefinition::mcp(json!({
             "server_label": "dmcp",
             "server_url": "https://dmcp-server.deno.dev/sse",
             "require_approval": "never"
         }))
-        .validate()
-        .is_ok()
-    );
+        .validate().unwrap();
     assert!(ToolDefinition::mcp(json!("dmcp")).validate().is_err());
 }
 
 #[test]
 fn google_maps_tool_definition_requires_object_config() {
-    assert!(
-        ToolDefinition::google_maps(json!({"center": "sf"}))
-            .validate()
-            .is_ok()
-    );
+    ToolDefinition::google_maps(json!({"center": "sf"}))
+            .validate().unwrap();
     assert!(
         ToolDefinition::google_maps(json!(["sf"]))
             .validate()
@@ -68,11 +59,8 @@ fn google_maps_tool_definition_requires_object_config() {
 
 #[test]
 fn url_context_tool_definition_requires_object_config() {
-    assert!(
-        ToolDefinition::url_context(json!({"urls": ["https://example.com"]}))
-            .validate()
-            .is_ok()
-    );
+    ToolDefinition::url_context(json!({"urls": ["https://example.com"]}))
+            .validate().unwrap();
     assert!(
         ToolDefinition::url_context(json!("https://example.com"))
             .validate()
@@ -82,7 +70,7 @@ fn url_context_tool_definition_requires_object_config() {
 
 #[test]
 fn code_execution_tool_definition_requires_object_config() {
-    assert!(ToolDefinition::code_execution(json!({})).validate().is_ok());
+    ToolDefinition::code_execution(json!({})).validate().unwrap();
     assert!(
         ToolDefinition::code_execution(json!("enabled"))
             .validate()
@@ -108,7 +96,7 @@ fn anthropic_web_search_tool_definition_accepts_object_config() {
         defer_loading: None,
     };
 
-    assert!(tool.validate().is_ok());
+    tool.validate().unwrap();
 }
 
 #[test]
@@ -165,7 +153,7 @@ fn anthropic_code_execution_tool_definition_is_supported() {
         defer_loading: None,
     };
 
-    assert!(tool.validate().is_ok());
+    tool.validate().unwrap();
     assert!(tool.is_anthropic_code_execution());
 }
 
@@ -184,7 +172,7 @@ fn anthropic_memory_tool_definition_is_supported() {
         defer_loading: None,
     };
 
-    assert!(tool.validate().is_ok());
+    tool.validate().unwrap();
     assert!(tool.is_anthropic_memory_tool());
     assert_eq!(tool.function_name(), "memory");
 }

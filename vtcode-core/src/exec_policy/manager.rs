@@ -93,7 +93,7 @@ pub struct ExecPolicyManager {
     config: ExecPolicyConfig,
 
     /// Workspace root for path validation.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     workspace_root: PathBuf,
 
     /// Commands that have been pre-approved this session.

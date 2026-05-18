@@ -789,13 +789,13 @@ mod tests {
     #[test]
     fn test_unknown_terminal_error() {
         let result = generate_config(TerminalType::Unknown);
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
     fn test_generate_config() {
         // This test exists for backward compatibility with the stub
-        assert!(generate_config(TerminalType::Kitty).is_ok());
+        generate_config(TerminalType::Kitty).unwrap();
     }
 
     #[test]

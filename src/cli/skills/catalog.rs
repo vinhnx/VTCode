@@ -359,7 +359,7 @@ mod tests {
 
         let result = handle_skills_list(&options).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[tokio::test]

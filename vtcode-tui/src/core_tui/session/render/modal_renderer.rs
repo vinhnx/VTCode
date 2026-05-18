@@ -422,7 +422,7 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
     let trimmed = text.trim();
     let stripped = trimmed
@@ -447,7 +447,7 @@ pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -
     true
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn remove_trailing_empty_tool_line(session: &mut Session) {
     let should_remove = session
         .lines

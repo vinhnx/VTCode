@@ -146,7 +146,7 @@ fn repeated_plain_click_on_same_transcript_file_link_is_throttled() {
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == fixture.path
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn double_click_emits_open_file_event_for_absolute_transcript_path() {
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == fixture.path
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -630,7 +630,7 @@ fn repeated_plain_click_on_same_modal_url_link_is_throttled() {
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -665,7 +665,7 @@ fn double_click_emits_open_url_event_for_standard_modal_auth_link() {
         rx.try_recv(),
         Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -837,7 +837,7 @@ fn ctrl_click_does_not_emit_open_file_event_on_macos() {
         None,
     );
 
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
     assert_eq!(fixture.session.mouse_drag_target, MouseDragTarget::None);
     assert!(!fixture.session.mouse_selection.is_selecting);
     assert!(!fixture.session.mouse_selection.has_selection);
@@ -880,7 +880,7 @@ fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
         KeyModifiers::NONE,
     );
 
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -962,7 +962,7 @@ fn app_session_double_click_emits_open_file_event_for_transcript_path() {
         rx.try_recv(),
         Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == fixture.path
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -992,7 +992,7 @@ fn app_session_double_click_emits_open_url_event_for_modal_auth_link() {
         rx.try_recv(),
         Ok(app_types::InlineEvent::OpenUrl(clicked)) if clicked == url
     ));
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -1037,7 +1037,7 @@ fn app_session_ctrl_click_on_link_is_consumed_without_selection() {
         None,
     );
 
-    assert!(rx.try_recv().is_err());
+    rx.try_recv().unwrap_err();
     assert_eq!(
         fixture.session.core.mouse_drag_target,
         MouseDragTarget::None

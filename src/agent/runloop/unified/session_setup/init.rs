@@ -44,7 +44,7 @@ use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_noti
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
 
-#[allow(clippy::unnecessary_cast)]
+#[expect(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
     vt_cfg: Option<&VTCodeConfig>,
     _agent_config: &CoreAgentConfig,

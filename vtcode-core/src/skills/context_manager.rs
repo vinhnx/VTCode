@@ -620,7 +620,7 @@ mod tests {
         assert!(size_of::<SkillContextEntry>() < size_of::<SkillContextEntryInlineSkill>());
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct SkillContextEntryInlineSkill {
         name: String,
         level: ContextLevel,
@@ -644,7 +644,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(manager.register_skill_metadata(manifest).is_ok());
+        manager.register_skill_metadata(manifest).unwrap();
         assert_eq!(manager.get_active_skills().len(), 1);
         assert_eq!(manager.get_token_usage(), 50); // metadata_token_cost
     }

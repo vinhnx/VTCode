@@ -499,7 +499,7 @@ mod tests {
             }),
         )
         .await;
-        assert!(traversal.is_err());
+        traversal.unwrap_err();
 
         let readonly = execute(
             workspace.path(),
@@ -511,7 +511,7 @@ mod tests {
             }),
         )
         .await;
-        assert!(readonly.is_err());
+        readonly.unwrap_err();
     }
 
     #[tokio::test]
@@ -547,6 +547,6 @@ mod tests {
             }),
         )
         .await;
-        assert!(rollout_write.is_err());
+        rollout_write.unwrap_err();
     }
 }

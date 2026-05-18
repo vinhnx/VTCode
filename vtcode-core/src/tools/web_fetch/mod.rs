@@ -240,7 +240,7 @@ impl WebFetchTool {
     }
 
     /// Expand ~ to home directory
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn expand_home_path(path: &str) -> String {
         if path.starts_with("~/")
             && let Ok(home) = std::env::var("HOME")
@@ -251,7 +251,7 @@ impl WebFetchTool {
     }
 
     /// Load blocklist from external JSON file
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     async fn load_dynamic_blocklist(&self, path: &str) -> Result<(Vec<String>, Vec<String>)> {
         let expanded_path = Self::expand_home_path(path);
         if !Path::new(&expanded_path).exists() {
@@ -283,7 +283,7 @@ impl WebFetchTool {
     }
 
     /// Load whitelist from external JSON file
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     async fn load_dynamic_whitelist(&self, path: &str) -> Result<Vec<String>> {
         let expanded_path = Self::expand_home_path(path);
         if !Path::new(&expanded_path).exists() {

@@ -127,24 +127,15 @@ mod tests {
         let recorder = ApprovalRecorder::new(temp_dir.clone());
 
         // Record some approvals
-        assert!(
-            recorder
+        recorder
                 .record_approval("read_file", Some("Read File"), true, None)
-                .await
-                .is_ok()
-        );
-        assert!(
-            recorder
+                .await.unwrap();
+        recorder
                 .record_approval("read_file", Some("Read File"), true, None)
-                .await
-                .is_ok()
-        );
-        assert!(
-            recorder
+                .await.unwrap();
+        recorder
                 .record_approval("read_file", Some("Read File"), false, None)
-                .await
-                .is_ok()
-        );
+                .await.unwrap();
 
         // Check pattern
         let pattern = recorder.get_pattern("read_file").await;

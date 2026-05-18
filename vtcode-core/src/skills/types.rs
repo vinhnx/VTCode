@@ -608,7 +608,7 @@ mod tests {
             description: "A test skill".to_string(),
             ..Default::default()
         };
-        assert!(m.validate().is_ok());
+        m.validate().unwrap();
     }
 
     #[test]
@@ -652,7 +652,7 @@ mod tests {
             compatibility: Some("Designed for VT Code".to_string()),
             ..Default::default()
         };
-        assert!(m.validate().is_ok());
+        m.validate().unwrap();
 
         // Invalid: empty compatibility
         let m = SkillManifest {
@@ -682,7 +682,7 @@ mod tests {
             allowed_tools: Some("Read Write Bash".to_string()),
             ..Default::default()
         };
-        assert!(m.validate().is_ok());
+        m.validate().unwrap();
 
         // Invalid: empty string
         let m = SkillManifest {
@@ -737,7 +737,7 @@ mod tests {
             tools: None,
             ..Default::default()
         };
-        assert!(m.validate().is_ok());
+        m.validate().unwrap();
     }
 
     #[test]

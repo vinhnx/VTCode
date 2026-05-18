@@ -494,7 +494,7 @@ async fn reuse_saved_approval(
     None
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn finalize_permission_decision(
     tool_registry: &ToolRegistry,
     tool_name: &str,

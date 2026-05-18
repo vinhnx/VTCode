@@ -85,7 +85,7 @@ fn copy_notification_renders_in_input_status_line() {
 fn copy_notification_expires_after_five_seconds() {
     let mut session = fresh_session();
     session.show_copy_notification();
-    session.copy_notification_until = Some(Instant::now() - Duration::from_secs(1));
+    session.copy_notification_until = Some(Instant::now().checked_sub(Duration::from_secs(1)).unwrap());
     session.handle_tick();
 
     let rendered = session
@@ -112,7 +112,7 @@ fn cursor_visible_while_scrolling() {
     assert!(during_scroll.cursor_should_be_visible);
     assert!(session.use_steady_cursor());
 
-    session.scroll_cursor_steady_until = Some(Instant::now() - Duration::from_millis(1));
+    session.scroll_cursor_steady_until = Some(Instant::now().checked_sub(Duration::from_millis(1)).unwrap());
     session.handle_tick();
 
     assert!(!session.use_steady_cursor());

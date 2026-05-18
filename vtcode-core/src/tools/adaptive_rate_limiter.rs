@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn returns_wait_hint_when_bucket_exhausted() {
         let limiter = AdaptiveRateLimiter::new(1.0, 1.0);
-        assert!(limiter.try_acquire("tool").is_ok());
+        limiter.try_acquire("tool").unwrap();
         let wait_hint = limiter
             .try_acquire("tool")
             .expect_err("second immediate call should be rate-limited");
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn invalid_default_limits_fall_back_to_positive_values() {
         let limiter = AdaptiveRateLimiter::new(f64::NAN, 0.0);
-        assert!(limiter.try_acquire("tool").is_ok());
+        limiter.try_acquire("tool").unwrap();
         let wait_hint = limiter
             .try_acquire("tool")
             .expect_err("second immediate call should be rate-limited");

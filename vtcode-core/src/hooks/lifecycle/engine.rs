@@ -163,7 +163,7 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_subagent_start(
         &self,
         parent_session_id: &str,
@@ -220,7 +220,7 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_subagent_stop(
         &self,
         parent_session_id: &str,

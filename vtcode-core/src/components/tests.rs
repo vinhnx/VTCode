@@ -265,7 +265,7 @@ delegate_components!(TestRetryCtx {
 async fn auto_ctx_approves() {
     let ctx = TestAutoCtx;
     let result = ComposableRuntime::run(&ctx, "grep", "search files").await;
-    assert!(result.is_ok());
+    result.unwrap();
 }
 
 #[tokio::test]
@@ -450,7 +450,7 @@ async fn handler_facade_denied_by_ctx() {
     };
 
     let result = facade.handle(invocation).await;
-    assert!(result.is_err());
+    result.unwrap_err();
 }
 
 // ================================================================

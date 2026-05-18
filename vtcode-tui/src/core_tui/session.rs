@@ -222,7 +222,7 @@ pub struct Session {
     input_compact_mode: bool,
 
     // --- UI State ---
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
@@ -294,7 +294,7 @@ pub struct Session {
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 
     // --- Clipboard for yank/paste operations ---
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) clipboard: String,
     pub(crate) vim_state: VimState,
 

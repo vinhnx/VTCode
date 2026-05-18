@@ -367,7 +367,7 @@ pub(crate) async fn render_stream_with_options_and_progress_impl(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     provider_name: &str,
     stream: &mut uni::BorrowedLLMStream<'_>,

@@ -9,7 +9,7 @@ pub(crate) struct ThinkingSpinner {
     started_at: Instant,
     spinner_index: usize,
     last_update: Instant,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) label: String,
 }
 
@@ -44,7 +44,7 @@ impl ThinkingSpinner {
         false
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active
     }

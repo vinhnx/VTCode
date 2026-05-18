@@ -927,7 +927,7 @@ struct OllamaChatResponse {
 #[derive(Debug, Deserialize)]
 struct OllamaResponseMessage {
     #[serde(default)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     role: Option<String>,
     #[serde(default)]
     content: Option<String>,
@@ -943,7 +943,7 @@ struct OllamaResponseMessage {
 struct OllamaResponseToolCall {
     #[serde(default)]
     #[serde(rename = "type")]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     call_type: Option<String>,
     #[serde(default)]
     function: Option<OllamaResponseFunctionCall>,

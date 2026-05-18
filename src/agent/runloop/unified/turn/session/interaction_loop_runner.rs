@@ -47,14 +47,14 @@ pub(super) async fn run_interaction_loop_impl(
     const MCP_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
     let mut last_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
     let mut last_input_activity_at = Instant::now();
-    let mut last_durable_scheduler_poll = Instant::now() - DURABLE_SCHEDULER_POLL_INTERVAL;
+    let mut last_durable_scheduler_poll = Instant::now().checked_sub(DURABLE_SCHEDULER_POLL_INTERVAL).unwrap();
     let mut durable_scheduler_daemon = None;
     let mut last_durable_scheduler_error = None::<String>;
     let mut durable_scheduler_run = None::<JoinHandle<Result<usize>>>;
     let mut live_reload_watcher = SimpleConfigWatcher::new(ctx.config.workspace.clone());
     live_reload_watcher.set_check_interval(1);
     live_reload_watcher.set_debounce_duration(200);
-    let mut last_status_refresh = Instant::now() - Duration::from_millis(500);
+    let mut last_status_refresh = Instant::now().checked_sub(Duration::from_millis(500)).unwrap();
     const STATUS_REFRESH_INTERVAL: Duration = Duration::from_millis(200);
 
     loop {

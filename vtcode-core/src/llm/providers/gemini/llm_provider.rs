@@ -222,7 +222,7 @@ impl LLMProvider for GeminiProvider {
             let mut aggregator =
                 crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
-            #[allow(clippy::collapsible_if)]
+            #[expect(clippy::collapsible_if)]
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {
                     return Ok(());

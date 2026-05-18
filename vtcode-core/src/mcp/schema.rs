@@ -72,7 +72,7 @@ mod tests {
         });
 
         let valid_input = json!({"name": "test"});
-        assert!(validate_against_schema(&schema, &valid_input).is_ok());
+        validate_against_schema(&schema, &valid_input).unwrap();
 
         let invalid_input = json!({"name": 123});
         assert!(validate_against_schema(&schema, &invalid_input).is_err());
@@ -90,7 +90,7 @@ mod tests {
         });
 
         let valid = json!({"name": "John"});
-        assert!(validate_against_schema(&schema, &valid).is_ok());
+        validate_against_schema(&schema, &valid).unwrap();
 
         let invalid = json!({"age": 30});
         assert!(validate_against_schema(&schema, &invalid).is_err());
@@ -110,7 +110,7 @@ mod tests {
         });
 
         let valid = json!({"name": "John"});
-        assert!(validate_against_schema(&schema, &valid).is_ok());
+        validate_against_schema(&schema, &valid).unwrap();
 
         let invalid_empty = json!({"name": ""});
         assert!(validate_against_schema(&schema, &invalid_empty).is_err());
@@ -132,7 +132,7 @@ mod tests {
         });
 
         let valid = json!({"status": "active"});
-        assert!(validate_against_schema(&schema, &valid).is_ok());
+        validate_against_schema(&schema, &valid).unwrap();
 
         let invalid = json!({"status": "unknown"});
         assert!(validate_against_schema(&schema, &invalid).is_err());
@@ -151,7 +151,7 @@ mod tests {
         });
 
         let valid = json!({"tags": ["rust", "mcp"]});
-        assert!(validate_against_schema(&schema, &valid).is_ok());
+        validate_against_schema(&schema, &valid).unwrap();
 
         let invalid = json!({"tags": ["rust", 123]});
         assert!(validate_against_schema(&schema, &invalid).is_err());
@@ -174,7 +174,7 @@ mod tests {
         });
 
         let valid = json!({"user": {"name": "John", "age": 30}});
-        assert!(validate_against_schema(&schema, &valid).is_ok());
+        validate_against_schema(&schema, &valid).unwrap();
 
         let invalid = json!({"user": {"age": 30}});
         assert!(validate_against_schema(&schema, &invalid).is_err());
@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn test_validate_tool_input_with_no_schema() {
         let input = json!({"any": "value"});
-        assert!(validate_tool_input(None, &input).is_ok());
+        validate_tool_input(None, &input).unwrap();
     }
 
     #[test]
@@ -197,7 +197,7 @@ mod tests {
         });
 
         let valid = json!({"path": "/home"});
-        assert!(validate_tool_input(Some(&schema), &valid).is_ok());
+        validate_tool_input(Some(&schema), &valid).unwrap();
 
         let invalid = json!({});
         assert!(validate_tool_input(Some(&schema), &invalid).is_err());
@@ -207,7 +207,7 @@ mod tests {
     fn test_simple_schema() {
         let schema = simple_schema();
         let input = json!({});
-        assert!(validate_against_schema(&schema, &input).is_ok());
+        validate_against_schema(&schema, &input).unwrap();
     }
 
     #[test]

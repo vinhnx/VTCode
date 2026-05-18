@@ -41,7 +41,7 @@ pub(crate) struct InlineModalProcessor<'a> {
 }
 
 impl<'a> InlineModalProcessor<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         handle: &'a InlineHandle,
         header_context: &'a mut InlineHeaderContext,
@@ -440,7 +440,7 @@ struct PaletteCoordinator<'a> {
 }
 
 impl<'a> PaletteCoordinator<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn handle_submit(
         &mut self,
         renderer: &mut AnsiRenderer,

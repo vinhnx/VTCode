@@ -14,7 +14,7 @@ const PAGE_SIZE: usize = 20;
 #[derive(Debug, Clone)]
 pub struct FileEntry {
     pub path: String,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub display_name: String,
     pub relative_path: String,
     pub is_dir: bool,
@@ -27,7 +27,7 @@ pub struct FilePalette {
     filter_query: String,
     workspace_root: PathBuf,
     filter_cache: hashbrown::HashMap<String, Vec<FileEntry>>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     file_colorizer: FileColorizer,
 }
 
@@ -45,7 +45,7 @@ impl FilePalette {
     }
 
     /// Reset selection and filter (call when opening file browser)
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn reset(&mut self) {
         self.filter_query.clear();
         self.apply_filter(); // Refresh filtered_files to show all

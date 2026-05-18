@@ -147,12 +147,12 @@ impl TranscriptReflowCache {
         result
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn message_start_row(&self, index: usize) -> Option<usize> {
         self.row_offsets.get(index).copied()
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn message_row_count(&self, index: usize) -> Option<usize> {
         self.messages.get(index).map(|m| m.lines.len())
     }

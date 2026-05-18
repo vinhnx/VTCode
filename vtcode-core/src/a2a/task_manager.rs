@@ -467,7 +467,7 @@ mod tests {
             .expect("complete");
 
         let result = manager.cancel_task(&task.id).await;
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[tokio::test]

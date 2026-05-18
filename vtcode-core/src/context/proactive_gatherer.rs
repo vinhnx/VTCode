@@ -18,7 +18,7 @@ use crate::utils::file_utils::read_file_with_context;
 const MAX_CONTEXT_FILES: usize = 3;
 
 /// Maximum snippets per file
-#[allow(dead_code)]
+#[expect(dead_code)]
 const MAX_SNIPPETS_PER_FILE: usize = 20;
 
 /// Maximum tokens to gather

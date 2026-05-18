@@ -45,7 +45,7 @@ mod tests {
 
         let result = handle_skills_create(&skill_path).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
         assert!(skill_path.join("SKILL.md").exists());
     }
 }

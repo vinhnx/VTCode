@@ -85,7 +85,7 @@ fn test_openai_tool_call_format() {
     };
 
     // Only validate shape via provider API; internal conversion details are private
-    assert!(provider.validate_request(&request).is_ok());
+    provider.validate_request(&request).unwrap();
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn test_anthropic_tool_call_format() {
     };
 
     // Only validate shape via provider API; internal conversion details are private
-    assert!(provider.validate_request(&request).is_ok());
+    provider.validate_request(&request).unwrap();
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn test_gemini_tool_call_format() {
         anthropic_request_overrides: None,
     };
 
-    assert!(provider.validate_request(&request).is_ok());
+    provider.validate_request(&request).unwrap();
 }
 
 #[test]
@@ -407,10 +407,10 @@ fn test_all_providers_tool_validation() {
         anthropic_request_overrides: None,
     };
 
-    assert!(gemini.validate_request(&gemini_request).is_ok());
-    assert!(openai.validate_request(&openai_request).is_ok());
-    assert!(anthropic.validate_request(&anthropic_request).is_ok());
-    assert!(openrouter.validate_request(&openrouter_request).is_ok());
+    gemini.validate_request(&gemini_request).unwrap();
+    openai.validate_request(&openai_request).unwrap();
+    anthropic.validate_request(&anthropic_request).unwrap();
+    openrouter.validate_request(&openrouter_request).unwrap();
 
     let lmstudio_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -450,7 +450,7 @@ fn test_all_providers_tool_validation() {
         anthropic_request_overrides: None,
     };
 
-    assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
+    lmstudio.validate_request(&lmstudio_request).unwrap();
 
     let ollama_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -565,7 +565,7 @@ fn test_openrouter_tool_call_format() {
         anthropic_request_overrides: None,
     };
 
-    assert!(provider.validate_request(&request).is_ok());
+    provider.validate_request(&request).unwrap();
 }
 
 #[test]

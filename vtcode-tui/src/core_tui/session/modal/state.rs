@@ -16,15 +16,15 @@ pub struct ModalState {
     pub hotkeys: Vec<OverlayHotkey>,
     pub list: Option<ModalListState>,
     pub secure_prompt: Option<SecurePromptConfig>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub restore_input: bool,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub restore_cursor: bool,
     pub search: Option<ModalSearchState>,
 }
 
 /// State for a multi-step wizard modal with tabs for navigation
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Clone)]
 pub struct WizardModalState {
     pub title: String,
@@ -35,7 +35,7 @@ pub struct WizardModalState {
 }
 
 /// State for a single wizard step
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Clone)]
 pub struct WizardStepState {
     /// Title displayed in the tab header
@@ -539,7 +539,7 @@ impl ModalListItem {
     }
 }
 
-#[allow(clippy::const_is_empty)]
+#[expect(clippy::const_is_empty)]
 pub fn is_divider_title(item: &InlineListItem) -> bool {
     if item.selection.is_some() {
         return false;
@@ -1021,7 +1021,7 @@ impl ModalListState {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl WizardModalState {
     /// Create a new wizard modal state from wizard steps
     pub fn new(

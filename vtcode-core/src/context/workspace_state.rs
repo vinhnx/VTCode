@@ -78,7 +78,7 @@ pub struct WorkspaceState {
     recent_files: VecDeque<FileActivity>,
 
     /// Files currently open/being edited
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     open_files: HashSet<PathBuf>,
 
     /// Recent changes
@@ -94,7 +94,7 @@ pub struct WorkspaceState {
     last_user_intent: Option<String>,
 
     /// Pending unresolved references
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pending_references: Vec<UnresolvedReference>,
 }
 

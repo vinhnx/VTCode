@@ -259,7 +259,7 @@ fn session_message_preserves_parts() {
 #[test]
 fn session_message_layout_is_smaller_than_unboxed_equivalent() {
     #[derive(Debug)]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     struct UnboxedSessionMessageLike(
         MessageRole,
         MessageContent,

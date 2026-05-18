@@ -583,7 +583,7 @@ mod tests {
             &EditorTarget::new(PathBuf::from("/tmp/test.rs"), None),
             true,
         );
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

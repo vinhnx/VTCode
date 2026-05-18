@@ -33,7 +33,7 @@ pub enum SkillLocationType {
 
 impl SkillLocationType {
     /// Get location type from path
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn from_path(path: &Path) -> Option<Self> {
         let path_str = path.to_string_lossy();
 

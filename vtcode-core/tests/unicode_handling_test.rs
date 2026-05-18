@@ -13,18 +13,18 @@ mod tests {
 
         // Valid UTF-8 sequences
         let valid_ascii = b"Hello World";
-        assert!(str::from_utf8(valid_ascii).is_ok());
+        str::from_utf8(valid_ascii).unwrap();
 
         let valid_unicode = "Hello 世界".as_bytes();
-        assert!(str::from_utf8(valid_unicode).is_ok());
+        str::from_utf8(valid_unicode).unwrap();
 
         let valid_emoji = "🌍🚀✨".as_bytes();
-        assert!(str::from_utf8(valid_emoji).is_ok());
+        str::from_utf8(valid_emoji).unwrap();
 
         // Invalid UTF-8 sequences that push_utf8 should handle
         let invalid_sequence = &[0xFF, 0xFE, b'X'];
         let result = str::from_utf8(invalid_sequence);
-        assert!(result.is_err());
+        result.unwrap_err();
 
         // Test UTF-8 error handling similar to push_utf8
         match str::from_utf8(invalid_sequence) {
@@ -60,10 +60,10 @@ mod tests {
 
         // Test incomplete sequences
         let incomplete_1 = [0xC3]; // Missing second byte
-        assert!(str::from_utf8(&incomplete_1).is_err());
+        str::from_utf8(&incomplete_1).unwrap_err();
 
         let incomplete_2 = [0xA9]; // Second byte without first (would be different char)
-        assert!(str::from_utf8(&incomplete_2).is_err());
+        str::from_utf8(&incomplete_2).unwrap_err();
 
         // Emoji "🌍" is 4 bytes: 0xF0 0x9F 0x8C 0x8D
         let full_emoji = [0xF0, 0x9F, 0x8C, 0x8D];
@@ -71,10 +71,10 @@ mod tests {
 
         // Test incomplete emoji sequences
         let incomplete_emoji_1 = [0xF0, 0x9F]; // First 2 bytes
-        assert!(str::from_utf8(&incomplete_emoji_1).is_err());
+        str::from_utf8(&incomplete_emoji_1).unwrap_err();
 
         let incomplete_emoji_2 = [0xF0, 0x9F, 0x8C]; // First 3 bytes
-        assert!(str::from_utf8(&incomplete_emoji_2).is_err());
+        str::from_utf8(&incomplete_emoji_2).unwrap_err();
     }
 
     #[test]
@@ -116,11 +116,11 @@ mod tests {
 
         // High surrogate in UTF-8: 0xED 0xA0 0x80 to 0xED 0xAF 0xBF
         let high_surrogate = [0xED, 0xA0, 0x80];
-        assert!(str::from_utf8(&high_surrogate).is_err());
+        str::from_utf8(&high_surrogate).unwrap_err();
 
         // Low surrogate in UTF-8: 0xED 0xB0 0x80 to 0xED 0xBF 0xBF
         let low_surrogate = [0xED, 0xB0, 0x80];
-        assert!(str::from_utf8(&low_surrogate).is_err());
+        str::from_utf8(&low_surrogate).unwrap_err();
     }
 
     #[test]

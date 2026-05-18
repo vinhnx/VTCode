@@ -64,7 +64,7 @@ pub struct ToolExecutionRecord {
 
 impl ToolExecutionRecord {
     /// Create a new failed execution record.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[inline]
     pub fn failure(
         tool_name: String,
@@ -102,7 +102,7 @@ impl ToolExecutionRecord {
     }
 
     /// Create a new successful execution record.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[inline]
     pub fn success(
         tool_name: String,

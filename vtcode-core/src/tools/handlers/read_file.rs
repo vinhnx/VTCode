@@ -1038,7 +1038,7 @@ mod defaults {
 
 #[cfg(test)]
 mod tests {
-    #[allow(unused_imports)]
+    #[expect(unused_imports)]
     use super::indentation::*;
     use super::slice::*;
     use super::*;
@@ -1124,7 +1124,7 @@ mod tests {
         writeln!(temp, "only").unwrap();
 
         let err = read(temp.path(), 3, 1).await;
-        assert!(err.is_err());
+        err.unwrap_err();
     }
 
     #[tokio::test]

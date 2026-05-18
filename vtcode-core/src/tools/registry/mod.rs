@@ -581,12 +581,9 @@ mod tests {
         );
 
         registry.close_harness_exec_session(&session_id).await?;
-        assert!(
-            registry
+        registry
                 .harness_exec_session_completed(&session_id)
-                .await
-                .is_err()
-        );
+                .await.unwrap_err();
 
         Ok(())
     }

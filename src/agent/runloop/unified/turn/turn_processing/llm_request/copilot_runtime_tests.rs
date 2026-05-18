@@ -590,12 +590,9 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         .handle_terminal_release(&response.terminal_id)
         .await
         .expect("release local terminal");
-    assert!(
-        runtime_host
+    runtime_host
             .handle_terminal_output(&response.terminal_id)
-            .await
-            .is_err()
-    );
+            .await.unwrap_err();
 }
 
 #[tokio::test]

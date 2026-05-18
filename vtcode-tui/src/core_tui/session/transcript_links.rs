@@ -80,7 +80,7 @@ impl Session {
         self.decorate_borrowed_transcript_links_impl(lines, area, false)
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn decorate_borrowed_transcript_links(
         &mut self,
         lines: &[TranscriptLine],
@@ -133,7 +133,7 @@ impl Session {
         decorated
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn decorate_visible_transcript_links(
         &mut self,
         lines: Vec<TranscriptLine>,

@@ -29,7 +29,7 @@ pub(crate) struct InlineEventContext<'a> {
 }
 
 impl<'a> InlineEventContext<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn new(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,

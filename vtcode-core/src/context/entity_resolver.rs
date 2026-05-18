@@ -142,7 +142,7 @@ pub struct EntityResolver {
     index: EntityIndex,
 
     /// Workspace root for path resolution
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     workspace_root: PathBuf,
 
     /// Cache file path

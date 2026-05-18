@@ -143,7 +143,7 @@ impl ToolRegistry {
     /// Check if a unified tool call represents a read-only action.
     /// Allows `unified_file` with action "read" and `unified_exec` with read-only actions
     /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
         crate::tools::tool_intent::classify_tool_intent(tool_name, args).readonly_unified_action
     }

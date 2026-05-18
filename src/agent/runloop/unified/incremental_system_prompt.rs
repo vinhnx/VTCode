@@ -67,7 +67,7 @@ impl IncrementalSystemPrompt {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) async fn get_system_prompt(
         &self,
         base_system_prompt: &str,
@@ -101,7 +101,7 @@ impl IncrementalSystemPrompt {
     }
 
     /// Rebuild the prompt
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) async fn rebuild_prompt(
         &self,
         base_system_prompt: &str,

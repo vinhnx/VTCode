@@ -799,7 +799,7 @@ impl AgentRunner {
     }
 
     /// Execute multiple tool calls in parallel. Only safe for read-only operations.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn execute_parallel_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
@@ -852,7 +852,7 @@ impl AgentRunner {
     }
 
     /// Execute multiple tool calls sequentially.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) async fn execute_sequential_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,

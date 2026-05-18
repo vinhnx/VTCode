@@ -32,7 +32,7 @@ fn service_tier_message_label(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn finalize_model_selection(
     renderer: &mut AnsiRenderer,
     picker: &ModelPickerState,

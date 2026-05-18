@@ -250,7 +250,7 @@ mod tests {
 
         if let Ok(session) = session {
             let result = session.exit();
-            assert!(result.is_ok());
+            result.unwrap();
         }
     }
 

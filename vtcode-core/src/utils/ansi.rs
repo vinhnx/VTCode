@@ -1211,7 +1211,7 @@ impl InlineSink {
         self.handle.close_modal();
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn clear_screen(&self) {
         self.handle.clear_screen();
     }

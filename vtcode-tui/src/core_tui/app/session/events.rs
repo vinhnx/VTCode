@@ -1083,7 +1083,7 @@ pub(super) fn emit_inline_event(
 
 /// Handles scroll down event from mouse input
 #[inline]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn handle_scroll_down(
     session: &mut Session,
     events: &UnboundedSender<InlineEvent>,
@@ -1096,7 +1096,7 @@ pub(super) fn handle_scroll_down(
 
 /// Handles scroll up event from mouse input
 #[inline]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn handle_scroll_up(
     session: &mut Session,
     events: &UnboundedSender<InlineEvent>,
@@ -1107,7 +1107,7 @@ pub(super) fn handle_scroll_up(
     emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(super) fn handle_diff_preview_key(
     session: &mut Session,
     key: &KeyEvent,

@@ -185,7 +185,7 @@ mod tests {
             var_name: "INVALID-VAR-NAME".to_string(), // Hyphens not allowed
             link: None,
         };
-        assert!(AuthHandler::new(&method).is_err());
+        AuthHandler::new(&method).unwrap_err();
     }
 
     #[test]

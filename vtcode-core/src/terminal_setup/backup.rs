@@ -15,7 +15,7 @@ const MAX_BACKUPS: usize = 5;
 
 /// Manages configuration file backups for terminal setup
 pub struct ConfigBackupManager {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     terminal_type: TerminalType,
 }
 
@@ -264,6 +264,6 @@ mod tests {
         let manager = ConfigBackupManager::new(TerminalType::Kitty);
         let result = manager.backup_config(&config_path);
 
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 }

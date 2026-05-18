@@ -698,7 +698,7 @@ mod validation_tests {
         ] {
             let (_, session_resume) =
                 resolve_session_resume(&args).expect("session resume should resolve");
-            assert!(validate_resume_all_usage(&args, session_resume.as_ref()).is_ok());
+            validate_resume_all_usage(&args, session_resume.as_ref()).unwrap();
         }
     }
 
@@ -730,7 +730,7 @@ mod validation_tests {
             session_resume,
             Some(SessionResumeMode::Interactive)
         ));
-        assert!(validate_resume_all_usage(&args, session_resume.as_ref()).is_ok());
+        validate_resume_all_usage(&args, session_resume.as_ref()).unwrap();
     }
 
     #[tokio::test]

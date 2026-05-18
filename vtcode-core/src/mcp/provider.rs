@@ -28,7 +28,7 @@ use super::{
 
 pub struct McpProvider {
     pub(super) name: String,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) protocol_version: String,
     client: ArcSwap<RmcpClient>,
     /// Stored config so we can reconnect after disconnection.

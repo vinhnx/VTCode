@@ -28,12 +28,12 @@ mod tests {
 
     #[test]
     fn allows_printable_text() {
-        assert!(validate_agent_safe_text("prompt", "hello world").is_ok());
+        validate_agent_safe_text("prompt", "hello world").unwrap();
     }
 
     #[test]
     fn allows_newline_tab_and_carriage_return() {
-        assert!(validate_agent_safe_text("prompt", "line1\nline2\r\n\tindent").is_ok());
+        validate_agent_safe_text("prompt", "line1\nline2\r\n\tindent").unwrap();
     }
 
     #[test]

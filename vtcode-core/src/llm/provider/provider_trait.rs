@@ -273,6 +273,6 @@ pub trait LLMProvider: Send + Sync {
     fn supported_models(&self) -> Vec<String>;
 
     /// Validate request for this provider
-    #[allow(clippy::result_large_err)]
+    #[expect(clippy::result_large_err)]
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;
 }

@@ -57,7 +57,7 @@ impl CommandTool {
         );
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) async fn prepare_invocation(
         &self,
         input: &EnhancedTerminalInput,
@@ -182,14 +182,14 @@ impl CommandTool {
 // CommandTool is kept for internal command preparation in the PTY system.
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CommandInvocation {
     pub(crate) program: String,
     pub(crate) args: Vec<String>,
     pub(crate) display: String,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn format_command(command: &[String]) -> String {
     command
         .iter()
@@ -198,7 +198,7 @@ fn format_command(command: &[String]) -> String {
         .join(" ")
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn is_risky_command(command: &[String]) -> bool {
     if command.is_empty() {
         return false;
@@ -228,12 +228,12 @@ fn is_risky_command(command: &[String]) -> bool {
     program == "kubectl" // kubectl operations can be destructive; require confirmation
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn log_audit_for_command(_command: &str, _reason: &str) {
     // Audit logging removed - kept as no-op for backwards compatibility
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_owned();

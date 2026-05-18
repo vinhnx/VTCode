@@ -137,7 +137,7 @@ mod tests {
 
         // This should not fail even if no providers are configured
         let result = client.initialize().await;
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]

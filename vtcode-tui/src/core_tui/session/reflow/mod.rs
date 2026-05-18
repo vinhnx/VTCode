@@ -72,7 +72,7 @@ impl Session {
     /// - Subtle dividers between conversation turns
     /// - Consistent spacing between message blocks
     /// - Tool output grouped with headers
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
         let Some(message) = self.lines.get(index) else {
             return vec![TranscriptLine::default()];
@@ -247,7 +247,7 @@ impl Session {
     }
 
     /// Reflow error, warning, and info messages with a bordered block.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(super) fn reflow_error_warning_lines(
         &self,
         index: usize,

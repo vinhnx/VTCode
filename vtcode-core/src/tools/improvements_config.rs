@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn test_default_config_is_valid() {
         let config = ImprovementsConfig::default();
-        assert!(config.validate().is_ok());
+        config.validate().unwrap();
     }
 
     #[test]

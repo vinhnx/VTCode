@@ -96,7 +96,7 @@ pub struct ConversationMemory {
     recent_file_contexts: VecDeque<PathBuf>,
 
     /// Unresolved pronouns
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     unresolved_pronouns: Vec<PronounReference>,
 
     /// Resolved reference mappings

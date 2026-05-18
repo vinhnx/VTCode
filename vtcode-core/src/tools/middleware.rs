@@ -163,7 +163,7 @@ impl Default for RequestMetadata {
     note = "Use async_middleware::AsyncLoggingMiddleware instead"
 )]
 pub struct LoggingMiddleware {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     level: tracing::Level,
 }
 

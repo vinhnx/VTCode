@@ -93,6 +93,6 @@ Test instructions
 
         let result = handle_skills_validate(&skill_path, false).await;
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 }

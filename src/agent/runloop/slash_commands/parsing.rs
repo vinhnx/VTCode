@@ -368,11 +368,11 @@ mod tests {
 
     #[test]
     fn compact_rejects_invalid_flags() {
-        assert!(parse_compact_command("--max-output-tokens nope").is_err());
-        assert!(parse_compact_command("--reasoning-effort absurd").is_err());
-        assert!(parse_compact_command("--verbosity louder").is_err());
-        assert!(parse_compact_command("--service-tier turbo").is_err());
-        assert!(parse_compact_command("--store --no-store").is_err());
+        parse_compact_command("--max-output-tokens nope").unwrap_err();
+        parse_compact_command("--reasoning-effort absurd").unwrap_err();
+        parse_compact_command("--verbosity louder").unwrap_err();
+        parse_compact_command("--service-tier turbo").unwrap_err();
+        parse_compact_command("--store --no-store").unwrap_err();
     }
 
     #[test]
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn share_log_rejects_unknown_format() {
-        assert!(parse_session_log_export_format("xml").is_err());
+        parse_session_log_export_format("xml").unwrap_err();
     }
 
     #[test]

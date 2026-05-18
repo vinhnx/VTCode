@@ -1739,7 +1739,7 @@ mod tests {
         let result =
             Cli::try_parse_from(["vtcode", "--codex-experimental", "--no-codex-experimental"]);
 
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]
