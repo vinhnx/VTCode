@@ -1,5 +1,7 @@
 //! Timeline presentation helpers for share-log exports.
 
+#![allow(clippy::let_underscore_must_use)]
+
 use std::fmt::Write as _;
 
 use super::{

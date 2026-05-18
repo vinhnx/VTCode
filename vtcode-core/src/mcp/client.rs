@@ -71,7 +71,7 @@ impl McpClient {
         );
 
         // Sequential initialization
-        self.initialize_sequential().await
+        Box::pin(self.initialize_sequential()).await
     }
 
     /// Initialize providers sequentially (fallback method)

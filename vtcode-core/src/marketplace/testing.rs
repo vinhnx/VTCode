@@ -203,15 +203,16 @@ pub fn test_plugin_validation() -> Result<()> {
 
     // Test validation of valid plugin (should pass)
     let valid_result = installer.validate_manifest(&valid_plugin);
-    assert!(valid_result.is_ok(), "Valid plugin should pass validation");
+    if !valid_result.is_ok() {
+        anyhow::bail!("Valid plugin should pass validation");
+    }
     tracing::info!("valid plugin validation passed");
 
     // Test validation of invalid plugin (should fail)
     let invalid_result = installer.validate_manifest(&invalid_plugin);
-    assert!(
-        invalid_result.is_err(),
-        "Invalid plugin should fail validation"
-    );
+    if !invalid_result.is_err() {
+        anyhow::bail!("Invalid plugin should fail validation");
+    }
     tracing::info!("invalid plugin validation failed as expected");
 
     tracing::info!("plugin validation tests passed");

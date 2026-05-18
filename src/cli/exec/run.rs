@@ -394,6 +394,7 @@ mod tests {
     };
 
     #[tokio::test]
+    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
     async fn checkpoint_exec_archive_writes_initial_snapshot() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("tempdir")?;
         let archive_path = temp_dir.path().join("session-vtcode-test-archive.json");

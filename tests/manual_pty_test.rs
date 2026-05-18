@@ -6,6 +6,7 @@ use serde_json::json;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::main]
+#[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
 async fn main() -> Result<()> {
     println!("Testing PTY functionality...");
 

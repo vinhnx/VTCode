@@ -7,6 +7,7 @@ use vtcode_core::{
 };
 
 #[tokio::test]
+#[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
 async fn test_write_and_edit_rendered() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

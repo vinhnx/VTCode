@@ -268,6 +268,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are OK")]
     fn resolves_current_dir_when_none() -> Result<()> {
         let _guard = workspace_guard();
         let original_cwd = env::current_dir()?;

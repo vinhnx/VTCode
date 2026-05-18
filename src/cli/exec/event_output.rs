@@ -1,3 +1,5 @@
+#![allow(clippy::let_underscore_must_use)]
+
 use anyhow::{Context, Result};
 use std::fmt::Write as _;
 use std::fs::File;

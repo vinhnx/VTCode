@@ -16,6 +16,7 @@ use vtcode_core::{
 };
 
 #[tokio::test]
+#[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
 async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config = AgentConfig {

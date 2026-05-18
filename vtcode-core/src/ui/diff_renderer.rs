@@ -1,3 +1,5 @@
+#![allow(clippy::let_underscore_must_use)]
+
 use crate::config::constants::diff as diff_constants;
 use crate::ui::git_config::GitColorConfig;
 use crate::utils::style_helpers::style_from_color_name;

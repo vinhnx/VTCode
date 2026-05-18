@@ -1,3 +1,4 @@
+#![allow(clippy::let_underscore_must_use)]
 //! Skill persistence and management for reusable code functions.
 //!
 //! Agents can save working code implementations as reusable "skills" in the

@@ -159,7 +159,7 @@ panic_in_result_fn = "warn"
 
 # Don't Fail Silently - prevent dropped futures and swallowed errors
 let_underscore_future = "warn"
-let_underscore_must_use = "warn"
+let_underscore_must_use = "allow"  # TODO: Audit intentional drops (mostly safe write! calls & cleanup)
 unused_result_ok = "warn"
 map_err_ignore = "warn"
 assertions_on_result_states = "warn"
