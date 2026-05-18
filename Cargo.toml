@@ -143,33 +143,58 @@ rust.unsafe_code = "warn"
 rust.unstable_features = "warn"
 
 [workspace.lints.clippy]
-# Curated article-inspired rollout: enable the tripwires that are already clean in vtcode today,
-# and keep noisier slicing/unwrap/panic lints for a dedicated cleanup pass.
-dbg_macro = "warn"
+# Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
+# Note: string_slice and indexing_slicing are phased in; high-noise on existing codebase.
+string_slice = "allow"  # TODO: Phase in after cleanup pass
+indexing_slicing = "allow"  # TODO: Phase in after cleanup pass
+unwrap_used = "warn"
+panic = "warn"
 todo = "warn"
 unimplemented = "warn"
+unreachable = "warn"
+get_unwrap = "warn"
+unwrap_in_result = "warn"
+unchecked_time_subtraction = "warn"
+panic_in_result_fn = "warn"
 
-# Silent async failure / concurrency hazards
+# Don't Fail Silently - prevent dropped futures and swallowed errors
 let_underscore_future = "warn"
+let_underscore_must_use = "warn"
+unused_result_ok = "warn"
+map_err_ignore = "warn"
+assertions_on_result_states = "warn"
+
+# Don't Do Bad Async Stuff - prevent deadlocks and concurrency bugs
 await_holding_lock = "warn"
 await_holding_refcell_ref = "warn"
+if_let_mutex = "warn"
+large_futures = "warn"
 
-# Unsafe hygiene: unsafe remains visible and requires explicit rationale.
+# Don't Do Unsafe Things with Memory
+mem_forget = "warn"
 undocumented_unsafe_blocks = "warn"
 multiple_unsafe_ops_per_block = "warn"
 unnecessary_safety_doc = "warn"
 unnecessary_safety_comment = "warn"
-mem_forget = "warn"
 
-# Numeric tripwires with low current noise.
+# Don't Do Potentially Incorrect Things with Numbers
+float_cmp = "warn"
+float_cmp_const = "warn"
 lossy_float_literal = "warn"
+cast_sign_loss = "warn"
 invalid_upcast_comparisons = "warn"
 
-# Easy-to-avoid correctness hazards.
+# Don't Do Bad Things That are Easy to Avoid
 rc_mutex = "warn"
+debug_assert_with_mut_call = "warn"
 iter_not_returning_iterator = "warn"
 expl_impl_clone_on_copy = "warn"
 infallible_try_from = "warn"
+dbg_macro = "warn"
+
+# Don't `allow` Your Way Around These Lints
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 
 
 [dependencies]
