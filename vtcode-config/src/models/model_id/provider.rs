@@ -12,6 +12,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview
+            | ModelId::Gemini35Flash
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT55
             | ModelId::GPT5

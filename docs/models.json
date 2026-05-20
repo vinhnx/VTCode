@@ -103,6 +103,37 @@
           "thinking": true
         }
       },
+      "gemini-3.5-flash": {
+        "id": "gemini-3.5-flash",
+        "name": "Gemini 3.5 Flash",
+        "description": "High-efficiency frontier model for fast inference with excellent quality-to-speed balance",
+        "version": "stable",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "caching": true,
+          "code_execution": true,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": true,
+          "thinking": true
+        }
+      },
       "gemini-3-flash-preview": {
         "id": "gemini-3-flash-preview",
         "name": "Gemini 3 Flash",

@@ -19,7 +19,7 @@ memories = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-oss:120b-cloud"
+default_model = "gemini-3.5-flash"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -27,14 +27,14 @@ default_model = "gpt-oss:120b-cloud"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
 theme = "mono"
-api_key_env = "OLLAMA_API_KEY"
-provider = "ollama"
+api_key_env = "GEMINI_API_KEY"
+provider = "gemini"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.

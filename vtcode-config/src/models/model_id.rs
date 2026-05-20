@@ -27,6 +27,8 @@ pub enum ModelId {
     Gemini31ProPreviewCustomTools,
     /// Gemini 3.1 Flash Lite Preview - Most cost-efficient model, offering fastest performance for high-frequency, lightweight tasks
     Gemini31FlashLitePreview,
+    /// Gemini 3.5 Flash - High-efficiency frontier model for fast inference
+    Gemini35Flash,
     /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
     #[default]
     Gemini3FlashPreview,

@@ -18,6 +18,7 @@ pub mod zai;
 pub const GEMINI_3_1_PRO_PREVIEW: &str = google::GEMINI_3_1_PRO_PREVIEW;
 pub const GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS: &str = google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS;
 pub const GEMINI_3_1_FLASH_LITE_PREVIEW: &str = google::GEMINI_3_1_FLASH_LITE_PREVIEW;
+pub const GEMINI_3_5_FLASH: &str = google::GEMINI_3_5_FLASH;
 pub const GEMINI_3_FLASH_PREVIEW: &str = google::GEMINI_3_FLASH_PREVIEW;
 pub const GPT: &str = openai::GPT;
 pub const GPT_5: &str = openai::GPT_5;

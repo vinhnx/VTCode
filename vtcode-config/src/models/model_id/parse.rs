@@ -58,6 +58,7 @@ impl FromStr for ModelId {
             s if s == models::GEMINI_3_1_FLASH_LITE_PREVIEW => {
                 Ok(ModelId::Gemini31FlashLitePreview)
             }
+            s if s == models::GEMINI_3_5_FLASH => Ok(ModelId::Gemini35Flash),
             s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
             s if s == models::GPT => Ok(ModelId::GPT54),

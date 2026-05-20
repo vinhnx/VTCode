@@ -11,6 +11,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview => "Gemini 3.1 Pro Preview",
             ModelId::Gemini31ProPreviewCustomTools => "Gemini 3.1 Pro Preview (Custom Tools)",
             ModelId::Gemini31FlashLitePreview => "Gemini 3.1 Flash Lite Preview",
+            ModelId::Gemini35Flash => "Gemini 3.5 Flash",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
             ModelId::GPT55 => "GPT-5.5",

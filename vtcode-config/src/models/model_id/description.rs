@@ -17,6 +17,9 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => {
                 "Most cost-efficient Gemini 3.1 model, offering fastest performance for high-frequency, lightweight tasks"
             }
+            ModelId::Gemini35Flash => {
+                "High-efficiency frontier model for fast inference with excellent quality-to-speed balance"
+            }
             ModelId::Gemini3FlashPreview => {
                 "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }
