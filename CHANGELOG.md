@@ -2,6 +2,29 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.106.0 - 2026-05-20
+
+### Highlights
+### Other Changes
+#### Other
+
+- Implement slash command handling and associated models; add tests for command parsing and outcomes (2d07c12f) 
+- Add status line and terminal title setup commands (edca2bfb) 
+- Add support for inline loop actions and enhance diagnostics commands (34fc9261) 
+- Decompose TUI runloop and slash-command modules into smaller units (02d94320) 
+- Add interview context and payload handling for Plan Mode (d0516994) 
+- Add recovery preview and response handling for assistant interactions (d0b6e8e8) 
+- Refactor canonical_tool_name to return &str and update related usages (0dbef927) 
+- Refactor agent_type handling to use String instead of Cow and optimize message content processing (3901951c) 
+- Refactor code for readability and maintainability; streamline tool loop limit checks and enhance plan response handling (3d222d8e) 
+- Enhance Clippy lints for better safety and correctness checks (8b03a3e1) 
+- Replace #[allow(dead_code)] with #[expect(dead_code)] in multiple files to improve dead code handling (b01fb753) 
+- Add new tools to tool policy and adjust policies; update Clippy lints and test expectations (f9c6c5df) 
+- Update lints and improve code quality across multiple modules (ca987323) 
+- Add Gemini 3.5 Flash model (0509cebf) 
+#### Refactors
+
+- Optimize atomic operations and session management in PTY handling (1141a096) 
 ## 0.105.13 - 2026-05-14
 
 ### Highlights
