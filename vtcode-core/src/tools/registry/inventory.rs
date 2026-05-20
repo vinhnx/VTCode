@@ -679,7 +679,9 @@ mod tests {
     #[test]
     fn test_cleanup_uses_frequently_used_snapshot() {
         let inventory = make_test_inventory();
-        let stale = Instant::now().checked_sub(Duration::from_secs(3601)).unwrap();
+        let stale = Instant::now()
+            .checked_sub(Duration::from_secs(3601))
+            .unwrap();
 
         for idx in 0..1001 {
             let name = format!("tool_{idx}");
@@ -703,7 +705,9 @@ mod tests {
         {
             let mut state = inventory.state.write().unwrap();
             state.frequently_used.insert("tool_0".to_string());
-            state.last_cache_cleanup = Instant::now().checked_sub(Duration::from_secs(301)).unwrap();
+            state.last_cache_cleanup = Instant::now()
+                .checked_sub(Duration::from_secs(301))
+                .unwrap();
         }
 
         inventory.cleanup_cache_if_needed();

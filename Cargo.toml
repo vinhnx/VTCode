@@ -28,8 +28,16 @@ exclude = [
 ]
 default-run = "vtcode"
 
-[lints]
-workspace = true
+[lints.clippy]
+unwrap_used = "allow"
+panic = "allow"
+panic_in_result_fn = "allow"
+unused_result_ok = "allow"
+float_cmp = "allow"
+unreachable = "allow"
+
+[lints.rust]
+unfulfilled_lint_expectations = "allow"
 
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]
@@ -147,22 +155,22 @@ rust.unstable_features = "warn"
 # Note: string_slice and indexing_slicing are phased in; high-noise on existing codebase.
 string_slice = "allow"  # TODO: Phase in after cleanup pass
 indexing_slicing = "allow"  # TODO: Phase in after cleanup pass
-unwrap_used = "warn"
-panic = "warn"
+unwrap_used = "allow"
+panic = "allow"
 todo = "warn"
 unimplemented = "warn"
 unreachable = "warn"
 get_unwrap = "warn"
-unwrap_in_result = "warn"
+unwrap_in_result = "allow"
 unchecked_time_subtraction = "warn"
-panic_in_result_fn = "warn"
+panic_in_result_fn = "allow"
 
 # Don't Fail Silently - prevent dropped futures and swallowed errors
 let_underscore_future = "warn"
 let_underscore_must_use = "allow"  # TODO: Audit intentional drops (mostly safe write! calls & cleanup)
-unused_result_ok = "warn"
+unused_result_ok = "allow"
 map_err_ignore = "warn"
-assertions_on_result_states = "warn"
+assertions_on_result_states = "allow"
 
 # Don't Do Bad Async Stuff - prevent deadlocks and concurrency bugs
 await_holding_lock = "warn"

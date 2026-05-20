@@ -14,6 +14,36 @@ pub use vtcode_commons::utils::{
     current_timestamp, extract_readme_excerpt, extract_toml_str, safe_replace_text,
 };
 
+/// Merge a base list of patterns with patterns loaded from an environment variable.
+/// The environment variable, if set, is expected to be a comma-separated list of values.
+pub fn merge_env_patterns(base: &[String], env_var: &str) -> Vec<String> {
+    let extra_val = std::env::var(env_var).ok();
+    let extra_count = extra_val
+        .as_ref()
+        .map(|s| s.split(',').count())
+        .unwrap_or(0);
+
+    let mut combined = Vec::with_capacity(base.len() + extra_count);
+
+    for entry in base {
+        let trimmed = entry.trim();
+        if !trimmed.is_empty() {
+            combined.push(trimmed.to_owned());
+        }
+    }
+
+    if let Some(extra) = extra_val {
+        for item in extra.split(',') {
+            let trimmed = item.trim();
+            if !trimmed.is_empty() {
+                combined.push(trimmed.to_owned());
+            }
+        }
+    }
+
+    combined
+}
+
 const WORKSPACE_LANGUAGE_SCAN_LIMIT: usize = 5_000;
 
 /// Render PTY output in a terminal-like interface

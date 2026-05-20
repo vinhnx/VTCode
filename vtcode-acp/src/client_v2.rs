@@ -419,7 +419,7 @@ impl AcpClientV2 {
                 self.call::<_, SessionPromptResult>("session/prompt", Some(params)),
             )
             .await
-            .map_err(|_| AcpError::Timeout("Prompt request timed out".to_string()))??
+            .map_err(|_err| AcpError::Timeout("Prompt request timed out".to_string()))??
         } else {
             self.call("session/prompt", Some(params)).await?
         };

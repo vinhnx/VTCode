@@ -1,3 +1,5 @@
+#![allow(clippy::panic)]
+
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use std::env;

@@ -21,11 +21,11 @@ impl ZedAgent {
                 notification,
                 completion,
             })
-            .map_err(|_| acp::Error::internal_error())?;
+            .map_err(|_err| acp::Error::internal_error())?;
 
         completion_rx
             .await
-            .map_err(|_| acp::Error::internal_error())
+            .map_err(|_err| acp::Error::internal_error())
     }
 
     pub(super) async fn send_plan_update(

@@ -181,7 +181,7 @@ impl ZedAgent {
             let data = session.data.borrow();
             data.last_tool_call_at.and_then(|last_call| {
                 let elapsed = last_call.elapsed();
-                (elapsed < delay).then_some(delay - elapsed)
+                delay.checked_sub(elapsed)
             })
         };
 

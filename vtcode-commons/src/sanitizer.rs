@@ -52,6 +52,7 @@ pub fn redact_secrets(input: String) -> String {
     redacted.to_string()
 }
 
+#[allow(clippy::panic)]
 fn compile_regex(pattern: &str) -> Regex {
     match Regex::new(pattern) {
         Ok(regex) => regex,

@@ -3,7 +3,6 @@ use crate::config::CommandsConfig;
 use crate::tools::command_cache::PermissionCache;
 use crate::tools::command_resolver::CommandResolver;
 use regex::Regex;
-use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use tracing::warn;
@@ -25,15 +24,20 @@ pub struct CommandPolicyEvaluator {
 
 impl CommandPolicyEvaluator {
     pub fn from_config(config: &CommandsConfig) -> Self {
-        let allow_prefixes = merge_patterns(&config.allow_list, "VTCODE_COMMANDS_ALLOW_LIST");
-        let deny_prefixes = merge_patterns(&config.deny_list, "VTCODE_COMMANDS_DENY_LIST");
+        let allow_prefixes =
+            crate::utils::merge_env_patterns(&config.allow_list, "VTCODE_COMMANDS_ALLOW_LIST");
+        let deny_prefixes =
+            crate::utils::merge_env_patterns(&config.deny_list, "VTCODE_COMMANDS_DENY_LIST");
 
         let allow_regex_patterns =
-            merge_patterns(&config.allow_regex, "VTCODE_COMMANDS_ALLOW_REGEX");
-        let deny_regex_patterns = merge_patterns(&config.deny_regex, "VTCODE_COMMANDS_DENY_REGEX");
+            crate::utils::merge_env_patterns(&config.allow_regex, "VTCODE_COMMANDS_ALLOW_REGEX");
+        let deny_regex_patterns =
+            crate::utils::merge_env_patterns(&config.deny_regex, "VTCODE_COMMANDS_DENY_REGEX");
 
-        let allow_glob_patterns = merge_patterns(&config.allow_glob, "VTCODE_COMMANDS_ALLOW_GLOB");
-        let deny_glob_patterns = merge_patterns(&config.deny_glob, "VTCODE_COMMANDS_DENY_GLOB");
+        let allow_glob_patterns =
+            crate::utils::merge_env_patterns(&config.allow_glob, "VTCODE_COMMANDS_ALLOW_GLOB");
+        let deny_glob_patterns =
+            crate::utils::merge_env_patterns(&config.deny_glob, "VTCODE_COMMANDS_DENY_GLOB");
 
         let allow_regexes = compile_regexes(&allow_regex_patterns);
         let deny_regexes = compile_regexes(&deny_regex_patterns);
@@ -176,22 +180,6 @@ impl CommandPolicyEvaluator {
     fn matches_any(regexes: &[Regex], value: &str) -> bool {
         regexes.iter().any(|re| re.is_match(value))
     }
-}
-
-fn merge_patterns(base: &[String], env_var: &str) -> Vec<String> {
-    let mut combined: Vec<String> = base.iter().map(|entry| entry.trim().to_owned()).collect();
-    if let Ok(extra) = env::var(env_var) {
-        combined.extend(
-            extra
-                .split(',')
-                .map(|item| item.trim().to_owned())
-                .filter(|item| !item.is_empty()),
-        );
-    }
-    combined
-        .into_iter()
-        .filter(|item| !item.is_empty())
-        .collect()
 }
 
 fn compile_regexes(patterns: &[String]) -> Vec<Regex> {

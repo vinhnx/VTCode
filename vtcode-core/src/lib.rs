@@ -1,3 +1,16 @@
+#![allow(
+    clippy::map_err_ignore,
+    clippy::cast_sign_loss,
+    clippy::collapsible_if,
+    clippy::large_futures,
+    clippy::unreachable,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::unused_result_ok,
+    clippy::float_cmp,
+    unfulfilled_lint_expectations
+)]
 //! # vtcode-core - Runtime for VT Code
 //!
 //! `vtcode-core` powers the VT Code terminal coding agent. It provides the

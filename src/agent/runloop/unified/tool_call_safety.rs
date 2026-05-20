@@ -220,11 +220,13 @@ mod tests {
         validator.start_turn();
 
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         assert!(matches!(
             validator.validate_call("read_file", &json!({})).await,
             Err(SafetyError::RateLimitExceeded { .. })
@@ -237,11 +239,13 @@ mod tests {
         validator.start_turn();
 
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         validator
-                .validate_call("delete_file", &json!({}))
-                .await.unwrap();
+            .validate_call("delete_file", &json!({}))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -254,11 +258,13 @@ mod tests {
         validator.start_turn();
 
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -268,11 +274,13 @@ mod tests {
 
         validator.start_turn();
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         assert!(
             validator
                 .validate_call("read_file", &json!({}))
@@ -282,8 +290,9 @@ mod tests {
 
         validator.start_turn();
         validator
-                .validate_call("read_file", &json!({}))
-                .await.unwrap();
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         assert!(
             validator
                 .validate_call("read_file", &json!({}))

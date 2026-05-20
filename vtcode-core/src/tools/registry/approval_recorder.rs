@@ -128,14 +128,17 @@ mod tests {
 
         // Record some approvals
         recorder
-                .record_approval("read_file", Some("Read File"), true, None)
-                .await.unwrap();
+            .record_approval("read_file", Some("Read File"), true, None)
+            .await
+            .unwrap();
         recorder
-                .record_approval("read_file", Some("Read File"), true, None)
-                .await.unwrap();
+            .record_approval("read_file", Some("Read File"), true, None)
+            .await
+            .unwrap();
         recorder
-                .record_approval("read_file", Some("Read File"), false, None)
-                .await.unwrap();
+            .record_approval("read_file", Some("Read File"), false, None)
+            .await
+            .unwrap();
 
         // Check pattern
         let pattern = recorder.get_pattern("read_file").await;

@@ -582,8 +582,9 @@ mod tests {
 
         registry.close_harness_exec_session(&session_id).await?;
         registry
-                .harness_exec_session_completed(&session_id)
-                .await.unwrap_err();
+            .harness_exec_session_completed(&session_id)
+            .await
+            .unwrap_err();
 
         Ok(())
     }

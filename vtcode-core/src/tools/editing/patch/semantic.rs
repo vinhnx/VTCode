@@ -231,7 +231,7 @@ fn resolve_ast_grep_binary(display_path: &str, anchor: &str) -> Result<PathBuf, 
 pub(crate) fn resolve_ast_grep_binary_path() -> Result<PathBuf, String> {
     match AST_GREP_OVERRIDE
         .lock()
-        .expect("ast-grep override mutex must not be poisoned")
+        .map_err(|error| format!("ast-grep override mutex must not be poisoned: {error}"))?
         .clone()
     {
         AstGrepBinaryOverride::System => {}

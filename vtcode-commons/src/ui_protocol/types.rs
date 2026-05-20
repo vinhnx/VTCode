@@ -301,6 +301,7 @@ impl PlanContent {
     }
 
     /// Get progress as a percentage.
+    #[allow(clippy::cast_sign_loss)]
     pub fn progress_percent(&self) -> u8 {
         if self.total_steps == 0 {
             0

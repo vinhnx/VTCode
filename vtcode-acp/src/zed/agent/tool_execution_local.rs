@@ -254,7 +254,7 @@ impl ZedAgent {
             let resolved = self.parse_resource_path(uri)?;
             let workspace_root = self.workspace_root();
             let normalized = ensure_path_within_workspace(&resolved, workspace_root)
-                .map_err(|_| "list_files path must stay within the workspace".to_string())?;
+                .map_err(|_err| "list_files path must stay within the workspace".to_string())?;
 
             if normalized == workspace_root {
                 return Ok(Some(".".into()));

@@ -58,12 +58,12 @@ impl ZedAgent {
         }
 
         let parsed = Url::parse(uri)
-            .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
+            .map_err(|_err| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
 
         let path = match parsed.scheme() {
-            "file" => parsed
-                .to_file_path()
-                .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?,
+            "file" => parsed.to_file_path().map_err(|_err| {
+                format!("Unable to resolve URI provided to {}", tools::READ_FILE)
+            })?,
             "zed" | "zed-fs" => {
                 let raw_path = parsed.path();
                 if raw_path.is_empty() {
@@ -72,7 +72,7 @@ impl ZedAgent {
                         tools::READ_FILE
                     ));
                 }
-                let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_| {
+                let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_err| {
                     format!("Unable to resolve URI provided to {}", tools::READ_FILE)
                 })?;
                 PathBuf::from(&*decoded)

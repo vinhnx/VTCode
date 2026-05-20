@@ -86,7 +86,7 @@ impl AcpClient {
             .registry
             .find(remote_agent_id)
             .await
-            .map_err(|_| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
+            .map_err(|_err| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
 
         let message = AcpMessage::request(
             self.local_agent_id.clone(),
@@ -122,7 +122,7 @@ impl AcpClient {
             .registry
             .find(remote_agent_id)
             .await
-            .map_err(|_| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
+            .map_err(|_err| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
 
         let mut message = AcpMessage::request(
             self.local_agent_id.clone(),
@@ -231,7 +231,7 @@ impl AcpClient {
             .registry
             .find(remote_agent_id)
             .await
-            .map_err(|_| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
+            .map_err(|_err| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
 
         let url = format!("{}/health", agent_info.base_url.trim_end_matches('/'));
 
@@ -239,18 +239,12 @@ impl AcpClient {
             Ok(response) => {
                 let is_healthy = response.status().is_success();
                 if is_healthy {
-                    self.registry
-                        .update_status(remote_agent_id, true)
-                        .await
-                        .ok();
+                    let _ = self.registry.update_status(remote_agent_id, true).await;
                 }
                 Ok(is_healthy)
             }
             Err(_) => {
-                self.registry
-                    .update_status(remote_agent_id, false)
-                    .await
-                    .ok();
+                let _ = self.registry.update_status(remote_agent_id, false).await;
                 Ok(false)
             }
         }

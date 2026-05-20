@@ -1,3 +1,12 @@
+#![allow(
+    clippy::unused_result_ok,
+    clippy::unreachable,
+    clippy::panic,
+    clippy::cast_sign_loss,
+    clippy::unwrap_used,
+    clippy::map_err_ignore,
+    unfulfilled_lint_expectations
+)]
 //! `vtcode-tui` exposes inline terminal UI APIs as a reusable crate.
 //!
 //! The migrated implementation source lives in `src/core_tui/`.

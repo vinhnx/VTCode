@@ -318,8 +318,10 @@ mod tests {
 
     #[test]
     fn tools_config_reports_tool_loop_limit() {
-        let mut config = ToolsConfig::default();
-        config.max_tool_loops = 2;
+        let config = ToolsConfig {
+            max_tool_loops: 2,
+            ..Default::default()
+        };
 
         assert!(!config.tool_loop_limit_reached(1));
         assert!(config.tool_loop_limit_reached(2));

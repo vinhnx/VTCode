@@ -1,3 +1,4 @@
+#![allow(clippy::map_err_ignore)]
 use anyhow::{Context, Result, anyhow};
 use libloading::Library;
 use std::ffi::c_void;

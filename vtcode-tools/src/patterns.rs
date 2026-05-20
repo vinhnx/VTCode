@@ -259,11 +259,11 @@ mod tests {
         let mut detector = PatternDetector::new(2);
         let now = Instant::now();
 
-        for i in 0..5 {
+        for i in 0u64..5u64 {
             detector.record_event(ToolEvent {
                 tool_name: format!("tool_{}", i % 2),
                 success: i % 2 == 0,
-                duration_ms: 50 + i as u64 * 10,
+                duration_ms: 50 + i * 10,
                 timestamp: now,
             });
         }

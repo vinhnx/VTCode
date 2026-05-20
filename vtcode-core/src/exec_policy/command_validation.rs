@@ -1315,23 +1315,27 @@ mod tests {
 
         // Safe read-only operations should be allowed
         validate_git(&["status".to_owned()], &workspace, &working, false)
-                .await.unwrap();
+            .await
+            .unwrap();
         validate_git(
-                &["log".to_owned(), "--oneline".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await.unwrap();
+            &["log".to_owned(), "--oneline".to_owned()],
+            &workspace,
+            &working,
+            false,
+        )
+        .await
+        .unwrap();
         validate_git(&["diff".to_owned()], &workspace, &working, false)
-                .await.unwrap();
+            .await
+            .unwrap();
         validate_git(
-                &["show".to_owned(), "HEAD".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await.unwrap();
+            &["show".to_owned(), "HEAD".to_owned()],
+            &workspace,
+            &working,
+            false,
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

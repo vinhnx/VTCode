@@ -1,3 +1,4 @@
+#![allow(clippy::cast_sign_loss)]
 //! Shared theme registry and runtime state for VT Code UI crates.
 
 mod color_math;

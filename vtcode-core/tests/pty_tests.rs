@@ -1,3 +1,4 @@
+#![allow(clippy::panic_in_result_fn)]
 use std::time::Duration;
 
 use anyhow::Result;

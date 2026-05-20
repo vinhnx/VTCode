@@ -20,6 +20,7 @@ pub fn color_from_hex(hex: &str) -> Option<Color> {
 }
 
 /// Blend two RGB colors
+#[allow(clippy::cast_sign_loss)]
 pub fn blend_colors(color1: &Color, color2: &Color, ratio: f32) -> Option<Color> {
     let rgb1 = color_to_rgb(color1)?;
     let rgb2 = color_to_rgb(color2)?;
@@ -119,6 +120,7 @@ pub fn contrasting_color(color: &Color) -> Color {
 }
 
 /// Create a desaturated version of a color
+#[allow(clippy::cast_sign_loss)]
 pub fn desaturate_color(color: &Color, amount: f32) -> Option<Color> {
     let rgb = color_to_rgb(color)?;
     let r = rgb.r() as f32;

@@ -355,7 +355,9 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    anthropic.validate_request(&valid_anthropic_request).unwrap();
+    anthropic
+        .validate_request(&valid_anthropic_request)
+        .unwrap();
 
     let legacy_anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -364,7 +366,8 @@ fn test_request_validation() {
         ..Default::default()
     };
     anthropic
-            .validate_request(&legacy_anthropic_request).unwrap();
+        .validate_request(&legacy_anthropic_request)
+        .unwrap();
 
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {

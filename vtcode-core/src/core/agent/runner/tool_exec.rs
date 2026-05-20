@@ -327,6 +327,67 @@ fn align_prepared_batches(
 }
 
 impl AgentRunner {
+    async fn throttle_repeated_tool(&self, name: &str) {
+        let repeat_count = self.loop_detector.lock().get_call_count(name);
+        if repeat_count > 1 {
+            let delay_ms = (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
+            if !self.quiet {
+                info!(
+                    agent = %self.agent_type,
+                    tool = %name,
+                    repeat_count,
+                    delay_ms,
+                    "Throttling repeated tool call"
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+    }
+
+    async fn try_execute_fallback(
+        &self,
+        fallback: &crate::core::agent::harness_kernel::FallbackRecommendation,
+        runtime: &mut AgentRuntime,
+        agent_prefix: &str,
+        name: &str,
+    ) -> Option<(serde_json::Value, String, serde_json::Value)> {
+        info!(
+            agent = %agent_prefix,
+            tool = %name,
+            fallback_tool = %fallback.tool_name,
+            "Main tool execution failed; attempting fallback recommendation"
+        );
+
+        match self.admit_tool_call(&fallback.tool_name, &fallback.args, &mut runtime.state) {
+            Ok(fallback_prepared) => {
+                match self
+                    .execute_prepared_tool_internal(&fallback_prepared)
+                    .await
+                {
+                    Ok(res) => Some((res, fallback.tool_name.clone(), fallback.args.clone())),
+                    Err(fallback_err) => {
+                        warn!(
+                            agent = %agent_prefix,
+                            tool = %fallback.tool_name,
+                            error = %fallback_err.message,
+                            "Fallback tool execution failed"
+                        );
+                        None
+                    }
+                }
+            }
+            Err(admit_err) => {
+                warn!(
+                    agent = %agent_prefix,
+                    tool = %fallback.tool_name,
+                    error = %admit_err,
+                    "Failed to admit fallback tool call"
+                );
+                None
+            }
+        }
+    }
+
     async fn admit_runner_tool_call(
         &self,
         call: ToolCall,
@@ -431,6 +492,12 @@ impl AgentRunner {
     ) -> Result<bool> {
         use futures::future::join_all;
 
+        let prepared_map: std::collections::HashMap<String, PreparedRunnerToolCall> =
+            prepared_calls
+                .iter()
+                .map(|c| (c.tool_call_id.clone(), c.clone()))
+                .collect();
+
         let max_parallel = self.config().agent.harness.max_parallel_tool_calls;
         // Build a semaphore only when a finite concurrency cap is configured.
         // `0` means unlimited — matches the pre-semaphore behaviour.
@@ -466,6 +533,7 @@ impl AgentRunner {
                 } else {
                     None
                 };
+                runner.throttle_repeated_tool(&name).await;
                 let result = runner.execute_prepared_tool_internal(&prepared).await;
                 (
                     name,
@@ -515,45 +583,107 @@ impl AgentRunner {
                     );
                 }
                 Err(e) => {
-                    let category = e.category;
-                    let failure_text = e.user_message();
-                    error!(
-                        agent = %agent_prefix,
-                        tool = %name,
-                        error = %e.message,
-                        category = ?category,
-                        retryable = e.retryable,
-                        partial_state_possible = e.partial_state_possible,
-                        "Tool execution failed"
-                    );
-                    halt_turn = apply_tool_failure_halt_policy(&mut runtime.state, category);
-                    runtime.state.push_tool_error(
-                        call_id.clone(),
-                        &name,
-                        e.to_json_value().to_string(),
-                        is_gemini,
-                    );
-                    complete_tool_invocation(
-                        runtime,
-                        event_recorder,
-                        &call_id,
-                        &name,
-                        &args,
-                        &tool_call_item,
-                        ToolCallStatus::Failed,
-                    );
-                    event_recorder
-                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
-                    event_recorder.tool_output_finished(
-                        &tool_call_item.call_item_id,
-                        Some(&call_id),
-                        ToolCallStatus::Failed,
-                        None,
-                        &failure_text,
-                        None,
-                    );
-                    if halt_turn {
-                        break;
+                    // Try fallback first before declaring failure
+                    let mut fallback_succeeded = false;
+                    let mut fallback_result = None;
+                    let mut fallback_tool_name = None;
+                    let mut fallback_args = None;
+
+                    if let Some(prepared_call) = prepared_map.get(&call_id) {
+                        if let Some(fallback) = &prepared_call.prepared.fallback_recommendation {
+                            if let Some((res, f_name, f_args)) = self
+                                .try_execute_fallback(fallback, runtime, agent_prefix, &name)
+                                .await
+                            {
+                                fallback_succeeded = true;
+                                fallback_result = Some(res);
+                                fallback_tool_name = Some(f_name);
+                                fallback_args = Some(f_args);
+                            }
+                        }
+                    }
+
+                    if let (true, Some(res), Some(f_name), Some(f_args)) = (
+                        fallback_succeeded,
+                        fallback_result,
+                        fallback_tool_name,
+                        fallback_args,
+                    ) {
+                        // Success with fallback
+                        if !self.quiet {
+                            info!(agent = %agent_prefix, tool = %f_name, "Fallback tool executed successfully");
+                        }
+
+                        let optimized_result = reduce_tool_result(&f_name, res);
+                        let tool_result = serde_json::to_string(&optimized_result)?;
+
+                        self.update_last_paths_from_args(&f_name, &f_args, &mut runtime.state);
+
+                        runtime.state.push_tool_result(
+                            call_id.clone(),
+                            &f_name,
+                            tool_result,
+                            is_gemini,
+                        );
+                        complete_tool_invocation(
+                            runtime,
+                            event_recorder,
+                            &call_id,
+                            &f_name,
+                            &f_args,
+                            &tool_call_item,
+                            ToolCallStatus::Completed,
+                        );
+                        event_recorder
+                            .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                        finish_successful_tool_output(
+                            event_recorder,
+                            &tool_call_item.call_item_id,
+                            &call_id,
+                            &optimized_result,
+                        );
+                    } else {
+                        // Standard failure handling
+                        let category = e.category;
+                        let failure_text = e.user_message();
+                        error!(
+                            agent = %agent_prefix,
+                            tool = %name,
+                            error = %e.message,
+                            category = ?category,
+                            retryable = e.retryable,
+                            partial_state_possible = e.partial_state_possible,
+                            "Tool execution failed"
+                        );
+                        halt_turn = apply_tool_failure_halt_policy(&mut runtime.state, category);
+                        runtime.state.push_tool_error(
+                            call_id.clone(),
+                            &name,
+                            e.to_json_value().to_string(),
+                            is_gemini,
+                        );
+                        complete_tool_invocation(
+                            runtime,
+                            event_recorder,
+                            &call_id,
+                            &name,
+                            &args,
+                            &tool_call_item,
+                            ToolCallStatus::Failed,
+                        );
+                        event_recorder
+                            .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                        event_recorder.tool_output_finished(
+                            &tool_call_item.call_item_id,
+                            Some(&call_id),
+                            ToolCallStatus::Failed,
+                            None,
+                            &failure_text,
+                            None,
+                        );
+                        if halt_turn {
+                            break;
+                        }
                     }
                 }
             }
@@ -582,11 +712,7 @@ impl AgentRunner {
         event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.tool_call_id));
         let circuit_before = snapshot_circuit_diagnostics(self, &name);
 
-        let repeat_count = self.loop_detector.lock().get_call_count(&name);
-        if repeat_count > 1 {
-            let delay_ms = (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-        }
+        self.throttle_repeated_tool(&name).await;
 
         let mut guard = ToolExecutionGuard::new(
             &name,
@@ -635,41 +761,107 @@ impl AgentRunner {
                 Ok(false)
             }
             Err(e) => {
-                guard.mark_completed();
-                record_circuit_transition(
-                    self,
-                    &runtime.state.error_recovery,
-                    &name,
-                    circuit_before,
-                );
-                let category = e.category;
-                let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
+                // Try fallback first before declaring failure
+                let mut fallback_succeeded = false;
+                let mut fallback_result = None;
+                let mut fallback_tool_name = None;
+                let mut fallback_args = None;
 
-                complete_tool_invocation(
-                    runtime,
-                    event_recorder,
-                    &call.tool_call_id,
-                    &name,
-                    &args,
-                    &tool_call_item,
-                    ToolCallStatus::Failed,
-                );
-                let mut failure_ctx = ToolFailureContext {
-                    agent_prefix,
-                    session_state: &mut runtime.state,
-                    event_recorder,
-                    tool_call_id: &call.tool_call_id,
-                    call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                    is_gemini,
-                };
-                self.record_tool_failure(
-                    &mut failure_ctx,
-                    &name,
-                    &e,
-                    Some(call.tool_call_id.as_str()),
-                );
+                if let Some(fallback) = &call.prepared.fallback_recommendation {
+                    if let Some((res, f_name, f_args)) = self
+                        .try_execute_fallback(fallback, runtime, agent_prefix, &name)
+                        .await
+                    {
+                        fallback_succeeded = true;
+                        fallback_result = Some(res);
+                        fallback_tool_name = Some(f_name);
+                        fallback_args = Some(f_args);
+                    }
+                }
 
-                Ok(should_halt)
+                if let (true, Some(res), Some(f_name), Some(f_args)) = (
+                    fallback_succeeded,
+                    fallback_result,
+                    fallback_tool_name,
+                    fallback_args,
+                ) {
+                    // Success with fallback
+                    guard.mark_completed();
+                    record_circuit_transition(
+                        self,
+                        &runtime.state.error_recovery,
+                        &f_name,
+                        circuit_before,
+                    );
+                    if !self.quiet {
+                        info!(agent = %agent_prefix, tool = %f_name, "Fallback tool executed successfully");
+                    }
+
+                    let optimized_result = reduce_tool_result(&f_name, res);
+                    let tool_result = serde_json::to_string(&optimized_result)?;
+
+                    self.update_last_paths_from_args(&f_name, &f_args, &mut runtime.state);
+
+                    runtime.state.push_tool_result(
+                        call.tool_call_id.clone(),
+                        &f_name,
+                        tool_result,
+                        is_gemini,
+                    );
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call.tool_call_id,
+                        &f_name,
+                        &f_args,
+                        &tool_call_item,
+                        ToolCallStatus::Completed,
+                    );
+                    finish_successful_tool_output(
+                        event_recorder,
+                        &tool_call_item.call_item_id,
+                        &call.tool_call_id,
+                        &optimized_result,
+                    );
+                    Ok(false)
+                } else {
+                    // Main failure and fallback failed / not present
+                    guard.mark_completed();
+                    record_circuit_transition(
+                        self,
+                        &runtime.state.error_recovery,
+                        &name,
+                        circuit_before,
+                    );
+                    let category = e.category;
+                    let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
+
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call.tool_call_id,
+                        &name,
+                        &args,
+                        &tool_call_item,
+                        ToolCallStatus::Failed,
+                    );
+                    let mut failure_ctx = ToolFailureContext {
+                        agent_prefix,
+                        session_state: &mut runtime.state,
+                        event_recorder,
+                        tool_call_id: &call.tool_call_id,
+                        call_item_id: Some(tool_call_item.call_item_id.as_str()),
+                        is_gemini,
+                    };
+                    self.record_tool_failure(
+                        &mut failure_ctx,
+                        &name,
+                        &e,
+                        Some(call.tool_call_id.as_str()),
+                    );
+
+                    Ok(should_halt)
+                }
             }
         }
     }

@@ -1,3 +1,4 @@
+#![allow(clippy::unreachable, clippy::map_err_ignore)]
 //! Shared authentication and OAuth flows for VT Code.
 
 mod auth_service;

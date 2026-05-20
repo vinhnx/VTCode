@@ -211,11 +211,12 @@ mod tests {
     fn alignment_ok_when_plan_modes_match() {
         validate_prompt_catalog_alignment("normal prompt", &snapshot(false), false, false).unwrap();
         validate_prompt_catalog_alignment(
-                PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
-                &snapshot(true),
-                true,
-                false,
-            ).unwrap();
+            PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
+            &snapshot(true),
+            true,
+            false,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -255,11 +256,12 @@ mod tests {
     fn no_false_positive_in_normal_mode_with_apply_patch() {
         // Mentioning apply_patch in a normal-mode prompt is fine.
         validate_prompt_catalog_alignment(
-                "you may call apply_patch",
-                &snapshot(false),
-                false,
-                false
-            ).unwrap();
+            "you may call apply_patch",
+            &snapshot(false),
+            false,
+            false,
+        )
+        .unwrap();
     }
 
     #[test]

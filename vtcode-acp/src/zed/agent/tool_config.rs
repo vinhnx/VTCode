@@ -180,7 +180,7 @@ impl ZedAgent {
         };
 
         let normalized = ensure_path_within_workspace(&resolved, &self.config.workspace)
-            .map_err(|_| "working_dir must stay within the workspace".to_string())?;
+            .map_err(|_err| "working_dir must stay within the workspace".to_string())?;
 
         Ok(Some(normalized))
     }
@@ -298,7 +298,7 @@ impl ZedAgent {
             self.workspace_root().join(candidate)
         };
         let normalized = ensure_path_within_workspace(&resolved_candidate, self.workspace_root())
-            .map_err(|_| {
+            .map_err(|_err| {
             Self::argument_message(TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE, argument)
         })?;
 

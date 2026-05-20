@@ -177,7 +177,7 @@ impl StdioTransport {
         let (tx, rx) = oneshot::channel();
         self.pending
             .lock()
-            .map_err(|_| AcpError::Internal("stdio transport pending mutex poisoned".into()))?
+            .map_err(|_err| AcpError::Internal("stdio transport pending mutex poisoned".into()))?
             .insert(pending_key.clone(), tx);
 
         let mut payload = serde_json::json!({
@@ -195,8 +195,8 @@ impl StdioTransport {
 
         timeout(self.rpc_timeout, rx)
             .await
-            .map_err(|_| AcpError::Timeout(format!("{method} timed out")))?
-            .map_err(|_| AcpError::Internal(format!("{method} response channel closed")))
+            .map_err(|_err| AcpError::Timeout(format!("{method} timed out")))?
+            .map_err(|_err| AcpError::Internal(format!("{method} response channel closed")))
             .and_then(|r| r)
     }
 
@@ -268,7 +268,7 @@ impl StdioTransport {
         let text = serde_json::to_string(&payload)?;
         self.write_tx
             .send(text)
-            .map_err(|_| AcpError::Internal("stdio transport writer channel closed".into()))
+            .map_err(|_err| AcpError::Internal("stdio transport writer channel closed".into()))
     }
 }
 

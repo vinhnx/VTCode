@@ -61,6 +61,7 @@ fn gray_index(level: u8) -> u8 {
 }
 
 /// Reflected cube index (maps `r,g,b` in `0..=5` onto `16..=231`).
+#[allow(clippy::cast_sign_loss)]
 fn cube_index(r: u8, g: u8, b: u8) -> u8 {
     let r = r.min(5);
     let g = g.min(5);

@@ -70,7 +70,10 @@ mod integration_tests {
     }
 
     #[test]
-    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "test function, assertions are expected"
+    )]
     fn test_audit_log_creation_and_logging() -> anyhow::Result<()> {
         let dir = TempDir::new()?;
         let mut log = PermissionAuditLog::new(dir.path().to_path_buf())?;
@@ -94,7 +97,10 @@ mod integration_tests {
     }
 
     #[test]
-    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "test function, assertions are expected"
+    )]
     fn test_full_permission_flow() -> anyhow::Result<()> {
         // 1. Initialize audit log
         let audit_dir = TempDir::new()?;
@@ -195,7 +201,10 @@ mod integration_tests {
     }
 
     #[test]
-    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "test function, assertions are expected"
+    )]
     fn test_audit_log_file_location() -> anyhow::Result<()> {
         let dir = TempDir::new()?;
         let audit_log = PermissionAuditLog::new(dir.path().to_path_buf())?;

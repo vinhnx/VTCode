@@ -19,6 +19,7 @@ fn apply_platform_proxy_policy(builder: ClientBuilder) -> ClientBuilder {
     }
 }
 
+#[allow(clippy::panic)]
 fn build_client<F>(configure: F) -> Client
 where
     F: Fn(ClientBuilder) -> ClientBuilder,

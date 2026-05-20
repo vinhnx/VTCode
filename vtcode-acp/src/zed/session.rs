@@ -71,7 +71,7 @@ pub async fn run_acp_agent(
     let title_clone = title.clone();
 
     local_set
-        .run_until(async move {
+        .run_until(Box::pin(async move {
             let (tx, mut rx) = mpsc::unbounded_channel::<NotificationEnvelope>();
             let tools_config_clone = tools_config.clone();
             let commands_config_clone = commands_config.clone();
@@ -111,7 +111,7 @@ pub async fn run_acp_agent(
             let io_result = io_task.await;
             notifications.abort();
             io_result
-        })
+        }))
         .await
         .context("ACP stdio bridge task failed")?;
 

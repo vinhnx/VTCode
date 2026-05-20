@@ -1,3 +1,4 @@
+#![allow(clippy::panic)]
 use mockito::{Matcher, Server, ServerGuard};
 use serde_json::json;
 use vtcode_core::config::core::PromptCachingConfig;

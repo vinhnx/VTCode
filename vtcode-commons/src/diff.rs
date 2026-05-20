@@ -120,6 +120,7 @@ enum Edit {
     Insert,
 }
 
+#[allow(clippy::cast_sign_loss)]
 fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
     let n = old.len();
     let m = new.len();
@@ -171,6 +172,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
     vec![]
 }
 
+#[allow(clippy::cast_sign_loss)]
 fn backtrack_myers(
     old: &[char],
     new: &[char],

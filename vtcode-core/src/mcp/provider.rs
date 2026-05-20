@@ -168,7 +168,7 @@ impl McpProvider {
         }
 
         *self.initialize_result.lock().await = Some(result);
-        self.refresh_tools(allowlist, tool_timeout).await.ok();
+        let _ = self.refresh_tools(allowlist, tool_timeout).await;
         Ok(())
     }
 

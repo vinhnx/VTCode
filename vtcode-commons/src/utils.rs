@@ -35,6 +35,7 @@ pub fn calculate_sha256(content: &[u8]) -> String {
     output
 }
 
+#[allow(clippy::unreachable)]
 fn nibble_to_hex(nibble: u8) -> char {
     match nibble {
         0..=9 => char::from(b'0' + nibble),
