@@ -142,9 +142,8 @@ fn should_show_loading_ui_for_tool_call(name: &str, args: &Value) -> bool {
 }
 
 fn set_tool_execution_status(handle: &vtcode_tui::app::InlineHandle, tool_name: &str) {
-    // Show tool execution status instead of clearing it
     let left = format!("Running {}...", tool_name);
-    handle.set_input_status(Some(left), Some(String::new()));
+    handle.set_input_status(Some(left), None);
 }
 
 #[derive(Clone, Copy)]
@@ -647,7 +646,7 @@ mod tests {
         match rx.try_recv().expect("status command expected") {
             InlineCommand::SetInputStatus { left, right } => {
                 assert_eq!(left.as_deref(), Some("Running test-tool..."));
-                assert_eq!(right.as_deref(), Some(""));
+                assert_eq!(right, None);
             }
             _ => panic!("expected input status command"),
         }
