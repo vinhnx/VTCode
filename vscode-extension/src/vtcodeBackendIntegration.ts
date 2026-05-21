@@ -7,8 +7,15 @@
 
 import * as vscode from "vscode";
 import type { Context7Integration } from "./context7Integration";
-import type { ChatMessage } from "./enhancedChatView";
 import type { McpToolManager } from "./mcpTools";
+
+interface ChatMessage {
+    role: "user" | "assistant" | "system" | "tool";
+    content: string;
+    timestamp: number;
+    id?: string;
+    metadata?: Record<string, unknown>;
+}
 
 export interface VTCodeBackendConfig {
     vtcodePath: string;
