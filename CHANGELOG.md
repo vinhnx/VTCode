@@ -2,6 +2,25 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## scode-v0.50.14 - 2026-05-21
+
+### Highlights
+#### Features
+
+- Add DeepSeek V4 Flash and Pro models to Hugging Face integration (f7aac344) (@vinhnx)
+- Implement auto-scroll toggle functionality and update related key bindings (b9e91ef5) (@vinhnx)
+### Other Changes
+#### Other
+
+- Remove deprecated OpenRouter models and update data structures for better type handling (06ccb60f) (@vinhnx)
+- Refactor AgentRunner initialization and remove unused TUI session files (7da13a76) (@vinhnx)
+- Remove integration example and MCP chat adapter files; update backend integration with ChatMessage interface (31e6dafc) (@vinhnx)
+#### Refactors
+
+- Enhance retry logic with structured error handling and backoff steps (8552a810) (@vinhnx)
+- Update PlaceholderSpinner initialization and add defer restore functionality (75660e9e) (@vinhnx)
+- Clean up tool policies and adjust execution status handling (7564f2bf) (@vinhnx)
+- Remove unused 'walkdir' dependency and clean up config watcher logic (514d5a3a) (@vinhnx)
 ## 0.106.0 - 2026-05-20
 
 ### Highlights
