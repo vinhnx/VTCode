@@ -691,6 +691,8 @@ impl PlaceholderSpinner {
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
+        let defer_restore = Arc::new(AtomicBool::new(false));
+        let defer_restore_bg = defer_restore.clone();
         let restore_on_stop_left = restore_left.clone();
         let restore_on_stop_right = restore_right.clone();
         let status_right = restore_right.clone();
@@ -735,7 +737,9 @@ impl PlaceholderSpinner {
                 }
             }
 
-            spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
+            if !defer_restore_bg.load(Ordering::SeqCst) {
+                spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
+            }
         });
 
         Self {
@@ -745,7 +749,7 @@ impl PlaceholderSpinner {
             active,
             task,
             message_sender: Some(message_sender_clone),
-            defer_restore: Arc::new(AtomicBool::new(false)),
+            defer_restore,
         }
     }
 

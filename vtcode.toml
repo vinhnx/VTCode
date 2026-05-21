@@ -28,11 +28,6 @@ default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "low"
-
-# UI theme identifier controlling ANSI styling
-# Default: "ciapre"
-# Type: `string`
-theme = "mono"
 api_key_env = "HF_TOKEN"
 provider = "huggingface"
 

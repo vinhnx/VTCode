@@ -220,13 +220,15 @@ pub(super) async fn execute_with_cache_and_streaming(
 
     let tool_spinner = if show_loading_ui {
         let status_message = build_tool_status_message(name, args_val);
-        Some(PlaceholderSpinner::with_progress(
+        let spinner = PlaceholderSpinner::with_progress(
             handle,
-            Some(String::new()),
-            Some(String::new()),
+            None,
+            None,
             status_message,
             progress_reporter.as_ref(),
-        ))
+        );
+        spinner.set_defer_restore(true);
+        Some(spinner)
     } else {
         None
     };
