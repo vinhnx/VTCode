@@ -204,7 +204,15 @@
   },
   "approval_cache": {
     "allowed": [
-      "git status|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "git status|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline -20|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline --all '--grep=piped' '|' head '-5;' echo '---;' git log --oneline --all '--grep=optimization' '|' head '-5;' echo '---;' git log --oneline --all '--grep=comprehensive' '|' head -5|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline --all head echo git log --oneline --all head echo git log --oneline --all head|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline --all '|' head -50|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline --all head|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git stash list|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git stash list|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ],
     "prefixes": [],
     "regexes": []

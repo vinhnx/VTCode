@@ -159,12 +159,14 @@ impl<'a> InlineModalProcessor<'a> {
         let vt_cfg = self.model_picker.vt_cfg.clone();
         let view = {
             let loading_spinner = if renderer.supports_inline_ui() {
-                Some(PlaceholderSpinner::new(
+                let spinner = PlaceholderSpinner::new(
                     self.model_picker.handle,
-                    Some(String::new()),
-                    Some(String::new()),
+                    None,
+                    None,
                     "Loading lightweight model lists...",
-                ))
+                );
+                spinner.set_defer_restore(true);
+                Some(spinner)
             } else {
                 renderer.line(MessageStyle::Info, "Loading lightweight model lists...")?;
                 None
@@ -602,12 +604,10 @@ impl<'a> ModelPickerCoordinator<'a> {
         let workspace_hint = Some(self.config.workspace.clone());
         let picker_start = {
             let loading_spinner = if renderer.supports_inline_ui() {
-                Some(PlaceholderSpinner::new(
-                    self.handle,
-                    Some(String::new()),
-                    Some(String::new()),
-                    "Loading model lists...",
-                ))
+                let spinner =
+                    PlaceholderSpinner::new(self.handle, None, None, "Loading model lists...");
+                spinner.set_defer_restore(true);
+                Some(spinner)
             } else {
                 renderer.line(MessageStyle::Info, "Loading model lists...")?;
                 None

@@ -926,11 +926,12 @@ impl ObservedToolPtyStream {
         let progress_reporter = ProgressReporter::new();
         let spinner = PlaceholderSpinner::with_progress(
             handle,
-            Some(String::new()),
-            Some(String::new()),
+            None,
+            None,
             format!("Running command: {command_display}"),
             Some(&progress_reporter),
         );
+        spinner.set_defer_restore(true);
         let (runtime, callback) = PtyStreamRuntime::start(
             handle.clone(),
             progress_reporter.clone(),
@@ -1385,11 +1386,12 @@ async fn setup_terminal_stream(
 
     let spinner = PlaceholderSpinner::with_progress(
         handle,
-        Some(String::new()),
-        Some(String::new()),
+        None,
+        None,
         format!("Running command: {command_display}"),
         Some(&progress_reporter),
     );
+    spinner.set_defer_restore(true);
 
     let (runtime, callback) = PtyStreamRuntime::start(
         handle.clone(),
