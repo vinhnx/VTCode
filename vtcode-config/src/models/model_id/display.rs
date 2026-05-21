@@ -78,6 +78,8 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             ModelId::HuggingFaceQwen35397BA17BTogether => "Qwen3.5-397B-A17B (Together)",
             ModelId::HuggingFaceKimiK26Novita => "Kimi K2.6 (Novita)",
+            ModelId::HuggingFaceDeepseekV4FlashNovita => "DeepSeek V4 Flash (Novita)",
+            ModelId::HuggingFaceDeepseekV4ProTogether => "DeepSeek V4 Pro (Together)",
             ModelId::HuggingFaceStep35Flash => "Step 3.5 Flash (HF)",
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",

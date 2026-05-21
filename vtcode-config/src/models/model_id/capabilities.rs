@@ -187,6 +187,9 @@ impl ModelId {
                 Some(ModelId::CopilotGPT54Mini)
             }
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
+            ModelId::HuggingFaceDeepseekV4ProTogether => {
+                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
+            }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
@@ -249,6 +252,9 @@ impl ModelId {
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
+            ModelId::HuggingFaceDeepseekV4ProTogether => {
+                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
+            }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus47
@@ -279,6 +285,7 @@ impl ModelId {
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::OllamaGemini3FlashPreviewCloud
                 | ModelId::HuggingFaceStep35Flash
+                | ModelId::HuggingFaceDeepseekV4FlashNovita
         )
     }
 
@@ -328,6 +335,7 @@ impl ModelId {
                 | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
+                | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::OpenRouterMoonshotaiKimiK26
         )
     }
@@ -349,6 +357,7 @@ impl ModelId {
                 | ModelId::OpenCodeGoMinimaxM25
                 | ModelId::DeepSeekV4Flash
                 | ModelId::HuggingFaceStep35Flash
+                | ModelId::HuggingFaceDeepseekV4FlashNovita
         )
     }
 
@@ -391,6 +400,8 @@ impl ModelId {
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
+                | ModelId::HuggingFaceDeepseekV4FlashNovita
+                | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::OpenRouterMoonshotaiKimiK26
         )
     }
@@ -493,6 +504,8 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
             ModelId::HuggingFaceKimiK26Novita => "k2.6",
+            ModelId::HuggingFaceDeepseekV4FlashNovita => "v4-flash",
+            ModelId::HuggingFaceDeepseekV4ProTogether => "v4-pro",
             ModelId::HuggingFaceStep35Flash => "3.5",
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"

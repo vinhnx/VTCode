@@ -1276,6 +1276,44 @@
           "structured_output": true,
           "streaming": true
         }
+      },
+      "deepseek-ai/DeepSeek-V4-Flash:novita": {
+        "id": "deepseek-ai/DeepSeek-V4-Flash:novita",
+        "name": "DeepSeek V4 Flash (Novita)",
+        "description": "DeepSeek V4 Flash via Novita inference provider on HuggingFace router. Fast inference model for cost-effective reasoning (1M context, 158B params).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
+      "deepseek-ai/DeepSeek-V4-Pro:together": {
+        "id": "deepseek-ai/DeepSeek-V4-Pro:together",
+        "name": "DeepSeek V4 Pro (Together)",
+        "description": "DeepSeek V4 Pro via Together inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "capabilities": {
+          "structured_output": true
+        }
       }
     }
   },

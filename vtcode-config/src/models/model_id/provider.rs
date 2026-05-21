@@ -53,6 +53,8 @@ impl ModelId {
             | ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::HuggingFaceQwen35397BA17BTogether
             | ModelId::HuggingFaceKimiK26Novita
+            | ModelId::HuggingFaceDeepseekV4FlashNovita
+            | ModelId::HuggingFaceDeepseekV4ProTogether
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK26 | ModelId::MoonshotKimiK25 => Provider::Moonshot,

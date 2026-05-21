@@ -100,6 +100,8 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita,
             ModelId::HuggingFaceQwen35397BA17BTogether,
             ModelId::HuggingFaceKimiK26Novita,
+            ModelId::HuggingFaceDeepseekV4FlashNovita,
+            ModelId::HuggingFaceDeepseekV4ProTogether,
             ModelId::HuggingFaceStep35Flash,
             ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
             ModelId::OpenRouterMinimaxM25,

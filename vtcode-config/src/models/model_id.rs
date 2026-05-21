@@ -119,6 +119,10 @@ pub enum ModelId {
     HuggingFaceQwen35397BA17BTogether,
     /// Kimi K2.6 via Novita on Hugging Face router
     HuggingFaceKimiK26Novita,
+    /// DeepSeek V4 Flash via Novita on Hugging Face router
+    HuggingFaceDeepseekV4FlashNovita,
+    /// DeepSeek V4 Pro via Together on Hugging Face router
+    HuggingFaceDeepseekV4ProTogether,
     /// Step 3.5 Flash via Hugging Face router
     HuggingFaceStep35Flash,
 

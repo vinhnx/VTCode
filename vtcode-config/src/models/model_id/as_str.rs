@@ -100,6 +100,12 @@ impl ModelId {
                 models::huggingface::QWEN3_5_397B_A17B_TOGETHER
             }
             ModelId::HuggingFaceKimiK26Novita => models::huggingface::KIMI_K2_6_NOVITA,
+            ModelId::HuggingFaceDeepseekV4FlashNovita => {
+                models::huggingface::DEEPSEEK_V4_FLASH_NOVITA
+            }
+            ModelId::HuggingFaceDeepseekV4ProTogether => {
+                models::huggingface::DEEPSEEK_V4_PRO_TOGETHER
+            }
             ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
             // MiniMax models
             ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,

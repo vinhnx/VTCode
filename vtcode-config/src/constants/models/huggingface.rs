@@ -22,6 +22,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     KIMI_K2_6_NOVITA,
     // Together inference provider models
     QWEN3_5_397B_A17B_TOGETHER,
+    DEEPSEEK_V4_PRO_TOGETHER,
     STEP_3_5_FLASH,
 ];
 
@@ -51,6 +52,10 @@ pub const ZAI_GLM_5_1_ZAI_ORG: &str = "zai-org/GLM-5.1:zai-org";
 pub const KIMI_K2_6_NOVITA: &str = "moonshotai/Kimi-K2.6:novita";
 pub const QWEN3_5_397B_A17B_TOGETHER: &str = "Qwen/Qwen3.5-397B-A17B:together";
 
+// DeepSeek V4 models via HF router
+pub const DEEPSEEK_V4_FLASH_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Flash:novita";
+pub const DEEPSEEK_V4_PRO_TOGETHER: &str = "deepseek-ai/DeepSeek-V4-Pro:together";
+
 pub const REASONING_MODELS: &[&str] = &[
     // All recommended conversational LLMs support reasoning
     QWEN3_CODER_480B_A35B_INSTRUCT,
@@ -66,5 +71,7 @@ pub const REASONING_MODELS: &[&str] = &[
     QWEN3_CODER_NEXT_NOVITA,
     ZAI_GLM_5_1_ZAI_ORG,
     QWEN3_5_397B_A17B_TOGETHER,
+    DEEPSEEK_V4_PRO_TOGETHER,
+    DEEPSEEK_V4_FLASH_NOVITA,
     STEP_3_5_FLASH,
 ];

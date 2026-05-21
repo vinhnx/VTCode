@@ -226,6 +226,12 @@ impl ModelId {
             ModelId::HuggingFaceKimiK26Novita => {
                 "Kimi K2.6 via Novita inference provider on HuggingFace router."
             }
+            ModelId::HuggingFaceDeepseekV4FlashNovita => {
+                "DeepSeek V4 Flash via Novita inference provider on HuggingFace router. Fast inference model for cost-effective reasoning (1M context, 158B params)."
+            }
+            ModelId::HuggingFaceDeepseekV4ProTogether => {
+                "DeepSeek V4 Pro via Together inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params)."
+            }
             ModelId::HuggingFaceStep35Flash => {
                 "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
             }

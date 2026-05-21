@@ -160,6 +160,12 @@ impl FromStr for ModelId {
             s if s == models::huggingface::KIMI_K2_6_NOVITA => {
                 Ok(ModelId::HuggingFaceKimiK26Novita)
             }
+            s if s == models::huggingface::DEEPSEEK_V4_FLASH_NOVITA => {
+                Ok(ModelId::HuggingFaceDeepseekV4FlashNovita)
+            }
+            s if s == models::huggingface::DEEPSEEK_V4_PRO_TOGETHER => {
+                Ok(ModelId::HuggingFaceDeepseekV4ProTogether)
+            }
             s if s == models::huggingface::STEP_3_5_FLASH
                 || s == models::huggingface::STEP_3_5_FLASH_BASE
                 || s == models::huggingface::STEP_3_5_FLASH_LEGACY_FASTEST =>

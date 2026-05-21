@@ -1032,23 +1032,75 @@ fn moonshot_presets() -> Vec<ModelPreset> {
 }
 
 fn huggingface_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "huggingface/deepseek-v3.2".to_string(),
-        model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
-        display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
-        description: "DeepSeek via Hugging Face Inference".to_string(),
-        provider: Provider::HuggingFace,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(128_000),
-    }]
+    vec![
+        ModelPreset {
+            id: "huggingface/deepseek-v3.2".to_string(),
+            model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
+            display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
+            description: "DeepSeek via Hugging Face Inference".to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(128_000),
+        },
+        ModelPreset {
+            id: "huggingface/deepseek-v4-flash".to_string(),
+            model: "deepseek-ai/DeepSeek-V4-Flash:novita".to_string(),
+            display_name: "DeepSeek V4 Flash (HF/Novita)".to_string(),
+            description:
+                "Fast inference model for cost-effective reasoning (1M context, 158B params)"
+                    .to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+        ModelPreset {
+            id: "huggingface/deepseek-v4-pro".to_string(),
+            model: "deepseek-ai/DeepSeek-V4-Pro:together".to_string(),
+            display_name: "DeepSeek V4 Pro (HF/Together)".to_string(),
+            description:
+                "High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params)"
+                    .to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+    ]
 }
 
 /// Get all model presets (for testing)
