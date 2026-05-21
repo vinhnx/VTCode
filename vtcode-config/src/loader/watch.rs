@@ -41,7 +41,6 @@ impl ConfigWatcher {
     pub async fn initialize(&mut self) -> Result<()> {
         self.load_config().await?;
 
-        let workspace_path = self.workspace_path.clone();
         let last_event_time = Arc::clone(&self.last_event_time);
         let debounce_duration = self.debounce_duration;
 
@@ -53,7 +52,7 @@ impl ConfigWatcher {
                         && now.duration_since(*last_time) >= debounce_duration
                     {
                         *last_time = now;
-                        if is_relevant_config_event(&event, &workspace_path) {
+                        if is_relevant_config_event(&event) {
                             tracing::debug!("Config file changed: {:?}", event);
                         }
                     }
@@ -66,7 +65,7 @@ impl ConfigWatcher {
             if let Some(parent) = path.parent() {
                 watcher
                     .watch(parent, RecursiveMode::NonRecursive)
-                    .with_context(|| format!("Failed to watch config directory: {:?}", parent))?;
+                    .with_context(|| format!("Failed to watch config directory: {parent:?}"))?;
             }
         }
 
@@ -223,9 +222,8 @@ impl SimpleConfigWatcher {
     }
 }
 
-fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bool {
-    let relevant_files = ["vtcode.toml", ".vtcode.toml", "config.toml", "theme.toml"];
-    let relevant_dirs = ["config", "theme"];
+fn is_relevant_config_event(event: &notify::Event) -> bool {
+    let relevant_files = ["vtcode.toml", "theme.toml"];
 
     match &event.kind {
         notify::EventKind::Create(_)
@@ -233,59 +231,19 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
         | notify::EventKind::Remove(_) => event.paths.iter().any(|path| {
             path.file_name()
                 .and_then(|file_name| file_name.to_str())
-                .is_some_and(|file_name| {
-                    relevant_files.contains(&file_name) || relevant_dirs.contains(&file_name)
-                })
+                .is_some_and(|file_name| relevant_files.contains(&file_name))
         }),
         _ => false,
     }
 }
 
 fn get_config_file_paths(workspace_path: &Path) -> Vec<PathBuf> {
-    let mut paths = vec![
+    vec![
         workspace_path.join("vtcode.toml"),
-        workspace_path.join(".vtcode.toml"),
         workspace_path.join(".vtcode").join("theme.toml"),
-        workspace_path.join("config"),
-        workspace_path.join("theme"),
-        workspace_path.join(".vtcode").join("config"),
-        workspace_path.join(".vtcode").join("theme"),
-    ];
-
-    if let Some(home_dir) = dirs::home_dir() {
-        paths.push(home_dir.join(".vtcode.toml"));
-    }
-
-    paths
+    ]
 }
 
 fn latest_modified(path: &Path) -> Option<SystemTime> {
-    if path.is_file() {
-        return std::fs::metadata(path).ok()?.modified().ok();
-    }
-
-    if !path.is_dir() {
-        return None;
-    }
-
-    let mut newest = None;
-    for entry in walkdir::WalkDir::new(path)
-        .into_iter()
-        .filter_map(|item| item.ok())
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(metadata) = entry.metadata() else {
-            continue;
-        };
-        let Ok(modified) = metadata.modified() else {
-            continue;
-        };
-        newest = match newest {
-            Some(current) if modified <= current => Some(current),
-            _ => Some(modified),
-        };
-    }
-    newest
+    std::fs::metadata(path).ok()?.modified().ok()
 }

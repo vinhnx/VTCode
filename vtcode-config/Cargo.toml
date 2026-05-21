@@ -36,7 +36,6 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.106.0" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.106.0" }
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
-walkdir = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
 [features]

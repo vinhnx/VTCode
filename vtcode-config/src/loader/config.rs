@@ -40,7 +40,7 @@ pub struct ProviderConfig {
 
 /// Codex-compatible top-level feature flags.
 ///
-/// Maps to `[features]` in `vtcode.toml` (or `~/.vtcode/config.toml`).
+/// Maps to `[features]` in `vtcode.toml`.
 /// When `memories` is true, VT Code can carry useful context from earlier
 /// threads into future work via the persistent memory subsystem.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

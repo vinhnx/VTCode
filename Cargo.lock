@@ -6800,7 +6800,6 @@ dependencies = [
  "tracing",
  "vtcode-auth",
  "vtcode-commons",
- "walkdir",
 ]
 
 [[package]]
