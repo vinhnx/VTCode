@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.14] - 2026-05-21
+
+### Removed
+
+-   Removed dead webview-based chat agent views (`ChatViewProvider`, `EnhancedChatViewProvider`) and their associated files (chat-view, enhanced-chat, mcp-chat-adapter, integration examples). The extension continues to use the VS Code native chat participant API.
+
 ## [0.50.11] - 2026-03-12
 
 ### Added
