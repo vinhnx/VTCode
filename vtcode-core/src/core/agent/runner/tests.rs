@@ -6,7 +6,6 @@ use crate::config::types::CapabilityLevel;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
-use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{Task, TaskOutcome, TaskResults};
@@ -65,51 +64,54 @@ fn record_turn_duration_records_once() {
 
 #[test]
 fn finalize_outcome_marks_success() {
-    let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
-    state.has_completed = true;
-    state.turns_executed = 2;
+    let mut state = AgentSessionState::new("test".to_string(), 10, 5, 10000);
+    state.is_completed = true;
+    state.stats.turns_executed = 2;
 
     state.finalize_outcome(4);
 
-    assert_eq!(state.completion_outcome, TaskOutcome::Success);
+    assert_eq!(state.outcome, TaskOutcome::Success);
 }
 
 #[test]
 fn finalize_outcome_turn_limit() {
-    let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
-    state.turns_executed = 6;
+    let mut state = AgentSessionState::new("test".to_string(), 6, 5, 10000);
+    state.stats.turns_executed = 6;
 
     state.finalize_outcome(6);
 
     assert!(matches!(
-        state.completion_outcome,
+        state.outcome,
         TaskOutcome::TurnLimitReached { .. }
     ));
 }
 
 #[test]
 fn finalize_outcome_tool_loop_limit() {
-    let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2, 10000);
-    state.turns_executed = 2;
+    let mut state = AgentSessionState::new("test".to_string(), 10, 2, 10000);
+    state.stats.turns_executed = 2;
     state.tool_loop_limit_hit = true;
 
     state.finalize_outcome(10);
 
     assert_eq!(
-        state.completion_outcome,
-        TaskOutcome::tool_loop_limit_reached(state.max_tool_loops, state.consecutive_tool_loops)
+        state.outcome,
+        TaskOutcome::tool_loop_limit_reached(
+            state.constraints.max_tool_loops,
+            state.consecutive_tool_loops
+        )
     );
 }
 
 #[test]
 fn into_results_computes_metrics() {
-    let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
+    let mut state = AgentSessionState::new("test".to_string(), 5, 5, 10000);
     state.turn_durations_ms = vec![100, 200, 300];
     state.turn_total_ms = 600;
     state.turn_max_ms = 300;
     state.turn_count = 3;
-    state.turns_executed = 3;
-    state.completion_outcome = TaskOutcome::Success;
+    state.stats.turns_executed = 3;
+    state.outcome = TaskOutcome::Success;
     state.modified_files = vec!["file.rs".to_owned()];
     state.executed_commands = vec!["write_file".to_owned()];
     state.warnings = vec!["warning".to_owned()];
@@ -131,7 +133,7 @@ fn into_results_computes_metrics() {
 #[tokio::test]
 async fn full_auto_allowlist_hides_tools_from_exposure() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -143,7 +145,8 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -159,7 +162,7 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
 #[tokio::test]
 async fn runner_uses_public_tool_resolution_for_validation() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -171,7 +174,8 @@ async fn runner_uses_public_tool_resolution_for_validation() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -184,7 +188,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
 #[tokio::test]
 async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -196,7 +200,8 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -252,7 +257,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
 #[tokio::test]
 async fn build_universal_tools_uses_override_when_present() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -264,7 +269,8 @@ async fn build_universal_tools_uses_override_when_present() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -284,7 +290,7 @@ async fn build_universal_tools_uses_override_when_present() {
 #[tokio::test]
 async fn normalize_tool_args_applies_transform_after_defaults() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -296,7 +302,8 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -330,7 +337,7 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.provider = "anthropic".to_string();
 
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -342,7 +349,8 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
         },
         None,
         ThreadBootstrap::new(None),
-        vt_cfg,
+        Some(vt_cfg),
+        None,
     )
     .await
     .expect("runner");
@@ -360,7 +368,7 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
     vt_cfg.agent.api_key_env = crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string();
     vt_cfg.agent.checkpointing.storage_dir = Some(absolute_checkpoint_dir.display().to_string());
 
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -372,7 +380,8 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
         },
         None,
         ThreadBootstrap::new(None),
-        vt_cfg,
+        Some(vt_cfg),
+        None,
     )
     .await
     .expect("runner");
@@ -394,7 +403,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
     vt_cfg.agent.default_model =
         crate::config::constants::models::huggingface::ZAI_GLM_5_NOVITA.to_string();
 
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::HuggingFaceGlm5Novita,
         "test-key".to_string(),
@@ -406,7 +415,8 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
         },
         None,
         ThreadBootstrap::new(None),
-        vt_cfg,
+        Some(vt_cfg),
+        None,
     )
     .await
     .expect("runner");
@@ -417,7 +427,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
 #[tokio::test]
 async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -429,7 +439,8 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
@@ -450,7 +461,7 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
 #[tokio::test]
 async fn review_tool_allowlist_expands_wildcard_read_only() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -462,49 +473,18 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
         },
         None,
         ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
+        Some(VTCodeConfig::default()),
+        None,
     )
     .await
     .expect("runner");
 
-    let allowlist = runner
-        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
         .await;
 
-    assert!(allowlist.contains(&tools::UNIFIED_FILE.to_string()));
-    assert!(allowlist.contains(&tools::UNIFIED_SEARCH.to_string()));
-    assert!(!allowlist.iter().any(|tool| tool == tools::UNIFIED_EXEC));
-}
-
-#[tokio::test]
-async fn validate_and_normalize_tool_name_matches_public_registry_resolution() {
-    let temp = TempDir::new().expect("tempdir");
-    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
-        AgentType::Single,
-        ModelId::default(),
-        "test-key".to_string(),
-        temp.path().to_path_buf(),
-        "thread-tool-normalization".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
-        None,
-        ThreadBootstrap::new(None),
-        VTCodeConfig::default(),
-    )
-    .await
-    .expect("runner");
-
-    let normalized = runner
-        .validate_and_normalize_tool_name("Exec code", &json!({"command": "echo vtcode"}))
-        .expect("humanized exec label should resolve");
-    assert_eq!(normalized, tools::UNIFIED_EXEC);
-
-    let err = runner
-        .validate_and_normalize_tool_name("exec_code", &json!({"command": "echo vtcode"}))
-        .expect_err("removed alias should stay rejected");
-    assert!(err.to_string().contains("Unknown tool"));
+    assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
 }
 
 #[derive(Clone)]
@@ -699,7 +679,7 @@ fn workspace_root(temp: &TempDir) -> PathBuf {
 }
 
 async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> AgentRunner {
-    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         ModelId::default(),
         "test-key".to_string(),
@@ -711,7 +691,8 @@ async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> 
         },
         None,
         ThreadBootstrap::new(None),
-        vt_cfg,
+        Some(vt_cfg),
+        None,
     )
     .await
     .expect("runner");

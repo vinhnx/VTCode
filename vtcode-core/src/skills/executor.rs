@@ -421,35 +421,30 @@ impl ChildAgentSkillExecutor {
             .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
 
         let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
-            AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
+            AgentRunner::new_with_bootstrap(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
                 self.runtime.workspace.clone(),
                 session_id,
-                RunnerSettings {
-                    reasoning_effort: None,
-                    verbosity: None,
-                },
+                RunnerSettings::default(),
                 None,
                 crate::core::threads::ThreadBootstrap::new(None),
-                vt_cfg,
+                Some(vt_cfg),
                 self.runtime.openai_chatgpt_auth.clone(),
             )
             .await?
         } else {
-            AgentRunner::new_with_thread_bootstrap_and_openai_auth(
+            AgentRunner::new_with_bootstrap(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
                 self.runtime.workspace.clone(),
                 session_id,
-                RunnerSettings {
-                    reasoning_effort: None,
-                    verbosity: None,
-                },
+                RunnerSettings::default(),
                 None,
                 crate::core::threads::ThreadBootstrap::new(None),
+                None,
                 self.runtime.openai_chatgpt_auth.clone(),
             )
             .await?

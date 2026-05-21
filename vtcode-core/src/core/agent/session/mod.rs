@@ -475,5 +475,3 @@ mod tests {
         );
     }
 }
-
-// TODO: Move history invariant validation logic from state.rs here or shared module

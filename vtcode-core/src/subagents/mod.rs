@@ -1687,7 +1687,7 @@ impl SubagentController {
                 .await?
         };
         checkpoint_subagent_archive_start(&archive, &bootstrap_messages).await?;
-        let mut runner = AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
+        let mut runner = AgentRunner::new_with_bootstrap(
             agent_type_for_spec(&spec),
             resolved_model,
             self.config.api_key.clone(),
@@ -1699,7 +1699,7 @@ impl SubagentController {
             },
             None,
             bootstrap,
-            child_cfg.clone(),
+            Some(child_cfg.clone()),
             self.config.openai_chatgpt_auth.clone(),
         )
         .await?;

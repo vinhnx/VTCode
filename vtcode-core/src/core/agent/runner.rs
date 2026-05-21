@@ -11,7 +11,7 @@ use crate::core::agent::steering::SteeringMessage;
 use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle, build_thread_archive_metadata};
 
 /// Settings for the agent runner
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RunnerSettings {
     /// Reasoning effort level for the agent
     pub reasoning_effort: Option<ReasoningEffortLevel>,
@@ -31,7 +31,7 @@ use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::ToolRegistry;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -124,7 +124,7 @@ impl AgentRunner {
         }
     }
 
-    /// Create a new agent runner
+    /// Create a new agent runner.
     pub async fn new(
         agent_type: AgentType,
         model: ModelId,
@@ -134,30 +134,7 @@ impl AgentRunner {
         settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
-        Self::new_with_openai_auth(
-            agent_type,
-            model,
-            api_key,
-            workspace,
-            session_id,
-            settings,
-            steering_receiver,
-            None,
-        )
-        .await
-    }
-
-    pub async fn new_with_openai_auth(
-        agent_type: AgentType,
-        model: ModelId,
-        api_key: String,
-        workspace: PathBuf,
-        session_id: String,
-        settings: RunnerSettings,
-        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
-    ) -> Result<Self> {
-        Self::new_with_thread_bootstrap_and_openai_auth(
+        Self::new_internal(
             agent_type,
             model,
             api_key,
@@ -166,38 +143,15 @@ impl AgentRunner {
             settings,
             steering_receiver,
             ThreadBootstrap::new(None),
-            openai_chatgpt_auth,
-        )
-        .await
-    }
-
-    /// Create an agent runner with a prebuilt thread bootstrap (for resumed sessions).
-    pub async fn new_with_thread_bootstrap(
-        agent_type: AgentType,
-        model: ModelId,
-        api_key: String,
-        workspace: PathBuf,
-        session_id: String,
-        settings: RunnerSettings,
-        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-        bootstrap: ThreadBootstrap,
-    ) -> Result<Self> {
-        Self::new_with_thread_bootstrap_and_openai_auth(
-            agent_type,
-            model,
-            api_key,
-            workspace,
-            session_id,
-            settings,
-            steering_receiver,
-            bootstrap,
+            None,
             None,
         )
         .await
     }
 
-    /// Create an agent runner with a prebuilt thread bootstrap (for resumed sessions).
-    pub async fn new_with_thread_bootstrap_and_openai_auth(
+    /// Create an agent runner with prebuilt thread bootstrap, config, and auth.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_bootstrap(
         agent_type: AgentType,
         model: ModelId,
         api_key: String,
@@ -206,36 +160,10 @@ impl AgentRunner {
         settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
         bootstrap: ThreadBootstrap,
+        vt_cfg: Option<VTCodeConfig>,
         openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     ) -> Result<Self> {
-        Self::new_with_thread_bootstrap_internal(
-            agent_type,
-            model,
-            api_key,
-            workspace,
-            session_id,
-            settings,
-            steering_receiver,
-            bootstrap,
-            None,
-            openai_chatgpt_auth,
-        )
-        .await
-    }
-
-    /// Create an agent runner with a prebuilt thread bootstrap and preloaded config.
-    pub async fn new_with_thread_bootstrap_and_config(
-        agent_type: AgentType,
-        model: ModelId,
-        api_key: String,
-        workspace: PathBuf,
-        session_id: String,
-        settings: RunnerSettings,
-        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-        bootstrap: ThreadBootstrap,
-        vt_cfg: VTCodeConfig,
-    ) -> Result<Self> {
-        Self::new_with_thread_bootstrap_and_config_with_openai_auth(
+        Self::new_internal(
             agent_type,
             model,
             api_key,
@@ -245,42 +173,13 @@ impl AgentRunner {
             steering_receiver,
             bootstrap,
             vt_cfg,
-            None,
-        )
-        .await
-    }
-
-    /// Create an agent runner with a prebuilt thread bootstrap, preloaded config, and runtime auth.
-    #[expect(clippy::too_many_arguments)]
-    pub async fn new_with_thread_bootstrap_and_config_with_openai_auth(
-        agent_type: AgentType,
-        model: ModelId,
-        api_key: String,
-        workspace: PathBuf,
-        session_id: String,
-        settings: RunnerSettings,
-        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-        bootstrap: ThreadBootstrap,
-        vt_cfg: VTCodeConfig,
-        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
-    ) -> Result<Self> {
-        Self::new_with_thread_bootstrap_internal(
-            agent_type,
-            model,
-            api_key,
-            workspace,
-            session_id,
-            settings,
-            steering_receiver,
-            bootstrap,
-            Some(vt_cfg),
             openai_chatgpt_auth,
         )
         .await
     }
 
     #[expect(clippy::too_many_arguments)]
-    async fn new_with_thread_bootstrap_internal(
+    async fn new_internal(
         agent_type: AgentType,
         model: ModelId,
         api_key: String,
@@ -333,11 +232,11 @@ impl AgentRunner {
 
         let client: AnyClient = Box::new(ProviderClientAdapter::new(
             create_provider_with_config(&provider_name, provider_config.clone())
-                .map_err(|e| anyhow!("Failed to create client provider: {}", e))?,
+                .with_context(|| "Failed to create client provider")?,
             model.to_string(),
         ));
         let provider_client = create_provider_with_config(&provider_name, provider_config)
-            .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
+            .with_context(|| "Failed to create provider client")?;
         if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
             eprintln!(
                 "vtcode-debug: runner provider={} client_provider={} model={}",
@@ -498,12 +397,10 @@ impl AgentRunner {
     /// Enable read-only plan mode for the underlying tool registry.
     pub fn enable_plan_mode(&self) {
         self.tool_registry.enable_plan_mode();
-        self.tool_registry.plan_mode_state().enable();
     }
 
     pub fn disable_plan_mode(&self) {
         self.tool_registry.disable_plan_mode();
-        self.tool_registry.plan_mode_state().disable();
     }
 
     /// Attach a callback that will be invoked for each structured event as it is recorded.

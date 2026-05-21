@@ -2,10 +2,9 @@ use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
-use crate::tools::registry::{ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError};
+use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
-use crate::utils::error_messages::ERR_TOOL_DENIED;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde_json::Value;
 use tracing::info;
 
@@ -25,19 +24,6 @@ impl AgentRunner {
         self.is_tool_exposed(&canonical_name)
             .await
             .then_some(canonical_name)
-    }
-
-    #[expect(dead_code)]
-    pub(super) fn validate_and_normalize_tool_name(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> Result<String> {
-        let requested_name = Self::canonical_exec_request_name(tool_name);
-
-        self.tool_registry
-            .preflight_validate_call(requested_name, args)
-            .map(|outcome| outcome.normalized_tool_name)
     }
 
     pub(super) fn admit_tool_call(
@@ -77,30 +63,6 @@ impl AgentRunner {
     #[inline]
     pub(super) async fn is_valid_tool(&self, tool_name: &str) -> bool {
         self.resolve_executable_tool_name(tool_name).await.is_some()
-    }
-
-    /// Execute a tool by name with given arguments.
-    /// This is the public API that includes validation; for internal use after
-    /// validation, prefer `execute_tool_internal`.
-    #[expect(dead_code)]
-    pub(super) async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
-        let prepared = self
-            .tool_registry
-            .admit_public_tool_call(Self::canonical_exec_request_name(tool_name), args)?;
-        let canonical_name = prepared.canonical_name.clone();
-
-        // Fail fast if tool is denied or missing to avoid tight retry loops
-        if self
-            .resolve_executable_tool_name(&canonical_name)
-            .await
-            .is_none()
-        {
-            return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, canonical_name));
-        }
-        self.tool_registry
-            .execute_prepared_public_tool_ref_with_mode(&prepared, ExecSettlementMode::Manual)
-            .await
-            .map_err(|error| anyhow!(error.to_string()))
     }
 
     pub(super) async fn execute_prepared_tool_internal(
@@ -171,7 +133,7 @@ impl AgentRunner {
 
     /// Internal tool execution, skipping validation.
     /// Use when `is_valid_tool` has already been called by the caller.
-    #[expect(dead_code)]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub(super) async fn execute_tool_internal(
         &self,
         tool_name: &str,

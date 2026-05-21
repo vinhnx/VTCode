@@ -5,6 +5,7 @@ use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::types::AgentType;
+use vtcode_core::core::threads::ThreadBootstrap;
 use vtcode_core::utils::file_utils::write_file_with_context_sync;
 
 use crate::startup::ensure_full_auto_workspace_trust;
@@ -65,7 +66,7 @@ pub async fn handle_benchmark_command(
             .as_secs()
     );
 
-    let mut runner = AgentRunner::new_with_openai_auth(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         model_id,
         config.api_key.clone(),
@@ -75,6 +76,8 @@ pub async fn handle_benchmark_command(
             reasoning_effort: Some(config.reasoning_effort),
             verbosity: None,
         },
+        None,
+        ThreadBootstrap::new(None),
         None,
         config.openai_chatgpt_auth.clone(),
     )

@@ -1,11 +1,6 @@
-use crate::core::agent::task::{TaskOutcome, TaskResults};
-use crate::exec::events::ThreadEvent;
 use crate::llm::provider::Message;
-use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use hashbrown::{HashMap, HashSet};
 use std::time::Duration;
-
-use crate::core::agent::conversation::build_messages_from_conversation;
 
 // ============================================================================
 // Context Manager: Call/Output Pairing Invariants (OpenAI Codex pattern)
@@ -87,6 +82,7 @@ impl HistoryValidationReport {
     }
 }
 
+#[cfg(test)]
 #[inline]
 pub(crate) fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
@@ -150,371 +146,16 @@ impl ApiFailureTracker {
     }
 }
 
-pub struct TaskRunState {
-    pub conversation: Vec<Content>,
-    pub conversation_messages: Vec<Message>,
-    pub created_contexts: Vec<String>,
-    pub modified_files: Vec<String>,
-    pub executed_commands: Vec<String>,
-    pub warnings: Vec<String>,
-    pub last_file_path: Option<String>,
-    pub last_dir_path: Option<String>,
-    pub has_completed: bool,
-    pub completion_outcome: TaskOutcome,
-    pub turns_executed: usize,
-    pub turn_durations_ms: Vec<u128>,
-    pub turn_total_ms: u128,
-    pub turn_max_ms: u128,
-    pub turn_count: usize,
-    pub max_tool_loops: usize,
-    pub consecutive_tool_loops: usize,
-    pub max_tool_loop_streak: usize,
-    pub tool_loop_limit_hit: bool,
-    pub consecutive_idle_turns: usize,
-    // Optimization: Track last processed message index for incremental Gemini message building
-    pub last_processed_message_idx: usize,
-    pub max_context_tokens: usize,
-}
-
-impl TaskRunState {
-    pub fn new(
-        conversation: Vec<Content>,
-        conversation_messages: Vec<Message>,
-        max_tool_loops: usize,
-        max_context_tokens: usize,
-    ) -> Self {
-        Self {
-            conversation,
-            conversation_messages,
-            created_contexts: Vec::with_capacity(16), // Typical session creates ~5-10 contexts
-            modified_files: Vec::with_capacity(32),   // Typical session modifies ~10-20 files
-            executed_commands: Vec::with_capacity(64), // Typical session executes ~20-40 commands
-            warnings: Vec::with_capacity(16),         // Typical session has ~5-10 warnings
-            last_file_path: None,
-            last_dir_path: None,
-            has_completed: false,
-            completion_outcome: TaskOutcome::Unknown,
-            turns_executed: 0,
-            turn_durations_ms: Vec::with_capacity(max_tool_loops), // Pre-allocate for expected number of turns
-            turn_total_ms: 0,
-            turn_max_ms: 0,
-            turn_count: 0,
-            last_processed_message_idx: 0,
-            max_tool_loops,
-            consecutive_tool_loops: 0,
-            max_tool_loop_streak: 0,
-            tool_loop_limit_hit: false,
-            consecutive_idle_turns: 0,
-            max_context_tokens,
-        }
+pub fn summarize_list(items: &[String]) -> String {
+    const MAX_ITEMS: usize = 5;
+    if items.is_empty() {
+        return "none".into();
     }
-
-    pub fn record_turn(&mut self, start: &std::time::Instant, recorded: &mut bool) {
-        record_turn_duration(
-            &mut self.turn_durations_ms,
-            &mut self.turn_total_ms,
-            &mut self.turn_max_ms,
-            &mut self.turn_count,
-            recorded,
-            start,
-        );
-    }
-
-    /// Get current budget utilization (0.0 to 1.0)
-    pub fn utilization(&self) -> f64 {
-        if self.max_context_tokens == 0 {
-            return 0.0;
-        }
-        self.total_tokens() as f64 / self.max_context_tokens as f64
-    }
-
-    /// Calculate total estimated tokens in the conversation.
-    pub fn total_tokens(&self) -> usize {
-        self.conversation_messages
-            .iter()
-            .map(|m| m.estimate_tokens())
-            .sum()
-    }
-
-    /// Find a safe split point for history trimming that doesn't break tool call/output pairs.
-    ///
-    /// Returns an index into `self.conversation` that is safe to split at.
-    /// A split point is safe if no tool response in the "keep" set (index..len)
-    /// has its corresponding tool call in the "discard" set (0..index).
-    pub fn find_safe_split_point(&self, preferred_split_at: usize) -> usize {
-        safe_history_split_point(
-            &self.conversation_messages,
-            self.conversation.len(),
-            preferred_split_at,
-        )
-    }
-
-    pub fn finalize_outcome(&mut self, max_turns: usize) {
-        if self.completion_outcome == TaskOutcome::Unknown {
-            if self.has_completed {
-                self.completion_outcome = TaskOutcome::Success;
-            } else if self.tool_loop_limit_hit {
-                self.completion_outcome = TaskOutcome::tool_loop_limit_reached(
-                    self.max_tool_loops,
-                    self.consecutive_tool_loops,
-                );
-            } else if self.turns_executed >= max_turns {
-                self.completion_outcome =
-                    TaskOutcome::turn_limit_reached(max_turns, self.turns_executed);
-            }
-        }
-    }
-
-    pub fn register_tool_loop(&mut self) -> usize {
-        self.consecutive_tool_loops += 1;
-        if self.consecutive_tool_loops > self.max_tool_loop_streak {
-            self.max_tool_loop_streak = self.consecutive_tool_loops;
-        }
-        self.consecutive_tool_loops
-    }
-
-    pub fn reset_tool_loop_guard(&mut self) {
-        self.consecutive_tool_loops = 0;
-    }
-
-    pub fn mark_tool_loop_limit_hit(&mut self) {
-        // Idempotent: skip if already marked
-        if self.tool_loop_limit_hit {
-            return;
-        }
-        self.tool_loop_limit_hit = true;
-        self.completion_outcome =
-            TaskOutcome::tool_loop_limit_reached(self.max_tool_loops, self.consecutive_tool_loops);
-    }
-
-    pub fn into_results(
-        self,
-        summary: String,
-        thread_events: Vec<ThreadEvent>,
-        total_duration_ms: u128,
-    ) -> TaskResults {
-        let average_turn_duration_ms = if self.turn_count > 0 {
-            Some(self.turn_total_ms as f64 / self.turn_count as f64)
-        } else {
-            None
-        };
-        let max_turn_duration_ms = if self.turn_count > 0 {
-            Some(self.turn_max_ms)
-        } else {
-            None
-        };
-        let completion_outcome = self.completion_outcome;
-
-        TaskResults {
-            created_contexts: self.created_contexts,
-            modified_files: self.modified_files,
-            executed_commands: self.executed_commands,
-            summary,
-            stop_reason: None,
-            total_cost_usd: None,
-            warnings: self.warnings,
-            thread_events,
-            outcome: completion_outcome,
-            turns_executed: self.turns_executed,
-            total_duration_ms,
-            average_turn_duration_ms,
-            max_turn_duration_ms,
-            turn_durations_ms: self.turn_durations_ms,
-        }
-    }
-
-    pub fn summarize_conversation_if_needed(
-        &mut self,
-        preserve_recent_turns: usize,
-        utilization: f64,
-    ) {
-        if utilization < 0.90 {
-            return;
-        }
-
-        if self.conversation.len() <= preserve_recent_turns {
-            return;
-        }
-
-        let preferred_split_at = self
-            .conversation
-            .len()
-            .saturating_sub(preserve_recent_turns);
-
-        // Context Manager: Find a safe split point that doesn't break tool call/output pairs.
-        let split_at = self.find_safe_split_point(preferred_split_at);
-
-        if split_at == 0 {
-            return;
-        }
-
-        let summarize_list = |items: &[String]| -> String {
-            const MAX_ITEMS: usize = 5;
-            if items.is_empty() {
-                return "none".into();
-            }
-            let shown: Vec<&str> = items.iter().take(MAX_ITEMS).map(|s| s.as_str()).collect();
-            if items.len() > MAX_ITEMS {
-                format!("{} [+{} more]", shown.join(", "), items.len() - MAX_ITEMS)
-            } else {
-                shown.join(", ")
-            }
-        };
-
-        let summary = format!(
-            "Summarized {} earlier turns to stay within context budget. Files: {}; Commands: {}; Warnings: {}.",
-            split_at,
-            summarize_list(&self.modified_files),
-            summarize_list(&self.executed_commands),
-            summarize_list(
-                &self
-                    .warnings
-                    .iter()
-                    .map(|w| w.to_string())
-                    .collect::<Vec<_>>()
-            ),
-        );
-
-        let mut new_conversation = Vec::with_capacity(1 + preserve_recent_turns);
-        new_conversation.push(Content::user_parts(vec![Part::Text {
-            text: summary,
-            thought_signature: None,
-        }]));
-        new_conversation.extend_from_slice(&self.conversation[split_at..]);
-        self.conversation = new_conversation;
-        self.conversation_messages = build_messages_from_conversation(&self.conversation);
-
-        // Context Manager: Ensure history invariants are maintained after summarization.
-        // Summarization might split a tool call from its response if they span across
-        // the split point. Normalization fixes this by adding synthetic outputs or
-        // removing orphaned responses.
-        self.normalize();
-
-        self.last_processed_message_idx = self.conversation.len();
-    }
-
-    pub fn add_warning(&mut self, warning: String) {
-        self.warnings.push(warning);
-    }
-
-    pub fn add_user_message(&mut self, text: String) {
-        self.conversation.push(Content {
-            role: "user".to_string(),
-            parts: vec![Part::Text {
-                text,
-                thought_signature: None,
-            }],
-        });
-    }
-
-    pub fn add_tool_response_message(&mut self, call_id: String, content: String) {
-        self.conversation_messages
-            .push(Message::tool_response(call_id, content));
-    }
-
-    /// Push a successful tool result to both conversation (for Gemini) and conversation_messages.
-    /// This ensures state consistency between the two collections.
-    #[inline]
-    pub fn push_tool_result(
-        &mut self,
-        call_id: String,
-        tool_name: &str,
-        _display_text: String,
-        serialized_result: String,
-        is_gemini: bool,
-    ) {
-        if is_gemini {
-            let response_value = serde_json::from_str(&serialized_result)
-                .unwrap_or_else(|_| serde_json::json!({ "result": serialized_result }));
-
-            self.conversation.push(Content {
-                role: "function".to_string(),
-                parts: vec![Part::FunctionResponse {
-                    function_response: FunctionResponse {
-                        name: tool_name.to_string(),
-                        response: response_value,
-                        id: Some(call_id.clone()),
-                    },
-                    thought_signature: None,
-                }],
-            });
-        }
-        self.conversation_messages
-            .push(Message::tool_response(call_id, serialized_result));
-        self.executed_commands.push(tool_name.to_owned());
-    }
-
-    /// Push a tool error to both conversation (for Gemini) and conversation_messages.
-    #[inline]
-    pub fn push_tool_error(
-        &mut self,
-        call_id: String,
-        tool_name: &str,
-        error_payload: String,
-        is_gemini: bool,
-    ) {
-        if is_gemini {
-            let response_value = serde_json::from_str(&error_payload)
-                .unwrap_or_else(|_| serde_json::json!({ "error": error_payload }));
-            self.conversation.push(Content {
-                role: "function".to_string(),
-                parts: vec![Part::FunctionResponse {
-                    function_response: FunctionResponse {
-                        name: tool_name.to_string(),
-                        response: response_value,
-                        id: Some(call_id.clone()),
-                    },
-                    thought_signature: None,
-                }],
-            });
-        }
-        self.conversation_messages
-            .push(Message::tool_response(call_id, error_payload));
-    }
-
-    // ========================================================================
-    // Context Manager: Call/Output Pairing Validation (OpenAI Codex pattern)
-    // ========================================================================
-
-    /// Validate that conversation history maintains call/output invariants.
-    ///
-    /// This check ensures:
-    /// 1. Every tool call has a corresponding output (tool_call_id match)
-    /// 2. Every output has a corresponding call
-    ///
-    /// Returns a report of any violations found (non-fatal).
-    pub fn validate_history_invariants(&self) -> HistoryValidationReport {
-        validate_history_invariants(&self.conversation_messages)
-    }
-
-    /// Ensure all tool calls have corresponding outputs.
-    ///
-    /// If a tool call is missing its output (due to cancellation, timeout, or crash),
-    /// create a synthetic output with status "canceled" to maintain the invariant.
-    pub fn ensure_call_outputs_present(&mut self) {
-        ensure_call_outputs_present(&mut self.conversation_messages);
-    }
-
-    /// Remove outputs without corresponding calls (orphaned outputs).
-    ///
-    /// Maintains the invariant that every output has a matching call.
-    pub fn remove_orphan_outputs(&mut self) {
-        remove_orphan_outputs(&mut self.conversation_messages);
-    }
-
-    /// Normalize history to enforce call/output pairing invariants.
-    ///
-    /// This calls ensure_call_outputs_present() and remove_orphan_outputs()
-    /// to maintain both critical invariants.
-    pub fn normalize(&mut self) {
-        normalize_history(&mut self.conversation_messages);
-    }
-
-    /// Recover from crashed or interrupted session.
-    ///
-    /// Auto-fixes history by creating synthetic outputs for incomplete calls.
-    pub fn recover_from_crash(&mut self) {
-        recover_history_from_crash(&mut self.conversation_messages);
+    let shown: Vec<&str> = items.iter().take(MAX_ITEMS).map(|s| s.as_str()).collect();
+    if items.len() > MAX_ITEMS {
+        format!("{} [+{} more]", shown.join(", "), items.len() - MAX_ITEMS)
+    } else {
+        shown.join(", ")
     }
 }
 
@@ -727,421 +368,221 @@ pub fn recover_history_from_crash(messages: &mut Vec<Message>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Helper: Create a test TaskRunState with empty conversation
-    fn create_test_state() -> TaskRunState {
-        TaskRunState::new(Vec::new(), Vec::new(), 10, 10000)
+    use crate::llm::provider::Message;
+    /// Helper: Create test messages
+    fn make_tool_call(call_id: &str, tool_name: &str) -> Message {
+        Message::assistant_with_tools(
+            "".to_string(),
+            vec![crate::llm::provider::ToolCall::function(
+                call_id.to_string(),
+                tool_name.to_string(),
+                "{}".to_string(),
+            )],
+        )
     }
 
-    /// Test 1: Valid history with matched calls and outputs
+    fn make_tool_response(call_id: &str, content: &str) -> Message {
+        Message::tool_response(call_id.to_string(), content.to_string())
+    }
+
+    /// Test: Valid history with matched calls and outputs
     #[test]
     fn test_validate_history_valid_matched_pairs() {
-        let mut state = create_test_state();
+        let mut messages = vec![
+            make_tool_call("call_1", "list_files"),
+            make_tool_response("call_1", "file1.rs\nfile2.rs"),
+        ];
 
-        // Add an assistant message with a tool call
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_1".to_string(),
-                vtcode_config::constants::tools::LIST_FILES.to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call1);
+        let report = validate_history_invariants(&messages);
+        assert!(report.is_valid(), "Valid paired call/output should pass");
+        assert!(report.missing_outputs.is_empty());
+        assert!(report.orphan_outputs.is_empty());
 
-        // Add a tool response with matching call_id
-        state.conversation_messages.push(Message::tool_response(
-            "call_1".to_string(),
-            "file1.rs\nfile2.rs".to_string(),
-        ));
-
-        let report = state.validate_history_invariants();
-
-        assert!(
-            report.is_valid(),
-            "Valid paired call/output should pass validation"
-        );
-        assert!(report.missing_outputs.is_empty(), "No missing outputs");
-        assert!(report.orphan_outputs.is_empty(), "No orphan outputs");
+        // Normalize should be a no-op
+        normalize_history(&mut messages);
+        assert_eq!(messages.len(), 2);
     }
 
-    /// Test 2: Missing output (tool call without response)
+    /// Test: Missing output (tool call without response)
     #[test]
     fn test_validate_history_missing_output() {
-        let mut state = create_test_state();
+        let messages = vec![make_tool_call("call_1", "list_files")];
 
-        // Add a tool call without corresponding response
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_1".to_string(),
-                vtcode_config::constants::tools::LIST_FILES.to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call1);
-
-        let report = state.validate_history_invariants();
-
-        assert!(
-            !report.is_valid(),
-            "Missing output should invalidate history"
-        );
-        assert_eq!(
-            report.missing_outputs.len(),
-            1,
-            "Should detect one missing output"
-        );
-        assert_eq!(
-            report.missing_outputs[0].call_id.0, "call_1",
-            "Should identify correct call_id"
-        );
-        assert!(
-            report.orphan_outputs.is_empty(),
-            "Should have no orphan outputs"
-        );
+        let report = validate_history_invariants(&messages);
+        assert!(!report.is_valid());
+        assert_eq!(report.missing_outputs.len(), 1);
+        assert_eq!(report.missing_outputs[0].call_id.0, "call_1");
+        assert!(report.orphan_outputs.is_empty());
     }
 
-    /// Test 3: Orphan output (response without corresponding call)
+    /// Test: Orphan output (response without corresponding call)
     #[test]
     fn test_validate_history_orphan_output() {
-        let mut state = create_test_state();
+        let messages = vec![make_tool_response("orphan_call", "Some result")];
 
-        // Add a tool response without a preceding call
-        state.conversation_messages.push(Message::tool_response(
-            "orphan_call".to_string(),
-            "Some result".to_string(),
-        ));
-
-        let report = state.validate_history_invariants();
-
-        assert!(
-            !report.is_valid(),
-            "Orphan output should invalidate history"
-        );
-        assert!(
-            report.missing_outputs.is_empty(),
-            "Should have no missing outputs"
-        );
-        assert_eq!(
-            report.orphan_outputs.len(),
-            1,
-            "Should detect one orphan output"
-        );
-        assert_eq!(
-            report.orphan_outputs[0].0, "orphan_call",
-            "Should identify correct orphan call_id"
-        );
+        let report = validate_history_invariants(&messages);
+        assert!(!report.is_valid());
+        assert!(report.missing_outputs.is_empty());
+        assert_eq!(report.orphan_outputs.len(), 1);
+        assert_eq!(report.orphan_outputs[0].0, "orphan_call");
     }
 
-    /// Test 4: ensure_call_outputs_present creates synthetic outputs
+    /// Test: ensure_call_outputs_present creates synthetic outputs
     #[test]
     fn test_ensure_call_outputs_present() {
-        let mut state = create_test_state();
+        let mut messages = vec![make_tool_call("call_1", "list_files")];
+        let initial_len = messages.len();
 
-        // Add a tool call without response
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_1".to_string(),
-                vtcode_config::constants::tools::LIST_FILES.to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call1);
+        ensure_call_outputs_present(&mut messages);
 
-        let initial_len = state.conversation_messages.len();
+        assert_eq!(messages.len(), initial_len + 1);
+        let last_msg = &messages[initial_len];
+        assert_eq!(last_msg.tool_call_id, Some("call_1".to_string()));
+        assert!(last_msg.content.as_text().contains("canceled"));
 
-        // Ensure outputs are present (should create synthetic output)
-        state.ensure_call_outputs_present();
-
-        assert_eq!(
-            state.conversation_messages.len(),
-            initial_len + 1,
-            "Should add one synthetic output"
-        );
-
-        // Verify the synthetic output was added
-        let last_msg = &state.conversation_messages[initial_len];
-        assert_eq!(
-            last_msg.tool_call_id,
-            Some("call_1".to_string()),
-            "Synthetic output should have correct call_id"
-        );
-        assert!(
-            last_msg.content.as_text().contains("canceled"),
-            "Synthetic output should indicate cancellation"
-        );
-
-        // Validate after fix
-        let report = state.validate_history_invariants();
-        assert!(
-            report.is_valid(),
-            "History should be valid after normalization"
-        );
+        let report = validate_history_invariants(&messages);
+        assert!(report.is_valid());
     }
 
-    /// Test 5: remove_orphan_outputs filters out orphaned responses
+    /// Test: remove_orphan_outputs filters out orphaned responses
     #[test]
     fn test_remove_orphan_outputs() {
-        let mut state = create_test_state();
+        let mut messages = vec![
+            make_tool_call("call_1", "list_files"),
+            make_tool_response("call_1", "valid result"),
+            make_tool_response("orphan_call", "orphan result"),
+        ];
 
-        // Add a tool call
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_1".to_string(),
-                vtcode_config::constants::tools::LIST_FILES.to_string(),
-                "{}".to_string(),
-            )],
+        let initial_len = messages.len();
+        remove_orphan_outputs(&mut messages);
+
+        assert_eq!(messages.len(), initial_len - 1);
+        assert!(
+            messages
+                .iter()
+                .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"))
         );
-        state.conversation_messages.push(call1);
-
-        // Add valid response for call_1
-        state.conversation_messages.push(Message::tool_response(
-            "call_1".to_string(),
-            "valid result".to_string(),
-        ));
-
-        // Add orphan response (no matching call)
-        state.conversation_messages.push(Message::tool_response(
-            "orphan_call".to_string(),
-            "orphan result".to_string(),
-        ));
-
-        let initial_len = state.conversation_messages.len();
-
-        // Remove orphans
-        state.remove_orphan_outputs();
-
-        assert_eq!(
-            state.conversation_messages.len(),
-            initial_len - 1,
-            "Should remove one orphan output"
-        );
-
-        // Verify call_1 output is still there, orphan is gone
-        let has_call_1_output = state
-            .conversation_messages
-            .iter()
-            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"));
-        assert!(has_call_1_output, "Valid output should be retained");
-
-        let has_orphan = state.conversation_messages.iter().any(|msg| {
+        assert!(!messages.iter().any(|msg| {
             msg.tool_call_id
                 .as_ref()
                 .is_some_and(|id| id == "orphan_call")
-        });
-        assert!(!has_orphan, "Orphan output should be removed");
+        }));
 
-        // Validate after cleanup
-        let report = state.validate_history_invariants();
-        assert!(report.is_valid(), "History should be valid after cleanup");
+        let report = validate_history_invariants(&messages);
+        assert!(report.is_valid());
     }
 
-    /// Test 6: normalize() applies both fixes
+    /// Test: normalize() applies both fixes (synthetic output + orphan removal)
     #[test]
     fn test_normalize_combined_fixes() {
-        let mut state = create_test_state();
+        let mut messages = vec![
+            make_tool_call("call_1", "read_file"),
+            make_tool_call("call_2", "write_file"),
+            make_tool_response("call_2", "written"),
+            make_tool_response("orphan", "orphan result"),
+        ];
 
-        // Add call_1 without output
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_1".to_string(),
-                "read_file".to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call1);
+        normalize_history(&mut messages);
 
-        // Add valid response for call_2
-        let call2 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_2".to_string(),
-                "write_file".to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call2);
-
-        state.conversation_messages.push(Message::tool_response(
-            "call_2".to_string(),
-            "written".to_string(),
-        ));
-
-        // Add orphan response
-        state.conversation_messages.push(Message::tool_response(
-            "orphan".to_string(),
-            "orphan result".to_string(),
-        ));
-
-        // Normalize should:
-        // 1. Create synthetic output for call_1
-        // 2. Remove orphan output
-        state.normalize();
-
-        let report = state.validate_history_invariants();
+        let report = validate_history_invariants(&messages);
+        assert!(report.is_valid());
         assert!(
-            report.is_valid(),
-            "After normalize, history should be valid"
+            messages
+                .iter()
+                .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"))
         );
-
-        // Verify call_1 has synthetic output
-        let call_1_has_output = state
-            .conversation_messages
-            .iter()
-            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"));
         assert!(
-            call_1_has_output,
-            "call_1 should have synthetic output after normalization"
+            !messages
+                .iter()
+                .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "orphan"))
         );
-
-        // Verify orphan is gone
-        let has_orphan = state
-            .conversation_messages
-            .iter()
-            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "orphan"));
-        assert!(!has_orphan, "Orphan should be removed after normalization");
     }
 
-    /// Test 7: recover_from_crash() handles both missing and orphan outputs
+    /// Test: recover_history_from_crash handles both missing and orphan outputs
     #[test]
     fn test_recover_from_crash() {
-        let mut state = create_test_state();
+        let mut messages = vec![
+            make_tool_call("crashed_call", "dangerous_op"),
+            make_tool_response("old_call", "stale result"),
+        ];
 
-        // Set up a broken state similar to a crash scenario
-        // Missing output
-        let call1 = Message::assistant_with_tools(
-            "".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "crashed_call".to_string(),
-                "dangerous_op".to_string(),
-                "{}".to_string(),
-            )],
-        );
-        state.conversation_messages.push(call1);
+        recover_history_from_crash(&mut messages);
 
-        // Orphan output (stale from previous session)
-        state.conversation_messages.push(Message::tool_response(
-            "old_call".to_string(),
-            "stale result".to_string(),
-        ));
-
-        // Recover
-        state.recover_from_crash();
-
-        // Verify history is now valid
-        let report = state.validate_history_invariants();
-        assert!(report.is_valid(), "After recovery, history should be valid");
-
-        // Verify synthetic output was created
-        let has_recovered_call = state.conversation_messages.iter().any(|msg| {
+        let report = validate_history_invariants(&messages);
+        assert!(report.is_valid());
+        assert!(messages.iter().any(|msg| {
             msg.tool_call_id
                 .as_ref()
                 .is_some_and(|id| id == "crashed_call")
-        });
+        }));
         assert!(
-            has_recovered_call,
-            "Crashed call should have recovered synthetic output"
-        );
-
-        // Verify orphan was removed
-        let has_orphan = state
-            .conversation_messages
-            .iter()
-            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "old_call"));
-        assert!(
-            !has_orphan,
-            "Orphan output should be removed during recovery"
+            !messages
+                .iter()
+                .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "old_call"))
         );
     }
 
-    /// Test 8: HistoryValidationReport summary messages
+    /// Test: HistoryValidationReport summary messages
     #[test]
     fn test_validation_report_summary() {
-        let valid_report = HistoryValidationReport {
-            missing_outputs: vec![],
-            orphan_outputs: vec![],
-        };
-        assert_eq!(valid_report.summary(), "History invariants are valid");
-        assert!(valid_report.is_valid());
+        let valid = HistoryValidationReport::default();
+        assert_eq!(valid.summary(), "History invariants are valid");
+        assert!(valid.is_valid());
 
-        let invalid_report = HistoryValidationReport {
+        let invalid = HistoryValidationReport {
             missing_outputs: vec![
                 MissingOutput {
-                    call_id: ToolCallId("call_1".to_string()),
-                    tool_name: "tool_a".to_string(),
+                    call_id: ToolCallId("call_1".into()),
+                    tool_name: "tool_a".into(),
                 },
                 MissingOutput {
-                    call_id: ToolCallId("call_2".to_string()),
-                    tool_name: "tool_b".to_string(),
+                    call_id: ToolCallId("call_2".into()),
+                    tool_name: "tool_b".into(),
                 },
             ],
-            orphan_outputs: vec![ToolCallId("orphan_1".to_string())],
+            orphan_outputs: vec![ToolCallId("orphan_1".into())],
         };
-        assert_eq!(
-            invalid_report.summary(),
-            "2 missing outputs, 1 orphan outputs"
-        );
-        assert!(!invalid_report.is_valid());
+        assert_eq!(invalid.summary(), "2 missing outputs, 1 orphan outputs");
+        assert!(!invalid.is_valid());
     }
 
-    /// Test 9: Multiple tool calls with selective missing outputs
+    /// Test: Multiple tool calls with selective missing outputs
     #[test]
     fn test_multiple_calls_partial_outputs() {
-        let mut state = create_test_state();
+        let _messages: Vec<Message> = (1..=3)
+            .flat_map(|i| {
+                vec![
+                    make_tool_call(&format!("call_{i}"), &format!("tool_{i}")),
+                    if i != 2 {
+                        make_tool_response(&format!("call_{i}"), &format!("result_{i}"))
+                    } else {
+                        // Simulate a gap: we don't add a response for call_2 here directly,
+                        // but we need to build messages differently.
+                        // Instead, build manually below.
+                        Message::tool_response("placeholder".into(), "".into())
+                    },
+                ]
+            })
+            .collect();
+        // Redo: explicit construction
+        let mut messages = vec![
+            make_tool_call("call_1", "tool_1"),
+            make_tool_response("call_1", "result_1"),
+            make_tool_call("call_2", "tool_2"),
+            make_tool_call("call_3", "tool_3"),
+            make_tool_response("call_3", "result_3"),
+        ];
 
-        // Add 3 tool calls
-        for i in 1..=3 {
-            let msg = Message::assistant_with_tools(
-                "".to_string(),
-                vec![crate::llm::provider::ToolCall::function(
-                    format!("call_{}", i),
-                    format!("tool_{}", i),
-                    "{}".to_string(),
-                )],
-            );
-            state.conversation_messages.push(msg);
-        }
+        let report = validate_history_invariants(&messages);
+        assert!(!report.is_valid());
+        assert_eq!(report.missing_outputs.len(), 1);
+        assert_eq!(report.missing_outputs[0].call_id.0, "call_2");
 
-        // Add outputs for calls 1 and 3, but not 2
-        state.conversation_messages.push(Message::tool_response(
-            "call_1".to_string(),
-            "result_1".to_string(),
-        ));
-        state.conversation_messages.push(Message::tool_response(
-            "call_3".to_string(),
-            "result_3".to_string(),
-        ));
-
-        let report = state.validate_history_invariants();
-
-        assert!(
-            !report.is_valid(),
-            "Should be invalid with missing output for call_2"
-        );
-        assert_eq!(
-            report.missing_outputs.len(),
-            1,
-            "Should have exactly one missing output"
-        );
-        assert_eq!(
-            report.missing_outputs[0].call_id.0, "call_2",
-            "Should identify call_2 as missing"
-        );
-
-        // Normalize and verify
-        state.normalize();
-        let final_report = state.validate_history_invariants();
-        assert!(
-            final_report.is_valid(),
-            "After normalization, all invariants should be satisfied"
-        );
+        normalize_history(&mut messages);
+        assert!(validate_history_invariants(&messages).is_valid());
     }
 
-    /// Test 10: OutputStatus enum conversion
+    /// Test: OutputStatus enum conversion
     #[test]
     fn test_output_status_as_str() {
         assert_eq!(OutputStatus::Success.as_str(), "success");
@@ -1150,99 +591,35 @@ mod tests {
         assert_eq!(OutputStatus::Timeout.as_str(), "timeout");
     }
 
-    /// Test 11: total_tokens() estimation
-    #[test]
-    fn test_total_tokens() {
-        let mut state = create_test_state();
-        state
-            .conversation_messages
-            .push(Message::user("Hello".to_string())); // ~4 + 1 = 5
-        state
-            .conversation_messages
-            .push(Message::assistant("Hi".to_string())); // ~4 + 1 = 5
-
-        let tokens = state.total_tokens();
-        assert!(tokens > 0);
-    }
-
-    /// Test 12: find_safe_split_point() maintains call/output pairs
+    /// Test: find_safe_split_point maintains call/output pairs
     #[test]
     fn test_find_safe_split_point() {
-        let mut state = create_test_state();
+        let messages = vec![
+            Message::user("User 1".into()),           // 0
+            make_tool_call("call_a", "tool_a"),       // 1
+            make_tool_response("call_a", "Result A"), // 2
+            make_tool_call("call_b", "tool_b"),       // 3
+            make_tool_response("call_b", "Result B"), // 4
+        ];
+        let conversation_len = 5;
 
-        // Turn 1: User
-        state.conversation.push(Content::user_text("User 1"));
-        state
-            .conversation_messages
-            .push(Message::user("User 1".to_string()));
+        // Split at 3 means keeping 3,4. But response at 2 needs call at 1 -> must split at 2.
+        let safe = safe_history_split_point(&messages, conversation_len, 3);
+        assert_eq!(safe, 2, "Should move split to include Call A");
 
-        // Turn 2: Assistant (Call A)
-        state.conversation.push(Content {
-            role: "model".to_string(),
-            parts: vec![Part::Text {
-                text: "Calling A".to_string(),
-                thought_signature: None,
-            }],
-        });
-        state
-            .conversation_messages
-            .push(Message::assistant_with_tools(
-                "Calling A".to_string(),
-                vec![crate::llm::provider::ToolCall::function(
-                    "call_a".to_string(),
-                    "tool_a".to_string(),
-                    "{}".to_string(),
-                )],
-            ));
+        // Split at 4 is safe: call_b (3) and response_b (4) are both kept.
+        let safe2 = safe_history_split_point(&messages, conversation_len, 4);
+        assert_eq!(safe2, 4, "Should stay at 4 as it is safe");
+    }
 
-        // Turn 3: User (Response A)
-        state.conversation.push(Content::user_text("Result A"));
-        state.conversation_messages.push(Message::tool_response(
-            "call_a".to_string(),
-            "Result A".to_string(),
-        ));
-
-        // Turn 4: Assistant (Call B)
-        state.conversation.push(Content {
-            role: "model".to_string(),
-            parts: vec![Part::Text {
-                text: "Calling B".to_string(),
-                thought_signature: None,
-            }],
-        });
-        state
-            .conversation_messages
-            .push(Message::assistant_with_tools(
-                "Calling B".to_string(),
-                vec![crate::llm::provider::ToolCall::function(
-                    "call_b".to_string(),
-                    "tool_b".to_string(),
-                    "{}".to_string(),
-                )],
-            ));
-
-        // Turn 5: User (Response B)
-        state.conversation.push(Content::user_text("Result B"));
-        state.conversation_messages.push(Message::tool_response(
-            "call_b".to_string(),
-            "Result B".to_string(),
-        ));
-
-        // Total conversation length is 5.
-        assert_eq!(state.conversation.len(), 5);
-
-        // If we want to preserve 2 turns (keeping turns 4 and 5), preferred_split_at is 3.
-        // Turn 3 is Response A. Turn 2 is Call A.
-        // If we split at 3, we keep Response A but lose Call A.
-        // find_safe_split_point(3) should move it to 2 to include Call A in the keep set.
-
-        let safe_split = state.find_safe_split_point(3);
-        assert_eq!(safe_split, 2, "Should move split point to include Call A");
-
-        // If we want to preserve 1 turn (keeping turn 5), preferred_split_at is 4.
-        // Turn 4 is Call B. Turn 5 is Response B.
-        // Splitting at 4 is safe because Call B and Response B are both in the keep set.
-        let safe_split_2 = state.find_safe_split_point(4);
-        assert_eq!(safe_split_2, 4, "Should stay at 4 as it is safe");
+    #[test]
+    fn test_summarize_list_formatting() {
+        assert_eq!(summarize_list(&[]), "none");
+        assert_eq!(summarize_list(&["a".into()]), "a");
+        assert_eq!(summarize_list(&["a".into(), "b".into()]), "a, b");
+        let many: Vec<String> = (1..=7).map(|i| format!("item{i}")).collect();
+        let result = summarize_list(&many);
+        assert!(result.contains("item1, item2, item3, item4, item5"));
+        assert!(result.contains("[+2 more]"));
     }
 }

@@ -2,15 +2,11 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
-    "close_agent",
     "cron_create",
     "cron_delete",
     "cron_list",
     "enter_plan_mode",
     "exit_plan_mode",
-    "list_skills",
-    "load_skill",
-    "load_skill_resource",
     "mcp_connect_server",
     "mcp_disconnect_server",
     "mcp_get_tool_details",
@@ -18,15 +14,10 @@
     "mcp_search_tools",
     "plan_task_tracker",
     "request_user_input",
-    "resume_agent",
-    "send_input",
-    "spawn_agent",
-    "spawn_background_subprocess",
     "task_tracker",
     "unified_exec",
     "unified_file",
-    "unified_search",
-    "wait_agent"
+    "unified_search"
   ],
   "policies": {
     "apply_patch": "prompt",
@@ -43,21 +34,12 @@
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
     "task_tracker": "prompt",
-    "unified_exec": "allow",
-    "unified_file": "allow",
+    "unified_exec": "prompt",
+    "unified_file": "prompt",
     "unified_search": "allow",
-    "close_agent": "prompt",
-    "list_skills": "allow",
-    "resume_agent": "prompt",
-    "send_input": "prompt",
-    "spawn_agent": "prompt",
-    "spawn_background_subprocess": "prompt",
-    "wait_agent": "prompt",
-    "load_skill_resource": "allow",
-    "load_skill": "allow",
     "list_files": "allow",
-    "read_file": "allow",
-    "memory": "allow"
+    "memory": "allow",
+    "read_file": "allow"
   },
   "constraints": {},
   "mcp": {
@@ -203,17 +185,7 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [
-      "git status|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline -20|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline --all '--grep=piped' '|' head '-5;' echo '---;' git log --oneline --all '--grep=optimization' '|' head '-5;' echo '---;' git log --oneline --all '--grep=comprehensive' '|' head -5|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline --all head echo git log --oneline --all head echo git log --oneline --all head|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git log --oneline --all '|' head -50|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git log --oneline --all head|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode '&&' git stash list|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode git stash list|sandbox_permissions=\"use_default\"|additional_permissions=null"
-    ],
+    "allowed": [],
     "prefixes": [],
     "regexes": []
   }

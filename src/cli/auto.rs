@@ -8,6 +8,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
+use vtcode_core::core::threads::ThreadBootstrap;
 use vtcode_core::utils::colors::style;
 
 use crate::startup::require_full_auto_workspace_trust;
@@ -77,7 +78,7 @@ pub async fn handle_auto_task_command(
             .as_secs()
     );
 
-    let mut runner = AgentRunner::new_with_openai_auth(
+    let mut runner = AgentRunner::new_with_bootstrap(
         AgentType::Single,
         model_id,
         config.api_key.clone(),
@@ -87,6 +88,8 @@ pub async fn handle_auto_task_command(
             reasoning_effort: Some(config.reasoning_effort),
             verbosity: None,
         },
+        None,
+        ThreadBootstrap::new(None),
         None,
         config.openai_chatgpt_auth.clone(),
     )

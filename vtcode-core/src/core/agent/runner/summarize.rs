@@ -6,6 +6,7 @@ use crate::core::agent::harness_artifacts::{
     read_contract_summary, read_evaluation_summary, read_spec_summary,
 };
 use crate::core::agent::session::AgentSessionState;
+use crate::core::agent::state::summarize_list;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use tracing::{info, warn};
 
@@ -45,19 +46,6 @@ impl AgentRunner {
             &session_state.modified_files,
             &session_state.executed_commands,
         );
-
-        let summarize_list = |items: &[String]| -> String {
-            const MAX_ITEMS: usize = 5;
-            if items.is_empty() {
-                return "none".into();
-            }
-            let shown: Vec<&str> = items.iter().take(MAX_ITEMS).map(|s| s.as_str()).collect();
-            if items.len() > MAX_ITEMS {
-                format!("{} [+{} more]", shown.join(", "), items.len() - MAX_ITEMS)
-            } else {
-                shown.join(", ")
-            }
-        };
 
         let base_summary = format!(
             "Summarized {} earlier turns to stay within context budget. Files: {}; Commands: {}; Warnings: {}.",
@@ -104,8 +92,7 @@ impl AgentRunner {
         session_state.conversation = new_conversation;
         session_state.messages = build_messages_from_conversation(&session_state.conversation);
 
-        // Context Manager: Ensure history invariants are maintained after summarization.
-        // session_state.normalize(); // TODO: Implement normalize in session_state if needed
+        session_state.normalize();
 
         session_state.last_processed_message_idx = session_state.conversation.len();
     }

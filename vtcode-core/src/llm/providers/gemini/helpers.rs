@@ -322,7 +322,8 @@ impl GeminiProvider {
         }
 
         request.model.contains("gemini-3")
-            && collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice())).uses_server_side_tools
+            && collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()))
+                .uses_server_side_tools
     }
 
     pub(super) fn convert_to_interaction_request(
