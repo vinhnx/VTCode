@@ -317,32 +317,27 @@ impl ToolRegistry {
                     )
                     .await
             {
-                let structured = retry_policy.apply_to_tool_execution_error(
-                    safety_error
-                        .with_tool_call_context(request.tool_name.as_str(), &request.args)
-                        .with_attempt(attempt_index + 1)
-                        .with_surface("tool_registry"),
-                    attempt_index,
-                    Some(request.tool_name.as_str()),
-                );
-                let retry_delay = structured
-                    .retry_after()
-                    .or_else(|| structured.retry_delay());
-                if structured.retryable
-                    && attempt_index + 1 < max_attempts
-                    && let Some(delay) = retry_delay
+                let decorated = safety_error
+                    .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                    .with_attempt(attempt_index + 1)
+                    .with_surface("tool_registry");
+                if let Some(terminal) = Self::classify_and_step(
+                    decorated,
+                    &retry_policy,
+                    request.tool_name.as_str(),
+                    &mut attempt_index,
+                    max_attempts,
+                    &mut last_error,
+                )
+                .await
                 {
-                    last_error = Some(structured);
-                    tokio::time::sleep(delay).await;
-                    attempt_index = attempt_index.saturating_add(1);
-                    continue;
+                    return ToolExecutionOutcome::failure(
+                        request.tool_name.clone(),
+                        attempt_index + 1,
+                        terminal,
+                    );
                 }
-
-                return ToolExecutionOutcome::failure(
-                    request.tool_name.clone(),
-                    attempt_index + 1,
-                    structured,
-                );
+                continue;
             }
 
             let result = self
@@ -357,33 +352,27 @@ impl ToolRegistry {
             match result {
                 Ok(output) => {
                     if let Some(structured_error) = ToolExecutionError::from_tool_output(&output) {
-                        let structured = retry_policy.apply_to_tool_execution_error(
-                            structured_error
-                                .with_tool_call_context(request.tool_name.as_str(), &request.args)
-                                .with_attempt(attempt_index + 1)
-                                .with_surface("tool_registry"),
-                            attempt_index,
-                            Some(request.tool_name.as_str()),
-                        );
-
-                        let retry_delay = structured
-                            .retry_after()
-                            .or_else(|| structured.retry_delay());
-                        if structured.retryable
-                            && attempt_index + 1 < max_attempts
-                            && let Some(delay) = retry_delay
+                        let decorated = structured_error
+                            .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                            .with_attempt(attempt_index + 1)
+                            .with_surface("tool_registry");
+                        if let Some(terminal) = Self::classify_and_step(
+                            decorated,
+                            &retry_policy,
+                            request.tool_name.as_str(),
+                            &mut attempt_index,
+                            max_attempts,
+                            &mut last_error,
+                        )
+                        .await
                         {
-                            last_error = Some(structured);
-                            tokio::time::sleep(delay).await;
-                            attempt_index = attempt_index.saturating_add(1);
-                            continue;
+                            return ToolExecutionOutcome::failure(
+                                request.tool_name.clone(),
+                                attempt_index + 1,
+                                terminal,
+                            );
                         }
-
-                        return ToolExecutionOutcome::failure(
-                            request.tool_name.clone(),
-                            attempt_index + 1,
-                            structured,
-                        );
+                        continue;
                     }
 
                     return ToolExecutionOutcome::success(
@@ -418,29 +407,23 @@ impl ToolRegistry {
                         }
                     }
 
-                    let structured = retry_policy.apply_to_tool_execution_error(
+                    if let Some(terminal) = Self::classify_and_step(
                         base,
-                        attempt_index,
-                        Some(request.tool_name.as_str()),
-                    );
-                    let retry_delay = structured
-                        .retry_after()
-                        .or_else(|| structured.retry_delay());
-                    if structured.retryable
-                        && attempt_index + 1 < max_attempts
-                        && let Some(delay) = retry_delay
+                        &retry_policy,
+                        request.tool_name.as_str(),
+                        &mut attempt_index,
+                        max_attempts,
+                        &mut last_error,
+                    )
+                    .await
                     {
-                        last_error = Some(structured);
-                        tokio::time::sleep(delay).await;
-                        attempt_index = attempt_index.saturating_add(1);
-                        continue;
+                        return ToolExecutionOutcome::failure(
+                            request.tool_name.clone(),
+                            attempt_index + 1,
+                            terminal,
+                        );
                     }
-
-                    return ToolExecutionOutcome::failure(
-                        request.tool_name.clone(),
-                        attempt_index + 1,
-                        structured,
-                    );
+                    continue;
                 }
             }
         }
@@ -460,6 +443,37 @@ impl ToolRegistry {
                 .with_surface("tool_registry")
             }),
         )
+    }
+
+    /// Apply the retry policy to a `ToolExecutionError` and either schedule
+    /// the next attempt (sleep + bump index, return `None`) or report a
+    /// terminal failure (return `Some(structured)` for the caller to surface).
+    ///
+    /// Consolidates the three identical retry/sleep/continue blocks that
+    /// previously lived inline in `execute_tool_request_internal`.
+    async fn classify_and_step(
+        decorated: ToolExecutionError,
+        retry_policy: &crate::retry::RetryPolicy,
+        tool_name: &str,
+        attempt_index: &mut u32,
+        max_attempts: u32,
+        last_error: &mut Option<ToolExecutionError>,
+    ) -> Option<ToolExecutionError> {
+        let structured =
+            retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
+        let retry_delay = structured
+            .retry_after()
+            .or_else(|| structured.retry_delay());
+        if structured.retryable
+            && *attempt_index + 1 < max_attempts
+            && let Some(delay) = retry_delay
+        {
+            *last_error = Some(structured);
+            tokio::time::sleep(delay).await;
+            *attempt_index = attempt_index.saturating_add(1);
+            return None;
+        }
+        Some(structured)
     }
 
     async fn should_skip_loop_detection_for_active_exec_continuation(

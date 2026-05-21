@@ -5,50 +5,12 @@
 
 use crate::config::models::ModelId;
 use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
-use crate::retry::RetryPolicy;
-use serde::{Deserialize, Serialize};
+use crate::retry::{RetryPolicy, RetryStep};
 use std::future::Future;
 use std::result::Result as StdResult;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{info, warn};
-
-/// Configuration for retry behavior.
-///
-/// This is a thin wrapper kept for backward compatibility. New code should
-/// construct [`RetryPolicy`] directly.
-#[deprecated(note = "Use RetryPolicy directly for new code")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetryConfig {
-    pub max_retries: u32,
-    pub initial_delay_secs: u64,
-    pub max_delay_secs: u64,
-    pub backoff_multiplier: f64,
-}
-
-#[expect(deprecated)]
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            max_retries: 5,
-            initial_delay_secs: 1,
-            max_delay_secs: 60,
-            backoff_multiplier: 2.0,
-        }
-    }
-}
-
-#[expect(deprecated)]
-impl From<RetryConfig> for RetryPolicy {
-    fn from(config: RetryConfig) -> Self {
-        RetryPolicy::from_retries(
-            config.max_retries,
-            Duration::from_secs(config.initial_delay_secs),
-            Duration::from_secs(config.max_delay_secs),
-            config.backoff_multiplier,
-        )
-    }
-}
 
 /// Statistics about retry attempts
 #[derive(Debug, Clone, Default)]
@@ -98,12 +60,6 @@ impl RetryManager {
         }
     }
 
-    /// Create a new retry manager with custom configuration (backward compat)
-    #[expect(deprecated)]
-    pub fn with_config(config: RetryConfig) -> Self {
-        Self::with_policy(config.into())
-    }
-
     /// Get the current retry statistics
     pub fn stats(&self) -> &RetryStats {
         &self.stats
@@ -144,7 +100,7 @@ impl RetryManager {
                 "retry attempt starting"
             );
 
-            match operation(*primary_model).await {
+            let err = match operation(*primary_model).await {
                 Ok(result) => {
                     if attempt > 0 {
                         self.stats.successful_retries += 1;
@@ -159,52 +115,63 @@ impl RetryManager {
                 }
                 Err(err) => {
                     let err: VtCodeError = err.into();
-                    let decision = policy.decision_for_vtcode_error(&err, attempt, None);
-                    last_error = Some(err);
+                    err
+                }
+            };
 
-                    warn!(
-                        attempt = attempt + 1,
-                        max_attempts = policy.max_attempts,
-                        operation = operation_name,
-                        model = ?primary_model,
-                        error = %last_error.as_ref().expect("retry error should exist"),
-                        category = ?decision.category,
-                        "operation attempt failed"
-                    );
+            let category_was_retryable = err.category.is_retryable();
+            let step = policy.step_for_vtcode_error(err, attempt, None);
 
-                    if !decision.retryable {
-                        if attempt + 1 == policy.max_attempts
-                            && last_error
-                                .as_ref()
-                                .is_some_and(|error| error.category.is_retryable())
-                        {
-                            self.stats.failed_retries += 1;
-                        }
-                        let err = last_error.expect("non-retryable error should exist");
-                        warn!(
-                            operation = operation_name,
-                            error = %err,
-                            category = ?decision.category,
-                            "non-retryable error"
-                        );
-                        return Err(err);
+            // Emit the shared "attempt failed" warning once for both arms.
+            let (decision_for_log, error_for_log) = match &step {
+                RetryStep::Backoff {
+                    decision, error, ..
+                }
+                | RetryStep::GiveUp { decision, error } => (decision, error),
+            };
+            warn!(
+                attempt = attempt + 1,
+                max_attempts = policy.max_attempts,
+                operation = operation_name,
+                model = ?primary_model,
+                error = %error_for_log,
+                category = ?decision_for_log.category,
+                "operation attempt failed"
+            );
+
+            match step {
+                RetryStep::GiveUp { decision, error } => {
+                    if attempt + 1 == policy.max_attempts && category_was_retryable {
+                        self.stats.failed_retries += 1;
                     }
-
-                    let backoff_duration = decision.delay.expect("retryable decisions need delay");
-                    self.stats.total_backoff_time += backoff_duration;
+                    warn!(
+                        operation = operation_name,
+                        error = %error,
+                        category = ?decision.category,
+                        "non-retryable error"
+                    );
+                    return Err(error);
+                }
+                RetryStep::Backoff {
+                    delay,
+                    decision,
+                    error,
+                } => {
+                    last_error = Some(error);
+                    self.stats.total_backoff_time += delay;
                     if attempt + 2 == policy.max_attempts {
                         self.stats.failed_retries += 1;
                     }
 
                     info!(
-                        delay_ms = backoff_duration.as_millis() as u64,
+                        delay_ms = delay.as_millis() as u64,
                         next_attempt = attempt + 2,
                         operation = operation_name,
                         category = ?decision.category,
                         "backing off before retry"
                     );
 
-                    sleep(backoff_duration).await;
+                    sleep(delay).await;
                 }
             }
         }
@@ -294,7 +261,6 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
 }
 
 #[cfg(test)]
-#[expect(deprecated)]
 mod tests {
     use super::*;
     use crate::error::{ErrorCode, VtCodeError};
@@ -340,15 +306,6 @@ mod tests {
         assert!(!is_retryable_error(&anyhow!("429 quota exceeded")));
     }
 
-    #[test]
-    fn test_retry_config_defaults() {
-        let config = RetryConfig::default();
-        assert_eq!(config.max_retries, 5);
-        assert_eq!(config.initial_delay_secs, 1);
-        assert_eq!(config.max_delay_secs, 60);
-        assert_eq!(config.backoff_multiplier, 2.0);
-    }
-
     #[tokio::test]
     async fn test_retry_manager_success_first_attempt() {
         let mut manager = RetryManager::new();
@@ -370,12 +327,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_retry_manager_success_after_retry() {
-        let mut manager = RetryManager::with_config(RetryConfig {
-            max_retries: 2,
-            initial_delay_secs: 0, // No delay for test
-            max_delay_secs: 1,
-            backoff_multiplier: 2.0,
-        });
+        let mut manager = RetryManager::with_policy(RetryPolicy::from_retries(
+            2,
+            Duration::from_secs(0), // No delay for test
+            Duration::from_secs(1),
+            2.0,
+        ));
 
         let attempt_count = Arc::new(Mutex::new(0));
         let attempt_count_clone = attempt_count.clone();

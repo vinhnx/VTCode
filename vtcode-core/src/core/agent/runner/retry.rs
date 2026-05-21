@@ -1,7 +1,7 @@
 use super::AgentRunner;
 use crate::core::agent::task::{ContextItem, Task, TaskResults};
 use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
-use crate::retry::RetryPolicy;
+use crate::retry::{RetryPolicy, RetryStep};
 use crate::utils::colors::style;
 use tracing::{info, warn};
 
@@ -36,11 +36,10 @@ impl AgentRunner {
                 "agent task attempt starting"
             );
 
-            match self.execute_task(task, contexts).await {
+            let err = match self.execute_task(task, contexts).await {
                 Ok(result) => {
                     if attempt > 0 {
                         metrics.record_retry_success();
-                        // Notify user about successful retry
                         self.runner_println(format_args!(
                             "{} Task succeeded after {} attempt(s)",
                             style("[✓]").green().bold(),
@@ -55,57 +54,59 @@ impl AgentRunner {
                     }
                     return Ok(result);
                 }
-                Err(err) => {
-                    let typed_error = VtCodeError::from(err);
-                    let decision = policy.decision_for_vtcode_error(&typed_error, attempt, None);
-                    let exhausted_retryable_error =
-                        typed_error.category.is_retryable() && attempt + 1 == policy.max_attempts;
-                    last_error = Some(typed_error);
+                Err(err) => VtCodeError::from(err),
+            };
 
+            let category_was_retryable = err.category.is_retryable();
+
+            match policy.step_for_vtcode_error(err, attempt, None) {
+                RetryStep::GiveUp { decision, error } => {
+                    if category_was_retryable && attempt + 1 == policy.max_attempts {
+                        metrics.record_retry_exhausted();
+                    }
                     warn!(
                         attempt = attempt + 1,
                         max_attempts = policy.max_attempts,
                         task_id = %task.id,
-                        error = %last_error.as_ref().expect("retry error should exist"),
+                        error = %error,
+                        category = ?decision.category,
+                        "agent task attempt failed (non-retryable)"
+                    );
+                    return Err(error);
+                }
+                RetryStep::Backoff {
+                    delay,
+                    decision,
+                    error,
+                } => {
+                    warn!(
+                        attempt = attempt + 1,
+                        max_attempts = policy.max_attempts,
+                        task_id = %task.id,
+                        error = %error,
                         category = ?decision.category,
                         "agent task attempt failed"
                     );
-
-                    if !decision.retryable {
-                        if exhausted_retryable_error {
-                            metrics.record_retry_exhausted();
-                        }
-                        let err = last_error.expect("non-retryable error should exist");
-                        warn!(
-                            task_id = %task.id,
-                            error = %err,
-                            category = ?decision.category,
-                            "non-retryable error"
-                        );
-                        return Err(err);
-                    }
-
-                    let backoff_duration = decision.delay.expect("retryable decisions need delay");
+                    last_error = Some(error);
                     metrics.record_retry_attempt();
 
-                    // Notify user about retry with visible message
                     self.runner_println(format_args!(
                         "{} Task failed (attempt {}/{}), retrying in {}s...",
                         style("[Warning]").red().bold(),
                         attempt + 1,
                         policy.max_attempts,
-                        backoff_duration.as_secs()
+                        delay.as_secs()
                     ));
 
                     info!(
-                        delay_ms = backoff_duration.as_millis() as u64,
+                        delay_ms = delay.as_millis() as u64,
                         next_attempt = attempt + 2,
                         task_id = %task.id,
                         category = ?decision.category,
                         "backing off before retry"
                     );
 
-                    sleep(backoff_duration).await;
+                    sleep(delay).await;
                 }
             }
         }

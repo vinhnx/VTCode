@@ -179,6 +179,33 @@ impl RetryPolicy {
         )
     }
 
+    /// Classify a `VtCodeError` failure into a typed [`RetryStep`].
+    ///
+    /// This consolidates the "decision -> sleep or give-up" branching used by
+    /// agent-level retry loops, removing the brittle
+    /// `decision.delay.expect("retryable decisions need delay")` calls and
+    /// guaranteeing a delay is always available for retryable steps.
+    pub fn step_for_vtcode_error(
+        &self,
+        error: VtCodeError,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> RetryStep {
+        let decision = self.decision_for_vtcode_error(&error, attempt_index, tool_name);
+        if decision.retryable {
+            let delay = decision
+                .delay
+                .unwrap_or_else(|| self.delay_for_attempt(attempt_index));
+            RetryStep::Backoff {
+                delay,
+                decision,
+                error,
+            }
+        } else {
+            RetryStep::GiveUp { decision, error }
+        }
+    }
+
     pub fn apply_to_tool_execution_error(
         &self,
         error: ToolExecutionError,
@@ -227,6 +254,25 @@ pub struct RetryDecision {
     pub retryable: bool,
     pub delay: Option<Duration>,
     pub retry_after: Option<Duration>,
+}
+
+/// Typed step produced by [`RetryPolicy::step_for_vtcode_error`].
+///
+/// Callers match on this instead of re-deriving the
+/// `if decision.retryable { sleep(decision.delay.expect(...)) }` pattern.
+#[derive(Debug)]
+pub enum RetryStep {
+    /// Wait `delay` then retry; `error` is the failure being retried.
+    Backoff {
+        delay: Duration,
+        decision: RetryDecision,
+        error: VtCodeError,
+    },
+    /// Give up immediately and surface `error`.
+    GiveUp {
+        decision: RetryDecision,
+        error: VtCodeError,
+    },
 }
 
 fn llm_metadata(error: &LLMError) -> Option<&LLMErrorMetadata> {
