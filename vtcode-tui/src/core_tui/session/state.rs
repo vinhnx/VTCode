@@ -398,6 +398,15 @@ impl Session {
         self.mark_dirty();
     }
 
+    /// Toggle auto-scroll to bottom on/off
+    pub(crate) fn toggle_auto_scroll(&mut self) {
+        self.auto_scroll_to_bottom = !self.auto_scroll_to_bottom;
+        if self.auto_scroll_to_bottom {
+            self.scroll_to_bottom();
+        }
+        self.mark_dirty();
+    }
+
     /// Show a simple modal dialog
     pub(crate) fn show_modal(
         &mut self,
@@ -767,14 +776,15 @@ impl Session {
 
     /// Adjust scroll position after content changes
     pub(crate) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
-        use std::cmp::min;
-
         let new_max_offset = self.current_max_scroll_offset();
-        let current_offset = self.scroll_manager.offset();
 
-        if current_offset >= previous_max_offset && new_max_offset > previous_max_offset {
-            self.scroll_manager.set_offset(new_max_offset);
-        } else if current_offset > 0 && new_max_offset > previous_max_offset {
+        if self.auto_scroll_to_bottom {
+            // Always scroll to bottom to show latest content
+            self.scroll_manager.set_offset(0);
+        } else if new_max_offset > previous_max_offset {
+            // Auto-scroll disabled: keep content position stable
+            use std::cmp::min;
+            let current_offset = self.scroll_manager.offset();
             let delta = new_max_offset - previous_max_offset;
             self.scroll_manager
                 .set_offset(min(current_offset + delta, new_max_offset));

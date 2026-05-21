@@ -598,6 +598,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.toggle_logs();
             None
         }
+        KeyCode::Char('a') | KeyCode::Char('A') if has_alt && !has_control && !has_command => {
+            session.toggle_auto_scroll();
+            None
+        }
         KeyCode::Char(ch) => {
             if !session.input_enabled {
                 return None;
@@ -679,6 +683,7 @@ fn quick_help_lines() -> Vec<String> {
     vec![
         "Enter queues; Tab queues or accepts an inline suggestion.".to_string(),
         "Alt+P: Generate an inline prompt suggestion.".to_string(),
+        "Alt+A: Toggle auto-scroll to latest content.".to_string(),
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
         "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
