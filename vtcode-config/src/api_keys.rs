@@ -257,7 +257,7 @@ fn get_custom_api_key_from_secure_storage(provider: &str) -> Result<Option<Strin
 /// Get API key for a specific environment variable with fallback
 fn get_api_key_with_fallback(
     env_var: &str,
-    config_value: Option<&String>,
+    config_value: Option<&str>,
     provider_name: &str,
 ) -> Result<String> {
     // First try environment variable (most secure)
@@ -271,7 +271,7 @@ fn get_api_key_with_fallback(
     if let Some(key) = config_value
         && !key.is_empty()
     {
-        return Ok(key.clone());
+        return Ok(key.to_string());
     }
 
     // If neither worked, return an error
@@ -282,7 +282,7 @@ fn get_api_key_with_fallback(
     ))
 }
 
-fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&String>) -> String {
+fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&str>) -> String {
     if let Some(key) = read_env_var(env_var)
         && !key.is_empty()
     {
@@ -292,7 +292,7 @@ fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&Strin
     if let Some(key) = config_value
         && !key.is_empty()
     {
-        return key.clone();
+        return key.to_string();
     }
 
     String::new()
@@ -332,7 +332,7 @@ fn get_gemini_api_key(sources: &ApiKeySources) -> Result<String> {
 fn get_anthropic_api_key(sources: &ApiKeySources) -> Result<String> {
     get_api_key_with_fallback(
         &sources.anthropic_env,
-        sources.anthropic_config.as_ref(),
+        sources.anthropic_config.as_deref(),
         "Anthropic",
     )
 }
@@ -341,7 +341,7 @@ fn get_anthropic_api_key(sources: &ApiKeySources) -> Result<String> {
 fn get_openai_api_key(sources: &ApiKeySources) -> Result<String> {
     get_api_key_with_fallback(
         &sources.openai_env,
-        sources.openai_config.as_ref(),
+        sources.openai_config.as_deref(),
         "OpenAI",
     )
 }
@@ -362,7 +362,7 @@ fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
     // Fall back to standard API key retrieval
     get_api_key_with_fallback(
         &sources.openrouter_env,
-        sources.openrouter_config.as_ref(),
+        sources.openrouter_config.as_deref(),
         "OpenRouter",
     )
 }
@@ -371,14 +371,14 @@ fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
 fn get_deepseek_api_key(sources: &ApiKeySources) -> Result<String> {
     get_api_key_with_fallback(
         &sources.deepseek_env,
-        sources.deepseek_config.as_ref(),
+        sources.deepseek_config.as_deref(),
         "DeepSeek",
     )
 }
 
 /// Get Z.AI API key with secure fallback
 fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(&sources.zai_env, sources.zai_config.as_ref(), "Z.AI")
+    get_api_key_with_fallback(&sources.zai_env, sources.zai_config.as_deref(), "Z.AI")
 }
 
 /// Get Ollama API key with secure fallback
@@ -387,7 +387,7 @@ fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
     // Cloud variants still rely on environment/config values when present.
     Ok(get_optional_api_key_with_fallback(
         &sources.ollama_env,
-        sources.ollama_config.as_ref(),
+        sources.ollama_config.as_deref(),
     ))
 }
 
@@ -395,7 +395,7 @@ fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
 fn get_lmstudio_api_key(sources: &ApiKeySources) -> Result<String> {
     Ok(get_optional_api_key_with_fallback(
         &sources.lmstudio_env,
-        sources.lmstudio_config.as_ref(),
+        sources.lmstudio_config.as_deref(),
     ))
 }
 

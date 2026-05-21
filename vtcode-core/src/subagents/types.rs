@@ -405,12 +405,12 @@ impl ChildRecord {
                 } else {
                     SubagentStatus::Failed
                 };
-                self.summary = Some(result.summary.clone());
+                self.summary = Some(result.summary);
                 self.error = match result.outcome {
                     TaskOutcome::Failed { reason } => Some(reason),
                     _ => None,
                 };
-                self.transcript_path = result.transcript_path.clone();
+                self.transcript_path = result.transcript_path;
                 self.stored_messages = result.messages;
             }
             Err(error) => {

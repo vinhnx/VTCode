@@ -219,7 +219,7 @@ impl GeminiProvider {
             }
         }
 
-        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref());
+        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()));
         let tools = tool_spec.generate_tools;
         let uses_server_side_tools = tool_spec.uses_server_side_tools;
 
@@ -322,7 +322,7 @@ impl GeminiProvider {
         }
 
         request.model.contains("gemini-3")
-            && collect_gemini_tool_spec(request.tools.as_deref()).uses_server_side_tools
+            && collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice())).uses_server_side_tools
     }
 
     pub(super) fn convert_to_interaction_request(
@@ -341,7 +341,7 @@ impl GeminiProvider {
             Self::HISTORY_DIRECTIVES_SECTION_HEADER,
         );
 
-        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref());
+        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()));
         let generation_config = build_generation_config(self, request);
         let interaction_input = build_interaction_input(request)?;
 
@@ -1072,7 +1072,7 @@ fn gemini_interaction_built_in_tool(tool: &ToolDefinition) -> Option<Interaction
     Some(InteractionTool::built_in(tool_type, config))
 }
 
-fn collect_gemini_tool_spec(definitions: Option<&Vec<ToolDefinition>>) -> GeminiToolSpec {
+fn collect_gemini_tool_spec(definitions: Option<&[ToolDefinition]>) -> GeminiToolSpec {
     let Some(definitions) = definitions else {
         return GeminiToolSpec {
             generate_tools: None,

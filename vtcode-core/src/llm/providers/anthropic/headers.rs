@@ -16,7 +16,7 @@ pub struct BetaHeaderConfig<'a> {
     pub model: &'a str,
     pub include_advanced_tool_use: bool,
     pub include_manual_interleaved_beta: bool,
-    pub request_betas: Option<&'a Vec<String>>,
+    pub request_betas: Option<&'a [String]>,
     pub include_task_budget: bool,
 }
 

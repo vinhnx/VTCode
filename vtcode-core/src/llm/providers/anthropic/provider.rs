@@ -433,7 +433,7 @@ impl AnthropicProvider {
         request: &LLMRequest,
         anthropic_request: &Value,
         include_advanced_tool_use: bool,
-        request_betas: Option<&Vec<String>>,
+        request_betas: Option<&[String]>,
     ) -> Option<String> {
         let beta_config = headers::BetaHeaderConfig {
             config: &self.anthropic_config,
@@ -576,7 +576,7 @@ impl LLMProvider for AnthropicProvider {
             &request,
             &anthropic_request,
             include_advanced_tool_use,
-            betas.as_ref(),
+            betas.as_deref(),
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -639,7 +639,7 @@ impl LLMProvider for AnthropicProvider {
             &request,
             &anthropic_request,
             include_advanced_tool_use,
-            betas.as_ref(),
+            betas.as_deref(),
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }

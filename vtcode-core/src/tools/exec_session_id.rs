@@ -62,12 +62,6 @@ impl From<&str> for ExecSessionId {
     }
 }
 
-impl From<&String> for ExecSessionId {
-    fn from(value: &String) -> Self {
-        Self(value.clone())
-    }
-}
-
 impl From<ExecSessionId> for String {
     fn from(value: ExecSessionId) -> Self {
         value.0

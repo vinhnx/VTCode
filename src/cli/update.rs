@@ -158,7 +158,10 @@ fn handle_unpin() -> Result<()> {
         return Ok(());
     }
 
-    let pinned = updater.pinned_version().unwrap().clone();
+    let pinned = updater
+        .pinned_version()
+        .expect("is_pinned() returned true, so pinned_version() should be Some")
+        .clone();
     updater.unpin_version()?;
 
     println!("{} Unpinned from v{}", "✓".green(), pinned);
