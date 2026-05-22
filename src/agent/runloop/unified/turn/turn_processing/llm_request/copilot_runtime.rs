@@ -427,19 +427,16 @@ impl<'a> CopilotRuntimeHost<'a> {
             }
         }
 
-        if let Some(max_tool_calls) = self.harness_state.exhausted_tool_call_limit() {
+        if let Some(exhaustion) = self.harness_state.tool_budget_exhaustion() {
             return Ok(Some(tool_exceeded_budget_response(
                 tool_name,
-                max_tool_calls,
+                exhaustion.max,
             )));
         }
 
-        if let Some(warning) = self.harness_state.record_tool_call_with_warning(0.75) {
-            tracing::info!(
-                used = warning.used,
-                max = warning.max,
-                remaining = warning.remaining,
-                "Tool-call budget warning threshold reached in copilot ACP path"
+        if let Some(warning) = self.harness_state.record_tool_call_with_default_warning() {
+            warning.log_threshold_reached(
+                "Tool-call budget warning threshold reached in copilot ACP path",
             );
         }
 

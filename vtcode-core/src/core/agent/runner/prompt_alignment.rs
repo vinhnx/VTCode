@@ -5,6 +5,9 @@
 //! lightweight pure-function check so the runner can detect and self-heal any
 //! divergence before dispatching to the LLM provider.
 
+use futures::future::BoxFuture;
+use tracing::warn;
+
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::prompts::system::{
     PLAN_MODE_INTERVIEW_POLICY_LINE, PLAN_MODE_NO_REQUEST_USER_INPUT_POLICY_LINE,
@@ -47,6 +50,36 @@ impl AlignmentError {
     pub const fn should_rebuild_runtime_prompt(&self) -> bool {
         true
     }
+}
+
+pub async fn rebuild_once_on_alignment_mismatch<S, T, E, Build, Validate>(
+    state: &mut S,
+    mut current: T,
+    mut build: Build,
+    validate: Validate,
+    rebuild_message: &'static str,
+    persisted_message: &'static str,
+) -> Result<T, E>
+where
+    Build: for<'a> FnMut(&'a mut S) -> BoxFuture<'a, Result<T, E>>,
+    Validate: Fn(&S, &T) -> Result<(), AlignmentError>,
+{
+    let mut alignment_error = validate(&*state, &current).err();
+
+    if alignment_error
+        .as_ref()
+        .is_some_and(AlignmentError::should_rebuild_runtime_prompt)
+    {
+        warn!(error = ?alignment_error, "{rebuild_message}");
+        current = build(state).await?;
+        alignment_error = validate(&*state, &current).err();
+    }
+
+    if let Some(error) = alignment_error {
+        warn!(error = ?error, "{persisted_message}");
+    }
+
+    Ok(current)
 }
 
 #[derive(Debug, Default)]
@@ -201,10 +234,53 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use std::sync::Arc;
 
     fn snapshot(plan_mode: bool) -> SessionToolCatalogSnapshot {
         SessionToolCatalogSnapshot::new(1, 1, plan_mode, false, Some(Arc::new(Vec::new())), false)
+    }
+
+    #[tokio::test]
+    async fn rebuild_once_on_alignment_mismatch_retries_exactly_once() {
+        #[derive(Default)]
+        struct TestState {
+            rebuilds: usize,
+        }
+
+        let mut state = TestState::default();
+        let validated_value = Cell::new(0usize);
+
+        let result = rebuild_once_on_alignment_mismatch(
+            &mut state,
+            0usize,
+            |state| {
+                Box::pin(async move {
+                    state.rebuilds = state.rebuilds.saturating_add(1);
+                    Ok::<usize, ()>(state.rebuilds)
+                })
+            },
+            |_, value| {
+                validated_value.set(*value);
+                if *value == 0 {
+                    Err(AlignmentError::PromptCatalogMetadataMismatch {
+                        field: "version",
+                        prompt_value: "0".to_string(),
+                        snapshot_value: "1".to_string(),
+                    })
+                } else {
+                    Ok(())
+                }
+            },
+            "rebuild test",
+            "persisted test",
+        )
+        .await
+        .expect("helper should rebuild once and recover");
+
+        assert_eq!(result, 1);
+        assert_eq!(state.rebuilds, 1);
+        assert_eq!(validated_value.get(), 1);
     }
 
     #[test]

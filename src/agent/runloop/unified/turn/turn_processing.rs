@@ -1,5 +1,6 @@
 mod llm_request;
 mod plan_mode;
+mod recovery_guidance;
 mod response_processing;
 mod result_handler;
 #[cfg(test)]

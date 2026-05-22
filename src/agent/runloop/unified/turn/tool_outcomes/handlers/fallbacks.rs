@@ -8,6 +8,15 @@ use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::compact_model_tool_payload;
 use crate::agent::runloop::unified::turn::tool_outcomes::handlers::PreparedToolCall;
 
+fn trimmed_non_empty_string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
         tool_names::UNIFIED_SEARCH => {
@@ -115,28 +124,9 @@ pub(super) fn preflight_validation_fallback(
         || error_text.contains("for 'unified_search'");
     if is_unified_search {
         let mut normalized = tool_intent::normalize_unified_search_args(args_val);
-        let inferred_pattern = normalized
-            .get("pattern")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string)
-            .or_else(|| {
-                normalized
-                    .get("keyword")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-            })
-            .or_else(|| {
-                normalized
-                    .get("query")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-            });
+        let inferred_pattern = trimmed_non_empty_string_field(&normalized, "pattern")
+            .or_else(|| trimmed_non_empty_string_field(&normalized, "keyword"))
+            .or_else(|| trimmed_non_empty_string_field(&normalized, "query"));
 
         if let Some(obj) = normalized.as_object_mut() {
             let action = obj
@@ -172,11 +162,8 @@ pub(super) fn preflight_validation_fallback(
     }
 
     if tool_intent::unified_file_action_is(args_val, "list") {
-        let path = args_val
-            .get("path")
-            .and_then(Value::as_str)
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or(".");
+        let path =
+            trimmed_non_empty_string_field(args_val, "path").unwrap_or_else(|| ".".to_string());
         return Some((
             tool_names::UNIFIED_SEARCH.to_string(),
             json!({
@@ -213,5 +200,46 @@ pub(super) fn try_recover_preflight_with_fallback(
             );
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{preflight_validation_fallback, trimmed_non_empty_string_field};
+    use anyhow::anyhow;
+    use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
+
+    #[test]
+    fn trimmed_non_empty_string_field_trims_and_rejects_blank() {
+        let value = json!({
+            "pattern": "  todo  ",
+            "blank": "   "
+        });
+
+        assert_eq!(
+            trimmed_non_empty_string_field(&value, "pattern"),
+            Some("todo".to_string())
+        );
+        assert_eq!(trimmed_non_empty_string_field(&value, "blank"), None);
+        assert_eq!(trimmed_non_empty_string_field(&value, "missing"), None);
+    }
+
+    #[test]
+    fn preflight_validation_fallback_promotes_unified_search_keyword_to_pattern() {
+        let args = json!({
+            "action": "read",
+            "path": "src",
+            "keyword": "  todo  "
+        });
+        let error = anyhow!("tool 'unified_search' validation failed");
+
+        let (tool_name, recovered_args) =
+            preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
+                .expect("unified_search fallback should recover");
+
+        assert_eq!(tool_name, tool_names::UNIFIED_SEARCH);
+        assert_eq!(recovered_args["action"], "grep");
+        assert_eq!(recovered_args["pattern"], "todo");
     }
 }

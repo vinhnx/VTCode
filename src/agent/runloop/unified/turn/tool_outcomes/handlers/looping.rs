@@ -8,6 +8,9 @@ use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_f
 
 pub(super) use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 
+const READ_FILE_OFFSET_KEYS: &[&str] = &["offset", "offset_lines", "offset_bytes"];
+const READ_FILE_LIMIT_KEYS: &[&str] = &["limit", "page_size_lines", "max_lines", "chunk_lines"];
+
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
 }
@@ -66,28 +69,29 @@ fn unified_search_globs_arg(args: &Value) -> Option<String> {
     }
 }
 
+fn first_arg_value_by_keys<'a>(args: &'a Value, keys: &[&str]) -> Option<&'a Value> {
+    keys.iter().find_map(|key| args.get(*key))
+}
+
+fn has_any_arg_by_keys(args: &Value, keys: &[&str]) -> bool {
+    first_arg_value_by_keys(args, keys).is_some()
+}
+
 fn read_file_has_offset_arg(args: &Value) -> bool {
-    ["offset", "offset_lines", "offset_bytes"]
-        .iter()
-        .any(|key| args.get(*key).is_some())
+    has_any_arg_by_keys(args, READ_FILE_OFFSET_KEYS)
 }
 
 fn read_file_offset_value(args: &Value) -> Option<usize> {
-    ["offset", "offset_lines", "offset_bytes"]
-        .iter()
-        .filter_map(|key| args.get(*key))
-        .find_map(|value| {
-            value
-                .as_u64()
-                .and_then(|n| usize::try_from(n).ok())
-                .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
-        })
+    first_arg_value_by_keys(args, READ_FILE_OFFSET_KEYS).and_then(|value| {
+        value
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+    })
 }
 
 fn read_file_has_limit_arg(args: &Value) -> bool {
-    ["limit", "page_size_lines", "max_lines", "chunk_lines"]
-        .iter()
-        .any(|key| args.get(*key).is_some())
+    has_any_arg_by_keys(args, READ_FILE_LIMIT_KEYS)
 }
 
 pub(super) fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
@@ -217,5 +221,37 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
             Some(key)
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{read_file_has_limit_arg, read_file_has_offset_arg, read_file_offset_value};
+    use serde_json::json;
+
+    #[test]
+    fn read_file_offset_value_accepts_alias_keys() {
+        assert_eq!(read_file_offset_value(&json!({"offset": 7})), Some(7));
+        assert_eq!(
+            read_file_offset_value(&json!({"offset_lines": "8"})),
+            Some(8)
+        );
+        assert_eq!(read_file_offset_value(&json!({"offset_bytes": 9})), Some(9));
+    }
+
+    #[test]
+    fn read_file_has_offset_arg_accepts_alias_keys() {
+        assert!(read_file_has_offset_arg(&json!({"offset_lines": 1})));
+        assert!(read_file_has_offset_arg(&json!({"offset_bytes": 1})));
+        assert!(!read_file_has_offset_arg(&json!({"path": "src/main.rs"})));
+    }
+
+    #[test]
+    fn read_file_has_limit_arg_accepts_alias_keys() {
+        assert!(read_file_has_limit_arg(&json!({"limit": 10})));
+        assert!(read_file_has_limit_arg(&json!({"page_size_lines": 10})));
+        assert!(read_file_has_limit_arg(&json!({"max_lines": 10})));
+        assert!(read_file_has_limit_arg(&json!({"chunk_lines": 10})));
+        assert!(!read_file_has_limit_arg(&json!({"path": "src/main.rs"})));
     }
 }

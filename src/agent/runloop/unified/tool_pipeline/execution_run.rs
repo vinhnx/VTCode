@@ -136,15 +136,12 @@ pub(crate) async fn run_tool_call_with_args(
         resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
-        if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
+        if let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion() {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: structured_failure(
+                    error: structured_failure_from_message(
                         requested_name,
-                        &anyhow::anyhow!(
-                            "Policy violation: exceeded max tool calls per turn ({})",
-                            max_tool_calls
-                        ),
+                        exhaustion.policy_violation_message(),
                     ),
                 },
             ));
@@ -260,12 +257,9 @@ pub(crate) async fn run_tool_call_with_args(
             }
         }
 
-        if let Some(warning) = ctx.harness_state.record_tool_call_with_warning(0.75) {
-            tracing::info!(
-                used = warning.used,
-                max = warning.max,
-                remaining = warning.remaining,
-                "Tool-call budget warning threshold reached in tool pipeline path"
+        if let Some(warning) = ctx.harness_state.record_tool_call_with_default_warning() {
+            warning.log_threshold_reached(
+                "Tool-call budget warning threshold reached in tool pipeline path",
             );
         }
     }
