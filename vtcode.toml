@@ -19,7 +19,7 @@ memories = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
+default_model = "deepseek-ai/deepseek-v4-flash"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -28,8 +28,8 @@ default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "low"
-api_key_env = "HF_TOKEN"
-provider = "huggingface"
+api_key_env = "ATLASCLOUD_API_KEY"
+provider = "atlascloud"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
@@ -56,6 +56,32 @@ default_mode = "auto"
 # Default: false
 # Type: `boolean`
 enabled = true
+
+[[custom_providers]]
+api_key_env = "ATLASCLOUD_API_KEY"
+base_url = "https://api.atlascloud.ai/v1"
+display_name = "Atlas Cloud"
+model = "deepseek-ai/deepseek-v4-flash"
+models = [
+    "deepseek-ai/deepseek-v4-flash",
+    "deepseek-ai/deepseek-v4-pro",
+    "deepseek-ai/DeepSeek-V3-0324",
+    "deepseek-ai/DeepSeek-V3.1",
+    "deepseek-ai/deepseek-v3.2",
+    "deepseek-ai/deepseek-r1-0528",
+    "qwen/qwen3.6-35b-a3b",
+    "qwen/qwen3.6-plus",
+    "qwen/qwen3.5-122b-a10b",
+    "qwen/qwen3-coder-next",
+    "moonshotai/kimi-k2.6",
+    "moonshotai/kimi-k2.5",
+    "zai-org/glm-5.1",
+    "zai-org/glm-5-turbo",
+    "minimaxai/minimax-m2.7",
+    "minimaxai/minimax-m2.5",
+    "kwaipilot/kat-coder-pro-v2",
+]
+name = "atlascloud"
 
 
 # Provider Endpoints
