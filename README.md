@@ -122,9 +122,35 @@ toggle_shortcut = "ctrl+b"
 
 ### Supported Providers
 
-VT Code works with GitHub Copilot, OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
+VT Code works with GitHub Copilot, OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), LM Studio (local), and OpenAI-compatible custom providers such as Atlas Cloud.
 
 Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
+
+#### Atlas Cloud
+
+Atlas Cloud works through VT Code's `[[custom_providers]]` support, so you can
+point VT Code at `https://api.atlascloud.ai/v1` without adding a dedicated
+runtime provider.
+
+<p align="center">
+  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider setup" width="720" />
+</p>
+
+```toml
+[agent]
+provider = "atlascloud"
+default_model = "deepseek-ai/DeepSeek-V3-0324"
+
+[[custom_providers]]
+name = "atlascloud"
+display_name = "Atlas Cloud"
+base_url = "https://api.atlascloud.ai/v1"
+api_key_env = "ATLASCLOUD_API_KEY"
+model = "deepseek-ai/DeepSeek-V3-0324"
+```
+
+See [Atlas Cloud Integration](./docs/providers/atlascloud.md) for the full setup
+flow and troubleshooting notes.
 
 #### GitHub Copilot Integration
 
@@ -293,6 +319,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
 - [**Update System**](./docs/guides/UPDATE_SYSTEM.md) - Release channels, version pinning, and update management
 - [**AI Provider Setup**](./docs/providers/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     - [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
+    - [Atlas Cloud](./docs/providers/atlascloud.md)
     - [OpenRouter](./docs/providers/openrouter.md)
     - [Ollama](./docs/providers/ollama.md)
     - [LM Studio](./docs/providers/lmstudio.md)

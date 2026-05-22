@@ -53,6 +53,16 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   [Model catalog](https://openrouter.ai/docs/llms)
 -   Default model: `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
 
+## Atlas Cloud
+
+-   **Guide:** [Atlas Cloud Integration](./providers/atlascloud.md)
+-   **Official docs:**
+    -   [LLM / Chat](https://www.atlascloud.ai/docs/models/llm)
+    -   [FAQ](https://www.atlascloud.ai/docs/en/faq)
+-   **Integration mode:** configure Atlas Cloud through VT Code's `[[custom_providers]]` support because the LLM endpoint is OpenAI-compatible.
+-   **Base URL:** `https://api.atlascloud.ai/v1`
+-   **Recommended model:** start with an exact model slug returned by `GET /v1/models`, such as `deepseek-ai/DeepSeek-V3-0324`.
+
 ## Ollama Local & Cloud Models
 
 -   **Setup:** Install and run Ollama locally ([official install](https://ollama.com/download))

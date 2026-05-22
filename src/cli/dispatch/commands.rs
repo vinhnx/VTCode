@@ -24,6 +24,10 @@ pub(crate) async fn dispatch_command(
     let skip_confirmations = startup.skip_confirmations;
     let full_auto_requested = startup.full_auto_requested;
 
+    // Register OpenAI-compatible custom providers for non-interactive CLI flows
+    // such as `ask`, `review`, and `benchmark` before any provider is resolved.
+    vtcode_core::llm::factory::register_custom_providers(&cfg.custom_providers);
+
     match command {
         Commands::AgentClientProtocol { target } => {
             handle_acp_command(core_cfg, cfg, target).await?;
