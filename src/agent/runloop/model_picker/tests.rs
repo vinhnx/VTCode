@@ -412,7 +412,7 @@ fn preferred_model_selection_matches_current_custom_provider() {
         model: "gpt-5-mini".to_string(),
         models: Vec::new(),
     };
-    picker.custom_providers = vec![selection_from_custom_provider(&config)];
+    picker.custom_providers = selections_from_custom_provider(&config);
 
     let selection = picker.preferred_model_selection();
     let Some(InlineListSelection::CustomProvider(index)) = selection else {
