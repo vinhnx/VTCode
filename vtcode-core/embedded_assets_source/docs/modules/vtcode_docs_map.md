@@ -385,6 +385,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### LLM Providers & Models
 
+- **File**: `docs/providers/atlascloud.md`
+  - **Content**: Atlas Cloud Integration Guide
+  - **Topics**: Quickstart, Why This Works, Model Selection Notes, CLI Examples, Troubleshooting
+  - **User Questions**: "What can you tell me about Atlas Cloud Integration Guide?", "How does Quickstart work?", "How does Why This Works work?"
+
 - **File**: `docs/providers/copilot.md`
   - **Content**: GitHub Copilot Managed Auth
   - **Topics**: What You Need, If `copilot` Is Missing, If `gh` Is Missing, Troubleshooting
