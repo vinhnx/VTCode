@@ -238,14 +238,6 @@ impl CircuitBreaker {
         None
     }
 
-    /// Legacy method for backwards compatibility - always returns true (global check disabled).
-    /// Use `allow_request_for_tool` for per-tool checking.
-    #[deprecated(note = "Use allow_request_for_tool for per-tool circuit breaking")]
-    pub fn allow_request(&self) -> bool {
-        // Global circuit breaker is disabled - we now use per-tool tracking
-        true
-    }
-
     /// Record success for a specific tool
     ///
     /// State transitions on success:
@@ -271,12 +263,6 @@ impl CircuitBreaker {
                 state.reset_on_success();
             }
         }
-    }
-
-    /// Legacy method - no-op. Use `record_success_for_tool` instead.
-    #[deprecated(note = "Use record_success_for_tool for per-tool circuit breaking")]
-    pub fn record_success(&self) {
-        // No-op for backwards compatibility
     }
 
     /// Record failure for a specific tool.
@@ -346,7 +332,7 @@ impl CircuitBreaker {
         }
     }
 
-    /// Legacy helper that preserves the older boolean contract.
+    /// Convenience wrapper that maps a boolean argument error flag to the appropriate ErrorCategory.
     pub fn record_failure_for_tool(&self, tool_name: &str, is_argument_error: bool) {
         let category = if is_argument_error {
             ErrorCategory::InvalidParameters
@@ -356,12 +342,6 @@ impl CircuitBreaker {
         self.record_failure_category_for_tool(tool_name, category);
     }
 
-    /// Legacy method - no-op. Use `record_failure_for_tool` instead.
-    #[deprecated(note = "Use record_failure_for_tool for per-tool circuit breaking")]
-    pub fn record_failure(&self) {
-        // No-op for backwards compatibility
-    }
-
     /// Get the circuit state for a specific tool
     pub fn state_for_tool(&self, tool_name: &str) -> CircuitState {
         let states = self.tool_states.read();
@@ -369,12 +349,6 @@ impl CircuitBreaker {
             .get(tool_name)
             .map(|s| s.status)
             .unwrap_or(CircuitState::Closed)
-    }
-
-    /// Legacy method - returns Closed. Use `state_for_tool` instead.
-    #[deprecated(note = "Use state_for_tool for per-tool circuit breaking")]
-    pub fn state(&self) -> CircuitState {
-        CircuitState::Closed
     }
 
     /// Reset the circuit breaker state for a specific tool

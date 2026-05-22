@@ -148,23 +148,22 @@ impl SessionStats {
         let Some(usage) = usage else {
             return;
         };
-
         self.total_usage.input_tokens = self
             .total_usage
             .input_tokens
-            .saturating_add(usage.prompt_tokens as u64);
+            .saturating_add(u64::from(usage.prompt_tokens));
         self.total_usage.cached_input_tokens = self
             .total_usage
             .cached_input_tokens
-            .saturating_add(usage.cache_read_tokens_or_fallback() as u64);
+            .saturating_add(u64::from(usage.cache_read_tokens_or_fallback()));
         self.total_usage.cache_creation_tokens = self
             .total_usage
             .cache_creation_tokens
-            .saturating_add(usage.cache_creation_tokens_or_zero() as u64);
+            .saturating_add(u64::from(usage.cache_creation_tokens_or_zero()));
         self.total_usage.output_tokens = self
             .total_usage
             .output_tokens
-            .saturating_add(usage.completion_tokens as u64);
+            .saturating_add(u64::from(usage.completion_tokens));
     }
 
     pub(crate) fn total_usage(&self) -> HarnessUsage {
@@ -466,27 +465,7 @@ impl SessionStats {
         };
 
         self.prompt_cache_observations = self.prompt_cache_observations.saturating_add(1);
-        match reason {
-            "model" => {
-                self.prompt_cache_model_changes = self.prompt_cache_model_changes.saturating_add(1);
-            }
-            "unchanged" => {
-                self.prompt_cache_unchanged = self.prompt_cache_unchanged.saturating_add(1);
-            }
-            "stable_prefix" => {
-                self.prompt_cache_stable_prefix_changes =
-                    self.prompt_cache_stable_prefix_changes.saturating_add(1);
-            }
-            "tool_catalog" => {
-                self.prompt_cache_tool_catalog_changes =
-                    self.prompt_cache_tool_catalog_changes.saturating_add(1);
-            }
-            "stable_prefix+tool_catalog" => {
-                self.prompt_cache_combined_changes =
-                    self.prompt_cache_combined_changes.saturating_add(1);
-            }
-            _ => {}
-        }
+        *self.counter_for_reason(reason) += 1;
 
         self.last_prompt_cache_model = Some(model.to_string());
         self.last_stable_prefix_hash = Some(stable_prefix_hash);
@@ -494,6 +473,17 @@ impl SessionStats {
         self.last_prompt_cache_change_reason = Some(reason.to_string());
 
         reason
+    }
+
+    fn counter_for_reason(&mut self, reason: &str) -> &mut usize {
+        match reason {
+            "model" => &mut self.prompt_cache_model_changes,
+            "unchanged" => &mut self.prompt_cache_unchanged,
+            "stable_prefix" => &mut self.prompt_cache_stable_prefix_changes,
+            "tool_catalog" => &mut self.prompt_cache_tool_catalog_changes,
+            "stable_prefix+tool_catalog" => &mut self.prompt_cache_combined_changes,
+            _ => &mut self.prompt_cache_unchanged,
+        }
     }
 
     pub(crate) fn set_previous_response_chain(
