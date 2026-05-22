@@ -61,7 +61,7 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   [FAQ](https://www.atlascloud.ai/docs/en/faq)
 -   **Integration mode:** configure Atlas Cloud through VT Code's `[[custom_providers]]` support because the LLM endpoint is OpenAI-compatible.
 -   **Base URL:** `https://api.atlascloud.ai/v1`
--   **Recommended model:** start with an exact model slug returned by `GET /v1/models`, such as `deepseek-ai/DeepSeek-V3-0324`.
+-   **Recommended model:** start with `deepseek-ai/deepseek-v4-flash` (DeepSeek's latest flash model, 1M context, $0.14/M input tokens).
 
 ## Ollama Local & Cloud Models
 

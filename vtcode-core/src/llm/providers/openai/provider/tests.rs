@@ -559,6 +559,7 @@ async fn custom_provider_auth_retries_with_refreshed_tokens_after_401() {
             custom_provider_auth_fixture(&tempdir, &["first-token", "second-token"]),
             None,
         )),
+        None,
     );
 
     let response = provider
@@ -2211,7 +2212,8 @@ fn supports_manual_openai_compaction_is_native_only() {
             None,
             None,
             None,
-            None
+            None,
+            None,
         )
         .supports_manual_openai_compaction(models::openai::GPT_5)
     );
@@ -2423,6 +2425,7 @@ fn provider_from_config_respects_prompt_cache_and_websocket_gating() {
             websocket_mode: true,
             ..Default::default()
         }),
+        None,
         None,
         None,
     );

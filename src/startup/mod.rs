@@ -616,6 +616,7 @@ mod validation_tests {
                 api_key_env: "MYCORP_API_KEY".to_string(),
                 auth: None,
                 model: "gpt-5-mini".to_string(),
+                models: Vec::new(),
             });
 
         let selection = RuntimeModelSelection {

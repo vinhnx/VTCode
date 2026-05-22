@@ -22,7 +22,7 @@ Add Atlas Cloud to your workspace `vtcode.toml`:
 ```toml
 [agent]
 provider = "atlascloud"
-default_model = "deepseek-ai/DeepSeek-V3-0324"
+default_model = "deepseek-ai/deepseek-v4-flash"
 reasoning_effort = "low"
 
 [[custom_providers]]
@@ -30,7 +30,28 @@ name = "atlascloud"
 display_name = "Atlas Cloud"
 base_url = "https://api.atlascloud.ai/v1"
 api_key_env = "ATLASCLOUD_API_KEY"
-model = "deepseek-ai/DeepSeek-V3-0324"
+model = "deepseek-ai/deepseek-v4-flash"
+
+# Optional: list available models for the model picker.
+# models = [
+#     "deepseek-ai/deepseek-v4-flash",
+#     "deepseek-ai/deepseek-v4-pro",
+#     "deepseek-ai/DeepSeek-V3-0324",
+#     "deepseek-ai/DeepSeek-V3.1",
+#     "deepseek-ai/deepseek-v3.2",
+#     "deepseek-ai/deepseek-r1-0528",
+#     "qwen/qwen3.6-35b-a3b",
+#     "qwen/qwen3.6-plus",
+#     "qwen/qwen3.5-122b-a10b",
+#     "qwen/qwen3-coder-next",
+#     "moonshotai/kimi-k2.6",
+#     "moonshotai/kimi-k2.5",
+#     "zai-org/glm-5.1",
+#     "zai-org/glm-5-turbo",
+#     "minimaxai/minimax-m2.7",
+#     "minimaxai/minimax-m2.5",
+#     "kwaipilot/kat-coder-pro-v2",
+# ]
 ```
 
 Then run VT Code normally:
@@ -48,9 +69,15 @@ vtcode ask "Summarize this repository"
 
 ## Model Selection Notes
 
-- Atlas Cloud's docs often show the alias `deepseek-v3`.
-- In live testing, the exact slug `deepseek-ai/DeepSeek-V3-0324` was returned by
-  `GET /v1/models` and worked for `POST /v1/chat/completions`.
+- Atlas Cloud hosts 300+ models spanning LLM, image, video, audio, and 3D.
+  The complete LLM catalog includes DeepSeek, Qwen, Kimi, GLM, MiniMax,
+  and many more.
+- The recommended default is `deepseek-ai/deepseek-v4-flash` — DeepSeek's
+  latest flash model with a 1M context window and competitive pricing
+  ($0.14/M input tokens).
+- Use the `models` field in `[[custom_providers]]` to populate the model picker
+  with the exact slugs you have access to. Run `GET /v1/models` against your
+  API key to see your full catalog.
 - If your account enables different models, update both `agent.default_model`
   and `[[custom_providers]].model` to the slug returned by Atlas Cloud.
 
@@ -65,7 +92,7 @@ vtcode ask "Explain the current module layout"
 Override the model for a single invocation:
 
 ```bash
-vtcode ask --model qwen/qwen3-32b "Review this patch at a high level"
+vtcode ask --model moonshotai/kimi-k2.6 "Review this patch at a high level"
 ```
 
 ## Troubleshooting
@@ -79,5 +106,6 @@ vtcode ask --model qwen/qwen3-32b "Review this patch at a high level"
 
 ## References
 
-- [Atlas Cloud LLM / Chat](https://www.atlascloud.ai/docs/models/llm)
+- [Atlas Cloud LLM Catalog](https://www.atlascloud.ai/models/list/llm)
+- [Atlas Cloud API Docs](https://docs.atlascloud.ai)
 - [Atlas Cloud FAQ](https://www.atlascloud.ai/docs/en/faq)

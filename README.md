@@ -139,14 +139,14 @@ runtime provider.
 ```toml
 [agent]
 provider = "atlascloud"
-default_model = "deepseek-ai/DeepSeek-V3-0324"
+default_model = "deepseek-ai/deepseek-v4-flash"
 
 [[custom_providers]]
 name = "atlascloud"
 display_name = "Atlas Cloud"
 base_url = "https://api.atlascloud.ai/v1"
 api_key_env = "ATLASCLOUD_API_KEY"
-model = "deepseek-ai/DeepSeek-V3-0324"
+model = "deepseek-ai/deepseek-v4-flash"
 ```
 
 See [Atlas Cloud Integration](./docs/providers/atlascloud.md) for the full setup

@@ -274,6 +274,7 @@ mod tests {
                 api_key_env: "MYCORP_API_KEY".to_string(),
                 auth: None,
                 model: "gpt-5-mini".to_string(),
+                models: Vec::new(),
             });
 
         assert_eq!(provider_label("mycorp", Some(&config)), "MyCorporateName");

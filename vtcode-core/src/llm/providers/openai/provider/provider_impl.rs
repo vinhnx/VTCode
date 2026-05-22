@@ -158,6 +158,9 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
+        if let Some(models) = &self.supported_models_override {
+            return models.clone();
+        }
         if self.provider_key_override.is_some() {
             return vec![self.model.to_string()];
         }
