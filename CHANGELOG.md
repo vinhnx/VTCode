@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.108.0 - 2026-05-22
+
+### Highlights
+#### Bug Fixes
+
+- Enable atlas cloud custom provider flows  (84750086) (@lucaszhu-hue)
+#### Features
+
+- Update model configs and wire models list through custom provider  (76f5146c) (@vinhnx)
+### Other Changes
+#### Other
+
+- Refactor tool outcome handlers and improve recovery guidance (1af72c93) 
+- Refactor token usage tracking and simplify recovery logic in turn loop (a284faf9) 
 ## scode-v0.50.14 - 2026-05-21
 
 ### Highlights
