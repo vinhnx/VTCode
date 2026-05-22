@@ -502,6 +502,15 @@ pub(crate) async fn run_turn_loop(
                     break;
                 }
 
+                if tool_free_recovery {
+                    result = complete_turn_after_failed_tool_free_recovery(
+                        turn_processing_ctx.working_history,
+                        "execute_llm_request.direct_tool_free_failure",
+                        Some(&err),
+                    );
+                    break;
+                }
+
                 display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
                 // Show recovery hints derived from the canonical error category
                 {
@@ -780,19 +789,14 @@ pub(crate) async fn run_turn_loop(
                 return Err(err);
             }
         };
+        // Record token usage before continuing or breaking
+        ctx.context_manager.update_token_usage(&response_usage);
+        #[cfg(debug_assertions)]
+        ctx.context_manager.validate_token_tracking(&response_usage);
+
         match turn_outcome {
-            TurnHandlerOutcome::Continue => {
-                // Update token usage before continuing loop
-                ctx.context_manager.update_token_usage(&response_usage);
-                #[cfg(debug_assertions)]
-                ctx.context_manager.validate_token_tracking(&response_usage);
-                continue;
-            }
+            TurnHandlerOutcome::Continue => continue,
             TurnHandlerOutcome::Break(outcome_result) => {
-                // Update token usage before breaking
-                ctx.context_manager.update_token_usage(&response_usage);
-                #[cfg(debug_assertions)]
-                ctx.context_manager.validate_token_tracking(&response_usage);
                 result = normalize_tool_free_recovery_break_outcome(
                     working_history,
                     outcome_result,
