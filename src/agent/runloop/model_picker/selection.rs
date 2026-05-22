@@ -213,28 +213,34 @@ pub(super) fn selection_from_dynamic(
     )
 }
 
-pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) -> SelectionDetail {
-    let model_id = provider.model.trim().to_string();
+pub(super) fn selections_from_custom_provider(
+    provider: &CustomProviderConfig,
+) -> Vec<SelectionDetail> {
     let env_key = if provider.uses_command_auth() {
         String::new()
     } else {
         provider.resolved_api_key_env()
     };
-    SelectionDetail {
-        provider_key: provider.name.to_lowercase(),
-        provider_label: provider.display_name.clone(),
-        provider_enum: None,
-        model_id: model_id.clone(),
-        model_display: model_id,
-        known_model: false,
-        reasoning_supported: Provider::OpenAI.supports_reasoning_effort(&provider.model),
-        reasoning_optional: true,
-        reasoning_off_model: None,
-        service_tier_supported: Provider::OpenAI.supports_service_tier(&provider.model),
-        requires_api_key: !provider.uses_command_auth(),
-        uses_chatgpt_auth: false,
-        env_key,
-    }
+
+    provider
+        .effective_models()
+        .into_iter()
+        .map(|model_id| SelectionDetail {
+            provider_key: provider.name.to_lowercase(),
+            provider_label: provider.display_name.clone(),
+            provider_enum: None,
+            model_id: model_id.clone(),
+            model_display: model_id.clone(),
+            known_model: false,
+            reasoning_supported: Provider::OpenAI.supports_reasoning_effort(&model_id),
+            reasoning_optional: true,
+            reasoning_off_model: None,
+            service_tier_supported: Provider::OpenAI.supports_service_tier(&model_id),
+            requires_api_key: !provider.uses_command_auth(),
+            uses_chatgpt_auth: false,
+            env_key: env_key.clone(),
+        })
+        .collect()
 }
 
 fn selection_from_resolved(

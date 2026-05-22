@@ -496,6 +496,7 @@ mod tests {
                     refresh_interval_ms: 60_000,
                 }),
                 model: "gpt-5-mini".to_string(),
+                models: Vec::new(),
             });
         let selection = selection("mycorp", None, "", None, false);
 

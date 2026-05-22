@@ -64,7 +64,7 @@ impl CustomProviderCommandAuthConfig {
 /// proxies) with distinct display names, so they can toggle between them
 /// and clearly see which endpoint is active.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct CustomProviderConfig {
     /// Stable provider key used for routing and persistence (e.g., "mycorp").
     /// Must be lowercase alphanumeric with optional hyphens/underscores.
@@ -88,8 +88,22 @@ pub struct CustomProviderConfig {
     pub auth: Option<CustomProviderCommandAuthConfig>,
 
     /// Default model to use with this endpoint (e.g., "gpt-5-mini").
+    ///
+    /// When [`models`](Self::models) is empty, this single model is what the
+    /// `/model` picker offers for this provider. When [`models`](Self::models)
+    /// is non-empty, this field is used as the default selection but the
+    /// picker lists every entry in [`models`](Self::models).
     #[serde(default)]
     pub model: String,
+
+    /// Optional list of additional model identifiers offered by the provider.
+    ///
+    /// Useful for OpenAI-compatible aggregators such as Atlas Cloud that
+    /// expose many models behind a single endpoint. When set, the `/model`
+    /// picker shows one entry per model. When empty, the picker falls back to
+    /// the single [`model`](Self::model) field.
+    #[serde(default)]
+    pub models: Vec<String>,
 }
 
 impl CustomProviderConfig {
@@ -121,6 +135,29 @@ impl CustomProviderConfig {
 
     pub fn uses_command_auth(&self) -> bool {
         self.auth.is_some()
+    }
+
+    /// Return the list of models the `/model` picker should offer for this
+    /// provider.
+    ///
+    /// If `models` is non-empty, every entry is returned (trimmed). Otherwise
+    /// the single `model` field is returned as a one-element list. An empty
+    /// `model` field with no `models` list yields an empty result.
+    pub fn effective_models(&self) -> Vec<String> {
+        if !self.models.is_empty() {
+            return self
+                .models
+                .iter()
+                .map(|m| m.trim().to_string())
+                .filter(|m| !m.is_empty())
+                .collect();
+        }
+        let trimmed = self.model.trim();
+        if trimmed.is_empty() {
+            Vec::new()
+        } else {
+            vec![trimmed.to_string()]
+        }
     }
 
     /// Validate that required fields are present and the name doesn't collide
@@ -159,6 +196,13 @@ impl CustomProviderConfig {
                     self.name
                 ));
             }
+        }
+
+        if self.models.iter().any(|m| m.trim().is_empty()) {
+            return Err(format!(
+                "custom_providers[{}]: `models` entries must not be empty",
+                self.name
+            ));
         }
 
         let reserved = [
@@ -221,6 +265,7 @@ mod tests {
             api_key_env: String::new(),
             auth: None,
             model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
         };
 
         assert!(config.validate().is_ok());
@@ -236,6 +281,7 @@ mod tests {
             api_key_env: String::new(),
             auth: None,
             model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
         };
 
         let err = config.validate().expect_err("invalid name should fail");
@@ -257,6 +303,7 @@ mod tests {
                 refresh_interval_ms: default_auth_refresh_interval_ms(),
             }),
             model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
         };
 
         let err = config.validate().expect_err("conflicting auth should fail");
@@ -278,9 +325,68 @@ mod tests {
                 refresh_interval_ms: 60_000,
             }),
             model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
         };
 
         assert!(config.validate().is_ok());
         assert!(config.uses_command_auth());
+    }
+
+    #[test]
+    fn validate_rejects_empty_model_entry_in_models_list() {
+        let config = CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorp".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
+            model: "gpt-5-mini".to_string(),
+            models: vec!["valid-model".to_string(), "   ".to_string()],
+        };
+
+        let err = config
+            .validate()
+            .expect_err("blank models entry should fail");
+        assert!(err.contains("`models` entries must not be empty"));
+    }
+
+    #[test]
+    fn effective_models_uses_models_list_when_present() {
+        let config = CustomProviderConfig {
+            name: "atlascloud".to_string(),
+            display_name: "Atlas Cloud".to_string(),
+            base_url: "https://api.atlascloud.ai/v1".to_string(),
+            api_key_env: "ATLASCLOUD_API_KEY".to_string(),
+            auth: None,
+            model: "deepseek-ai/deepseek-v4-flash".to_string(),
+            models: vec![
+                "deepseek-ai/deepseek-v4-flash".to_string(),
+                "deepseek-ai/deepseek-v4-pro".to_string(),
+                "deepseek-ai/DeepSeek-V3-0324".to_string(),
+                "qwen/qwen3.6-35b-a3b".to_string(),
+                "moonshotai/kimi-k2.6".to_string(),
+            ],
+        };
+
+        assert_eq!(
+            config.effective_models(),
+            vec![
+                "deepseek-ai/deepseek-v4-flash".to_string(),
+                "deepseek-ai/deepseek-v4-pro".to_string(),
+                "deepseek-ai/DeepSeek-V3-0324".to_string(),
+                "qwen/qwen3.6-35b-a3b".to_string(),
+                "moonshotai/kimi-k2.6".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn effective_models_falls_back_to_single_model_field() {
+        let config = CustomProviderConfig {
+            model: "gpt-5-mini".to_string(),
+            ..CustomProviderConfig::default()
+        };
+
+        assert_eq!(config.effective_models(), vec!["gpt-5-mini".to_string()]);
     }
 }

@@ -229,6 +229,7 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
         model: "gpt-5-mini".to_string(),
+        models: Vec::new(),
     });
 
     let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
@@ -256,6 +257,7 @@ fn parse_model_selection_marks_command_auth_custom_provider_as_keyless() {
             refresh_interval_ms: 60_000,
         }),
         model: "gpt-5-mini".to_string(),
+        models: Vec::new(),
     });
 
     let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
@@ -408,8 +410,9 @@ fn preferred_model_selection_matches_current_custom_provider() {
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
         model: "gpt-5-mini".to_string(),
+        models: Vec::new(),
     };
-    picker.custom_providers = vec![selection_from_custom_provider(&config)];
+    picker.custom_providers = selections_from_custom_provider(&config);
 
     let selection = picker.preferred_model_selection();
     let Some(InlineListSelection::CustomProvider(index)) = selection else {

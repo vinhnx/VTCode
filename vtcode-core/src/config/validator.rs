@@ -415,6 +415,7 @@ mod tests {
                 api_key_env: "MYCORP_API_KEY".to_string(),
                 auth: None,
                 model: "totally-custom-model".to_string(),
+                models: Vec::new(),
             });
 
         let result = validator.validate(&config).unwrap();

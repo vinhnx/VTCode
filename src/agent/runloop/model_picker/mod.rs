@@ -38,7 +38,7 @@ use rendering::{
 use selection::{
     ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
     parse_model_selection, reasoning_level_description, reasoning_level_label,
-    selection_from_custom_provider, selection_from_option, supports_max_reasoning,
+    selection_from_option, selections_from_custom_provider, supports_max_reasoning,
     supports_xhigh_reasoning,
 };
 
@@ -171,7 +171,7 @@ impl ModelPickerState {
             .map(|cfg| {
                 cfg.custom_providers
                     .iter()
-                    .map(selection_from_custom_provider)
+                    .flat_map(selections_from_custom_provider)
                     .collect()
             })
             .unwrap_or_default();
@@ -320,7 +320,7 @@ impl ModelPickerState {
             .map(|cfg| {
                 cfg.custom_providers
                     .iter()
-                    .map(selection_from_custom_provider)
+                    .flat_map(selections_from_custom_provider)
                     .collect()
             })
             .unwrap_or_default();

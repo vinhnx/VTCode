@@ -83,6 +83,7 @@ pub struct OpenAIProvider {
     http_client: HttpClient,
     base_url: Arc<str>,
     model: Arc<str>,
+    supported_models_override: Option<Vec<String>>,
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
@@ -189,6 +190,7 @@ impl OpenAIProvider {
             http_client,
             base_url: Arc::from(base_url.as_str()),
             model: Arc::from(model.as_str()),
+            supported_models_override: None,
             prompt_cache_enabled: false,
             prompt_cache_settings: Default::default(),
             responses_api_modes: Mutex::new(HashMap::new()),
@@ -243,6 +245,7 @@ impl OpenAIProvider {
         openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
         custom_provider_auth: Option<CustomProviderAuthHandle>,
+        supported_models_override: Option<Vec<String>>,
     ) -> Self {
         let mut provider = Self::from_config(
             api_key,
@@ -258,6 +261,7 @@ impl OpenAIProvider {
         provider.provider_key_override = Some(Arc::from(provider_key.as_str()));
         provider.provider_display_override = Some(Arc::from(display_name.as_str()));
         provider.custom_provider_auth = custom_provider_auth;
+        provider.supported_models_override = supported_models_override;
         provider
     }
 
@@ -338,6 +342,7 @@ impl OpenAIProvider {
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
             model: Arc::from(model.as_str()),
+            supported_models_override: None,
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,

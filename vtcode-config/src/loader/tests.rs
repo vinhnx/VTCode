@@ -310,6 +310,7 @@ fn custom_providers_fields_round_trip_through_toml() {
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
         model: "gpt-5-mini".to_string(),
+        models: vec!["gpt-5-mini".to_string(), "gpt-5-large".to_string()],
     });
 
     let serialized = toml::to_string(&config).expect("serialize config");
@@ -326,6 +327,10 @@ fn custom_providers_fields_round_trip_through_toml() {
     assert_eq!(provider.base_url, "https://llm.corp.example/v1");
     assert_eq!(provider.api_key_env, "MYCORP_API_KEY");
     assert_eq!(provider.model, "gpt-5-mini");
+    assert_eq!(
+        provider.models,
+        vec!["gpt-5-mini".to_string(), "gpt-5-large".to_string()]
+    );
 }
 
 #[test]
