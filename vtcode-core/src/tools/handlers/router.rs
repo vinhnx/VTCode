@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::tools::tool_intent;
+
 use super::tool_handler::{
     ConfiguredToolSpec, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
     ToolPayload, ToolSession, ToolSpec, TurnContext,
@@ -52,8 +54,10 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
         .replace(['(', ')', '\'', '"'], "");
 
     let mapped = match normalized.as_str() {
-        "exec_code" | "run_code" | "run_command" | "run_command_pty" | "container.exec"
-        | "bash" => tools::UNIFIED_EXEC,
+        alias if tool_intent::canonical_unified_exec_tool_name(alias).is_some() => {
+            tools::UNIFIED_EXEC
+        }
+        "exec_code" | "run_code" | "run_command" | "run_command_pty" => tools::UNIFIED_EXEC,
         "search_text" => tools::GREP_FILE,
         tools::READ_FILE => tools::READ_FILE,
         tools::WRITE_FILE => tools::WRITE_FILE,
@@ -484,6 +488,14 @@ mod tests {
         );
         assert_eq!(
             normalize_router_tool_name("run command (PTY)").as_deref(),
+            Some("unified_exec")
+        );
+        assert_eq!(
+            normalize_router_tool_name("bash").as_deref(),
+            Some("unified_exec")
+        );
+        assert_eq!(
+            normalize_router_tool_name("container.exec").as_deref(),
             Some("unified_exec")
         );
     }

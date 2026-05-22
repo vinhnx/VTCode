@@ -12,6 +12,39 @@ const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration =
     Duration::from_secs(vtcode_config::constants::execution::MAX_RATE_LIMIT_WAIT_SECS);
 
+fn ctrl_c_break_outcome(
+    ctx: &TurnProcessingContext<'_>,
+    prefer_exit: bool,
+) -> Option<ValidationResult> {
+    let (first_requested, first_outcome, second_requested, second_outcome) = if prefer_exit {
+        (
+            ctx.ctrl_c_state.is_exit_requested(),
+            TurnLoopResult::Exit,
+            ctx.ctrl_c_state.is_cancel_requested(),
+            TurnLoopResult::Cancelled,
+        )
+    } else {
+        (
+            ctx.ctrl_c_state.is_cancel_requested(),
+            TurnLoopResult::Cancelled,
+            ctx.ctrl_c_state.is_exit_requested(),
+            TurnLoopResult::Exit,
+        )
+    };
+
+    if first_requested {
+        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            first_outcome,
+        )));
+    }
+    if second_requested {
+        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            second_outcome,
+        )));
+    }
+    None
+}
+
 fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> String {
     serde_json::json!({
         "error": format!(
@@ -36,15 +69,8 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
         match acquire_result {
             Ok(_) => return Ok(None),
             Err(wait_time) => {
-                if ctx.ctrl_c_state.is_cancel_requested() {
-                    return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                        TurnLoopResult::Cancelled,
-                    ))));
-                }
-                if ctx.ctrl_c_state.is_exit_requested() {
-                    return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                        TurnLoopResult::Exit,
-                    ))));
+                if let Some(outcome) = ctrl_c_break_outcome(ctx, false) {
+                    return Ok(Some(outcome));
                 }
 
                 let bounded_wait = wait_time.min(MAX_RATE_LIMIT_WAIT);
@@ -72,15 +98,8 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
                 tokio::select! {
                     _ = tokio::time::sleep(bounded_wait) => {},
                     _ = ctx.ctrl_c_notify.notified() => {
-                        if ctx.ctrl_c_state.is_exit_requested() {
-                            return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                                TurnLoopResult::Exit,
-                            ))));
-                        }
-                        if ctx.ctrl_c_state.is_cancel_requested() {
-                            return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                                TurnLoopResult::Cancelled,
-                            ))));
+                        if let Some(outcome) = ctrl_c_break_outcome(ctx, true) {
+                            return Ok(Some(outcome));
                         }
                     }
                 }

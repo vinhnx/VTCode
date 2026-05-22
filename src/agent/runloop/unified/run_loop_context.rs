@@ -63,6 +63,73 @@ pub(crate) struct ToolBudgetWarning {
     pub remaining: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolBudgetExhaustion {
+    pub used: usize,
+    pub max: usize,
+    pub remaining: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolBudgetExhaustionNotice {
+    pub exhaustion: ToolBudgetExhaustion,
+    pub first_notice: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ToolWallClockExhaustion {
+    pub max_secs: u64,
+}
+
+pub(crate) const TOOL_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
+
+impl ToolBudgetWarning {
+    pub(crate) fn system_message(self) -> String {
+        format!(
+            "Tool-call budget warning: {}/{} used; {} remaining for this turn. Use targeted extraction/batching before additional tool calls.",
+            self.used, self.max, self.remaining
+        )
+    }
+
+    pub(crate) fn log_threshold_reached(self, path: &'static str) {
+        tracing::info!(
+            used = self.used,
+            max = self.max,
+            remaining = self.remaining,
+            "{path}"
+        );
+    }
+}
+
+impl ToolBudgetExhaustion {
+    pub(crate) fn policy_violation_message(self) -> String {
+        format!(
+            "Policy violation: exceeded max tool calls per turn ({})",
+            self.max
+        )
+    }
+
+    pub(crate) fn blocked_turn_reason(self) -> String {
+        debug_assert!(
+            self.max > 0,
+            "disabled tool-call caps must not emit exhaustion"
+        );
+        format!(
+            "Tool-call budget exhausted for this turn ({}/{}). Start a new turn with \"continue\" or provide a new instruction to proceed.",
+            self.used, self.max
+        )
+    }
+}
+
+impl ToolWallClockExhaustion {
+    pub(crate) fn policy_violation_message(self) -> String {
+        format!(
+            "Policy violation: exceeded tool wall clock budget ({}s)",
+            self.max_secs
+        )
+    }
+}
+
 impl From<TurnPhase> for TurnExecutionPhase {
     fn from(value: TurnPhase) -> Self {
         match value {
@@ -159,12 +226,24 @@ impl HarnessTurnState {
         self.has_tool_call_budget() && self.tool_calls >= self.max_tool_calls
     }
 
-    pub(crate) fn exhausted_tool_call_limit(&self) -> Option<usize> {
-        self.tool_budget_exhausted().then_some(self.max_tool_calls)
+    pub(crate) fn tool_budget_exhaustion(&self) -> Option<ToolBudgetExhaustion> {
+        self.tool_budget_exhausted()
+            .then_some(ToolBudgetExhaustion {
+                used: self.tool_calls,
+                max: self.max_tool_calls,
+                remaining: self.remaining_tool_calls(),
+            })
     }
 
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
         self.turn_started_at.elapsed() >= self.max_tool_wall_clock
+    }
+
+    pub(crate) fn wall_clock_budget_exhaustion(&self) -> Option<ToolWallClockExhaustion> {
+        self.wall_clock_exhausted()
+            .then_some(ToolWallClockExhaustion {
+                max_secs: self.max_tool_wall_clock.as_secs(),
+            })
     }
 
     pub(crate) fn set_turn_timeout_secs(&mut self, turn_timeout_secs: u64) {
@@ -202,6 +281,24 @@ impl HarnessTurnState {
         };
         self.mark_tool_budget_warning_emitted();
         Some(warning)
+    }
+
+    pub(crate) fn record_tool_call_with_default_warning(&mut self) -> Option<ToolBudgetWarning> {
+        self.record_tool_call_with_warning(TOOL_BUDGET_WARNING_THRESHOLD)
+    }
+
+    pub(crate) fn record_tool_budget_exhaustion_notice(
+        &mut self,
+    ) -> Option<ToolBudgetExhaustionNotice> {
+        let exhaustion = self.tool_budget_exhaustion()?;
+        let first_notice = !self.tool_budget_exhausted_emitted;
+        if first_notice {
+            self.mark_tool_budget_exhausted_emitted();
+        }
+        Some(ToolBudgetExhaustionNotice {
+            exhaustion,
+            first_notice,
+        })
     }
 
     pub(crate) fn record_blocked_tool_call(&mut self) -> usize {
@@ -507,8 +604,9 @@ impl<'a> RunLoopContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HarnessTurnState, RecoveryMode, ToolBudgetWarning, TurnExecutionPhase, TurnId, TurnPhase,
-        TurnRunId,
+        HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD, ToolBudgetExhaustion,
+        ToolBudgetExhaustionNotice, ToolBudgetWarning, ToolWallClockExhaustion, TurnExecutionPhase,
+        TurnId, TurnPhase, TurnRunId,
     };
     use std::time::{Duration, Instant};
 
@@ -561,15 +659,15 @@ mod tests {
             1,
         );
 
-        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         state.record_tool_call(); // 1/4
-        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         state.record_tool_call(); // 2/4
-        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         state.record_tool_call(); // 3/4 => 75%
-        assert!(state.should_emit_tool_budget_warning(0.75));
+        assert!(state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         state.mark_tool_budget_warning_emitted();
-        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         assert_eq!(state.remaining_tool_calls(), 1);
     }
 
@@ -583,21 +681,34 @@ mod tests {
             1,
         );
 
-        assert_eq!(state.record_tool_call_with_warning(0.75), None);
-        assert_eq!(state.record_tool_call_with_warning(0.75), None);
+        assert_eq!(state.record_tool_call_with_default_warning(), None);
+        assert_eq!(state.record_tool_call_with_default_warning(), None);
         assert_eq!(
-            state.record_tool_call_with_warning(0.75),
+            state.record_tool_call_with_default_warning(),
             Some(ToolBudgetWarning {
                 used: 3,
                 max: 4,
                 remaining: 1,
             })
         );
-        assert_eq!(state.record_tool_call_with_warning(0.75), None);
+        assert_eq!(state.record_tool_call_with_default_warning(), None);
     }
 
     #[test]
-    fn harness_state_tracks_budget_exhaustion_notice_flag() {
+    fn tool_budget_warning_system_message_matches_contract() {
+        assert_eq!(
+            ToolBudgetWarning {
+                used: 3,
+                max: 4,
+                remaining: 1,
+            }
+            .system_message(),
+            "Tool-call budget warning: 3/4 used; 1 remaining for this turn. Use targeted extraction/batching before additional tool calls."
+        );
+    }
+
+    #[test]
+    fn harness_state_records_budget_exhaustion_notice_once_via_helper() {
         let mut state = HarnessTurnState::new(
             TurnRunId("run-1".to_string()),
             TurnId("turn-1".to_string()),
@@ -610,8 +721,50 @@ mod tests {
         assert!(!state.tool_budget_exhausted_emitted);
         state.record_tool_call();
         assert!(state.tool_budget_exhausted());
-        state.mark_tool_budget_exhausted_emitted();
+        assert_eq!(
+            state.record_tool_budget_exhaustion_notice(),
+            Some(ToolBudgetExhaustionNotice {
+                exhaustion: ToolBudgetExhaustion {
+                    used: 1,
+                    max: 1,
+                    remaining: 0,
+                },
+                first_notice: true,
+            })
+        );
         assert!(state.tool_budget_exhausted_emitted);
+        assert_eq!(
+            state.record_tool_budget_exhaustion_notice(),
+            Some(ToolBudgetExhaustionNotice {
+                exhaustion: ToolBudgetExhaustion {
+                    used: 1,
+                    max: 1,
+                    remaining: 0,
+                },
+                first_notice: false,
+            })
+        );
+    }
+
+    #[test]
+    fn tool_budget_exhaustion_blocked_turn_reason_matches_contract() {
+        assert_eq!(
+            ToolBudgetExhaustion {
+                used: 4,
+                max: 4,
+                remaining: 0,
+            }
+            .blocked_turn_reason(),
+            "Tool-call budget exhausted for this turn (4/4). Start a new turn with \"continue\" or provide a new instruction to proceed."
+        );
+    }
+
+    #[test]
+    fn tool_wall_clock_exhaustion_policy_violation_message_matches_contract() {
+        assert_eq!(
+            ToolWallClockExhaustion { max_secs: 600 }.policy_violation_message(),
+            "Policy violation: exceeded tool wall clock budget (600s)"
+        );
     }
 
     #[test]
@@ -630,8 +783,26 @@ mod tests {
 
         assert!(!state.has_tool_call_budget());
         assert!(!state.tool_budget_exhausted());
-        assert_eq!(state.exhausted_tool_call_limit(), None);
-        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert_eq!(state.tool_budget_exhaustion(), None);
+        assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
+    }
+
+    #[test]
+    fn harness_state_reports_wall_clock_budget_exhaustion() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(state.wall_clock_budget_exhaustion(), None);
+        state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
+        assert_eq!(
+            state.wall_clock_budget_exhaustion(),
+            Some(ToolWallClockExhaustion { max_secs: 10 })
+        );
     }
 
     #[test]

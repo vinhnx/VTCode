@@ -33,6 +33,33 @@ pub(crate) struct AutoModeDenial {
     pub matched_exception: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FollowUpPromptAction {
+    None,
+    ForceConclusion,
+    RecoverFromStall { stall_reason: Option<String> },
+}
+
+impl FollowUpPromptAction {
+    pub(crate) const fn should_force_autonomous_response(&self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    pub(crate) const fn is_stalled_recovery(&self) -> bool {
+        matches!(self, Self::RecoverFromStall { .. })
+    }
+
+    pub(crate) fn stall_reason(&self) -> Option<&str> {
+        match self {
+            Self::RecoverFromStall { stall_reason } => stall_reason.as_deref(),
+            Self::None | Self::ForceConclusion => None,
+        }
+    }
+}
+
+const FOLLOW_UP_STALLED_THRESHOLD: usize = 1;
+const FOLLOW_UP_DEFAULT_THRESHOLD: usize = 3;
+
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
@@ -320,23 +347,38 @@ impl SessionStats {
         self.plan_mode_last_interview_cancelled
     }
 
-    pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> bool {
+    pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> FollowUpPromptAction {
         let suppression_active = self.consume_follow_up_prompt_suppression();
         let is_follow_up = is_follow_up_prompt_like(input);
 
         if is_follow_up {
             if suppression_active {
-                return false;
+                return FollowUpPromptAction::None;
             }
             self.follow_up_prompt_streak = self.follow_up_prompt_streak.saturating_add(1);
         } else {
             self.follow_up_prompt_streak = 0;
             self.turn_stalled = false;
             self.turn_stall_reason = None;
+            return FollowUpPromptAction::None;
         }
 
-        let threshold = if self.turn_stalled { 1 } else { 3 };
-        is_follow_up && self.follow_up_prompt_streak >= threshold
+        let threshold = if self.turn_stalled {
+            FOLLOW_UP_STALLED_THRESHOLD
+        } else {
+            FOLLOW_UP_DEFAULT_THRESHOLD
+        };
+        if self.follow_up_prompt_streak < threshold {
+            return FollowUpPromptAction::None;
+        }
+
+        if self.turn_stalled {
+            FollowUpPromptAction::RecoverFromStall {
+                stall_reason: self.turn_stall_reason.clone(),
+            }
+        } else {
+            FollowUpPromptAction::ForceConclusion
+        }
     }
 
     pub(crate) fn mark_turn_stalled(&mut self, stalled: bool, reason: Option<String>) {
@@ -350,6 +392,7 @@ impl SessionStats {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn turn_stalled(&self) -> bool {
         self.turn_stalled
     }
@@ -738,8 +781,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AutoModeDenial, CtrlCSignal, CtrlCState, PromptCacheDiagnostics, SessionMode, SessionStats,
-        is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
+        AutoModeDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PromptCacheDiagnostics,
+        SessionMode, SessionStats, is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
@@ -761,7 +804,13 @@ mod tests {
         let mut stats = SessionStats::default();
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
 
-        assert!(stats.register_follow_up_prompt("continue"));
+        let action = stats.register_follow_up_prompt("continue");
+        assert_eq!(
+            action,
+            FollowUpPromptAction::RecoverFromStall {
+                stall_reason: Some("turn blocked".to_string()),
+            }
+        );
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
     }
@@ -775,7 +824,10 @@ mod tests {
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn aborted"));
 
-        assert!(!stats.register_follow_up_prompt("run tests and summarize"));
+        assert_eq!(
+            stats.register_follow_up_prompt("run tests and summarize"),
+            FollowUpPromptAction::None
+        );
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
     }
@@ -783,9 +835,18 @@ mod tests {
     #[test]
     fn follow_up_prompt_variants_are_detected() {
         let mut stats = SessionStats::default();
-        assert!(!stats.register_follow_up_prompt("continue."));
-        assert!(!stats.register_follow_up_prompt("continue with your recommendation"));
-        assert!(stats.register_follow_up_prompt("please continue"));
+        assert_eq!(
+            stats.register_follow_up_prompt("continue."),
+            FollowUpPromptAction::None
+        );
+        assert_eq!(
+            stats.register_follow_up_prompt("continue with your recommendation"),
+            FollowUpPromptAction::None
+        );
+        assert_eq!(
+            stats.register_follow_up_prompt("please continue"),
+            FollowUpPromptAction::ForceConclusion
+        );
     }
 
     #[test]
@@ -794,11 +855,18 @@ mod tests {
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
         stats.suppress_next_follow_up_prompt();
 
-        assert!(!stats.register_follow_up_prompt("continue"));
+        assert_eq!(
+            stats.register_follow_up_prompt("continue"),
+            FollowUpPromptAction::None
+        );
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
 
-        assert!(stats.register_follow_up_prompt("continue"));
+        assert!(
+            stats
+                .register_follow_up_prompt("continue")
+                .is_stalled_recovery()
+        );
     }
 
     #[test]
@@ -807,9 +875,23 @@ mod tests {
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
         stats.suppress_next_follow_up_prompt();
 
-        assert!(!stats.register_follow_up_prompt("run tests and summarize"));
+        assert_eq!(
+            stats.register_follow_up_prompt("run tests and summarize"),
+            FollowUpPromptAction::None
+        );
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
+    }
+
+    #[test]
+    fn follow_up_prompt_action_exposes_stall_reason() {
+        let action = FollowUpPromptAction::RecoverFromStall {
+            stall_reason: Some("blocked".to_string()),
+        };
+
+        assert!(action.should_force_autonomous_response());
+        assert!(action.is_stalled_recovery());
+        assert_eq!(action.stall_reason(), Some("blocked"));
     }
 
     #[test]

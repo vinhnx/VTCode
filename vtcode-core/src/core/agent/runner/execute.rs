@@ -248,43 +248,28 @@ impl AgentRunner {
         &self,
         is_simple_task: bool,
     ) -> Result<RuntimePromptBundle> {
-        let mut bundle = self.build_runtime_prompt_bundle(is_simple_task).await?;
-        let mut alignment_error = prompt_alignment::validate_prompt_catalog_alignment(
-            &bundle.system_instruction,
-            &bundle.tool_snapshot,
-            self.tool_registry.is_plan_mode(),
-            self.features()
-                .request_user_input_enabled(self.tool_registry.is_plan_mode(), false),
+        let mut runner = self;
+        let bundle = runner.build_runtime_prompt_bundle(is_simple_task).await?;
+        prompt_alignment::rebuild_once_on_alignment_mismatch(
+            &mut runner,
+            bundle,
+            |runner| Box::pin((*runner).build_runtime_prompt_bundle(is_simple_task)),
+            |runner, bundle| {
+                let plan_mode = runner.tool_registry.is_plan_mode();
+                let request_user_input_enabled = runner
+                    .features()
+                    .request_user_input_enabled(plan_mode, false);
+                prompt_alignment::validate_prompt_catalog_alignment(
+                    &bundle.system_instruction,
+                    &bundle.tool_snapshot,
+                    plan_mode,
+                    request_user_input_enabled,
+                )
+            },
+            "prompt/catalog alignment mismatch; rebuilding runtime prompt bundle",
+            "prompt/catalog alignment mismatch persisted after rebuild",
         )
-        .err();
-
-        if alignment_error
-            .as_ref()
-            .is_some_and(prompt_alignment::AlignmentError::should_rebuild_runtime_prompt)
-        {
-            warn!(
-                error = ?alignment_error,
-                "prompt/catalog alignment mismatch; rebuilding runtime prompt bundle"
-            );
-            bundle = self.build_runtime_prompt_bundle(is_simple_task).await?;
-            alignment_error = prompt_alignment::validate_prompt_catalog_alignment(
-                &bundle.system_instruction,
-                &bundle.tool_snapshot,
-                self.tool_registry.is_plan_mode(),
-                self.features()
-                    .request_user_input_enabled(self.tool_registry.is_plan_mode(), false),
-            )
-            .err();
-        }
-
-        if let Some(error) = alignment_error {
-            warn!(
-                error = ?error,
-                "prompt/catalog alignment mismatch persisted after rebuild"
-            );
-        }
-
-        Ok(bundle)
+        .await
     }
 
     async fn refresh_runtime_prompt_bundle_if_catalog_changed(

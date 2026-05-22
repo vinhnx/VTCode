@@ -12,6 +12,7 @@ pub mod harness_limits;
 pub mod output_styles;
 pub mod resources;
 pub mod runtime_contract;
+pub mod sections;
 pub mod system;
 pub mod system_prompt_cache;
 pub mod templates;

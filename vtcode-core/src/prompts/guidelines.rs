@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
+use crate::prompts::sections::SectionBoundaryMode;
 
 const TOOL_UNIFIED_EXEC: &str = tools::UNIFIED_EXEC;
 const TOOL_UNIFIED_FILE: &str = tools::UNIFIED_FILE;
@@ -69,22 +70,56 @@ pub fn append_runtime_tool_prompt_sections(
     tool_snapshot: &SessionToolCatalogSnapshot,
     include_catalog_metadata: bool,
 ) {
+    remove_prompt_section(prompt, "## Active Tools");
+    remove_prompt_section(prompt, "[Runtime Tool Catalog]");
+    while prompt.ends_with('\n') {
+        prompt.pop();
+    }
+
     let available_tools = snapshot_tool_names(tool_snapshot);
     let guidelines = generate_runtime_tool_guidelines(&available_tools, tool_snapshot.plan_mode);
     if !guidelines.is_empty() {
-        prompt.push_str(&guidelines);
+        append_prompt_block(prompt, guidelines.trim_start_matches('\n'));
     }
 
     if include_catalog_metadata && tool_snapshot.snapshot.is_some() {
-        let _ = writeln!(
-            prompt,
-            "\n[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}\n- request_user_input_enabled: {}",
+        let catalog_metadata = format!(
+            "[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}\n- request_user_input_enabled: {}",
             tool_snapshot.version,
             tool_snapshot.epoch,
             tool_snapshot.available_tools(),
             tool_snapshot.request_user_input_enabled,
         );
+        append_prompt_block(prompt, &catalog_metadata);
     }
+}
+
+fn append_prompt_block(prompt: &mut String, block: &str) {
+    if block.is_empty() {
+        return;
+    }
+
+    if prompt.is_empty() {
+        prompt.push_str(block);
+    } else {
+        let _ = write!(prompt, "\n\n{block}");
+    }
+}
+
+fn remove_prompt_section(prompt: &mut String, section_header: &str) {
+    while let Some((section_start, section_end)) =
+        find_prompt_section_bounds(prompt, section_header)
+    {
+        prompt.replace_range(section_start..section_end, "");
+    }
+}
+
+fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usize, usize)> {
+    crate::prompts::sections::find_prompt_section_bounds(
+        prompt,
+        section_header,
+        SectionBoundaryMode::BracketOrMarkdown,
+    )
 }
 
 fn generate_runtime_tool_guidelines(available_tools: &[String], plan_mode: bool) -> String {
@@ -399,5 +434,48 @@ mod tests {
         assert!(prompt.contains("## Active Tools"));
         assert!(prompt.contains("[Runtime Tool Catalog]"));
         assert!(prompt.contains("request_user_input_enabled: false"));
+    }
+
+    #[test]
+    fn runtime_tool_prompt_sections_replace_existing_runtime_sections() {
+        let mut prompt = "Base prompt".to_string();
+        let first = SessionToolCatalogSnapshot::new(
+            1,
+            2,
+            false,
+            false,
+            Some(std::sync::Arc::new(vec![
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_UNIFIED_SEARCH.to_string(),
+                    "Search".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+            ])),
+            false,
+        );
+        let second = SessionToolCatalogSnapshot::new(
+            7,
+            9,
+            true,
+            true,
+            Some(std::sync::Arc::new(vec![
+                crate::llm::provider::ToolDefinition::function(
+                    TOOL_UNIFIED_FILE.to_string(),
+                    "File".to_string(),
+                    serde_json::json!({"type": "object"}),
+                ),
+            ])),
+            false,
+        );
+
+        append_runtime_tool_prompt_sections(&mut prompt, &first, true);
+        append_runtime_tool_prompt_sections(&mut prompt, &second, true);
+
+        assert_eq!(prompt.matches("## Active Tools").count(), 1);
+        assert_eq!(prompt.matches("[Runtime Tool Catalog]").count(), 1);
+        assert!(prompt.contains("version: 7"));
+        assert!(!prompt.contains("version: 1"));
+        assert!(prompt.contains("request_user_input_enabled: true"));
+        assert!(!prompt.contains("request_user_input_enabled: false"));
     }
 }

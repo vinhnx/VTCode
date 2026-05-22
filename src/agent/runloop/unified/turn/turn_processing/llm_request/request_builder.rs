@@ -57,6 +57,7 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
     }
 }
 
+#[derive(Clone)]
 pub(super) struct TurnRequestSnapshot {
     pub provider_name: String,
     pub plan_mode: bool,
@@ -154,6 +155,15 @@ async fn assemble_prompt(
     ctx: &mut TurnProcessingContext<'_>,
     input: PromptAssemblyInput<'_>,
 ) -> Result<PromptAssemblyOutput> {
+    let prompt_output = build_prompt_output(ctx, PromptAssemblyInput { turn: input.turn }).await?;
+
+    validate_prompt_output_with_rebuild(ctx, input.turn, prompt_output).await
+}
+
+async fn build_prompt_output(
+    ctx: &mut TurnProcessingContext<'_>,
+    input: PromptAssemblyInput<'_>,
+) -> Result<PromptAssemblyOutput> {
     let mut system_prompt = ctx
         .context_manager
         .build_system_prompt(
@@ -214,18 +224,6 @@ async fn assemble_prompt(
         !input.turn.prompt_cache_shaping_mode.is_enabled(),
     );
 
-    if let Err(error) = prompt_alignment::validate_prompt_catalog_alignment(
-        &system_prompt,
-        &tool_snapshot,
-        input.turn.plan_mode,
-        input.turn.request_user_input_enabled,
-    ) {
-        tracing::warn!(
-            error = ?error,
-            "prompt/catalog alignment mismatch during unified request assembly"
-        );
-    }
-
     if tool_snapshot.has_tools() && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
         append_copilot_runtime_guidance(&mut system_prompt);
     }
@@ -234,6 +232,40 @@ async fn assemble_prompt(
         system_prompt,
         tool_snapshot,
     })
+}
+
+fn validate_prompt_output_alignment(
+    prompt_output: &PromptAssemblyOutput,
+    turn: &TurnRequestSnapshot,
+) -> Result<(), prompt_alignment::AlignmentError> {
+    prompt_alignment::validate_prompt_catalog_alignment(
+        &prompt_output.system_prompt,
+        &prompt_output.tool_snapshot,
+        turn.plan_mode,
+        turn.request_user_input_enabled,
+    )
+}
+
+async fn validate_prompt_output_with_rebuild(
+    ctx: &mut TurnProcessingContext<'_>,
+    turn: &TurnRequestSnapshot,
+    prompt_output: PromptAssemblyOutput,
+) -> Result<PromptAssemblyOutput> {
+    let rebuild_turn = turn.clone();
+    prompt_alignment::rebuild_once_on_alignment_mismatch(
+        ctx,
+        prompt_output,
+        move |ctx| {
+            let turn = rebuild_turn.clone();
+            Box::pin(
+                async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &turn }).await },
+            )
+        },
+        |_, prompt_output| validate_prompt_output_alignment(prompt_output, turn),
+        "prompt/catalog alignment mismatch during unified request assembly; rebuilding prompt",
+        "prompt/catalog alignment mismatch persisted after unified prompt rebuild",
+    )
+    .await
 }
 
 fn resolve_context_management(
@@ -547,15 +579,19 @@ pub(super) async fn build_turn_request(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     use serde_json::json;
     use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
+    use vtcode_core::prompts::append_runtime_tool_prompt_sections;
     use vtcode_core::{EditorContextSnapshot, EditorFileContext};
 
     use super::{
-        build_turn_request, capture_turn_request_snapshot, stable_system_prefix_hash,
-        update_previous_response_chain_after_success,
+        PromptAssemblyOutput, build_turn_request, capture_turn_request_snapshot,
+        stable_system_prefix_hash, update_previous_response_chain_after_success,
+        validate_prompt_output_alignment,
     };
     use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -1088,6 +1124,47 @@ mod tests {
                 "compact_threshold": 512,
             }]))
         );
+    }
+
+    #[tokio::test]
+    async fn prompt_alignment_detects_stale_runtime_tool_catalog_metadata() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        let turn = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+
+        let make_snapshot = || {
+            SessionToolCatalogSnapshot::new(
+                7,
+                11,
+                turn.plan_mode,
+                turn.request_user_input_enabled,
+                Some(Arc::new(Vec::new())),
+                false,
+            )
+        };
+
+        let misaligned_prompt = format!(
+            "Base prompt\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 11\n- available_tools: 0\n- request_user_input_enabled: {}\n",
+            turn.request_user_input_enabled
+        );
+        let misaligned_output = PromptAssemblyOutput {
+            system_prompt: misaligned_prompt,
+            tool_snapshot: make_snapshot(),
+        };
+
+        let aligned_snapshot = make_snapshot();
+        let mut aligned_prompt = "Base prompt".to_string();
+        append_runtime_tool_prompt_sections(&mut aligned_prompt, &aligned_snapshot, true);
+        let aligned_output = PromptAssemblyOutput {
+            system_prompt: aligned_prompt,
+            tool_snapshot: aligned_snapshot,
+        };
+
+        let err = validate_prompt_output_alignment(&misaligned_output, &turn)
+            .expect_err("stale runtime metadata should be rejected");
+        assert!(err.should_rebuild_runtime_prompt());
+        validate_prompt_output_alignment(&aligned_output, &turn)
+            .expect("aligned runtime metadata should pass");
     }
 
     #[test]

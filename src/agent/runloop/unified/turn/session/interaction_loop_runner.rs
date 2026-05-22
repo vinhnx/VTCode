@@ -577,14 +577,13 @@ pub(super) async fn run_interaction_loop_impl(
             return Ok(outcome);
         }
 
-        if ctx
+        let follow_up_action = ctx
             .session_stats
-            .register_follow_up_prompt(input_owned.as_str())
-        {
-            if ctx.session_stats.turn_stalled() {
-                let stall_reason = ctx
-                    .session_stats
-                    .turn_stall_reason()
+            .register_follow_up_prompt(input_owned.as_str());
+        if follow_up_action.should_force_autonomous_response() {
+            if follow_up_action.is_stalled_recovery() {
+                let stall_reason = follow_up_action
+                    .stall_reason()
                     .unwrap_or("Previous turn stalled without a detailed reason.")
                     .to_string();
                 let fallback_hint = extract_recent_follow_up_hint(ctx.conversation_history);

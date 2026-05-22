@@ -283,21 +283,16 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
-    if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
-        let tool_calls = ctx.harness_state.tool_calls;
-        let exhausted_emitted = ctx.harness_state.tool_budget_exhausted_emitted;
-        let error_msg = format!(
-            "Policy violation: exceeded max tool calls per turn ({})",
-            max_tool_calls
-        );
-        let block_reason = build_tool_budget_exhausted_reason(tool_calls, max_tool_calls);
+    if let Some(notice) = ctx.harness_state.record_tool_budget_exhaustion_notice() {
+        let exhaustion = notice.exhaustion;
+        let error_msg = exhaustion.policy_violation_message();
+        let block_reason = build_tool_budget_exhausted_reason(exhaustion.used, exhaustion.max);
         ctx.push_tool_response(
             tool_call_id,
             build_failure_error_content(error_msg, "policy"),
         );
-        if !exhausted_emitted {
+        if notice.first_notice {
             ctx.push_system_message(block_reason.clone());
-            ctx.harness_state.mark_tool_budget_exhausted_emitted();
         }
         return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
             TurnLoopResult::Blocked {
@@ -306,13 +301,8 @@ pub(crate) async fn validate_tool_call<'a>(
         )));
     }
 
-    let wall_clock_exhausted = ctx.harness_state.wall_clock_exhausted();
-    if wall_clock_exhausted {
-        let max_tool_wall_clock_secs = ctx.harness_state.max_tool_wall_clock.as_secs();
-        let error_msg = format!(
-            "Policy violation: exceeded tool wall clock budget ({}s)",
-            max_tool_wall_clock_secs
-        );
+    if let Some(exhaustion) = ctx.harness_state.wall_clock_budget_exhaustion() {
+        let error_msg = exhaustion.policy_violation_message();
         ctx.push_tool_response(
             tool_call_id,
             build_failure_error_content(error_msg, "policy"),

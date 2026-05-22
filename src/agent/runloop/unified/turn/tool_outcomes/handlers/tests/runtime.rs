@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Duration;
 
 #[tokio::test]
 async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
@@ -167,6 +168,35 @@ async fn duplicate_task_tracker_create_is_blocked_not_breaking() {
         &args,
     );
     assert!(matches!(second, Some(ValidationResult::Blocked)));
+}
+
+#[tokio::test]
+async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
+    let mut backing = TestContextBacking::new(4).await;
+    let sample_path = backing.sample_file.to_string_lossy().to_string();
+    let mut ctx = backing.turn_processing_context();
+    ctx.harness_state.turn_started_at = Instant::now()
+        .checked_sub(Duration::from_secs(
+            ctx.harness_state.max_tool_wall_clock.as_secs() + 1,
+        ))
+        .unwrap();
+
+    let result = validate_tool_call(
+        &mut ctx,
+        "wall_clock_exhausted",
+        tool_names::READ_FILE,
+        &json!({"path": sample_path}),
+    )
+    .await
+    .expect("validate wall-clock-exhausted tool call");
+
+    assert!(matches!(result, ValidationResult::Blocked));
+    assert!(ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("Policy violation: exceeded tool wall clock budget")
+    }));
 }
 
 #[tokio::test]

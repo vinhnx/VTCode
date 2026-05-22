@@ -1,33 +1,5 @@
+use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
 use std::fmt::Write as _;
-
-fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usize, usize)> {
-    fn is_section_header_line(line: &str) -> bool {
-        let trimmed = line.trim();
-        trimmed.starts_with('[') && trimmed.ends_with(']')
-    }
-
-    let mut offset = 0usize;
-    let mut section_start = None;
-
-    for line in prompt.split_inclusive('\n') {
-        let trimmed = line.trim();
-        if section_start.is_none() && trimmed == section_header {
-            section_start = Some(offset);
-            offset += line.len();
-            continue;
-        }
-
-        if let Some(start) = section_start
-            && is_section_header_line(line)
-        {
-            return Some((start, offset));
-        }
-
-        offset += line.len();
-    }
-
-    section_start.map(|start| (start, prompt.len()))
-}
 
 /// Keep prompt guidance aligned with the selected user-visible harness limits.
 ///
@@ -46,7 +18,7 @@ pub fn upsert_harness_limits_section(
     };
 
     while let Some((section_start, section_end)) =
-        find_prompt_section_bounds(prompt, "[Harness Limits]")
+        find_prompt_section_bounds(prompt, "[Harness Limits]", SectionBoundaryMode::BracketOnly)
     {
         prompt.replace_range(section_start..section_end, "");
     }

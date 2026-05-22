@@ -20,6 +20,16 @@ use super::{ValidationResult, build_failure_error_content};
 const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
 const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 4;
 
+fn push_guard_failure_messages(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    error_content: String,
+    block_reason: &str,
+) {
+    ctx.push_tool_response(tool_call_id, error_content);
+    ctx.push_system_message(block_reason.to_string());
+}
+
 pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(
     ctx: &TurnProcessingContext<'_>,
 ) -> usize {
@@ -58,11 +68,14 @@ pub(super) fn enforce_blocked_tool_call_guard(
             "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
         )
     };
-    ctx.push_tool_response(
+    push_guard_failure_messages(
+        ctx,
         tool_call_id,
         build_failure_error_content(
             if recovery_total_fuse_tripped {
-                format!("Blocked tool calls exceeded the recovery-mode cap ({max_streak}) for this turn.")
+                format!(
+                    "Blocked tool calls exceeded the recovery-mode cap ({max_streak}) for this turn."
+                )
             } else {
                 format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn.")
             },
@@ -72,8 +85,8 @@ pub(super) fn enforce_blocked_tool_call_guard(
                 "blocked_streak"
             },
         ),
+        &block_reason,
     );
-    ctx.push_system_message(block_reason.clone());
 
     Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
         reason: Some(block_reason),
@@ -175,11 +188,12 @@ pub(super) fn enforce_repeated_read_only_call_guard(
                 target, MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS
             );
             ctx.activate_recovery(block_reason.clone());
-            ctx.push_tool_response(
+            push_guard_failure_messages(
+                ctx,
                 tool_call_id,
                 build_repeated_file_read_family_error_content(target),
+                &block_reason,
             );
-            ctx.push_system_message(block_reason);
             return Some(ValidationResult::Blocked);
         }
     }
@@ -227,11 +241,12 @@ pub(super) fn enforce_repeated_shell_run_guard(
         display_tool, streak, max_repeated_runs
     );
     ctx.activate_recovery(block_reason.clone());
-    ctx.push_tool_response(
+    push_guard_failure_messages(
+        ctx,
         tool_call_id,
         build_repeated_shell_run_error_content(max_repeated_runs),
+        &block_reason,
     );
-    ctx.push_system_message(block_reason);
 
     Some(ValidationResult::Blocked)
 }
@@ -288,11 +303,12 @@ pub(super) fn enforce_spool_chunk_read_guard(
     );
 
     ctx.activate_recovery(block_reason.clone());
-    ctx.push_tool_response(
+    push_guard_failure_messages(
+        ctx,
         tool_call_id,
         build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
+        &block_reason,
     );
-    ctx.push_system_message(block_reason);
 
     Some(ValidationResult::Blocked)
 }
