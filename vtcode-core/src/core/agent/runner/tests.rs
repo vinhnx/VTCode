@@ -795,6 +795,8 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
     seed_tracker(&workspace, json!(["Finish tracker step"])).await;
 
     let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 3;
     let mut runner = make_runner(&temp, vt_cfg, "thread-continuation-success").await;
     runner
@@ -833,7 +835,10 @@ async fn runner_reuses_openai_response_chain_and_session_cache_key() {
     let workspace = workspace_root(&temp);
     seed_tracker(&workspace, json!(["Cache-aware tracker step"])).await;
 
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-cache-lineage").await;
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-cache-lineage").await;
     runner
         .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
         .await;
@@ -889,12 +894,10 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
     )
     .await;
 
-    let mut runner = make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-verification-success",
-    )
-    .await;
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-verification-success").await;
     runner.enable_full_auto(&[]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
@@ -928,6 +931,8 @@ async fn exec_full_auto_retries_after_verification_failure() {
     .await;
 
     let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 2;
     let mut runner = make_runner(&temp, vt_cfg, "thread-verification-failure").await;
     runner.enable_full_auto(&[]).await;
@@ -1030,6 +1035,8 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
     seed_tracker(&workspace, json!(["Investigate loop"])).await;
 
     let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 1;
     vt_cfg.tools.max_tool_loops = 1;
     let mut runner = make_runner(&temp, vt_cfg, "thread-tool-loop-blocked").await;
@@ -1119,6 +1126,62 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
         .expect("contract file");
     assert!(contract.contains("Execution Contract"));
     assert!(contract.contains("Verify with `pwd`"));
+
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::PlanningStarted));
+    assert!(events.contains(&HarnessEventKind::PlanningCompleted));
+    assert!(events.contains(&HarnessEventKind::EvaluationStarted));
+    assert!(events.contains(&HarnessEventKind::EvaluationPassed));
+}
+
+#[tokio::test]
+async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+
+    let vt_cfg = VTCodeConfig::default();
+    let mut runner = make_runner(&temp, vt_cfg, "thread-default-plan-build-evaluate").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json(
+            "pass",
+            "Evaluator accepted the implementation.",
+            0,
+        )),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Default planner + evaluator", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(
+        workspace.join(".vtcode/tasks/current_spec.md").exists(),
+        "default full-auto should write current_spec.md"
+    );
+    assert!(
+        workspace.join(".vtcode/tasks/current_contract.md").exists(),
+        "default full-auto should write current_contract.md"
+    );
+    assert!(
+        workspace
+            .join(".vtcode/tasks/current_evaluation.md")
+            .exists(),
+        "default full-auto should write current_evaluation.md"
+    );
 
     let events = harness_events(&result);
     assert!(events.contains(&HarnessEventKind::PlanningStarted));

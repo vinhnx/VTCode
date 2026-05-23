@@ -19,7 +19,7 @@ memories = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
+default_model = "deepseek-v4-flash"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -28,8 +28,8 @@ default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "low"
-api_key_env = "HF_TOKEN"
-provider = "huggingface"
+api_key_env = "DEEPSEEK_API_KEY"
+provider = "deepseek"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
@@ -188,7 +188,7 @@ skill = "allow"
 
 spawn_agent = "allow"
 
-task_tracker = "prompt"
+task_tracker = "allow"
 
 unified_exec = "allow"
 

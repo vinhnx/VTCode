@@ -583,6 +583,12 @@ pub(crate) async fn execute_llm_request(
                             };
                             let compacted = compact_tool_messages_for_retry(&request.messages);
                             request.messages = compacted;
+                            // Strip reasoning_effort on retry — DeepSeek's
+                            // `thinking` parameter causes ExecutionError on
+                            // post-tool follow-ups where tool messages are
+                            // already in context. Reasoning isn't needed for
+                            // a synthesis retry.
+                            request.reasoning_effort = None;
                             compacted_tool_retry_used = true;
                             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                                 ctx.renderer,

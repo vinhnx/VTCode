@@ -944,6 +944,7 @@ fn legacy_memory_envelope_deserializes_with_new_fields_defaulted() {
 
     assert_eq!(envelope.schema_version, None);
     assert_eq!(envelope.objective, None);
+    assert_eq!(envelope.verification_summary, None);
     assert!(envelope.constraints.is_empty());
     assert!(envelope.open_questions.is_empty());
     assert!(envelope.verification_todo.is_empty());
@@ -989,6 +990,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
         task_summary: Some("Older task summary".to_string()),
         spec_summary: None,
         evaluation_summary: None,
+        verification_summary: Some("- [x] Prior verification passed".to_string()),
         constraints: vec!["Do not redesign the harness".to_string()],
         grounded_facts: vec![GroundedFactRecord {
             fact: "Existing grounded fact".to_string(),
@@ -1060,6 +1062,12 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     );
     assert!(
         envelope
+            .verification_summary
+            .as_deref()
+            .is_some_and(|summary| summary.contains("Run cargo nextest"))
+    );
+    assert!(
+        envelope
             .open_questions
             .contains(&"Should dedup cover batch reads?".to_string())
     );
@@ -1087,6 +1095,55 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
             .as_text()
             .contains("[Session Memory Envelope]")
     );
+    assert!(history[0].content.as_text().contains("Verification Status"));
+}
+
+#[test]
+fn refresh_session_memory_envelope_prefers_structured_verify_metadata() {
+    let temp = tempdir().expect("tempdir");
+    let history_dir = temp.path().join(".vtcode").join("history");
+    fs::create_dir_all(&history_dir).expect("history dir");
+    fs::create_dir_all(temp.path().join(".vtcode").join("tasks")).expect("tasks dir");
+    fs::write(
+        temp.path()
+            .join(".vtcode")
+            .join("tasks")
+            .join("current_task.md"),
+        "# Ship compaction cleanup\n- [x] Analyze current continuity path\n  outcome: Existing envelope flow reviewed.\n- [ ] Update verification preservation\n  verify: cargo check -p vtcode\n- [ ] Run focused regression\n  verify:\n    - cargo test -p vtcode --bin vtcode agent::runloop::unified::turn::compaction::tests::refresh_session_memory_envelope_prefers_structured_verify_metadata -- --exact\n",
+    )
+    .expect("write task");
+
+    let mut history = vec![Message::user("Continue the compaction work.".to_string())];
+    let session_stats = SessionStats::default();
+
+    let envelope = super::refresh_session_memory_envelope(
+        temp.path(),
+        "session-alpha",
+        Some(&VTCodeConfig::default()),
+        &mut history,
+        &session_stats,
+        None,
+    )
+    .expect("refresh succeeds")
+    .expect("envelope should be refreshed");
+
+    assert_eq!(
+        envelope.verification_summary.as_deref(),
+        Some(
+            "- cargo check -p vtcode\n- cargo test -p vtcode --bin vtcode agent::runloop::unified::turn::compaction::tests::refresh_session_memory_envelope_prefers_structured_verify_metadata -- --exact"
+        )
+    );
+    assert!(history[0].content.as_text().contains("Verification Status"));
+    assert!(
+        history[0]
+            .content
+            .as_text()
+            .contains("- cargo check -p vtcode")
+    );
+    assert!(history[0]
+        .content
+        .as_text()
+        .contains("- cargo test -p vtcode --bin vtcode agent::runloop::unified::turn::compaction::tests::refresh_session_memory_envelope_prefers_structured_verify_metadata -- --exact"));
 }
 
 #[tokio::test]
@@ -1334,6 +1391,7 @@ fn inject_latest_memory_envelope_rehydrates_resume_history() {
         task_summary: Some("Tracker: - [ ] Follow up".to_string()),
         spec_summary: None,
         evaluation_summary: None,
+        verification_summary: Some("- [ ] Run cargo nextest".to_string()),
         constraints: Vec::new(),
         grounded_facts: vec![GroundedFactRecord {
             fact: "Cargo.toml declares vtcode-core".to_string(),
@@ -1360,6 +1418,7 @@ fn inject_latest_memory_envelope_rehydrates_resume_history() {
     ));
     assert!(history[0].content.as_text().contains("Persisted summary"));
     assert!(history[0].content.as_text().contains("Cargo.toml"));
+    assert!(history[0].content.as_text().contains("Verification Status"));
 }
 
 #[test]
@@ -1381,6 +1440,7 @@ fn inject_latest_memory_envelope_is_session_scoped() {
             task_summary: None,
             spec_summary: None,
             evaluation_summary: None,
+            verification_summary: None,
             constraints: Vec::new(),
             grounded_facts: Vec::new(),
             touched_files: Vec::new(),
@@ -1425,6 +1485,7 @@ fn inject_latest_memory_envelope_requires_exact_session_prefix_match() {
             task_summary: None,
             spec_summary: None,
             evaluation_summary: None,
+            verification_summary: None,
             constraints: Vec::new(),
             grounded_facts: Vec::new(),
             touched_files: Vec::new(),
@@ -1543,6 +1604,7 @@ fn inject_latest_memory_envelope_uses_exact_session_id_when_prefixes_collide() {
             task_summary: None,
             spec_summary: None,
             evaluation_summary: None,
+            verification_summary: None,
             constraints: Vec::new(),
             grounded_facts: Vec::new(),
             touched_files: Vec::new(),
@@ -1623,6 +1685,7 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
         task_summary: Some("Tracker: keep going".to_string()),
         spec_summary: None,
         evaluation_summary: None,
+        verification_summary: None,
         constraints: Vec::new(),
         grounded_facts: vec![GroundedFactRecord {
             fact: "src/lib.rs was updated".to_string(),
@@ -1694,6 +1757,7 @@ async fn budget_resume_summary_reuses_saved_envelope_without_provider_compaction
         task_summary: None,
         spec_summary: None,
         evaluation_summary: None,
+        verification_summary: None,
         constraints: Vec::new(),
         grounded_facts: Vec::new(),
         touched_files: vec!["src/lib.rs".to_string()],

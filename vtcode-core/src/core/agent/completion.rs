@@ -1,8 +1,8 @@
 use crate::core::agent::session::AgentSessionState;
 use crate::llm::provider::MessageRole;
 
-/// Checks if the agent's response indicates that the task has been completed.
-pub fn check_completion_indicators(response_text: &str) -> bool {
+/// Checks if the agent's response is a candidate for completion handling.
+pub fn check_completion_candidate(response_text: &str) -> bool {
     // High-confidence terminal markers that strongly indicate intent to stop.
     const COMPLETION_SENTENCES: &[&str] = &[
         "the task is complete",
@@ -31,7 +31,33 @@ pub fn check_completion_indicators(response_text: &str) -> bool {
         "done.",
     ];
 
+    const UNRESOLVED_PHRASES: &[&str] = &[
+        "still need to",
+        "remaining step",
+        "remaining work",
+        "verification pending",
+        "verification still pending",
+        "tests not run",
+        "haven't run",
+        "have not run",
+        "blocked on",
+        "open questions remain",
+        "question remains",
+        "todo:",
+        "not complete yet",
+        "once verification",
+        "after verification",
+    ];
+
     let response_lower = response_text.to_lowercase();
+
+    if UNRESOLVED_PHRASES
+        .iter()
+        .any(|phrase| response_lower.contains(phrase))
+        || structured_contract_has_unresolved_sections(response_text)
+    {
+        return false;
+    }
 
     // Strategy 1: Explicit terminal sentences
     if COMPLETION_SENTENCES
@@ -89,6 +115,52 @@ pub fn check_completion_indicators(response_text: &str) -> bool {
     false
 }
 
+fn structured_contract_has_unresolved_sections(response_text: &str) -> bool {
+    let mut in_open_questions = false;
+    let mut in_verification = false;
+
+    for line in response_text.lines() {
+        let line_lower = line.trim().to_lowercase();
+        if line_lower.starts_with('#') {
+            in_open_questions =
+                line_lower == "## open questions" || line_lower == "# open questions";
+            in_verification = line_lower == "## verification" || line_lower == "# verification";
+            continue;
+        }
+
+        if line_lower.is_empty() {
+            continue;
+        }
+
+        if in_open_questions && !section_entry_is_none(&line_lower) {
+            return true;
+        }
+
+        if in_verification && section_entry_is_unresolved(&line_lower) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn section_entry_is_none(line: &str) -> bool {
+    let normalized = normalized_section_entry(line).trim_end_matches('.');
+    matches!(normalized, "none" | "n/a")
+}
+
+fn section_entry_is_unresolved(line: &str) -> bool {
+    let normalized = normalized_section_entry(line);
+    normalized.contains("pending")
+        || normalized.contains("not run")
+        || normalized.contains("failed")
+        || normalized.contains("blocked")
+}
+
+fn normalized_section_entry(line: &str) -> &str {
+    line.trim_start_matches(['-', '*']).trim()
+}
+
 /// Check for repetitive text in assistant responses to catch non-tool-calling loops.
 /// Returns true if a loop is detected.
 pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSessionState) -> bool {
@@ -137,51 +209,78 @@ mod tests {
     use crate::llm::provider::Message;
 
     #[test]
-    fn test_completion_indicators() {
-        assert!(check_completion_indicators("The task is complete"));
-        assert!(check_completion_indicators("Revision 1: task is complete."));
-        assert!(check_completion_indicators(
+    fn test_completion_candidates() {
+        assert!(check_completion_candidate("The task is complete"));
+        assert!(check_completion_candidate("Revision 1: task is complete."));
+        assert!(check_completion_candidate(
             "I have successfully completed the task."
         ));
-        assert!(check_completion_indicators("Task done"));
-        assert!(check_completion_indicators("All done"));
+        assert!(check_completion_candidate("Task done"));
+        assert!(check_completion_candidate("All done"));
 
         // Negative cases
-        assert!(!check_completion_indicators(
+        assert!(!check_completion_candidate(
             "I will have the task done soon"
         ));
-        assert!(!check_completion_indicators("Is the task done?"));
-        assert!(!check_completion_indicators("random text"));
+        assert!(!check_completion_candidate("Is the task done?"));
+        assert!(!check_completion_candidate("random text"));
+        assert!(!check_completion_candidate(
+            "The task is complete once verification finishes."
+        ));
+        assert!(!check_completion_candidate(
+            "All done. Verification pending."
+        ));
+        assert!(!check_completion_candidate(
+            "All done, but open questions remain."
+        ));
     }
 
     #[test]
     fn subagent_markdown_contract_detected_as_complete() {
         let contract = "## Summary\n- Background subprocess launched; PID 86065.\n\n## Facts\n- Script started at 2026-04-25T08:39:10Z.\n\n## Touched Files\n- None\n\n## Verification\n- Process confirmed.\n\n## Open Questions\n- None";
-        assert!(check_completion_indicators(contract));
+        assert!(check_completion_candidate(contract));
     }
 
     #[test]
     fn subagent_markdown_contract_with_crlf_detected_as_complete() {
         let contract = "## Summary\r\n- Done.\r\n\r\n## Facts\r\n- Fact 1.\r\n";
-        assert!(check_completion_indicators(contract));
+        assert!(check_completion_candidate(contract));
     }
 
     #[test]
     fn subagent_markdown_contract_with_leading_whitespace_detected() {
         let contract = "\n\n## Summary\n- item\n\n## Facts\n- fact\n";
-        assert!(check_completion_indicators(contract));
+        assert!(check_completion_candidate(contract));
     }
 
     #[test]
     fn document_with_only_summary_header_not_detected() {
         let doc = "## Summary\n- This is a doc without a Facts section.\n";
-        assert!(!check_completion_indicators(doc));
+        assert!(!check_completion_candidate(doc));
     }
 
     #[test]
     fn document_with_only_facts_header_not_detected() {
         let doc = "## Facts\n- Fact without summary.\n";
-        assert!(!check_completion_indicators(doc));
+        assert!(!check_completion_candidate(doc));
+    }
+
+    #[test]
+    fn structured_contract_with_open_questions_is_not_complete() {
+        let doc = "## Summary\n- Work applied.\n\n## Facts\n- Fact.\n\n## Verification\n- Process confirmed.\n\n## Open Questions\n- Need to rerun the end-to-end flow.";
+        assert!(!check_completion_candidate(doc));
+    }
+
+    #[test]
+    fn structured_contract_with_unresolved_verification_is_not_complete() {
+        let doc = "## Summary\n- Work applied.\n\n## Facts\n- Fact.\n\n## Verification\n- Verification pending.\n\n## Open Questions\n- None";
+        assert!(!check_completion_candidate(doc));
+    }
+
+    #[test]
+    fn structured_contract_with_none_punctuation_is_complete() {
+        let doc = "## Summary\n- Work applied.\n\n## Facts\n- Fact.\n\n## Verification\n- Process confirmed.\n\n## Open Questions\n- None.";
+        assert!(check_completion_candidate(doc));
     }
 
     #[test]

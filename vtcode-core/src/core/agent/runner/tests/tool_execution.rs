@@ -350,7 +350,7 @@ async fn execute_tool_internal_retries_open_circuit_breaker() {
     assert!(start.elapsed() >= Duration::from_millis(10));
     assert_eq!(
         result.get("content").and_then(|value| value.as_str()),
-        Some("hello")
+        Some("hello\n")
     );
 }
 

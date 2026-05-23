@@ -35,6 +35,12 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     if let Some(s) = maybe_section("Evaluation Summary", envelope.evaluation_summary.as_deref()) {
         sections.push(s);
     }
+    if let Some(s) = maybe_section(
+        "Verification Status",
+        envelope.verification_summary.as_deref(),
+    ) {
+        sections.push(s);
+    }
     if let Some(s) = list_section("Constraints", &envelope.constraints) {
         sections.push(s);
     }
@@ -170,6 +176,7 @@ pub(super) fn read_task_tracker_snapshot(workspace_root: &Path) -> TaskTrackerSn
         .take(5)
         .map(normalize_whitespace)
         .collect::<Vec<_>>();
+    let verification_summary = extract_verification_summary(&content, &checklist);
     let verification_todo = content
         .lines()
         .filter(|line| line.trim_start().starts_with("- [ ]"))
@@ -186,8 +193,82 @@ pub(super) fn read_task_tracker_snapshot(workspace_root: &Path) -> TaskTrackerSn
     TaskTrackerSnapshot {
         summary,
         objective: title,
+        verification_summary,
         verification_todo,
     }
+}
+
+fn extract_verification_summary(content: &str, checklist: &[String]) -> Option<String> {
+    let verify_commands = collect_structured_verify_commands(content);
+    if !verify_commands.is_empty() {
+        return Some(render_bullet_list(&verify_commands));
+    }
+
+    let fallback_lines = checklist
+        .iter()
+        .filter(|line| looks_like_verification_line(line))
+        .cloned()
+        .collect::<Vec<_>>();
+    (!fallback_lines.is_empty()).then(|| fallback_lines.join("\n"))
+}
+
+fn collect_structured_verify_commands(content: &str) -> Vec<String> {
+    let mut commands = Vec::new();
+    let mut in_verify_block = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("verify:") {
+            let command = normalize_whitespace(rest);
+            if command.is_empty() {
+                in_verify_block = true;
+            } else {
+                commands.push(command);
+                in_verify_block = false;
+            }
+            continue;
+        }
+
+        if !in_verify_block {
+            continue;
+        }
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if (line.starts_with(' ') || line.starts_with('\t')) && trimmed.starts_with("- ") {
+            commands.push(normalize_whitespace(trimmed.trim_start_matches("- ")));
+            continue;
+        }
+
+        in_verify_block = false;
+    }
+
+    commands
+}
+
+fn render_bullet_list(items: &[String]) -> String {
+    items
+        .iter()
+        .map(|item| format!("- {item}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn looks_like_verification_line(line: &str) -> bool {
+    let lowered = line.to_ascii_lowercase();
+    [
+        "verify",
+        "verification",
+        "test",
+        "lint",
+        "cargo check",
+        "check-dev.sh",
+        "check.sh",
+    ]
+    .iter()
+    .any(|keyword| lowered.contains(keyword))
 }
 
 pub(super) fn memory_envelope_path_from_history_path(

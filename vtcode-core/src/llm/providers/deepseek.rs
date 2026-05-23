@@ -179,10 +179,18 @@ impl DeepSeekProvider {
         }
 
         if let Some(effort) = request.reasoning_effort {
-            payload.insert(
-                "reasoning_effort".to_string(),
-                Value::String(effort.to_string()),
-            );
+            use crate::config::models::Provider;
+            use crate::llm::rig_adapter::RigProviderCapabilities;
+            if let Some(reasoning_params) =
+                RigProviderCapabilities::new(Provider::DeepSeek, &request.model)
+                    .reasoning_parameters(effort)
+            {
+                if let Some(params_obj) = reasoning_params.as_object() {
+                    for (k, v) in params_obj {
+                        payload[k] = v.clone();
+                    }
+                }
+            }
         }
 
         Ok(Value::Object(payload))

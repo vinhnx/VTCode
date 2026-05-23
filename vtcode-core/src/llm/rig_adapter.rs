@@ -148,6 +148,15 @@ impl RigProviderCapabilities {
                 | ReasoningEffortLevel::XHigh
                 | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
             },
+            Provider::DeepSeek => match effort {
+                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::Minimal => Some(json!({ "reasoning_effort": "minimal" })),
+                ReasoningEffortLevel::Low => Some(json!({ "reasoning_effort": "low" })),
+                ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
+            },
             Provider::Minimax => None,
             Provider::Ollama => None,
             Provider::ZAI => match effort {

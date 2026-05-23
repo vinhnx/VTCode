@@ -48,6 +48,12 @@ pub fn generate_tool_guidelines(
                 .to_string(),
         );
     }
+    if has_exec || has_file || has_apply_patch {
+        lines.push(
+            "- Completion is a checkpoint: keep `task_tracker` current and verification resolved."
+                .to_string(),
+        );
+    }
     if has_search && has_exec {
         lines.push("- Prefer search over shell for exploration.".to_string());
     }
@@ -161,6 +167,9 @@ fn generate_runtime_tool_guidelines(available_tools: &[String], plan_mode: bool)
     }
     if has_task_tracker {
         lines.push("- Keep `task_tracker` updated as you refine the plan.".to_string());
+        lines.push(
+            "- Keep blockers and verification open in `task_tracker` until resolved.".to_string(),
+        );
     }
     if has_request_user_input {
         lines.push(
@@ -278,6 +287,7 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Prefer search over shell"));
         assert!(guidelines.contains("git diff -- <path>"));
+        assert!(guidelines.contains("Completion is a checkpoint"));
     }
 
     #[test]
@@ -286,6 +296,7 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Read before edit"));
         assert!(guidelines.contains("patches small"));
+        assert!(guidelines.contains("verification resolved"));
     }
 
     #[test]
@@ -344,6 +355,18 @@ mod tests {
         let tools = vec![];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(guidelines.contains("Mode: read-only"));
+    }
+
+    #[test]
+    fn test_plan_mode_guidance_keeps_verification_open() {
+        let tools = vec![
+            TOOL_UNIFIED_EXEC.to_string(),
+            TOOL_TASK_TRACKER.to_string(),
+            TOOL_UNIFIED_SEARCH.to_string(),
+        ];
+        let guidelines = generate_runtime_tool_guidelines(&tools, true);
+        assert!(guidelines.contains("Keep `task_tracker` updated"));
+        assert!(guidelines.contains("blockers and verification open"));
     }
 
     #[test]

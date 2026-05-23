@@ -8,6 +8,51 @@ use anyhow::Result;
 use serde_json::Value;
 use tracing::info;
 
+fn restore_exact_text_content(content: &str, size_bytes: u64) -> Option<String> {
+    let content_size = content.len() as u64;
+    match size_bytes.checked_sub(content_size) {
+        Some(0) => Some(content.to_string()),
+        Some(1) => Some(format!("{content}\n")),
+        Some(2) if content.contains("\r\n") || !content.contains('\n') => {
+            Some(format!("{content}\r\n"))
+        }
+        _ => None,
+    }
+}
+
+fn restore_exact_file_read_output(mut output: Value) -> Value {
+    let Some(obj) = output.as_object_mut() else {
+        return output;
+    };
+
+    let is_text_file_read = obj
+        .get("content_kind")
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "text")
+        && obj.get("path").and_then(Value::as_str).is_some();
+    if !is_text_file_read {
+        return output;
+    }
+
+    let Some(content) = obj.get("content").and_then(Value::as_str) else {
+        return output;
+    };
+    let Some(size_bytes) = obj
+        .get("metadata")
+        .and_then(|metadata| metadata.get("data"))
+        .and_then(|data| data.get("size_bytes"))
+        .and_then(Value::as_u64)
+    else {
+        return output;
+    };
+
+    if let Some(exact_content) = restore_exact_text_content(content, size_bytes) {
+        obj.insert("content".to_string(), Value::String(exact_content));
+    }
+
+    output
+}
+
 impl AgentRunner {
     #[inline]
     fn canonical_exec_request_name(tool_name: &str) -> &str {
@@ -121,7 +166,7 @@ impl AgentRunner {
             .execute_prepared_public_tool_request(prepared, policy)
             .await;
         match (outcome.output, outcome.error) {
-            (Some(output), None) => Ok(output),
+            (Some(output), None) => Ok(restore_exact_file_read_output(output)),
             (_, Some(error)) => Err(error.with_surface("agent_runner")),
             _ => Err(ToolExecutionError::policy_violation(
                 resolved_tool_name.to_string(),

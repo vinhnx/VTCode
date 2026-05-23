@@ -19,7 +19,7 @@ use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::warn;
@@ -405,7 +405,23 @@ impl AutonomousExecutor {
 
     /// Validate list_files arguments to prevent root listing loops
     fn validate_list_files_args(&self, args: &Value) -> Result<()> {
-        validate_non_root_listing_path(args.get("path").and_then(|v| v.as_str()))
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim();
+
+        let targets_root_directory = !Path::new(raw_path)
+            .components()
+            .any(|component| !matches!(component, Component::CurDir | Component::RootDir));
+
+        if targets_root_directory {
+            anyhow::bail!(
+                "Error: autonomous directory listing must not target the root directory. Please specify a subdirectory like 'src/', 'vtcode-core/src/', or 'tests/'."
+            );
+        }
+
+        validate_non_root_listing_path(Some(raw_path))
     }
 
     /// Generate dry-run preview for verification

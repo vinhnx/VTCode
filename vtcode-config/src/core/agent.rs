@@ -295,8 +295,8 @@ impl<'de> Deserialize<'de> for ContinuationPolicy {
 #[serde(rename_all = "snake_case")]
 pub enum HarnessOrchestrationMode {
     #[default]
-    Single,
     PlanBuildEvaluate,
+    Single,
 }
 
 impl HarnessOrchestrationMode {
@@ -1531,7 +1531,7 @@ mod tests {
     fn test_harness_orchestration_mode_defaults_and_parses() {
         assert_eq!(
             HarnessOrchestrationMode::default(),
-            HarnessOrchestrationMode::Single
+            HarnessOrchestrationMode::PlanBuildEvaluate
         );
         assert_eq!(
             HarnessOrchestrationMode::parse("single"),
@@ -1563,7 +1563,7 @@ mod tests {
             toml::from_str("orchestration_mode = \"unexpected\"").expect("fallback config");
         assert_eq!(
             fallback.orchestration_mode,
-            HarnessOrchestrationMode::Single
+            HarnessOrchestrationMode::PlanBuildEvaluate
         );
     }
 

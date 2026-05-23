@@ -730,8 +730,7 @@ pub fn serialize_messages_openai_format(
             );
         }
 
-        if provider_key == "zai"
-            && message.role == MessageRole::Assistant
+        if message.role == MessageRole::Assistant
             && let Some(reasoning) = &message.reasoning
         {
             message_map.insert(

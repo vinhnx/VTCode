@@ -11,7 +11,7 @@ use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::tool_loop_limit_reached;
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
 use crate::core::agent::blocked_handoff::write_blocked_handoff;
-use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
+use crate::core::agent::completion::{check_completion_candidate, check_for_response_loop};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, conversation_from_messages,
 };
@@ -830,11 +830,13 @@ impl AgentRunner {
                         break;
                     }
 
-                    if check_completion_indicators(response.content_text()) {
+                    if check_completion_candidate(response.content_text()) {
                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
-                            style("Completion indicator detected.").green().bold()
+                            style("Completion candidate detected; checking tracker and verification state.")
+                                .green()
+                                .bold()
                         ));
                         match continuation_controller
                             .assess_completion(&effective_task, &runtime.state)
