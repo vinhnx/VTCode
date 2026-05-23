@@ -34,7 +34,7 @@
     "cron_delete": "prompt",
     "cron_list": "prompt",
     "enter_plan_mode": "prompt",
-    "exit_plan_mode": "prompt",
+    "exit_plan_mode": "allow",
     "mcp_connect_server": "prompt",
     "mcp_disconnect_server": "prompt",
     "mcp_get_tool_details": "allow",
@@ -203,7 +203,9 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [],
+    "allowed": [
+      "load_skill"
+    ],
     "prefixes": [],
     "regexes": []
   }
