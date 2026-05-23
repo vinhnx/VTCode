@@ -19,7 +19,7 @@ memories = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-ai/deepseek-v4-flash"
+default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -28,8 +28,8 @@ default_model = "deepseek-ai/deepseek-v4-flash"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "low"
-api_key_env = "ATLASCLOUD_API_KEY"
-provider = "atlascloud"
+api_key_env = "HF_TOKEN"
+provider = "huggingface"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
@@ -47,15 +47,6 @@ enabled = true
 # Default: "default"
 # Type: `string`
 default_mode = "auto"
-
-
-# Background Subagents
-# Managed background subprocess runtime settings.
-[subagents.background]
-# Enable managed background subprocesses for background-capable subagents.
-# Default: false
-# Type: `boolean`
-enabled = true
 
 [[custom_providers]]
 api_key_env = "ATLASCLOUD_API_KEY"
@@ -82,6 +73,15 @@ models = [
     "kwaipilot/kat-coder-pro-v2",
 ]
 name = "atlascloud"
+
+
+# Background Subagents
+# Managed background subprocess runtime settings.
+[subagents.background]
+# Enable managed background subprocesses for background-capable subagents.
+# Default: false
+# Type: `boolean`
+enabled = true
 
 
 # Provider Endpoints
@@ -146,7 +146,7 @@ exec_code = "allow"
 
 execute_code = "allow"
 
-exit_plan_mode = "prompt"
+exit_plan_mode = "allow"
 
 git_diff = "allow"
 
