@@ -52,7 +52,7 @@ fn is_missing_apply_patch_payload(args: &Value) -> bool {
 
 fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
     if tool_name == tool_names::READ_FILE && key == "path" {
-        return ["path", "file_path", "filepath", "target_path"]
+        return ["path", "file_path", "filepath", "target_path", "file"]
             .iter()
             .all(|candidate| is_missing_arg_value(args, candidate));
     }
@@ -371,6 +371,12 @@ pub(super) fn preflight_validate_resolved_call(
             validation_args
                 .as_ref()
                 .get("target_path")
+                .and_then(|v| v.as_str())
+        })
+        .or_else(|| {
+            validation_args
+                .as_ref()
+                .get("file")
                 .and_then(|v| v.as_str())
         })
         && let Err(err) = paths::validate_path_safety(path)

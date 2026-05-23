@@ -70,7 +70,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
         if is_read_tool {
             // Normalize path aliases to "path"
-            for alias in ["file_path", "filepath", "target_path"] {
+            for alias in ["file_path", "filepath", "target_path", "file"] {
                 if let Some(val) = normalized.remove(alias)
                     && !normalized.contains_key("path")
                 {
@@ -619,7 +619,7 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
     }
 
     let obj = args.as_object()?;
-    for key in ["path", "file_path", "filepath", "target_path"] {
+    for key in ["path", "file_path", "filepath", "target_path", "file"] {
         if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
             let trimmed = path.trim();
             if !trimmed.is_empty() {

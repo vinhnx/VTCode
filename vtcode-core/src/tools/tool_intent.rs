@@ -412,6 +412,7 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
             || args.get("file_path").is_some()
             || args.get("filepath").is_some()
             || args.get("target_path").is_some()
+            || args.get("file").is_some()
             || args.get("p").is_some();
         let patch_in_input = args
             .get("input")

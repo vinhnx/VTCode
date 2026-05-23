@@ -46,7 +46,6 @@ pub(crate) fn prepare_post_tool_tool_free_recovery(
 }
 
 pub(super) fn maybe_recover_after_post_tool_llm_failure(
-
     renderer: &mut AnsiRenderer,
     working_history: &mut Vec<uni::Message>,
     err: &anyhow::Error,
