@@ -1,6 +1,7 @@
 //! Turn-loop helpers for recovering after tool output when the follow-up LLM phase fails.
 
 use anyhow::Result;
+use vtcode_commons::ErrorCategory;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -83,7 +84,9 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     }
     ensure_post_tool_resume_directive(working_history);
 
-    let action = if err_cat.is_retryable() && allow_tool_free_retry {
+    let should_retry = allow_tool_free_retry
+        && (err_cat.is_retryable() || matches!(err_cat, ErrorCategory::ExecutionError));
+    let action = if should_retry {
         prepare_post_tool_tool_free_recovery(working_history, POST_TOOL_RECOVERY_REASON);
         renderer.line(
             MessageStyle::Info,

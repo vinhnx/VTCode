@@ -160,6 +160,8 @@ pub(crate) struct SessionMemoryEnvelope {
     pub spec_summary: Option<String>,
     pub evaluation_summary: Option<String>,
     #[serde(default)]
+    pub verification_summary: Option<String>,
+    #[serde(default)]
     pub constraints: Vec<String>,
     pub grounded_facts: Vec<GroundedFactRecord>,
     pub touched_files: Vec<String>,
@@ -188,6 +190,7 @@ pub(crate) struct SessionMemoryEnvelopeUpdate {
 struct TaskTrackerSnapshot {
     summary: Option<String>,
     objective: Option<String>,
+    verification_summary: Option<String>,
     verification_todo: Vec<String>,
 }
 

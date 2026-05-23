@@ -220,6 +220,14 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.finish_recovery_pass()
     }
 
+    pub(crate) fn retry_recovery_pass(&mut self) -> bool {
+        self.harness_state.retry_recovery_pass()
+    }
+
+    pub(crate) fn recovery_retry_count(&self) -> u8 {
+        self.harness_state.recovery_retry_count()
+    }
+
     pub(crate) fn push_tool_response<S>(&mut self, tool_call_id: S, content: String)
     where
         S: AsRef<str> + Into<String>,

@@ -65,10 +65,16 @@ use usage_accounting::{
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
-const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 320;
+const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
+/// Maximum number of times the recovery pass is retried when the model
+/// returns tool calls (discarded) instead of text during tool-free recovery.
+const MAX_RECOVERY_RETRIES: u8 = 1;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "I couldn't complete the final recovery synthesis, but the latest validated tool outputs in this turn are still usable. Reuse them directly.";
+/// System message injected before retrying a tool-free recovery pass when the model
+/// produced tool calls (which are discarded) instead of text.
+const RECOVERY_TOOL_CALL_RETRY_DIRECTIVE: &str = "CRITICAL: Recovery pass: the model attempted tool calls instead of a text-only synthesis. Tools remain disabled. Provide a text-only synthesis now, summarizing what was found from the previous tool outputs already in history and proposing the next concrete action.";
 
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
@@ -502,15 +508,6 @@ pub(crate) async fn run_turn_loop(
                     break;
                 }
 
-                if tool_free_recovery {
-                    result = complete_turn_after_failed_tool_free_recovery(
-                        turn_processing_ctx.working_history,
-                        "execute_llm_request.direct_tool_free_failure",
-                        Some(&err),
-                    );
-                    break;
-                }
-
                 display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
                 // Show recovery hints derived from the canonical error category
                 {
@@ -686,6 +683,25 @@ pub(crate) async fn run_turn_loop(
                 return Err(err);
             }
         };
+        // When in tool-free recovery and the model returns no text (e.g. producing
+        // tool calls that get discarded), retry with a more explicit directive
+        // rather than immediately falling back to the deterministic final answer.
+        if tool_free_recovery
+            && matches!(processing_result, TurnProcessingResult::Empty)
+            && response
+                .tool_calls
+                .as_ref()
+                .is_some_and(|tc| !tc.is_empty())
+            && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
+        {
+            turn_processing_ctx
+                .working_history
+                .push(uni::Message::system(
+                    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string(),
+                ));
+            turn_processing_ctx.retry_recovery_pass();
+            continue;
+        }
         if turn_config.request_user_input_enabled {
             let should_attempt_synthesis = {
                 turn_processing_ctx.is_plan_mode()

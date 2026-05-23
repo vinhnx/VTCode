@@ -39,6 +39,10 @@ fn append_full_auto_notice(prompt: &mut String, contract: RuntimePromptContract)
         prompt,
         "- Stay within the exposed tool list and adapt when a tool is unavailable or denied."
     );
+    let _ = writeln!(
+        prompt,
+        "- Treat completion language as a checkpoint, not proof; only stop when `task_tracker`, verification, and resumable state agree."
+    );
     if !contract.request_user_input_enabled {
         let _ = writeln!(
             prompt,
@@ -132,5 +136,6 @@ mod tests {
 
         assert!(prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
         assert!(prompt.contains("`request_user_input` is unavailable in this runtime"));
+        assert!(prompt.contains("completion language as a checkpoint"));
     }
 }

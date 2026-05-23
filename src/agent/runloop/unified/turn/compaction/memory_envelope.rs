@@ -199,6 +199,10 @@ fn build_session_memory_envelope(
             .or_else(|| pe.and_then(|e| e.task_summary.clone())),
         spec_summary,
         evaluation_summary,
+        verification_summary: task_snapshot
+            .verification_summary
+            .clone()
+            .or_else(|| pe.and_then(|e| e.verification_summary.clone())),
         constraints: merge(&constraints, &update.constraints),
         grounded_facts: merge_grounded_facts(pe, original_history, &update.grounded_facts),
         touched_files: merge_touched_files(

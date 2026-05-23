@@ -28,7 +28,7 @@ Harness primitives in VT Code map to the runtime like this:
 - **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
 - **Tools**: `vtcode-tools/`, `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose filesystem, search, edit, exec, and protocol-backed capabilities to the model.
 - **Sandbox / execution environment**: `vtcode-bash-runner/`, unified exec, workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
-- **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification TODOs, and delegated findings for resume and summarized-fork handoff.
+- **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification status, verification TODOs, and delegated findings for resume and summarized-fork handoff.
 - **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk. On VT Code's local compaction path, older repeated single-file reads are deduplicated before summarization so the summary prompt keeps the newest copy and avoids re-injecting stale file payloads.
 - **Hooks / middleware**: lifecycle hooks, tool middleware, guard rails, duplicate-call protection, and plan-mode enforcement add deterministic control around the model loop.
 - **Continuation**: exec/full-auto now uses a harness-managed continuation controller that accepts completion only when tracker state is complete and verification commands pass.
@@ -164,28 +164,28 @@ pub trait CacheableTool: Tool {
 
 ### GrepSearchManager (`tools::grep_file`)
 
--   Debounce and cancellation pipeline for responsive searches
--   Ripgrep primary backend with perg fallback when unavailable
--   Supports glob filters, hidden file handling, and context lines
--   Enforces workspace boundaries with robust path validation
+- Debounce and cancellation pipeline for responsive searches
+- Ripgrep primary backend with perg fallback when unavailable
+- Supports glob filters, hidden file handling, and context lines
+- Enforces workspace boundaries with robust path validation
 
 ### Search Stack Consolidation
 
--   `grep_file.rs` is the single source of truth for content search
--   Higher-level helpers were removed; use `ToolRegistry::grep_file_executor`
--   `list_files` remains a discovery/metadata tool; defer all content scanning to `grep_file`
+- `grep_file.rs` is the single source of truth for content search
+- Higher-level helpers were removed; use `ToolRegistry::grep_file_executor`
+- `list_files` remains a discovery/metadata tool; defer all content scanning to `grep_file`
 
 ### FileOpsTool
 
--   Workspace-scoped file listing, metadata inspection, and traversal
--   Async directory walking with cache integration for large trees
--   Path policy enforcement shared with the command subsystem
+- Workspace-scoped file listing, metadata inspection, and traversal
+- Async directory walking with cache integration for large trees
+- Path policy enforcement shared with the command subsystem
 
 ### CommandTool
 
--   Standard command execution with exit-code and output capture
--   PTY session management for interactive commands
--   Streaming support for long-lived shell tasks with cancellation
+- Standard command execution with exit-code and output capture
+- PTY session management for interactive commands
+- Streaming support for long-lived shell tasks with cancellation
 
 ## Design Principles
 
@@ -235,33 +235,33 @@ impl ModeTool for MyTool {
 
 ## Benefits
 
--   **77% complexity reduction** from monolithic structure
--   **Enhanced functionality** through mode-based execution
--   **100% backward compatibility** maintained
--   **Protocol-friendly extension model** for external development
--   **Performance optimized** with intelligent caching
+- **77% complexity reduction** from monolithic structure
+- **Enhanced functionality** through mode-based execution
+- **100% backward compatibility** maintained
+- **Protocol-friendly extension model** for external development
+- **Performance optimized** with intelligent caching
 
 ## RL Optimization Loop (Adaptive Action Selection)
 
--   **Module:** `vtcode-core/src/llm/rl` (bandit and actor-critic implementations)
--   **Config:** `[optimization]` with `strategy = "bandit" | "actor_critic"` plus reward shaping knobs
--   **Signals:** Success/timeout + latency feed `RewardSignal`, stored in a rolling `RewardLedger`
--   **Usage:** Construct `RlEngine::from_config(&VTCodeConfig::optimization)` and call `select(actions, PolicyContext)`; on completion emit `apply_reward`
--   **Goal:** Prefer low-latency, high-success actions (e.g., choose edge vs cloud executors) while remaining pluggable for future policies
+- **Module:** `vtcode-core/src/llm/rl` (bandit and actor-critic implementations)
+- **Config:** `[optimization]` with `strategy = "bandit" | "actor_critic"` plus reward shaping knobs
+- **Signals:** Success/timeout + latency feed `RewardSignal`, stored in a rolling `RewardLedger`
+- **Usage:** Construct `RlEngine::from_config(&VTCodeConfig::optimization)` and call `select(actions, PolicyContext)`; on completion emit `apply_reward`
+- **Goal:** Prefer low-latency, high-success actions (e.g., choose edge vs cloud executors) while remaining pluggable for future policies
 
 ## Training & Evaluation Alignment
 
 To operationalize the staged training paradigm introduced in `docs/research/kimi_dev_agentless_training.md`, VT Code couples its
 modular runtime with a data and evaluation strategy designed for agentless skill priors:
 
--   **Dual Roles** – Prompt templates for `BugFixer` and `TestWriter` share the same tool registry, enabling deterministic skill
-    acquisition before agentic orchestration.
--   **Execution Telemetry** – Command and sandbox outputs are captured through the existing `bash_runner` and PTY subsystems,
-    allowing outcome-based rewards for RL without extra instrumentation. The ATIF trajectory exporter provides standardized
-    per-step metrics (token usage, costs, logprobs) directly consumable by SFT and RL training pipelines.
--   **Self-Play Hooks** – The tool layer exposes high-signal search, diff, and patching capabilities that feed directly into the
-    multi-rollout evaluation loop defined in the training roadmap.
--   **Context Capacity** – Long-context support in the LLM provider abstraction ensures that multi-turn reasoning traces and
-    aggregated rollouts remain accessible during both SFT and inference.
+- **Dual Roles** – Prompt templates for `BugFixer` and `TestWriter` share the same tool registry, enabling deterministic skill
+  acquisition before agentic orchestration.
+- **Execution Telemetry** – Command and sandbox outputs are captured through the existing `bash_runner` and PTY subsystems,
+  allowing outcome-based rewards for RL without extra instrumentation. The ATIF trajectory exporter provides standardized
+  per-step metrics (token usage, costs, logprobs) directly consumable by SFT and RL training pipelines.
+- **Self-Play Hooks** – The tool layer exposes high-signal search, diff, and patching capabilities that feed directly into the
+  multi-rollout evaluation loop defined in the training roadmap.
+- **Context Capacity** – Long-context support in the LLM provider abstraction ensures that multi-turn reasoning traces and
+  aggregated rollouts remain accessible during both SFT and inference.
 
 See the research note for the full pipeline (mid-training data curation, SFT cold start, RL curriculum, and test-time self-play).

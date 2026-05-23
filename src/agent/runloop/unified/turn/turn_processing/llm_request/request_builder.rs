@@ -461,7 +461,7 @@ pub(super) async fn build_turn_request(
     .await?;
 
     let reasoning_effort = ctx.vt_cfg.and_then(|cfg| {
-        if turn_snapshot.capabilities.reasoning_effort {
+        if turn_snapshot.capabilities.reasoning_effort && !turn_snapshot.tool_free_recovery {
             Some(cfg.agent.reasoning_effort)
         } else {
             None
@@ -583,6 +583,7 @@ mod tests {
 
     use serde_json::json;
     use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::config::types::ReasoningEffortLevel;
     use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
     use vtcode_core::prompts::append_runtime_tool_prompt_sections;
@@ -613,14 +614,37 @@ mod tests {
             .await;
 
         let mut ctx = backing.turn_processing_context();
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.reasoning_effort = ReasoningEffortLevel::High;
+        ctx.vt_cfg = Some(&vt_cfg);
         ctx.activate_recovery("loop detector");
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", true);
+        let mut normal_snapshot = snapshot.clone();
+        normal_snapshot.tool_free_recovery = false;
+        normal_snapshot.capabilities.reasoning_effort = true;
+
+        let normal_built = build_turn_request(
+            &mut ctx,
+            1,
+            "noop-model",
+            &normal_snapshot,
+            Some(320),
+            None,
+            false,
+        )
+        .await
+        .expect("normal request should build");
         let built =
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
                 .expect("recovery request should build");
 
+        assert_eq!(
+            normal_built.request.reasoning_effort,
+            Some(ReasoningEffortLevel::High)
+        );
+        assert!(built.request.reasoning_effort.is_none());
         assert!(!built.has_tools);
         assert!(built.request.tools.is_none());
         assert!(matches!(

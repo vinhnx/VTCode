@@ -44,6 +44,16 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
         *stderr = json!(s.trim_end());
     }
 
+    if obj
+        .get("content_kind")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| value == "text")
+        && let Some(content) = obj.get_mut("content")
+        && let Some(s) = content.as_str()
+    {
+        *content = json!(s.trim_end());
+    }
+
     if obj.get("working_directory").is_some_and(Value::is_null) {
         obj.remove("working_directory");
     }
@@ -210,5 +220,16 @@ mod tests {
         assert!(normalized.get("follow_up_prompt").is_none());
         assert!(normalized.get("next_poll_args").is_none());
         assert!(normalized.get("preferred_next_action").is_none());
+    }
+
+    #[test]
+    fn trims_trailing_newline_from_text_content() {
+        let normalized = normalize_tool_output(json!({
+            "content": "via alias\n",
+            "path": "note.txt",
+            "content_kind": "text"
+        }));
+
+        assert_eq!(normalized["content"], "via alias");
     }
 }

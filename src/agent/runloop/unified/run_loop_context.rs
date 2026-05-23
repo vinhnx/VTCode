@@ -175,6 +175,7 @@ pub(crate) struct HarnessTurnState {
     pub recovery_reason: Option<String>,
     recovery_phase: RecoveryPhase,
     recovery_mode: Option<RecoveryMode>,
+    recovery_retry_count: u8,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -212,6 +213,7 @@ impl HarnessTurnState {
             recovery_reason: None,
             recovery_phase: RecoveryPhase::Inactive,
             recovery_mode: None,
+            recovery_retry_count: 0,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -350,6 +352,7 @@ impl HarnessTurnState {
             self.recovery_reason = Some(reason.into());
             self.recovery_phase = RecoveryPhase::Pending;
             self.recovery_mode = Some(mode);
+            self.recovery_retry_count = 0;
         }
     }
 
@@ -394,6 +397,28 @@ impl HarnessTurnState {
         }
         self.recovery_phase = RecoveryPhase::Completed;
         true
+    }
+
+    /// Retry the recovery pass by resetting the phase back to `Pending`
+    /// so the next loop iteration re-enters tool-free recovery mode.
+    /// Increments the retry counter; the caller is responsible for checking
+    /// `recovery_retry_count()` against its own limit.
+    /// Only works if a recovery pass has been consumed (phase is InPass or Completed).
+    pub(crate) fn retry_recovery_pass(&mut self) -> bool {
+        if matches!(
+            self.recovery_phase,
+            RecoveryPhase::InPass | RecoveryPhase::Completed
+        ) {
+            self.recovery_phase = RecoveryPhase::Pending;
+            self.recovery_retry_count += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn recovery_retry_count(&self) -> u8 {
+        self.recovery_retry_count
     }
 
     pub(crate) fn record_spool_chunk_read(&mut self) -> usize {

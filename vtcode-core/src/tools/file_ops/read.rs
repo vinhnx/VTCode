@@ -79,6 +79,9 @@ fn looks_like_patch_payload(args: &Value) -> bool {
 fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
     let mut handler_args_json = args.clone();
     if let Some(obj) = handler_args_json.as_object_mut() {
+        for alias in ["path", "filepath", "target_path", "file"] {
+            obj.remove(alias);
+        }
         obj.insert(
             "file_path".to_string(),
             json!(canonical_path.to_string_lossy()),
@@ -469,11 +472,17 @@ impl FileOpsTool {
                             has_more,
                         } = handler.handle_detailed(read_args).await?;
                         let full_text_read = is_full_text_read(&args, is_spool_output);
+                        let response_content = if full_text_read {
+                            restore_exact_text_content(&content, size_bytes)
+                                .unwrap_or_else(|| content.clone())
+                        } else {
+                            content.clone()
+                        };
 
                         let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
                             .success()
                             .message(format!("Successfully read file {}", requested_path))
-                            .content(&content)
+                            .content(&response_content)
                             .field("path", json!(requested_path.clone()))
                             .field("no_spool", json!(true))
                             .field("content_kind", json!("text"))
@@ -505,8 +514,12 @@ impl FileOpsTool {
                         let response = builder.build_json();
 
                         if full_text_read {
-                            self.track_exact_text_snapshot(&canonical, &content, size_bytes)
-                                .await;
+                            self.track_exact_text_snapshot(
+                                &canonical,
+                                &response_content,
+                                size_bytes,
+                            )
+                            .await;
                         } else {
                             self.track_read_snapshot(&canonical).await;
                         }
@@ -716,6 +729,20 @@ mod read_tests {
         assert_eq!(built["file_path"], json!("/tmp/example.txt"));
         assert_eq!(built["offset"], json!(1));
         assert!(built.get("limit").is_none());
+    }
+
+    #[test]
+    fn build_read_handler_args_avoids_duplicate_path_aliases() {
+        let canonical = Path::new("/tmp/example.txt");
+        let args = json!({
+            "path": "example.txt"
+        });
+
+        let built = build_read_handler_args(&args, canonical);
+        let parsed: ReadFileArgs = serde_json::from_value(built).unwrap();
+
+        assert_eq!(parsed.file_path, "/tmp/example.txt");
+        assert_eq!(parsed.offset, 1);
     }
 
     #[test]
@@ -951,6 +978,24 @@ mod read_tests {
         let content = result["content"].as_str().unwrap();
         assert!(content.len() <= 10);
         assert!(content.starts_with("line1"));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_full_text_preserves_trailing_newline() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("note.txt");
+        fs::write(&test_file, "hello\n").unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let result = file_ops
+            .read_file(json!({ "path": "note.txt" }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["content"].as_str(), Some("hello\n"));
     }
 
     #[tokio::test]

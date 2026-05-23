@@ -42,10 +42,11 @@ pub const PLAN_MODE_TASK_TRACKER_LINE: &str =
 pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise. If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode` (or press `Shift+Tab`/`Alt+M` in interactive mode).";
 
 const PROMPT_TITLE: &str = "# VT Code";
-const PROMPT_INTRO: &str = "You are VT Code. Be concise, direct, and safe.";
+const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
 const CONTRACT_HEADER: &str = "## Contract";
 const HANDLE_CONTEXT_PROMPT_LINE: &str =
-    "Prefer explicit handles plus an owning context when state relationships get tangled.";
+    "Prefer explicit handles plus an owning context when state gets tangled.";
+const DONE_CRITERIA_PROMPT_LINE: &str = "Treat \"done\" as observable: keep `task_tracker` current, keep blockers/verification open, and leave resumable state.";
 
 const OPENAI_GPT55_CONTRACT_HEADER: &str = "## GPT-5.5 OpenAI Addendum";
 const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
@@ -57,49 +58,54 @@ const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
 ];
 
 const DEFAULT_CONTRACT_LINES: &[&str] = &[
-    "Start with `AGENTS.md`; inspect code and match local patterns. Use `@file` when helpful.",
-    "If context is missing, say so plainly, do not guess, and finish any unblocked portion first.",
+    "Start with `AGENTS.md`; inspect code, match local patterns, and use `@file` when helpful.",
+    "If context is missing, say so, do not guess, and finish unblocked slices.",
     "Take safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.",
     HANDLE_CONTEXT_PROMPT_LINE,
-    "Keep control on the main thread. Delegate only bounded, independent work that will not block the next local step.",
+    "Keep control on the main thread. Delegate only bounded, independent work that won't block the next step.",
     "Prefer simple changes. Measure before optimizing.",
     "Verify changes yourself; never claim a check passed unless you ran it.",
+    DONE_CRITERIA_PROMPT_LINE,
     "Keep outputs concise and in the requested format. Keep user updates brief and high-signal.",
-    "Use retrieved evidence for citation-sensitive work and preserve task goal, touched files, outcomes, and decisions across compaction.",
+    "Use retrieved evidence for citation-sensitive work. Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
     "NEVER use emoji in any output. Use plain text only.",
 ];
 
 const MINIMAL_CONTRACT_LINES: &[&str] = &[
-    "Start with `AGENTS.md`; inspect code first.",
-    "If context is missing, say so plainly, do not guess, and finish any unblocked portion first.",
+    "Use `AGENTS.md`; inspect code first.",
+    "If context is missing, say so, do not guess, and finish unblocked slices.",
     HANDLE_CONTEXT_PROMPT_LINE,
-    "Take safe, reversible steps without asking and verify changes yourself.",
+    "Take safe, reversible steps; verify changes yourself.",
+    DONE_CRITERIA_PROMPT_LINE,
     "Keep delegation bounded and explicit.",
-    "Preserve task goal, touched files, and outcomes across compaction.",
-    "Use retrieved evidence for citation-sensitive work.",
+    "Preserve tracker state, touched files, and verification status across compaction.",
+    "Use retrieved evidence when citation-sensitive.",
     "Keep outputs concise and in the requested format.",
-    "NEVER use emoji in any output. Use plain text only.",
 ];
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
 - Use `task_tracker` for non-trivial work.
-- Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit."#;
+- Treat completion language as a checkpoint, not proof; only stop when the tracker is current and verification is resolved.
+- Use Plan Mode for research/spec work; stay read-only until implementation intent is explicit."#;
 
 const MINIMAL_MODE_DELTA: &str = r#"## Mode
 
-- Stay lightweight and precise; use `task_tracker` once the task stops being trivial.
-- Use `AGENTS.md` as the map and open repo docs only when structural rules matter."#;
+- Stay precise; use `task_tracker` once work stops being trivial.
+- Treat completion language as a checkpoint, not proof.
+- Use `AGENTS.md` as the map; open repo docs only when structural rules matter."#;
 
 const LIGHTWEIGHT_MODE_DELTA: &str = r#"## Mode
 
 - Act and verify in one thread.
-- Use `task_tracker` for non-trivial work."#;
+- Completion language is a checkpoint.
+- Use `task_tracker` for nontrivial work."#;
 
 const SPECIALIZED_MODE_DELTA: &str = r#"## Mode
 
 - Explore, plan, then execute.
 - Use `task_tracker` for multi-step work and Plan Mode when scope or verification is still open.
+- Treat completion language as a checkpoint, not proof; only stop when tracker state, verification, and resumable state agree.
 - End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
 - Use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
 
@@ -903,6 +909,14 @@ mod tests {
             "Default prompt should preserve decision rationale across compaction"
         );
         assert!(
+            default_system_prompt().contains("tracker state"),
+            "Default prompt should preserve tracker state across compaction"
+        );
+        assert!(
+            default_system_prompt().contains("verification status"),
+            "Default prompt should preserve verification status across compaction"
+        );
+        assert!(
             minimal_system_prompt().contains("touched files"),
             "Minimal prompt should preserve touched files across compaction"
         );
@@ -925,9 +939,29 @@ mod tests {
             "Default prompt should require verification before finalizing"
         );
         assert!(
+            prompt.contains(DONE_CRITERIA_PROMPT_LINE),
+            "Default prompt should define observable done criteria"
+        );
+        assert!(
             prompt.contains("Keep user updates brief and high-signal"),
             "Default prompt should constrain progress updates"
         );
+    }
+
+    #[test]
+    fn test_all_prompt_modes_treat_completion_as_checkpoint_not_proof() {
+        for (mode_name, prompt) in [
+            ("default", default_system_prompt()),
+            ("minimal", minimal_system_prompt()),
+            ("lightweight", default_lightweight_prompt()),
+            ("specialized", specialized_instruction_text().as_str()),
+        ] {
+            assert!(
+                prompt.contains("completion language as a checkpoint")
+                    || prompt.contains(DONE_CRITERIA_PROMPT_LINE),
+                "{mode_name} prompt should treat completion as a checkpoint"
+            );
+        }
     }
 
     #[test]
