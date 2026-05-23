@@ -4,7 +4,7 @@ use vtcode_core::tools::tool_intent;
 
 pub(crate) fn read_file_path_arg(args: &Value) -> Option<&str> {
     let obj = args.as_object()?;
-    for key in ["path", "file_path", "filepath", "target_path"] {
+    for key in ["path", "file_path", "filepath", "target_path", "file"] {
         if let Some(path) = obj.get(key).and_then(Value::as_str) {
             let trimmed = path.trim();
             if !trimmed.is_empty() {

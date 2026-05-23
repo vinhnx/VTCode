@@ -67,6 +67,7 @@ pub struct Input {
         alias = "file_path",
         alias = "filepath",
         alias = "target_path",
+        alias = "file",
         alias = "p"
     )]
     pub path: String,
@@ -110,7 +111,12 @@ pub struct Input {
 
 #[derive(Debug, Deserialize)]
 pub struct WriteInput {
-    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
@@ -124,7 +130,12 @@ pub struct WriteInput {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateInput {
-    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
@@ -134,7 +145,12 @@ pub struct CreateInput {
 
 #[derive(Debug, Deserialize)]
 pub struct DeleteInput {
-    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     #[serde(default)]
     pub recursive: bool,
@@ -144,6 +160,12 @@ pub struct DeleteInput {
 
 #[derive(Debug, Deserialize)]
 pub struct MoveInput {
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     pub destination: String,
     #[serde(default)]
@@ -152,6 +174,12 @@ pub struct MoveInput {
 
 #[derive(Debug, Deserialize)]
 pub struct CopyInput {
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     pub destination: String,
     #[serde(default)]
@@ -164,6 +192,7 @@ pub struct PathArgs {
         alias = "file_path",
         alias = "filepath",
         alias = "target_path",
+        alias = "file",
         alias = "p"
     )]
     pub path: String,
@@ -171,7 +200,12 @@ pub struct PathArgs {
 
 #[derive(Debug, Deserialize)]
 pub struct EditInput {
-    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub path: String,
     #[serde(
         alias = "old_text",

@@ -177,7 +177,7 @@ pub fn unified_file_parameters() -> Value {
                 "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
                 "description": "Optional; inferred from old_str/patch/content/destination/path."
             },
-            "path": {"type": "string", "description": "File path. Compact alias: `p`."},
+            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/file/p."},
             "content": {"type": "string", "description": "Content for write."},
             "old_str": {"type": "string", "description": "Exact text to replace for edit."},
             "new_str": {"type": "string", "description": "Replacement text for edit."},
@@ -215,7 +215,7 @@ pub fn read_file_parameters() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/p."},
+            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/file/p."},
             "offset": {"type": "integer", "description": "1-indexed line offset. Compact alias: `o`.", "minimum": 1},
             "limit": {"type": "integer", "description": "Max lines for this chunk. Compact alias: `l`.", "minimum": 1},
             "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode.", "default": "slice"},

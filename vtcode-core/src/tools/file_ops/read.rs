@@ -379,7 +379,7 @@ impl FileOpsTool {
                 "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
                 Received: {}\n\
                 Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
-                Accepted path parameters: path, file_path, filepath, target_path, p\n\
+                Accepted path parameters: path, file_path, filepath, target_path, file, p\n\
                 Optional params: offset_lines, limit, max_bytes, max_tokens",
                 received
             )

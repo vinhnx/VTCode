@@ -36,6 +36,12 @@ pub(crate) struct ReadFileOutcome {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ReadFileArgs {
     /// Absolute path to the file that will be read.
+    #[serde(
+        alias = "path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "file"
+    )]
     pub file_path: String,
     /// 1-indexed line number to start reading from; defaults to 1.
     #[serde(
