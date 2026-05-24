@@ -234,16 +234,6 @@ fn highlight_code_block(
         line_number = line_number.saturating_add(omitted);
     }
 
-    if code_to_display.ends_with('\n') {
-        let (gutter_text, _) = format_gutter_text(line_number, number_width, "");
-        let line = code_line_with_prefix(
-            prefix_segments,
-            use_line_numbers.then_some(gutter_text.as_str()),
-            gutter_style,
-        );
-        lines.push(line);
-    }
-
     lines
 }
 
@@ -400,10 +390,6 @@ fn render_diff_code_block(
             }
         }
         lines.push(line);
-    }
-
-    if code.ends_with('\n') {
-        lines.push(prefixed_line(prefix_segments));
     }
 
     lines

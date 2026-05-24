@@ -1,10 +1,8 @@
 //! Diff utilities for generating structured diffs.
 
-use anstyle::Reset;
+use anstyle::{AnsiColor, Color, Reset, Style};
 use std::fmt::Write;
 pub use vtcode_commons::diff::*;
-
-use crate::ui::theme;
 
 /// Format a unified diff without ANSI color codes.
 pub fn format_unified_diff(old: &str, new: &str, options: DiffOptions<'_>) -> String {
@@ -19,18 +17,17 @@ pub fn compute_diff_with_theme(old: &str, new: &str, options: DiffOptions<'_>) -
     compute_diff(old, new, options, format_colored_diff)
 }
 
-/// Format diff hunks with theme colors for terminal display.
+/// Format diff hunks with standard ANSI colors for terminal display.
 pub fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String {
     if hunks.is_empty() {
         return String::new();
     }
 
-    let active_styles = theme::active_styles();
-    let header_style = active_styles.status;
-    let hunk_header_style = active_styles.status;
-    let addition_style = active_styles.secondary;
-    let deletion_style = active_styles.error;
-    let context_style = active_styles.output;
+    let header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    let hunk_header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    let addition_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
+    let deletion_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+    let context_style = Style::new();
 
     let mut output = String::new();
 

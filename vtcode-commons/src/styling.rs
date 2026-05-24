@@ -2,7 +2,7 @@
 
 use crate::ansi_codes::RESET;
 use crate::color_policy;
-use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
+use anstyle::{AnsiColor, Color, Effects, Style};
 
 /// Standard color palette with semantic names
 #[derive(Debug, Clone, Copy)]
@@ -120,11 +120,11 @@ impl Default for DiffColorPalette {
     fn default() -> Self {
         Self {
             added_fg: Color::Ansi(AnsiColor::Green),
-            added_bg: Color::Rgb(RgbColor(10, 24, 10)),
+            added_bg: Color::Ansi(AnsiColor::Green),
             removed_fg: Color::Ansi(AnsiColor::Red),
-            removed_bg: Color::Rgb(RgbColor(24, 10, 10)),
+            removed_bg: Color::Ansi(AnsiColor::Red),
             header_fg: Color::Ansi(AnsiColor::Cyan),
-            header_bg: Color::Rgb(RgbColor(10, 16, 20)),
+            header_bg: Color::Ansi(AnsiColor::Cyan),
         }
     }
 }

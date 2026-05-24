@@ -246,61 +246,45 @@ mod tests {
     }
 
     #[test]
-    fn dark_truecolor_add_bg_is_rgb() {
+    fn dark_add_bg_is_ansi_green() {
         let bg = diff_add_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert!(matches!(
-            bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(25, 45, 35))
-        ));
+        assert_eq!(bg, anstyle::Color::Ansi(anstyle::AnsiColor::Green));
     }
 
     #[test]
-    fn dark_truecolor_del_bg_is_rgb() {
+    fn dark_del_bg_is_ansi_red() {
         let bg = diff_del_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert!(matches!(
-            bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(90, 40, 40))
-        ));
+        assert_eq!(bg, anstyle::Color::Ansi(anstyle::AnsiColor::Red));
     }
 
     #[test]
-    fn light_truecolor_add_bg_is_accessible() {
+    fn light_add_bg_is_bright_green() {
         let bg = diff_add_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert!(matches!(
-            bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(215, 240, 215))
-        ));
+        assert_eq!(bg, anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen));
     }
 
     #[test]
-    fn light_truecolor_del_bg_is_accessible() {
+    fn light_del_bg_is_bright_red() {
         let bg = diff_del_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert!(matches!(
-            bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(255, 235, 235))
-        ));
+        assert_eq!(bg, anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed));
     }
 
     #[test]
-    fn dark_256_uses_indexed_colors() {
-        let add = diff_add_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
-        let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
-        assert!(matches!(
-            add,
-            anstyle::Color::Ansi256(anstyle::Ansi256Color(22))
-        ));
-        assert!(matches!(
-            del,
-            anstyle::Color::Ansi256(anstyle::Ansi256Color(52))
-        ));
-    }
-
-    #[test]
-    fn dark_ansi16_uses_named_colors() {
-        let add = diff_add_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
-        let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
-        assert_eq!(add, anstyle::Color::Ansi(anstyle::AnsiColor::Green));
-        assert_eq!(del, anstyle::Color::Ansi(anstyle::AnsiColor::Red));
+    fn all_levels_use_same_ansi_colors() {
+        for level in [
+            DiffColorLevel::TrueColor,
+            DiffColorLevel::Ansi256,
+            DiffColorLevel::Ansi16,
+        ] {
+            assert_eq!(
+                diff_add_bg(DiffTheme::Dark, level),
+                anstyle::Color::Ansi(anstyle::AnsiColor::Green)
+            );
+            assert_eq!(
+                diff_del_bg(DiffTheme::Dark, level),
+                anstyle::Color::Ansi(anstyle::AnsiColor::Red)
+            );
+        }
     }
 
     #[test]
@@ -383,9 +367,10 @@ mod tests {
             style_line_bg(DiffLineType::Insert, style_context),
             RatatuiStyle::default().bg(RatatuiColor::Indexed(22))
         );
+        // Fallback is now standard ANSI red instead of custom 256-color
         assert_eq!(
             style_line_bg(DiffLineType::Delete, style_context),
-            RatatuiStyle::default().bg(RatatuiColor::Indexed(52))
+            RatatuiStyle::default().bg(RatatuiColor::Red)
         );
     }
 
@@ -438,9 +423,10 @@ mod tests {
             content_background(DiffLineType::Insert, style_context),
             Some(RatatuiColor::Rgb(12, 34, 56))
         );
+        // Fallback is now standard ANSI red instead of custom RGB
         assert_eq!(
             content_background(DiffLineType::Delete, style_context),
-            Some(RatatuiColor::Rgb(90, 40, 40))
+            Some(RatatuiColor::Red)
         );
     }
 }
