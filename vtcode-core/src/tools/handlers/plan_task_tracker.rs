@@ -417,17 +417,18 @@ fn parse_index_path(value: &str) -> Result<Vec<usize>> {
         bail!("index_path cannot be empty");
     }
 
-    let mut out = Vec::new();
-    for token in trimmed.split('.') {
-        let parsed = token
-            .parse::<usize>()
-            .with_context(|| format!("Invalid index component '{}'", token))?;
-        if parsed == 0 {
-            bail!("index_path components must be >= 1");
-        }
-        out.push(parsed);
-    }
-    Ok(out)
+    trimmed
+        .split('.')
+        .map(|token| {
+            let parsed = token
+                .parse::<usize>()
+                .with_context(|| format!("Invalid index component '{}'", token))?;
+            if parsed == 0 {
+                bail!("index_path components must be >= 1");
+            }
+            Ok(parsed)
+        })
+        .collect()
 }
 
 fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {

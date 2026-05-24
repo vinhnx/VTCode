@@ -41,6 +41,7 @@ impl TraceStore {
     }
 
     /// Ensure the trace storage directory exists.
+    #[must_use = "trace directory creation failure is lost"]
     pub fn ensure_dir(&self) -> Result<()> {
         ensure_dir_exists_sync(&self.base_dir)
             .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
@@ -50,6 +51,7 @@ impl TraceStore {
     /// Write a trace record to storage.
     ///
     /// The filename is based on the trace ID or git revision if available.
+    #[must_use = "trace writing failure goes undetected"]
     pub fn write_trace(&self, trace: &TraceRecord) -> Result<PathBuf> {
         self.ensure_dir()?;
 
@@ -259,8 +261,8 @@ impl TraceIndex {
     }
 
     /// Get trace filenames for a file path.
-    pub fn get_traces_for_file(&self, path: &str) -> Option<&Vec<String>> {
-        self.files.get(path)
+    pub fn get_traces_for_file(&self, path: &str) -> Option<&[String]> {
+        self.files.get(path).map(|v| v.as_slice())
     }
 }
 

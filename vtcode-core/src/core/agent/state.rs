@@ -184,23 +184,21 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
     }
 
     // Find missing outputs (calls without corresponding responses)
-    let mut missing_outputs = Vec::new();
-    for call_id in call_map.keys() {
-        if !output_ids.contains(call_id) {
-            missing_outputs.push(MissingOutput {
-                call_id: ToolCallId(call_id.clone()),
-                tool_name: "unknown".to_string(),
-            });
-        }
-    }
+    let missing_outputs: Vec<_> = call_map
+        .keys()
+        .filter(|call_id| !output_ids.contains(*call_id))
+        .map(|call_id| MissingOutput {
+            call_id: ToolCallId(call_id.clone()),
+            tool_name: "unknown".to_string(),
+        })
+        .collect();
 
     // Find orphan outputs (responses without matching calls)
-    let mut orphan_outputs = Vec::new();
-    for output_id in &output_ids {
-        if !call_map.contains_key(output_id) {
-            orphan_outputs.push(ToolCallId(output_id.clone()));
-        }
-    }
+    let orphan_outputs: Vec<_> = output_ids
+        .iter()
+        .filter(|output_id| !call_map.contains_key(*output_id))
+        .map(|output_id| ToolCallId(output_id.clone()))
+        .collect();
 
     HistoryValidationReport {
         missing_outputs,

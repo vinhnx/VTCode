@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -301,8 +301,20 @@ impl PluginManager {
 
     /// Load a plugin manifest from a marketplace.json or plugin.json path.
     async fn load_plugin_manifest(&self, manifest_path: &Path) -> Result<DiscoveredPluginInfo> {
-        let content = tokio::fs::read_to_string(manifest_path).await?;
-        let manifest: PluginManifest = serde_json::from_str(&content)?;
+        let content = tokio::fs::read_to_string(manifest_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to read plugin manifest at {}",
+                    manifest_path.display()
+                )
+            })?;
+        let manifest: PluginManifest = serde_json::from_str(&content).with_context(|| {
+            format!(
+                "failed to parse plugin manifest at {}",
+                manifest_path.display()
+            )
+        })?;
 
         Ok(DiscoveredPluginInfo {
             name: manifest.name.clone(),

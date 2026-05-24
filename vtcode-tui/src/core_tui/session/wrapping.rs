@@ -14,7 +14,7 @@ static PRESERVED_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>\[\]{}|^]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(/[^\s<>\[\]{}|^]*)?|localhost:\d+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?|`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'|(?:\./|\../|~/|/)[^\s<>\[\]{}|^]+|(?:[A-Za-z]:[\\/][^\s<>\[\]{}|^]+)|(?:[A-Za-z0-9._-]+[\\/][^\s<>\[\]{}|^]+)"#,
     )
-    .unwrap()
+    .expect("invalid URL/path token regex")
 });
 
 /// Check if text contains a preserved URL/path token.

@@ -247,10 +247,12 @@ fn generate_call_id() -> String {
 
     let result = hasher.finalize();
     // Use first 12 bytes (24 hex chars) for a shorter but still unique ID
-    result[..12].iter().fold(String::with_capacity(24), |mut output, b| {
-        let _ = std::fmt::write(&mut output, format_args!("{:02x}", b));
-        output
-    })
+    result[..12]
+        .iter()
+        .fold(String::with_capacity(24), |mut output, b| {
+            let _ = std::fmt::write(&mut output, format_args!("{:02x}", b));
+            output
+        })
 }
 
 /// Spool large output to a temporary file if it exceeds the threshold

@@ -106,7 +106,7 @@ impl TranscriptReviewState {
             };
             let line = self
                 .line_text_at(row)
-                .map_or_else(String::new, Clone::clone);
+                .map_or_else(String::new, str::to_string);
             visible.push(Line::styled(line, style));
         }
 
@@ -321,7 +321,7 @@ impl TranscriptReviewState {
         self.total_lines = current_offset;
     }
 
-    fn line_text_at(&self, row: usize) -> Option<&String> {
+    fn line_text_at(&self, row: usize) -> Option<&str> {
         if row >= self.total_lines {
             return None;
         }
@@ -333,7 +333,7 @@ impl TranscriptReviewState {
         };
         let message = self.messages.get(message_index)?;
         let local_index = row.saturating_sub(self.row_offsets[message_index]);
-        message.lines.get(local_index)
+        message.lines.get(local_index).map(String::as_str)
     }
 
     fn current_match_line(&self) -> Option<usize> {

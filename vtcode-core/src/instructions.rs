@@ -203,7 +203,7 @@ impl ExclusionMatcher {
         home_dir: Option<&Path>,
         raw_patterns: &[String],
     ) -> Result<Self> {
-        let mut patterns = Vec::new();
+        let mut patterns = Vec::with_capacity(raw_patterns.len());
         for raw in raw_patterns {
             let trimmed = raw.trim();
             if trimmed.is_empty() {

@@ -1,6 +1,6 @@
 use super::*;
 use std::collections::BTreeMap;
-use std::sync::LazyLock;
+use vtcode_commons::env_lock;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
@@ -8,36 +8,10 @@ use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
 
-static ENV_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
-
-#[expect(
-    unsafe_code,
-    reason = "Rust 2024 makes process-environment mutation unsafe; this test serializes access through ENV_LOCK."
-)]
-fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
-    // SAFETY: prompt refinement tests take `ENV_LOCK` before mutating the process environment and
-    // restore the test-only variable before returning.
-    unsafe {
-        std::env::set_var(key, value);
-    }
-}
-
-#[expect(
-    unsafe_code,
-    reason = "Rust 2024 makes process-environment mutation unsafe; this test serializes access through ENV_LOCK."
-)]
-fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
-    // SAFETY: prompt refinement tests take `ENV_LOCK` before mutating the process environment and
-    // restore the test-only variable before returning.
-    unsafe {
-        std::env::remove_var(key);
-    }
-}
-
 #[tokio::test]
 async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
-    let _env_guard = ENV_LOCK.lock().await;
-    set_env_var("VTCODE_PROMPT_REFINER_STUB", "1");
+    let env_guard = env_lock::lock();
+    env_guard.set_var("VTCODE_PROMPT_REFINER_STUB", "1");
 
     let cfg = CoreAgentConfig {
         model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
@@ -70,7 +44,7 @@ async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
 
     assert!(out.starts_with("[REFINED] "));
 
-    remove_env_var("VTCODE_PROMPT_REFINER_STUB");
+    env_guard.remove_var("VTCODE_PROMPT_REFINER_STUB");
 }
 
 #[test]

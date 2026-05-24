@@ -379,28 +379,25 @@ static DATA_IMAGE_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 fn find_data_url_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Vec<DataUrlMatch> {
-    let mut matches = Vec::new();
-    for capture in DATA_IMAGE_URL_REGEX.captures_iter(input) {
-        let Some(data_match) = capture.get(1) else {
-            continue;
-        };
-        let start = data_match.start();
-        let end = data_match.end();
-        if overlaps_range(start, end, protected_ranges) {
-            continue;
-        }
-        let raw = data_match.as_str();
-        let Some((mime_type, data)) = parse_data_image_url(raw) else {
-            continue;
-        };
-        matches.push(DataUrlMatch {
-            start,
-            end,
-            mime_type,
-            data,
-        });
-    }
-    matches
+    DATA_IMAGE_URL_REGEX
+        .captures_iter(input)
+        .filter_map(|capture| {
+            let data_match = capture.get(1)?;
+            let start = data_match.start();
+            let end = data_match.end();
+            if overlaps_range(start, end, protected_ranges) {
+                return None;
+            }
+            let raw = data_match.as_str();
+            let (mime_type, data) = parse_data_image_url(raw)?;
+            Some(DataUrlMatch {
+                start,
+                end,
+                mime_type,
+                data,
+            })
+        })
+        .collect()
 }
 
 static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {

@@ -160,8 +160,8 @@ fn collect_search_terms(path: &str, value: &TomlValue, parts: &mut Vec<String>) 
     }
 }
 
-pub(super) fn sorted_table_keys(table: &toml::map::Map<String, TomlValue>) -> Vec<&String> {
-    let mut keys: Vec<&String> = table.keys().collect();
+pub(super) fn sorted_table_keys(table: &toml::map::Map<String, TomlValue>) -> Vec<&str> {
+    let mut keys: Vec<&str> = table.keys().map(|s| s.as_str()).collect();
     keys.sort();
     keys
 }

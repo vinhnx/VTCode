@@ -365,32 +365,16 @@ mod tests {
     #[test]
     #[cfg(unix)]
     #[serial]
-    #[expect(unsafe_code)]
     fn create_env_preserves_non_utf8_path() {
+        let env_guard = vtcode_commons::env_lock::lock();
         let original_path = std::env::var_os("PATH");
         let non_utf8_path = OsString::from_vec(b"/tmp/alpha:\xFFbeta".to_vec());
 
-        // SAFETY: this test runs serially and restores PATH before returning.
-        unsafe {
-            std::env::set_var("PATH", &non_utf8_path);
-        }
+        env_guard.set_var("PATH", &non_utf8_path);
 
         let env = create_env_for_mcp_server(None);
 
-        match original_path {
-            Some(value) => {
-                // SAFETY: this test runs serially and restores the previous PATH value.
-                unsafe {
-                    std::env::set_var("PATH", value);
-                }
-            }
-            None => {
-                // SAFETY: this test runs serially and restores PATH to the original unset state.
-                unsafe {
-                    std::env::remove_var("PATH");
-                }
-            }
-        }
+        env_guard.restore_var("PATH", original_path);
 
         assert_eq!(env.get(&OsString::from("PATH")), Some(&non_utf8_path));
     }

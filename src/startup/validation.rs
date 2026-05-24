@@ -225,47 +225,12 @@ fn check_ripgrep_availability() {
 }
 
 #[cfg(test)]
-#[expect(
-    unsafe_code,
-    reason = "These validation tests serialize environment mutation with workspace_guard, but Rust 2024 still requires unsafe set_var/remove_var calls."
-)]
 mod tests {
     use super::*;
     use assert_fs::TempDir;
     use std::env;
-    use std::sync::{Mutex, OnceLock};
+    use vtcode_commons::env_lock;
     use vtcode_core::config::loader::ConfigBuilder;
-
-    fn workspace_guard() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("workspace lock")
-    }
-
-    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: validation tests hold `workspace_guard()` before mutating process-global
-        // environment variables, so these mutations are serialized.
-        unsafe {
-            env::set_var(key, value);
-        }
-    }
-
-    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: validation tests hold `workspace_guard()` before mutating process-global
-        // environment variables, so these mutations are serialized.
-        unsafe {
-            env::remove_var(key);
-        }
-    }
-
-    fn restore_env_var<T: AsRef<std::ffi::OsStr>>(key: &str, previous: Option<T>) {
-        if let Some(previous) = previous {
-            set_env_var(key, previous);
-        } else {
-            remove_env_var(key);
-        }
-    }
 
     #[test]
     #[expect(
@@ -273,7 +238,7 @@ mod tests {
         reason = "test function, assertions are OK"
     )]
     fn resolves_current_dir_when_none() -> Result<()> {
-        let _guard = workspace_guard();
+        let _env = env_lock::lock();
         let original_cwd = env::current_dir()?;
         let temp_dir = TempDir::new()?;
         env::set_current_dir(temp_dir.path())?;
@@ -287,7 +252,7 @@ mod tests {
 
     #[test]
     fn resolves_relative_workspace_path() -> Result<()> {
-        let _guard = workspace_guard();
+        let _env = env_lock::lock();
         let original_cwd = env::current_dir()?;
         let temp_dir = TempDir::new()?;
         let workspace_dir = temp_dir.path().join("project");
@@ -370,10 +335,10 @@ mod tests {
 
     #[test]
     fn applies_inline_overrides_to_config() -> Result<()> {
-        let _guard = workspace_guard();
+        let env_guard = env_lock::lock();
         let temp_dir = TempDir::new()?;
-        let previous_config_dir = env::var("VTCODE_CONFIG").ok();
-        set_env_var("VTCODE_CONFIG", temp_dir.path());
+        let previous_config_dir = env::var_os("VTCODE_CONFIG");
+        env_guard.set_var("VTCODE_CONFIG", temp_dir.path());
 
         let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
@@ -385,7 +350,7 @@ mod tests {
 
         assert_eq!(config.agent.provider, "openai");
 
-        restore_env_var("VTCODE_CONFIG", previous_config_dir);
+        env_guard.restore_var("VTCODE_CONFIG", previous_config_dir);
         Ok(())
     }
 }

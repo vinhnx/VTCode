@@ -743,7 +743,7 @@ impl Tool for ListSkillsTool {
         });
 
         // Group by variety for "better" discovery
-        let mut grouped = HashMap::new();
+        let mut grouped = HashMap::with_capacity(skill_list.len());
         for skill in &skill_list {
             let variety = skill
                 .get("variety")

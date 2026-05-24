@@ -56,11 +56,13 @@ impl SessionState {
     }
 
     /// Save session to disk.
+    #[must_use = "session save silently drops data"]
     pub fn save(&self, path: &Path) -> Result<()> {
         write_json_file_sync(path, self)
     }
 
     /// Load session from disk.
+    #[must_use = "session load failure goes undetected"]
     pub fn load(path: &Path) -> Result<Self> {
         read_json_file_sync(path)
     }
