@@ -23,6 +23,7 @@ use tokio::task;
 use tracing::debug;
 #[cfg(test)]
 use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig, supports_responses_chaining};
 
 use crate::agent::runloop::unified::extract_action_from_messages;
@@ -255,6 +256,19 @@ pub(crate) async fn execute_llm_request(
             &turn_snapshot.provider_name,
             turn_snapshot.capabilities.responses_compaction,
         );
+
+        // DeepSeek: preemptively disable thinking for post-tool follow-ups.
+        // Thinking mode + tool messages causes API errors because DeepSeek
+        // expects `reasoning_content` in all assistant messages when thinking
+        // is enabled, but serialized tool results don't include it.
+        if has_post_tool_context
+            && turn_snapshot.provider_name == "DeepSeek"
+            && request
+                .reasoning_effort
+                .is_some_and(|e| e != ReasoningEffortLevel::None)
+        {
+            request.reasoning_effort = Some(ReasoningEffortLevel::None);
+        }
 
         let step_result = if use_streaming {
             let mut stream_bridge = HarnessStreamingBridge::new(
