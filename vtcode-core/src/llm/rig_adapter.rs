@@ -148,14 +148,19 @@ impl RigProviderCapabilities {
                 | ReasoningEffortLevel::XHigh
                 | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
             },
+            // DeepSeek only accepts `high` and `max` for reasoning_effort.
+            // Per DeepSeek docs: low/medium → high, xhigh → max.
             Provider::DeepSeek => match effort {
                 ReasoningEffortLevel::None => None,
-                ReasoningEffortLevel::Minimal => Some(json!({ "reasoning_effort": "minimal" })),
-                ReasoningEffortLevel::Low => Some(json!({ "reasoning_effort": "low" })),
-                ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
-                ReasoningEffortLevel::High
-                | ReasoningEffortLevel::XHigh
-                | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
+                ReasoningEffortLevel::Minimal
+                | ReasoningEffortLevel::Low
+                | ReasoningEffortLevel::Medium
+                | ReasoningEffortLevel::High => {
+                    Some(json!({"thinking": {"type": "enabled"}, "reasoning_effort": "high"}))
+                }
+                ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => {
+                    Some(json!({"thinking": {"type": "enabled"}, "reasoning_effort": "max"}))
+                }
             },
             Provider::Minimax => None,
             Provider::Ollama => None,

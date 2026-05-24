@@ -126,8 +126,26 @@ impl DeepSeekProvider {
         }
     }
 
+    #[must_use]
+    #[inline]
+    fn is_thinking_enabled(request: &LLMRequest) -> bool {
+        request
+            .reasoning_effort
+            .is_some_and(|e| e != crate::config::types::ReasoningEffortLevel::None)
+    }
+
+    fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
+        serde_json::Number::from_f64(value as f64).ok_or_else(|| LLMError::InvalidRequest {
+            message: "invalid numeric parameter value (NaN or infinity)".to_string(),
+            metadata: None,
+        })
+    }
+
     fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut payload = Map::new();
+        // est. 8–12 keys: model, messages, system (cond), max_tokens (cond),
+        // temperature/top_p (cond), stream (cond), tools (cond), tool_choice (cond),
+        // thinking (cond), user_id (cond)
+        let mut payload = Map::with_capacity(12);
 
         payload.insert("model".to_owned(), Value::String(request.model.clone()));
         payload.insert(
@@ -149,20 +167,33 @@ impl DeepSeekProvider {
             );
         }
 
-        if let Some(temperature) = request.temperature {
-            payload.insert(
-                "temperature".to_owned(),
-                Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest {
-                        message: "Invalid temperature value".to_string(),
-                        metadata: None,
-                    },
-                )?),
-            );
+        let thinking_enabled = Self::is_thinking_enabled(request);
+
+        // Thinking mode does not support temperature, top_p, presence_penalty,
+        // or frequency_penalty. Suppress them to avoid wasted payload bytes.
+        if !thinking_enabled {
+            if let Some(temperature) = request.temperature {
+                payload.insert(
+                    "temperature".to_owned(),
+                    Value::Number(Self::float_to_json_number(temperature)?),
+                );
+            }
+
+            if let Some(top_p) = request.top_p {
+                payload.insert(
+                    "top_p".to_owned(),
+                    Value::Number(Self::float_to_json_number(top_p)?),
+                );
+            }
         }
 
         if request.stream {
             payload.insert("stream".to_string(), Value::Bool(true));
+            // Request usage info in the final streaming chunk.
+            payload.insert(
+                "stream_options".to_string(),
+                serde_json::json!({"include_usage": true}),
+            );
         }
 
         if let Some(tools) = &request.tools
@@ -198,7 +229,37 @@ impl DeepSeekProvider {
             }
         }
 
+        // Pass through user_id for KV cache isolation and traffic management.
+        if let Some(meta) = &request.metadata {
+            if let Some(user_id) = meta.get("user_id").and_then(|v| v.as_str()) {
+                payload.insert("user_id".to_owned(), Value::String(user_id.to_owned()));
+            }
+        }
+
         Ok(Value::Object(payload))
+    }
+
+    async fn send_request(
+        &self,
+        payload: &Value,
+    ) -> Result<reqwest::Response, LLMError> {
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        self.http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(payload)
+            .send()
+            .await
+            .map_err(|e| {
+                LLMError::Network {
+                    message: error_display::format_llm_error(
+                        PROVIDER_NAME,
+                        &format!("network error: {}", e),
+                    ),
+                    metadata: None,
+                }
+            })
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
@@ -270,36 +331,16 @@ impl LLMProvider for DeepSeekProvider {
         let model = request.model.clone();
 
         let payload = self.convert_to_deepseek_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
+        let response = self.send_request(&payload).await?;
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 
         let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", e),
-            );
             LLMError::Provider {
-                message: formatted_error,
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("failed to parse response: {}", e),
+                ),
                 metadata: None,
             }
         })?;
@@ -317,26 +358,7 @@ impl LLMProvider for DeepSeekProvider {
         let model = request.model.clone();
 
         let payload = self.convert_to_deepseek_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
+        let response = self.send_request(&payload).await?;
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 

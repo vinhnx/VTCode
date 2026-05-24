@@ -120,7 +120,7 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 #[inline]
 pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
-        error_display::format_llm_error(provider, &format!("Network error: {}", error));
+        error_display::format_llm_error(provider, &format!("network error: {}", error));
     LLMError::Network {
         message: formatted_error,
         metadata: None,
@@ -131,7 +131,7 @@ pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> L
 #[inline]
 pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
-        error_display::format_llm_error(provider, &format!("Failed to parse response: {}", error));
+        error_display::format_llm_error(provider, &format!("failed to parse response: {}", error));
     LLMError::Provider {
         message: formatted_error,
         metadata: None,
@@ -141,7 +141,7 @@ pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLM
 /// Format HTTP error with status code and message
 #[inline]
 pub fn format_http_error(provider: &str, status: reqwest::StatusCode, error_text: &str) -> String {
-    error_display::format_llm_error(provider, &format!("HTTP {}: {}", status, error_text))
+    error_display::format_llm_error(provider, &format!("http {}: {}", status, error_text))
 }
 
 /// Parse standard API error response body into LLMError.
@@ -189,6 +189,36 @@ fn parse_api_error_with_metadata(
                 Some(body.to_string()),
             )),
         },
+        402 => LLMError::InvalidRequest {
+            message: error_display::format_llm_error(
+                provider_name,
+                &format!("insufficient balance: {}", error_message),
+            ),
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("insufficient_balance".to_string()),
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
+                Some(body.to_string()),
+            )),
+        },
+        422 => LLMError::InvalidRequest {
+            message: error_display::format_llm_error(
+                provider_name,
+                &format!("invalid parameters: {}", error_message),
+            ),
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("invalid_parameters".to_string()),
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
+                Some(body.to_string()),
+            )),
+        },
         429 => LLMError::RateLimit {
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
@@ -214,7 +244,7 @@ fn parse_api_error_with_metadata(
         400 => LLMError::InvalidRequest {
             message: error_display::format_llm_error(
                 provider_name,
-                &format!("Invalid request: {}", error_message),
+                &format!("invalid request: {}", error_message),
             ),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
@@ -229,7 +259,7 @@ fn parse_api_error_with_metadata(
         _ => LLMError::Provider {
             message: error_display::format_llm_error(
                 provider_name,
-                &format!("HTTP {}: {}", status, error_message),
+                &format!("http {}: {}", status, error_message),
             ),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
@@ -248,12 +278,12 @@ fn authentication_error_message(provider_name: &str, error_message: &str) -> Str
     let trimmed = error_message.trim();
     if provider_name.eq_ignore_ascii_case("Moonshot") {
         return format!(
-            "Authentication failed: {}. Use a MOONSHOT_API_KEY from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API",
+            "authentication failed: {}. use a MOONSHOT_API_KEY from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API",
             trimmed
         );
     }
 
-    format!("Authentication failed: {}", trimmed)
+    format!("authentication failed: {}", trimmed)
 }
 
 /// Extract the most human-readable error message from a provider's JSON error body.
