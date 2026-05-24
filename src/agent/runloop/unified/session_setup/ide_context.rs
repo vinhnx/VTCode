@@ -472,10 +472,6 @@ fn compute_snapshot_digest(snapshot: Option<&EditorContextSnapshot>) -> Option<u
 }
 
 #[cfg(test)]
-#[expect(
-    unsafe_code,
-    reason = "IDE context tests mutate environment variables under #[serial], but Rust 2024 still requires unsafe set_var/remove_var calls."
-)]
 mod tests {
     use super::{
         IdeContextBridge, VSCODE_COMPATIBLE_JSON_FILE, configured_snapshot,
@@ -484,28 +480,12 @@ mod tests {
         read_vscode_compatible_snapshot_from_roots, status_line_editor_label, tui_header_summary,
     };
     use serial_test::serial;
-    use std::env;
     use std::fs;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
+    use vtcode_commons::env_lock::{remove_var as remove_env_var, set_var as set_env_var};
     use vtcode_config::IdeContextConfig;
     use vtcode_core::ide_context::{EditorContextSnapshot, IDE_CONTEXT_ENV_VAR};
-
-    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: the env-mutating tests in this module are marked `#[serial]`, so these process
-        // environment updates do not race with one another.
-        unsafe {
-            env::set_var(key, value);
-        }
-    }
-
-    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: the env-mutating tests in this module are marked `#[serial]`, so these process
-        // environment updates do not race with one another.
-        unsafe {
-            env::remove_var(key);
-        }
-    }
 
     #[test]
     fn preferred_language_uses_snapshot_before_workspace_fallback() {

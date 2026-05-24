@@ -39,6 +39,7 @@ impl ModelsDatabase {
     }
 
     /// Load models database from docs/models.json
+    #[must_use = "models database load failure is silently ignored"]
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = read_file_with_context_sync(path, "models database")?;
 
@@ -121,6 +122,7 @@ impl ConfigValidator {
     }
 
     /// Validate entire configuration
+    #[must_use = "validation errors go unnoticed"]
     pub fn validate(&self, config: &VTCodeConfig) -> Result<ValidationResult> {
         let mut result = ValidationResult::default();
         let managed_auth_provider = configured_managed_auth_provider(config);

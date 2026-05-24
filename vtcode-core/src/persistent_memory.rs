@@ -1391,7 +1391,9 @@ async fn read_existing_memory_lines(directory: &Path) -> Result<BTreeSet<String>
             if path.extension().and_then(|v| v.to_str()) != Some("md") {
                 continue;
             }
-            let content = tokio::fs::read_to_string(&path).await?;
+            let content = tokio::fs::read_to_string(&path)
+                .await
+                .with_context(|| format!("failed to read note file at {}", path.display()))?;
             for line in content.lines() {
                 if let Some((_, fact)) = parse_fact_line(line) {
                     lines.insert(normalize_whitespace(&fact).to_ascii_lowercase());

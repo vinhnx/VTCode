@@ -201,33 +201,14 @@ impl StatusLineGit {
 }
 
 #[cfg(test)]
-#[expect(
-    unsafe_code,
-    reason = "Status line payload tests mutate IDE context environment variables under #[serial], but Rust 2024 still requires unsafe set_var/remove_var calls."
-)]
 mod tests {
     use super::StatusLineCommandPayload;
     use serde_json::Value;
     use serial_test::serial;
-    use std::{env, fs};
+    use std::fs;
     use tempfile::TempDir;
+    use vtcode_commons::env_lock::{remove_var as remove_env_var, set_var as set_env_var};
     use vtcode_core::ide_context::{IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR};
-
-    fn set_env_var(key: impl AsRef<std::ffi::OsStr>, value: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: all env-mutating tests in this module are marked `#[serial]`, so these process
-        // environment updates do not race with one another.
-        unsafe {
-            env::set_var(key, value);
-        }
-    }
-
-    fn remove_env_var(key: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: all env-mutating tests in this module are marked `#[serial]`, so these process
-        // environment updates do not race with one another.
-        unsafe {
-            env::remove_var(key);
-        }
-    }
 
     #[test]
     #[serial]

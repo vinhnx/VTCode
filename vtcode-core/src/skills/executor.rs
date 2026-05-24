@@ -16,7 +16,7 @@
 use crate::config::VTCodeConfig;
 use crate::config::models::ModelId;
 use crate::core::agent::runner::{AgentRunner, RunnerSettings};
-use crate::core::agent::task::{ContextItem, Task};
+use crate::core::agent::task::Task;
 use crate::core::agent::types::AgentType;
 use crate::core::loop_detector::LoopDetector;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
@@ -540,9 +540,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
         );
         task.instructions = Some(skill.instructions.clone());
 
-        let results = runner
-            .execute_task(&task, &Vec::<ContextItem>::new())
-            .await?;
+        let results = runner.execute_task(&task, &[]).await?;
         let mut artifact_paths = results.modified_files.clone();
         let handoff_paths = blocked_handoff_paths(&results.thread_events);
         for path in handoff_paths {

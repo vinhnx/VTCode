@@ -183,7 +183,7 @@ fn append_table_items(
         };
         let path = parent_path
             .map(|parent| format!("{parent}.{key}"))
-            .unwrap_or_else(|| key.clone());
+            .unwrap_or_else(|| key.to_string());
         if HIDDEN_SETTINGS_PATHS.contains(&path.as_str()) {
             continue;
         }

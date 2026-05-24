@@ -148,6 +148,7 @@ impl UserConfirmation {
     }
 
     /// Simple yes/no confirmation with custom message
+    #[must_use = "confirmation action failure is silently ignored"]
     pub fn confirm_action(message: &str, default: bool) -> Result<bool> {
         Confirm::new()
             .with_prompt(message)

@@ -6,6 +6,8 @@ use anyhow::{Context, Result};
 use clap::FromArgMatches;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;
+#[cfg(target_os = "macos")]
+use vtcode_commons::env_lock;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_tui::panic_hook;
@@ -74,16 +76,11 @@ fn main() -> std::process::ExitCode {
 }
 
 #[cfg(target_os = "macos")]
-#[expect(
-    unsafe_code,
-    reason = "Rust 2024 requires unsafe process-environment mutation, and VT Code clears these macOS malloc variables before starting any worker threads."
-)]
 fn remove_runtime_env_var(key: &str) {
-    // SAFETY: this runs on the dedicated main thread before any Tokio runtime or worker threads
-    // exist, so there is no concurrent environment access yet.
-    unsafe {
-        std::env::remove_var(key);
-    }
+    // Delegates to the process-wide env lock so this mutation cannot race with any
+    // other VT Code env mutator, even though it runs on the dedicated main thread
+    // before any worker threads exist.
+    env_lock::remove_var(key);
 }
 
 fn bootstrap_main() -> Result<BootstrapOutcome> {

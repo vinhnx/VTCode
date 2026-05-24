@@ -324,9 +324,18 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
             count += c;
             size += s;
         } else {
-            fs::copy(&src_path, &dst_path)?;
+            fs::copy(&src_path, &dst_path).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    src_path.display(),
+                    dst_path.display()
+                )
+            })?;
             count += 1;
-            size += entry.metadata()?.len();
+            size += entry
+                .metadata()
+                .with_context(|| format!("failed to stat {}", src_path.display()))?
+                .len();
         }
     }
 
@@ -372,8 +381,12 @@ fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Res
     }
     entry.latest_version = version.to_string();
 
-    fs::create_dir_all(store_path)?;
-    fs::write(&index_path, serde_json::to_string_pretty(&index)?)?;
+    fs::create_dir_all(store_path)
+        .with_context(|| format!("failed to create store dir at {}", store_path.display()))?;
+    let index_json = serde_json::to_string_pretty(&index)
+        .with_context(|| format!("failed to serialize index for {}", skill_name))?;
+    fs::write(&index_path, &index_json)
+        .with_context(|| format!("failed to write index at {}", index_path.display()))?;
 
     debug!("Updated skill index at {}", index_path.display());
     Ok(())

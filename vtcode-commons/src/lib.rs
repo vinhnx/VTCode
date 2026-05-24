@@ -22,6 +22,7 @@ pub mod diff_paths;
 pub mod diff_preview;
 pub mod diff_theme;
 pub mod editor;
+pub mod env_lock;
 pub mod error_category;
 pub mod errors;
 pub mod formatting;

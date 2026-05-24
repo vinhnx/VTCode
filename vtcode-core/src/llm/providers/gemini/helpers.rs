@@ -152,7 +152,7 @@ impl GeminiProvider {
             // configuration usage even when implicit mode is active.
         }
 
-        let mut call_map: HashMap<String, String> = HashMap::new();
+        let mut call_map: HashMap<String, String> = HashMap::with_capacity(request.messages.len());
         for message in &request.messages {
             if message.role == MessageRole::Assistant
                 && let Some(tool_calls) = &message.tool_calls
@@ -1276,7 +1276,7 @@ fn build_interaction_turns(
     messages: &[Message],
     full_messages: &[Message],
 ) -> Result<Vec<InteractionTurn>, LLMError> {
-    let mut call_map: HashMap<String, String> = HashMap::new();
+    let mut call_map: HashMap<String, String> = HashMap::with_capacity(full_messages.len());
     for message in full_messages {
         if message.role == MessageRole::Assistant
             && let Some(tool_calls) = &message.tool_calls

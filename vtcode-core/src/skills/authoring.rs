@@ -3,7 +3,7 @@
 //! Implements the Agent Skills specification for creating, validating,
 //! and packaging skills that extend VT Code's capabilities.
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -79,7 +79,12 @@ impl SkillAuthor {
         }
 
         // Create skill directory
-        fs::create_dir_all(&skill_dir)?;
+        fs::create_dir_all(&skill_dir).with_context(|| {
+            format!(
+                "failed to create skill directory at {}",
+                skill_dir.display()
+            )
+        })?;
         info!("Created skill directory: {}", skill_dir.display());
 
         // Create SKILL.md
@@ -88,7 +93,9 @@ impl SkillAuthor {
             "Describe the workflow, routing triggers, and expected artifact for this skill.",
         );
 
-        fs::write(skill_dir.join("SKILL.md"), skill_content)?;
+        let skill_md_path = skill_dir.join("SKILL.md");
+        fs::write(&skill_md_path, skill_content)
+            .with_context(|| format!("failed to write {}", skill_md_path.display()))?;
         info!("Created SKILL.md");
 
         // Create resource directories with examples
@@ -123,7 +130,8 @@ impl SkillAuthor {
         }
 
         // Read and parse content
-        let content = fs::read_to_string(&skill_md)?;
+        let content = fs::read_to_string(&skill_md)
+            .with_context(|| format!("failed to read {}", skill_md.display()))?;
 
         // Extract frontmatter
         if !content.starts_with("---") {
@@ -259,7 +267,9 @@ impl SkillAuthor {
         // Create zip file
         use zip::ZipWriter;
 
-        let file = fs::File::create(&output_file)?;
+        let file = fs::File::create(&output_file).with_context(|| {
+            format!("failed to create output file at {}", output_file.display())
+        })?;
         let mut zip = ZipWriter::new(file);
 
         // Add all files from skill_dir
@@ -299,18 +309,25 @@ impl SkillAuthor {
 
     fn create_scripts_dir(&self, skill_dir: &Path, skill_name: &str) -> Result<()> {
         let scripts_dir = skill_dir.join("scripts");
-        fs::create_dir(&scripts_dir)?;
+        fs::create_dir(&scripts_dir).with_context(|| {
+            format!("failed to create scripts dir at {}", scripts_dir.display())
+        })?;
 
         let example_script = scripts_dir.join("example.py");
         let content = EXAMPLE_SCRIPT.replace("{skill_name}", skill_name);
-        fs::write(&example_script, content)?;
+        fs::write(&example_script, content)
+            .with_context(|| format!("failed to write {}", example_script.display()))?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&example_script)?.permissions();
+            let mut perms = fs::metadata(&example_script)
+                .with_context(|| format!("failed to stat {}", example_script.display()))?
+                .permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&example_script, perms)?;
+            fs::set_permissions(&example_script, perms).with_context(|| {
+                format!("failed to set permissions on {}", example_script.display())
+            })?;
         }
 
         info!("Created scripts/example.py");
@@ -319,11 +336,17 @@ impl SkillAuthor {
 
     fn create_references_dir(&self, skill_dir: &Path, skill_title: &str) -> Result<()> {
         let references_dir = skill_dir.join("references");
-        fs::create_dir(&references_dir)?;
+        fs::create_dir(&references_dir).with_context(|| {
+            format!(
+                "failed to create references dir at {}",
+                references_dir.display()
+            )
+        })?;
 
         let reference_file = references_dir.join("api_reference.md");
         let content = EXAMPLE_REFERENCE.replace("{skill_title}", skill_title);
-        fs::write(reference_file, content)?;
+        fs::write(&reference_file, content)
+            .with_context(|| format!("failed to write {}", reference_file.display()))?;
 
         info!("Created references/api_reference.md");
         Ok(())
@@ -331,7 +354,8 @@ impl SkillAuthor {
 
     fn create_assets_dir(&self, skill_dir: &Path) -> Result<()> {
         let assets_dir = skill_dir.join("assets");
-        fs::create_dir(&assets_dir)?;
+        fs::create_dir(&assets_dir)
+            .with_context(|| format!("failed to create assets dir at {}", assets_dir.display()))?;
 
         let placeholder = assets_dir.join(".gitkeep");
         fs::write(

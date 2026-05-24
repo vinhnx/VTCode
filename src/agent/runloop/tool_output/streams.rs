@@ -594,8 +594,7 @@ pub(crate) async fn render_stream_section(
                         )?;
                     }
                 } else if apply_line_styles
-                    && let Some(style) =
-                        select_line_style(tool_name, line, git_styles, ls_styles)
+                    && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
                 {
                     render_preview_line(
                         renderer,
@@ -607,15 +606,7 @@ pub(crate) async fn render_stream_section(
                         Some(style),
                     )?;
                 } else {
-                    render_preview_line(
-                        renderer,
-                        line,
-                        None,
-                        None,
-                        false,
-                        fallback_style,
-                        None,
-                    )?;
+                    render_preview_line(renderer, line, None, None, false, fallback_style, None)?;
                 }
             }
         }
