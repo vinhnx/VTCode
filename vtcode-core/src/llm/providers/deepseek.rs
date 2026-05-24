@@ -181,7 +181,12 @@ impl DeepSeekProvider {
         if let Some(effort) = request.reasoning_effort {
             use crate::config::models::Provider;
             use crate::llm::rig_adapter::RigProviderCapabilities;
-            if let Some(reasoning_params) =
+            if effort == crate::config::types::ReasoningEffortLevel::None {
+                payload.insert(
+                    "thinking".to_owned(),
+                    serde_json::json!({"type": "disabled"}),
+                );
+            } else if let Some(reasoning_params) =
                 RigProviderCapabilities::new(Provider::DeepSeek, &request.model)
                     .reasoning_parameters(effort)
             {
