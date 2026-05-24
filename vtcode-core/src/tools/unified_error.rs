@@ -120,7 +120,18 @@ pub struct DebugContext {
 }
 
 impl UnifiedToolError {
+    /// Ensure debug context exists and return a mutable reference.
+    fn debug_context_mut(&mut self) -> &mut DebugContext {
+        self.debug_context.get_or_insert_with(|| DebugContext {
+            tool_name: String::new(),
+            invocation_id: None,
+            attempt: 1,
+            metadata: Vec::new(),
+        })
+    }
+
     /// Create a new unified error
+    #[must_use]
     pub fn new(kind: UnifiedErrorKind, user_message: impl Into<String>) -> Self {
         let severity = match kind {
             UnifiedErrorKind::Timeout
@@ -141,77 +152,59 @@ impl UnifiedToolError {
     }
 
     /// Add debug context
+    #[must_use]
     pub fn with_context(mut self, ctx: DebugContext) -> Self {
         self.debug_context = Some(ctx);
         self
     }
 
     /// Add source error
+    #[must_use]
     pub fn with_source(mut self, err: anyhow::Error) -> Self {
         self.source = Some(err);
         self
     }
 
     /// Add tool name to debug context
+    #[must_use]
     pub fn with_tool_name(mut self, name: &str) -> Self {
-        if let Some(ref mut ctx) = self.debug_context {
-            ctx.tool_name = name.to_string();
-        } else {
-            self.debug_context = Some(DebugContext {
-                tool_name: name.to_string(),
-                invocation_id: None,
-                attempt: 1,
-                metadata: Vec::new(),
-            });
-        }
+        self.debug_context_mut().tool_name = name.to_string();
         self
     }
 
     /// Add invocation ID to debug context
+    #[must_use]
     pub fn with_invocation_id(mut self, id: crate::tools::invocation::ToolInvocationId) -> Self {
-        if let Some(ref mut ctx) = self.debug_context {
-            ctx.invocation_id = Some(id.to_string());
-        } else {
-            self.debug_context = Some(DebugContext {
-                tool_name: String::new(),
-                invocation_id: Some(id.to_string()),
-                attempt: 1,
-                metadata: Vec::new(),
-            });
-        }
+        self.debug_context_mut().invocation_id = Some(id.to_string());
         self
     }
 
     /// Add duration metadata
+    #[must_use]
     pub fn with_duration(mut self, duration: std::time::Duration) -> Self {
-        if let Some(ref mut ctx) = self.debug_context {
-            ctx.metadata
-                .push(("duration_ms".to_string(), duration.as_millis().to_string()));
-        } else {
-            self.debug_context = Some(DebugContext {
-                tool_name: String::new(),
-                invocation_id: None,
-                attempt: 1,
-                metadata: vec![("duration_ms".to_string(), duration.as_millis().to_string())],
-            });
-        }
+        self.debug_context_mut()
+            .metadata
+            .push(("duration_ms".to_string(), duration.as_millis().to_string()));
         self
     }
 
     /// Check if error is retryable
     #[inline]
+    #[must_use]
     pub fn is_retryable(&self) -> bool {
         self.kind.is_retryable() && matches!(self.severity, ErrorSeverity::Transient)
     }
 
     /// Check if this is an LLM argument error (should not count toward circuit breaker)
     #[inline]
+    #[must_use]
     pub fn is_llm_mistake(&self) -> bool {
         self.kind.is_llm_mistake()
     }
 
     /// Return the canonical VT Code error category for this tool error.
     #[inline]
+    #[must_use]
     pub fn category(&self) -> ErrorCategory {
         ErrorCategory::from(self.kind)
     }

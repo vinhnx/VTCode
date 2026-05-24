@@ -272,6 +272,7 @@ pub fn strip_ansi_ascii_only(text: &str) -> String {
 }
 
 /// Detect if text contains unicode characters that need special handling
+#[must_use]
 pub fn contains_unicode(text: &str) -> bool {
     text.bytes().any(|b| b >= 0x80)
 }

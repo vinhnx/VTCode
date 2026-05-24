@@ -589,18 +589,16 @@ impl AgentRunner {
                     let mut fallback_tool_name = None;
                     let mut fallback_args = None;
 
-                    if let Some(prepared_call) = prepared_map.get(&call_id) {
-                        if let Some(fallback) = &prepared_call.prepared.fallback_recommendation {
-                            if let Some((res, f_name, f_args)) = self
-                                .try_execute_fallback(fallback, runtime, agent_prefix, &name)
-                                .await
-                            {
-                                fallback_succeeded = true;
-                                fallback_result = Some(res);
-                                fallback_tool_name = Some(f_name);
-                                fallback_args = Some(f_args);
-                            }
-                        }
+                    if let Some(prepared_call) = prepared_map.get(&call_id)
+                        && let Some(fallback) = &prepared_call.prepared.fallback_recommendation
+                        && let Some((res, f_name, f_args)) = self
+                            .try_execute_fallback(fallback, runtime, agent_prefix, &name)
+                            .await
+                    {
+                        fallback_succeeded = true;
+                        fallback_result = Some(res);
+                        fallback_tool_name = Some(f_name);
+                        fallback_args = Some(f_args);
                     }
 
                     if let (true, Some(res), Some(f_name), Some(f_args)) = (
@@ -767,16 +765,15 @@ impl AgentRunner {
                 let mut fallback_tool_name = None;
                 let mut fallback_args = None;
 
-                if let Some(fallback) = &call.prepared.fallback_recommendation {
-                    if let Some((res, f_name, f_args)) = self
+                if let Some(fallback) = &call.prepared.fallback_recommendation
+                    && let Some((res, f_name, f_args)) = self
                         .try_execute_fallback(fallback, runtime, agent_prefix, &name)
                         .await
-                    {
-                        fallback_succeeded = true;
-                        fallback_result = Some(res);
-                        fallback_tool_name = Some(f_name);
-                        fallback_args = Some(f_args);
-                    }
+                {
+                    fallback_succeeded = true;
+                    fallback_result = Some(res);
+                    fallback_tool_name = Some(f_name);
+                    fallback_args = Some(f_args);
                 }
 
                 if let (true, Some(res), Some(f_name), Some(f_args)) = (

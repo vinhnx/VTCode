@@ -270,7 +270,7 @@ fn clause_has_continuation_intent(clause: &str) -> bool {
 /// Transitions: "now", "next" (only before i/we), "then", "first"
 /// Possessives: "my" (for "my next step is ...")
 /// Subjects: "i" (and optionally "am"), "we"
-fn normalize_clause<'a>(s: &'a str) -> &'a str {
+fn normalize_clause(s: &str) -> &str {
     let s = s.trim_start();
     let s = s.strip_prefix("now ").unwrap_or(s);
     let s = s.strip_prefix("then ").unwrap_or(s);
@@ -288,10 +288,10 @@ fn normalize_clause<'a>(s: &'a str) -> &'a str {
     // Handle both "i " (uncontracted) and "i'" (contracted: i'll, i'd, i'm, i've).
     // For contractions we strip only the "i", keeping the apostrophe so that
     // patterns like "'ll " and "'d like to " still match.
-    let s = if s.starts_with("i ") {
-        &s[2..]
-    } else if s.starts_with("i'") {
-        &s[1..]
+    let s = if let Some(after) = s.strip_prefix("i ") {
+        after
+    } else if let Some(after) = s.strip_prefix("i'") {
+        after
     } else {
         s
     };

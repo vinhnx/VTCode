@@ -151,6 +151,7 @@ pub fn collect_git_info(cwd: &Path) -> Result<GitInfo> {
 ///
 /// # Returns
 /// true if inside a git repository, false otherwise.
+#[must_use]
 pub fn is_git_repo(cwd: &Path) -> bool {
     Command::new("git")
         .args(["rev-parse", "--git-dir"])

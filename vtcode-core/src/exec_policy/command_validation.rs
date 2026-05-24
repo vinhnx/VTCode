@@ -125,7 +125,7 @@ async fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path)
 
 async fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let allowed_cat_flags = &["-b", "-n", "-t"];
-    let mut files = Vec::new();
+    let mut files = Vec::with_capacity(args.len());
 
     for arg in args {
         if arg.starts_with('-') {

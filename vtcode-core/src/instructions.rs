@@ -119,7 +119,7 @@ struct MatchContext {
 impl MatchContext {
     fn new(project_root: &Path, match_paths: &[PathBuf]) -> Self {
         let mut seen = HashSet::new();
-        let mut candidates = Vec::new();
+        let mut candidates = Vec::with_capacity(match_paths.len());
         let canonical_root =
             canonicalize_with_context(project_root, "instruction match project root").ok();
 
@@ -810,7 +810,7 @@ async fn expand_instruction_patterns(
     patterns: &[String],
     excludes: &ExclusionMatcher,
 ) -> Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(patterns.len());
     let mut seen = HashSet::new();
 
     for pattern in patterns {
@@ -826,7 +826,7 @@ async fn expand_instruction_patterns(
             })
             .collect();
 
-        let mut matches = Vec::new();
+        let mut matches = Vec::with_capacity(glob_matches.len());
         for path in glob_matches {
             match normalize_instruction_candidate(&path, excludes).await {
                 Ok(Some(canonical)) if seen.insert(canonical.clone()) => matches.push(canonical),

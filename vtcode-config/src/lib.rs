@@ -1,4 +1,5 @@
-#![allow(clippy::unreachable, clippy::map_err_ignore)]
+#![cfg_attr(test, allow(clippy::unreachable))]
+#![cfg_attr(not(test), allow(clippy::map_err_ignore))]
 //! Shared configuration loader utilities for VT Code and downstream integrations.
 //!
 //! This crate exposes [`VTCodeConfig`] and [`ConfigManager`] for reading and

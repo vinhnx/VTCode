@@ -540,6 +540,9 @@ pub struct LLMErrorMetadata {
 }
 
 impl LLMErrorMetadata {
+    /// Boxed constructor because metadata is always stored inside `Option<Box<LLMErrorMetadata>>`
+    /// in the LLMError enum variants.
+    #[must_use]
     pub fn new(
         provider: impl Into<String>,
         status: Option<u16>,

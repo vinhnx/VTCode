@@ -45,9 +45,33 @@ pub enum ToolErrorType {
     PolicyViolation,
 }
 
+impl ToolErrorType {
+    /// Return the error type as a static string for serialization.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::InvalidParameters => "InvalidParameters",
+            Self::ToolNotFound => "ToolNotFound",
+            Self::PermissionDenied => "PermissionDenied",
+            Self::ResourceNotFound => "ResourceNotFound",
+            Self::NetworkError => "NetworkError",
+            Self::Timeout => "Timeout",
+            Self::ExecutionError => "ExecutionError",
+            Self::PolicyViolation => "PolicyViolation",
+        }
+    }
+}
+
 impl ToolExecutionError {
     #[inline]
-    pub fn new(tool_name: String, error_type: ToolErrorType, message: String) -> Self {
+    #[must_use]
+    pub fn new(
+        tool_name: impl Into<String>,
+        error_type: ToolErrorType,
+        message: impl Into<String>,
+    ) -> Self {
+        let tool_name = tool_name.into();
+        let message = message.into();
         let category = ErrorCategory::from(error_type);
         let (retryable, is_recoverable, recovery_suggestions) =
             generate_recovery_info(tool_name.as_str(), category, error_type);
@@ -74,17 +98,19 @@ impl ToolExecutionError {
     }
 
     #[inline]
+    #[must_use]
     pub fn with_original_error(
-        tool_name: String,
+        tool_name: impl Into<String>,
         error_type: ToolErrorType,
-        message: String,
-        original_error: String,
+        message: impl Into<String>,
+        original_error: impl Into<String>,
     ) -> Self {
         let mut error = Self::new(tool_name, error_type, message);
-        error.original_error = Some(original_error);
+        error.original_error = Some(original_error.into());
         error
     }
 
+    #[must_use]
     pub fn from_anyhow(
         tool_name: impl Into<String>,
         error: &Error,
@@ -114,10 +140,12 @@ impl ToolExecutionError {
         structured
     }
 
-    pub fn policy_violation(tool_name: String, message: impl Into<String>) -> Self {
-        Self::new(tool_name, ToolErrorType::PolicyViolation, message.into())
+    #[must_use]
+    pub fn policy_violation(tool_name: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(tool_name, ToolErrorType::PolicyViolation, message)
     }
 
+    #[must_use]
     pub fn with_retry_decision(mut self, decision: RetryDecision) -> Self {
         self.category = decision.category;
         self.retryable = decision.retryable;
@@ -127,6 +155,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_partial_state(
         mut self,
         partial_state_possible: bool,
@@ -137,6 +166,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_surface(mut self, surface: impl Into<String>) -> Self {
         let debug = self
             .debug_context
@@ -145,6 +175,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_attempt(mut self, attempt: u32) -> Self {
         let debug = self
             .debug_context
@@ -153,6 +184,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_invocation_id(mut self, invocation_id: impl Into<String>) -> Self {
         let debug = self
             .debug_context
@@ -161,6 +193,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_debug_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         let debug = self
             .debug_context
@@ -169,6 +202,7 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn with_tool_call_context(mut self, tool_name: &str, args: &Value) -> Self {
         self.tool_name = tool_name.to_string();
 
@@ -184,12 +218,14 @@ impl ToolExecutionError {
         self
     }
 
+    #[must_use]
     pub fn attempts_made(&self) -> Option<u32> {
         self.debug_context
             .as_ref()
             .and_then(|context| context.attempt)
     }
 
+    #[must_use]
     pub fn retry_summary(&self) -> Option<String> {
         let retry_count = self
             .attempts_made()
@@ -225,6 +261,7 @@ impl ToolExecutionError {
         summary
     }
 
+    #[must_use]
     pub fn user_message(&self) -> String {
         let mut message = format!("[{}] {}", self.category.user_label(), self.message);
 
@@ -247,19 +284,23 @@ impl ToolExecutionError {
         message
     }
 
+    #[must_use]
     pub fn retry_delay(&self) -> Option<std::time::Duration> {
         self.retry_delay_ms.map(std::time::Duration::from_millis)
     }
 
+    #[must_use]
     pub fn retry_after(&self) -> Option<std::time::Duration> {
         self.retry_after_ms.map(std::time::Duration::from_millis)
     }
 
+    #[must_use]
     pub fn from_tool_output(output: &Value) -> Option<Self> {
         let error_payload = output.get("error")?;
         Self::from_error_payload(error_payload)
     }
 
+    #[must_use]
     pub fn from_error_payload(error_payload: &Value) -> Option<Self> {
         if let Some(inner) = error_payload.get("error") {
             return Self::from_error_payload(inner);
@@ -331,11 +372,12 @@ impl ToolExecutionError {
         })
     }
 
+    #[must_use]
     pub fn to_json_value(&self) -> Value {
         json!({
             "error": {
                 "tool_name": self.tool_name,
-                "error_type": format!("{:?}", self.error_type),
+                "error_type": self.error_type.as_str(),
                 "category": self.category,
                 "message": self.message,
                 "retryable": self.retryable,

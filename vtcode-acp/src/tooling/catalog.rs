@@ -131,7 +131,7 @@ impl AcpToolRegistry {
         enabled_tools: &[SupportedTool],
         include_local: bool,
     ) -> Vec<ToolDefinition> {
-        let mut definitions = Vec::new();
+        let mut definitions = Vec::with_capacity(self.entries.len());
         for entry in &self.entries {
             if enabled_tools.contains(&entry.tool) {
                 definitions.push(entry.definition.clone());

@@ -317,6 +317,7 @@ pub fn decision_for_anyhow_error(
     policy.decision_for_anyhow(error, attempt_index, tool_name)
 }
 
+#[must_use]
 pub fn is_command_tool(tool_name: &str) -> bool {
     tool_name == tools::CREATE_PTY_SESSION
         || tool_name == tools::SEND_PTY_INPUT
