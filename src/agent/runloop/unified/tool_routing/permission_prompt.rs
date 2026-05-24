@@ -178,6 +178,36 @@ pub(super) fn extract_shell_command_text(
     extract_shell_command_text_from_run_args(args)
 }
 
+pub(super) fn split_command_words_on_operators(parts: &[String]) -> Option<Vec<Vec<String>>> {
+    if parts.is_empty() {
+        return None;
+    }
+
+    let mut segments: Vec<Vec<String>> = Vec::new();
+    let mut current: Vec<String> = Vec::new();
+
+    for word in parts {
+        match word.as_str() {
+            "|" | "||" | "&&" | ";" => {
+                if !current.is_empty() {
+                    segments.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(word.clone()),
+        }
+    }
+
+    if !current.is_empty() {
+        segments.push(current);
+    }
+
+    if segments.is_empty() || segments.iter().all(|s| s.is_empty()) {
+        return None;
+    }
+
+    Some(segments)
+}
+
 pub(super) fn extract_shell_approval_command_words(
     tool_name: &str,
     tool_args: Option<&Value>,

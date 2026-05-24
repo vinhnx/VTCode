@@ -45,7 +45,7 @@ use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
 use hook_messages::render_hook_messages;
 use permission_prompt::{
     extract_shell_approval_command_words, extract_shell_permission_scope_signature,
-    prompt_tool_permission,
+    prompt_tool_permission, split_command_words_on_operators,
 };
 use shell_approval::{
     approval_learning_target, exact_shell_approval_target, persistent_approval_target,
@@ -567,6 +567,17 @@ async fn finalize_permission_decision(
                 "Failed to persist approval cache entry",
             )
             .await;
+            if let Some(no_scope_key) =
+                strip_default_scope_suffix(&approval_learning_target.approval_key)
+            {
+                persist_approval_cache_key(
+                    tool_registry,
+                    tool_name,
+                    no_scope_key,
+                    "Failed to persist approval cache entry (no scope)",
+                )
+                .await;
+            }
             if let Some(exact_target) = exact_shell_approval_target
                 && exact_target.approval_key != approval_learning_target.approval_key
             {
@@ -577,6 +588,17 @@ async fn finalize_permission_decision(
                     "Failed to persist exact shell approval cache entry",
                 )
                 .await;
+                if let Some(no_scope_key) =
+                    strip_default_scope_suffix(&exact_target.approval_key)
+                {
+                    persist_approval_cache_key(
+                        tool_registry,
+                        tool_name,
+                        no_scope_key,
+                        "Failed to persist exact shell approval cache entry (no scope)",
+                    )
+                    .await;
+                }
             }
             persist_segment_approval_cache_keys(
                 tool_registry,
@@ -830,12 +852,14 @@ fn segmented_shell_approval_keys(
     let scope_signature =
         extract_shell_permission_scope_signature(normalized_tool_name, tool_args)?;
     let command_words = extract_shell_approval_command_words(normalized_tool_name, tool_args)?;
-    let segments = parse_bash_lc_commands(&command_words).or_else(|| {
-        vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
-            command_words.iter().map(String::as_str),
-        ))
-        .ok()
-    })?;
+    let segments = parse_bash_lc_commands(&command_words)
+        .or_else(|| split_command_words_on_operators(&command_words))
+        .or_else(|| {
+            vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
+                command_words.iter().map(String::as_str),
+            ))
+            .ok()
+        })?;
 
     let keys = segments
         .into_iter()
@@ -850,6 +874,11 @@ fn segmented_shell_approval_keys(
     (!keys.is_empty()).then_some(keys)
 }
 
+fn strip_default_scope_suffix(key: &str) -> Option<&str> {
+    const DEFAULT_SUFFIX: &str = "|sandbox_permissions=\"use_default\"|additional_permissions=null";
+    key.strip_suffix(DEFAULT_SUFFIX)
+}
+
 async fn persisted_segment_approval_hit_key(
     tool_registry: &ToolRegistry,
     normalized_tool_name: &str,
@@ -858,7 +887,16 @@ async fn persisted_segment_approval_hit_key(
     let keys = segmented_shell_approval_keys(normalized_tool_name, tool_args)?;
 
     for key in &keys {
-        if !tool_registry.has_persisted_approval(key).await {
+        let has_match = tool_registry.has_persisted_approval(key).await
+            || {
+                let no_scope = strip_default_scope_suffix(key);
+                if let Some(no_scope_key) = no_scope {
+                    tool_registry.has_persisted_approval(no_scope_key).await
+                } else {
+                    false
+                }
+            };
+        if !has_match {
             return None;
         }
     }
@@ -884,6 +922,15 @@ async fn persist_segment_approval_cache_keys(
             "Failed to persist segmented shell approval cache entry",
         )
         .await;
+        if let Some(no_scope_key) = strip_default_scope_suffix(&approval_key) {
+            persist_approval_cache_key(
+                tool_registry,
+                tool_name,
+                no_scope_key,
+                "Failed to persist segmented shell approval cache entry (no scope)",
+            )
+            .await;
+        }
     }
 }
 
