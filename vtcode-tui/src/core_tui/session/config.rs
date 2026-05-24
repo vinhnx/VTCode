@@ -87,6 +87,10 @@ pub struct AppearanceConfig {
     #[serde(default)]
     pub reduce_motion_keep_progress_animation: bool,
 
+    /// Hide the full TUI header, showing only version info in a compact line
+    #[serde(default)]
+    pub hide_header: bool,
+
     /// Customization settings
     pub customization: CustomizationConfig,
 }
@@ -110,6 +114,7 @@ impl Default for AppearanceConfig {
             screen_reader_mode: false,
             reduce_motion_mode: false,
             reduce_motion_keep_progress_animation: false,
+            hide_header: true,
             customization: CustomizationConfig::default(),
         }
     }

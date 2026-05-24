@@ -144,6 +144,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         screen_reader_mode: config.ui.screen_reader_mode,
         reduce_motion_mode,
         reduce_motion_keep_progress_animation: config.ui.reduce_motion_keep_progress_animation,
+        hide_header: config.ui.hide_header,
         customization: Default::default(),
     }
 }
