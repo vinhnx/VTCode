@@ -21,9 +21,9 @@ use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
+use vtcode_core::config::types::ReasoningEffortLevel;
 #[cfg(test)]
 use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
-use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig, supports_responses_chaining};
 
 use crate::agent::runloop::unified::extract_action_from_messages;
@@ -188,16 +188,13 @@ pub(crate) async fn execute_llm_request(
                 .as_ref()
                 .map(|cat| cat.user_label())
                 .unwrap_or("unknown error");
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer,
-                &format!(
-                    "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
-                    reason_hint,
-                    delay_secs,
-                    attempt + 1,
-                    max_retries
-                ),
-            )?;
+            tracing::debug!(
+                category = reason_hint,
+                delay_secs,
+                attempt = attempt + 1,
+                max_retries,
+                "LLM request failed; retrying after backoff"
+            );
             let cancel_notifier = ctx.ctrl_c_notify.notified();
             tokio::pin!(cancel_notifier);
             tokio::select! {
@@ -572,19 +569,16 @@ pub(crate) async fn execute_llm_request(
                                 &mut use_streaming,
                                 &mut stream_fallback_used,
                             );
-                            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                                ctx.renderer,
-                                &format!(
-                                    "{} post-tool follow-up failed; retrying with non-streaming.",
-                                    turn_snapshot.provider_name
-                                ),
-                            )?;
+                            tracing::debug!(
+                                provider = %turn_snapshot.provider_name,
+                                "post-tool follow-up failed; retrying with non-streaming.",
+                            );
                             _spinner.finish();
                             attempt += 1;
                             continue;
                         }
                         Some(PostToolRetryAction::CompactToolContext) => {
-                            let status = if use_streaming {
+                            let status_msg = if use_streaming {
                                 format!(
                                     "{} post-tool follow-up failed; retrying with compacted tool context.",
                                     turn_snapshot.provider_name
@@ -604,14 +598,10 @@ pub(crate) async fn execute_llm_request(
                             // a synthesis retry. Use Some(None) instead of None
                             // to explicitly disable thinking mode via the
                             // `thinking: {"type": "disabled"}` payload field.
-                            request.reasoning_effort = Some(
-                                vtcode_core::config::types::ReasoningEffortLevel::None,
-                            );
+                            request.reasoning_effort =
+                                Some(vtcode_core::config::types::ReasoningEffortLevel::None);
                             compacted_tool_retry_used = true;
-                            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                                ctx.renderer,
-                                &status,
-                            )?;
+                            tracing::debug!(provider = %turn_snapshot.provider_name, "{status_msg}",);
                             _spinner.finish();
                             attempt += 1;
                             continue;

@@ -239,10 +239,7 @@ impl DeepSeekProvider {
         Ok(Value::Object(payload))
     }
 
-    async fn send_request(
-        &self,
-        payload: &Value,
-    ) -> Result<reqwest::Response, LLMError> {
+    async fn send_request(&self, payload: &Value) -> Result<reqwest::Response, LLMError> {
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
         self.http_client
@@ -251,14 +248,12 @@ impl DeepSeekProvider {
             .json(payload)
             .send()
             .await
-            .map_err(|e| {
-                LLMError::Network {
-                    message: error_display::format_llm_error(
-                        PROVIDER_NAME,
-                        &format!("network error: {}", e),
-                    ),
-                    metadata: None,
-                }
+            .map_err(|e| LLMError::Network {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("network error: {}", e),
+                ),
+                metadata: None,
             })
     }
 
@@ -335,14 +330,12 @@ impl LLMProvider for DeepSeekProvider {
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            LLMError::Provider {
-                message: error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("failed to parse response: {}", e),
-                ),
-                metadata: None,
-            }
+        let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
+            message: error_display::format_llm_error(
+                PROVIDER_NAME,
+                &format!("failed to parse response: {}", e),
+            ),
+            metadata: None,
         })?;
 
         self.parse_response(response_json, model)

@@ -1039,10 +1039,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     .expect("refresh succeeds")
     .expect("envelope should be refreshed");
 
-    assert_eq!(
-        envelope.objective.as_deref(),
-        Some("Ship compaction cleanup")
-    );
+    assert_eq!(envelope.objective.as_deref(), Some("Keep continuity"));
     assert!(
         envelope
             .constraints

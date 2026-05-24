@@ -172,7 +172,7 @@ async fn previous_response_chain_retry_keeps_real_retry_backoff() {
                 retry_label
             ))
             .count(),
-        1
+        0
     );
 
     transcript::clear();

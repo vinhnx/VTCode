@@ -188,15 +188,12 @@ fn build_session_memory_envelope(
         schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary,
         objective: update.objective.or_else(|| {
-            task_snapshot
-                .objective
-                .clone()
-                .or_else(|| pe.and_then(|e| e.objective.clone()))
+            pe.and_then(|e| e.objective.clone())
+                .or_else(|| task_snapshot.objective.clone())
         }),
-        task_summary: task_snapshot
-            .summary
-            .clone()
-            .or_else(|| pe.and_then(|e| e.task_summary.clone())),
+        task_summary: pe
+            .and_then(|e| e.task_summary.clone())
+            .or_else(|| task_snapshot.summary.clone()),
         spec_summary,
         evaluation_summary,
         verification_summary: task_snapshot
