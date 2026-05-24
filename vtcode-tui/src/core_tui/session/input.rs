@@ -851,6 +851,9 @@ impl Session {
         let mut right_spans: Vec<Span<'static>> = Vec::new();
         if !self.auto_scroll_to_bottom {
             right_spans.push(Span::styled("⏸".to_string(), dim_style));
+        } else if self.user_scrolled {
+            // Auto-scroll is on but paused because the user scrolled away from bottom
+            right_spans.push(Span::styled("↕".to_string(), dim_style));
         }
         if let Some(scroll) = &scroll_indicator {
             right_spans.push(Span::styled(scroll.clone(), dim_style));

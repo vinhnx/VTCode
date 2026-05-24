@@ -1022,15 +1022,71 @@ impl ToolPolicyManager {
     }
 
     /// Check whether an explicit approval key is remembered for this workspace.
+    ///
+    /// Performs three levels of matching:
+    /// 1. Exact match against persisted allowed keys
+    /// 2. Word-prefix match: checks if the approval key starts with any persisted prefix
+    /// 3. Regex match against persisted regex patterns
     pub fn has_approval_cache_key(&self, approval_key: &str) -> bool {
-        self.config.approval_cache.allowed.contains(approval_key)
-            || self
-                .config
-                .approval_cache
-                .regexes
-                .iter()
-                .filter_map(|pattern| Regex::new(pattern).ok())
-                .any(|regex| regex.is_match(approval_key))
+        // Exact match: simplest and fastest
+        if self.config.approval_cache.allowed.contains(approval_key) {
+            return true;
+        }
+
+        // Word-prefix match: check if any cached key is a word-prefix of the approval_key
+        // e.g., "cargo check" matches "cargo check --target x86_64"
+        for cached in &self.config.approval_cache.allowed {
+            if cached.len() < approval_key.len()
+                && approval_key.starts_with(cached.as_str())
+                && approval_key.as_bytes().get(cached.len()) == Some(&b' ')
+            {
+                return true;
+            }
+        }
+
+        // Word-prefix match against cached prefixes
+        let approval_words: Vec<&str> = approval_key.split_whitespace().collect();
+        for cached in &self.config.approval_cache.prefixes {
+            let (prefix_text, _) = split_shell_approval_entry(cached.as_str());
+            let prefix_words: Vec<&str> = prefix_text.split_whitespace().collect();
+            if !prefix_words.is_empty()
+                && prefix_words.len() <= approval_words.len()
+                && prefix_words
+                    .iter()
+                    .zip(approval_words.iter())
+                    .all(|(a, b)| a == b)
+            {
+                return true;
+            }
+        }
+
+        // Regex match against persisted regex patterns
+        self.config
+            .approval_cache
+            .regexes
+            .iter()
+            .filter_map(|pattern| Regex::new(pattern).ok())
+            .any(|regex| regex.is_match(approval_key))
+    }
+
+    /// Find the best matching cache key for a given approval key using fuzzy prefix matching.
+    /// Returns the longest matching prefix key if one exists.
+    pub fn find_matching_cache_prefix(&self, approval_key: &str) -> Option<String> {
+        let mut best_match: Option<String> = None;
+        let mut best_len = 0usize;
+
+        for cached in &self.config.approval_cache.allowed {
+            if cached.len() < approval_key.len()
+                && approval_key.starts_with(cached.as_str())
+                && approval_key.as_bytes().get(cached.len()) == Some(&b' ')
+                && cached.len() > best_len
+            {
+                best_len = cached.len();
+                best_match = Some(cached.clone());
+            }
+        }
+
+        best_match
     }
 
     /// Persist an explicit approval key for future prompts in this workspace.
@@ -1041,6 +1097,42 @@ impl ToolPolicyManager {
             .allowed
             .insert(approval_key.into())
         {
+            self.save_config().await?;
+        }
+        Ok(())
+    }
+
+    /// Persist an approval key and automatically derive shorter segment-prefix keys
+    /// so that future similar commands also match without re-prompting.
+    ///
+    /// For example, approving "cargo check --target x86_64" also caches
+    /// "cargo check" as a segment prefix, so "cargo check --release" also matches.
+    pub async fn add_approval_cache_key_with_segments(
+        &mut self,
+        approval_key: impl Into<String>,
+    ) -> Result<()> {
+        let key: String = approval_key.into();
+        let mut changed = false;
+
+        // Add the exact key
+        if self.config.approval_cache.allowed.insert(key.clone()) {
+            changed = true;
+        }
+
+        // Derive segment prefixes for shell commands (3+ words):
+        // "cargo check --target x86_64" → also caches word prefixes:
+        // "cargo", "cargo check", "cargo check --target"
+        let words: Vec<&str> = key.split_whitespace().collect();
+        if words.len() >= 3 {
+            for i in (1..words.len()).rev() {
+                let prefix: String = words[..i].join(" ");
+                if self.config.approval_cache.prefixes.insert(prefix) {
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
             self.save_config().await?;
         }
         Ok(())

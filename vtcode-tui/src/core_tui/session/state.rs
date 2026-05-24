@@ -402,6 +402,7 @@ impl Session {
     pub(crate) fn toggle_auto_scroll(&mut self) {
         self.auto_scroll_to_bottom = !self.auto_scroll_to_bottom;
         if self.auto_scroll_to_bottom {
+            self.user_scrolled = false;
             self.scroll_to_bottom();
         }
         self.mark_dirty();
@@ -775,14 +776,19 @@ impl Session {
     }
 
     /// Adjust scroll position after content changes
+    ///
+    /// Respects `user_scrolled`: if the user has manually scrolled away from
+    /// the bottom, auto-scroll is suppressed even when `auto_scroll_to_bottom`
+    /// is enabled. Auto-scroll resumes when the user scrolls back to the bottom
+    /// (which sets `user_scrolled = false`) or toggles auto-scroll off and on.
     pub(crate) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
         let new_max_offset = self.current_max_scroll_offset();
 
-        if self.auto_scroll_to_bottom {
-            // Always scroll to bottom to show latest content
+        if self.auto_scroll_to_bottom && !self.user_scrolled {
+            // Auto-scroll is enabled and the user has not manually scrolled away
             self.scroll_manager.set_offset(0);
         } else if new_max_offset > previous_max_offset {
-            // Auto-scroll disabled: keep content position stable
+            // Auto-scroll disabled or user-scrolled: keep content position stable
             use std::cmp::min;
             let current_offset = self.scroll_manager.offset();
             let delta = new_max_offset - previous_max_offset;

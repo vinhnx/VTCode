@@ -512,6 +512,19 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     hitl_notification_bell: bool,
     source_thread_label: Option<&str>,
 ) -> Result<HitlDecision> {
+    // Auto-approve if the approval recorder indicates high-frequency approval history
+    // (≥3 approvals with >80% approval rate), skipping the prompt entirely.
+    if let Some(recorder) = approval_recorder
+        && recorder.should_auto_approve(approval_learning_key).await
+    {
+        tracing::info!(
+            tool = %tool_name,
+            key = %approval_learning_key,
+            "Auto-approved based on learned approval pattern"
+        );
+        return Ok(HitlDecision::Approved);
+    }
+
     let prompt_kind = tool_permission_prompt_kind(tool_name);
     let mut description_lines = vec![
         format!("Tool: {}", tool_name),
