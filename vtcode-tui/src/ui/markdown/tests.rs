@@ -1,4 +1,6 @@
-use super::code_blocks::{normalize_code_indentation, normalize_diff_lines};
+use super::code_blocks::{
+    normalize_code_indentation, normalize_diff_lines, render_diff_content_segments,
+};
 use super::links::{
     COLON_LOCATION_SUFFIX_RE, HASH_LOCATION_SUFFIX_RE, label_has_location_suffix,
     label_segments_have_location_suffix, normalize_hash_location,
@@ -404,6 +406,14 @@ fn test_markdown_unlabeled_diff_code_block_detects_diff() {
             .iter()
             .all(|seg| seg.style.get_bg_color().is_none())
     );
+}
+
+#[test]
+fn test_diff_blank_line_renders_placeholder_space() {
+    let segments = render_diff_content_segments("", Some("toml"), Style::default());
+
+    assert_eq!(segments.len(), 1);
+    assert_eq!(segments[0].text, " ");
 }
 
 #[test]

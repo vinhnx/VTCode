@@ -415,8 +415,8 @@ impl DiffRenderer {
             _ => {
                 output.push_str(style_code);
                 output.push_str(prefix);
+                output.push(' ');
                 if !line.content.is_empty() {
-                    output.push(' ');
                     output.push_str(&line.content);
                 }
                 output.push_str(&self.cached_styles.reset);
@@ -949,5 +949,17 @@ mod tests {
 
         assert!(output.contains("▸ Edit file.rs (+1 -1)"));
         assert!(output.contains("@@ -1 +1 @@"));
+    }
+
+    #[test]
+    fn test_render_file_change_keeps_blank_added_line_spacing() {
+        let renderer = DiffChatRenderer::new(false, 3, false);
+        let output = renderer.render_file_change(
+            Path::new("Cargo.toml"),
+            "[package]\n[dependencies]\n",
+            "[package]\n[dependencies]\n\n[workspace]\n",
+        );
+
+        assert!(output.contains("\n+ \n+ [workspace]\n"));
     }
 }
