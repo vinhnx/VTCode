@@ -304,7 +304,7 @@ impl MetricsCollector {
     pub fn get_summary(&self) -> MetricsSummary {
         MetricsSummary {
             timestamp: Utc::now(),
-            session_duration_ms: self.start_time.elapsed().as_millis() as u64,
+            session_duration_ms: self.start_time.elapsed().as_millis().min(u64::MAX as u128) as u64,
             discovery: self.get_discovery_metrics(),
             execution: self.get_execution_metrics(),
             sdk: self.get_sdk_metrics(),

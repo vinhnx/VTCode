@@ -197,7 +197,7 @@ impl Middleware for LoggingMiddleware {
 
         let start = std::time::Instant::now();
         let mut result = next(request);
-        let duration = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
         if result.success {
             tracing::debug!(
