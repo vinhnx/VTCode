@@ -188,7 +188,7 @@ pub(crate) async fn render_terminal_command_panel(
         } else {
             "done".to_string()
         };
-        renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
+        renderer.line(MessageStyle::Info, &format!("✓ {}", exit_badge))?;
     }
 
     let rendered_follow_up_body = [

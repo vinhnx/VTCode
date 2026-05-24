@@ -304,14 +304,16 @@ async fn render_tool_output_common(
 
     if inline_run_tool && !git_diff_payload {
         if !has_renderable_stream_content(output) && command_success {
-            renderer.line(MessageStyle::ToolDetail, "(no output)")?;
+            renderer.line(MessageStyle::Info, "(no output)")?;
             return Ok(());
         }
 
         // Content was streamed inline via PtyStreamRuntime (or error with no output).
         // Avoid duplicating the output — just render the completion status.
+        // Use MessageStyle::Info so the completion aligns with the "• Ran" header,
+        // avoiding double-indent from ToolDetail + TUI reflow block prefix.
         if let Some(completion) = compact_run_completion_line(output, command_success) {
-            renderer.line(MessageStyle::ToolDetail, &completion)?;
+            renderer.line(MessageStyle::Info, &completion)?;
         }
         return Ok(());
     }

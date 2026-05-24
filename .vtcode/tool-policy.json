@@ -203,10 +203,7 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [
-      "cd hello_world '&&' cargo run|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cd hello_world cargo run|sandbox_permissions=\"use_default\"|additional_permissions=null"
-    ],
+    "allowed": [],
     "prefixes": [],
     "regexes": []
   }
