@@ -394,6 +394,27 @@ impl AnsiRenderer {
         }
     }
 
+    /// Write a continuation line that joins an existing Pty block.
+    ///
+    /// Sends the text as `InlineMessageKind::Pty` through
+    /// `write_multiline_with_transcript` so the TUI reflow renders it
+    /// with the same 2-space block prefix and styling as the PTY output.
+    pub fn pty_continuation_line(&mut self, text: &str) -> Result<()> {
+        let style = MessageStyle::ToolOutput;
+        let indent = style.indent();
+        let kind = Self::message_kind(style);
+        if let Some(sink) = &mut self.sink {
+            sink.write_multiline_with_transcript(style.style(), indent, text, kind, true)?;
+            return Ok(());
+        }
+        self.buffer.clear();
+        if !indent.is_empty() && !text.is_empty() {
+            self.buffer.push_str(indent);
+        }
+        self.buffer.push_str(text);
+        self.flush(style)
+    }
+
     /// Write a URL as a full, clickable line using OSC 8 hyperlinks.
     ///
     /// The URL is rendered on its own line so that terminal emulators can

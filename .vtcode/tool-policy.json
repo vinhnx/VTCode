@@ -203,7 +203,13 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": [],
+    "allowed": [
+      "mkdir -p hello_world/src|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd hello_world '&&' cargo run|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cd hello_world cargo run|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "grep -n 'workspace\\|members\\|exclude' Cargo.toml '|' head -20|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "grep -n Cargo.toml head|sandbox_permissions=\"use_default\"|additional_permissions=null"
+    ],
     "prefixes": [],
     "regexes": []
   }

@@ -275,6 +275,60 @@ fn apply_task_tracker_block(
     harness_state.remember_task_tracker_block(lines);
 }
 
+/// Extract the command string from tool call arguments.
+fn extract_command_line(args: &serde_json::Value) -> Option<String> {
+    args.get("command")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            args.get("raw_command")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            args.get("cmd")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+}
+
+/// Record the tool-call summary line ("• Ran ...") to the transcript only.
+fn record_summary_line(
+    name: &str,
+    args: &serde_json::Value,
+    _output: &serde_json::Value,
+    _command_success: bool,
+) {
+    let action_label = if tool_intent::is_command_run_tool_call(name, args) {
+        "Run command"
+    } else {
+        name
+    };
+    let headline = if action_label == "Run command" {
+        if let Some(cmd) = extract_command_line(args) {
+            format!("Ran {cmd}")
+        } else {
+            "Ran command".to_string()
+        }
+    } else {
+        format!("• {action_label}")
+    };
+    transcript::append(&headline);
+}
+
+/// Record the tool output content (stdout/stderr) to the transcript only.
+fn record_output_lines(output: &serde_json::Value) {
+    for key in ["output", "stdout", "stderr"] {
+        if let Some(text) = output.get(key).and_then(serde_json::Value::as_str)
+            && !text.trim().is_empty()
+        {
+            for line in text.lines() {
+                transcript::append(line);
+            }
+        }
+    }
+}
+
 async fn render_tool_output_common(
     renderer: &mut AnsiRenderer,
     name: &str,
@@ -286,9 +340,35 @@ async fn render_tool_output_common(
     let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
     let git_diff_payload = is_git_diff_payload(output);
 
-    // Render the summary header ("• Ran <command>") for all tools.
-    // For inline PTY tools, this ensures the header is recorded in the transcript
-    // even if it was previously streamed via PTY-kind messages (which are excluded from transcript).
+    // For streamed inline PTY tools: the pre-execution Pty block already
+    // shows "• Ran ..." and output. Skip duplicating the output in the TUI,
+    // but still record the summary and output content to the transcript.
+    if inline_run_tool && !git_diff_payload {
+        // Record the command summary to transcript (TUI already showed it via PTY block)
+        record_summary_line(name, args_val, output, command_success);
+
+        // Record streamed output content to transcript
+        record_output_lines(output);
+
+        if !has_renderable_stream_content(output) && command_success {
+            renderer.line(MessageStyle::Info, "(no output)")?;
+            return Ok(());
+        }
+
+        // Send completion via pty_continuation_line so it joins the Pty block
+        // as a continuation (2-space block prefix + 4-space indent = 6 spaces,
+        // matching PTY output continuation lines).
+        if let Some(completion) = compact_run_completion_line(output, command_success) {
+            renderer.pty_continuation_line(&completion)?;
+            // Pty kind skips transcript recording in TUI mode; append manually.
+            transcript::append(&completion);
+        }
+        return Ok(());
+    }
+
+    // Render the summary header for non-streamed tools.
+    // (streamed PTY tools with git_diff_payload also skip summary here,
+    //  falling through to the full render_tool_output path.)
     if !(inline_run_tool && git_diff_payload) {
         let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
             output,
@@ -300,22 +380,6 @@ async fn render_tool_output_common(
             args_val,
             stream_label,
         )?;
-    }
-
-    if inline_run_tool && !git_diff_payload {
-        if !has_renderable_stream_content(output) && command_success {
-            renderer.line(MessageStyle::Info, "(no output)")?;
-            return Ok(());
-        }
-
-        // Content was streamed inline via PtyStreamRuntime (or error with no output).
-        // Avoid duplicating the output — just render the completion status.
-        // Use MessageStyle::Info so the completion aligns with the "• Ran" header,
-        // avoiding double-indent from ToolDetail + TUI reflow block prefix.
-        if let Some(completion) = compact_run_completion_line(output, command_success) {
-            renderer.line(MessageStyle::Info, &completion)?;
-        }
-        return Ok(());
     }
 
     crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
