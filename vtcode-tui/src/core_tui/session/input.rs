@@ -817,7 +817,6 @@ impl Session {
             && right.is_none()
             && scroll_indicator.is_none()
             && !self.thinking_spinner.is_active
-            && self.auto_scroll_to_bottom
         {
             return None;
         }
@@ -847,14 +846,8 @@ impl Session {
             spans.push(Span::styled("Thinking", dim_style));
         }
 
-        // Build right side spans (auto-scroll indicator + scroll indicator + optional right content)
+        // Build right side spans (scroll indicator + optional right content)
         let mut right_spans: Vec<Span<'static>> = Vec::new();
-        if !self.auto_scroll_to_bottom {
-            right_spans.push(Span::styled("⏸".to_string(), dim_style));
-        } else if self.user_scrolled {
-            // Auto-scroll is on but paused because the user scrolled away from bottom
-            right_spans.push(Span::styled("↕".to_string(), dim_style));
-        }
         if let Some(scroll) = &scroll_indicator {
             right_spans.push(Span::styled(scroll.clone(), dim_style));
         }

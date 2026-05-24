@@ -80,7 +80,6 @@ impl Session {
             input_manager: InputManager::new(),
             scroll_manager: ScrollManager::new(initial_transcript_rows),
             user_scrolled: false,
-            auto_scroll_to_bottom: true,
 
             // --- Message Management ---
             lines: Vec::with_capacity(64),

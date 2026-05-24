@@ -202,9 +202,6 @@ pub struct BehaviorConfig {
     /// Delay in milliseconds for double-tap detection
     pub double_tap_delay_ms: u64,
 
-    /// Whether to auto-scroll to bottom
-    pub auto_scroll_to_bottom: bool,
-
     /// Whether to show queued inputs
     pub show_queued_inputs: bool,
 }
@@ -217,7 +214,6 @@ impl Default for BehaviorConfig {
             history_size: 100,
             double_tap_escape_clears: true,
             double_tap_delay_ms: 300,
-            auto_scroll_to_bottom: true,
             show_queued_inputs: true,
         }
     }

@@ -685,10 +685,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.toggle_logs();
             None
         }
-        KeyCode::Char('a') | KeyCode::Char('A') if has_alt && !has_control && !has_command => {
-            session.toggle_auto_scroll();
-            None
-        }
         KeyCode::Char(ch) => {
             if !session.core.input_enabled() {
                 return None;

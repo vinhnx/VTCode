@@ -199,7 +199,6 @@ pub struct Session {
     /// Manages scroll state and viewport metrics
     pub(crate) scroll_manager: ScrollManager,
     user_scrolled: bool,
-    pub(crate) auto_scroll_to_bottom: bool,
 
     // --- Message Management ---
     pub(crate) lines: Vec<MessageLine>,
