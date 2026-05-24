@@ -4,6 +4,7 @@ mod detect;
 mod parse_args;
 mod parse_bracketed;
 mod parse_channel;
+mod parse_dsml;
 mod parse_structured;
 mod parse_tagged;
 mod parse_yaml;
