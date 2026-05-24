@@ -223,7 +223,7 @@ fn format_diff_line_with_gutter_and_syntax(
     line_number_width: usize,
 ) -> String {
     use std::fmt::Write as _;
-    let (marker, content) = match line.kind {
+    let (marker, mut content) = match line.kind {
         DiffDisplayKind::Addition => ('+', line.text.as_str()),
         DiffDisplayKind::Deletion => ('-', line.text.as_str()),
         DiffDisplayKind::Context => (' ', line.text.as_str()),
@@ -231,6 +231,9 @@ fn format_diff_line_with_gutter_and_syntax(
             return line.numbered_text(line_number_width);
         }
     };
+    if content.is_empty() {
+        content = " ";
+    }
 
     let marker_text = match marker {
         '+' => "+",
@@ -808,6 +811,22 @@ mod tests {
         );
         let stripped = strip_ansi_codes(&rendered);
         assert!(stripped.contains("+  1384     line,"));
+    }
+
+    #[test]
+    fn format_diff_line_keeps_blank_line_spacing() {
+        let rendered = format_diff_line_with_gutter_and_syntax(
+            &DiffDisplayLine {
+                kind: DiffDisplayKind::Addition,
+                line_number: Some(42),
+                text: String::new(),
+            },
+            None,
+            None,
+            5,
+        );
+        let stripped = strip_ansi_codes(&rendered);
+        assert_eq!(stripped, "+    42  ");
     }
 
     #[test]

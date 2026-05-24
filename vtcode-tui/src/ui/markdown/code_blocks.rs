@@ -704,7 +704,7 @@ pub(crate) fn render_diff_content_segments(
 ) -> Vec<MarkdownSegment> {
     let text = content.trim_end_matches('\n');
     if text.is_empty() {
-        return Vec::new();
+        return vec![MarkdownSegment::new(fallback_style, " ")];
     }
 
     if let Some(segments) = highlight_line_for_diff(text, language)
