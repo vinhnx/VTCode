@@ -263,7 +263,7 @@ impl AgentSessionState {
 
     /// Add a user message to the history.
     pub fn add_user_message(&mut self, text: String) {
-        self.conversation.push(Content::user_text(text.clone()));
+        self.conversation.push(Content::user_text(text.as_str()));
         self.messages.push(Message::user(text));
     }
 
