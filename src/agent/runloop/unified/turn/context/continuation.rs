@@ -35,6 +35,22 @@ pub(super) fn evaluate_interim_text_continuation(
     }
 
     if !is_interim_progress {
+        // Relaxed: if the model just ran tools and the final clause isn't conclusive,
+        // treat a long analysis text as continuation-worthy even if it doesn't match
+        // the strict interim-intent prefixes.
+        if recent_tool_activity
+            && !last_clause_contains_conclusive_marker(&text.to_ascii_lowercase())
+        {
+            return InterimTextContinuationDecision {
+                should_continue: true,
+                reason: "recent_tool_activity_relaxed",
+                is_interim_progress,
+                last_user_follow_up,
+                recent_tool_activity,
+                last_user_requested_progressive_work,
+            };
+        }
+
         return InterimTextContinuationDecision {
             should_continue: false,
             reason: "non_interim_text",
@@ -101,9 +117,41 @@ pub(super) fn push_system_directive_once(history: &mut Vec<uni::Message>, direct
     }
 }
 
+/// Returns true when the **last** clause (after the final sentence boundary) contains
+/// a conclusive marker like "completed", "done", "fixed", "summary", etc.
+/// A middle clause with "completed" followed by "Now let me ..." does NOT match —
+/// only the final clause determines conclusiveness.
+fn last_clause_contains_conclusive_marker(lower: &str) -> bool {
+    let conclusive_markers = [
+        "completed",
+        "done",
+        "fixed",
+        "resolved",
+        "summary",
+        "final review",
+        "final blocker",
+        "next action",
+        "what changed",
+        "validation",
+        "passed",
+        "passes",
+        "cannot proceed",
+        "can't proceed",
+        "blocked by",
+        "all set",
+    ];
+    let last_clause = lower
+        .rfind(|ch| matches!(ch, '.' | '!' | '\n'))
+        .map(|idx| lower[idx + 1..].trim_start())
+        .unwrap_or(lower);
+    conclusive_markers
+        .iter()
+        .any(|marker| last_clause.contains(marker))
+}
+
 pub(super) fn is_interim_progress_update(text: &str) -> bool {
     let trimmed = text.trim();
-    if trimmed.is_empty() || trimmed.len() > 280 {
+    if trimmed.is_empty() || trimmed.len() > 800 {
         return false;
     }
 
@@ -128,27 +176,7 @@ pub(super) fn is_interim_progress_update(text: &str) -> bool {
         return false;
     }
 
-    let conclusive_markers = [
-        "completed",
-        "done",
-        "fixed",
-        "resolved",
-        "summary",
-        "final review",
-        "final blocker",
-        "next action",
-        "what changed",
-        "validation",
-        "passed",
-        "passes",
-        "cannot proceed",
-        "can't proceed",
-        "blocked by",
-        "all set",
-    ];
-    !conclusive_markers
-        .iter()
-        .any(|marker| lower.contains(marker))
+    !last_clause_contains_conclusive_marker(&lower)
 }
 
 fn last_user_message_is_follow_up(history: &[uni::Message]) -> bool {
@@ -236,6 +264,7 @@ fn starts_with_interim_intent(lower: &str) -> bool {
         "i am going to ",
         "i'm going to ",
         "now i need to ",
+        "now let me ",
         "continuing ",
         "next i need to ",
         "next, i'll ",
