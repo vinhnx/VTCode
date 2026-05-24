@@ -196,6 +196,69 @@ pub(super) fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) 
     serialize_output(&compacted)
 }
 
+/// Like `maybe_inline_spooled`, but when the output is stripped to a spool
+/// reference, reads the spool file and embeds an inline `tail_preview` so the
+/// model has actual content to reason about. Prevents tight retry loops where
+/// the model sees an empty payload and assumes the command produced nothing.
+pub(super) async fn maybe_inline_spooled_with_preview(
+    workspace_root: &Path,
+    tool_name: &str,
+    output: &serde_json::Value,
+) -> String {
+    let mut compacted = compact_model_tool_payload(output.clone());
+    let prefer_ref_only = should_prefer_spool_reference_only(tool_name, output);
+    if !prefer_ref_only {
+        return serialize_output(&compacted);
+    }
+
+    apply_spool_reference_only(&mut compacted, output);
+
+    if let Some(spool_path) = output
+        .get("spool_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+    {
+        match validate_and_resolve_path(workspace_root, spool_path).await {
+            Ok(resolved) => match tokio::fs::read(&resolved).await {
+                Ok(bytes) => {
+                    let content = String::from_utf8_lossy(&bytes);
+                    let preview = tail_preview_text(
+                        &content,
+                        TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES,
+                        TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES,
+                    );
+                    if !preview.trim().is_empty()
+                        && let Some(obj) = compacted.as_object_mut()
+                    {
+                        obj.insert(
+                            "tail_preview".to_string(),
+                            serde_json::Value::String(preview),
+                        );
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        tool = %tool_name,
+                        spool_path = %resolved.display(),
+                        error = %err,
+                        "Failed to read spool file for inline tail preview; sending reference-only payload",
+                    );
+                }
+            },
+            Err(err) => {
+                tracing::warn!(
+                    tool = %tool_name,
+                    spool_path,
+                    error = %err,
+                    "Failed to validate spool path for inline tail preview; sending reference-only payload",
+                );
+            }
+        }
+    }
+
+    serialize_output(&compacted)
+}
+
 fn read_summary_source_path(output: &serde_json::Value) -> Option<&str> {
     output
         .get("source_path")
@@ -448,10 +511,12 @@ pub(super) async fn prepare_tool_response_content(
     args_val: &serde_json::Value,
     output: &serde_json::Value,
 ) -> String {
-    let fallback = maybe_inline_spooled(tool_name, output);
+    let workspace_root = ctx.tool_registry.workspace_root().clone();
+    let fallback =
+        maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output).await;
     let serialized_output = serialize_json_for_model(output);
     let summary_input = tool_output_summary_input_or_serialized(
-        ctx.tool_registry.workspace_root().as_path(),
+        workspace_root.as_path(),
         tool_name,
         output,
         &serialized_output,

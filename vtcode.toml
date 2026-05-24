@@ -22,18 +22,18 @@ enabled = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "HF_TOKEN"
+api_key_env = "DEEPSEEK_API_KEY"
 
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
+default_model = "deepseek-v4-flash"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "huggingface"
+provider = "deepseek"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -47,6 +47,14 @@ reasoning_effort = "low"
 # Default: "ciapre"
 # Type: `string`
 theme = "mono"
+
+# Persistent Memory
+# Per-repository memory summary, rollout staging, and learned durable notes.
+[agent.persistent_memory]
+# Toggle main-session persistent memory for this repository
+# Default: false
+# Type: `boolean`
+enabled = true
 
 [[custom_providers]]
 api_key_env = "ATLASCLOUD_API_KEY"
@@ -73,14 +81,6 @@ models = [
     "kwaipilot/kat-coder-pro-v2",
 ]
 name = "atlascloud"
-
-# Persistent Memory
-# Per-repository memory summary, rollout staging, and learned durable notes.
-[agent.persistent_memory]
-# Toggle main-session persistent memory for this repository
-# Default: false
-# Type: `boolean`
-enabled = true
 
 
 # Features

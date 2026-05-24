@@ -49,7 +49,8 @@ use crate::agent::runloop::unified::turn::context::{
 use super::error_handling::serialize_json_for_model;
 #[cfg(test)]
 use super::response_content::{
-    maybe_inline_spooled, tool_output_summary_input_or_serialized, truncate_stderr_preview,
+    maybe_inline_spooled, maybe_inline_spooled_with_preview,
+    tool_output_summary_input_or_serialized, truncate_stderr_preview,
 };
 #[cfg(test)]
 use super::subagent_memory::{build_subagent_memory_update, parse_subagent_summary_markdown};

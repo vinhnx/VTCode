@@ -39,6 +39,7 @@ pub(super) fn evaluate_interim_text_continuation(
     text: &str,
 ) -> InterimTextContinuationDecision {
     let is_interim_progress = is_interim_progress_update(text);
+    let lower = text.to_ascii_lowercase();
     let last_user_follow_up = last_user_message_is_follow_up(history);
     let recent_tool_activity = has_recent_tool_activity(history);
     let last_user_requested_progressive_work = last_user_requested_progressive_work(history);
@@ -59,14 +60,17 @@ pub(super) fn evaluate_interim_text_continuation(
     }
 
     if !is_interim_progress {
-        let not_conclusive = !last_clause_contains_conclusive_marker(&text.to_ascii_lowercase());
+        let not_conclusive = !last_clause_contains_conclusive_marker(&lower);
+        let has_relaxed_continuation_intent = has_relaxed_continuation_intent(&lower);
         // Relaxed: if the model just ran tools, or the user asked for progressive work,
-        // and the final clause isn't conclusive, treat a long analysis text as
-        // continuation-worthy even if it doesn't match the strict interim-intent prefixes.
-        if not_conclusive && recent_tool_activity {
+        // and the text still contains a continuation-intent clause, treat long
+        // analysis text as continuation-worthy even if it exceeded the strict
+        // interim-progress shape.
+        if not_conclusive && has_relaxed_continuation_intent && recent_tool_activity {
             return d(true, "recent_tool_activity_relaxed");
         }
-        if not_conclusive && last_user_requested_progressive_work {
+        if not_conclusive && has_relaxed_continuation_intent && last_user_requested_progressive_work
+        {
             return d(true, "progressive_relaxed");
         }
         return d(false, "non_interim_text");
@@ -241,6 +245,27 @@ fn has_interim_intent_clause(lower: &str) -> bool {
     false
 }
 
+fn has_relaxed_continuation_intent(lower: &str) -> bool {
+    if has_interim_intent_clause(lower) {
+        return true;
+    }
+
+    [
+        " let me ",
+        " i'll ",
+        " i will ",
+        " i need to ",
+        " i want to ",
+        " i'd like to ",
+        " next step ",
+        " next up:",
+        " continuing ",
+        " time to ",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
 /// Returns true when a single clause expresses an intent to continue working.
 ///
 /// Instead of matching an ever-growing list of specific prefixes, this
@@ -285,12 +310,12 @@ fn normalize_clause(s: &str) -> &str {
     };
     let s = s.strip_prefix("my ").unwrap_or(s);
     let s = s.strip_prefix("i am ").unwrap_or(s);
-    // Handle both "i " (uncontracted) and "i'" (contracted: i'll, i'd, i'm, i've).
+    // Handle both "i " (uncontracted) and contractions (i'll, i'd, i'm, i've).
     // For contractions we strip only the "i", keeping the apostrophe so that
     // patterns like "'ll " and "'d like to " still match.
     let s = if let Some(after) = s.strip_prefix("i ") {
         after
-    } else if let Some(after) = s.strip_prefix("i'") {
+    } else if let Some(after) = s.strip_prefix("i").filter(|after| after.starts_with('\'')) {
         after
     } else {
         s
@@ -690,6 +715,48 @@ mod tests {
         );
     }
 
+    #[test]
+    fn short_completion_after_tool_activity_does_not_continue_via_relaxed_path() {
+        let history = vec![
+            uni::Message::user("create a simple rust hello world program".to_string()),
+            uni::Message::assistant("Let me compile and run it to confirm it works:".to_string())
+                .with_tool_calls(vec![uni::ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{}".to_string(),
+                )]),
+            uni::Message::tool_response("call_1".to_string(), "Hello, World!".to_string()),
+        ];
+
+        assert!(
+            !evaluate_interim_text_continuation(
+                true,
+                false,
+                &history,
+                "It works! The program compiled and ran successfully, printing `Hello, World!`."
+            )
+            .should_continue
+        );
+    }
+
+    #[test]
+    fn short_completion_after_progressive_request_does_not_continue_via_relaxed_path() {
+        let history = vec![
+            uni::Message::user("fix the parser regression".to_string()),
+            uni::Message::assistant("I'll inspect the parser.".to_string()),
+        ];
+
+        assert!(
+            !evaluate_interim_text_continuation(
+                false,
+                false,
+                &history,
+                "I updated the parser logic and the targeted regression test now passes."
+            )
+            .should_continue
+        );
+    }
+
     #[tokio::test]
     async fn tool_enabled_recovery_pass_can_continue_after_interim_progress() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
@@ -715,5 +782,65 @@ mod tests {
         assert!(matches!(outcome, TurnHandlerOutcome::Continue));
         assert!(!ctx.is_recovery_active());
         assert!(ctx.recovery_pass_used());
+    }
+
+    #[tokio::test]
+    async fn continuing_text_response_is_recorded_as_commentary_phase() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history
+            .push(uni::Message::user("fix the parser regression".to_string()));
+
+        let outcome = ctx
+            .handle_text_response(
+                "Now I need to update the parser branch and rerun the targeted test.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("continuing text response should be handled");
+
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        let last_assistant = ctx
+            .working_history
+            .iter()
+            .rev()
+            .find(|message| message.role == uni::MessageRole::Assistant)
+            .expect("assistant message should be recorded");
+        assert_eq!(last_assistant.phase, Some(uni::AssistantPhase::Commentary));
+    }
+
+    #[tokio::test]
+    async fn completed_text_response_is_recorded_as_final_answer_phase() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history
+            .push(uni::Message::user("explain the core loop".to_string()));
+
+        let outcome = ctx
+            .handle_text_response(
+                "The core loop requests model output, dispatches tool calls, and ends once a final textual answer is produced."
+                    .to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("completed text response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
+        ));
+        let last_assistant = ctx
+            .working_history
+            .iter()
+            .rev()
+            .find(|message| message.role == uni::MessageRole::Assistant)
+            .expect("assistant message should be recorded");
+        assert_eq!(last_assistant.phase, Some(uni::AssistantPhase::FinalAnswer));
     }
 }

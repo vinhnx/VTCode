@@ -137,7 +137,6 @@ impl<'a> TurnProcessingContext<'a> {
     ) -> anyhow::Result<TurnHandlerOutcome> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
         let tool_free_recovery_pass = recovery_pass_response && self.recovery_is_tool_free();
-        let final_text = text.clone();
         let continuation_decision = if tool_free_recovery_pass {
             InterimTextContinuationDecision {
                 should_continue: false,
@@ -155,12 +154,17 @@ impl<'a> TurnProcessingContext<'a> {
                 &text,
             )
         };
+        let assistant_phase = if continuation_decision.should_continue {
+            Some(uni::AssistantPhase::Commentary)
+        } else {
+            Some(uni::AssistantPhase::FinalAnswer)
+        };
         self.handle_assistant_response(
             text,
             reasoning,
             reasoning_details,
             response_streamed,
-            Some(uni::AssistantPhase::FinalAnswer),
+            assistant_phase,
         )?;
 
         if recovery_pass_response {
@@ -193,8 +197,15 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         if let Some(hooks) = self.lifecycle_hooks {
+            let stop_text = self
+                .working_history
+                .iter()
+                .rev()
+                .find(|message| message.role == uni::MessageRole::Assistant)
+                .map(|message| message.content.as_text().into_owned())
+                .unwrap_or_default();
             let outcome = hooks
-                .run_stop(&final_text, self.harness_state.stop_hook_active)
+                .run_stop(&stop_text, self.harness_state.stop_hook_active)
                 .await?;
             crate::agent::runloop::unified::turn::utils::render_hook_messages(
                 self.renderer,

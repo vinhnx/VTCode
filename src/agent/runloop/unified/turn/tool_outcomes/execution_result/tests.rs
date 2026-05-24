@@ -501,6 +501,79 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
     );
 }
 
+#[tokio::test]
+async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file() {
+    let workspace = tempdir().expect("tempdir");
+    let spool_dir = workspace.path().join(".vtcode/context/tool_outputs");
+    tokio::fs::create_dir_all(&spool_dir)
+        .await
+        .expect("create spool dir");
+    let spool_relative = ".vtcode/context/tool_outputs/unified_exec_test.txt";
+    let spool_absolute = workspace.path().join(spool_relative);
+    let mut content = String::new();
+    for idx in 0..40 {
+        content.push_str(&format!("./crate/file_{idx}.rs\n"));
+    }
+    tokio::fs::write(&spool_absolute, &content)
+        .await
+        .expect("write spool");
+
+    let serialized = maybe_inline_spooled_with_preview(
+        workspace.path(),
+        tool_names::UNIFIED_EXEC,
+        &serde_json::json!({
+            "output": "",
+            "stdout": "",
+            "stderr": "",
+            "spool_path": spool_relative,
+            "exit_code": 0,
+            "is_exited": true
+        }),
+    )
+    .await;
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    assert!(parsed.get("output").is_none(), "output should be stripped");
+    assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
+    assert_eq!(
+        parsed.get("result_ref_only"),
+        Some(&serde_json::json!(true))
+    );
+    let preview = parsed
+        .get("tail_preview")
+        .and_then(serde_json::Value::as_str)
+        .expect("tail_preview should be present so the model sees actual content");
+    assert!(
+        preview.contains("./crate/file_"),
+        "tail_preview should include actual spool content, got: {preview}"
+    );
+}
+
+#[tokio::test]
+async fn maybe_inline_spooled_with_preview_skips_preview_when_spool_missing() {
+    let workspace = tempdir().expect("tempdir");
+    let serialized = maybe_inline_spooled_with_preview(
+        workspace.path(),
+        tool_names::UNIFIED_EXEC,
+        &serde_json::json!({
+            "output": "",
+            "spool_path": ".vtcode/context/tool_outputs/missing.txt",
+            "exit_code": 0,
+            "is_exited": true
+        }),
+    )
+    .await;
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    assert!(parsed.get("tail_preview").is_none());
+    assert_eq!(
+        parsed.get("result_ref_only"),
+        Some(&serde_json::json!(true))
+    );
+}
+
 #[test]
 fn maybe_inline_spooled_drops_terminal_exec_metadata_without_continuation() {
     let serialized = maybe_inline_spooled(
