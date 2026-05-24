@@ -292,6 +292,7 @@ mod tests {
         PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingResult,
     };
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
+    use crate::agent::runloop::unified::turn::turn_loop::RECOVERY_CONTRACT_VIOLATION_REASON;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use vtcode_core::llm::provider as uni;
 

@@ -1,7 +1,7 @@
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
     HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-    POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery,
+    POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
     RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage,
     complete_turn_after_failed_tool_free_recovery, has_turn_usage,
     maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
@@ -221,10 +221,7 @@ fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_to_com
     let outcome = normalize_tool_free_recovery_break_outcome(
         &mut history,
         TurnLoopResult::Blocked {
-            reason: Some(
-                "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
-                    .to_string(),
-            ),
+            reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
         },
         true,
     );
