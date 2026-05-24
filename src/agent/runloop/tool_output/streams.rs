@@ -141,26 +141,42 @@ fn render_preview_line(
         return Ok(());
     }
 
-    let truncated_line = if truncate_line && display_width(display_line) > MAX_LINE_LENGTH {
-        Cow::Owned(truncate_with_ellipsis(display_line, MAX_LINE_LENGTH, "..."))
-    } else {
-        Cow::Borrowed(display_line)
-    };
+    let line = rendered_line.unwrap_or(display_line);
 
-    let line = rendered_line.unwrap_or(truncated_line.as_ref());
-    let prefixed_line = if let Some(prefix) = prefix {
-        let mut line_with_prefix = String::with_capacity(prefix.len() + line.len());
-        line_with_prefix.push_str(prefix);
-        line_with_prefix.push_str(line);
-        Cow::Owned(line_with_prefix)
+    if !truncate_line || display_width(line) <= MAX_LINE_LENGTH {
+        return match prefix {
+            Some(pfx) => {
+                let mut buf = String::with_capacity(pfx.len() + line.len());
+                buf.push_str(pfx);
+                buf.push_str(line);
+                renderer.line_with_override_style(
+                    fallback_style,
+                    override_style.unwrap_or(fallback_style.style()),
+                    &buf,
+                )
+            }
+            None => renderer.line_with_override_style(
+                fallback_style,
+                override_style.unwrap_or(fallback_style.style()),
+                line,
+            ),
+        };
+    }
+
+    let truncated = truncate_with_ellipsis(line, MAX_LINE_LENGTH, "...");
+    let text = if let Some(pfx) = prefix {
+        let mut buf = String::with_capacity(pfx.len() + truncated.len());
+        buf.push_str(pfx);
+        buf.push_str(&truncated);
+        buf
     } else {
-        Cow::Borrowed(line)
+        truncated
     };
 
     renderer.line_with_override_style(
         fallback_style,
         override_style.unwrap_or(fallback_style.style()),
-        prefixed_line.as_ref(),
+        &text,
     )
 }
 
@@ -206,6 +222,7 @@ fn format_diff_line_with_gutter_and_syntax(
     language_hint: Option<&str>,
     line_number_width: usize,
 ) -> String {
+    use std::fmt::Write as _;
     let (marker, content) = match line.kind {
         DiffDisplayKind::Addition => ('+', line.text.as_str()),
         DiffDisplayKind::Deletion => ('-', line.text.as_str()),
@@ -251,7 +268,7 @@ fn format_diff_line_with_gutter_and_syntax(
     out.push_str(marker_text);
     out.push(' ');
     out.push_str(&gutter_style.render().to_string());
-    out.push_str(&format!("{line_no:>line_number_width$} "));
+    let _ = write!(out, "{line_no:>line_number_width$} ");
     if let Some(highlighted) = highlight_diff_content(content, language_hint, bg) {
         out.push_str(&highlighted);
     } else if let Some(style) = base_style {
@@ -514,7 +531,7 @@ pub(crate) async fn render_stream_section(
             let _ = write!(
                 &mut msg_buffer,
                 "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                <Cow<'_, str> as AsRef<str>>::as_ref(&uppercase_title),
+                uppercase_title.as_ref(),
                 effective_normalized_content.len(),
                 total,
                 log_path.display()
@@ -550,18 +567,39 @@ pub(crate) async fn render_stream_section(
             renderer.render_markdown_output(fallback_style, &markdown)?;
         } else {
             for line in &tail {
-                let display_line = if display_width(line) > MAX_LINE_LENGTH {
-                    Cow::Owned(truncate_with_ellipsis(line, MAX_LINE_LENGTH, "..."))
-                } else {
-                    Cow::Borrowed(*line)
-                };
-                if apply_line_styles
+                if display_width(line) > MAX_LINE_LENGTH {
+                    let truncated = truncate_with_ellipsis(line, MAX_LINE_LENGTH, "...");
+                    if apply_line_styles
+                        && let Some(style) =
+                            select_line_style(tool_name, &truncated, git_styles, ls_styles)
+                    {
+                        render_preview_line(
+                            renderer,
+                            &truncated,
+                            None,
+                            None,
+                            false,
+                            fallback_style,
+                            Some(style),
+                        )?;
+                    } else {
+                        render_preview_line(
+                            renderer,
+                            &truncated,
+                            None,
+                            None,
+                            false,
+                            fallback_style,
+                            None,
+                        )?;
+                    }
+                } else if apply_line_styles
                     && let Some(style) =
-                        select_line_style(tool_name, &display_line, git_styles, ls_styles)
+                        select_line_style(tool_name, line, git_styles, ls_styles)
                 {
                     render_preview_line(
                         renderer,
-                        display_line.as_ref(),
+                        line,
                         None,
                         None,
                         false,
@@ -571,7 +609,7 @@ pub(crate) async fn render_stream_section(
                 } else {
                     render_preview_line(
                         renderer,
-                        display_line.as_ref(),
+                        line,
                         None,
                         None,
                         false,

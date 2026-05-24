@@ -166,6 +166,7 @@ pub(super) fn is_info_box_line(message: &MessageLine) -> bool {
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines.
 /// Returns Cow to avoid allocation when no changes are needed.
 #[expect(dead_code)]
+#[inline]
 pub(super) fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     // Quick check: if no triple newlines, return borrowed
     if !text.contains("\n\n\n") {

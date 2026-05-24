@@ -70,12 +70,11 @@ pub(crate) fn build_markdown_code_block(
     markdown.push_str(language.unwrap_or(""));
     markdown.push('\n');
     for line in lines {
-        let display_line = if truncate_long_lines && display_width(line) > super::MAX_LINE_LENGTH {
-            Cow::Owned(truncate_with_ellipsis(line, super::MAX_LINE_LENGTH, "..."))
+        if truncate_long_lines && display_width(line) > super::MAX_LINE_LENGTH {
+            markdown.push_str(&truncate_with_ellipsis(line, super::MAX_LINE_LENGTH, "..."));
         } else {
-            Cow::Borrowed(*line)
-        };
-        markdown.push_str(&display_line);
+            markdown.push_str(line);
+        }
         markdown.push('\n');
     }
     markdown.push_str("```");
@@ -275,6 +274,7 @@ mod markdown_block_tests {
     }
 }
 
+#[inline]
 pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
     if !input.contains(ESC_CHAR) {
         return Cow::Borrowed(input);

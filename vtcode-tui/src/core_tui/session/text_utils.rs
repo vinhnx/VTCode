@@ -11,6 +11,7 @@ use vtcode_commons::ansi_codes::ESC_CHAR;
 use crate::utils::ansi_parser::strip_ansi;
 
 /// Strips ANSI escape codes from text to ensure plain text output
+#[inline]
 pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
     if !text.contains(ESC_CHAR) {
         return Cow::Borrowed(text);

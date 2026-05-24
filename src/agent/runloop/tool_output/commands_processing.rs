@@ -8,7 +8,7 @@ use super::streams::strip_ansi_codes;
 
 pub(super) fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
     if let Some(array) = payload.get("command").and_then(Value::as_array) {
-        let mut tokens = Vec::new();
+        let mut tokens = Vec::with_capacity(array.len());
         for value in array {
             if let Some(segment) = value.as_str()
                 && !segment.is_empty()
@@ -102,14 +102,14 @@ pub(super) fn preprocess_terminal_stdout<'a>(
     let normalized = if let Some(filtered) = filtered_text {
         let stripped = strip_ansi_codes(&filtered);
         match stripped {
-            Cow::Borrowed(text) => normalize_carriage_returns(text).into_owned().into(),
-            Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+            Cow::Borrowed(text) => Cow::Owned(normalize_carriage_returns(text).into_owned()),
+            Cow::Owned(text) => Cow::Owned(normalize_carriage_returns(&text).into_owned()),
         }
     } else {
         let stripped = strip_ansi_codes(stdout);
         match stripped {
             Cow::Borrowed(text) => normalize_carriage_returns(text),
-            Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+            Cow::Owned(text) => Cow::Owned(normalize_carriage_returns(&text).into_owned()),
         }
     };
 
@@ -119,7 +119,10 @@ pub(super) fn preprocess_terminal_stdout<'a>(
         && looks_like_rust_diagnostic(normalized.as_ref());
 
     if should_strip_numbers {
-        return strip_rust_diagnostic_columns(normalized);
+        if let Some(stripped) = strip_rust_diagnostic_columns_from_str(normalized.as_ref()) {
+            return Cow::Owned(stripped);
+        }
+        return normalized;
     }
 
     if let Some(parts) = tokens
@@ -182,21 +185,7 @@ fn looks_like_rust_diagnostic(text: &str) -> bool {
     false
 }
 
-fn strip_rust_diagnostic_columns<'a>(content: Cow<'a, str>) -> Cow<'a, str> {
-    match content {
-        Cow::Borrowed(text) => strip_rust_diagnostic_columns_from_str(text)
-            .map(Cow::Owned)
-            .unwrap_or_else(|| Cow::Borrowed(text)),
-        Cow::Owned(text) => {
-            if let Some(stripped) = strip_rust_diagnostic_columns_from_str(&text) {
-                Cow::Owned(stripped)
-            } else {
-                Cow::Owned(text)
-            }
-        }
-    }
-}
-
+#[inline]
 fn strip_rust_diagnostic_columns_from_str(input: &str) -> Option<String> {
     if input.is_empty() {
         return None;
@@ -270,6 +259,7 @@ fn rust_diagnostic_prefix_end(line: &str) -> Option<usize> {
     None
 }
 
+#[inline]
 fn normalize_carriage_returns(input: &str) -> Cow<'_, str> {
     if !input.contains('\r') {
         return Cow::Borrowed(input);

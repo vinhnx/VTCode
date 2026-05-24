@@ -246,7 +246,7 @@ fn shorten(text: &str, max_len: usize) -> String {
         return text.to_string();
     }
 
-    let mut result = String::new();
+    let mut result = String::with_capacity(max_len);
     for (idx, ch) in text.chars().enumerate() {
         if idx + ELLIPSIS.len() >= max_len {
             result.push_str(ELLIPSIS);

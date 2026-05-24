@@ -291,8 +291,8 @@ pub enum DiffLineKind {
 #[derive(Debug, Clone, Serialize)]
 pub struct DiffLine {
     pub kind: DiffLineKind,
-    pub old_line: Option<usize>,
-    pub new_line: Option<usize>,
+    pub old_line: Option<u32>,
+    pub new_line: Option<u32>,
     pub text: String,
 }
 
@@ -354,8 +354,8 @@ fn collect_line_records<'a>(
 ) -> Vec<LineRecord<'a>> {
     let (old_encoded, new_encoded) = encode_line_sequences(old_lines, new_lines);
     let mut records = Vec::with_capacity(old_lines.len() + new_lines.len());
-    let mut old_index = 0usize;
-    let mut new_index = 0usize;
+    let mut old_index = 0u32;
+    let mut new_index = 0u32;
 
     for chunk in compute_diff_chunks(old_encoded.as_str(), new_encoded.as_str()) {
         match chunk {
@@ -363,7 +363,7 @@ fn collect_line_records<'a>(
                 for _ in text.chars() {
                     let old_line = old_index + 1;
                     let new_line = new_index + 1;
-                    let line = old_lines[old_index];
+                    let line = old_lines[old_index as usize];
                     records.push(LineRecord {
                         kind: DiffLineKind::Context,
                         old_line: Some(old_line),
@@ -380,7 +380,7 @@ fn collect_line_records<'a>(
                 for _ in text.chars() {
                     let old_line = old_index + 1;
                     let anchor_new = new_index + 1;
-                    let line = old_lines[old_index];
+                    let line = old_lines[old_index as usize];
                     records.push(LineRecord {
                         kind: DiffLineKind::Deletion,
                         old_line: Some(old_line),
@@ -396,7 +396,7 @@ fn collect_line_records<'a>(
                 for _ in text.chars() {
                     let new_line = new_index + 1;
                     let anchor_old = old_index + 1;
-                    let line = new_lines[new_index];
+                    let line = new_lines[new_index as usize];
                     records.push(LineRecord {
                         kind: DiffLineKind::Addition,
                         old_line: None,
@@ -465,11 +465,11 @@ fn next_token_char(counter: &mut u32) -> Option<char> {
 #[derive(Debug)]
 struct LineRecord<'a> {
     kind: DiffLineKind,
-    old_line: Option<usize>,
-    new_line: Option<usize>,
+    old_line: Option<u32>,
+    new_line: Option<u32>,
     text: &'a str,
-    anchor_old: usize,
-    anchor_new: usize,
+    anchor_old: u32,
+    anchor_new: u32,
 }
 
 fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
@@ -488,14 +488,14 @@ fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
             .filter_map(|r| r.old_line)
             .min()
             .or_else(|| slice.iter().map(|r| r.anchor_old).min())
-            .unwrap_or(1);
+            .unwrap_or(1) as usize;
 
         let new_start = slice
             .iter()
             .filter_map(|r| r.new_line)
             .min()
             .or_else(|| slice.iter().map(|r| r.anchor_new).min())
-            .unwrap_or(1);
+            .unwrap_or(1) as usize;
 
         let old_lines = slice
             .iter()

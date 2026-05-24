@@ -90,8 +90,8 @@ impl GitDiffPalette {
 pub struct DiffLine {
     pub line_type: DiffLineType,
     pub content: String,
-    pub line_number_old: Option<usize>,
-    pub line_number_new: Option<usize>,
+    pub line_number_old: Option<u32>,
+    pub line_number_new: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

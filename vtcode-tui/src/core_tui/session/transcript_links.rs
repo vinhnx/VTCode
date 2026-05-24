@@ -571,6 +571,7 @@ fn may_contain_link_candidate_text(text: &str) -> bool {
         || text.contains("../")
 }
 
+#[inline]
 pub(crate) fn transcript_line_text<'a>(line: &'a Line<'a>) -> Cow<'a, str> {
     match line.spans.as_slice() {
         [] => Cow::Borrowed(""),

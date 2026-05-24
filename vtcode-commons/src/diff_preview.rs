@@ -23,7 +23,7 @@ pub enum DiffDisplayKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiffDisplayLine {
     pub kind: DiffDisplayKind,
-    pub line_number: Option<usize>,
+    pub line_number: Option<u32>,
     pub text: String,
 }
 
@@ -92,14 +92,14 @@ pub fn display_lines_from_hunks(hunks: &[DiffHunk]) -> Vec<DiffDisplayLine> {
 
 pub fn display_lines_from_unified_diff(diff_content: &str) -> Vec<DiffDisplayLine> {
     let mut lines = Vec::new();
-    let mut old_line_no = 0usize;
-    let mut new_line_no = 0usize;
+    let mut old_line_no = 0u32;
+    let mut new_line_no = 0u32;
     let mut in_hunk = false;
 
     for line in diff_content.lines() {
         if let Some((old_start, new_start)) = parse_hunk_starts(line) {
-            old_line_no = old_start;
-            new_line_no = new_start;
+            old_line_no = old_start as u32;
+            new_line_no = new_start as u32;
             in_hunk = true;
             lines.push(DiffDisplayLine {
                 kind: DiffDisplayKind::HunkHeader,
