@@ -365,7 +365,7 @@ impl PromptOptimizer {
             original_prompt: original_prompt.to_string(),
             optimized_prompt: optimized.clone(),
             model_used: target_model.to_string(),
-            tokens_saved: Some(tokens_saved.try_into().unwrap_or(u32::MAX)),
+            tokens_saved: Some(tokens_saved.min(u32::MAX as usize) as u32),
             quality_score: Some(0.8), // Placeholder quality score
             created_at: current_timestamp(),
             last_used: current_timestamp(),

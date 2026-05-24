@@ -373,6 +373,7 @@ impl ResourceLimits {
             || self.max_pids > 0
             || self.max_disk_mb > 0
             || self.cpu_time_secs > 0
+            || self.timeout_secs > 0
     }
 
     /// Get the effective timeout in seconds.
@@ -1234,7 +1235,7 @@ mod tests {
         assert_eq!(limits.max_memory_mb, 0);
         assert_eq!(limits.max_pids, 0);
         assert_eq!(limits.timeout_secs, 300);
-        assert!(!limits.has_limits());
+        assert!(limits.has_limits());
     }
 
     #[test]

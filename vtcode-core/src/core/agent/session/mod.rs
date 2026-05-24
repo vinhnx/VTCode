@@ -176,18 +176,19 @@ impl AgentSessionState {
     }
 
     pub fn finalize_outcome(&mut self, max_turns: usize) {
-        if self.outcome == TaskOutcome::Unknown {
-            if self.is_completed {
-                self.outcome = TaskOutcome::Success;
-            } else if self.tool_loop_limit_hit {
-                self.outcome = TaskOutcome::tool_loop_limit_reached(
-                    self.constraints.max_tool_loops,
-                    self.consecutive_tool_loops,
-                );
-            } else if self.stats.turns_executed >= max_turns {
-                self.outcome =
-                    TaskOutcome::turn_limit_reached(max_turns, self.stats.turns_executed);
-            }
+        if self.outcome != TaskOutcome::Unknown {
+            return;
+        }
+        // Priority order: tool loop limit > completion > turn limit
+        if self.tool_loop_limit_hit {
+            self.outcome = TaskOutcome::tool_loop_limit_reached(
+                self.constraints.max_tool_loops,
+                self.consecutive_tool_loops,
+            );
+        } else if self.is_completed {
+            self.outcome = TaskOutcome::Success;
+        } else if self.stats.turns_executed >= max_turns {
+            self.outcome = TaskOutcome::turn_limit_reached(max_turns, self.stats.turns_executed);
         }
     }
 

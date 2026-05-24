@@ -237,7 +237,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
 
         let start = Instant::now();
         let mut result = next(request).await;
-        let duration = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
         result.duration_ms = duration;
 
