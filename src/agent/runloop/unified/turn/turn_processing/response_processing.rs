@@ -69,6 +69,15 @@ pub(crate) fn process_llm_response(
         proposed_plan = extraction.plan_text;
     }
 
+    // Strip DSML markup from text before rendering to prevent raw tags
+    // from leaking into the user-visible output.
+    if let Some(ref text) = final_text
+        && (text.contains("<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}")
+            || text.contains("</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}"))
+    {
+        final_text = Some(crate::agent::runloop::text_tools::strip_dsml_markup(text));
+    }
+
     if allow_tool_calls
         && tool_calls.is_empty()
         && let Some(text) = final_text.as_deref()

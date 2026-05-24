@@ -5,6 +5,32 @@ use crate::agent::runloop::text_tools::canonical::canonicalize_tool_result;
 const DSML_TAG_PREFIX: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
 const DSML_CLOSE_PREFIX: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
 
+/// Strips DSML markup from text, removing all `<||DSML||...>` and `</||DSML||...>` tags
+/// while preserving non-tag content (including parameter values).
+pub(crate) fn strip_dsml_markup(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    let open_prefix = DSML_TAG_PREFIX;
+    let close_prefix = DSML_CLOSE_PREFIX;
+    let open_bytes = open_prefix.as_bytes();
+    let close_bytes = close_prefix.as_bytes();
+
+    while !rest.is_empty() {
+        let rest_bytes = rest.as_bytes();
+        if rest_bytes.starts_with(open_bytes) || rest_bytes.starts_with(close_bytes) {
+            let Some(gt) = rest.find('>') else {
+                break;
+            };
+            rest = &rest[gt + 1..];
+        } else if let Some(ch) = rest.chars().next() {
+            out.push(ch);
+            rest = &rest[ch.len_utf8()..];
+        }
+    }
+
+    out
+}
+
 pub(super) fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
     let invoke_open = format!("{}invoke name=\"", DSML_TAG_PREFIX);
     let invoke_close = format!("{}invoke>", DSML_CLOSE_PREFIX);
@@ -155,5 +181,58 @@ mod tests {
         );
 
         assert!(parse_dsml_tool_call(text).is_none());
+    }
+
+    // --- strip_dsml_markup tests ---
+
+    #[test]
+    fn strip_dsml_preserves_plain_text() {
+        let input = "This is plain text without any DSML tags.";
+        let result = strip_dsml_markup(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn strip_dsml_removes_single_invoke_with_params() {
+        let text = concat!(
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}tool_calls>\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"task_tracker\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"action\" string=\"true\">update</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"item_index\" string=\"false\">1</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>\n",
+            "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}tool_calls>",
+        );
+        let result = strip_dsml_markup(text);
+        assert!(!result.contains("DSML"));
+        assert!(!result.contains("\u{ff5c}"));
+    }
+
+    #[test]
+    fn strip_dsml_preserves_text_around_tags() {
+        let text = concat!(
+            "Here is my synthesis.\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"read_file\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"path\" string=\"true\">/tmp/foo.txt</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>\n",
+            "The key finding is...",
+        );
+        let result = strip_dsml_markup(text);
+        assert!(result.contains("Here is my synthesis."));
+        assert!(result.contains("The key finding is..."));
+        assert!(!result.contains("DSML"));
+    }
+
+    #[test]
+    fn strip_dsml_empty_for_pure_tags() {
+        let text = concat!(
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}tool_calls>\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"read_file\">\n",
+            "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter name=\"path\" string=\"true\">/tmp/foo.txt</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>\n",
+            "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>\n",
+            "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}tool_calls>",
+        );
+        let result = strip_dsml_markup(text);
+        let trimmed = result.trim();
+        assert!(trimmed.is_empty() || !trimmed.contains("DSML"));
     }
 }

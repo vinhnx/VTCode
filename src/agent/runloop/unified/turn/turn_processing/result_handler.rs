@@ -210,6 +210,31 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 && params.ctx.recovery_is_tool_free()
                 && crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
             {
+                let cleaned = crate::agent::runloop::text_tools::strip_dsml_markup(&text)
+                    .trim()
+                    .to_string();
+                // If DSML stripping produced a clean, markup-free text, use it.
+                // Otherwise fall back to the original Blocked behavior for
+                // non-DSML tool-call markup formats.
+                if !cleaned.is_empty()
+                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
+                        .is_none()
+                {
+                    let _ = params.ctx.renderer.line(
+                        MessageStyle::Warning,
+                        "[!] Stripped tool-call markup from recovery synthesis.",
+                    );
+                    return params
+                        .ctx
+                        .handle_text_response(
+                            cleaned,
+                            reasoning,
+                            reasoning_details,
+                            proposed_plan,
+                            params.response_streamed,
+                        )
+                        .await;
+                }
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));

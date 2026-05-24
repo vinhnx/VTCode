@@ -14,3 +14,4 @@ mod tests;
 
 pub(crate) use code_fence::{CodeFenceBlock, extract_code_fence_blocks};
 pub(crate) use detect::detect_textual_tool_call;
+pub(crate) use parse_dsml::strip_dsml_markup;

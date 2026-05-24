@@ -68,7 +68,7 @@ use vtcode_core::core::agent::error_recovery::ErrorType;
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 1024;
 /// Maximum number of times the recovery pass is retried when the model
 /// returns tool calls (discarded) instead of text during tool-free recovery.
-const MAX_RECOVERY_RETRIES: u8 = 1;
+const MAX_RECOVERY_RETRIES: u8 = 2;
 pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 const RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER: &str = "I couldn't complete the final recovery synthesis, but the latest validated tool outputs in this turn are still usable. Reuse them directly.";

@@ -347,8 +347,10 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
     }
 }
 
-fn navigation_loop_guidance(plan_mode: bool) -> &'static str {
-    if plan_mode {
+fn navigation_loop_guidance(plan_mode: bool, repetition: usize) -> &'static str {
+    if repetition >= 2 {
+        "CRITICAL: You have triggered the navigation-loop guard repeatedly. STOP all read/search operations immediately. DO NOT browse or explore further. Provide a direct synthesis with the next action or ask one blocking question, and nothing else."
+    } else if plan_mode {
         "WARNING: Too many read/search steps in Plan Mode without an actionable output. Stop browsing, summarize key findings, then update `task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
     } else {
         "WARNING: Too many read/search steps without edits or execution. Summarize findings and propose the next concrete edit/action, or explain the blocker."
@@ -388,8 +390,12 @@ pub(crate) async fn handle_turn_balancer(
 
     // NL2Repo-Bench: Navigation Loop Detection
     if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD {
+        repeated_tool_attempts.navigation_loop_recoveries = repeated_tool_attempts
+            .navigation_loop_recoveries
+            .saturating_add(1);
+        let recurrence = repeated_tool_attempts.navigation_loop_recoveries;
         let recovery_reason = format!(
-            "Navigation loop detected after {} consecutive read/search steps. Tools are disabled on the next pass; summarize findings and propose the next concrete action.",
+            "Navigation loop detected after {} consecutive read/search steps (recurrence #{recurrence}). Tools are disabled on the next pass; summarize findings and propose the next concrete action.",
             repeated_tool_attempts.consecutive_navigations
         );
         ctx.activate_recovery(recovery_reason.clone());
@@ -402,7 +408,7 @@ pub(crate) async fn handle_turn_balancer(
         ctx.working_history.push(uni::Message::system(format!(
             "{} {}",
             recovery_reason,
-            navigation_loop_guidance(ctx.session_stats.is_plan_mode())
+            navigation_loop_guidance(ctx.session_stats.is_plan_mode(), recurrence)
         )));
         return apply_balancer_recovery(repeated_tool_attempts);
     }
@@ -605,15 +611,23 @@ mod tests {
 
     #[test]
     fn navigation_loop_guidance_mentions_task_tracker_in_plan_mode() {
-        let guidance = navigation_loop_guidance(true);
+        let guidance = navigation_loop_guidance(true, 1);
         assert!(guidance.contains("task_tracker"));
     }
 
     #[test]
     fn navigation_loop_guidance_uses_generic_text_outside_plan_mode() {
-        let guidance = navigation_loop_guidance(false);
+        let guidance = navigation_loop_guidance(false, 1);
         assert!(guidance.contains("read/search"));
         assert!(!guidance.contains("task_tracker"));
+    }
+
+    #[test]
+    fn navigation_loop_guidance_escalates_on_repetition() {
+        let guidance = navigation_loop_guidance(false, 2);
+        assert!(
+            guidance.contains("CRITICAL: You have triggered the navigation-loop guard repeatedly")
+        );
     }
 
     #[test]

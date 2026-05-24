@@ -23,6 +23,8 @@ pub(crate) struct LoopTracker {
     pub consecutive_mutations: usize,
     /// Counter for consecutive read/search operations without action or synthesis
     pub consecutive_navigations: usize,
+    /// Number of times navigation-loop recovery has fired in this session.
+    pub navigation_loop_recoveries: usize,
 }
 
 impl LoopTracker {
@@ -32,6 +34,7 @@ impl LoopTracker {
             low_signal_attempts: FxHashMap::with_capacity_and_hasher(8, Default::default()),
             consecutive_mutations: 0,
             consecutive_navigations: 0,
+            navigation_loop_recoveries: 0,
         }
     }
 
@@ -493,6 +496,7 @@ mod tests {
         tracker.consecutive_mutations = 2;
         tracker.consecutive_navigations = 4;
         tracker.record_low_signal("unified_search::grep::src".to_string());
+        tracker.navigation_loop_recoveries = 3;
 
         tracker.reset_after_balancer_recovery();
 
@@ -500,6 +504,7 @@ mod tests {
         assert_eq!(tracker.max_low_signal_count(), 0);
         assert_eq!(tracker.consecutive_mutations, 0);
         assert_eq!(tracker.consecutive_navigations, 0);
+        assert_eq!(tracker.navigation_loop_recoveries, 3);
     }
 
     #[test]
