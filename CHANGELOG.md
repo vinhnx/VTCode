@@ -2,6 +2,44 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.108.2 - 2026-05-24
+
+### Highlights
+#### Bug Fixes
+
+- Improve tool output rendering for command success with no output (de2f5bad) 
+- Ensure duration calculations do not exceed maximum limits (c0fecf23) 
+#### Features
+
+- Add 'file' alias for file path parameters across tools (381be8e5) 
+- Update tool policies and enhance DeepSeek provider handling (afaad984) 
+- Add new tools and update policies in tool-policy.json; refactor diff rendering to use standard ANSI colors (991d1590) 
+- Enhance tool output handling and add command summary recording (66d2691d) 
+- Add DSML parsing functionality and update reasoning effort configuration (fd749d7c) 
+- Enhance tool policy management and improve recovery handling (e4ef7275) 
+- Expose RecoveryPhase enum and improve recovery contract violation handling (30bde025) 
+- Implement DSML markup stripping and enhance navigation loop guidance (9e6b10a6) 
+- Remove tool policy JSON and enhance auto-approval logic in permission prompts (bfea75d4) 
+- Add hide header option for TUI to enhance user interface customization (b73d94fb) 
+- Improve tool policy permission management and remove auto-scroll functionality (0b833ca9) 
+- Enhance interim text continuation logic and improve conclusive marker detection (b76b7675) 
+- Refactor interim text continuation logic and enhance conclusive marker detection (2e5b96ea) 
+- Add command word splitting functionality for shell approval commands (3467ab3d) 
+- Optimize vector initializations and add #[must_use] annotations for clarity (e90ee59b) 
+- Update user message handling to use string slice for efficiency (854f732f) 
+### Other Changes
+#### Other
+
+- Update config (632d5235) 
+- Refactor completion handling and enhance tool recovery logic (ce916001) 
+- Optimize string allocations and improve performance in various modules (2300d49f) 
+- Refactor environment variable handling with env_lock; remove unsafe code in tests (407414e0) 
+- Update tool policies to allow additional actions and modify reasoning effort handling (2266862a) 
+#### Refactors
+
+- Streamline tool policies and enhance DeepSeek provider error handling (9f1a794f) 
+- Update message styles for tool output rendering (63263fa1) 
+- Simplify condition checks and enhance clause intent evaluation logic (8abcbc01) 
 ## 0.108.1 - 2026-05-22
 
 ### Highlights
