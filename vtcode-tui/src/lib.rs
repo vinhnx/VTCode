@@ -1,9 +1,6 @@
 #![allow(
-    clippy::unused_result_ok,
     clippy::unreachable,
-    clippy::panic,
     clippy::cast_sign_loss,
-    clippy::unwrap_used,
     clippy::map_err_ignore,
     unfulfilled_lint_expectations
 )]

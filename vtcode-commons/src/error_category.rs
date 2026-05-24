@@ -20,6 +20,7 @@
 
 use std::borrow::Cow;
 use std::fmt;
+use std::fmt::Write;
 use std::time::Duration;
 
 /// Canonical error category used throughout VT Code for consistent
@@ -91,6 +92,7 @@ pub enum BackoffStrategy {
 impl ErrorCategory {
     /// Whether this error category is safe to retry.
     #[inline]
+    #[must_use]
     pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
@@ -104,6 +106,7 @@ impl ErrorCategory {
 
     /// Whether this category should count toward circuit breaker transitions.
     #[inline]
+    #[must_use]
     pub const fn should_trip_circuit_breaker(&self) -> bool {
         matches!(
             self,
@@ -118,12 +121,14 @@ impl ErrorCategory {
     /// Whether this error is an LLM argument mistake (should not count toward
     /// circuit breaker thresholds).
     #[inline]
+    #[must_use]
     pub const fn is_llm_mistake(&self) -> bool {
         matches!(self, ErrorCategory::InvalidParameters)
     }
 
     /// Whether this error represents a permanent, non-recoverable condition.
     #[inline]
+    #[must_use]
     pub const fn is_permanent(&self) -> bool {
         matches!(
             self,
@@ -135,6 +140,7 @@ impl ErrorCategory {
     }
 
     /// Get the recommended retryability for this error category.
+    #[must_use]
     pub fn retryability(&self) -> Retryability {
         match self {
             ErrorCategory::Network | ErrorCategory::ServiceUnavailable => Retryability::Retryable {
@@ -169,6 +175,7 @@ impl ErrorCategory {
 
     /// Get recovery suggestions for this error category.
     /// Returns static strings to avoid allocation.
+    #[must_use]
     pub fn recovery_suggestions(&self) -> Vec<Cow<'static, str>> {
         match self {
             ErrorCategory::Network => vec![
@@ -244,6 +251,7 @@ impl ErrorCategory {
     }
 
     /// Get a concise, user-friendly label for this error category.
+    #[must_use]
     pub const fn user_label(&self) -> &'static str {
         match self {
             ErrorCategory::Network => "Network error",
@@ -281,6 +289,7 @@ impl fmt::Display for ErrorCategory {
 /// This uses string matching as a last resort when the original error type has
 /// been erased through `anyhow` wrapping. Typed conversions (e.g., `From<LLMError>`)
 /// should be preferred where the original error type is available.
+#[must_use]
 pub fn classify_anyhow_error(err: &anyhow::Error) -> ErrorCategory {
     let msg = err.to_string().to_ascii_lowercase();
     classify_error_message(&msg)
@@ -291,6 +300,7 @@ pub fn classify_anyhow_error(err: &anyhow::Error) -> ErrorCategory {
 /// Marker groups are checked in priority order to handle overlapping patterns
 /// (e.g., "tool permission denied by policy" → `PolicyViolation`, not `PermissionDenied`).
 #[inline]
+#[must_use]
 pub fn classify_error_message(msg: &str) -> ErrorCategory {
     let msg = if msg.as_bytes().iter().any(|b| b.is_ascii_uppercase()) {
         Cow::Owned(msg.to_ascii_lowercase())
@@ -526,6 +536,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
 /// This is a focused classifier for LLM provider errors, combining
 /// non-retryable and retryable marker checks for the request retry path.
 #[inline]
+#[must_use]
 pub fn is_retryable_llm_error_message(msg: &str) -> bool {
     let category = classify_error_message(msg);
     category.is_retryable()
@@ -596,7 +607,6 @@ fn classify_llm_metadata(
         hint.push(' ');
     }
     if let Some(status) = metadata.status {
-        use std::fmt::Write;
         let _ = write!(&mut hint, "{status}");
     }
 

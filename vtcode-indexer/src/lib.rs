@@ -516,7 +516,7 @@ impl SimpleIndexer {
     /// Find files by name pattern.
     pub fn find_files(&self, pattern: &str) -> Result<Vec<String>> {
         let regex = Regex::new(pattern)?;
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(self.index_cache.len());
 
         for file_path in self.index_cache.keys() {
             if regex.is_match(file_path) {

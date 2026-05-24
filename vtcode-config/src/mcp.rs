@@ -391,6 +391,7 @@ impl Default for McpAllowListConfig {
 
 impl McpAllowListConfig {
     /// Determine whether a tool is permitted for the given provider
+    #[must_use]
     pub fn is_tool_allowed(&self, provider: &str, tool_name: &str) -> bool {
         if !self.enforce {
             return true;
@@ -400,6 +401,7 @@ impl McpAllowListConfig {
     }
 
     /// Determine whether a resource is permitted for the given provider
+    #[must_use]
     pub fn is_resource_allowed(&self, provider: &str, resource: &str) -> bool {
         if !self.enforce {
             return true;
@@ -409,6 +411,7 @@ impl McpAllowListConfig {
     }
 
     /// Determine whether a prompt is permitted for the given provider
+    #[must_use]
     pub fn is_prompt_allowed(&self, provider: &str, prompt: &str) -> bool {
         if !self.enforce {
             return true;

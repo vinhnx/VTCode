@@ -154,7 +154,7 @@ impl MarkdownStorage {
     fn format_raw_data<T: Serialize>(&self, data: &T) -> String {
         match serde_json::to_value(data) {
             Ok(serde_json::Value::Object(map)) => {
-                let mut lines = Vec::new();
+                let mut lines = Vec::with_capacity(map.len());
                 for (key, value) in map {
                     lines.push(format!("- **{}**: {}", key, self.format_value(&value)));
                 }

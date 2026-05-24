@@ -88,6 +88,7 @@ fn no_color_env_active_from(value: Option<OsString>) -> bool {
 }
 
 /// Returns true when NO_COLOR is present and non-empty.
+#[must_use]
 pub fn no_color_env_active() -> bool {
     no_color_env_active_from(std::env::var_os("NO_COLOR"))
 }
@@ -113,6 +114,7 @@ pub fn reset_color_output_policy_from_env() {
 }
 
 /// Returns true when runtime color output is enabled.
+#[must_use]
 pub fn color_output_enabled() -> bool {
     current_color_output_policy().enabled
 }

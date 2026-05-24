@@ -613,21 +613,25 @@ pub mod semantic {
 }
 
 #[inline]
+#[must_use]
 pub fn contains_ansi(text: &str) -> bool {
     text.contains(ESC_CHAR)
 }
 
 #[inline]
+#[must_use]
 pub fn starts_with_ansi(text: &str) -> bool {
     text.starts_with(ESC_CHAR)
 }
 
 #[inline]
+#[must_use]
 pub fn ends_with_ansi(text: &str) -> bool {
     text.ends_with('m') && text.contains(ESC)
 }
 
 #[inline]
+#[must_use]
 pub fn display_width(text: &str) -> usize {
     crate::ansi::strip_ansi(text).len()
 }

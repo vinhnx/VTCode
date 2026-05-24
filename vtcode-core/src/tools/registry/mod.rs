@@ -463,7 +463,7 @@ mod tests {
             )
             .await?;
 
-        registry.allow_all_tools().await.ok();
+        registry.allow_all_tools().await?;
 
         let available = registry.available_tools().await;
         assert!(available.contains(&CUSTOM_TOOL_NAME.to_string()));

@@ -757,7 +757,7 @@ fn normalize_subagent_tool_list(tools: Option<Vec<String>>) -> Option<Vec<String
 }
 
 fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
-    let mut normalized: Vec<String> = Vec::new();
+    let mut normalized: Vec<String> = Vec::with_capacity(tools.len());
     for tool in tools {
         let trimmed = tool.trim();
         let mapped_names = normalize_subagent_tool_name(trimmed);
