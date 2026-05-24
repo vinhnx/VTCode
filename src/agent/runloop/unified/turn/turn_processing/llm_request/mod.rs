@@ -587,8 +587,12 @@ pub(crate) async fn execute_llm_request(
                             // `thinking` parameter causes ExecutionError on
                             // post-tool follow-ups where tool messages are
                             // already in context. Reasoning isn't needed for
-                            // a synthesis retry.
-                            request.reasoning_effort = None;
+                            // a synthesis retry. Use Some(None) instead of None
+                            // to explicitly disable thinking mode via the
+                            // `thinking: {"type": "disabled"}` payload field.
+                            request.reasoning_effort = Some(
+                                vtcode_core::config::types::ReasoningEffortLevel::None,
+                            );
                             compacted_tool_retry_used = true;
                             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                                 ctx.renderer,
