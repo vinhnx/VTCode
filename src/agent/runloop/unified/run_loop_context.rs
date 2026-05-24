@@ -43,7 +43,7 @@ pub(crate) enum TurnExecutionPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RecoveryPhase {
+pub(crate) enum RecoveryPhase {
     Inactive,
     Pending,
     InPass,
