@@ -15,6 +15,7 @@ use crate::agent::runloop::unified::turn::context::{
 };
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
+use crate::agent::runloop::unified::turn::turn_loop::RECOVERY_CONTRACT_VIOLATION_REASON;
 
 /// Result of processing a single turn.
 pub(crate) struct HandleTurnProcessingResultParams<'a> {
@@ -112,10 +113,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 && params.ctx.recovery_is_tool_free()
             {
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(
-                        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
-                            .to_string(),
-                    ),
+                    reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));
             }
 
@@ -213,10 +211,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 && crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
             {
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(
-                        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
-                            .to_string(),
-                    ),
+                    reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));
             }
 
@@ -417,7 +412,7 @@ mod tests {
         assert!(matches!(
             outcome,
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
-            if reason.contains("tool-free synthesis pass")
+            if reason == RECOVERY_CONTRACT_VIOLATION_REASON
         ));
     }
 
@@ -623,7 +618,7 @@ mod tests {
         assert!(matches!(
             outcome,
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
-            if reason.contains("tool-free synthesis pass")
+            if reason == RECOVERY_CONTRACT_VIOLATION_REASON
         ));
     }
 

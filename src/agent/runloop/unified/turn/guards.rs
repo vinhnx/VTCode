@@ -635,7 +635,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn navigation_loop_schedules_recovery_and_progress_only_recovery_text_blocks() {
+    async fn navigation_loop_schedules_recovery_and_progress_only_recovery_text_completes() {
         let mut backing = TestTurnProcessingBacking::new(8).await;
         let mut ctx = backing.turn_processing_context();
         let mut tracker = LoopTracker::new();
@@ -666,13 +666,14 @@ mod tests {
 
         assert!(matches!(
             recovery_outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
     }
 
     #[tokio::test]
-    async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_blocks() {
+    async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_completes()
+    {
         let mut backing = TestTurnProcessingBacking::new(8).await;
         backing.set_loop_limit(tool_names::UNIFIED_SEARCH, 2);
         let seeded_args = json!({"action":"grep","path":"vtcode-tui","pattern":"-> Result"});
@@ -746,7 +747,7 @@ mod tests {
 
         assert!(matches!(
             recovery_outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
         assert!(backing.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));

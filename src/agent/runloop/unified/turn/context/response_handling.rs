@@ -137,13 +137,12 @@ impl<'a> TurnProcessingContext<'a> {
     ) -> anyhow::Result<TurnHandlerOutcome> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
         let tool_free_recovery_pass = recovery_pass_response && self.recovery_is_tool_free();
-        let recovery_progress_only = tool_free_recovery_pass && is_interim_progress_update(&text);
         let final_text = text.clone();
         let continuation_decision = if tool_free_recovery_pass {
             InterimTextContinuationDecision {
                 should_continue: false,
                 reason: "recovery_pass",
-                is_interim_progress: recovery_progress_only,
+                is_interim_progress: false,
                 last_user_follow_up: false,
                 recent_tool_activity: false,
                 last_user_requested_progressive_work: false,
@@ -166,14 +165,6 @@ impl<'a> TurnProcessingContext<'a> {
 
         if recovery_pass_response {
             self.finish_recovery_pass();
-            if recovery_progress_only {
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(
-                        "Recovery mode requested a final tool-free synthesis pass, but the model only described another next step."
-                            .to_string(),
-                    ),
-                }));
-            }
         }
 
         tracing::info!(

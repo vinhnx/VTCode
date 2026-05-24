@@ -6,7 +6,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
-    POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 
@@ -152,7 +153,7 @@ pub(super) fn normalize_tool_free_recovery_break_outcome(
             outcome_result,
             TurnLoopResult::Blocked {
                 reason: Some(ref reason)
-            } if reason.contains("tool-free synthesis pass")
+            } if reason == RECOVERY_CONTRACT_VIOLATION_REASON
         );
 
     if should_fallback {

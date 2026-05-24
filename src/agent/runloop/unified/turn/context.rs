@@ -13,7 +13,7 @@ mod runtime_context;
 
 use self::continuation::{
     AUTONOMOUS_CONTINUE_DIRECTIVE, InterimTextContinuationDecision,
-    evaluate_interim_text_continuation, is_interim_progress_update, push_system_directive_once,
+    evaluate_interim_text_continuation, push_system_directive_once,
 };
 use self::message_history::{
     build_combined_reasoning, parse_reasoning_detail_value, push_assistant_message,

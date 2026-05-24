@@ -440,7 +440,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recovery_pass_progress_only_text_breaks_turn_instead_of_continuing() {
+    async fn recovery_pass_progress_only_text_completes_turn() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
         ctx.activate_recovery("loop detector");
@@ -459,13 +459,13 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
     }
 
     #[tokio::test]
-    async fn recovery_pass_diagnostic_then_next_step_text_breaks_turn() {
+    async fn recovery_pass_diagnostic_then_next_step_text_completes_turn() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
         ctx.activate_recovery("turn balancer");
@@ -484,7 +484,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
     }
