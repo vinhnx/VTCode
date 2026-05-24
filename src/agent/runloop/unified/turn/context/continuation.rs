@@ -12,6 +12,26 @@ pub(super) struct InterimTextContinuationDecision {
     pub(super) last_user_requested_progressive_work: bool,
 }
 
+impl InterimTextContinuationDecision {
+    fn with(
+        should_continue: bool,
+        reason: &'static str,
+        is_interim_progress: bool,
+        last_user_follow_up: bool,
+        recent_tool_activity: bool,
+        last_user_requested_progressive_work: bool,
+    ) -> Self {
+        Self {
+            should_continue,
+            reason,
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_progressive_work,
+        }
+    }
+}
+
 pub(super) fn evaluate_interim_text_continuation(
     full_auto: bool,
     plan_mode: bool,
@@ -23,89 +43,55 @@ pub(super) fn evaluate_interim_text_continuation(
     let recent_tool_activity = has_recent_tool_activity(history);
     let last_user_requested_progressive_work = last_user_requested_progressive_work(history);
 
-    if plan_mode {
-        return InterimTextContinuationDecision {
-            should_continue: false,
-            reason: "plan_mode",
+    let d = |should_continue: bool, reason: &'static str| {
+        InterimTextContinuationDecision::with(
+            should_continue,
+            reason,
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
             last_user_requested_progressive_work,
-        };
+        )
+    };
+
+    if plan_mode {
+        return d(false, "plan_mode");
     }
 
     if !is_interim_progress {
-        // Relaxed: if the model just ran tools and the final clause isn't conclusive,
-        // treat a long analysis text as continuation-worthy even if it doesn't match
-        // the strict interim-intent prefixes.
-        if recent_tool_activity
-            && !last_clause_contains_conclusive_marker(&text.to_ascii_lowercase())
-        {
-            return InterimTextContinuationDecision {
-                should_continue: true,
-                reason: "recent_tool_activity_relaxed",
-                is_interim_progress,
-                last_user_follow_up,
-                recent_tool_activity,
-                last_user_requested_progressive_work,
-            };
+        let not_conclusive = !last_clause_contains_conclusive_marker(&text.to_ascii_lowercase());
+        // Relaxed: if the model just ran tools, or the user asked for progressive work,
+        // and the final clause isn't conclusive, treat a long analysis text as
+        // continuation-worthy even if it doesn't match the strict interim-intent prefixes.
+        if not_conclusive && recent_tool_activity {
+            return d(true, "recent_tool_activity_relaxed");
         }
-
-        return InterimTextContinuationDecision {
-            should_continue: false,
-            reason: "non_interim_text",
-            is_interim_progress,
-            last_user_follow_up,
-            recent_tool_activity,
-            last_user_requested_progressive_work,
-        };
+        if not_conclusive && last_user_requested_progressive_work {
+            return d(true, "progressive_relaxed");
+        }
+        return d(false, "non_interim_text");
     }
 
     if last_user_follow_up {
-        return InterimTextContinuationDecision {
-            should_continue: true,
-            reason: "follow_up_prompt",
-            is_interim_progress,
-            last_user_follow_up,
-            recent_tool_activity,
-            last_user_requested_progressive_work,
-        };
+        return d(true, "follow_up_prompt");
     }
 
     if recent_tool_activity {
-        return InterimTextContinuationDecision {
-            should_continue: true,
-            reason: "recent_tool_activity",
-            is_interim_progress,
-            last_user_follow_up,
-            recent_tool_activity,
-            last_user_requested_progressive_work,
-        };
+        return d(true, "recent_tool_activity");
     }
 
     if last_user_requested_progressive_work {
-        return InterimTextContinuationDecision {
-            should_continue: true,
-            reason: "progressive_request",
-            is_interim_progress,
-            last_user_follow_up,
-            recent_tool_activity,
-            last_user_requested_progressive_work,
-        };
+        return d(true, "progressive_request");
     }
 
-    InterimTextContinuationDecision {
-        should_continue: false,
-        reason: if full_auto {
+    d(
+        false,
+        if full_auto {
             "awaiting_model_action"
         } else {
             "interactive_mode"
         },
-        is_interim_progress,
-        last_user_follow_up,
-        recent_tool_activity,
-        last_user_requested_progressive_work,
-    }
+    )
 }
 
 pub(super) fn push_system_directive_once(history: &mut Vec<uni::Message>, directive: &str) {
@@ -141,7 +127,7 @@ fn last_clause_contains_conclusive_marker(lower: &str) -> bool {
         "all set",
     ];
     let last_clause = lower
-        .rfind(|ch| matches!(ch, '.' | '!' | '\n'))
+        .rfind(|ch| matches!(ch, '.' | '!' | '\n' | '—' | '…'))
         .map(|idx| lower[idx + 1..].trim_start())
         .unwrap_or(lower);
     conclusive_markers
@@ -244,7 +230,7 @@ fn has_interim_intent_clause(lower: &str) -> bool {
     }
 
     for (idx, ch) in lower.char_indices() {
-        if matches!(ch, '.' | '!' | '?' | ':' | ';' | '\n') {
+        if matches!(ch, '.' | '!' | '?' | ':' | ';' | '\n' | '—' | '…') {
             let remainder = lower[idx + ch.len_utf8()..].trim_start();
             if !remainder.is_empty() && starts_with_interim_intent(remainder) {
                 return true;
@@ -258,9 +244,12 @@ fn has_interim_intent_clause(lower: &str) -> bool {
 fn starts_with_interim_intent(lower: &str) -> bool {
     let intent_prefixes = [
         "let me ",
+        "let me now ",
         "i'll ",
         "i will ",
         "i need to ",
+        "i'd like to ",
+        "i want to ",
         "i am going to ",
         "i'm going to ",
         "now i need to ",
@@ -268,7 +257,10 @@ fn starts_with_interim_intent(lower: &str) -> bool {
         "continuing ",
         "next i need to ",
         "next, i'll ",
+        "next up: ",
         "now i'll ",
+        "my next step is ",
+        "time to ",
         "let us ",
     ];
 
@@ -516,6 +508,112 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Completed)
         ));
         assert!(!ctx.is_recovery_active());
+    }
+
+    #[test]
+    fn detects_new_intent_prefixes_as_interim() {
+        assert!(is_interim_progress_update(
+            "I'd like to check the next file before proceeding."
+        ));
+        assert!(is_interim_progress_update(
+            "I want to verify the output of the previous step."
+        ));
+        assert!(is_interim_progress_update(
+            "My next step is to run the full test suite."
+        ));
+        assert!(is_interim_progress_update(
+            "Time to fix the remaining lint warnings."
+        ));
+        assert!(is_interim_progress_update(
+            "Let me now inspect the second module for regressions."
+        ));
+    }
+
+    #[test]
+    fn em_dash_boundary_detected_as_interim() {
+        assert!(is_interim_progress_update(
+            "First check passed—now let me verify the second component."
+        ));
+        assert!(has_interim_intent_clause(
+            "done with the first task—now i'll move to the next"
+        ));
+    }
+
+    #[test]
+    fn ellipsis_boundary_detected_as_interim() {
+        assert!(has_interim_intent_clause(
+            "checking results…now i need to update the config"
+        ));
+        assert!(is_interim_progress_update(
+            "Scanning the logs…now let me check for error patterns."
+        ));
+    }
+
+    #[test]
+    fn long_text_with_progressive_request_continues_via_relaxed_path() {
+        // User asked for progressive work ("fix"), model responds with long analysis
+        // (> 800 chars, non-interim pattern), no tool activity.
+        // Should continue via "progressive_relaxed" path.
+        let long_analysis_base = "The root cause of this issue is a race condition in the connection \
+            pool initialization. When multiple threads attempt to acquire connections \
+            simultaneously, the pool's internal counter can overflow. This happens because \
+            the increment operation is not atomic. The fix should wrap the counter update \
+            in a mutex lock. Additionally, we should consider using atomic operations for \
+            better performance. ";
+        // Pad to exceed 800 chars
+        let padding = "x".repeat(820usize.saturating_sub(long_analysis_base.len()));
+        let long_text = format!(
+            "{}{} Let me now implement the mutex-based fix in the connection pool module.",
+            long_analysis_base, padding
+        );
+        assert!(
+            long_text.len() > 800,
+            "test text must exceed 800-char limit to trigger relaxed path"
+        );
+
+        let history = vec![
+            uni::Message::user("fix the race condition in connection pool".to_string()),
+            uni::Message::assistant("I'll look into it.".to_string()),
+        ];
+
+        // Without tool activity, the text is > 800 chars → not interim → hits relaxed path
+        // last_user_requested_progressive_work is true → should continue
+        assert!(
+            evaluate_interim_text_continuation(false, false, &history, &long_text).should_continue
+        );
+    }
+
+    #[test]
+    fn long_text_with_tool_activity_and_not_conclusive_continues() {
+        let long_analysis = "I've reviewed the output from the linter. There are several \
+            warnings in the networking module. The main issues are unused imports and \
+            a potential memory leak in the connection handler. The fixes are \
+            straightforward: remove the unused imports and add proper cleanup in the \
+            deinit method. Let me apply these changes to the affected files now. \
+            Starting with the networking module, I'll remove the unused imports and \
+            then fix the memory leak in the connection handler. After that, I'll \
+            run the linter again to verify the warnings are resolved.";
+        assert!(
+            long_analysis.len() > 280,
+            "test text must exceed original 280-char limit"
+        );
+
+        let history = vec![
+            uni::Message::user("run cargo clippy and fix warnings".to_string()),
+            uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
+                uni::ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{}".to_string(),
+                ),
+            ]),
+            uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
+        ];
+
+        assert!(
+            evaluate_interim_text_continuation(true, false, &history, long_analysis)
+                .should_continue
+        );
     }
 
     #[tokio::test]
