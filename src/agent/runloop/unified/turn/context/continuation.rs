@@ -127,7 +127,7 @@ fn last_clause_contains_conclusive_marker(lower: &str) -> bool {
         "all set",
     ];
     let last_clause = lower
-        .rfind(|ch| matches!(ch, '.' | '!' | '\n' | '—' | '…'))
+        .rfind(|ch| ['.', '!', '\n', '—', '…'].contains(&ch))
         .map(|idx| lower[idx + 1..].trim_start())
         .unwrap_or(lower);
     conclusive_markers
@@ -225,14 +225,14 @@ fn last_user_requested_progressive_work(history: &[uni::Message]) -> bool {
 }
 
 fn has_interim_intent_clause(lower: &str) -> bool {
-    if starts_with_interim_intent(lower) {
+    if clause_has_continuation_intent(lower) {
         return true;
     }
 
     for (idx, ch) in lower.char_indices() {
         if matches!(ch, '.' | '!' | '?' | ':' | ';' | '\n' | '—' | '…') {
             let remainder = lower[idx + ch.len_utf8()..].trim_start();
-            if !remainder.is_empty() && starts_with_interim_intent(remainder) {
+            if !remainder.is_empty() && clause_has_continuation_intent(remainder) {
                 return true;
             }
         }
@@ -241,33 +241,107 @@ fn has_interim_intent_clause(lower: &str) -> bool {
     false
 }
 
-fn starts_with_interim_intent(lower: &str) -> bool {
-    let intent_prefixes = [
-        "let me ",
-        "let me now ",
-        "i'll ",
-        "i will ",
-        "i need to ",
-        "i'd like to ",
-        "i want to ",
-        "i am going to ",
-        "i'm going to ",
-        "now i need to ",
-        "now let me ",
-        "continuing ",
-        "next i need to ",
-        "next, i'll ",
-        "next up: ",
-        "now i'll ",
-        "my next step is ",
-        "time to ",
-        "let us ",
-    ];
+/// Returns true when a single clause expresses an intent to continue working.
+///
+/// Instead of matching an ever-growing list of specific prefixes, this
+/// normalizes away clause-initial transition words ("now", "next", "then",
+/// "first") and subjects ("i", "we"), then checks a compact set of
+/// grammatical patterns that capture the underlying linguistic structure
+/// of continuation intent.  This handles many more phrasings automatically
+/// than explicitly listing every variant.
+fn clause_has_continuation_intent(clause: &str) -> bool {
+    let clause = clause.trim_start();
+    if clause.is_empty() {
+        return false;
+    }
 
-    intent_prefixes
-        .iter()
-        .any(|prefix| lower.starts_with(prefix))
-        || starts_with_present_progress_update(lower)
+    let normalized = normalize_clause(clause);
+    if normalized.is_empty() {
+        return false;
+    }
+
+    core_intent_matches(normalized) || starts_with_present_progress_update(normalized)
+}
+
+/// Strip leading transition words and subjects to reach the core intent
+/// expression.  Reduces hundreds of possible phrasings down to a handful
+/// of grammatical patterns checked by [`core_intent_matches`].
+///
+/// Transitions: "now", "next" (only before i/we), "then", "first"
+/// Possessives: "my" (for "my next step is ...")
+/// Subjects: "i" (and optionally "am"), "we"
+fn normalize_clause<'a>(s: &'a str) -> &'a str {
+    let s = s.trim_start();
+    let s = s.strip_prefix("now ").unwrap_or(s);
+    let s = s.strip_prefix("then ").unwrap_or(s);
+    let s = s.strip_prefix("first, ").unwrap_or(s);
+    let s = s.strip_prefix("first ").unwrap_or(s);
+    let s = s.strip_prefix("next, ").unwrap_or(s);
+    // "next" before a subject is a transition; otherwise it may be
+    // part of an intent expression ("next step", "next up").
+    let s = match s.strip_prefix("next ") {
+        Some(after) if after.starts_with("i ") || after.starts_with("we ") => after,
+        _ => s,
+    };
+    let s = s.strip_prefix("my ").unwrap_or(s);
+    let s = s.strip_prefix("i am ").unwrap_or(s);
+    // Handle both "i " (uncontracted) and "i'" (contracted: i'll, i'd, i'm, i've).
+    // For contractions we strip only the "i", keeping the apostrophe so that
+    // patterns like "'ll " and "'d like to " still match.
+    let s = if s.starts_with("i ") {
+        &s[2..]
+    } else if s.starts_with("i'") {
+        &s[1..]
+    } else {
+        s
+    };
+    let s = s.strip_prefix("we ").unwrap_or(s);
+    s.trim_start()
+}
+
+/// Check the core grammatical patterns of continuation intent.
+fn core_intent_matches(text: &str) -> bool {
+    // "let {me|us|'s}" + action verb
+    if text.starts_with("let ") {
+        return true;
+    }
+
+    // <intent-verb> "to" <action>
+    // Covers: need to, want to, going to, plan to, intend to,
+    //         have to, 'm going to, 'd like to, hope to, etc.
+    const TO_INTENTS: &[&str] = &[
+        "need to ",
+        "want to ",
+        "going to ",
+        "plan to ",
+        "intend to ",
+        "have to ",
+        "'m going to ",
+        "'d like to ",
+        "hope to ",
+    ];
+    if TO_INTENTS.iter().any(|v| text.starts_with(v)) {
+        return true;
+    }
+
+    // <modal> <action> — exclude conclusive follow-ups
+    if let Some(rest) = text
+        .strip_prefix("will ")
+        .or_else(|| text.strip_prefix("'ll "))
+    {
+        return !rest.starts_with("be ") && !rest.starts_with("now be ");
+    }
+
+    // Standalone expressions that don't fit the verb patterns above
+    if text.starts_with("time to ")
+        || text.starts_with("next up:")
+        || text.starts_with("next step ")
+        || text.starts_with("continuing")
+    {
+        return true;
+    }
+
+    false
 }
 
 fn starts_with_present_progress_update(lower: &str) -> bool {

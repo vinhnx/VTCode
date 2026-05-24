@@ -588,9 +588,7 @@ async fn finalize_permission_decision(
                     "Failed to persist exact shell approval cache entry",
                 )
                 .await;
-                if let Some(no_scope_key) =
-                    strip_default_scope_suffix(&exact_target.approval_key)
-                {
+                if let Some(no_scope_key) = strip_default_scope_suffix(&exact_target.approval_key) {
                     persist_approval_cache_key(
                         tool_registry,
                         tool_name,
@@ -887,15 +885,14 @@ async fn persisted_segment_approval_hit_key(
     let keys = segmented_shell_approval_keys(normalized_tool_name, tool_args)?;
 
     for key in &keys {
-        let has_match = tool_registry.has_persisted_approval(key).await
-            || {
-                let no_scope = strip_default_scope_suffix(key);
-                if let Some(no_scope_key) = no_scope {
-                    tool_registry.has_persisted_approval(no_scope_key).await
-                } else {
-                    false
-                }
-            };
+        let has_match = tool_registry.has_persisted_approval(key).await || {
+            let no_scope = strip_default_scope_suffix(key);
+            if let Some(no_scope_key) = no_scope {
+                tool_registry.has_persisted_approval(no_scope_key).await
+            } else {
+                false
+            }
+        };
         if !has_match {
             return None;
         }
