@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.108.3 - 2026-05-24
+
+### Highlights
+#### Bug Fixes
+
+- Update stop hook to use final text for improved response handling (24739e82) 
+- Ensure blank lines are rendered as placeholders in diff output (2395d8ea) 
+#### Features
+
+- Enhance continuation evaluation with relaxed intent handling and add inline preview for spooled outputs (0d08141a) 
+### Other Changes
+#### Other
+
+- Update config (e95a9d64) 
 ## 0.108.2 - 2026-05-24
 
 ### Highlights
