@@ -8,6 +8,7 @@ use crate::agent::runloop::text_tools::canonical::{
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
 use crate::agent::runloop::text_tools::parse_bracketed::parse_bracketed_tool_call;
 use crate::agent::runloop::text_tools::parse_channel::parse_channel_tool_call;
+use crate::agent::runloop::text_tools::parse_dsml::parse_dsml_tool_call;
 use crate::agent::runloop::text_tools::parse_structured::parse_rust_struct_tool_call;
 use crate::agent::runloop::text_tools::parse_tagged::parse_tagged_tool_call;
 use crate::agent::runloop::text_tools::parse_yaml::parse_yaml_tool_call;
@@ -107,6 +108,13 @@ fn find_matching_paren_end_with_depth_limit(text: &str, args_start: usize) -> Op
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     // Try gpt-oss channel format first
     if let Some((name, args)) = parse_channel_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
+
+    // DeepSeek DSML v2 format: <||DSML||invoke name="...">
+    if let Some((name, args)) = parse_dsml_tool_call(text)
         && let Some(result) = canonicalize_tool_result(name, args)
     {
         return Some(result);
