@@ -69,12 +69,20 @@ impl Session {
             return cached.clone();
         }
 
-        let lines = vec![self.header_compact_line()];
+        let lines = if self.appearance.hide_header {
+            vec![self.header_block_title()]
+        } else {
+            vec![self.header_compact_line()]
+        };
         self.header_lines_cache = Some(lines.clone());
         lines
     }
 
     pub(crate) fn header_height_from_lines(&mut self, width: u16, lines: &[Line<'static>]) -> u16 {
+        if self.appearance.hide_header {
+            return 1;
+        }
+
         if width == 0 {
             return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
         }
@@ -93,6 +101,14 @@ impl Session {
     }
 
     pub(crate) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
+        let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
+
+        if self.appearance.hide_header {
+            return Paragraph::new(lines.to_vec())
+                .style(text_style)
+                .wrap(Wrap { trim: true });
+        }
+
         let mut border_style = Style::default();
         if let Some(accent) = self
             .theme

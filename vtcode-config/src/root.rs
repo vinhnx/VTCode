@@ -347,6 +347,10 @@ pub struct UiConfig {
     /// Keep animated progress indicators while reduce_motion_mode is enabled.
     #[serde(default = "default_reduce_motion_keep_progress_animation")]
     pub reduce_motion_keep_progress_animation: bool,
+
+    /// Hide the full TUI header, showing only version info in a compact line.
+    #[serde(default = "default_hide_header")]
+    pub hide_header: bool,
 }
 
 /// Color scheme mode for theme selection
@@ -504,6 +508,10 @@ fn default_reduce_motion_keep_progress_animation() -> bool {
     false
 }
 
+fn default_hide_header() -> bool {
+    true
+}
+
 fn default_ask_questions_enabled() -> bool {
     true
 }
@@ -540,6 +548,7 @@ impl Default for UiConfig {
             screen_reader_mode: default_screen_reader_mode(),
             reduce_motion_mode: default_reduce_motion_mode(),
             reduce_motion_keep_progress_animation: default_reduce_motion_keep_progress_animation(),
+            hide_header: default_hide_header(),
         }
     }
 }

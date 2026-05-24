@@ -126,6 +126,7 @@ impl Session {
             }
             InlineCommand::SetAppearance { appearance } => {
                 self.appearance = appearance;
+                self.invalidate_header_cache();
                 self.invalidate_transcript_cache();
                 self.invalidate_scroll_metrics();
             }
