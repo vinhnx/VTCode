@@ -30,3 +30,11 @@ warning: public documentation for `terminate_all_exec_sessions_async` links to p
 = note: this link will resolve properly if you pass `--document-private-items`
 
 warning: `vtcode-core` (lib doc) generated 3 warnings
+
+---
+
+add Mistral provider
+
+---
+
+github.com/vinhnx/VTCode/issues/652
