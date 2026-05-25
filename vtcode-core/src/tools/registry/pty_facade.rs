@@ -49,7 +49,7 @@ impl ToolRegistry {
     }
 
     /// Inline-delegating wrapper over
-    /// [`crate::tools::exec_session::ExecSessionManager::terminate_all_sessions_async`].
+    /// [`Self::terminate_all_exec_sessions_async`].
     pub fn terminate_all_exec_sessions_async(&self) -> impl Future<Output = Result<()>> + '_ {
         self.exec_sessions.terminate_all_sessions_async()
     }

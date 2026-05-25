@@ -81,7 +81,7 @@ impl ToolRegistry {
     }
 
     /// Inline-delegating wrapper over
-    /// [`crate::tools::exec_session::ExecSessionManager::is_session_completed`].
+    /// [`Self::harness_exec_session_completed`].
     /// Returns the inner future directly (audit section 16).
     pub fn harness_exec_session_completed<'a>(
         &'a self,
@@ -91,7 +91,7 @@ impl ToolRegistry {
     }
 
     /// Inline-delegating wrapper over
-    /// [`crate::tools::exec_session::ExecSessionManager::terminate_session`].
+    /// [`Self::terminate_harness_exec_session`].
     pub fn terminate_harness_exec_session<'a>(
         &'a self,
         session_id: &'a str,
