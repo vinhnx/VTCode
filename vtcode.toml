@@ -1,61 +1,11 @@
+# VT Code Configuration File
+# Saved from /config with readable section headings.
+# Every field includes descriptions, defaults, and known choices where available.
 
-# ACP Bridge
-# IDE and Agent Client Protocol integrations.
-[acp]
-# Globally enable the ACP bridge
-# Default: false
-# Type: `boolean`
-enabled = true
-
-# Zed Integration
-# How VT Code connects commands and trust settings to Zed.
-[acp.zed]
-# Enable Zed integration
-# Default: false
-# Type: `boolean`
-enabled = true
-
-
-# Agent Defaults
-# Primary model, prompt, and chat behavior.
-[agent]
-# Environment variable that stores the API key for the active provider
-# Default: "OPENAI_API_KEY"
-# Type: `string`
-api_key_env = "HF_TOKEN"
-
-# Default model to use
-# Default: "gpt-5.3-codex"
-# Type: `string`
-default_model = "deepseek-ai/DeepSeek-V4-Flash:novita"
-
-# AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
-# Possible values: anthropic, gemini, openai, openrouter, zai
-# Default: "openai"
-# Type: `string`
-provider = "huggingface"
-
-# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
-# Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
-# currently intended for Claude Opus 4.7.
-# Possible values: high, low, max, medium, minimal, none, xhigh
-# Default: "none"
-# Type: `string`
-reasoning_effort = "low"
-
-# UI theme identifier controlling ANSI styling
-# Default: "ciapre"
-# Type: `string`
-theme = "mono"
-
-# Persistent Memory
-# Per-repository memory summary, rollout staging, and learned durable notes.
-[agent.persistent_memory]
-# Toggle main-session persistent memory for this repository
-# Default: false
-# Type: `boolean`
-enabled = true
-
+# User-defined OpenAI-compatible provider endpoints. These entries are editable in `/config` and
+# appear in the model picker using each entry's `display_name`.
+# Default: []
+# Type: `array`
 [[custom_providers]]
 api_key_env = "ATLASCLOUD_API_KEY"
 base_url = "https://api.atlascloud.ai/v1"
@@ -81,6 +31,63 @@ models = [
     "kwaipilot/kat-coder-pro-v2",
 ]
 name = "atlascloud"
+
+# ACP Bridge
+# IDE and Agent Client Protocol integrations.
+[acp]
+# Globally enable the ACP bridge
+# Default: false
+# Type: `boolean`
+enabled = true
+
+# Zed Integration
+# How VT Code connects commands and trust settings to Zed.
+[acp.zed]
+# Enable Zed integration
+# Default: false
+# Type: `boolean`
+enabled = true
+
+
+# Agent Defaults
+# Primary model, prompt, and chat behavior.
+[agent]
+# Environment variable that stores the API key for the active provider
+# Default: "OPENAI_API_KEY"
+# Type: `string`
+api_key_env = "OLLAMA_API_KEY"
+
+# Default model to use
+# Default: "gpt-5.3-codex"
+# Type: `string`
+default_model = "nemotron-3-super:cloud"
+
+# AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
+# Possible values: anthropic, gemini, openai, openrouter, zai
+# Default: "openai"
+# Type: `string`
+provider = "ollama"
+
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
+# Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
+# currently intended for Claude Opus 4.7.
+# Possible values: high, low, max, medium, minimal, none, xhigh
+# Default: "none"
+# Type: `string`
+reasoning_effort = "low"
+
+# UI theme identifier controlling ANSI styling
+# Default: "ciapre"
+# Type: `string`
+theme = "mono"
+
+# Persistent Memory
+# Per-repository memory summary, rollout staging, and learned durable notes.
+[agent.persistent_memory]
+# Toggle main-session persistent memory for this repository
+# Default: false
+# Type: `boolean`
+enabled = true
 
 
 # Features
@@ -164,10 +171,11 @@ enabled = true
 # Type: `boolean`
 atif_enabled = true
 
-# Emit bottleneck traces for slow paths
-# Default: false
-# Type: `boolean`
-bottleneck_tracing = false
+# Retention window for historical benchmarking (days)
+# Possible values: days
+# Default: 14
+# Type: `integer`
+retention_days = 5
 
 
 # Tool Defaults
@@ -252,7 +260,6 @@ web_fetch = "allow"
 # Interface
 # Appearance, layout, and transcript behavior.
 [ui]
-
 # Notifications
 # Desktop and in-app notification delivery.
 [ui.notifications]
