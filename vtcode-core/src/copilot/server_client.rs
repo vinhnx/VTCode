@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdout};
 use tokio::time::timeout;
 use vtcode_config::auth::CopilotAuthConfig;
@@ -215,9 +215,7 @@ async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
 
     let content_length =
         content_length.ok_or_else(|| anyhow!("copilot cli response missing Content-Length"))?;
-    let mut payload = vec![0_u8; content_length];
-    reader
-        .read_exact(&mut payload)
+    let payload = crate::utils::async_utils::read_exact_uninit(reader, content_length)
         .await
         .context("copilot cli payload read failed")?;
     serde_json::from_slice(&payload).context("copilot cli json decode failed")
