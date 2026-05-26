@@ -170,10 +170,14 @@ pub(super) async fn run_interaction_loop_impl(
                 context_limit_tokens,
             );
 
-            // Track running cost, cache hit, and balance for supported providers
+            // Track running cost, cache hit, and balance for visible auto status components.
             let model = &ctx.config.model;
             let status = &mut state.input_status_state;
-            status.show_costs = matches!(ctx.provider_client.name(), "deepseek" | "openai");
+            let status_config = ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line);
+            status.show_costs =
+                crate::agent::runloop::unified::status_line::status_line_shows_auto_components(
+                    status_config,
+                ) && matches!(ctx.provider_client.name(), "deepseek" | "openai");
             status.cost_usd = ctx.session_stats.total_cost_usd();
             let usage = ctx.session_stats.total_usage();
             let total_cache = usage.cached_input_tokens + usage.cache_creation_tokens;
@@ -186,7 +190,7 @@ pub(super) async fn run_interaction_loop_impl(
                     &ctx.config.workspace,
                     model,
                     ctx.config.reasoning_effort.as_str(),
-                    ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                    status_config,
                     status,
                 )
                 .await
@@ -202,10 +206,13 @@ pub(super) async fn run_interaction_loop_impl(
                     &ctx.config.workspace,
                     model,
                     ctx.config.reasoning_effort.as_str(),
-                    ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                    status_config,
                     status,
                 )
                 .await;
+            } else {
+                status.balance = None;
+                status.last_balance_refresh = None;
             }
             ctx.handle.set_terminal_title_items(
                 ctx.vt_cfg

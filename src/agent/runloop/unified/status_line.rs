@@ -92,6 +92,20 @@ pub(crate) fn update_context_budget(
     state.context_remaining_tokens = Some(remaining);
 }
 
+pub(crate) fn status_line_shows_auto_components(status_config: Option<&StatusLineConfig>) -> bool {
+    match status_config
+        .map(|cfg| cfg.effective_mode())
+        .unwrap_or(StatusLineMode::Auto)
+    {
+        StatusLineMode::Auto => true,
+        StatusLineMode::Command => status_config
+            .and_then(|cfg| cfg.command.as_deref())
+            .map(|command| command.trim().is_empty())
+            .unwrap_or(true),
+        StatusLineMode::Hidden => false,
+    }
+}
+
 #[expect(clippy::too_many_arguments)]
 pub(crate) async fn update_input_status_if_changed(
     handle: &InlineHandle,
@@ -485,6 +499,7 @@ pub(crate) async fn refresh_balance_info(
     state: &mut InputStatusState,
 ) {
     const BALANCE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+    const BALANCE_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
     let stale = state
         .last_balance_refresh
@@ -494,11 +509,12 @@ pub(crate) async fn refresh_balance_info(
         return;
     }
 
-    match provider_client.get_balance().await {
-        Ok(Some(bal)) => {
+    state.last_balance_refresh = Some(Instant::now());
+
+    match tokio::time::timeout(BALANCE_REQUEST_TIMEOUT, provider_client.get_balance()).await {
+        Ok(Ok(Some(bal))) => {
             let warn = if bal.is_available { "" } else { " !" };
             state.balance = Some(format!("{}{}", bal.display, warn));
-            state.last_balance_refresh = Some(Instant::now());
             if let Err(e) = update_input_status_if_changed(
                 handle,
                 workspace,
@@ -512,12 +528,14 @@ pub(crate) async fn refresh_balance_info(
                 tracing::debug!("Failed to refresh status after balance fetch: {e}");
             }
         }
-        Ok(None) => {
+        Ok(Ok(None)) => {
             state.balance = None;
-            state.last_balance_refresh = Some(Instant::now());
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             tracing::debug!("Failed to fetch provider balance: {e}");
+        }
+        Err(_) => {
+            tracing::debug!("Timed out fetching provider balance");
         }
     }
 }
