@@ -170,10 +170,10 @@ pub(super) async fn run_interaction_loop_impl(
                 context_limit_tokens,
             );
 
-            // DeepSeek-specific: track running cost, cache hit, and balance
+            // Track running cost, cache hit, and balance for supported providers
             let model = &ctx.config.model;
             let status = &mut state.input_status_state;
-            status.is_deepseek = ctx.provider_client.name() == "deepseek";
+            status.show_costs = matches!(ctx.provider_client.name(), "deepseek" | "openai");
             status.cost_usd = ctx.session_stats.total_cost_usd();
             let usage = ctx.session_stats.total_usage();
             let total_cache = usage.cached_input_tokens + usage.cache_creation_tokens;
@@ -194,38 +194,18 @@ pub(super) async fn run_interaction_loop_impl(
                 tracing::warn!("Failed to refresh status line: {}", error);
             }
 
-            // Periodically fetch DeepSeek account balance
-            if status.is_deepseek {
-                let stale = status
-                    .last_balance_refresh
-                    .map(|t| t.elapsed() >= Duration::from_secs(60))
-                    .unwrap_or(true);
-                if stale {
-                    match ctx.provider_client.get_balance().await {
-                        Ok(Some(bal)) => {
-                            let warn = if bal.is_available { "" } else { " !" };
-                            status.balance = Some(format!("{}{}", bal.display, warn));
-                            status.last_balance_refresh = Some(Instant::now());
-                            if let Err(e) = crate::agent::runloop::unified::status_line::update_input_status_if_changed(
-                                ctx.handle,
-                                &ctx.config.workspace,
-                                model,
-                                ctx.config.reasoning_effort.as_str(),
-                                ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
-                                status,
-                            ).await {
-                                tracing::debug!("Failed to refresh status after balance fetch: {}", e);
-                            }
-                        }
-                        Ok(None) => {
-                            status.balance = None;
-                            status.last_balance_refresh = Some(Instant::now());
-                        }
-                        Err(e) => {
-                            tracing::debug!("Failed to fetch DeepSeek balance: {}", e);
-                        }
-                    }
-                }
+            // Periodically fetch account balance for providers that support it
+            if status.show_costs {
+                crate::agent::runloop::unified::status_line::refresh_balance_info(
+                    ctx.provider_client.as_ref(),
+                    ctx.handle,
+                    &ctx.config.workspace,
+                    model,
+                    ctx.config.reasoning_effort.as_str(),
+                    ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                    status,
+                )
+                .await;
             }
             ctx.handle.set_terminal_title_items(
                 ctx.vt_cfg

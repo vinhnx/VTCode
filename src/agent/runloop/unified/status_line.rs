@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
+use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::models::ModelId;
 use vtcode_tui::app::InlineHandle;
 
@@ -31,8 +32,8 @@ pub(crate) struct InputStatusState {
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
     pub(crate) thread_context: Option<String>,
-    // DeepSeek-specific balance & cost (only shown for deepseek provider)
-    pub(crate) is_deepseek: bool,
+    // Balance & cost info (shown for DeepSeek and OpenAI providers)
+    pub(crate) show_costs: bool,
     pub(crate) balance: Option<String>,
     pub(crate) cost_usd: Option<f64>,
     pub(crate) cache_hit_pct: Option<f64>,
@@ -339,8 +340,8 @@ fn auto_status_components(
     );
     parts.push((!model.trim().is_empty()).then(|| model.trim().to_string()));
 
-    // DeepSeek-specific balance/cost/cache display
-    if state.is_deepseek {
+    // Provider-specific balance/cost/cache display (DeepSeek, OpenAI)
+    if state.show_costs {
         if let Some(bal) = &state.balance {
             parts.push(Some(format!("Balance: {bal}")));
         }
@@ -471,6 +472,54 @@ pub(crate) fn update_thread_context(
         }
     }
     state.thread_context = (!value.trim().is_empty()).then_some(value);
+}
+
+/// Refresh account balance from the provider and update the status line.
+pub(crate) async fn refresh_balance_info(
+    provider_client: &dyn LLMProvider,
+    handle: &InlineHandle,
+    workspace: &Path,
+    model: &str,
+    reasoning_effort: &str,
+    status_config: Option<&StatusLineConfig>,
+    state: &mut InputStatusState,
+) {
+    const BALANCE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+
+    let stale = state
+        .last_balance_refresh
+        .map(|t| t.elapsed() >= BALANCE_REFRESH_INTERVAL)
+        .unwrap_or(true);
+    if !stale {
+        return;
+    }
+
+    match provider_client.get_balance().await {
+        Ok(Some(bal)) => {
+            let warn = if bal.is_available { "" } else { " !" };
+            state.balance = Some(format!("{}{}", bal.display, warn));
+            state.last_balance_refresh = Some(Instant::now());
+            if let Err(e) = update_input_status_if_changed(
+                handle,
+                workspace,
+                model,
+                reasoning_effort,
+                status_config,
+                state,
+            )
+            .await
+            {
+                tracing::debug!("Failed to refresh status after balance fetch: {e}");
+            }
+        }
+        Ok(None) => {
+            state.balance = None;
+            state.last_balance_refresh = Some(Instant::now());
+        }
+        Err(e) => {
+            tracing::debug!("Failed to fetch provider balance: {e}");
+        }
+    }
 }
 
 #[cfg(test)]
