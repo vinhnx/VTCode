@@ -56,10 +56,16 @@ impl<'a> PatchContextMatcher<'a> {
             }
         }
 
+        // Pre-compute normalised pattern lines once, then compare against
+        // normalised file lines — avoids repeated String allocations in the
+        // inner loop (the previous version called normalise_text on every
+        // comparison).
+        let norm_pattern: Vec<String> = pattern.iter().map(|p| normalise_text(p)).collect();
+        let norm_lines: Vec<String> = self.lines.iter().map(|l| normalise_text(l)).collect();
         for idx in search_start..=max_start {
             let mut ok = true;
-            for (offset, pat) in pattern.iter().enumerate() {
-                if normalise_text(&self.lines[idx + offset]) != normalise_text(pat) {
+            for (offset, norm_pat) in norm_pattern.iter().enumerate() {
+                if norm_lines[idx + offset] != *norm_pat {
                     ok = false;
                     break;
                 }
@@ -95,10 +101,10 @@ pub(crate) fn seek_segment(
 }
 
 pub(crate) fn normalise_text(input: &str) -> String {
-    input
-        .trim()
-        .chars()
-        .map(|c| match c {
+    let trimmed = input.trim();
+    let mut result = String::with_capacity(trimmed.len());
+    for c in trimmed.chars() {
+        let normalised = match c {
             '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2015}'
             | '\u{2212}' => '-',
             '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}' => '\'',
@@ -107,6 +113,8 @@ pub(crate) fn normalise_text(input: &str) -> String {
             | '\u{2007}' | '\u{2008}' | '\u{2009}' | '\u{200A}' | '\u{202F}' | '\u{205F}'
             | '\u{3000}' => ' ',
             other => other,
-        })
-        .collect()
+        };
+        result.push(normalised);
+    }
+    result
 }

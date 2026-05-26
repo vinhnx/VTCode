@@ -24,33 +24,28 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
         return vec![Chunk::Delete(old)];
     }
 
-    // Strip common prefix and suffix first (optimization)
-    let mut prefix_len = 0;
-    for (o, n) in old.chars().zip(new.chars()) {
-        if o == n {
-            prefix_len += o.len_utf8();
-        } else {
-            break;
-        }
-    }
+    // Strip common prefix first (optimisation).
+    let prefix_byte_len: usize = old
+        .chars()
+        .zip(new.chars())
+        .take_while(|(o, n)| o == n)
+        .map(|(c, _)| c.len_utf8())
+        .sum();
 
-    let mut suffix_len = 0;
-    let old_rest = &old[prefix_len..];
-    let new_rest = &new[prefix_len..];
+    // Strip common suffix on the remaining text.
+    let old_rest = &old[prefix_byte_len..];
+    let new_rest = &new[prefix_byte_len..];
 
-    let old_chars: Vec<char> = old_rest.chars().collect();
-    let new_chars: Vec<char> = new_rest.chars().collect();
+    let suffix_byte_len: usize = old_rest
+        .chars()
+        .rev()
+        .zip(new_rest.chars().rev())
+        .take_while(|(o, n)| o == n)
+        .map(|(c, _)| c.len_utf8())
+        .sum();
 
-    for (o, n) in old_chars.iter().rev().zip(new_chars.iter().rev()) {
-        if o == n {
-            suffix_len += o.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    let old_middle_end = old_rest.len() - suffix_len;
-    let new_middle_end = new_rest.len() - suffix_len;
+    let old_middle_end = old_rest.len() - suffix_byte_len;
+    let new_middle_end = new_rest.len() - suffix_byte_len;
 
     let old_middle = &old_rest[..old_middle_end];
     let new_middle = &new_rest[..new_middle_end];
@@ -58,8 +53,8 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     let mut result = Vec::with_capacity(old_middle.len() + new_middle.len());
 
     // Add common prefix
-    if prefix_len > 0 {
-        result.push(Chunk::Equal(&old[..prefix_len]));
+    if prefix_byte_len > 0 {
+        result.push(Chunk::Equal(&old[..prefix_byte_len]));
     }
 
     // Compute optimal diff for the middle section
@@ -106,8 +101,8 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     }
 
     // Add common suffix
-    if suffix_len > 0 {
-        result.push(Chunk::Equal(&old[old.len() - suffix_len..]));
+    if suffix_byte_len > 0 {
+        result.push(Chunk::Equal(&old[old.len() - suffix_byte_len..]));
     }
 
     result
@@ -118,6 +113,36 @@ enum Edit {
     Equal,
     Delete,
     Insert,
+}
+
+/// Advance along matching characters. Extracted from `myers_diff` so the
+/// compiler sees a tight leaf loop with no surrounding state, enabling better
+/// register allocation and (in some cases) auto-vectorization heuristics.
+fn advance_matching(old: &[char], new: &[char], mut x: usize, mut y: usize) -> (usize, usize) {
+    while x < old.len() && y < new.len() && old[x] == new[y] {
+        x += 1;
+        y += 1;
+    }
+    (x, y)
+}
+
+/// Erase the trailing equal run during backtracking. Same rationale as
+/// `advance_matching` — a focused leaf function that the compiler can
+/// optimise in isolation.
+/// Returns the final `(x, y)` position after removing equal edits.
+fn backtrack_equal_run(
+    mut x: usize,
+    mut y: usize,
+    move_x: usize,
+    move_y: usize,
+    edits: &mut Vec<Edit>,
+) -> (usize, usize) {
+    while x > move_x && y > move_y {
+        edits.push(Edit::Equal);
+        x -= 1;
+        y -= 1;
+    }
+    (x, y)
 }
 
 #[allow(clippy::cast_sign_loss)]
@@ -155,10 +180,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
             let mut x = x;
             let mut y = (x as i32 - k) as usize;
 
-            while x < n && y < m && old[x] == new[y] {
-                x += 1;
-                y += 1;
-            }
+            (x, y) = advance_matching(old, new, x, y);
 
             v[k_idx] = x;
             v_index[row_start + k_idx] = x;
@@ -219,11 +241,7 @@ fn backtrack_myers(
             (prev_x_val + 1, prev_y)
         };
 
-        while x > move_x && y > move_y {
-            edits.push(Edit::Equal);
-            x -= 1;
-            y -= 1;
-        }
+        (x, y) = backtrack_equal_run(x, y, move_x, move_y, &mut edits);
 
         if prev_k == k + 1 {
             edits.push(Edit::Insert);

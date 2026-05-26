@@ -90,6 +90,18 @@ fn strip_line_prefixes(text: &str) -> (String, bool) {
     (stripped, true)
 }
 
+/// Normalize internal whitespace: collapse consecutive whitespace to single spaces.
+fn ws_normalize(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for word in s.split_whitespace() {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        result.push_str(word);
+    }
+    result
+}
+
 fn apply_edit_replacement(
     content: &str,
     effective_old_str: &str,
@@ -107,10 +119,10 @@ fn apply_edit_replacement(
     if !replacement_occurred {
         let old_lines: Vec<&str> = effective_old_str.lines().collect();
         let content_lines: Vec<&str> = content.lines().collect();
+        let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
 
         'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
             if utils::lines_match(window, &old_lines) {
-                let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
                 let mut result_lines = Vec::with_capacity(
                     i + replacement_lines.len()
                         + content_lines.len().saturating_sub(i + old_lines.len()),
@@ -126,18 +138,19 @@ fn apply_edit_replacement(
         }
 
         if !replacement_occurred {
-            for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
-                let window_normalized: Vec<String> = window
-                    .iter()
-                    .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-                    .collect();
-                let old_normalized: Vec<String> = old_lines
-                    .iter()
-                    .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-                    .collect();
+            // Pre-compute normalised old lines once (avoid re-allocation per window).
+            let old_normalized: Vec<String> = old_lines.iter().map(|l| ws_normalize(l)).collect();
 
-                if window_normalized == old_normalized {
-                    let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
+            for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
+                let mut ok = true;
+                for (j, line) in window.iter().enumerate() {
+                    if ws_normalize(line) != old_normalized[j] {
+                        ok = false;
+                        break;
+                    }
+                }
+
+                if ok {
                     let mut result_lines = Vec::with_capacity(
                         i + replacement_lines.len()
                             + content_lines.len().saturating_sub(i + old_lines.len()),

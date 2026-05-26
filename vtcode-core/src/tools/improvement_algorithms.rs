@@ -35,6 +35,60 @@ pub fn jaro_winkler_similarity(s1: &str, s2: &str) -> f32 {
     jaro + (prefix_len as f32 * 0.1 * (1.0 - jaro))
 }
 
+/// Collect matched characters for Jaro similarity.
+/// Returns the number of matches found.
+fn jaro_collect_matches(
+    s1c: &[char],
+    s2c: &[char],
+    s1_matched: &mut [bool],
+    s2_matched: &mut [bool],
+    window: usize,
+) -> usize {
+    let len2 = s2c.len();
+    let mut matches = 0usize;
+
+    for (i, &c1) in s1c.iter().enumerate() {
+        let lo = i.saturating_sub(window);
+        let hi = (i + window + 1).min(len2);
+        for j in lo..hi {
+            // j is guaranteed in [0, len2) because lo <= j < hi <= len2.
+            // Extracting this loop into its own function helps the compiler
+            // reason about bounds via the loop guard.
+            if !s2_matched[j] && c1 == s2c[j] {
+                s1_matched[i] = true;
+                s2_matched[j] = true;
+                matches += 1;
+                break;
+            }
+        }
+    }
+
+    matches
+}
+
+/// Count transpositions between matched character pairs.
+fn jaro_count_transpositions(
+    s1c: &[char],
+    s2c: &[char],
+    s1_matched: &[bool],
+    s2_matched: &[bool],
+) -> usize {
+    let mut transpositions = 0usize;
+    let mut s2_matched_iter = s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]);
+
+    for (_, &a) in s1c.iter().enumerate().filter(|&(i, _)| s1_matched[i]) {
+        if let Some((_, &b)) = s2_matched_iter.next() {
+            if a != b {
+                transpositions += 1;
+            }
+        } else {
+            break;
+        }
+    }
+
+    transpositions / 2
+}
+
 /// Jaro similarity in [0.0, 1.0].
 fn jaro_similarity(s1: &str, s2: &str) -> f32 {
     // Use SmallVec to avoid heap allocation for common short strings.
@@ -50,38 +104,17 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         return 0.0;
     }
 
-    let window = (len1.max(len2) / 2).saturating_sub(1);
+    let window = (len1.max(len2) >> 1).saturating_sub(1);
 
     let mut s1_matched = SmallVec::<[bool; 64]>::from_elem(false, len1);
     let mut s2_matched = SmallVec::<[bool; 64]>::from_elem(false, len2);
-    let mut matches = 0usize;
-
-    for (i, &c1) in s1c.iter().enumerate() {
-        let lo = i.saturating_sub(window);
-        let hi = (i + window + 1).min(len2);
-        for j in lo..hi {
-            if !s2_matched[j] && c1 == s2c[j] {
-                s1_matched[i] = true;
-                s2_matched[j] = true;
-                matches += 1;
-                break;
-            }
-        }
-    }
+    let matches = jaro_collect_matches(&s1c, &s2c, &mut s1_matched, &mut s2_matched, window);
 
     if matches == 0 {
         return 0.0;
     }
 
-    // Count transpositions: walk both arrays in order, zip the matched positions, count mismatches.
-    let transpositions = s1c
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| s1_matched[i])
-        .zip(s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]))
-        .filter(|&((_, &a), (_, &b))| a != b)
-        .count()
-        / 2;
+    let transpositions = jaro_count_transpositions(&s1c, &s2c, &s1_matched, &s2_matched);
 
     let m = matches as f32;
     (m / len1 as f32 + m / len2 as f32 + (m - transpositions as f32) / m) / 3.0
