@@ -977,15 +977,16 @@ impl InlineSink {
         kind: InlineMessageKind,
         record_transcript: bool,
     ) -> Result<()> {
-        let mut full_text = payload.text.to_string();
-        if !indent.is_empty() {
-            full_text = Self::indent_multiline(&full_text, indent);
-        }
-        self.handle
-            .append_pasted_message(kind, full_text.clone(), payload.line_count);
+        let full_text = if !indent.is_empty() {
+            Self::indent_multiline(payload.text, indent)
+        } else {
+            payload.text.to_string()
+        };
         if record_transcript {
             transcript::append(&full_text);
         }
+        self.handle
+            .append_pasted_message(kind, full_text, payload.line_count);
         Ok(())
     }
     #[cfg(feature = "tui")]
@@ -1330,7 +1331,7 @@ impl InlineSink {
         let mut plain_lines = Vec::with_capacity(line_count_estimate);
 
         for line in text.split('\n') {
-            let mut segments = Vec::new();
+            let mut segments = Vec::with_capacity(1);
             if !line.is_empty() {
                 segments.push(InlineSegment {
                     text: line.to_string(),
@@ -1405,8 +1406,9 @@ impl InlineSink {
         // creating a separate inline entry for each line. This prevents the
         // UI from showing a separate line per original line of tool output.
         if kind == InlineMessageKind::User || kind == InlineMessageKind::Tool {
-            let mut combined_segments = Vec::new();
-            let mut combined_plain = String::new();
+            let total_plain_len: usize = plain_lines.iter().map(|p| p.len()).sum();
+            let mut combined_segments = Vec::with_capacity(converted_lines.len());
+            let mut combined_plain = String::with_capacity(total_plain_len);
 
             for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
                 if !combined_segments.is_empty() {

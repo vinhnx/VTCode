@@ -242,7 +242,14 @@ impl LoopDetector {
         }
 
         self.recent_calls.push_back(record);
-        *self.tool_counts.entry(tool_name.to_string()).or_insert(0) += 1;
+        // Use get_mut + insert to avoid String allocation on every call.
+        // entry() would allocate tool_name.to_string() even for existing keys.
+        match self.tool_counts.get_mut(tool_name) {
+            Some(count) => *count += 1,
+            None => {
+                self.tool_counts.insert(tool_name.to_string(), 1);
+            }
+        }
 
         if let Some(read_target_warning) = self.detect_repetitive_read_target(tool_name) {
             return Some(read_target_warning);
