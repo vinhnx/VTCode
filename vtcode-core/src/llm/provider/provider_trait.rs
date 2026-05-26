@@ -272,6 +272,11 @@ pub trait LLMProvider: Send + Sync {
     /// Get supported models
     fn supported_models(&self) -> Vec<String>;
 
+    /// Fetch account balance for this provider, if supported.
+    async fn get_balance(&self) -> Result<Option<vtcode_commons::llm::BalanceInfo>, LLMError> {
+        Ok(None)
+    }
+
     /// Validate request for this provider
     #[expect(clippy::result_large_err)]
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;

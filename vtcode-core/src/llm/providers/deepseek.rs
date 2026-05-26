@@ -455,6 +455,50 @@ impl LLMProvider for DeepSeekProvider {
             Some(&supported_models),
         )
     }
+
+    async fn get_balance(&self) -> Result<Option<vtcode_commons::llm::BalanceInfo>, LLMError> {
+        // Strip /v1 suffix to get the root API URL for the balance endpoint.
+        let base = self.base_url.trim_end_matches('/');
+        let root = base.strip_suffix("/v1").unwrap_or(base);
+        let url = format!("{}/user/balance", root);
+
+        let response = self
+            .http_client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+            .map_err(|e| LLMError::Network {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("balance request failed: {}", e),
+                ),
+                metadata: None,
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(LLMError::Provider {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("balance API returned {}: {}", status, body),
+                ),
+                metadata: None,
+            });
+        }
+
+        let balance_resp: vtcode_commons::llm::DeepSeekBalanceResponse =
+            response.json().await.map_err(|e| LLMError::Provider {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("failed to parse balance response: {}", e),
+                ),
+                metadata: None,
+            })?;
+
+        Ok(Some(balance_resp.into()))
+    }
 }
 
 #[async_trait]
