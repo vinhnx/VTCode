@@ -169,18 +169,63 @@ pub(super) async fn run_interaction_loop_impl(
                 context_used_tokens,
                 context_limit_tokens,
             );
+
+            // DeepSeek-specific: track running cost, cache hit, and balance
+            let model = &ctx.config.model;
+            let status = &mut state.input_status_state;
+            status.is_deepseek = ctx.provider_client.name() == "deepseek";
+            status.cost_usd = ctx.session_stats.total_cost_usd();
+            let usage = ctx.session_stats.total_usage();
+            let total_cache = usage.cached_input_tokens + usage.cache_creation_tokens;
+            status.cache_hit_pct = (total_cache > 0)
+                .then(|| (usage.cached_input_tokens as f64 / total_cache as f64) * 100.0);
+
             if let Err(error) =
                 crate::agent::runloop::unified::status_line::update_input_status_if_changed(
                     ctx.handle,
                     &ctx.config.workspace,
-                    &ctx.config.model,
+                    model,
                     ctx.config.reasoning_effort.as_str(),
                     ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
-                    state.input_status_state,
+                    status,
                 )
                 .await
             {
                 tracing::warn!("Failed to refresh status line: {}", error);
+            }
+
+            // Periodically fetch DeepSeek account balance
+            if status.is_deepseek {
+                let stale = status
+                    .last_balance_refresh
+                    .map(|t| t.elapsed() >= Duration::from_secs(60))
+                    .unwrap_or(true);
+                if stale {
+                    match ctx.provider_client.get_balance().await {
+                        Ok(Some(bal)) => {
+                            let warn = if bal.is_available { "" } else { " !" };
+                            status.balance = Some(format!("{}{}", bal.display, warn));
+                            status.last_balance_refresh = Some(Instant::now());
+                            if let Err(e) = crate::agent::runloop::unified::status_line::update_input_status_if_changed(
+                                ctx.handle,
+                                &ctx.config.workspace,
+                                model,
+                                ctx.config.reasoning_effort.as_str(),
+                                ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                                status,
+                            ).await {
+                                tracing::debug!("Failed to refresh status after balance fetch: {}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            status.balance = None;
+                            status.last_balance_refresh = Some(Instant::now());
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to fetch DeepSeek balance: {}", e);
+                        }
+                    }
+                }
             }
             ctx.handle.set_terminal_title_items(
                 ctx.vt_cfg

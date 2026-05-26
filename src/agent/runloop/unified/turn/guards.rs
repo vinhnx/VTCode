@@ -389,7 +389,11 @@ pub(crate) async fn handle_turn_balancer(
     }
 
     // NL2Repo-Bench: Navigation Loop Detection
-    if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD {
+    // Only trigger when there are actual repeated navigations (not just diverse exploration).
+    // Reading 15 different files is exploration; re-reading the same 3 files 5x each is a loop.
+    if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD
+        && repeated_tool_attempts.repeated_navigation_count() >= 3
+    {
         repeated_tool_attempts.navigation_loop_recoveries = repeated_tool_attempts
             .navigation_loop_recoveries
             .saturating_add(1);

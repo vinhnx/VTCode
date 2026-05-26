@@ -18,7 +18,7 @@ use super::looping::{
 use super::{ValidationResult, build_failure_error_content};
 
 const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
-const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 4;
+const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 12;
 
 fn push_guard_failure_messages(
     ctx: &mut TurnProcessingContext<'_>,

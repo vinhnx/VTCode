@@ -1,5 +1,5 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
@@ -25,6 +25,9 @@ pub(crate) struct LoopTracker {
     pub consecutive_navigations: usize,
     /// Number of times navigation-loop recovery has fired in this session.
     pub navigation_loop_recoveries: usize,
+    /// Unique navigation signatures in the current consecutive window.
+    /// Used to distinguish legitimate exploration (all unique) from actual looping (many repeats).
+    nav_signatures: FxHashSet<String>,
 }
 
 impl LoopTracker {
@@ -35,6 +38,7 @@ impl LoopTracker {
             consecutive_mutations: 0,
             consecutive_navigations: 0,
             navigation_loop_recoveries: 0,
+            nav_signatures: FxHashSet::default(),
         }
     }
 
@@ -83,6 +87,13 @@ impl LoopTracker {
             .unwrap_or(0)
     }
 
+    /// Number of redundant navigations (total - unique) in the current window.
+    /// At least 3 before the navigation loop guard considers firing.
+    pub(crate) fn repeated_navigation_count(&self) -> usize {
+        self.consecutive_navigations
+            .saturating_sub(self.nav_signatures.len())
+    }
+
     fn reset_low_signal_attempts(&mut self) {
         self.low_signal_attempts.clear();
     }
@@ -90,6 +101,7 @@ impl LoopTracker {
     pub(crate) fn reset_after_balancer_recovery(&mut self) {
         self.attempts.clear();
         self.low_signal_attempts.clear();
+        self.nav_signatures.clear();
         self.consecutive_mutations = 0;
         self.consecutive_navigations = 0;
     }
@@ -351,7 +363,7 @@ pub(crate) fn update_repetition_tracker(
 
     let canonical_name = canonical_tool_name(name);
     let signature_key = signature_key_for(canonical_name, args);
-    loop_tracker.record(signature_key);
+    loop_tracker.record(signature_key.clone());
     let low_signal_family =
         crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key(
             canonical_name,
@@ -383,6 +395,7 @@ pub(crate) fn update_repetition_tracker(
         // Execution/verification step resets both counters
         loop_tracker.consecutive_mutations = 0;
         loop_tracker.consecutive_navigations = 0;
+        loop_tracker.nav_signatures.clear();
         if low_signal_family.is_none() {
             loop_tracker.reset_low_signal_attempts();
         }
@@ -390,17 +403,20 @@ pub(crate) fn update_repetition_tracker(
         // Plan artifact writes in dedicated plan storage are allowed in Plan Mode and
         // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
+        loop_tracker.nav_signatures.clear();
     } else {
         let intent = vtcode_core::tools::tool_intent::classify_tool_intent(canonical_name, args);
         if intent.mutating {
             loop_tracker.consecutive_mutations += 1;
             loop_tracker.consecutive_navigations = 0;
+            loop_tracker.nav_signatures.clear();
             if low_signal_family.is_none() {
                 loop_tracker.reset_low_signal_attempts();
             }
         } else {
             // Read-only / navigation tool
             loop_tracker.consecutive_navigations += 1;
+            loop_tracker.nav_signatures.insert(signature_key);
         }
     }
 }
