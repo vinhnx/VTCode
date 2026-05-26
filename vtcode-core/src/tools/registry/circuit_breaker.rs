@@ -5,9 +5,10 @@
 
 use crate::metrics::MetricsCollector;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, SystemTime};
-use vtcode_commons::ErrorCategory;
+use vtcode_commons::error_category::ErrorCategory;
+use vtcode_commons::thread_safety::RelaxedAtomic;
 
 /// Circuit breaker states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,13 +49,13 @@ pub struct McpCircuitBreaker {
     /// Current circuit state (0=Closed, 1=Open, 2=HalfOpen)
     state: AtomicU8,
     /// Consecutive failure count
-    consecutive_failures: AtomicU32,
+    consecutive_failures: RelaxedAtomic<u32>,
     /// Success count in half-open state
-    half_open_successes: AtomicU32,
+    half_open_successes: RelaxedAtomic<u32>,
     /// Last failure timestamp (seconds since UNIX_EPOCH)
     last_failure_time: parking_lot::Mutex<Option<SystemTime>>,
     /// Count of requests denied while the breaker is open
-    blocked_requests: AtomicU32,
+    blocked_requests: RelaxedAtomic<u32>,
     /// Configuration
     config: CircuitBreakerConfig,
     /// Optional path for persisting state
@@ -118,10 +119,10 @@ impl McpCircuitBreaker {
     ) -> Self {
         Self {
             state: AtomicU8::new(CircuitState::Closed as u8),
-            consecutive_failures: AtomicU32::new(0),
-            half_open_successes: AtomicU32::new(0),
+            consecutive_failures: RelaxedAtomic::new(0),
+            half_open_successes: RelaxedAtomic::new(0),
             last_failure_time: parking_lot::Mutex::new(None),
-            blocked_requests: AtomicU32::new(0),
+            blocked_requests: RelaxedAtomic::new(0),
             config,
             persistence_path,
             metrics,
@@ -139,7 +140,7 @@ impl McpCircuitBreaker {
             breaker.state.store(state.state, Ordering::Release);
             breaker
                 .consecutive_failures
-                .store(state.consecutive_failures, Ordering::Relaxed);
+                .store(state.consecutive_failures);
 
             if let Some(epoch) = state.last_failure_epoch_secs {
                 // Only restore if plausible (roughly sanity check vs now)
@@ -190,7 +191,7 @@ impl McpCircuitBreaker {
 
             let state = PersistedState {
                 state: self.state.load(Ordering::Acquire),
-                consecutive_failures: self.consecutive_failures.load(Ordering::Acquire),
+                consecutive_failures: self.consecutive_failures.load(),
                 last_failure_epoch_secs: epoch,
             };
 
@@ -235,12 +236,12 @@ impl McpCircuitBreaker {
                     // Transition to half-open
                     self.state
                         .store(CircuitState::HalfOpen as u8, Ordering::Release);
-                    self.half_open_successes.store(0, Ordering::Relaxed);
+                    self.half_open_successes.store(0);
                     self.record_half_open_metric();
                     self.persist();
                     true
                 } else {
-                    self.blocked_requests.fetch_add(1, Ordering::Relaxed);
+                    self.blocked_requests.fetch_add(1);
                     self.record_breaker_denial_metric();
                     false
                 }
@@ -259,18 +260,16 @@ impl McpCircuitBreaker {
         match state {
             CircuitState::Closed => {
                 // Reset failure counter on success
-                self.consecutive_failures.store(0, Ordering::Relaxed);
-                // Optimization: Maybe don't persist on every success to avoid IO thrashing
-                // Only if failures > 0
+                self.consecutive_failures.store(0);
             }
             CircuitState::HalfOpen => {
-                let successes = self.half_open_successes.fetch_add(1, Ordering::AcqRel) + 1;
+                let successes = self.half_open_successes.fetch_add(1) + 1;
                 if successes >= self.config.success_threshold {
                     // Enough successes, close the circuit
                     self.state
                         .store(CircuitState::Closed as u8, Ordering::Release);
-                    self.consecutive_failures.store(0, Ordering::Relaxed);
-                    self.half_open_successes.store(0, Ordering::Relaxed);
+                    self.consecutive_failures.store(0);
+                    self.half_open_successes.store(0);
                     *self.last_failure_time.lock() = None;
                     self.persist();
                 }
@@ -279,7 +278,7 @@ impl McpCircuitBreaker {
                 // Shouldn't happen, but treat as half-open transition
                 self.state
                     .store(CircuitState::HalfOpen as u8, Ordering::Release);
-                self.half_open_successes.store(1, Ordering::Relaxed);
+                self.half_open_successes.store(1);
                 self.persist();
             }
         }
@@ -301,7 +300,7 @@ impl McpCircuitBreaker {
 
         match state {
             CircuitState::Closed => {
-                let failures = self.consecutive_failures.fetch_add(1, Ordering::AcqRel) + 1;
+                let failures = self.consecutive_failures.fetch_add(1) + 1;
                 if failures >= self.config.failure_threshold {
                     // Too many failures, open the circuit
                     self.state
@@ -313,13 +312,13 @@ impl McpCircuitBreaker {
                 // Failure in half-open, go back to open
                 self.state
                     .store(CircuitState::Open as u8, Ordering::Release);
-                self.consecutive_failures.fetch_add(1, Ordering::AcqRel);
-                self.half_open_successes.store(0, Ordering::Relaxed);
+                self.consecutive_failures.fetch_add(1);
+                self.half_open_successes.store(0);
                 self.record_circuit_open_metric();
             }
             CircuitState::Open => {
                 // Already open, just increment failure count
-                self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
+                self.consecutive_failures.fetch_add(1);
             }
         }
         // Always persist on failure update
@@ -328,7 +327,7 @@ impl McpCircuitBreaker {
 
     /// Calculate timeout duration with exponential backoff
     fn calculate_timeout(&self) -> Duration {
-        let failures = self.consecutive_failures.load(Ordering::Relaxed);
+        let failures = self.consecutive_failures.load();
 
         // Exponential backoff: base_timeout * 2^(failures - threshold)
         let multiplier = if failures > self.config.failure_threshold {
@@ -356,12 +355,12 @@ impl McpCircuitBreaker {
 
         CircuitBreakerDiagnostics {
             state: self.state(),
-            consecutive_failures: self.consecutive_failures.load(Ordering::Relaxed),
-            half_open_successes: self.half_open_successes.load(Ordering::Relaxed),
+            consecutive_failures: self.consecutive_failures.load(),
+            half_open_successes: self.half_open_successes.load(),
             last_failure_time: *self.last_failure_time.lock(),
             current_timeout: self.calculate_timeout(),
             retry_after,
-            blocked_requests: self.blocked_requests.load(Ordering::Relaxed),
+            blocked_requests: self.blocked_requests.load(),
             is_blocking: self.state() == CircuitState::Open,
         }
     }
@@ -371,9 +370,9 @@ impl McpCircuitBreaker {
     pub fn reset(&self) {
         self.state
             .store(CircuitState::Closed as u8, Ordering::Release);
-        self.consecutive_failures.store(0, Ordering::Relaxed);
-        self.half_open_successes.store(0, Ordering::Relaxed);
-        self.blocked_requests.store(0, Ordering::Relaxed);
+        self.consecutive_failures.store(0);
+        self.half_open_successes.store(0);
+        self.blocked_requests.store(0);
         *self.last_failure_time.lock() = None;
         self.persist();
     }

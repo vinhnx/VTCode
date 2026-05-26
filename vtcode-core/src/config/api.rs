@@ -35,7 +35,7 @@ pub struct ConfigReadResponse {
     pub origins: BTreeMap<String, ConfigLayerMetadata>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigWriteTarget {
     User,
@@ -43,7 +43,7 @@ pub enum ConfigWriteTarget {
     Project,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigWriteStrategy {
     Replace,
@@ -152,7 +152,7 @@ impl ConfigService {
             &mut target_toml,
             &request.path,
             &request.value,
-            request.strategy.clone(),
+            request.strategy,
         )?;
 
         let updated_config: VTCodeConfig = target_toml.clone().try_into().with_context(|| {

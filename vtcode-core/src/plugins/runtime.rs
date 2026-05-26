@@ -13,7 +13,7 @@ use crate::config::PluginRuntimeConfig;
 use crate::utils::file_utils::read_file_with_context;
 
 /// Plugin state tracking
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PluginState {
     /// Plugin is loaded and ready
     Active,

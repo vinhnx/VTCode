@@ -170,7 +170,7 @@ impl ModalState {
                     && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
             =>
             {
-                Some(hotkey.action.clone())
+                Some(hotkey.action)
             }
             OverlayHotkeyKey::Char(ch)
                 if !modifiers.control
@@ -179,7 +179,7 @@ impl ModalState {
                     && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
             =>
             {
-                Some(hotkey.action.clone())
+                Some(hotkey.action)
             }
             _ => None,
         })

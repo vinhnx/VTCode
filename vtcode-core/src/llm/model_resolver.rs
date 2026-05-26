@@ -8,7 +8,7 @@ use crate::config::models::{
 use crate::llm::provider::Usage;
 use vtcode_config::auth::{AuthCredentialsStoreMode, CustomApiKeyStorage};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelAvailability {
     Available,
     MissingCredential,

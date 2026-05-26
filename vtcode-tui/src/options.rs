@@ -50,7 +50,7 @@ impl From<KeyboardProtocolSettings> for KeyboardProtocolConfig {
 }
 
 /// Standalone fullscreen interaction settings for alternate-screen behavior.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FullscreenInteractionSettings {
     pub mouse_capture: bool,
     pub copy_on_select: bool,

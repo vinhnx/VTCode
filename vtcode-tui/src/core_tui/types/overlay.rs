@@ -43,13 +43,13 @@ pub struct OverlayHotkey {
     pub action: OverlayHotkeyAction,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverlayHotkeyKey {
     CtrlChar(char),
     Char(char),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverlayHotkeyAction {
     LaunchEditor,
     OpenSourceThread,

@@ -25,7 +25,7 @@ pub struct LintConfig {
 }
 
 /// Lint result severity levels
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintSeverity {
     Info,
     Warning,

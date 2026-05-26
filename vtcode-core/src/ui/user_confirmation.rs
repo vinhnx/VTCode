@@ -213,14 +213,14 @@ impl UserConfirmation {
 }
 
 /// Available agent modes
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentMode {
     /// Single coder agent with Decision Ledger - reliable for all tasks
     SingleCoder,
 }
 
 /// Task complexity levels for agent mode selection
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskComplexity {
     /// Simple tasks - single file edits, basic questions
     Simple,

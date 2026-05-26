@@ -191,10 +191,12 @@ pub fn strip_ansi(text: &str) -> String {
 
     while i < bytes.len() {
         let next_esc = memchr(ESC, &bytes[i..]).map_or(bytes.len(), |offset| i + offset);
-        while i < next_esc {
-            push_visible_byte(&mut output, bytes[i]);
-            i += 1;
+        // Pre-slice to avoid bounds checks in the inner loop — the range
+        // i..next_esc is provably within bytes[..].
+        for &b in &bytes[i..next_esc] {
+            push_visible_byte(&mut output, b);
         }
+        i = next_esc;
 
         if i >= bytes.len() {
             break;
@@ -221,18 +223,21 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
     let mut i = 0;
 
     while i < bytes.len() {
-        if (bytes[i] == ESC || parse_c1_at(bytes, i).is_some())
-            && let Some(len) = parse_ansi_sequence_bytes(&bytes[i..])
+        // Pre-slice to the remaining portion so all indexing below shares one bounds edge.
+        let rest = &bytes[i..];
+
+        if (rest[0] == ESC || parse_c1_at(bytes, i).is_some())
+            && let Some(len) = parse_ansi_sequence_bytes(rest)
         {
             i += len;
             continue;
         }
-        if bytes[i] == ESC || parse_c1_at(bytes, i).is_some() {
+        if rest[0] == ESC || parse_c1_at(bytes, i).is_some() {
             // Incomplete/unterminated control sequence at end of available text.
             break;
         }
 
-        push_visible_byte(&mut output, bytes[i]);
+        push_visible_byte(&mut output, rest[0]);
         i += 1;
     }
     output

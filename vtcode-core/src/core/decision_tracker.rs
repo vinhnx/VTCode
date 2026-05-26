@@ -45,7 +45,7 @@ pub enum Action {
 }
 
 /// Type of response given to user
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ResponseType {
     Text,
     ToolExecution,

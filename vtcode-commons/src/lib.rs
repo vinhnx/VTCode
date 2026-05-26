@@ -70,3 +70,6 @@ pub use styling::{ColorPalette, DiffColorPalette, render_styled};
 pub use telemetry::{NoopTelemetry, TelemetrySink};
 pub use tokens::{estimate_tokens, truncate_to_tokens};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
+
+// Re-export key thread safety primitives.
+pub use thread_safety::RelaxedAtomic;

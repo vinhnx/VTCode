@@ -387,7 +387,7 @@ impl ErrorRecoveryManager {
             // Low retry success rate indicates recovery issues
             Urgency::High
         } else {
-            base_plan.urgency.clone()
+            base_plan.urgency
         };
 
         EnhancedContextPreservationPlan {
@@ -427,7 +427,7 @@ pub enum PreservationStrategy {
 }
 
 /// Urgency level for context preservation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Urgency {
     Low,
     High,

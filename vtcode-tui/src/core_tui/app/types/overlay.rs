@@ -93,13 +93,13 @@ pub struct TransientHotkey {
     pub action: TransientHotkeyAction,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransientHotkeyKey {
     CtrlChar(char),
     Char(char),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransientHotkeyAction {
     LaunchEditor,
     OpenSourceThread,

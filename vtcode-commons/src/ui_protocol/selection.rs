@@ -1,7 +1,7 @@
 //! List selection and wizard step types.
 
 /// Rewind action choices for the rewind overlay.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RewindAction {
     RestoreBoth,
     RestoreConversation,

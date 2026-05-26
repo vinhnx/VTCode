@@ -13,6 +13,7 @@ pub enum Chunk<'a> {
 }
 
 /// Compute an optimal diff between two strings using Myers algorithm.
+#[inline]
 pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     if old.is_empty() && new.is_empty() {
         return Vec::with_capacity(0);
@@ -118,6 +119,7 @@ enum Edit {
 /// Advance along matching characters. Extracted from `myers_diff` so the
 /// compiler sees a tight leaf loop with no surrounding state, enabling better
 /// register allocation and (in some cases) auto-vectorization heuristics.
+#[inline]
 fn advance_matching(old: &[char], new: &[char], mut x: usize, mut y: usize) -> (usize, usize) {
     while x < old.len() && y < new.len() && old[x] == new[y] {
         x += 1;
@@ -130,6 +132,7 @@ fn advance_matching(old: &[char], new: &[char], mut x: usize, mut y: usize) -> (
 /// `advance_matching` — a focused leaf function that the compiler can
 /// optimise in isolation.
 /// Returns the final `(x, y)` position after removing equal edits.
+#[inline]
 fn backtrack_equal_run(
     mut x: usize,
     mut y: usize,
@@ -297,7 +300,7 @@ pub struct DiffHunk {
 }
 
 /// A single diff line annotated with metadata and type.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DiffLineKind {
     Context,
@@ -366,6 +369,7 @@ fn split_lines_with_terminator(text: &str) -> Vec<String> {
     lines
 }
 
+#[inline]
 fn collect_line_records<'a>(
     old_lines: &'a [&'a str],
     new_lines: &'a [&'a str],
@@ -527,7 +531,7 @@ fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
         let lines = slice
             .iter()
             .map(|record| DiffLine {
-                kind: record.kind.clone(),
+                kind: record.kind,
                 old_line: record.old_line,
                 new_line: record.new_line,
                 text: record.text.to_string(),

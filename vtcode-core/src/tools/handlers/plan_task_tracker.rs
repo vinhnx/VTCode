@@ -172,7 +172,7 @@ fn flatten_for_global_items(
 ) {
     for node in nodes {
         out.push((
-            node.status.clone(),
+            node.status,
             format!("{}{}", "  ".repeat(level), node.description),
             node.metadata.clone(),
         ));
@@ -356,7 +356,7 @@ fn build_tree_from_flat(lines: &[FlatTaskLine]) -> Vec<PlanTaskNode> {
 
         let node = PlanTaskNode {
             description: line.description.clone(),
-            status: line.status.clone(),
+            status: line.status,
             metadata: line.metadata.clone(),
             children: Vec::new(),
         };

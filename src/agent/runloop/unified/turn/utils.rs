@@ -160,7 +160,7 @@ mod tests {
 
         assert!(history.len() <= output_limits::DEFAULT_MESSAGE_LIMIT);
         assert_eq!(
-            history.first().map(|m| m.role.clone()),
+            history.first().map(|m| m.role),
             Some(uni::MessageRole::System)
         );
     }

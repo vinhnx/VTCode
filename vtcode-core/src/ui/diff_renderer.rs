@@ -94,7 +94,7 @@ pub struct DiffLine {
     pub line_number_new: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffLineType {
     Added,
     Removed,

@@ -472,7 +472,7 @@ impl SessionMessage {
 impl From<&Message> for SessionMessage {
     fn from(message: &Message) -> Self {
         Self {
-            role: message.role.clone(),
+            role: message.role,
             content: message.content.clone(),
             reasoning: boxed_non_empty_string(message.reasoning.clone()),
             reasoning_details: boxed_non_empty_vec(message.reasoning_details.clone()),
@@ -487,7 +487,7 @@ impl From<&Message> for SessionMessage {
 impl From<&SessionMessage> for Message {
     fn from(message: &SessionMessage) -> Self {
         Self {
-            role: message.role.clone(),
+            role: message.role,
             content: message.content.clone(),
             reasoning: clone_non_empty_boxed_string(&message.reasoning),
             reasoning_details: clone_non_empty_boxed_vec(&message.reasoning_details),
@@ -1514,7 +1514,7 @@ pub async fn search_sessions(
                     session_path: listing.path.clone(),
                     timestamp: listing.snapshot.started_at,
                     message_index: idx,
-                    role: msg.role.clone(),
+                    role: msg.role,
                     content_snippet: snippet,
                     score: 1.0,
                 });

@@ -130,7 +130,7 @@ pub struct InlineTheme {
 // ---------------------------------------------------------------------------
 
 /// Status-badge tone used in header status indicators.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum InlineHeaderStatusTone {
     #[default]
     Ready,

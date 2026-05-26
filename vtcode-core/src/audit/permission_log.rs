@@ -38,7 +38,7 @@ pub struct PermissionEvent {
 }
 
 /// Type of file access permission
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum FileAccessPermission {
     Read,
     Write,

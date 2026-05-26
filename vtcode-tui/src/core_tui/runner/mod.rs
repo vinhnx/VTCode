@@ -175,7 +175,7 @@ where
     session.set_active_pty_sessions(options.active_pty_sessions);
     session.set_workspace_root(options.workspace_root.clone());
     session.set_fullscreen_active(surface.use_alternate());
-    session.set_fullscreen_interaction(options.fullscreen.clone());
+    session.set_fullscreen_interaction(options.fullscreen);
     if options.show_logs {
         let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
         session.set_log_receiver(log_rx);

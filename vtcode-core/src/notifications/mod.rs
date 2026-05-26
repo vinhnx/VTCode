@@ -70,7 +70,7 @@ pub enum NotificationEvent {
 }
 
 /// Status of a completed task
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum CompletionStatus {
     Success,
     PartialSuccess,

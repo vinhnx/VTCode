@@ -74,7 +74,7 @@ impl SnapshotMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FileEncoding {
     Utf8,
     Base64,
@@ -472,7 +472,7 @@ impl SnapshotManager {
                     })?;
                 }
 
-                let encoding = snapshot.encoding.clone().unwrap_or(FileEncoding::Utf8);
+                let encoding = snapshot.encoding.unwrap_or(FileEncoding::Utf8);
                 let data = snapshot.data.as_deref().unwrap_or_default();
                 let bytes = Self::decode_file(encoding, data)?;
                 tokio::fs::write(&absolute, &bytes).await.with_context(|| {
