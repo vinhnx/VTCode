@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use std::future::Future;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 use tokio::time::timeout;
 
 pub const DEFAULT_ASYNC_TIMEOUT: Duration = Duration::from_secs(30);
@@ -95,4 +96,36 @@ where
     F: Future<Output = T>,
 {
     with_timeout(futures::future::join_all(futs), duration, context).await
+}
+
+/// Read exactly `len` bytes from an async reader without zero-initializing
+/// the buffer first.
+///
+/// This avoids the double-write overhead of `vec![0u8; len]` followed by
+/// `read_exact` — the zeroing is wasted work since every byte is
+/// immediately overwritten by the read. For large payloads this can yield
+/// measurable performance gains.
+///
+/// The returned `Vec` has exactly `len` initialized bytes.
+///
+/// # Errors
+///
+/// Returns `io::Error` if the underlying reader's `read_exact` fails
+/// (e.g., unexpected EOF before `len` bytes are read).
+#[allow(unsafe_code)]
+pub async fn read_exact_uninit<R>(reader: &mut R, len: usize) -> std::io::Result<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut buf = Vec::with_capacity(len);
+    // SAFETY:
+    // - The Vec's allocation is valid and properly aligned for `len` bytes.
+    // - `read_exact` writes `len` bytes into `dst` before any read from `buf`,
+    //   so no uninitialized memory is ever observed.
+    // - The reference `dst` is never read — only written — by `read_exact`.
+    let dst = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr(), len) };
+    reader.read_exact(dst).await?;
+    // SAFETY: `read_exact` initializes exactly `len` bytes on success.
+    unsafe { buf.set_len(len) };
+    Ok(buf)
 }

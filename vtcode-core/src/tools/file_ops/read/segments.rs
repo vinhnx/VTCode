@@ -2,11 +2,12 @@ use super::FileOpsTool;
 use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::types::Input;
+use crate::utils::async_utils::read_exact_uninit;
 use crate::utils::file_utils::read_file_with_context;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::path::Path;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::io::AsyncSeekExt;
 
 impl FileOpsTool {
     pub(super) async fn read_file_paged(
@@ -170,23 +171,24 @@ impl FileOpsTool {
                 )
             })?;
 
-        // Read the specified number of bytes
-        let mut buffer = vec![0; actual_read_size];
-        let mut bytes_read = 0;
-
-        if actual_read_size > 0 {
-            bytes_read = file.read_exact(&mut buffer).await.with_context(|| {
-                format!(
-                    "Failed to read {} bytes from offset {} in file: {}",
-                    actual_read_size,
-                    offset_bytes,
-                    file_path.display()
-                )
-            })?;
-        }
+        // Read the specified number of bytes without zero-initializing first
+        let buffer = if actual_read_size > 0 {
+            read_exact_uninit(&mut file, actual_read_size)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to read {} bytes from offset {} in file: {}",
+                        actual_read_size,
+                        offset_bytes,
+                        file_path.display()
+                    )
+                })?
+        } else {
+            Vec::new()
+        };
 
         // Convert to string, handling potential UTF-8 errors gracefully
-        let final_content = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
+        let final_content = String::from_utf8_lossy(&buffer).into_owned();
         let is_truncated = end_pos < file_size;
 
         Ok((final_content, is_truncated))
