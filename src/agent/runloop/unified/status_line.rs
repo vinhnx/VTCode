@@ -55,12 +55,6 @@ impl BottomStatusLayout {
         }
     }
 
-    fn push_right(&mut self, value: Option<String>) {
-        if let Some(value) = value {
-            push_unique(&mut self.right, value);
-        }
-    }
-
     fn into_status(self) -> (Option<String>, Option<String>) {
         (
             join_status_components(self.left),
@@ -182,23 +176,7 @@ pub(crate) async fn update_input_status_if_changed(
             (None, None)
         }
         StatusLineMode::Auto => {
-            let mut layout = BottomStatusLayout::default();
-            layout.push_left(state.git_left.clone());
-            for component in auto_status_components(
-                state.thread_context.as_deref(),
-                state.ide_context_source.as_deref(),
-                state.git_summary.as_ref(),
-                trimmed_model,
-                trimmed_reasoning,
-                state.context_utilization,
-                state.context_tokens,
-                state.is_cancelling,
-                state.spooled_files_count,
-                state,
-            ) {
-                layout.push_right(Some(component));
-            }
-            layout.into_status()
+            auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
         }
         StatusLineMode::Command => {
             if let Some(cfg) = status_config {
@@ -245,43 +223,11 @@ pub(crate) async fn update_input_status_if_changed(
                     (state.command_value.clone(), None)
                 } else {
                     state.command_value = None;
-                    let mut layout = BottomStatusLayout::default();
-                    layout.push_left(state.git_left.clone());
-                    for component in auto_status_components(
-                        state.thread_context.as_deref(),
-                        state.ide_context_source.as_deref(),
-                        state.git_summary.as_ref(),
-                        trimmed_model,
-                        trimmed_reasoning,
-                        state.context_utilization,
-                        state.context_tokens,
-                        state.is_cancelling,
-                        state.spooled_files_count,
-                        state,
-                    ) {
-                        layout.push_right(Some(component));
-                    }
-                    layout.into_status()
+                    auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
                 }
             } else {
                 state.command_value = None;
-                let mut layout = BottomStatusLayout::default();
-                layout.push_left(state.git_left.clone());
-                for component in auto_status_components(
-                    state.thread_context.as_deref(),
-                    state.ide_context_source.as_deref(),
-                    state.git_summary.as_ref(),
-                    trimmed_model,
-                    trimmed_reasoning,
-                    state.context_utilization,
-                    state.context_tokens,
-                    state.is_cancelling,
-                    state.spooled_files_count,
-                    state,
-                ) {
-                    layout.push_right(Some(component));
-                }
-                layout.into_status()
+                auto_status_layout(state, trimmed_model, trimmed_reasoning).into_status()
             }
         }
     };
@@ -297,6 +243,28 @@ pub(crate) async fn update_input_status_if_changed(
     } else {
         Ok(())
     }
+}
+
+fn auto_status_layout(
+    state: &InputStatusState,
+    trimmed_model: &str,
+    trimmed_reasoning: &str,
+) -> BottomStatusLayout {
+    let mut layout = BottomStatusLayout::default();
+    layout.push_left(state.git_left.clone());
+    layout.right = auto_status_components(
+        state.thread_context.as_deref(),
+        state.ide_context_source.as_deref(),
+        state.git_summary.as_ref(),
+        trimmed_model,
+        trimmed_reasoning,
+        state.context_utilization,
+        state.context_tokens,
+        state.is_cancelling,
+        state.spooled_files_count,
+        state,
+    );
+    layout
 }
 
 /// Build model status with all context indicators including spooled files
@@ -499,7 +467,7 @@ pub(crate) async fn refresh_balance_info(
     state: &mut InputStatusState,
 ) {
     const BALANCE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
-    const BALANCE_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+    const BALANCE_REQUEST_TIMEOUT: Duration = Duration::from_millis(750);
 
     let stale = state
         .last_balance_refresh
