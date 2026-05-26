@@ -22,7 +22,7 @@ pub(super) fn describe_shell_command(args: &Value) -> Option<(String, HashSet<St
                 .filter_map(|value| value.as_str().map(str::to_string))
                 .collect::<Vec<_>>()
         })
-        .filter(|parts: &Vec<String>| !parts.is_empty())
+        .filter(|parts| !parts.is_empty())
     {
         used.insert("command".to_string());
         let joined = parts.join(" ");

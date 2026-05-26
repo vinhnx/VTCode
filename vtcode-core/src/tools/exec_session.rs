@@ -563,17 +563,19 @@ impl ExecSessionManager {
         pty_guard: Option<PtySessionGuard>,
     ) -> Result<()> {
         let mut sessions = self.sessions.write().await;
-        if sessions.contains_key(metadata.id.as_str()) {
-            return Err(anyhow!(
+        use hashbrown::hash_map::Entry;
+        match sessions.entry(metadata.id.clone()) {
+            Entry::Occupied(_) => Err(anyhow!(
                 "exec session '{}' already exists",
                 metadata.id.as_str()
-            ));
+            )),
+            Entry::Vacant(entry) => {
+                entry.insert(Arc::new(ExecSessionRecord::new(
+                    metadata, backend, pty_guard,
+                )));
+                Ok(())
+            }
         }
-        sessions.insert(
-            metadata.id.clone(),
-            Arc::new(ExecSessionRecord::new(metadata, backend, pty_guard)),
-        );
-        Ok(())
     }
 
     async fn ensure_session_absent(&self, session_id: &str) -> Result<()> {

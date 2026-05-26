@@ -92,7 +92,7 @@ impl InputManager {
 
     /// Sets the input content and resets cursor to end
     pub fn set_content(&mut self, content: String) {
-        self.content = content.clone();
+        self.content.clone_from(&content);
         self.cursor = content.len();
         self.clear_selection();
         self.reset_history_navigation();
@@ -403,7 +403,7 @@ impl InputManager {
     }
 
     pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
-        self.content = entry.content.clone();
+        self.content.clone_from(&entry.content);
         self.cursor = self.content.len();
         self.clear_selection();
         self.attachments = entry.attachment_elements();

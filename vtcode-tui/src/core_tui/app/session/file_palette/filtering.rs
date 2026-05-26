@@ -89,11 +89,11 @@ impl FilePalette {
     }
 
     pub fn set_filter(&mut self, query: String) {
-        self.filter_query = query.clone();
+        self.filter_query.clone_from(&query);
 
         // Check cache first
         if let Some(cached) = self.filter_cache.get(&query) {
-            self.filtered_files = cached.clone();
+            self.filtered_files.clone_from(cached);
         } else {
             self.apply_filter();
             // Cache the result
@@ -109,7 +109,7 @@ impl FilePalette {
     pub(super) fn apply_filter(&mut self) {
         if self.filter_query.is_empty() {
             // Avoid cloning when no filter - just reference all files
-            self.filtered_files = self.all_files.clone();
+            self.filtered_files.clone_from(&self.all_files);
             self.navigator.set_item_count(self.filtered_files.len());
             return;
         }

@@ -148,12 +148,12 @@ fn count_nodes(nodes: &[PlanTaskNode], counts: &mut TaskCounts) {
 fn write_markdown_nodes(nodes: &[PlanTaskNode], level: usize, out: &mut String) {
     let indent = "  ".repeat(level);
     for node in nodes {
-        out.push_str(&format!(
-            "{}- {} {}\n",
-            indent,
-            node.status.plan_checkbox(),
-            node.description
-        ));
+        out.push_str(&indent);
+        out.push_str("- ");
+        out.push_str(node.status.plan_checkbox());
+        out.push(' ');
+        out.push_str(&node.description);
+        out.push('\n');
         append_task_step_metadata(out, &indent, &node.metadata);
         write_markdown_nodes(&node.children, level + 1, out);
     }
@@ -240,24 +240,25 @@ fn build_view_lines(
             "verify": node.metadata.verify.clone(),
         }));
         if !node.metadata.files.is_empty() {
+            let files_text = node.metadata.files.join(", ");
             out.push(json!({
-                "display": format!("{next_prefix}files: {}", node.metadata.files.join(", ")),
+                "display": format!("{next_prefix}files: {files_text}"),
                 "status": node.status.as_str(),
-                "text": format!("files: {}", node.metadata.files.join(", ")),
+                "text": format!("files: {files_text}"),
             }));
         }
         if let Some(outcome) = node.metadata.outcome.as_deref() {
             out.push(json!({
-                "display": format!("{next_prefix}outcome: {}", outcome),
+                "display": format!("{next_prefix}outcome: {outcome}"),
                 "status": node.status.as_str(),
-                "text": format!("outcome: {}", outcome),
+                "text": format!("outcome: {outcome}"),
             }));
         }
         for command in &node.metadata.verify {
             out.push(json!({
-                "display": format!("{next_prefix}verify: {}", command),
+                "display": format!("{next_prefix}verify: {command}"),
                 "status": node.status.as_str(),
-                "text": format!("verify: {}", command),
+                "text": format!("verify: {command}"),
             }));
         }
         build_view_lines(&node.children, &next_prefix, &index_path, out);

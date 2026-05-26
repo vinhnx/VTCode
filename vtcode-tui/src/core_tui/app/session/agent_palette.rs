@@ -37,9 +37,9 @@ impl AgentPalette {
     }
 
     pub fn set_filter(&mut self, query: String) {
-        self.filter_query = query.clone();
+        self.filter_query.clone_from(&query);
         if let Some(cached) = self.filter_cache.get(&query) {
-            self.filtered_agents = cached.clone();
+            self.filtered_agents.clone_from(cached);
         } else {
             self.apply_filter();
             if !query.is_empty() && self.filter_cache.len() < 50 {
@@ -53,7 +53,7 @@ impl AgentPalette {
 
     fn apply_filter(&mut self) {
         if self.filter_query.is_empty() {
-            self.filtered_agents = self.all_agents.clone();
+            self.filtered_agents.clone_from(&self.all_agents);
             self.navigator.set_item_count(self.filtered_agents.len());
             return;
         }

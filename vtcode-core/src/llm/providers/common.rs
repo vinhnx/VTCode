@@ -465,6 +465,7 @@ pub fn strip_generation_controls_for_token_count(payload: &mut Value) {
     }
 }
 
+#[inline]
 fn parse_u32_value(value: &Value) -> Option<u32> {
     value
         .as_u64()
@@ -478,6 +479,7 @@ fn parse_u32_value(value: &Value) -> Option<u32> {
         .or_else(|| value.as_str().and_then(|s| s.parse::<u32>().ok()))
 }
 
+#[inline]
 fn value_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
     let mut cursor = value;
     for segment in path {
@@ -1037,10 +1039,7 @@ pub fn extract_reasoning_text_from_detail_values(details: &[Value]) -> Option<St
         let Some(text) = reasoning_text_from_detail_value(detail) else {
             continue;
         };
-        if fragments
-            .last()
-            .is_none_or(|existing: &String| existing != &text)
-        {
+        if fragments.last().is_none_or(|existing| existing != &text) {
             fragments.push(text);
         }
     }
@@ -1061,10 +1060,7 @@ pub fn extract_reasoning_text_from_serialized_details(details: &[String]) -> Opt
         let Some(text) = reasoning_text_from_detail_value(&parsed) else {
             continue;
         };
-        if fragments
-            .last()
-            .is_none_or(|existing: &String| existing != &text)
-        {
+        if fragments.last().is_none_or(|existing| existing != &text) {
             fragments.push(text);
         }
     }

@@ -110,6 +110,7 @@ impl ProcessHandle {
     /// let writer = handle.writer_sender();
     /// writer.send(b"input\n".to_vec()).await?;
     /// ```
+    #[inline]
     pub fn writer_sender(&self) -> mpsc::Sender<Vec<u8>> {
         self.writer_tx.clone()
     }
@@ -118,21 +119,25 @@ impl ProcessHandle {
     ///
     /// Multiple receivers can be created; each receives all output from the
     /// point of subscription.
+    #[inline]
     pub fn output_receiver(&self) -> broadcast::Receiver<Bytes> {
         self.output_tx.subscribe()
     }
 
     /// True if the child process has exited.
+    #[inline]
     pub fn has_exited(&self) -> bool {
         self.exit_status.load(Ordering::SeqCst)
     }
 
     /// Returns the exit code if the process has exited.
+    #[inline]
     pub fn exit_code(&self) -> Option<i32> {
         self.exit_code.lock().ok().and_then(|guard| *guard)
     }
 
     /// True once the stdout/stderr reader task has drained the child streams.
+    #[inline]
     pub fn is_output_drained(&self) -> bool {
         self.reader_handle
             .lock()
@@ -192,6 +197,7 @@ impl ProcessHandle {
     }
 
     /// Check if the process is still running.
+    #[inline]
     pub fn is_running(&self) -> bool {
         !self.has_exited() && !self.is_writer_closed()
     }
@@ -207,6 +213,7 @@ impl ProcessHandle {
     }
 
     /// Check if the writer channel is closed.
+    #[inline]
     pub fn is_writer_closed(&self) -> bool {
         self.writer_tx.is_closed()
     }

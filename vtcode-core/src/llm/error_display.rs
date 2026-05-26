@@ -51,6 +51,7 @@ pub fn style_provider_name(provider: &str) -> String {
 }
 
 /// Format an LLM error for display with enhanced coloring
+#[cold]
 pub fn format_llm_error(provider: &str, error: &str) -> String {
     let provider_styled = style_provider_name(provider);
     let error_styled = style_llm_error(error);
@@ -58,6 +59,7 @@ pub fn format_llm_error(provider: &str, error: &str) -> String {
 }
 
 /// Format an LLM warning for display with enhanced coloring
+#[cold]
 pub fn format_llm_warning(provider: &str, warning: &str) -> String {
     let provider_styled = style_provider_name(provider);
     let warning_styled = style_llm_warning(warning);

@@ -342,11 +342,15 @@ impl AnsiRenderer {
         }
         if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput) {
             let stripped = crate::utils::ansi_parser::strip_ansi(text);
-            let fenced = if looks_like_diff(&stripped) {
-                format!("```diff\n{stripped}\n```")
+            self.buffer.clear();
+            if looks_like_diff(&stripped) {
+                self.buffer.push_str("```diff\n");
             } else {
-                format!("```\n{stripped}\n```")
-            };
+                self.buffer.push_str("```\n");
+            }
+            self.buffer.push_str(&stripped);
+            self.buffer.push_str("\n```");
+            let fenced = std::mem::take(&mut self.buffer);
             return self.render_markdown(style, &fenced);
         }
         if matches!(style, MessageStyle::ToolDetail) {
@@ -356,7 +360,11 @@ impl AnsiRenderer {
             }
             if looks_like_diff(text) {
                 let stripped = crate::utils::ansi_parser::strip_ansi(text);
-                let fenced = format!("```diff\n{stripped}\n```");
+                self.buffer.clear();
+                self.buffer.push_str("```diff\n");
+                self.buffer.push_str(&stripped);
+                self.buffer.push_str("\n```");
+                let fenced = std::mem::take(&mut self.buffer);
                 return self.render_markdown(style, &fenced);
             }
         }
@@ -709,8 +717,8 @@ impl AnsiRenderer {
         if let Some(sink) = &mut self.sink {
             let fallback = sink.resolve_fallback_style(base_style);
             let fallback_arc = Arc::new(fallback.clone());
-            let mut prepared: Vec<Vec<InlineSegment>> = Vec::new();
-            let mut plain_lines: Vec<String> = Vec::new();
+            let mut prepared: Vec<Vec<InlineSegment>> = Vec::with_capacity(lines.len());
+            let mut plain_lines: Vec<String> = Vec::with_capacity(lines.len());
 
             for (line_idx, line) in lines.iter().enumerate() {
                 let (converted, plain) = sink.convert_plain_lines(line, &fallback);
@@ -779,7 +787,10 @@ impl AnsiRenderer {
             for (idx, line) in lines.iter().enumerate() {
                 if idx == 0 && !line.trim().is_empty() {
                     // Prepend "Thinking:" to first line
-                    let prefixed = format!("Thinking: {}", line);
+                    self.buffer.clear();
+                    self.buffer.push_str("Thinking: ");
+                    self.buffer.push_str(line);
+                    let prefixed = std::mem::take(&mut self.buffer);
                     self.line(style, &prefixed)?;
                 } else {
                     self.line(style, line)?;

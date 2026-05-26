@@ -18,6 +18,7 @@ pub struct EnhancedCacheEntry<T> {
 }
 
 impl<T> EnhancedCacheEntry<T> {
+    #[inline]
     pub fn new(data: T, size_bytes: usize) -> Self {
         let now = Instant::now();
         Self {
@@ -30,6 +31,7 @@ impl<T> EnhancedCacheEntry<T> {
         }
     }
 
+    #[inline]
     pub fn access(&mut self) {
         self.access_count += 1;
         self.last_accessed = Instant::now();

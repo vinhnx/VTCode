@@ -103,17 +103,15 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
                 }
             }
             for alias in ["max_lines", "chunk_lines", "limit_lines", "page_size_lines"] {
-                if let Some(val) = normalized.remove(alias)
-                    && !normalized.contains_key("limit")
-                {
-                    normalized.insert("limit".into(), val);
+                if let Some(val) = normalized.remove(alias) {
+                    normalized.entry(String::from("limit")).or_insert(val);
                 }
             }
 
             // Canonicalize omitted offsets to the first line.
-            if !normalized.contains_key("offset") {
-                normalized.insert("offset".into(), serde_json::json!(1));
-            }
+            normalized
+                .entry(String::from("offset"))
+                .or_insert(serde_json::json!(1));
 
             // Remove noise params that don't change semantic intent
             normalized.remove("encoding");

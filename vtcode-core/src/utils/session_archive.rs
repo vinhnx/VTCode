@@ -382,11 +382,13 @@ pub struct SessionMessage {
 impl Eq for SessionMessage {}
 
 #[expect(clippy::box_collection)]
+#[inline]
 fn boxed_non_empty_string(value: Option<String>) -> Option<Box<String>> {
     value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
 }
 
 #[expect(clippy::box_collection)]
+#[inline]
 fn boxed_non_empty_vec<T>(value: Option<Vec<T>>) -> Option<Box<Vec<T>>> {
     value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
 }
@@ -870,7 +872,7 @@ fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
         index += 1;
     }
 
-    while cleaned.last().is_some_and(|line: &String| line.is_empty()) {
+    while cleaned.last().is_some_and(|line| line.is_empty()) {
         cleaned.pop();
     }
 

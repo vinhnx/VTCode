@@ -69,12 +69,12 @@ where
     pub fn get(&mut self, key: &K) -> Option<Arc<V>> {
         self.prune_expired();
 
-        if self.entries.contains_key(key) {
+        let result = self.entries.get(key).map(|entry| Arc::clone(&entry.value));
+        if result.is_some() {
             self.touch_key(key);
             self.lru_order.push_back(key.clone());
         }
-
-        self.entries.get(key).map(|entry| Arc::clone(&entry.value))
+        result
     }
 
     pub fn get_owned(&mut self, key: &K) -> Option<V> {

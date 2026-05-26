@@ -99,6 +99,7 @@ impl Default for ResultMetadata {
 
 impl ResultMetadata {
     /// Overall quality score (0.0-1.0)
+    #[inline]
     pub fn quality_score(&self) -> f32 {
         let weighted = (self.confidence * 0.4)
             + (self.relevance * 0.4)
@@ -107,6 +108,7 @@ impl ResultMetadata {
     }
 
     /// Create metadata for a successful tool execution
+    #[inline]
     pub fn success(confidence: f32, relevance: f32) -> Self {
         Self {
             confidence: confidence.clamp(0.0, 1.0),
@@ -119,6 +121,7 @@ impl ResultMetadata {
     }
 
     /// Create metadata for empty results
+    #[inline]
     pub fn empty() -> Self {
         Self {
             completeness: ResultCompleteness::Empty,
@@ -208,11 +211,13 @@ impl EnhancedToolResult {
     }
 
     /// Whether this result is useful enough to include
+    #[inline]
     pub fn is_useful(&self) -> bool {
         self.metadata.quality_score() > 0.3
     }
 
     /// Whether this result is high quality
+    #[inline]
     pub fn is_high_quality(&self) -> bool {
         self.metadata.quality_score() > 0.7
     }

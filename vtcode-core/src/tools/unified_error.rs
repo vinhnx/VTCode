@@ -214,6 +214,7 @@ impl UnifiedToolError {
 ///
 /// Delegates to the shared `ErrorCategory` classifier for consistency,
 /// then converts the result to the `UnifiedErrorKind` type.
+#[cold]
 pub fn classify_error(err: &anyhow::Error) -> UnifiedErrorKind {
     let category = vtcode_commons::classify_anyhow_error(err);
     UnifiedErrorKind::from(category)

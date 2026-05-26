@@ -488,10 +488,10 @@ async fn merge_prompt_templates(
 
         match load_prompt_template(&path, name.clone()).await {
             Some(template) => {
-                if matches!(scope, PromptResourceScope::Workspace)
-                    || !discovered.contains_key(&name)
-                {
+                if matches!(scope, PromptResourceScope::Workspace) {
                     discovered.insert(name, template);
+                } else {
+                    discovered.entry(name).or_insert(template);
                 }
             }
             None => continue,

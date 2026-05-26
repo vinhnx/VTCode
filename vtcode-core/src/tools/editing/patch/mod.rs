@@ -53,8 +53,9 @@ impl PatchChunk {
     }
 
     pub(crate) fn to_segments(&self) -> (Vec<String>, Vec<String>) {
-        let mut old_lines = Vec::new();
-        let mut new_lines = Vec::new();
+        let cap = self.lines.len();
+        let mut old_lines = Vec::with_capacity(cap);
+        let mut new_lines = Vec::with_capacity(cap);
 
         for line in &self.lines {
             match line {

@@ -473,14 +473,14 @@ fn join_command(parts: Vec<String>) -> String {
 
 fn format_path(shell: ShellKind, path: &Path) -> String {
     match shell {
-        ShellKind::Unix => escape(path.to_string_lossy()).to_string(),
+        ShellKind::Unix => escape(path.to_string_lossy()).into_owned(),
         ShellKind::Windows => format!("'{}'", path.to_string_lossy().replace('\'', "''")),
     }
 }
 
 fn format_pattern(shell: ShellKind, pattern: &str) -> String {
     match shell {
-        ShellKind::Unix => escape(pattern.into()).to_string(),
+        ShellKind::Unix => escape(pattern.into()).into_owned(),
         ShellKind::Windows => format!("'{}'", pattern.replace('\'', "''")),
     }
 }

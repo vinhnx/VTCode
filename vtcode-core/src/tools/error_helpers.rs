@@ -30,6 +30,7 @@ where
 }
 
 /// Extract a required string field from JSON args, with a consistent error message
+#[cold]
 pub fn require_string_field(
     args: &serde_json::Value,
     field: &str,
@@ -49,6 +50,7 @@ pub fn optional_string_field(args: &serde_json::Value, field: &str) -> Option<St
 }
 
 /// Extract a required integer field from JSON args
+#[cold]
 pub fn require_int_field(args: &serde_json::Value, field: &str, tool_name: &str) -> Result<i64> {
     args.get(field)
         .and_then(|v| v.as_i64())
@@ -57,6 +59,7 @@ pub fn require_int_field(args: &serde_json::Value, field: &str, tool_name: &str)
 
 /// Extract a required value from an `Option<T>`, with a consistent error message
 /// referencing the field name and tool/operation name.
+#[cold]
 pub fn require_field<T>(value: Option<T>, field: &str, tool_name: &str) -> Result<T> {
     value.ok_or_else(|| anyhow::anyhow!("{field} is required for {tool_name}"))
 }
