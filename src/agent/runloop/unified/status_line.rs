@@ -31,6 +31,12 @@ pub(crate) struct InputStatusState {
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
     pub(crate) thread_context: Option<String>,
+    // DeepSeek-specific balance & cost (only shown for deepseek provider)
+    pub(crate) is_deepseek: bool,
+    pub(crate) balance: Option<String>,
+    pub(crate) cost_usd: Option<f64>,
+    pub(crate) cache_hit_pct: Option<f64>,
+    pub(crate) last_balance_refresh: Option<Instant>,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
@@ -173,6 +179,7 @@ pub(crate) async fn update_input_status_if_changed(
                 state.context_tokens,
                 state.is_cancelling,
                 state.spooled_files_count,
+                state,
             ) {
                 layout.push_right(Some(component));
             }
@@ -235,6 +242,7 @@ pub(crate) async fn update_input_status_if_changed(
                         state.context_tokens,
                         state.is_cancelling,
                         state.spooled_files_count,
+                        state,
                     ) {
                         layout.push_right(Some(component));
                     }
@@ -254,6 +262,7 @@ pub(crate) async fn update_input_status_if_changed(
                     state.context_tokens,
                     state.is_cancelling,
                     state.spooled_files_count,
+                    state,
                 ) {
                     layout.push_right(Some(component));
                 }
@@ -288,6 +297,7 @@ fn build_model_status_with_context_and_spooled(
     is_cancelling: bool,
     spooled_files: Option<usize>,
 ) -> Option<String> {
+    let default_state = InputStatusState::default();
     join_status_components(auto_status_components(
         thread_context,
         ide_context_source,
@@ -298,6 +308,7 @@ fn build_model_status_with_context_and_spooled(
         _total_tokens,
         is_cancelling,
         spooled_files,
+        &default_state,
     ))
 }
 
@@ -312,6 +323,7 @@ fn auto_status_components(
     _total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
+    state: &InputStatusState,
 ) -> Vec<String> {
     let mut parts: Vec<Option<String>> = Vec::new();
     if is_cancelling {
@@ -326,6 +338,19 @@ fn auto_status_components(
             .map(str::to_string),
     );
     parts.push((!model.trim().is_empty()).then(|| model.trim().to_string()));
+
+    // DeepSeek-specific balance/cost/cache display
+    if state.is_deepseek {
+        if let Some(bal) = &state.balance {
+            parts.push(Some(format!("Balance: {bal}")));
+        }
+        if let Some(cost) = state.cost_usd {
+            parts.push(Some(format!("Cost: ${cost:.4}")));
+        }
+        if let Some(pct) = state.cache_hit_pct {
+            parts.push(Some(format!("Cache: {pct:.0}%")));
+        }
+    }
 
     if let Some(util) = context_utilization {
         parts.push(Some(format!("{:.0}% context left", util.clamp(0.0, 100.0))));

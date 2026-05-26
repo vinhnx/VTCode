@@ -101,6 +101,53 @@ impl Usage {
     }
 }
 
+/// Provider-agnostic balance information for account status display.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BalanceInfo {
+    /// Human-readable balance string (e.g. "100.00¥", "$50.00").
+    pub display: String,
+    /// Whether the account has sufficient balance for API calls.
+    pub is_available: bool,
+}
+
+/// DeepSeek-specific balance info from GET /user/balance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepSeekBalanceResponse {
+    pub is_available: bool,
+    pub balance_infos: Vec<DeepSeekCurrencyBalance>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepSeekCurrencyBalance {
+    pub currency: String,
+    pub total_balance: String,
+    #[serde(default)]
+    pub granted_balance: String,
+    #[serde(default)]
+    pub topped_up_balance: String,
+}
+
+impl From<DeepSeekBalanceResponse> for BalanceInfo {
+    fn from(resp: DeepSeekBalanceResponse) -> Self {
+        let display = resp
+            .balance_infos
+            .first()
+            .map(|b| {
+                let symbol = match b.currency.as_str() {
+                    "CNY" => "¥",
+                    "USD" => "$",
+                    _ => &b.currency,
+                };
+                format!("{}{}", b.total_balance, symbol)
+            })
+            .unwrap_or_else(|| "N/A".to_string());
+        BalanceInfo {
+            display,
+            is_available: resp.is_available,
+        }
+    }
+}
+
 #[cfg(test)]
 mod usage_tests {
     use super::Usage;
