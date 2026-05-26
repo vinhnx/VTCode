@@ -302,7 +302,7 @@ pub struct UiConfig {
     /// - 3.0: Large text minimum
     /// - 1.0: Disable contrast enforcement
     #[serde(default = "default_minimum_contrast")]
-    pub minimum_contrast: f64,
+    pub minimum_contrast: f32,
 
     /// Compatibility mode for legacy terminals that map bold to bright colors.
     /// When enabled, avoids using bold styling on text that would become bright colors,
@@ -367,7 +367,7 @@ pub enum ColorSchemeMode {
     Dark,
 }
 
-fn default_minimum_contrast() -> f64 {
+fn default_minimum_contrast() -> f32 {
     crate::constants::ui::THEME_MIN_CONTRAST_RATIO
 }
 

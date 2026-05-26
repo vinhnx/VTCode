@@ -157,43 +157,43 @@ pub const TUI_MAX_VIEWPORT_WIDTH: u16 = 500;
 pub const TUI_MAX_VIEWPORT_HEIGHT: u16 = 200;
 
 // Theme and color constants
-pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;
-pub const THEME_FOREGROUND_LIGHTEN_RATIO: f64 = 0.25;
-pub const THEME_SECONDARY_LIGHTEN_RATIO: f64 = 0.2;
-pub const THEME_MIX_RATIO: f64 = 0.35;
-pub const THEME_TOOL_BODY_MIX_RATIO: f64 = 0.35;
-pub const THEME_TOOL_BODY_LIGHTEN_RATIO: f64 = 0.2;
-pub const THEME_RESPONSE_COLOR_LIGHTEN_RATIO: f64 = 0.15;
-pub const THEME_REASONING_COLOR_LIGHTEN_RATIO: f64 = 0.3;
-pub const THEME_INPUT_BACKGROUND_MIX_RATIO: f64 = 0.08;
-pub const THEME_USER_COLOR_LIGHTEN_RATIO: f64 = 0.2;
-pub const THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO: f64 = 0.4;
-pub const THEME_PRIMARY_STATUS_LIGHTEN_RATIO: f64 = 0.35;
-pub const THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO: f64 = 0.5;
-pub const THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO: f64 = 0.35;
-pub const THEME_LOGO_ACCENT_BANNER_SECONDARY_LIGHTEN_RATIO: f64 = 0.25;
+pub const THEME_MIN_CONTRAST_RATIO: f32 = 4.5;
+pub const THEME_FOREGROUND_LIGHTEN_RATIO: f32 = 0.25;
+pub const THEME_SECONDARY_LIGHTEN_RATIO: f32 = 0.2;
+pub const THEME_MIX_RATIO: f32 = 0.35;
+pub const THEME_TOOL_BODY_MIX_RATIO: f32 = 0.35;
+pub const THEME_TOOL_BODY_LIGHTEN_RATIO: f32 = 0.2;
+pub const THEME_RESPONSE_COLOR_LIGHTEN_RATIO: f32 = 0.15;
+pub const THEME_REASONING_COLOR_LIGHTEN_RATIO: f32 = 0.3;
+pub const THEME_INPUT_BACKGROUND_MIX_RATIO: f32 = 0.08;
+pub const THEME_USER_COLOR_LIGHTEN_RATIO: f32 = 0.2;
+pub const THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO: f32 = 0.4;
+pub const THEME_PRIMARY_STATUS_LIGHTEN_RATIO: f32 = 0.35;
+pub const THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO: f32 = 0.5;
+pub const THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO: f32 = 0.35;
+pub const THEME_LOGO_ACCENT_BANNER_SECONDARY_LIGHTEN_RATIO: f32 = 0.25;
 
 // UI Color constants
 pub const THEME_COLOR_WHITE_RED: u8 = 0xFF;
 pub const THEME_COLOR_WHITE_GREEN: u8 = 0xFF;
 pub const THEME_COLOR_WHITE_BLUE: u8 = 0xFF;
-pub const THEME_MIX_RATIO_MIN: f64 = 0.0;
-pub const THEME_MIX_RATIO_MAX: f64 = 1.0;
-pub const THEME_BLEND_CLAMP_MIN: f64 = 0.0;
-pub const THEME_BLEND_CLAMP_MAX: f64 = 255.0;
+pub const THEME_MIX_RATIO_MIN: f32 = 0.0;
+pub const THEME_MIX_RATIO_MAX: f32 = 1.0;
+pub const THEME_BLEND_CLAMP_MIN: f32 = 0.0;
+pub const THEME_BLEND_CLAMP_MAX: f32 = 255.0;
 
 // WCAG contrast algorithm constants
-pub const THEME_RELATIVE_LUMINANCE_CUTOFF: f64 = 0.03928;
-pub const THEME_RELATIVE_LUMINANCE_LOW_FACTOR: f64 = 12.92;
-pub const THEME_RELATIVE_LUMINANCE_OFFSET: f64 = 0.055;
-pub const THEME_RELATIVE_LUMINANCE_EXPONENT: f64 = 2.4;
-pub const THEME_CONTRAST_RATIO_OFFSET: f64 = 0.05;
-pub const THEME_RED_LUMINANCE_COEFFICIENT: f64 = 0.2126;
-pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f64 = 0.7152;
-pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f64 = 0.0722;
-pub const THEME_LUMINANCE_LIGHTEN_RATIO: f64 = 0.2;
+pub const THEME_RELATIVE_LUMINANCE_CUTOFF: f32 = 0.03928;
+pub const THEME_RELATIVE_LUMINANCE_LOW_FACTOR: f32 = 12.92;
+pub const THEME_RELATIVE_LUMINANCE_OFFSET: f32 = 0.055;
+pub const THEME_RELATIVE_LUMINANCE_EXPONENT: f32 = 2.4;
+pub const THEME_CONTRAST_RATIO_OFFSET: f32 = 0.05;
+pub const THEME_RED_LUMINANCE_COEFFICIENT: f32 = 0.2126;
+pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f32 = 0.7152;
+pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f32 = 0.0722;
+pub const THEME_LUMINANCE_LIGHTEN_RATIO: f32 = 0.2;
 /// Lighten ratio for PTY output text — subdued but readable (higher = brighter)
-pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f64 = 0.28;
+pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f32 = 0.28;
 
 /// Subdued gray for diff line numbers
 pub const DIFF_LINE_NUMBER_R: u8 = 0x4a;
@@ -210,13 +210,13 @@ pub const PLACEHOLDER_B: u8 = 0x88;
 // Colors NOT in this list have visibility issues in common terminal configurations.
 
 /// WCAG AA standard minimum contrast ratio (4.5:1)
-pub const WCAG_AA_CONTRAST_RATIO: f64 = 4.5;
+pub const WCAG_AA_CONTRAST_RATIO: f32 = 4.5;
 
 /// WCAG AAA standard minimum contrast ratio (7.0:1)
-pub const WCAG_AAA_CONTRAST_RATIO: f64 = 7.0;
+pub const WCAG_AAA_CONTRAST_RATIO: f32 = 7.0;
 
 /// Large text minimum contrast ratio (3.0:1)
-pub const WCAG_LARGE_TEXT_CONTRAST_RATIO: f64 = 3.0;
+pub const WCAG_LARGE_TEXT_CONTRAST_RATIO: f32 = 3.0;
 
 // Safe ANSI color indices (standard 0-15 palette)
 // These colors are portable across common terminal themes.

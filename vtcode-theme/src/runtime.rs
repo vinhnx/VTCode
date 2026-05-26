@@ -40,7 +40,7 @@ pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {
 }
 
 /// Return the currently configured minimum contrast ratio.
-pub fn get_minimum_contrast() -> f64 {
+pub fn get_minimum_contrast() -> f32 {
     COLOR_CONFIG.read().minimum_contrast
 }
 

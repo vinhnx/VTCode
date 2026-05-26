@@ -6,12 +6,12 @@ use crate::color_math::{balance_text_luminance, ensure_contrast, lighten, mix};
 /// Identifier for the default theme.
 pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
-const DEFAULT_MIN_CONTRAST: f64 = ui::THEME_MIN_CONTRAST_RATIO;
+const DEFAULT_MIN_CONTRAST: f32 = ui::THEME_MIN_CONTRAST_RATIO;
 
 /// Color accessibility configuration loaded from vtcode.toml.
 #[derive(Clone, Debug)]
 pub struct ColorAccessibilityConfig {
-    pub minimum_contrast: f64,
+    pub minimum_contrast: f32,
     pub bold_is_bright: bool,
     pub safe_colors_only: bool,
 }

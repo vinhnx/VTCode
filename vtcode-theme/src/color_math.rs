@@ -1,13 +1,13 @@
 use anstyle::RgbColor;
 use vtcode_config::constants::ui;
 
-pub(crate) const MAX_DARK_BG_TEXT_LUMINANCE: f64 = 0.92;
-pub(crate) const MIN_DARK_BG_TEXT_LUMINANCE: f64 = 0.20;
-pub(crate) const MAX_LIGHT_BG_TEXT_LUMINANCE: f64 = 0.68;
+pub(crate) const MAX_DARK_BG_TEXT_LUMINANCE: f32 = 0.92;
+pub(crate) const MIN_DARK_BG_TEXT_LUMINANCE: f32 = 0.20;
+pub(crate) const MAX_LIGHT_BG_TEXT_LUMINANCE: f32 = 0.68;
 
-pub(crate) fn relative_luminance(color: RgbColor) -> f64 {
-    fn channel(value: u8) -> f64 {
-        let c = (value as f64) / 255.0;
+pub(crate) fn relative_luminance(color: RgbColor) -> f32 {
+    fn channel(value: u8) -> f32 {
+        let c = (value as f32) / 255.0;
         if c <= ui::THEME_RELATIVE_LUMINANCE_CUTOFF {
             c / ui::THEME_RELATIVE_LUMINANCE_LOW_FACTOR
         } else {
@@ -26,18 +26,18 @@ pub(crate) fn relative_luminance(color: RgbColor) -> f64 {
         + ui::THEME_BLUE_LUMINANCE_COEFFICIENT * b
 }
 
-pub(crate) fn contrast_ratio(foreground: RgbColor, background: RgbColor) -> f64 {
+pub(crate) fn contrast_ratio(foreground: RgbColor, background: RgbColor) -> f32 {
     let fg = relative_luminance(foreground);
     let bg = relative_luminance(background);
     let (lighter, darker) = if fg > bg { (fg, bg) } else { (bg, fg) };
     (lighter + ui::THEME_CONTRAST_RATIO_OFFSET) / (darker + ui::THEME_CONTRAST_RATIO_OFFSET)
 }
 
-fn darken(color: RgbColor, ratio: f64) -> RgbColor {
+fn darken(color: RgbColor, ratio: f32) -> RgbColor {
     mix(color, RgbColor(0, 0, 0), ratio)
 }
 
-fn adjust_luminance_to_target(color: RgbColor, target: f64) -> RgbColor {
+fn adjust_luminance_to_target(color: RgbColor, target: f32) -> RgbColor {
     let current = relative_luminance(color);
     if (current - target).abs() < 1e-3 {
         return color;
@@ -57,7 +57,7 @@ fn adjust_luminance_to_target(color: RgbColor, target: f64) -> RgbColor {
 pub(crate) fn balance_text_luminance(
     color: RgbColor,
     background: RgbColor,
-    min_contrast: f64,
+    min_contrast: f32,
 ) -> RgbColor {
     let bg_luminance = relative_luminance(background);
     let mut candidate = color;
@@ -78,7 +78,7 @@ pub(crate) fn balance_text_luminance(
 pub(crate) fn ensure_contrast(
     candidate: RgbColor,
     background: RgbColor,
-    min_ratio: f64,
+    min_ratio: f32,
     fallbacks: &[RgbColor],
 ) -> RgbColor {
     if contrast_ratio(candidate, background) >= min_ratio {
@@ -100,11 +100,11 @@ pub(crate) fn ensure_contrast(
     }
 }
 
-pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
+pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     let ratio = ratio.clamp(ui::THEME_MIX_RATIO_MIN, ui::THEME_MIX_RATIO_MAX);
     let blend = |c: u8, t: u8| -> u8 {
-        let c = c as f64;
-        let t = t as f64;
+        let c = c as f32;
+        let t = t as f32;
         ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
             as u8
     };
@@ -116,7 +116,7 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
     )
 }
 
-pub(crate) fn lighten(color: RgbColor, ratio: f64) -> RgbColor {
+pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {
     mix(
         color,
         RgbColor(

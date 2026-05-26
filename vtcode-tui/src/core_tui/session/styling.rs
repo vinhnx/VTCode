@@ -10,11 +10,11 @@ use crate::ui::tui::{
 
 use super::message::MessageLine;
 
-fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
+fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     let ratio = ratio.clamp(ui::THEME_MIX_RATIO_MIN, ui::THEME_MIX_RATIO_MAX);
     let blend = |c: u8, t: u8| -> u8 {
-        let c = c as f64;
-        let t = t as f64;
+        let c = c as f32;
+        let t = t as f32;
         ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
             as u8
     };
