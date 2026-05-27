@@ -3,6 +3,36 @@ use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[allow(unsafe_code)]
+fn prctl_set_dumpable() -> i32 {
+    unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) }
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn ptrace_deny_attach() -> i32 {
+    unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) }
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn remove_env_var(key: OsString) {
+    unsafe { std::env::remove_var(key) }
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn setrlimit(resource: i32, rlim: &libc::rlimit) -> i32 {
+    unsafe { libc::setrlimit(resource, rlim) }
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn getrlimit(resource: i32, rlim: &mut libc::rlimit) -> i32 {
+    unsafe { libc::getrlimit(resource, rlim) }
+}
+
 /// Perform early process hardening as the first operation in `main()`.
 ///
 /// Call this before any other operations, thread spawning, or heap
@@ -46,7 +76,7 @@ pub(crate) fn pre_main_hardening_linux() {
     cap_stack_rlimit();
 
     // Disable ptrace attach / mark process non-dumpable.
-    let ret_code = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
+    let ret_code = prctl_set_dumpable();
     if ret_code != 0 {
         eprintln!(
             "ERROR: prctl(PR_SET_DUMPABLE, 0) failed: {}",
@@ -62,9 +92,7 @@ pub(crate) fn pre_main_hardening_linux() {
     // as LD_PRELOAD are ignored anyway, but just to be sure, clear them here.
     let ld_keys = env_keys_with_prefix(std::env::vars_os(), b"LD_");
     for key in ld_keys {
-        unsafe {
-            std::env::remove_var(key);
-        }
+        remove_env_var(key);
     }
 }
 
@@ -77,9 +105,7 @@ pub(crate) fn pre_main_hardening_bsd() {
 
     let ld_keys = env_keys_with_prefix(std::env::vars_os(), b"LD_");
     for key in ld_keys {
-        unsafe {
-            std::env::remove_var(key);
-        }
+        remove_env_var(key);
     }
 }
 
@@ -88,7 +114,7 @@ pub(crate) fn pre_main_hardening_macos() {
     cap_stack_rlimit();
 
     // Prevent debuggers from attaching to this process.
-    let ret_code = unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) };
+    let ret_code = ptrace_deny_attach();
     if ret_code == -1 {
         eprintln!(
             "ERROR: ptrace(PT_DENY_ATTACH) failed: {}",
@@ -104,9 +130,7 @@ pub(crate) fn pre_main_hardening_macos() {
     // library loading.
     let dyld_keys = env_keys_with_prefix(std::env::vars_os(), b"DYLD_");
     for key in dyld_keys {
-        unsafe {
-            std::env::remove_var(key);
-        }
+        remove_env_var(key);
     }
 }
 
@@ -116,7 +140,7 @@ fn set_core_file_size_limit_to_zero() {
         rlim_cur: 0,
         rlim_max: 0,
     };
-    let ret_code = unsafe { libc::setrlimit(libc::RLIMIT_CORE, &rlim) };
+    let ret_code = setrlimit(libc::RLIMIT_CORE, &rlim);
     if ret_code != 0 {
         eprintln!(
             "ERROR: setrlimit(RLIMIT_CORE) failed: {}",
@@ -157,8 +181,7 @@ fn cap_stack_rlimit() {
             rlim_cur: 0,
             rlim_max: 0,
         };
-        // SAFETY: rlimit is a POD struct; getrlimit only writes the two fields.
-        let ret = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut current) };
+        let ret = getrlimit(libc::RLIMIT_STACK, &mut current);
         if ret != 0 {
             return;
         }
@@ -170,12 +193,7 @@ fn cap_stack_rlimit() {
             rlim_cur: STACK_CAP_BYTES,
             rlim_max: STACK_CAP_BYTES,
         };
-        // SAFETY: `capped` is a fully initialized POD struct with valid
-        // `rlim_t` values. `setrlimit` is memory-safe regardless of the
-        // kernel policy decision; failure returns -1 with errno, which we
-        // intentionally ignore (best-effort hardening — EINVAL just means
-        // the current stack usage exceeds the cap, which is harmless).
-        let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
+        let _ = setrlimit(libc::RLIMIT_STACK, &capped);
     }
 }
 
