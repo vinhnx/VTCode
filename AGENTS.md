@@ -13,7 +13,7 @@
 - Match CI expectations in `.github/workflows/`.
 - Rust uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` on fallible paths.
 - Measure before optimizing.
-- Consult [`docs/development/rust-performance-principles.md`](docs/development/rust-performance-principles.md) for Rust-specific performance guidance (aliasing, destructive moves, iterator elision, `#[cold]` strategy, and safety-enables-aggressive-optimization patterns).
+- Consult [`docs/development/rust-performance-principles.md`](docs/development/rust-performance-principles.md) for Rust-specific performance guidance (aliasing, destructive moves, iterator elision, overflow checking near-zero cost, `#[cold]` strategy, and safety-enables-aggressive-optimization patterns).
 - In hot Rust paths, treat `Cow` as conditional ownership, not a free borrow: if values are always borrowed or stored in dense token/AST-style enums, prefer `&str`/slices and compact variants unless measurement shows `Cow` pays for itself.
 - Prefer ownership and borrowing by default; introduce `Rc<T>`/`Arc<T>` only for genuine shared ownership.
 - When ownership or lifetimes get tangled, first prefer explicit handles/IDs plus an owning context.

@@ -229,6 +229,47 @@ For vtcode, none of these are material concerns given the workload characteristi
 
 ---
 
+## Integer Overflow Checking: Near-Zero Cost with Proper Optimization
+
+A common intuition is that checked arithmetic (panicking on overflow) imposes significant runtime cost. Production experience from a former Microsoft Midori team compiler engineer ([source](https://ed0u11h)) demonstrates this is not the case: with proper compiler support, the overhead of overflow checking on **every** arithmetic operation was "literally unmeasurable" for most workloads, and at most 1.2% tax in the worst case.
+
+### Why checked arithmetic is cheap in a well-designed compiler
+
+1. **Late lowering**: The compiler keeps "add with overflow" as a single opcode in its IR throughout all optimization passes. Only at the very end — during machine-code lowering — does it emit the `add` + `jo` (jump on overflow) sequence. This means no optimization is inhibited by the presence of overflow checks — they don't break basic blocks, don't block vectorization, and don't impede code motion.
+
+2. **Range analysis eliminates unnecessary checks**: If the compiler can statically prove an operation cannot overflow (e.g., `(i & 0xFF) + 0x1000` where both operands are bounded), it simply omits the check. This creates a **virtuous cycle**: checked arithmetic constrains the range of values, which lets the compiler eliminate checks on downstream operations, which in turn enables better optimization of subsequent code.
+
+3. **Overflow coalescing**: Expression reassociation reduces the number of checks. `n + 4 + 4` is rewritten to `n + 8`, requiring only one overflow check instead of two. These patterns arise naturally in generated code (e.g., RPC serialization stubs) and compilers that treat checked arithmetic as a first-class optimization target handle them automatically.
+
+4. **Inlining is the amplifier**: Inlining gives range analysis broader visibility into callers' invariants. A function like `checked_add(high, 1)` inlined into a context where `high < MAX` eliminates the check entirely. The tighter the language guarantees, the more the optimizer can eliminate.
+
+### Checked arithmetic enables *better* optimization
+
+A subtle but important point: checked arithmetic makes the optimizer's job **easier**, not harder. When an operation would overflow, all subsequent code is dead (execution jumps to the panic handler). The compiler does not need to consider those states. Compare with C/C++ where signed overflow is undefined behavior — the compiler assumes it never happens, but the programmer cannot assume the same thing. In Rust, overflow is defined behavior (panic in debug, wrap in release), which means the compiler has *more* constraints it can exploit, not fewer.
+
+### What this means for vtcode
+
+vtcode already follows best practices:
+
+| Practice | vtcode status |
+|---|---|
+| Profile-based overflow control | `overflow-checks = true` in test, `false` in CI/release — correct split |
+| Semantic overflow methods | `checked_*` for fallible paths, `saturating_*` for clamping, `wrapping_*` for hashing — all used appropriately |
+| Hash code uses `wrapping_mul` | FNV-1a, MurmurHash3 — wrapping is the intended semantics, no checks needed |
+| No `unchecked_*` intrinsics | Appropriate — vtcode is I/O-bound, not tight numeric loops |
+
+Guidelines for ongoing work:
+
+- **Do not avoid `checked_*` in hot paths out of performance fear**. The optimizer handles it well. Use it where overflow indicates a real bug.
+- **Prefer `wrapping_*` for hash computations** (already done) — this communicates intent and avoids test-mode panics.
+- **Use `saturating_*` for UI/cursor/size math** (already done in TUI) — clamping is the correct semantics for layout.
+- **Only reach for `unsafe { unchecked_add() }` when profiling proves a bottleneck** — this has not been necessary in vtcode to date.
+- **Leverage the test profile**: since `overflow-checks = true` in `[profile.test]`, any arithmetic overflow in tests panics immediately, catching bugs that would silently wrap in release.
+
+The Rust compiler's overflow checking is not yet at the level of the Midori compiler described above (rustc's MIR does not keep overflow-checked ops as single nodes through all optimization passes — LLVM sees the branch). However, the direction of travel is the same, and for vtcode's workload, the cost is already negligible.
+
+---
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:
@@ -240,6 +281,7 @@ When reviewing or writing a hot path in vtcode:
 - [ ] Is the small hot function marked `#[inline]`?
 - [ ] Does the code use indexed `for i in 0..n` when an iterator would eliminate bounds checks?
 - [ ] Does the code use `Arc<RwLock<T>>` when `&mut T` or `Box<T>` would suffice?
+- [ ] Is overflow handling explicit (`checked_*`/`saturating_*`/`wrapping_*`) rather than relying on implicit wrap?
 - [ ] Has the performance been measured against baseline before/after?
 
 ---
