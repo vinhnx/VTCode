@@ -3,8 +3,9 @@
 //! Implements RFC 7636 for secure OAuth flows without client secrets.
 //! Uses SHA-256 (S256) code challenge method as recommended by the spec.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use ring::rand::{SecureRandom, SystemRandom};
 use sha2::{Digest, Sha256};
 
 /// PKCE code verifier length (43-128 characters per RFC 7636)
@@ -55,39 +56,25 @@ pub fn generate_pkce_challenge() -> Result<PkceChallenge> {
     PkceChallenge::from_verifier(code_verifier)
 }
 
-/// Generate a cryptographically random code verifier.
+/// Generate a cryptographically random code verifier per RFC 7636 §4.1.
+///
+/// Uses `ring::rand::SystemRandom` (backed by the OS CSPRNG) instead of a
+/// user-space PRNG to ensure ≥128 bits of entropy as required by the spec.
 fn generate_code_verifier() -> Result<String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // Use a simple but effective random generation approach
-    // Combine system time entropy with process ID for uniqueness
+    let rng = SystemRandom::new();
+    let charset_len = CODE_VERIFIER_CHARSET.len() as u8;
+    let max_valid = (256u16 - 256u16 % charset_len as u16) as u8;
     let mut verifier = String::with_capacity(CODE_VERIFIER_LENGTH);
+    let mut buf = [0u8; 1];
 
-    // Seed from system time nanoseconds + process ID
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("System time before UNIX epoch")?
-        .as_nanos();
-
-    let pid = std::process::id() as u128;
-    let mut state = nanos.wrapping_add(pid);
-
-    // XorShift128+ inspired PRNG for good distribution
-    for _ in 0..CODE_VERIFIER_LENGTH {
-        // Mix entropy
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-
-        // Add more entropy from high-res time
-        let extra = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        state = state.wrapping_add(extra);
-
-        let idx = (state % CODE_VERIFIER_CHARSET.len() as u128) as usize;
-        verifier.push(CODE_VERIFIER_CHARSET[idx] as char);
+    while verifier.len() < CODE_VERIFIER_LENGTH {
+        rng.fill(&mut buf)
+            .map_err(|_| anyhow::anyhow!("failed to read from OS random source"))?;
+        // Rejection sampling to avoid modulo bias.
+        if buf[0] < max_valid {
+            let idx = (buf[0] % charset_len) as usize;
+            verifier.push(CODE_VERIFIER_CHARSET[idx] as char);
+        }
     }
 
     Ok(verifier)

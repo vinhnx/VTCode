@@ -45,6 +45,7 @@ mod unix_impl {
     use parking_lot::Mutex;
     use std::fs;
     use std::io::{ErrorKind, Read, Write};
+    use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::{UnixListener, UnixStream};
     use std::path::{Path, PathBuf};
     use std::sync::{
@@ -84,6 +85,16 @@ mod unix_impl {
                     socket_path.display()
                 )
             })?;
+            // Restrict socket to owner-only — prevents other users on the same
+            // machine from communicating with the bridge (defence in depth;
+            // the random UUID path already provides unpredictability).
+            fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o700))
+                .with_context(|| {
+                    format!(
+                        "set permissions on zsh exec bridge socket at {}",
+                        socket_path.display()
+                    )
+                })?;
             listener
                 .set_nonblocking(true)
                 .context("set zsh exec bridge listener to nonblocking")?;

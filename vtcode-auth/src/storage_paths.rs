@@ -48,7 +48,6 @@ pub(crate) fn legacy_auth_storage_path() -> Result<PathBuf> {
     Ok(base_dir.join("auth.json"))
 }
 
-#[cfg(unix)]
 pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or_else(|| {
         anyhow!(
@@ -61,6 +60,7 @@ pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
         .tempfile_in(parent)
         .with_context(|| format!("failed to create temporary file in {}", parent.display()))?;
 
+    #[cfg(unix)]
     set_private_permissions(temp.as_file(), temp.path())?;
     temp.as_file_mut()
         .write_all(contents)
@@ -72,14 +72,9 @@ pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
     let _persisted = temp
         .persist(path)
         .with_context(|| format!("failed to persist private file {}", path.display()))?;
+    #[cfg(unix)]
     set_private_path_permissions(path)?;
     Ok(())
-}
-
-#[cfg(not(unix))]
-pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
-    fs::write(path, contents)
-        .with_context(|| format!("failed to write private file {}", path.display()))
 }
 
 #[cfg(unix)]

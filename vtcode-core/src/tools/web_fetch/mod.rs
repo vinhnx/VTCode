@@ -6,14 +6,16 @@
 use super::traits::Tool;
 use crate::config::constants::tools;
 use crate::tools::error_helpers::with_path_context;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use hashbrown::HashSet;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
+use std::net::IpAddr;
 use std::path::Path;
+use url::Url;
 
 pub mod domains;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
@@ -128,18 +130,23 @@ impl WebFetchTool {
             return Err(anyhow!("Only HTTPS URLs are allowed for security"));
         }
 
-        let url_lower = url.to_lowercase();
+        // Parse the URL to extract the real host, which correctly separates
+        // userinfo credentials (http://evil@127.0.0.1/) from the host.
+        let domain = extract_domain(url)
+            .map_err(|e| anyhow!("Failed to parse URL for security validation: {e}"))?;
 
-        // Check for localhost and private networks (always blocked)
-        if url_lower.contains("localhost")
-            || url_lower.contains("127.0.0.1")
-            || url_lower.contains("0.0.0.0")
-            || url_lower.contains("::1")
-            || url_lower.contains(".local")
-            || url_lower.contains(".internal")
-        {
+        // Reject private, loopback, link-local, and reserved IPs.
+        if is_private_host(&domain) {
             return Err(anyhow!("Access to local/private networks is blocked"));
         }
+
+        // Block .local and .internal TLDs (mDNS / split-DNS).
+        let domain_lower = domain.to_ascii_lowercase();
+        if domain_lower.ends_with(".local") || domain_lower.ends_with(".internal") {
+            return Err(anyhow!("Access to local/private networks is blocked"));
+        }
+
+        let url_lower = url.to_lowercase();
 
         // Apply security policy based on mode
         match self.mode.as_str() {
@@ -429,27 +436,61 @@ impl WebFetchTool {
 }
 
 /// Helper function to extract domain from URL
+///
+/// Uses proper URL parsing to correctly handle:
+/// - User credentials in URLs (`http://user@host/`) — the host is properly
+///   separated from the userinfo, preventing SSRF bypass
+/// - Port numbers, paths, and query strings
 fn extract_domain(url: &str) -> Result<String> {
-    // Remove protocol
-    let without_proto = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .unwrap_or(url);
+    let parsed = Url::parse(url).with_context(|| format!("Failed to parse URL: {url}"))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow!("URL has no host: {url}"))?;
+    if host.is_empty() {
+        bail!("URL has empty host: {url}");
+    }
+    Ok(host.to_string())
+}
 
-    // Split by first / to remove path
-    let domain_part = without_proto.split('/').next().unwrap_or("");
-
-    // Split by first ? to remove query string
-    let domain_only = domain_part.split('?').next().unwrap_or("");
-
-    // Remove port if present
-    let domain_no_port = domain_only.split(':').next().unwrap_or("");
-
-    if domain_no_port.is_empty() {
-        return Err(anyhow!("Could not extract domain from URL: {}", url));
+/// Returns `true` when `host` is a private, loopback, or link-local IP address.
+fn is_private_host(host: &str) -> bool {
+    // Try IPv4 / IPv6 parsing first.
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return match ip {
+            IpAddr::V4(v4) => {
+                let octets = v4.octets();
+                // 127.0.0.0/8 — loopback (is_loopback only matches 127.0.0.1)
+                octets[0] == 127
+                    // 10.0.0.0/8 — class A private
+                    || octets[0] == 10
+                    // 172.16.0.0/12 — class B private
+                    || (octets[0] == 172 && (octets[1] & 0xf0) == 16)
+                    // 192.168.0.0/16 — class C private
+                    || (octets[0] == 192 && octets[1] == 168)
+                    // 169.254.0.0/16 — link-local
+                    || (octets[0] == 169 && octets[1] == 254)
+                    // 0.0.0.0/8 — "this network"
+                    || octets[0] == 0
+            }
+            IpAddr::V6(v6) => {
+                let segments = v6.segments();
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    // fc00::/7 — unique local unicast
+                    || (segments[0] & 0xfe00) == 0xfc00
+                    // fe80::/10 — link-local unicast
+                    || (segments[0] & 0xffc0) == 0xfe80
+            }
+        };
     }
 
-    Ok(domain_no_port.to_string())
+    // DNS names like "localhost" that will resolve to loopback.
+    if host.eq_ignore_ascii_case("localhost") || host.eq_ignore_ascii_case("localhost.localdomain")
+    {
+        return true;
+    }
+
+    false
 }
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {

@@ -45,6 +45,10 @@ struct EncryptedCredential {
     nonce: String,
     ciphertext: String,
     version: u8,
+    /// Per-file random salt for HKDF-style key derivation.
+    /// Older files (version 1) will lack this field; serde defaults to None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    salt: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,7 +126,8 @@ pub(crate) fn is_keyring_functional() -> bool {
     // Try to read it back
     let functional = entry.get_password().is_ok();
 
-    // Clean up - ignore errors during cleanup
+    // Clean up - ignore errors during cleanup (called unconditionally so a
+    // stale entry does not persist when get_password fails after set succeeds).
     let _ = entry.delete_credential();
 
     functional
@@ -466,8 +471,14 @@ impl CustomApiKeyStorage {
 }
 
 fn encrypt_credential(value: &str) -> Result<EncryptedCredential> {
-    let key = derive_file_encryption_key()?;
+    // Generate a per-file random salt to diversify the encryption key.
     let rng = SystemRandom::new();
+    let mut salt_bytes = [0_u8; 16];
+    rng.fill(&mut salt_bytes)
+        .map_err(|_| anyhow!("failed to generate credential salt"))?;
+    let salt = STANDARD.encode(salt_bytes);
+
+    let key = derive_file_encryption_key(Some(&salt))?;
     let mut nonce_bytes = [0_u8; NONCE_LEN];
     rng.fill(&mut nonce_bytes)
         .map_err(|_| anyhow!("failed to generate credential nonce"))?;
@@ -484,6 +495,7 @@ fn encrypt_credential(value: &str) -> Result<EncryptedCredential> {
         nonce: STANDARD.encode(nonce_bytes),
         ciphertext: STANDARD.encode(ciphertext),
         version: ENCRYPTED_CREDENTIAL_VERSION,
+        salt: Some(salt),
     })
 }
 
@@ -502,7 +514,8 @@ fn decrypt_credential(encrypted: &EncryptedCredential) -> Result<String> {
         .decode(&encrypted.ciphertext)
         .context("failed to decode credential ciphertext")?;
 
-    let key = derive_file_encryption_key()?;
+    // Backward-compatible: older files won't have a salt (version 1 format).
+    let key = derive_file_encryption_key(encrypted.salt.as_deref())?;
     let plaintext = key
         .open_in_place(
             Nonce::assume_unique_for_key(nonce_array),
@@ -514,7 +527,7 @@ fn decrypt_credential(encrypted: &EncryptedCredential) -> Result<String> {
     String::from_utf8(plaintext.to_vec()).context("failed to parse decrypted credential")
 }
 
-fn derive_file_encryption_key() -> Result<LessSafeKey> {
+fn derive_file_encryption_key(salt: Option<&str>) -> Result<LessSafeKey> {
     use ring::digest::SHA256;
     use ring::digest::digest;
 
@@ -535,6 +548,13 @@ fn derive_file_encryption_key() -> Result<LessSafeKey> {
     }
 
     key_material.extend_from_slice(b"vtcode-credentials-v1");
+
+    // Per-file random salt diversifies keys across credentials so that a
+    // compromise of one file does not expose others encrypted under the same
+    // machine+user key material.
+    if let Some(salt) = salt {
+        key_material.extend_from_slice(salt.as_bytes());
+    }
 
     let hash = digest(&SHA256, &key_material);
     let key_bytes: &[u8; 32] = hash.as_ref()[..32]

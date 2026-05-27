@@ -133,6 +133,8 @@ fn set_core_file_size_limit_to_zero() {
 /// Linux allows `RLIMIT_STACK` to be `RLIM_INFINITY` (unlimited).  We set it
 /// to a fixed cap (8 MiB) when that is the case.  If the current stack usage
 /// already exceeds the cap the call will fail harmlessly with `EINVAL`.
+// Prevent unused warning when RLIMIT_STACK is not available on all targets
+#[allow(unused_variables)]
 fn cap_stack_rlimit() {
     #[cfg(any(
         target_os = "linux",

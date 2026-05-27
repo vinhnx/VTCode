@@ -275,7 +275,10 @@ pub async fn collect_output_until_exit(
                 while tokio::time::Instant::now() < max_deadline {
                     match tokio::time::timeout(quiet, output_rx.recv()).await {
                         Ok(Ok(chunk)) => collected.extend_from_slice(&chunk),
-                        Ok(Err(broadcast::error::RecvError::Lagged(_))) => continue,
+                        Ok(Err(broadcast::error::RecvError::Lagged(count))) => {
+                            eprintln!("[vtcode] output stream lagged ({} dropped)", count);
+                            continue;
+                        }
                         Ok(Err(broadcast::error::RecvError::Closed)) => break,
                         Err(_) => break, // Timeout - quiet period reached
                     }
