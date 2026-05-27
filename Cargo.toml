@@ -134,6 +134,13 @@ exclude = ["zed-extension"]
 
 [patch.crates-io]
 vtcode-commons = { path = "vtcode-commons" }
+vtcode-acp = { path = "vtcode-acp" }
+vtcode-auth = { path = "vtcode-auth" }
+vtcode-config = { path = "vtcode-config" }
+vtcode-core = { path = "vtcode-core" }
+vtcode-tui = { path = "vtcode-tui" }
+vtcode-process-hardening = { path = "vtcode-process-hardening" }
+vtcode-terminal-detection = { path = "vtcode-terminal-detection" }
 vtcode-markdown-store = { path = "vtcode-markdown-store" }
 vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
