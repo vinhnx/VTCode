@@ -27,7 +27,7 @@ api_key_env = "ATLASCLOUD_API_KEY"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "zai-org/glm-5.1"
+default_model = "deepseek-ai/deepseek-v4-flash"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
