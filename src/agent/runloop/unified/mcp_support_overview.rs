@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use hashbrown::HashSet;
+use std::fmt::Write;
 
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::tools::registry::ToolRegistry;
@@ -158,9 +159,9 @@ pub(crate) async fn display_mcp_status(
                 {
                     let preview: String = args.chars().take(80).collect();
                     if preview.len() < args.len() {
-                        detail.push_str(&format!(" · args {}…", preview));
+                        let _ = write!(detail, " · args {}…", preview);
                     } else {
-                        detail.push_str(&format!(" · args {}", preview));
+                        let _ = write!(detail, " · args {}", preview);
                     }
                 }
 

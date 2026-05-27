@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -476,9 +477,9 @@ fn render_message_for_copilot(message: &Message) -> String {
                 .map(|function| (function.name.as_str(), function.arguments.trim()))
                 .unwrap_or((call.call_type.as_str(), ""));
             if args.is_empty() {
-                tool_history.push_str(&format!("\n- {tool_name} id={}", call.id));
+                let _ = write!(tool_history, "\n- {tool_name} id={}", call.id);
             } else {
-                tool_history.push_str(&format!("\n- {tool_name} id={} args={args}", call.id));
+                let _ = write!(tool_history, "\n- {tool_name} id={} args={args}", call.id);
             }
         }
         sections.push(tool_history);
@@ -487,10 +488,10 @@ fn render_message_for_copilot(message: &Message) -> String {
     if message.role == MessageRole::Tool {
         let mut tool_result = String::from("[VT Code tool result]");
         if let Some(tool_call_id) = message.tool_call_id.as_deref() {
-            tool_result.push_str(&format!("\n- tool_call_id: {tool_call_id}"));
+            let _ = write!(tool_result, "\n- tool_call_id: {tool_call_id}");
         }
         if let Some(origin_tool) = message.origin_tool.as_deref() {
-            tool_result.push_str(&format!("\n- tool: {origin_tool}"));
+            let _ = write!(tool_result, "\n- tool: {origin_tool}");
         }
         sections.insert(0, tool_result);
     }

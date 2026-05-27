@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -237,14 +238,15 @@ impl EnrichedPrompt {
         if !self.resolutions.is_empty() {
             prompt.push_str("Resolved references:\n");
             for resolution in &self.resolutions {
-                prompt.push_str(&format!(
-                    "- \"{}\" → {} in {}:{} (confidence: {:.0}%)\n",
+                let _ = writeln!(
+                    prompt,
+                    "- \"{}\" → {} in {}:{} (confidence: {:.0}%)",
                     resolution.original,
                     resolution.resolved,
                     resolution.file,
                     resolution.line,
                     resolution.confidence * 100.0
-                ));
+                );
             }
             prompt.push('\n');
         }
@@ -252,7 +254,7 @@ impl EnrichedPrompt {
         if !self.inferred_values.is_empty() {
             prompt.push_str("Inferred values:\n");
             for (expr, value) in &self.inferred_values {
-                prompt.push_str(&format!("- \"{}\" → {}\n", expr, value));
+                let _ = writeln!(prompt, "- \"{}\" → {}", expr, value);
             }
             prompt.push('\n');
         }
@@ -260,7 +262,7 @@ impl EnrichedPrompt {
         if !self.recent_files.is_empty() {
             prompt.push_str("Recent context:\n");
             for file in self.recent_files.iter().take(5) {
-                prompt.push_str(&format!("- Last edited: {}\n", file));
+                let _ = writeln!(prompt, "- Last edited: {}", file);
             }
             prompt.push('\n');
         }
@@ -268,7 +270,7 @@ impl EnrichedPrompt {
         if !self.context_hints.is_empty() {
             prompt.push_str("Context hints:\n");
             for hint in &self.context_hints {
-                prompt.push_str(&format!("- {}\n", hint));
+                let _ = writeln!(prompt, "- {}", hint);
             }
             prompt.push('\n');
         }

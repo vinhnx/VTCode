@@ -328,7 +328,7 @@ impl ConversationMemory {
 
         let mut summary = String::from("Recent conversation:\n");
         for msg in messages.iter().rev() {
-            let _ = write!(summary, "Turn {}: {}\n", msg.turn, msg.content);
+            let _ = writeln!(summary, "Turn {}: {}", msg.turn, msg.content);
         }
 
         summary

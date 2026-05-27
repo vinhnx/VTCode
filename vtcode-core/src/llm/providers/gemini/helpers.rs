@@ -1092,19 +1092,21 @@ fn collect_gemini_tool_spec(definitions: Option<&[ToolDefinition]>) -> GeminiToo
             continue;
         };
         has_function_tools = true;
-        if !seen.insert(func.name.clone()) {
+        let name = func.name.clone();
+        if !seen.insert(name.clone()) {
             continue;
         }
 
+        let description = func.description.clone();
         let parameters = sanitize_function_parameters(func.parameters.clone());
         function_declarations.push(FunctionDeclaration {
-            name: func.name.clone(),
-            description: func.description.clone(),
+            name: name.clone(),
+            description: description.clone(),
             parameters: parameters.clone(),
         });
         interaction_tools.push(InteractionTool::function(
-            func.name.clone(),
-            func.description.clone(),
+            name,
+            description,
             parameters,
         ));
     }

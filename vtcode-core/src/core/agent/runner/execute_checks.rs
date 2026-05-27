@@ -2,6 +2,7 @@ use super::AgentRunner;
 use crate::utils::colors::style;
 
 impl AgentRunner {
+    #[cold]
     pub(super) fn warn_on_empty_response(
         &self,
         agent_prefix: &str,

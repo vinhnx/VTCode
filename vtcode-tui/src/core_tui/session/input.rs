@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Padding, Paragraph, Wrap},
 };
 use regex::Regex;
+use std::fmt::Write;
 use std::path::Path;
 use std::sync::LazyLock;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
@@ -1158,7 +1159,7 @@ fn compact_image_placeholders(content: &str) -> Option<String> {
             continue;
         }
         result.push_str(&content[last_end..start]);
-        result.push_str(&format!("[Image: {label}]"));
+        let _ = write!(result, "[Image: {label}]");
         last_end = end;
     }
     if last_end < content.len() {

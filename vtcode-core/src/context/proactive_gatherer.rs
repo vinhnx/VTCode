@@ -5,6 +5,7 @@
 
 use anyhow::{Context as AnyhowContext, Result};
 use hashbrown::HashMap;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -103,7 +104,7 @@ impl GatheredContext {
         if !self.files.is_empty() {
             text.push_str("### Relevant Files:\n");
             for file in &self.files {
-                text.push_str(&format!("- {}\n", file.display()));
+                let _ = writeln!(text, "- {}", file.display());
             }
             text.push('\n');
         }
@@ -111,15 +112,16 @@ impl GatheredContext {
         if !self.snippets.is_empty() {
             text.push_str("### File Snippets:\n\n");
             for (file, snippets) in &self.snippets {
-                text.push_str(&format!("**{}**:\n", file.display()));
+                let _ = writeln!(text, "**{}**:", file.display());
                 for snippet in snippets {
-                    text.push_str(&format!(
+                    let _ = write!(
+                        text,
                         "```\n{} (lines {}-{})\n{}\n```\n\n",
                         file.display(),
                         snippet.line_start,
                         snippet.line_end,
                         snippet.content
-                    ));
+                    );
                 }
             }
         }

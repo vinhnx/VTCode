@@ -65,7 +65,7 @@ pub struct ToolExecutionRecord {
 impl ToolExecutionRecord {
     /// Create a new failed execution record.
     #[expect(clippy::too_many_arguments)]
-    #[inline]
+    #[cold]
     pub fn failure(
         tool_name: String,
         requested_name: String,

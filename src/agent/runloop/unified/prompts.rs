@@ -66,7 +66,7 @@ pub(crate) async fn read_system_prompt(
             } else {
                 " Explicit delegation only."
             };
-            let _ = write!(section, "- {name}: {description}{suffix}\n");
+            let _ = writeln!(section, "- {name}: {description}{suffix}");
         }
         prompt.push_str("\n\n");
         prompt.push_str(section.trim_end());

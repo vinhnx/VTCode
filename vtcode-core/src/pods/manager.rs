@@ -511,17 +511,17 @@ fn render_run_script(
     script.push_str("export TERM=xterm-256color\n");
 
     for (key, value) in &profile.env {
-        let _ = write!(script, "export {key}={}\n", shell_quote(value));
+        let _ = writeln!(script, "export {key}={}", shell_quote(value));
     }
 
     if gpu_ids.len() == 1 {
-        let _ = write!(script, "export CUDA_VISIBLE_DEVICES={}\n", gpu_ids[0]);
+        let _ = writeln!(script, "export CUDA_VISIBLE_DEVICES={}", gpu_ids[0]);
     }
 
     if let Some(models_path) = models_path {
-        let _ = write!(
+        let _ = writeln!(
             script,
-            "export MODELS_PATH={}\n",
+            "export MODELS_PATH={}",
             shell_quote(models_path)
         );
     }
@@ -533,7 +533,7 @@ fn render_run_script(
         port,
         &join_args(vllm_args),
     );
-    let _ = write!(script, "exec {command}\n");
+    let _ = writeln!(script, "exec {command}");
     script
 }
 

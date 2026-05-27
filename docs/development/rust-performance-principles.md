@@ -144,10 +144,10 @@ This is directly analogous to how C++ compilers move exception-handling code to 
 
 | Annotation | Count | Assessment |
 |---|---|---|
-| `#[inline]` | ~456 | Good coverage on hot small functions |
-| `#[cold]` | 10 | Under-used; error paths in loop_detector, tool middleware, and persistent_memory could benefit |
+| `#[inline]` | ~150 | Good coverage on hot small functions |
+| `#[cold]` | ~75 | Well-covered; most error-diagnostic paths are annotated.
 
-**Action**: Mark error-diagnostic paths `#[cold]` rather than `#[inline]` when they are exclusively on the failure branch.
+**Action**: When adding new error-only functions, annotate them `#[cold]` rather than `#[inline]`.
 
 ---
 

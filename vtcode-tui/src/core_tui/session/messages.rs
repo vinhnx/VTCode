@@ -181,11 +181,10 @@ impl Session {
         line_count: usize,
     ) {
         if is_large_json_payload(kind, &text, line_count) {
-            let mut preview = String::new();
-            preview.push_str(&format!(
+            let mut preview = format!(
                 "[...] showing last {} lines - click to expand",
                 ui::INLINE_JSON_TAIL_LINES
-            ));
+            );
 
             let tail = tail_lines(&text, ui::INLINE_JSON_TAIL_LINES);
             if !tail.is_empty() {

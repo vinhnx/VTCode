@@ -2543,7 +2543,7 @@ fn render_topic_file(topic: MemoryTopic, facts: &[GroundedFactRecord]) -> String
         out.push('\n');
         for f in facts {
             let (_, src) = decode_topic_source(&f.source);
-            let _ = write!(out, "- [{}] {}\n", src.trim(), f.fact);
+            let _ = writeln!(out, "- [{}] {}", src.trim(), f.fact);
         }
     }
     out
@@ -2580,7 +2580,7 @@ fn render_memory_index(
     } else {
         for f in &highlights {
             let (_, src) = decode_topic_source(&f.source);
-            let _ = write!(out, "- [{}] {}\n", src.trim(), f.fact);
+            let _ = writeln!(out, "- [{}] {}", src.trim(), f.fact);
         }
     }
     if !notes.is_empty() {
@@ -2622,7 +2622,7 @@ fn render_memory_summary(
 fn render_memory_summary_bullets(bullets: &[String]) -> String {
     let mut out = String::from("# VT Code Memory Summary\n");
     for b in bullets {
-        let _ = write!(out, "- {}\n", b.trim());
+        let _ = writeln!(out, "- {}", b.trim());
     }
     out
 }
@@ -2641,7 +2641,7 @@ fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
             .iter()
             .chain(&classified.repository_facts)
         {
-            let _ = write!(out, "- [{}] {}\n", f.source, f.fact);
+            let _ = writeln!(out, "- [{}] {}", f.source, f.fact);
         }
     }
     out
