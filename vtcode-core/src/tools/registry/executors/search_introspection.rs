@@ -164,13 +164,15 @@ impl ToolRegistry {
         let tools = mcp_results
             .iter()
             .map(|result| {
-                if !grouped.contains_key(&result.provider) {
-                    provider_order.push(result.provider.clone());
+                match grouped.entry(result.provider.clone()) {
+                    hashbrown::hash_map::Entry::Vacant(ve) => {
+                        provider_order.push(ve.key().clone());
+                        ve.insert(Vec::new()).push(result.to_json(detail_level));
+                    }
+                    hashbrown::hash_map::Entry::Occupied(oe) => {
+                        oe.into_mut().push(result.to_json(detail_level));
+                    }
                 }
-                grouped
-                    .entry(result.provider.clone())
-                    .or_default()
-                    .push(result.to_json(detail_level));
                 result.to_json(detail_level)
             })
             .collect::<Vec<_>>();

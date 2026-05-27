@@ -219,10 +219,7 @@ impl DispatchRegistryBuilder {
     ) -> &mut Self {
         let name = name.into();
         let canonical_name = canonical_name.into();
-        if self.handlers.contains_key(&name) {
-            tracing::warn!("Overwriting handler for tool {name}");
-        }
-        self.handlers.insert(
+        let previous = self.handlers.insert(
             name,
             DispatchEntry {
                 canonical_name: canonical_name.clone(),
@@ -232,6 +229,9 @@ impl DispatchRegistryBuilder {
                 }),
             },
         );
+        if previous.is_some() {
+            tracing::warn!("Overwriting handler for tool");
+        }
         self
     }
 
@@ -346,7 +346,8 @@ impl ToolRouter {
     }
 
     /// Create a failure response for a tool call.
-    pub fn failure_response(_call_id: String, error: ToolCallError) -> ToolOutput {
+    #[cold]
+pub fn failure_response(_call_id: String, error: ToolCallError) -> ToolOutput {
         ToolOutput::error(error.to_string())
     }
 }

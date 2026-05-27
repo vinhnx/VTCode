@@ -117,6 +117,7 @@ pub(super) fn serialized_payload_size_bytes(args: &Value) -> usize {
         .unwrap_or_else(|_| args.to_string().len())
 }
 
+#[cold]
 pub(super) fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing unified_exec action. Use `action` or fields: \
@@ -128,6 +129,7 @@ pub(super) fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     )
 }
 
+#[cold]
 pub(super) fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing action in unified_file. Provide `action` or file-operation fields such as \
@@ -136,6 +138,7 @@ pub(super) fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
     )
 }
 
+#[cold]
 pub(super) fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing unified_search action. Use `action` or fields: \

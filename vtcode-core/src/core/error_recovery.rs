@@ -173,7 +173,7 @@ impl ErrorRecoveryManager {
     }
 
     /// Record a recovery attempt
-    #[inline]
+    #[cold]
     pub fn record_recovery_attempt(
         &mut self,
         error_id: &str,
@@ -199,7 +199,7 @@ impl ErrorRecoveryManager {
     }
 
     /// Get recovery strategies for a specific error type
-    #[inline]
+    #[cold]
     pub fn get_recovery_strategies(&self, error_type: &ErrorType) -> &[RecoveryStrategy] {
         self.recovery_strategies
             .get(error_type)
@@ -330,6 +330,8 @@ impl ErrorRecoveryManager {
     }
 
     /// Check if an operation should be retried based on error analysis
+    /// Cold path: only called after an error has occurred.
+    #[cold]
     pub async fn should_retry_operation(
         &self,
         error_type: &ErrorType,
@@ -348,6 +350,8 @@ impl ErrorRecoveryManager {
     }
 
     /// Configure timeout settings for a specific error type
+    /// Cold path: only called during proactive error recovery.
+    #[cold]
     pub async fn configure_timeout_for_error_type(
         &self,
         error_type: ErrorType,
@@ -358,6 +362,8 @@ impl ErrorRecoveryManager {
     }
 
     /// Generate enhanced recovery plan based on timeout detector insights
+    /// Cold path: only called during actual error recovery.
+    #[cold]
     pub async fn generate_enhanced_recovery_plan(
         &self,
         context_size: usize,

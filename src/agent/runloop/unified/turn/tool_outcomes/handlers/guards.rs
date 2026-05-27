@@ -20,6 +20,7 @@ use super::{ValidationResult, build_failure_error_content};
 const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
 const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 12;
 
+#[cold]
 fn push_guard_failure_messages(
     ctx: &mut TurnProcessingContext<'_>,
     tool_call_id: &str,
@@ -100,6 +101,7 @@ fn max_consecutive_identical_shell_command_runs_per_turn(ctx: &TurnProcessingCon
         .unwrap_or(DEFAULT_MAX_REPEATED_TOOL_CALLS)
 }
 
+#[cold]
 fn build_repeated_shell_run_error_content(max_repeated_runs: usize) -> String {
     super::super::execution_result::build_error_content(
         format!(
@@ -126,6 +128,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
     }
 }
 
+#[cold]
 fn build_repeated_file_read_family_error_content(target: &str) -> String {
     super::super::execution_result::build_error_content(
         format!(
@@ -258,6 +261,7 @@ fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) ->
         .unwrap_or(DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN)
 }
 
+#[cold]
 fn spool_chunk_guard_fallback_args(path: &str) -> Value {
     json!({
         "action": "grep",
@@ -266,6 +270,7 @@ fn spool_chunk_guard_fallback_args(path: &str) -> Value {
     })
 }
 
+#[cold]
 fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) -> String {
     super::super::execution_result::build_error_content(
         format!(

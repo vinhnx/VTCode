@@ -285,11 +285,13 @@ impl McpCircuitBreaker {
     }
 
     /// Record a failed operation
+    #[cold]
     pub fn record_failure(&self) {
         self.record_failure_category(ErrorCategory::ExecutionError);
     }
 
     /// Record a failed operation with its canonical error category.
+    #[cold]
     pub fn record_failure_category(&self, category: ErrorCategory) {
         if !category.should_trip_circuit_breaker() {
             return;
@@ -326,6 +328,7 @@ impl McpCircuitBreaker {
     }
 
     /// Calculate timeout duration with exponential backoff
+    #[cold]
     fn calculate_timeout(&self) -> Duration {
         let failures = self.consecutive_failures.load();
 

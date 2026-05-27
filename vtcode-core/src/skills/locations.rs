@@ -326,10 +326,10 @@ fn walk_directory(
         match parse_skill_file(dir) {
             Ok((manifest, _)) => {
                 // Check if we already have this skill from a higher precedence location
-                let had_existing = discovered.contains_key(&manifest.name);
+                let existing_entry = discovered.get(&manifest.name);
+                let had_existing = existing_entry.is_some();
 
-                if let Some(existing) = discovered
-                    .get(&manifest.name)
+                if let Some(existing) = existing_entry
                     .filter(|e| e.location_type > location.location_type)
                 {
                     // Existing skill has higher precedence, skip this one

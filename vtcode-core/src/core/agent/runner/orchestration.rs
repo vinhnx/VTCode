@@ -7,6 +7,7 @@ use crate::core::agent::task::Task;
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
 use crate::tools::handlers::TaskTrackerTool;
+use std::fmt::Write;
 use crate::tools::traits::Tool;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -618,7 +619,7 @@ impl AgentRunner {
             markdown.push_str("\n## Scorecard\n");
             for (label, score) in scorecard.entries() {
                 if let Some(score) = score {
-                    markdown.push_str(&format!("- {}: {}/5\n", label, score));
+                    let _ = writeln!(markdown, "- {}: {}/5", label, score);
                 }
             }
         }
@@ -626,11 +627,12 @@ impl AgentRunner {
         if !evaluation.findings.is_empty() {
             markdown.push_str("\n## Findings\n");
             for finding in &evaluation.findings {
-                markdown.push_str(&format!(
+                let _ = write!(
+                    markdown,
                     "- [{}] {}",
                     finding.severity.trim(),
                     finding.title.trim()
-                ));
+                );
                 if let Some(detail) = finding
                     .detail
                     .as_deref()
@@ -699,13 +701,13 @@ impl AgentRunner {
                 let files = json_string_list(item, "files");
                 let verify = json_string_list(item, "verify");
 
-                markdown.push_str(&format!("- Step {}: {}\n", index + 1, description));
-                markdown.push_str(&format!("- Outcome: {}\n", outcome));
+                let _ = writeln!(markdown, "- Step {}: {}", index + 1, description);
+                let _ = writeln!(markdown, "- Outcome: {}", outcome);
                 if !files.is_empty() {
-                    markdown.push_str(&format!("- Files: {}\n", files.join(", ")));
+                    let _ = writeln!(markdown, "- Files: {}", files.join(", "));
                 }
                 if !verify.is_empty() {
-                    markdown.push_str(&format!("- Verify: {}\n", verify.join(" | ")));
+                    let _ = writeln!(markdown, "- Verify: {}", verify.join(" | "));
                 }
             }
         }

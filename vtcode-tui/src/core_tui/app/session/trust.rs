@@ -41,7 +41,7 @@ impl TrustManager {
 
         match mode {
             TrustMode::AutoTrust | TrustMode::Always => {
-                self.settings.insert(file_path.clone(), setting);
+                self.settings.insert(file_path, setting);
             }
             TrustMode::Session => {
                 self.session_cache.insert(file_path);

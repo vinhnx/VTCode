@@ -331,17 +331,12 @@ impl ToolInventory {
         let tools = self.tools.read().ok()?;
         let state = self.state.read().ok()?;
 
-        let resolved_name = if tools.contains_key(&name_lower) {
-            &name_lower
-        } else if let Some(aliased) = state.aliases.get(&name_lower) {
-            aliased
+        if let Some(entry) = tools.get(&name_lower) {
+            Some(entry.registration.clone())
         } else {
-            return None;
-        };
-
-        tools
-            .get(resolved_name)
-            .map(|entry| entry.registration.clone())
+            let aliased = state.aliases.get(&name_lower)?;
+            tools.get(aliased).map(|entry| entry.registration.clone())
+        }
     }
 
     pub fn has_tool(&self, name: &str) -> bool {

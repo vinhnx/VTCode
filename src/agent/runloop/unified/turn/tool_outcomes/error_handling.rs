@@ -10,6 +10,7 @@ const MAX_ERROR_MESSAGE_CHARS: usize = 420;
 const MAX_FALLBACK_ARGS_PREVIEW_CHARS: usize = 140;
 const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
 
+#[cold]
 pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
     if agent_execution::is_plan_mode_denial(error) {
         return true;
@@ -207,6 +208,7 @@ fn structured_failure_guidance(
     )
 }
 
+#[cold]
 pub(super) fn format_structured_tool_error_for_user(
     tool_name: &str,
     error: &ToolExecutionError,
@@ -249,6 +251,7 @@ pub(super) fn format_structured_tool_error_for_user(
     (primary, hint)
 }
 
+#[cold]
 pub(crate) fn build_error_content(
     error_msg: String,
     fallback_tool: Option<String>,
@@ -292,6 +295,7 @@ pub(crate) fn build_error_content(
     }
 }
 
+#[cold]
 pub(super) fn build_structured_error_content(
     error: &ToolExecutionError,
     fallback_tool: Option<String>,
@@ -455,6 +459,7 @@ fn extract_patch_target_path_from_error(error_msg: &str) -> Option<String> {
     None
 }
 
+#[cold]
 pub(super) fn fallback_from_error(
     tool_name: &str,
     error_msg: &str,
@@ -532,13 +537,8 @@ pub(super) fn fallback_from_error(
         fallback_args.remove("background");
         fallback_args.remove("fork_context");
 
-        if !fallback_args.contains_key("agent_type")
-            && let Some(agent_name) = extract_background_subagent_name_from_error(error_msg)
-        {
-            fallback_args.insert(
-                "agent_type".to_string(),
-                serde_json::Value::String(agent_name),
-            );
+        if let Some(agent_name) = extract_background_subagent_name_from_error(error_msg) {
+            fallback_args.entry("agent_type".to_string()).or_insert_with(|| serde_json::Value::String(agent_name));
         }
 
         return Some((

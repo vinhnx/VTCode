@@ -419,57 +419,57 @@ impl ToolRegistration {
     }
 
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        self.metadata = self.metadata.clone().with_description(description);
+        self.metadata = self.metadata.with_description(description);
         self
     }
 
     pub fn with_prompt_path(mut self, path: impl Into<String>) -> Self {
-        self.metadata = self.metadata.clone().with_prompt_path(path);
+        self.metadata = self.metadata.with_prompt_path(path);
         self
     }
 
     pub fn with_parameter_schema(mut self, schema: Value) -> Self {
-        self.metadata = self.metadata.clone().with_parameter_schema(schema);
+        self.metadata = self.metadata.with_parameter_schema(schema);
         self
     }
 
     pub fn with_config_schema(mut self, schema: Value) -> Self {
-        self.metadata = self.metadata.clone().with_config_schema(schema);
+        self.metadata = self.metadata.with_config_schema(schema);
         self
     }
 
     pub fn with_state_schema(mut self, schema: Value) -> Self {
-        self.metadata = self.metadata.clone().with_state_schema(schema);
+        self.metadata = self.metadata.with_state_schema(schema);
         self
     }
 
     pub fn with_permission(mut self, permission: ToolPolicy) -> Self {
-        self.metadata = self.metadata.clone().with_permission(permission);
+        self.metadata = self.metadata.with_permission(permission);
         self
     }
 
     pub fn with_allowlist(mut self, patterns: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.metadata = self.metadata.clone().with_allowlist(patterns);
+        self.metadata = self.metadata.with_allowlist(patterns);
         self
     }
 
     pub fn with_denylist(mut self, patterns: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.metadata = self.metadata.clone().with_denylist(patterns);
+        self.metadata = self.metadata.with_denylist(patterns);
         self
     }
 
     pub fn with_aliases(mut self, aliases: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.metadata = self.metadata.clone().with_aliases(aliases);
+        self.metadata = self.metadata.with_aliases(aliases);
         self
     }
 
     pub fn with_server_hint(mut self, hint: impl Into<String>) -> Self {
-        self.metadata = self.metadata.clone().with_server_hint(hint);
+        self.metadata = self.metadata.with_server_hint(hint);
         self
     }
 
     pub fn with_behavior(mut self, behavior: ToolBehavior) -> Self {
-        self.metadata = self.metadata.clone().with_behavior(behavior);
+        self.metadata = self.metadata.with_behavior(behavior);
         self
     }
 }

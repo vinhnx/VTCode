@@ -125,10 +125,18 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                         data, mime_type, ..
                     } => {
                         has_non_text = true;
+                        let url = {
+                            let mut s = String::with_capacity(13 + mime_type.len() + data.len());
+                            s.push_str("data:");
+                            s.push_str(mime_type);
+                            s.push_str(";base64,");
+                            s.push_str(data);
+                            s
+                        };
                         serialized_parts.push(json!({
                             "type": "image_url",
                             "image_url": {
-                                "url": format!("data:{};base64,{}", mime_type, data)
+                                "url": url
                             }
                         }));
                     }

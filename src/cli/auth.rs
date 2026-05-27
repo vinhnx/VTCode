@@ -367,6 +367,7 @@ fn callback_outcome_to_openai_code(outcome: AuthCallbackOutcome) -> Result<Strin
 #[error("OAuth flow was cancelled")]
 struct OAuthFlowCancelled;
 
+#[cold]
 pub(crate) fn oauth_flow_cancelled_error() -> anyhow::Error {
     anyhow!(OAuthFlowCancelled)
 }

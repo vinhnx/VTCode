@@ -19,8 +19,8 @@ struct ActiveTheme {
 static COLOR_CONFIG: Lazy<RwLock<ColorAccessibilityConfig>> =
     Lazy::new(|| RwLock::new(ColorAccessibilityConfig::default()));
 
-fn current_color_config() -> ColorAccessibilityConfig {
-    COLOR_CONFIG.read().clone()
+fn current_color_config() -> impl std::ops::Deref<Target = ColorAccessibilityConfig> {
+    COLOR_CONFIG.read()
 }
 
 static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {

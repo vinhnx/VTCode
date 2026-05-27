@@ -63,7 +63,7 @@ impl LegacyPtyStreamState {
     }
 
     fn push_line(&mut self) {
-        let line = self.current_line.clone();
+        let line = std::mem::take(&mut self.current_line);
         if self.head_lines.len() < LIVE_PREVIEW_HEAD_LINES {
             self.head_lines.push(line);
         } else {
@@ -73,7 +73,6 @@ impl LegacyPtyStreamState {
             }
         }
         self.total_lines += 1;
-        self.current_line.clear();
     }
 
     fn render_output(&self, limit: usize) -> RenderedPtyOutput {
@@ -102,28 +101,32 @@ impl LegacyPtyStreamState {
                 .or_else(|| self.head_lines.last().cloned())
         };
 
-        let mut all_available = self.head_lines.clone();
-        all_available.extend(self.tail_lines.iter().cloned());
-        if has_current {
-            all_available.push(self.current_line.clone());
-        }
-
-        if total <= all_available.len() {
+        let head_len = self.head_lines.len();
+        let tail_len = self.tail_lines.len();
+        if total <= head_len + tail_len + usize::from(has_current) {
+            let mut lines = Vec::with_capacity(total);
+            lines.extend(self.head_lines.iter().cloned());
+            lines.extend(self.tail_lines.iter().cloned());
+            if has_current {
+                lines.push(self.current_line.clone());
+            }
             return RenderedPtyOutput {
-                lines: render_visible_output_lines(&all_available, limit),
+                lines: render_visible_output_lines(&lines, limit),
                 last_line,
             };
         }
 
-        let mut tail_preview = self.tail_lines.iter().cloned().collect::<Vec<_>>();
+        let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
+        let head_count = head_count.min(head_len);
+        let mut tail_preview: Vec<_> = self.tail_lines
+            .iter()
+            .rev()
+            .take(tail_count)
+            .rev()
+            .cloned()
+            .collect();
         if has_current {
             tail_preview.push(self.current_line.clone());
-        }
-        let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
-        let head_count = head_count.min(self.head_lines.len());
-        if tail_preview.len() > tail_count {
-            let drop = tail_preview.len() - tail_count;
-            tail_preview.drain(..drop);
         }
 
         let hidden_lines = total.saturating_sub(head_count + tail_preview.len());

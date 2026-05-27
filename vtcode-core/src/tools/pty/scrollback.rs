@@ -276,8 +276,7 @@ impl PtyScrollback {
                         buffer.clear();
                     } else if !buffer.is_empty() && !eof {
                         // Save incomplete sequence for next call
-                        self.utf8_buffer_remainder = buffer.clone();
-                        buffer.clear();
+                        self.utf8_buffer_remainder = std::mem::take(buffer);
                     }
 
                     break;

@@ -54,7 +54,7 @@ pub struct PluginManifest {
 impl PluginManifest {
     fn normalized(mut self, default_trust: PluginTrustLevel) -> Self {
         if self.id.is_empty() {
-            self.id = self.name.clone();
+            self.id = std::mem::take(&mut self.name);
         }
 
         if self.trust_level.is_none() {

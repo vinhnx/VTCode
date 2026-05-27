@@ -27,6 +27,7 @@ pub(super) enum ToolPermissionPromptKind {
     Mcp,
 }
 
+#[cold]
 fn cancelled_prompt_decision(prompt_kind: ToolPermissionPromptKind) -> HitlDecision {
     if prompt_kind == ToolPermissionPromptKind::Mcp {
         HitlDecision::DeniedOnce

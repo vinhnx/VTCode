@@ -174,9 +174,7 @@ impl Session {
         }
 
         // Resize message cache to match current line count
-        while cache.messages.len() > self.lines.len() {
-            cache.messages.pop();
-        }
+        cache.messages.truncate(self.lines.len());
         while cache.messages.len() < self.lines.len() {
             cache.messages.push(CachedMessage::default());
         }

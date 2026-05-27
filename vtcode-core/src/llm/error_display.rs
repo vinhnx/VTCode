@@ -22,13 +22,13 @@ fn style_text(style: Style, text: &str) -> String {
 }
 
 /// Get a styled error message with enhanced coloring
-#[inline]
+#[cold]
 pub fn style_llm_error(message: &str) -> String {
     style_text(Styles::error(), message)
 }
 
 /// Get a styled warning message with enhanced coloring
-#[inline]
+#[cold]
 pub fn style_llm_warning(message: &str) -> String {
     style_text(Styles::warning(), message)
 }

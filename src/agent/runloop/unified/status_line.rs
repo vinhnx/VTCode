@@ -409,7 +409,11 @@ fn push_unique(values: &mut Vec<String>, value: String) {
 }
 
 fn normalize_for_dedup(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+    value.split_whitespace().fold(String::new(), |mut acc, s| {
+        if !acc.is_empty() { acc.push(' '); }
+        acc.push_str(s);
+        acc
+    })
 }
 
 fn join_status_components(values: Vec<String>) -> Option<String> {

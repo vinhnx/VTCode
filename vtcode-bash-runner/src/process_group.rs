@@ -59,6 +59,7 @@ impl KillSignal {
 }
 
 #[cfg(unix)]
+#[cold]
 fn nix_err_to_io(err: Errno) -> io::Error {
     io::Error::from_raw_os_error(err as i32)
 }

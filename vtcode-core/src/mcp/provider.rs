@@ -189,13 +189,15 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpToolInfo>>> {
+        let mut caches = self.caches.lock().await;
         if self.client.load_full().take_tool_list_changed() {
-            self.caches.lock().await.tools = None;
+            caches.tools = None;
         }
 
-        if let Some(cache) = &self.caches.lock().await.tools {
+        if let Some(cache) = &caches.tools {
             return Ok(Arc::clone(cache));
         }
+        drop(caches);
 
         self.refresh_tools_shared(allowlist, timeout).await
     }
@@ -335,13 +337,15 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpResourceInfo>>> {
+        let mut caches = self.caches.lock().await;
         if self.client.load_full().take_resource_list_changed() {
-            self.caches.lock().await.resources = None;
+            caches.resources = None;
         }
 
-        if let Some(cache) = &self.caches.lock().await.resources {
+        if let Some(cache) = &caches.resources {
             return Ok(Arc::clone(cache));
         }
+        drop(caches);
 
         self.refresh_resources_shared(allowlist, timeout).await
     }
@@ -428,13 +432,15 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Arc<Vec<McpPromptInfo>>> {
+        let mut caches = self.caches.lock().await;
         if self.client.load_full().take_prompt_list_changed() {
-            self.caches.lock().await.prompts = None;
+            caches.prompts = None;
         }
 
-        if let Some(cache) = &self.caches.lock().await.prompts {
+        if let Some(cache) = &caches.prompts {
             return Ok(Arc::clone(cache));
         }
+        drop(caches);
 
         self.refresh_prompts_shared(allowlist, timeout).await
     }

@@ -80,7 +80,7 @@ pub async fn parse_at_patterns_with_options(
     }
     matches.sort_by_key(|m| m.start());
 
-    let mut parts = Vec::new();
+    let mut parts = Vec::with_capacity(matches.len());
     let mut last_end = 0;
 
     for m in matches {

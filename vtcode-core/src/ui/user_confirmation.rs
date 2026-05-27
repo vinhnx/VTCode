@@ -158,6 +158,7 @@ impl UserConfirmation {
     }
 
     /// Display a warning message and wait for user acknowledgment
+    #[cold]
     pub fn show_warning(message: &str) -> Result<()> {
         println!("{}", style(" Warning").red().bold());
         println!("{}", message);

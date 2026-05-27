@@ -66,14 +66,16 @@ pub fn ensure_timezone_argument(
     arguments: &mut Map<String, Value>,
     requires_timezone: bool,
 ) -> Result<()> {
-    if !requires_timezone || arguments.contains_key(TIMEZONE_ARGUMENT) {
+    if !requires_timezone {
         return Ok(());
     }
 
     let timezone = detect_local_timezone()
         .context("failed to determine a default timezone for MCP tool invocation")?;
     debug!("Injecting local timezone '{timezone}' for MCP tool call");
-    arguments.insert(TIMEZONE_ARGUMENT.to_string(), Value::String(timezone));
+    arguments
+        .entry(TIMEZONE_ARGUMENT.to_string())
+        .or_insert_with(|| Value::String(timezone));
     Ok(())
 }
 

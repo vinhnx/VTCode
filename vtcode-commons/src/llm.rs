@@ -506,7 +506,7 @@ fn close_incomplete_json_prefix(prefix: &str) -> Option<String> {
     if in_string {
         repaired.push('"');
     }
-    while let Some(closer) = expected_closers.pop() {
+    for closer in expected_closers.drain(..) {
         repaired.push(closer);
     }
 

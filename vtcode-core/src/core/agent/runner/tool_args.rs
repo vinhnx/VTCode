@@ -69,23 +69,21 @@ impl AgentRunner {
                 normalized.get("action").and_then(Value::as_str),
                 Some("grep" | "list")
             )
-            && !normalized.contains_key("path")
         {
-            normalized.insert("path".to_string(), Value::String(fallback_dir.clone()));
+            normalized.entry("path".to_string()).or_insert_with(|| Value::String(fallback_dir.clone()));
         }
 
-        if name == tools::LIST_FILES && !normalized.contains_key("path") {
-            normalized.insert("path".to_string(), Value::String(fallback_dir));
+        if name == tools::LIST_FILES {
+            normalized.entry("path".to_string()).or_insert_with(|| Value::String(fallback_dir));
         }
 
         if matches!(
             name,
             tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
-        ) && !normalized.contains_key("path")
-            && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
+        ) && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
             && let Some(last_file) = session_state.last_file_path.clone()
         {
-            normalized.insert("path".to_string(), Value::String(last_file));
+            normalized.entry("path".to_string()).or_insert_with(|| Value::String(last_file));
         }
 
         let normalized = Value::Object(normalized);

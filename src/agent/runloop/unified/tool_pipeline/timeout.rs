@@ -50,6 +50,7 @@ impl TimeoutWarningGuard {
 }
 
 /// Create a timeout error for a tool execution
+#[cold]
 pub(crate) fn create_timeout_error(
     name: &str,
     category: ToolTimeoutCategory,

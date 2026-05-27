@@ -800,6 +800,7 @@ pub fn is_global_terminal_focused() -> bool {
 }
 
 /// Convenience function to send a tool failure notification
+#[cold]
 pub async fn notify_tool_failure(
     tool_name: &str,
     error: &str,
@@ -826,6 +827,7 @@ pub async fn notify_tool_success(
 }
 
 /// Convenience function to send a command failure notification
+#[cold]
 pub async fn notify_command_failure(
     command: &str,
     error: &str,
@@ -840,7 +842,8 @@ pub async fn notify_command_failure(
 }
 
 /// Convenience function to send an error notification
-pub async fn notify_error(message: &str, context: Option<&str>) -> Result<(), anyhow::Error> {
+    #[cold]
+    pub async fn notify_error(message: &str, context: Option<&str>) -> Result<(), anyhow::Error> {
     let event = NotificationEvent::Error {
         message: message.to_string(),
         context: context.map(|s| s.to_string()),

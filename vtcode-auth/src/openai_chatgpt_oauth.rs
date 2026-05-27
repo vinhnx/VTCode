@@ -726,6 +726,7 @@ async fn acquire_refresh_lock() -> Result<RefreshLockGuard> {
     Ok(RefreshLockGuard { file })
 }
 
+#[cold]
 fn classify_refresh_error(err: reqwest::Error) -> anyhow::Error {
     let status = err.status();
     let message = err.to_string();

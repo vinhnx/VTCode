@@ -417,6 +417,8 @@ impl LoopDetector {
     }
 
     /// Suggest alternative approaches for common loop patterns
+    /// Only called after loop detection, so `#[cold]`.
+    #[cold]
     pub fn suggest_alternative(&self, tool_name: &str) -> Option<String> {
         match tool_name {
             LEGACY_LIST_FILES => Some(
@@ -522,7 +524,10 @@ impl LoopDetector {
     }
 
     /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
-    #[inline]
+    /// Called only on the cold path (loop already detected); marked `#[cold]`
+    /// and `#[inline(never)]` so LLVM does not inline it into the hot caller.
+    #[cold]
+    #[inline(never)]
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
             LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\

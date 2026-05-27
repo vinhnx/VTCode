@@ -105,10 +105,8 @@ pub fn replace_last(count: usize, lines: &[String]) {
         return;
     }
     let mut log = TRANSCRIPT.write();
-    let remove = count.min(log.len());
-    for _ in 0..remove {
-        log.pop();
-    }
+    let new_len = log.len().saturating_sub(count);
+    log.truncate(new_len);
     for line in lines {
         if log.len() == MAX_LINES {
             let drop_count = MAX_LINES / 5;

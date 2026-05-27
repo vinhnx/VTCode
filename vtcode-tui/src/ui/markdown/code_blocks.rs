@@ -6,6 +6,7 @@ use crate::ui::theme::ThemeStyles;
 use crate::utils::diff_styles::DiffColorPalette;
 use anstyle::{Effects, Style};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use std::fmt::Write;
 use syntect::util::LinesWithEndings;
 use vtcode_commons::diff_paths::{
     format_start_only_hunk_header, is_diff_addition_line, is_diff_deletion_line,
@@ -788,11 +789,7 @@ pub fn highlight_code_to_ansi(code: &str, language: Option<&str>, theme_name: &s
             let mut ansi_line = String::new();
             for seg in line_segments {
                 let rendered = seg.style.render();
-                ansi_line.push_str(&format!(
-                    "{rendered}{text}{reset}",
-                    text = seg.text,
-                    reset = anstyle::Reset
-                ));
+                let _ = write!(ansi_line, "{rendered}{}{}", seg.text, anstyle::Reset);
             }
             ansi_line
         })

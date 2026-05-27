@@ -469,7 +469,7 @@ impl SimpleIndexer {
         path_filter: Option<&str>,
         extract_matches: bool,
     ) -> Vec<SearchResult> {
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(self.index_cache.len());
 
         for file_path in self.index_cache.keys() {
             if path_filter.is_some_and(|filter| !file_path.contains(filter)) {

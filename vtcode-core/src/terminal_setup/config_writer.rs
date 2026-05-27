@@ -99,11 +99,10 @@ impl ConfigWriter {
 
     /// Remove existing VT Code configuration section from content
     fn remove_vtcode_section(content: &str) -> String {
-        let lines: Vec<&str> = content.lines().collect();
         let mut result = Vec::new();
         let mut in_vtcode_section = false;
 
-        for line in lines {
+        for line in content.lines() {
             if line.contains(VTCODE_BEGIN_MARKER) {
                 in_vtcode_section = true;
                 continue;

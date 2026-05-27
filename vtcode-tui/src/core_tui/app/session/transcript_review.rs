@@ -205,8 +205,7 @@ impl TranscriptReviewState {
 
     pub(crate) fn commit_search(&mut self, height: u16) {
         self.search.active = false;
-        self.search.query = self.search.pending_query.clone();
-        self.search.pending_query.clear();
+        self.search.query = std::mem::take(&mut self.search.pending_query);
         self.recompute_matches();
         if !self.search.matches.is_empty() {
             self.search.current_match = Some(0);

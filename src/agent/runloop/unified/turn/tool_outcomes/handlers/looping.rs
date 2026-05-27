@@ -16,10 +16,12 @@ fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
 }
 
 fn compact_loop_text(value: &str, max_chars: usize) -> String {
-    compact_loop_key_part(
-        &value.split_whitespace().collect::<Vec<_>>().join(" "),
-        max_chars,
-    )
+    let collapsed = value.split_whitespace().fold(String::new(), |mut acc, s| {
+        if !acc.is_empty() { acc.push(' '); }
+        acc.push_str(s);
+        acc
+    });
+    compact_loop_key_part(&collapsed, max_chars)
 }
 
 fn normalize_shell_command_text(value: &str, max_chars: usize) -> String {
