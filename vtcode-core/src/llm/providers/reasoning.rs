@@ -7,6 +7,7 @@ pub struct ReasoningBuffer {
 }
 
 impl ReasoningBuffer {
+    #[inline]
     pub fn push(&mut self, chunk: &str) -> Option<String> {
         if chunk.is_empty() {
             return None;

@@ -554,9 +554,10 @@ impl Session {
         let tokens = tokenize_input(self.input_manager.content());
         let cursor_y = layout.cursor_line_idx.saturating_sub(start) as u16;
 
-        let mut lines = Vec::new();
+        let vis_count = end.saturating_sub(start);
+        let mut lines = Vec::with_capacity(vis_count);
         for buffer in &layout.buffers[start..end] {
-            let mut spans = Vec::new();
+            let mut spans = Vec::with_capacity(4);
             spans.push(Span::styled(buffer.prefix.clone(), prompt_style));
             if !buffer.text.is_empty() {
                 let buf_chars: Vec<char> = buffer.text.chars().collect();

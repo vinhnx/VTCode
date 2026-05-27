@@ -6,7 +6,6 @@
 use crate::utils::colors::style;
 use anyhow::Result;
 use std::collections::BTreeMap;
-use std::io::Write;
 use std::path::Path;
 
 pub use vtcode_commons::project::{ProjectOverview, build_project_overview};
@@ -48,28 +47,24 @@ const WORKSPACE_LANGUAGE_SCAN_LIMIT: usize = 5_000;
 
 /// Render PTY output in a terminal-like interface
 pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) -> Result<()> {
-    // Print top border
-    println!("{}", style("=".repeat(80)).dim());
+    use std::io::Write;
 
-    // Print title
-    println!("{} {}", style("==").bold(), style(title).bold());
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
 
-    // Print command if available
+    writeln!(handle, "{}", style("=".repeat(80)).dim())?;
+    writeln!(handle, "{} {}", style("==").bold(), style(title).bold())?;
+
     if let Some(cmd) = command {
-        println!("{}", style(format!("> {}", cmd)).dim());
+        writeln!(handle, "{}", style(format!("> {}", cmd)).dim())?;
     }
 
-    // Print separator
-    println!("{}", style("-".repeat(80)).dim());
-
-    // Print the output
-    print!("{}", output);
-    std::io::stdout().flush()?;
-
-    // Print bottom border
-    println!("{}", style("-".repeat(80)).dim());
-    println!("{}", style("==").bold());
-    println!("{}", style("=".repeat(80)).dim());
+    writeln!(handle, "{}", style("-".repeat(80)).dim())?;
+    write!(handle, "{}", output)?;
+    writeln!(handle, "{}", style("-".repeat(80)).dim())?;
+    writeln!(handle, "{}", style("==").bold())?;
+    writeln!(handle, "{}", style("=".repeat(80)).dim())?;
+    handle.flush()?;
 
     Ok(())
 }

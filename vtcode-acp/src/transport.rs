@@ -17,10 +17,11 @@
 //! Stderr lines are forwarded to `tracing::debug!` under the
 //! `vtcode.stdio_transport.stderr` target.
 
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+
+use hashbrown::HashMap;
 use std::time::Duration;
 
 use serde_json::Value;

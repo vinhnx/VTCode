@@ -889,8 +889,9 @@ pub fn append_text_with_reasoning(
     }
 }
 
+#[inline]
 pub fn extract_data_payload(event: &str) -> Option<String> {
-    let mut data_lines: Vec<String> = Vec::new();
+    let mut out = String::new();
 
     for raw_line in event.lines() {
         let line = raw_line.trim_end_matches('\r');
@@ -899,17 +900,17 @@ pub fn extract_data_payload(event: &str) -> Option<String> {
         }
 
         if let Some(value) = line.strip_prefix("data:") {
-            data_lines.push(value.trim_start().to_string());
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(value.trim_start());
         }
     }
 
-    if data_lines.is_empty() {
-        None
-    } else {
-        Some(data_lines.join("\n"))
-    }
+    if out.is_empty() { None } else { Some(out) }
 }
 
+#[inline]
 pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
     let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
