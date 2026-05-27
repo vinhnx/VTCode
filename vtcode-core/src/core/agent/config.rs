@@ -116,6 +116,10 @@ pub fn provider_label(provider: &str, vt_cfg: Option<&VTCodeConfig>) -> String {
         return vt_cfg.provider_display_name(provider);
     }
 
+    if provider.eq_ignore_ascii_case("codex") {
+        return "Codex".to_string();
+    }
+
     Provider::from_str(provider)
         .map(|resolved| resolved.label().to_string())
         .unwrap_or_else(|_| provider.to_string())

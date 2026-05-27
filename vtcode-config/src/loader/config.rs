@@ -281,6 +281,8 @@ impl VTCodeConfig {
     pub fn provider_display_name(&self, provider_key: &str) -> String {
         if let Some(cp) = self.custom_provider(provider_key) {
             cp.display_name.clone()
+        } else if provider_key.eq_ignore_ascii_case("codex") {
+            "Codex".to_string()
         } else if let Ok(p) = std::str::FromStr::from_str(provider_key) {
             let p: crate::models::Provider = p;
             p.label().to_string()
