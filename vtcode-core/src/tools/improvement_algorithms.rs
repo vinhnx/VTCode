@@ -50,13 +50,14 @@ fn jaro_collect_matches(
     for (i, &c1) in s1c.iter().enumerate() {
         let lo = i.saturating_sub(window);
         let hi = (i + window + 1).min(len2);
-        for j in lo..hi {
-            // j is guaranteed in [0, len2) because lo <= j < hi <= len2.
-            // Extracting this loop into its own function helps the compiler
-            // reason about bounds via the loop guard.
-            if !s2_matched[j] && c1 == s2c[j] {
+        if lo >= len2 {
+            continue;
+        }
+        // Reslice to the search window so LLVM sees the exact bounds.
+        for (s2_char, s2_m) in s2c[lo..hi].iter().zip(s2_matched[lo..hi].iter_mut()) {
+            if !*s2_m && c1 == *s2_char {
                 s1_matched[i] = true;
-                s2_matched[j] = true;
+                *s2_m = true;
                 matches += 1;
                 break;
             }

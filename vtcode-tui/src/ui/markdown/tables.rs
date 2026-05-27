@@ -28,13 +28,13 @@ pub(crate) fn render_table(table: &TableBuffer, base_style: Style) -> Vec<Markdo
         .map(|row| row.iter().map(MarkdownLine::width).collect())
         .collect();
 
-    for (i, width) in header_widths.iter().enumerate() {
-        col_widths[i] = max(col_widths[i], *width);
+    for (col_width, width) in col_widths.iter_mut().zip(header_widths.iter()) {
+        *col_width = max(*col_width, *width);
     }
 
     for widths in &row_widths {
-        for (i, width) in widths.iter().enumerate() {
-            col_widths[i] = max(col_widths[i], *width);
+        for (col_width, width) in col_widths.iter_mut().zip(widths.iter()) {
+            *col_width = max(*col_width, *width);
         }
     }
 

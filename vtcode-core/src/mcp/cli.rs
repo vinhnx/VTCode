@@ -704,10 +704,12 @@ fn print_stdio_table(rows: &[[String; 6]]) {
     ];
 
     for row in rows {
-        for (idx, cell) in row.iter().enumerate() {
-            widths[idx] = widths[idx].max(cell.len());
+        for (width, cell) in widths.iter_mut().zip(row.iter()) {
+            *width = (*width).max(cell.len());
         }
     }
+
+    let [name_w, command_w, args_w, env_w, workdir_w, status_w] = widths;
 
     println!(
         "{name:<name_w$}  {command:<command_w$}  {args:<args_w$}  {env:<env_w$}  {workdir:<workdir_w$}  {status:<status_w$}",
@@ -717,12 +719,6 @@ fn print_stdio_table(rows: &[[String; 6]]) {
         env = "Env",
         workdir = "Working Dir",
         status = "Status",
-        name_w = widths[0],
-        command_w = widths[1],
-        args_w = widths[2],
-        env_w = widths[3],
-        workdir_w = widths[4],
-        status_w = widths[5],
     );
 
     for row in rows {
@@ -734,12 +730,6 @@ fn print_stdio_table(rows: &[[String; 6]]) {
             env = row[3],
             workdir = row[4],
             status = row[5],
-            name_w = widths[0],
-            command_w = widths[1],
-            args_w = widths[2],
-            env_w = widths[3],
-            workdir_w = widths[4],
-            status_w = widths[5],
         );
     }
 }
@@ -755,10 +745,12 @@ fn print_http_table(rows: &[[String; 6]]) {
     ];
 
     for row in rows {
-        for (idx, cell) in row.iter().enumerate() {
-            widths[idx] = widths[idx].max(cell.len());
+        for (width, cell) in widths.iter_mut().zip(row.iter()) {
+            *width = (*width).max(cell.len());
         }
     }
+
+    let [name_w, endpoint_w, auth_w, protocol_w, oauth_w, status_w] = widths;
 
     println!(
         "{name:<name_w$}  {endpoint:<endpoint_w$}  {auth:<auth_w$}  {protocol:<protocol_w$}  {oauth:<oauth_w$}  {status:<status_w$}",
@@ -768,12 +760,6 @@ fn print_http_table(rows: &[[String; 6]]) {
         protocol = "Protocol",
         oauth = "OAuth Status",
         status = "Status",
-        name_w = widths[0],
-        endpoint_w = widths[1],
-        auth_w = widths[2],
-        protocol_w = widths[3],
-        oauth_w = widths[4],
-        status_w = widths[5],
     );
 
     for row in rows {
@@ -785,12 +771,6 @@ fn print_http_table(rows: &[[String; 6]]) {
             protocol = row[3],
             oauth = row[4],
             status = row[5],
-            name_w = widths[0],
-            endpoint_w = widths[1],
-            auth_w = widths[2],
-            protocol_w = widths[3],
-            oauth_w = widths[4],
-            status_w = widths[5],
         );
     }
 }

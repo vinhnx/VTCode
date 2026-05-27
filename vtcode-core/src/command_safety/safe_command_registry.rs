@@ -241,8 +241,10 @@ impl SafeCommandRegistry {
                 .collect();
 
             for arg in command {
-                for (i, forbidden) in rule.forbidden_options.iter().enumerate() {
-                    if arg == forbidden || arg.starts_with(&forbidden_with_eq[i]) {
+                for (forbidden, forbidden_eq) in
+                    rule.forbidden_options.iter().zip(forbidden_with_eq.iter())
+                {
+                    if arg == forbidden || arg.starts_with(forbidden_eq) {
                         return SafetyDecision::Deny(format!(
                             "Option {} is not allowed for {}",
                             forbidden, cmd_name
