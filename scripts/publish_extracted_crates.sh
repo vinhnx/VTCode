@@ -97,6 +97,7 @@ done
 
 CRATES=(
     vtcode-commons
+    vtcode-process-hardening
     vtcode-auth
     vtcode-exec-events
     vtcode-markdown-store
