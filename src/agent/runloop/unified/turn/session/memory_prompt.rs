@@ -930,7 +930,7 @@ fn normalize_prompt_clause(input: &str) -> Option<String> {
         text = stripped.trim_start();
     }
 
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = vtcode_commons::formatting::collapse_whitespace(text);
     (!normalized.is_empty()).then_some(normalized)
 }
 

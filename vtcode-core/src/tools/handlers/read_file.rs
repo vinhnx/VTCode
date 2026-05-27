@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -355,16 +356,22 @@ impl ReadFileHandler {
 
         // Build concatenated content for token-efficient response
         let mut content_parts = Vec::new();
+        let mut buf = String::new();
         for result in &results {
             if let Some(ref error) = result.error {
-                content_parts.push(format!("== {} (ERROR)\n{}", result.file_path, error));
+                buf.clear();
+                let _ = write!(buf, "== {} (ERROR)\n{}", result.file_path, error);
+                content_parts.push(std::mem::take(&mut buf));
             } else {
                 for range in &result.ranges {
                     let end_line = range.offset + range.lines_read.saturating_sub(1);
-                    content_parts.push(format!(
+                    buf.clear();
+                    let _ = write!(
+                        buf,
                         "== {} (L{}..L{})\n{}",
                         result.file_path, range.offset, end_line, range.content
-                    ));
+                    );
+                    content_parts.push(std::mem::take(&mut buf));
                 }
             }
         }

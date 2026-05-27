@@ -1516,7 +1516,7 @@ fn summarize_task_name(summary: &str) -> String {
     if trimmed.is_empty() {
         return "Scheduled task".to_string();
     }
-    let compact = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = vtcode_commons::formatting::collapse_whitespace(trimmed);
     let mut output = String::new();
     for ch in compact.chars().take(32) {
         output.push(ch);

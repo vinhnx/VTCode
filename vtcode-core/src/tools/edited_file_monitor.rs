@@ -371,7 +371,8 @@ impl EditedFileMonitor {
                 .tracked_files
                 .entry(path.clone())
                 .or_insert_with(TrackedFileState::new);
-            entry.last_read_snapshot = Some(snapshot.clone());
+            let snap_for_disk = snapshot.clone();
+            entry.last_read_snapshot = Some(snap_for_disk);
             entry.last_known_disk_snapshot = Some(snapshot.clone());
             entry.last_agent_write_snapshot = Some(snapshot);
             entry.stale_conflict = None;

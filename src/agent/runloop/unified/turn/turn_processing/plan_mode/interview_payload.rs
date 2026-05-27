@@ -103,7 +103,7 @@ pub(super) fn sanitize_generated_interview_payload(
 }
 
 pub(super) fn single_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 
 fn normalize_question_id(raw_id: &str, index: usize) -> String {

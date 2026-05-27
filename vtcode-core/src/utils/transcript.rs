@@ -201,6 +201,7 @@ pub fn enqueue_message_with_kind(
 }
 
 /// Display an error message in the transcript instead of the input field
+#[cold]
 pub fn display_error(message: &str) {
     enqueue_message(message, MessageStyle::Error);
 }

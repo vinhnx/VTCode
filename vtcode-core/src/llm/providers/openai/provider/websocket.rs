@@ -557,6 +557,7 @@ fn responses_websocket_url(base_url: &str) -> Result<String, LLMError> {
     Ok(url.to_string())
 }
 
+#[cold]
 fn format_provider_error(message: String) -> LLMError {
     LLMError::Provider {
         message: error_display::format_llm_error("OpenAI", &message),
@@ -564,6 +565,7 @@ fn format_provider_error(message: String) -> LLMError {
     }
 }
 
+#[cold]
 fn format_network_error(message: String) -> LLMError {
     LLMError::Network {
         message: error_display::format_llm_error("OpenAI", &message),

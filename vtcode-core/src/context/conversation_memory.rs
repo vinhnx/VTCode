@@ -6,6 +6,7 @@
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::path::PathBuf;
 use vtcode_commons::utils::current_timestamp;
 
@@ -327,7 +328,7 @@ impl ConversationMemory {
 
         let mut summary = String::from("Recent conversation:\n");
         for msg in messages.iter().rev() {
-            summary.push_str(&format!("Turn {}: {}\n", msg.turn, msg.content));
+            let _ = write!(summary, "Turn {}: {}\n", msg.turn, msg.content);
         }
 
         summary

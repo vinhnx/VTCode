@@ -319,7 +319,7 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
 
 fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {
     command_prompt.and_then(|value| {
-        let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed = vtcode_commons::formatting::collapse_whitespace(&value);
         if collapsed.is_empty() {
             None
         } else {

@@ -60,6 +60,31 @@ pub fn truncate_byte_budget(text: &str, max_bytes: usize, suffix: &str) -> Strin
     format!("{}{suffix}", &text[..end])
 }
 
+/// Collapse consecutive whitespace into single spaces, trimming leading/trailing.
+///
+/// ```
+/// # use vtcode_commons::formatting::collapse_whitespace;
+/// assert_eq!(collapse_whitespace("  hello   world  "), "hello world");
+/// assert_eq!(collapse_whitespace(""), "");
+/// ```
+#[inline]
+pub fn collapse_whitespace(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut pending_space = false;
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            pending_space = true;
+        } else {
+            if pending_space && !result.is_empty() {
+                result.push(' ');
+            }
+            result.push(ch);
+            pending_space = false;
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

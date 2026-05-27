@@ -3,6 +3,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{Duration, sleep};
@@ -2502,6 +2503,7 @@ fn memory_model_route_from_resolution(
     }
 }
 
+#[cold]
 fn log_memory_route_warning(routes: &ResolvedMemoryRoutes) {
     if let Some(warning) = &routes.warning {
         tracing::warn!(warning = %warning, "persistent memory route adjusted");
@@ -2541,7 +2543,7 @@ fn render_topic_file(topic: MemoryTopic, facts: &[GroundedFactRecord]) -> String
         out.push('\n');
         for f in facts {
             let (_, src) = decode_topic_source(&f.source);
-            out.push_str(&format!("- [{}] {}\n", src.trim(), f.fact));
+            let _ = write!(out, "- [{}] {}\n", src.trim(), f.fact);
         }
     }
     out
@@ -2568,24 +2570,25 @@ fn render_memory_index(
     );
     out.push_str("- `notes/`: User-authored durable notes available to the native memory tool.\n");
     out.push_str("- `rollout_summaries/`: Per-session evidence summaries.\n");
-    out.push_str(&format!(
+    let _ = write!(
+        out,
         "\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n"
-    ));
+    );
     out.push_str("\n## Highlights\n");
     if highlights.is_empty() {
         out.push_str("- No persistent notes yet.\n");
     } else {
         for f in &highlights {
             let (_, src) = decode_topic_source(&f.source);
-            out.push_str(&format!("- [{}] {}\n", src.trim(), f.fact));
+            let _ = write!(out, "- [{}] {}\n", src.trim(), f.fact);
         }
     }
     if !notes.is_empty() {
         out.push_str("\n## Note Files\n");
         for n in notes {
-            out.push_str(&format!("- `{}`", n.relative_path));
+            let _ = write!(out, "- `{}`", n.relative_path);
             if let Some(first) = n.highlights.first() {
-                out.push_str(&format!(": {first}"));
+                let _ = write!(out, ": {first}");
             }
             out.push('\n');
         }
@@ -2619,7 +2622,7 @@ fn render_memory_summary(
 fn render_memory_summary_bullets(bullets: &[String]) -> String {
     let mut out = String::from("# VT Code Memory Summary\n");
     for b in bullets {
-        out.push_str(&format!("- {}\n", b.trim()));
+        let _ = write!(out, "- {}\n", b.trim());
     }
     out
 }
@@ -2638,7 +2641,7 @@ fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
             .iter()
             .chain(&classified.repository_facts)
         {
-            out.push_str(&format!("- [{}] {}\n", f.source, f.fact));
+            let _ = write!(out, "- [{}] {}\n", f.source, f.fact);
         }
     }
     out

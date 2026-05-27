@@ -5,6 +5,7 @@ use crate::pods::transport::{PodTransport, SshTransport};
 use anyhow::{Context, Result, anyhow};
 use parking_lot::RwLock;
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::sync::Arc;
 
 const DEFAULT_START_PORT: u16 = 8001;
@@ -510,18 +511,19 @@ fn render_run_script(
     script.push_str("export TERM=xterm-256color\n");
 
     for (key, value) in &profile.env {
-        script.push_str(&format!("export {key}={}\n", shell_quote(value)));
+        let _ = write!(script, "export {key}={}\n", shell_quote(value));
     }
 
     if gpu_ids.len() == 1 {
-        script.push_str(&format!("export CUDA_VISIBLE_DEVICES={}\n", gpu_ids[0]));
+        let _ = write!(script, "export CUDA_VISIBLE_DEVICES={}\n", gpu_ids[0]);
     }
 
     if let Some(models_path) = models_path {
-        script.push_str(&format!(
+        let _ = write!(
+            script,
             "export MODELS_PATH={}\n",
             shell_quote(models_path)
-        ));
+        );
     }
 
     let command = render_template(
@@ -531,7 +533,7 @@ fn render_run_script(
         port,
         &join_args(vllm_args),
     );
-    script.push_str(&format!("exec {command}\n"));
+    let _ = write!(script, "exec {command}\n");
     script
 }
 
