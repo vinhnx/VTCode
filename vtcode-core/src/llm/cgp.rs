@@ -16,15 +16,15 @@ use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
     HuggingFaceProviderConfig, LmStudioProviderConfig, MinimaxProviderConfig,
-    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig, OpenCodeGoProviderConfig,
-    OpenCodeZenProviderConfig, OpenResponsesProviderConfig, OpenRouterProviderConfig,
-    ZAIProviderConfig,
+    MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
+    OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
+    OpenRouterProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-    OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
-    ZAIProvider,
+    LmStudioProvider, MinimaxProvider, MistralProvider, MoonshotProvider, OllamaProvider,
+    OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
+    OpenRouterProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -256,6 +256,7 @@ impl_standard_provider_constructor!(
     HuggingFaceProvider,
     MinimaxProvider,
     DeepSeekProvider,
+    MistralProvider,
     OpenRouterProvider,
     OpenResponsesProvider,
     MoonshotProvider,
@@ -318,6 +319,10 @@ crate::delegate_components!(ZAIProviderConfig {
     ProviderMetadataComponent => ZAIProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<ZAIProvider>,
 });
+crate::delegate_components!(MistralProviderConfig {
+    ProviderMetadataComponent => MistralProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<MistralProvider>,
+});
 crate::delegate_components!(OpenCodeZenProviderConfig {
     ProviderMetadataComponent => OpenCodeZenProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<OpenCodeZenProvider>,
@@ -342,6 +347,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<OllamaProviderConfig>();
     factory.register_cgp_provider::<LmStudioProviderConfig>();
     factory.register_cgp_provider::<ZAIProviderConfig>();
+    factory.register_cgp_provider::<MistralProviderConfig>();
     factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
     factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
 }
@@ -453,6 +459,7 @@ mod tests {
                 "huggingface",
                 "lmstudio",
                 "minimax",
+                "mistral",
                 "moonshot",
                 "ollama",
                 "openai",

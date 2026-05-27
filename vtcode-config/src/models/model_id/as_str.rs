@@ -47,6 +47,8 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekV4Pro => models::deepseek::DEEPSEEK_V4_PRO,
             ModelId::DeepSeekV4Flash => models::deepseek::DEEPSEEK_V4_FLASH,
+            // Mistral models
+            ModelId::MistralLarge3 => models::mistral::MISTRAL_LARGE_3,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,

@@ -5,6 +5,7 @@ pub mod google;
 pub mod huggingface;
 pub mod lmstudio;
 pub mod minimax;
+pub mod mistral;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;

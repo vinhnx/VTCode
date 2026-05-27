@@ -85,6 +85,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    MistralProviderConfig,
+    "mistral",
+    "Mistral",
+    crate::config::constants::models::mistral::MISTRAL_LARGE_3,
+    crate::config::constants::urls::MISTRAL_API_BASE,
+    Some(crate::config::constants::env_vars::MISTRAL_BASE_URL),
+    ()
+);
+define_provider_config!(
     MoonshotProviderConfig,
     "moonshot",
     "Moonshot",

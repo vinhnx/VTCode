@@ -26,6 +26,7 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "moonshot",
     "zai",
     "minimax",
+    "mistral",
     "huggingface",
     "openresponses",
     "opencode-zen",
@@ -339,6 +340,7 @@ mod tests {
                 "huggingface",
                 "lmstudio",
                 "minimax",
+                "mistral",
                 "moonshot",
                 "ollama",
                 "openai",
@@ -703,12 +705,12 @@ mod tests {
     }
 
     #[test]
-    fn create_provider_for_mistral_model_uses_openrouter_provider() {
+    fn create_provider_for_mistral_model_uses_mistral_provider() {
         let provider =
-            create_provider_for_model("mistral-large", "test-key".to_string(), None, None)
-                .expect("mistral models should still resolve through openrouter");
+            create_provider_for_model("mistral-large-2512", "test-key".to_string(), None, None)
+                .expect("mistral models should resolve through mistral provider");
 
-        assert_eq!(provider.name(), "openrouter");
+        assert_eq!(provider.name(), "mistral");
     }
 
     #[test]

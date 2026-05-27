@@ -96,6 +96,10 @@ pub enum ModelId {
     DeepSeekV4Pro,
     /// DeepSeek V4 Flash - Fast inference model for cost-effective reasoning
     DeepSeekV4Flash,
+
+    // Mistral AI models
+    /// Mistral Large 3 - State-of-the-art open-weight general-purpose multimodal model
+    MistralLarge3,
     // Hugging Face models
     /// DeepSeek V3.2 via Hugging Face router
     HuggingFaceDeepseekV32,

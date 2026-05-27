@@ -50,6 +50,8 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekV4Pro,
             ModelId::DeepSeekV4Flash,
+            // Mistral models
+            ModelId::MistralLarge3,
             // Z.AI models
             ModelId::ZaiGlm5,
             ModelId::ZaiGlm51,

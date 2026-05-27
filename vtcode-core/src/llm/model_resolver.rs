@@ -363,14 +363,15 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::DeepSeek => 3,
         Provider::ZAI => 4,
         Provider::Minimax => 5,
-        Provider::Moonshot => 6,
-        Provider::OpenRouter => 7,
-        Provider::HuggingFace => 8,
-        Provider::Copilot => 9,
-        Provider::Ollama => 10,
-        Provider::LmStudio => 11,
-        Provider::OpenCodeZen => 12,
-        Provider::OpenCodeGo => 13,
+        Provider::Mistral => 6,
+        Provider::Moonshot => 7,
+        Provider::OpenRouter => 8,
+        Provider::HuggingFace => 9,
+        Provider::Copilot => 10,
+        Provider::Ollama => 11,
+        Provider::LmStudio => 12,
+        Provider::OpenCodeZen => 13,
+        Provider::OpenCodeGo => 14,
     }
 }
 
@@ -415,6 +416,11 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::Anthropic)
     } else if model.starts_with("deepseek-") {
         Some(Provider::DeepSeek)
+    } else if model.starts_with("mistral-")
+        || model.starts_with("ministral-")
+        || model.starts_with("codestral-")
+    {
+        Some(Provider::Mistral)
     } else if model.contains("gemini") || model.starts_with("palm") {
         Some(Provider::Gemini)
     } else if model.starts_with("glm-") {
@@ -434,8 +440,7 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         || model.starts_with("minimaxai/")
     {
         Some(Provider::HuggingFace)
-    } else if model.starts_with("mistral-")
-        || model.starts_with("mixtral-")
+    } else if model.starts_with("mixtral-")
         || model.starts_with("qwen-")
         || model.starts_with("meta-")
         || model.starts_with("llama-")

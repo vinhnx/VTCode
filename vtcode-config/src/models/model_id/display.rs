@@ -45,6 +45,8 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekV4Pro => "DeepSeek V4 Pro",
             ModelId::DeepSeekV4Flash => "DeepSeek V4 Flash",
+            // Mistral models
+            ModelId::MistralLarge3 => "Mistral Large 3",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",

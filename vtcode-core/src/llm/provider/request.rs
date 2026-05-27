@@ -300,6 +300,7 @@ impl ToolChoice {
         "openai",
         "deepseek",
         "huggingface",
+        "mistral",
         "openrouter",
         "zai",
         "moonshot",

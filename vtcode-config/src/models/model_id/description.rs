@@ -102,10 +102,12 @@ impl ModelId {
             }
             // DeepSeek models
             ModelId::DeepSeekV4Pro => {
-                "DeepSeek V4 Pro - High-performance reasoning model with advanced thinking capabilities (1M context, 384K max output)"
+                "High-performance reasoning model with advanced thinking capabilities"
             }
-            ModelId::DeepSeekV4Flash => {
-                "DeepSeek V4 Flash - Fast inference model for cost-effective reasoning tasks (1M context, 384K max output)"
+            ModelId::DeepSeekV4Flash => "Fast inference model for cost-effective reasoning",
+            // Mistral models
+            ModelId::MistralLarge3 => {
+                "State-of-the-art open-weight general-purpose multimodal model with Mixture-of-Experts architecture"
             }
             // Z.AI models
             ModelId::ZaiGlm5 => {

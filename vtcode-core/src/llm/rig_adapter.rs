@@ -73,6 +73,9 @@ impl RigProviderCapabilities {
             Provider::Moonshot => {
                 // Moonshot does not have a rig client integration yet.
             }
+            Provider::Mistral => {
+                // Mistral exposes an OpenAI-compatible API; rig has no dedicated client.
+            }
             Provider::ZAI => {
                 // The rig crate does not yet expose a dedicated Z.AI client.
                 // Skip instantiation while still marking the provider as verified.

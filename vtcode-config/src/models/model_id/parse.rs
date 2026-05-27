@@ -96,6 +96,8 @@ impl FromStr for ModelId {
             // DeepSeek models
             s if s == models::deepseek::DEEPSEEK_V4_PRO => Ok(ModelId::DeepSeekV4Pro),
             s if s == models::deepseek::DEEPSEEK_V4_FLASH => Ok(ModelId::DeepSeekV4Flash),
+            // Mistral models
+            s if s == models::mistral::MISTRAL_LARGE_3 => Ok(ModelId::MistralLarge3),
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),

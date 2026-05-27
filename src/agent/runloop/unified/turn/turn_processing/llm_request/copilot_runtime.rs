@@ -217,7 +217,9 @@ impl<'a> CopilotRuntimeHost<'a> {
         // Record the user's decision for auto-accept pattern learning.
         let approved = matches!(
             decision,
-            HitlDecision::Approved | HitlDecision::ApprovedSession | HitlDecision::ApprovedPermanent
+            HitlDecision::Approved
+                | HitlDecision::ApprovedSession
+                | HitlDecision::ApprovedPermanent
         );
         if let Err(err) = self
             .approval_recorder

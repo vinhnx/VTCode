@@ -279,6 +279,9 @@ impl ModelsManager {
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
             Provider::ZAI => "glm-5.1".to_string(),
             Provider::Minimax => "MiniMax-M2.5".to_string(),
+            Provider::Mistral => {
+                crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string()
+            }
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => "local-model".to_string(),
