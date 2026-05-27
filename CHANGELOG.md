@@ -2,6 +2,42 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.108.4 - 2026-05-27
+
+### Highlights
+#### Features
+
+- Add DeepSeek balance retrieval and display functionality (9c6aacc8) 
+- Enhance navigation loop detection and add DeepSeek balance tracking (5e9bdf89) 
+- Update balance tracking for multiple providers and refactor related logic (d3739bd3) 
+- Improve Linux installation logic and enhance balance fetching timeout handling (8a51b9a0) 
+### Other Changes
+#### Other
+
+- Update TODO (f679482a) 
+- Update vtcode (9aa12ed8) 
+- Refactor enums to derive Copy trait for improved performance and memory efficiency (bf7f239b) 
+- Optimize performance and memory usage across various modules by utilizing `Vec::with_capacity`, `entry` API, and reducing unnecessary clones. Mark cold paths with `#[cold]` for better inlining control. Refactor string manipulations for efficiency and clarity. (3950f5f7) 
+- Refactor formatting functions to use `vtcode_commons::formatting::collapse_whitespace` for whitespace handling and optimize string concatenation using `write!` for improved performance. (0273970c) 
+#### Refactors
+
+- Update documentation links to use public methods in harness and pty facades (466825fc) 
+- Simplify status line layout handling and improve auto status updates (fe1c3b85) 
+- Optimize code for better performance and readability (577415b8) 
+- Optimize tool call counting and improve string handling in loop detector (88bd10aa) 
+- Optimize diff computation and improve whitespace normalization in file helpers (91413b28) 
+- Change floating-point types from f64 to f32 for consistency and performance (b350c7d0) 
+- Implement read_exact_uninit for optimized async reading in file operations (787cea68) 
+- Enhance stack protection by capping stack size in pre-main hardening functions (3530b905) 
+- Enhance credential encryption with per-file salt and improve URL validation in WebFetch (d49e58f6) 
+- Optimize loops for width calculations in table rendering (cdad5eff) 
+- Update windows-sys dependency to 0.61.2 and add pretty_assertions for enhanced testing (b6e98c07) 
+- Improve process hardening documentation and clarify stack limit handling (0d1c310c) 
+- Implement integer overflow handling and improve safety checks across multiple modules (e8da535c) 
+- Replace `format!` with `write!` and `writeln!` for improved performance and clarity in multiple files (341a2de9) 
+- Enhance integer overflow handling documentation and clarify performance implications (05a00f9a) 
+- Integrate mimalloc for improved memory management and optimize various data structures (cd05078d) 
+- Implement process hardening functions and streamline environment variable management (42e3528e) 
 ## 0.108.3 - 2026-05-24
 
 ### Highlights
