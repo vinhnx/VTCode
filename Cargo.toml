@@ -94,6 +94,7 @@ agent-client-protocol = { version = "=0.10.4", features = ["unstable_auth_method
 uuid = "1.23.1"
 ignore = "0.4"
 ring = "0.17"
+pretty_assertions = "1.4"
 
 [workspace.package]
 version = "0.108.3"
@@ -126,9 +127,10 @@ members = [
     "vtcode-bash-runner",
     "vtcode-exec-events",
     "vtcode-file-search",
+    "vtcode-process-hardening",
 ]
 default-members = [".", "vtcode-core", "vtcode-tui"]
-exclude = ["zed-extension", "vtcode-process-hardening"]
+exclude = ["zed-extension"]
 
 [patch.crates-io]
 vtcode-commons = { path = "vtcode-commons" }
@@ -212,6 +214,7 @@ vtcode-commons = { path = "vtcode-commons", version = "0.108.3" }
 vtcode-config = { path = "vtcode-config", version = "0.108.3" }
 vtcode-auth = { path = "vtcode-auth", version = "0.108.3" }
 vtcode-core = { path = "vtcode-core", version = "0.108.3", default-features = false }
+vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.108.3" }
 vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.108.3" }
 vtcode-tui = { path = "vtcode-tui", version = "0.108.3" }
 anyhow = { workspace = true }
