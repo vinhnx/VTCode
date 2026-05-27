@@ -1,7 +1,7 @@
 use super::{models, ui};
 
-pub const DEFAULT_MODEL: &str = models::openai::GPT_5_3_CODEX;
-pub const DEFAULT_CLI_MODEL: &str = models::openai::GPT_5_3_CODEX;
+pub const DEFAULT_MODEL: &str = models::openai::DEFAULT_MODEL;
+pub const DEFAULT_CLI_MODEL: &str = models::openai::DEFAULT_MODEL;
 pub const DEFAULT_PROVIDER: &str = "openai";
 pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre";

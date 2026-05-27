@@ -1,4 +1,4 @@
-pub const DEFAULT_MODEL: &str = "gpt-5.4";
+pub const DEFAULT_MODEL: &str = "gpt-5.5";
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT,
     "gpt-5.5",            // GPT-5.5 flagship model

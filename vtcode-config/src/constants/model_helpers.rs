@@ -4,7 +4,7 @@ use super::models;
 pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
     match provider {
         "google" | "gemini" => Some(models::google::SUPPORTED_MODELS),
-        "openai" => Some(models::openai::SUPPORTED_MODELS),
+        "openai" | "codex" => Some(models::openai::SUPPORTED_MODELS),
         "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
         "copilot" => Some(models::copilot::SUPPORTED_MODELS),
         "minimax" => Some(models::minimax::SUPPORTED_MODELS),
@@ -26,7 +26,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
 pub fn default_for(provider: &str) -> Option<&'static str> {
     match provider {
         "google" | "gemini" => Some(models::google::DEFAULT_MODEL),
-        "openai" => Some(models::openai::DEFAULT_MODEL),
+        "openai" | "codex" => Some(models::openai::DEFAULT_MODEL),
         "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
         "copilot" => Some(models::copilot::DEFAULT_MODEL),
         "minimax" => Some(models::minimax::DEFAULT_MODEL),
