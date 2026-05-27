@@ -40,6 +40,8 @@ const SET_RLIMIT_CORE_FAILED_EXIT_CODE: i32 = 7;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) fn pre_main_hardening_linux() {
+    cap_stack_rlimit();
+
     // Disable ptrace attach / mark process non-dumpable.
     let ret_code = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
     if ret_code != 0 {
@@ -65,6 +67,8 @@ pub(crate) fn pre_main_hardening_linux() {
 
 #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
 pub(crate) fn pre_main_hardening_bsd() {
+    cap_stack_rlimit();
+
     // FreeBSD/OpenBSD: set RLIMIT_CORE to 0 and clear LD_* env vars
     set_core_file_size_limit_to_zero();
 
@@ -78,6 +82,8 @@ pub(crate) fn pre_main_hardening_bsd() {
 
 #[cfg(target_os = "macos")]
 pub(crate) fn pre_main_hardening_macos() {
+    cap_stack_rlimit();
+
     // Prevent debuggers from attaching to this process.
     let ret_code = unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) };
     if ret_code == -1 {
@@ -114,6 +120,51 @@ fn set_core_file_size_limit_to_zero() {
             std::io::Error::last_os_error()
         );
         std::process::exit(SET_RLIMIT_CORE_FAILED_EXIT_CODE);
+    }
+}
+
+/// Cap the main thread stack size if it is currently unlimited.
+///
+/// This is a complementary hardening measure to Rust's built-in stack clash
+/// protection (`-C probe-stack=inline`).  While probe-stack prevents attackers
+/// from jumping over the kernel guard page with a single large allocation,
+/// capping `RLIMIT_STACK` bounds stack resource exhaustion attacks.
+///
+/// Linux allows `RLIMIT_STACK` to be `RLIM_INFINITY` (unlimited).  We set it
+/// to a fixed cap (8 MiB) when that is the case.  If the current stack usage
+/// already exceeds the cap the call will fail harmlessly with `EINVAL`.
+fn cap_stack_rlimit() {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    {
+        const STACK_CAP_BYTES: u64 = 8 * 1024 * 1024;
+
+        let mut current: libc::rlimit = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: rlimit is a POD struct; getrlimit only writes the two fields.
+        let ret = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut current) };
+        if ret != 0 {
+            return;
+        }
+        // Only cap if the soft limit is currently unlimited.
+        if current.rlim_cur != libc::RLIM_INFINITY {
+            return;
+        }
+        let capped = libc::rlimit {
+            rlim_cur: STACK_CAP_BYTES,
+            rlim_max: STACK_CAP_BYTES,
+        };
+        // Ignore EINVAL — that just means we cannot lower the limit below
+        // the current usage, which is fine.
+        let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
     }
 }
 
