@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.109.0 - 2026-05-27
+
+### Highlights
+#### Bug Fixes
+
+- Record approval decisions for pattern learning in handle_builtin_permission (39cc8183) 
+#### Features
+
+- Update default model and add support for codex provider (1f361157) 
+### Other Changes
+#### Other
+
+- Add Mistral AI models and provider integration (81051c7a) 
+#### Refactors
+
+- Add missing crate paths for vtcode dependencies (f2c4630f) 
 ## 0.108.4 - 2026-05-27
 
 ### Highlights
