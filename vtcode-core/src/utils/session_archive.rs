@@ -1015,7 +1015,7 @@ fn summarize_tool_detail(line: &str) -> Option<String> {
 }
 
 fn collapse_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 
 fn normalized_transcript_key(text: &str) -> String {

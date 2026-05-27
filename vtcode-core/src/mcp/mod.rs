@@ -61,6 +61,7 @@ use anyhow::{Result, anyhow};
 use hashbrown::HashMap;
 pub use rmcp::model::ElicitationAction;
 use std::ffi::OsString;
+use std::fmt::Write;
 
 /// MCP protocol version constants
 pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -208,9 +209,8 @@ fn sanitize_filename(name: &str) -> String {
 /// Format a tool description as Markdown
 fn format_tool_markdown(tool: &McpToolInfo) -> String {
     let mut content = String::new();
-
-    content.push_str(&format!("# {}\n\n", tool.name));
-    content.push_str(&format!("**Provider**: {}\n\n", tool.provider));
+    let _ = write!(content, "# {}\n\n", tool.name);
+    let _ = write!(content, "**Provider**: {}\n\n", tool.provider);
     content.push_str("## Description\n\n");
     content.push_str(&tool.description);
     content.push_str("\n\n");
@@ -231,7 +231,7 @@ fn format_tool_markdown(tool: &McpToolInfo) -> String {
             content.push_str("## Required Parameters\n\n");
             for req in required {
                 if let Some(name) = req.as_str() {
-                    content.push_str(&format!("- `{}`\n", name));
+                    let _ = write!(content, "- `{}`\n", name);
                 }
             }
             content.push('\n');
@@ -251,10 +251,10 @@ fn format_tool_markdown(tool: &McpToolInfo) -> String {
                     .get("description")
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
-                content.push_str(&format!("### `{}`\n\n", param_name));
-                content.push_str(&format!("- **Type**: {}\n", param_type));
+                let _ = write!(content, "### `{}`\n\n", param_name);
+                let _ = write!(content, "- **Type**: {}\n", param_type);
                 if !param_desc.is_empty() {
-                    content.push_str(&format!("- **Description**: {}\n", param_desc));
+                    let _ = write!(content, "- **Description**: {}\n", param_desc);
                 }
                 content.push('\n');
             }
@@ -277,8 +277,6 @@ mod tests {
     use crate::mcp::utils::{clear_test_env_override, set_test_env_override};
     use hashbrown::HashMap;
     use serde_json::{Map, Value, json};
-    use std::ffi::OsString;
-
     // Re-export rmcp types for tests
     use rmcp::model::{
         ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,

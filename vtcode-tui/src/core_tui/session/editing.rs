@@ -193,7 +193,13 @@ impl Session {
         let merged = if self.input_manager.content().trim().is_empty() {
             trimmed.to_string()
         } else {
-            format!("{}\n\n{}", self.input_manager.content().trim_end(), trimmed)
+            let trimmed_end = self.input_manager.content().trim_end();
+            let cap = trimmed_end.len() + 2 + trimmed.len();
+            let mut s = String::with_capacity(cap);
+            s.push_str(trimmed_end);
+            s.push_str("\n\n");
+            s.push_str(trimmed);
+            s
         };
 
         self.input_manager.set_content(merged);
@@ -244,8 +250,9 @@ impl Session {
         if delete_start < cursor {
             let before = &self.input_manager.content()[..delete_start];
             let after = &self.input_manager.content()[cursor..];
-            let new_content = format!("{}{}", before, after);
-
+            let mut new_content = String::with_capacity(before.len() + after.len());
+            new_content.push_str(before);
+            new_content.push_str(after);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
             self.refresh_input_edit_state();
@@ -275,7 +282,11 @@ impl Session {
         };
 
         if delete_start < cursor {
-            let new_content = format!("{}{}", &content[..delete_start], &content[cursor..]);
+            let before = &content[..delete_start];
+            let after = &content[cursor..];
+            let mut new_content = String::with_capacity(before.len() + after.len());
+            new_content.push_str(before);
+            new_content.push_str(after);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
             self.refresh_input_edit_state();
@@ -300,7 +311,11 @@ impl Session {
         };
 
         if delete_len > 0 {
-            let new_content = format!("{}{}", &content[..cursor], &content[cursor + delete_len..]);
+            let before = &content[..cursor];
+            let after = &content[cursor + delete_len..];
+            let mut new_content = String::with_capacity(before.len() + after.len());
+            new_content.push_str(before);
+            new_content.push_str(after);
             self.input_manager.set_content(new_content);
             self.refresh_input_edit_state();
         }

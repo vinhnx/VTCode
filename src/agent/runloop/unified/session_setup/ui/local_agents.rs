@@ -357,7 +357,7 @@ fn summarize_preview_text(text: &str) -> Option<String> {
 }
 
 fn collapse_preview_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 
 fn truncate_preview_text(text: String, max_chars: usize) -> String {

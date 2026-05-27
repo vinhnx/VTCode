@@ -987,6 +987,7 @@ fn stderr_or_stdout(stderr: &[u8], stdout: &[u8]) -> String {
     "ast-grep exited without output".to_string()
 }
 
+#[cold]
 fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
     let needs_project_config_hint = looks_like_language_support_issue(&detail);
     let mut message = format!("{prefix}: {detail}. {AST_GREP_FAQ_HINT}");

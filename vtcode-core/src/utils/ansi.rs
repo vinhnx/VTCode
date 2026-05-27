@@ -1333,13 +1333,17 @@ impl InlineSink {
         for line in text.split('\n') {
             let mut segments = Vec::with_capacity(1);
             if !line.is_empty() {
+                let owned = line.to_string();
                 segments.push(InlineSegment {
-                    text: line.to_string(),
+                    text: owned.clone(),
                     style: Arc::clone(&fallback_arc),
                 });
+                converted_lines.push(segments);
+                plain_lines.push(owned);
+            } else {
+                converted_lines.push(segments);
+                plain_lines.push(String::new());
             }
-            converted_lines.push(segments);
-            plain_lines.push(line.to_string());
         }
 
         if had_trailing_newline {

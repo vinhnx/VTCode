@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::Path;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::SystemPromptMode;
@@ -65,7 +66,7 @@ pub(crate) async fn read_system_prompt(
             } else {
                 " Explicit delegation only."
             };
-            section.push_str(&format!("- {name}: {description}{suffix}\n"));
+            let _ = write!(section, "- {name}: {description}{suffix}\n");
         }
         prompt.push_str("\n\n");
         prompt.push_str(section.trim_end());

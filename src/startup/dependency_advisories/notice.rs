@@ -113,7 +113,7 @@ impl OptionalSearchToolsNotice {
 }
 
 fn compact_reason(reason: &str) -> String {
-    let compact = reason.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = vtcode_commons::formatting::collapse_whitespace(reason);
     let mut chars = compact.chars();
     let preview: String = chars.by_ref().take(REASON_PREVIEW_LIMIT).collect();
     if chars.next().is_some() {

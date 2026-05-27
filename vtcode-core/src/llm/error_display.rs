@@ -75,14 +75,14 @@ pub fn format_llm_success(provider: &str, message: &str) -> String {
 
 /// Format a network error for display with enhanced coloring.
 /// This is a convenience wrapper for the common "Network error: {}" pattern.
-#[inline]
+#[cold]
 pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> String {
     format_llm_error(provider, &format!("Network error: {}", error))
 }
 
 /// Format a parse error for display with enhanced coloring.
 /// This is a convenience wrapper for the common "Parse error: {}" pattern.
-#[inline]
+#[cold]
 pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> String {
     format_llm_error(provider, &format!("Parse error: {}", error))
 }

@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -68,7 +68,7 @@ pub struct PtyManager {
     config: PtyConfig,
     inner: Arc<PtyState>,
     audit_log: Option<Arc<TokioMutex<PermissionAuditLog>>>,
-    extra_paths: Arc<Mutex<Vec<PathBuf>>>,
+    extra_paths: Arc<RwLock<Arc<Vec<PathBuf>>>>,
 }
 
 #[derive(Default)]
@@ -92,7 +92,7 @@ impl PtyManager {
             config,
             inner: Arc::new(PtyState::default()),
             audit_log: None,
-            extra_paths: Arc::new(Mutex::new(default_paths)),
+            extra_paths: Arc::new(RwLock::new(Arc::new(default_paths))),
         }
     }
 
@@ -106,11 +106,11 @@ impl PtyManager {
     }
 
     pub fn apply_commands_config(&self, commands_config: &CommandsConfig) {
-        let mut extra = self.extra_paths.lock();
-        *extra = path_env::compute_extra_search_paths(
+        let new_paths = path_env::compute_extra_search_paths(
             &commands_config.extra_path_entries,
             &self.workspace_root,
         );
+        *self.extra_paths.write().unwrap() = Arc::new(new_paths);
     }
 
     pub fn describe_working_dir(&self, path: &Path) -> String {
@@ -138,7 +138,7 @@ impl PtyManager {
         gatekeeper::check_quarantine_for_program(&program);
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
-        let extra_paths = self.extra_paths.lock().clone();
+        let extra_paths = self.extra_paths.read().unwrap().clone();
         let max_tokens = request.max_tokens;
 
         // Determine if this command needs serialization to avoid contention
@@ -526,7 +526,7 @@ if output.len() > max_tokens * 4 {
         let mut command_parts = command;
         let program = command_parts.remove(0);
         let args = command_parts;
-        let extra_paths = self.extra_paths.lock().clone();
+        let extra_paths = self.extra_paths.read().unwrap().clone();
 
         // Use login shell for command execution to ensure user's PATH and environment
         // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).

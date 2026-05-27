@@ -11,6 +11,7 @@ use hashbrown::HashMap;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::{
+    fmt::Write,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -521,6 +522,7 @@ pub(super) fn filter_lines(
 
     let mut matches = Vec::new();
     let mut total_matches = 0usize;
+    let mut buf = String::new();
 
     for (idx, line) in content.lines().enumerate() {
         let is_match = if literal {
@@ -537,7 +539,9 @@ pub(super) fn filter_lines(
 
         total_matches = total_matches.saturating_add(1);
         if matches.len() < max_matches {
-            matches.push(format!("{}: {}", idx + 1, line));
+            buf.clear();
+            let _ = write!(buf, "{}: {}", idx + 1, line);
+            matches.push(std::mem::take(&mut buf));
         }
     }
 

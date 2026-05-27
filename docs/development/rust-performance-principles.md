@@ -11,6 +11,7 @@ This document captures the nuance of what makes Rust fast (and where it isn't) i
 - [Bounds Checking & Iterator Elision](#bounds-checking--iterator-elision)
 - [The `#[cold]` and `#[inline]` Strategy](#the-cold-and-inline-strategy)
 - [ABI Stability & Standard Library Evolution](#abi-stability--standard-library-evolution)
+- [LLVM's C/C++ Legacy: Why Rust's Extra Information Does Not Always Translate](#llvms-cc-legacy-why-rusts-extra-information-does-not-always-translate)
 - [Safety Enables Aggressive Optimization](#safety-enables-aggressive-optimization)
 - [When Rust Can Be Slower Than C/C++](#when-rust-can-be-slower-than-cc)
 - [Checklist for VT Code Hot Paths](#checklist-for-vt-code-hot-paths)
@@ -20,6 +21,8 @@ This document captures the nuance of what makes Rust fast (and where it isn't) i
 ## Core Insight: Rust Is Not Faster Than C/C++ — It Is *Safer While Being Equally Fast*
 
 For a well-optimized program, Rust and C++ produce comparable machine code. The performance differences are marginal and situational. The real advantage of Rust is that it makes it *easier* to write fast, correct code without compromising safety. In C++, defensive programming (extra copies, conservative synchronization) erodes performance when engineers are not operating at peak expertise. Rust's type system eliminates the need for much of that defensive overhead.
+
+Note that **C is not the "diamond standard" of performance** — that title arguably belongs to **Fortran**, whose stronger aliasing guarantees (no pointer aliasing at all) have enabled decades of superior numerical optimization. Rust's ownership model places it in a similar position to Fortran: the compiler *knows* references are unique, whereas C requires the explicit `restrict` keyword (rarely used in practice). Rust is structurally positioned to match or exceed C's optimization ceiling, but realizing that potential depends on the backend's ability to consume the information — which brings us to LLVM.
 
 **VT Code implication**: When choosing between a safe and an `unsafe` implementation, prefer the safe one and measure first. The borrow checker gives the optimizer information that C++ cannot express, so safe Rust can *already* produce better code than C++ in many cases.
 
@@ -53,7 +56,13 @@ The single biggest theoretical advantage Rust has over C/C++ in the optimizer is
 
 C++ `const T&` does *not* carry this guarantee: `const_cast` can remove const-ness, and mutable aliases may exist. The optimizer must assume the worst.
 
-Rust has historically struggled with LLVM bugs around `noalias` emission, but as of Rust 1.54+, `-Zmutable-noalias=yes` is enabled by default with LLVM 12+. This means `&mut T` in vtcode gives LLVM *actionable* alias information that C++ cannot express.
+### History: Rust as an LLVM bug finder
+
+Rust's aggressive emission of `noalias` has historically been a rollercoaster. The feature was initially enabled around 2014–2015 after Rust settled on `&mut` semantics, then deactivated due to LLVM bugs. It was re-enabled and quickly deactivated again in 2018. Finally, with LLVM 12 (Rust 1.54+), `-Zmutable-noalias=yes` was enabled by default.
+
+Before each deactivation, Rust's `noalias` emission **revealed multiple bugs in LLVM** — bugs that existed but were never triggered because no C/C++ frontend emitted `noalias` as aggressively. In effect, Rust has been a stress-test for LLVM's alias analysis, improving codegen for all LLVM frontends (including Clang). Fortran (via gfortran) similarly exercises GCC's aliasing paths, which is why GCC's handling has historically been more robust — but LLVM's Flang frontend is younger and hasn't yet had the same shake-down.
+
+As of Rust 1.54+ / LLVM 12+, `&mut T` in vtcode gives LLVM *actionable* alias information that C++ cannot express.
 
 ### VT Code guidelines
 
@@ -84,6 +93,8 @@ This means the Rust compiler (and LLVM) can cache loaded values across function 
 ## Bounds Checking & Iterator Elision
 
 Rust performs bounds checking on array/slice indexing by default. In hot loops, this can inhibit vectorization and other optimizations when the compiler cannot prove the bounds.
+
+The real cost of bounds checks is rarely the arithmetic itself — it is the **cascading failure of pattern-matching in the optimizer**. LLVM optimizations are largely pattern-based: if a bounds check creates IR that doesn't match a vectorization or loop-hoisting pattern, the compiler may miss entire families of optimizations downstream. The check itself may add zero measurable cycles, but the optimizations it blocks can cost double-digit percentages.
 
 *However*:
 - Iterator patterns (`for x in slice`, `.iter()`, `.iter_mut()`, `.chunks()`) elide bounds checks entirely because the iterator guarantees in-bounds access.
@@ -156,6 +167,26 @@ Rust has no stable ABI for the standard library. This means:
 
 ---
 
+## LLVM's C/C++ Legacy: Why Rust's Extra Information Does Not Always Translate
+
+Despite Rust's richer semantic information, LLVM — the primary backend for `rustc` — was designed and optimized for C/C++ over two decades. This creates several bottlenecks:
+
+### Niche information is dropped
+
+Rust guarantees niches: `&T` is never null, `&u16` is always 2-byte aligned, `bool` is only 0 or 1, etc. Rust's internal type system tracks these, but LLVM has no first-class concept of niches — C and C++ do not have them. When rustc lowers to LLVM IR, most niche information is either discarded or represented in ways LLVM cannot exploit. Active work exists to improve this, but LLVM's IR was not designed for it.
+
+### No optimized calling convention for sum types
+
+Rust uses `Option<T>` and `Result<T, E>` pervasively. These are tagged unions (discriminant + payload). C has tagged unions too, but no ABI or calling convention optimizes their passing — e.g., passing the discriminant in a flag register and splitting variants across registers vs. stack. Neither GCC nor LLVM support such conventions because C never needed them. This means returning `Result<T, E>` from a function can involve unnecessary memory traffic that a hypothetical optimal calling convention would avoid.
+
+### Move-heavy codegen is less tuned
+
+Rust's pervasive move semantics (bitwise copy + source invalidation) are uncommon in C/C++. When constructing a `Box::new(value)`, Rust constructs the value on the stack then copies it to the heap. LLVM can elide this copy (NRVO-style), but the pattern-matching isn't always successful. Equivalent C code (allocate on heap, initialize in-place) generates simpler IR from the start.
+
+### What this means for vtcode
+
+These are backend limitations, not language limitations. As LLVM evolves (or if Rust gains an alternative backend like GCC or Cranelift), these gaps will narrow. For vtcode's workload (I/O-bound LLM orchestration, not tight numeric loops), these issues are unlikely to be material — but they explain why Rust's "free performance from information" has not materialized at scale.
+
 ## Safety Enables Aggressive Optimization
 
 The most practically significant performance difference between Rust and C++ in a real-world project is not compiler optimization — it is the *social and architectural* effect of safety.
@@ -190,6 +221,7 @@ Rust has a few areas where it may be slower:
 | **Floating-point math** | No global `-ffast-math` equivalent in safe Rust. LLVM strict FP semantics prevent many optimizations. | Use `-C llvm-args=-enable-unsafe-fp-math` for measured numeric hot paths, or target-specific intrinsics. |
 | **Result checking in tight loops** | `Result<T, E>` is always checked; exceptions in C++ can be truly zero-cost when the sad path is rare. | Use `.unwrap_unchecked()` in `unsafe` blocks where invariants guarantee success (profile first). |
 | **Bounds checking** | Default indexing includes bounds checks. | Use iterators or `get_unchecked()` when proven necessary. |
+| **Move-heavy heap allocation** | Rust constructs values on the stack then copies to heap (`Box::new(val)`); LLVM does not always elide the intermediate copy. C allocates and initializes in-place. | Use `Box::new_uninit()` + manual init for measured hot paths, or arena allocation patterns. |
 | **Panic infrastructure** | Panic unwinding has overhead even if panic never occurs. | Use `panic = "abort"` in release (already vtcode's default). |
 | **Compile time** | Not a runtime concern, but Rust's generics and monomorphization increase build times. | Use `codegen-units=1` (already vtcode's release default), `lld` linker, and `-Zshare-generics`. |
 
@@ -214,7 +246,8 @@ When reviewing or writing a hot path in vtcode:
 
 ## References
 
-- [r/rust: "What makes Rust faster than C/C++?"](https://www.reddit.com/r/rust/comments/px72r1/what_makes_rust_faster_than_cc/) (2021)
+- [r/rust: "Why ISN'T Rust faster than C?" (2024)](https://www.reddit.com/r/rust/comments/1at3r6d/why_isnt_rust_faster_than_c_given_it_can_leverage/) — comprehensive discussion covering Fortran as the actual performance champion, noalias bug history, LLVM's C legacy, and the cascading-optimization-failure cost of safety checks.
+- [r/rust: "What makes Rust faster than C/C++?" (2021)](https://www.reddit.com/r/rust/comments/px72r1/what_makes_rust_faster_than_cc/)
 - [Where Rust Really Shines (Manish Goregaokar)](https://manishearth.github.io/blog/2015/05/03/where-rust-really-shines/)
 - [The Relative Performance of C and Rust (Bryan Cantrill)](https://blog.oxide.computer/relative-performance-c-rust)
 - [Rustc Guide: LLVM noalias](https://rustc-dev-guide.rust-lang.org/backend/misc.html#the-noalias-attribute)

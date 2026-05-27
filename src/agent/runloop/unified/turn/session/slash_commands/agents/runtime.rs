@@ -773,7 +773,7 @@ fn summarize_preview_text(text: &str) -> Option<String> {
 
 #[cfg(test)]
 fn collapse_preview_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 
 #[cfg(test)]
