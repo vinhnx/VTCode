@@ -1,5 +1,6 @@
 pub const RIPGREP_INSTALL_COMMAND: &str = "vtcode dependencies install ripgrep";
 
+#[cold]
 pub fn missing_ripgrep_message(suffix: &str) -> String {
     let extra = if suffix.is_empty() {
         String::new()

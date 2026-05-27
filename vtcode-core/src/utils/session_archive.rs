@@ -799,7 +799,7 @@ pub async fn reserve_session_archive_identifier(
 }
 
 fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) -> Vec<String> {
-    let mut transcript = Vec::new();
+    let mut transcript = Vec::with_capacity(recent_messages.len());
 
     for message in recent_messages {
         if !matches!(message.role, MessageRole::User | MessageRole::Assistant) {

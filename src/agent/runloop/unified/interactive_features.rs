@@ -656,10 +656,9 @@ fn dedupe_prompt_suggestions(suggestions: Vec<PromptSuggestion>) -> Vec<PromptSu
     let mut ordered = Vec::new();
     for suggestion in suggestions {
         let key = suggestion.prompt.to_lowercase();
-        if seen.contains_key(&key) {
+        if seen.insert(key, ()).is_some() {
             continue;
         }
-        seen.insert(key, ());
         ordered.push(suggestion);
         if ordered.len() == 4 {
             break;

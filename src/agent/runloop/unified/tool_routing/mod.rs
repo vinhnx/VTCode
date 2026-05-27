@@ -728,6 +728,7 @@ fn auto_mode_safe_builtin_allow(
     }
 }
 
+#[cold]
 fn headless_auto_mode_fallback_reason(
     tool_name: &str,
     denial: Option<&crate::agent::runloop::unified::state::AutoModeDenial>,

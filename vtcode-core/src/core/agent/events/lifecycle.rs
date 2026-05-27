@@ -5,6 +5,7 @@ use crate::exec::events::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 #[derive(Debug, Clone, Default)]
 struct StreamingTextState {
@@ -39,6 +40,7 @@ fn trimmed_string_field<'a>(output: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|text| !text.is_empty())
 }
 
+#[cold]
 fn trimmed_error_message(output: &Value) -> Option<&str> {
     match output.get("error") {
         Some(Value::String(message)) => Some(message.as_str()),
@@ -138,16 +140,19 @@ fn summarize_list_items(output: &Value, items: &[Value]) -> String {
 
     let mut summary = format!("Listed {total} {}", pluralize(total, "item", "items"));
     if files > 0 || directories > 0 {
-        summary.push_str(&format!(
-            " ({files} {}, {directories} {})",
+        let _ = write!(
+            summary,
+            " ({} {}, {} {})",
+            files,
             pluralize(files, "file", "files"),
+            directories,
             pluralize(directories, "directory", "directories"),
-        ));
+        );
     }
 
     let samples = sample_strings_from_objects(items, &["path", "name"], 3);
     if !samples.is_empty() {
-        summary.push_str(&format!(": {}", samples.join(", ")));
+        let _ = write!(summary, ": {}", samples.join(", "));
     }
 
     summary
@@ -169,7 +174,7 @@ fn summarize_file_list(output: &Value, files: &[Value]) -> String {
         .map(str::to_string)
         .collect::<Vec<_>>();
     if !samples.is_empty() {
-        summary.push_str(&format!(": {}", samples.join(", ")));
+        let _ = write!(summary, ": {}", samples.join(", "));
     }
 
     summary
@@ -191,9 +196,9 @@ fn summarize_matches(output: &Value, matches: &[Value]) -> String {
 
     let samples = sample_match_paths(matches, 3);
     if !samples.is_empty() {
-        summary.push_str(&format!(" in {}", samples.join(", ")));
+        let _ = write!(summary, " in {}", samples.join(", "));
     } else if let Some(path) = trimmed_string_field(output, "path") {
-        summary.push_str(&format!(" in {path}"));
+        let _ = write!(summary, " in {path}");
     }
 
     summary
@@ -464,15 +469,26 @@ impl SharedLifecycleEmitter {
             return false;
         }
 
-        if !self.tool_calls.contains_key(call_id) {
-            let _ = self.start_tool_call(call_id, tool_name.clone(), item_id);
-        }
+        let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
+        let buffer = self.tool_calls.entry(call_id.to_string()).or_insert_with(|| ToolCallStreamState {
+            item_id: generated_item_id,
+            name: None,
+            arguments: String::new(),
+            started: false,
+        });
 
-        let Some(buffer) = self.tool_calls.get_mut(call_id) else {
-            return false;
-        };
-
-        if buffer.name.is_none() {
+        if !buffer.started {
+            buffer.started = true;
+            if buffer.name.is_none() {
+                buffer.name = tool_name;
+            }
+            self.pending_events.push(tool_started_event(
+                buffer.item_id.clone(),
+                buffer.name.as_deref().unwrap_or_default(),
+                None,
+                Some(call_id),
+            ));
+        } else if buffer.name.is_none() {
             buffer.name = tool_name;
         }
 
@@ -525,16 +541,26 @@ impl SharedLifecycleEmitter {
         tool_name: Option<String>,
         item_id: Option<String>,
     ) -> bool {
-        if !self.tool_calls.contains_key(call_id) {
-            let _ = self.start_tool_call(call_id, tool_name.clone(), item_id);
-        }
-
-        let Some(buffer) = self.tool_calls.get_mut(call_id) else {
-            return false;
-        };
+        let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
+        let buffer = self.tool_calls.entry(call_id.to_string()).or_insert_with(|| ToolCallStreamState {
+            item_id: generated_item_id,
+            name: None,
+            arguments: String::new(),
+            started: false,
+        });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;
+        }
+
+        if !buffer.started {
+            buffer.started = true;
+            self.pending_events.push(tool_started_event(
+                buffer.item_id.clone(),
+                buffer.name.as_deref().unwrap_or_default(),
+                None,
+                Some(call_id),
+            ));
         }
 
         if buffer.arguments == arguments {
@@ -543,11 +569,11 @@ impl SharedLifecycleEmitter {
 
         buffer.arguments.clear();
         buffer.arguments.push_str(arguments);
-        let arguments = progress_tool_arguments(&buffer.arguments);
+        let args = progress_tool_arguments(&buffer.arguments);
         self.pending_events.push(tool_invocation_updated_event(
             buffer.item_id.clone(),
             buffer.name.as_deref().unwrap_or_default(),
-            Some(&arguments),
+            Some(&args),
             Some(call_id),
             ToolCallStatus::InProgress,
         ));
@@ -792,6 +818,7 @@ pub fn tool_output_completed_event(
 }
 
 #[must_use]
+#[cold]
 pub fn error_item_completed_event(item_id: String, message: impl Into<String>) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {

@@ -833,7 +833,7 @@ impl ModalListState {
 
     pub fn apply_search(&mut self, query: &str) {
         let preferred = self.current_selection();
-        self.apply_search_with_preference(query, preferred.clone());
+        self.apply_search_with_preference(query, preferred);
     }
 
     pub fn apply_search_with_preference(
@@ -1545,7 +1545,7 @@ impl WizardModalState {
                 OverlayEvent::Submitted(OverlaySubmission::Wizard(vec![selection])),
             )),
             WizardModalMode::MultiStep => {
-                self.complete_current_step(selection.clone());
+                self.complete_current_step(selection);
                 if self.current_step < self.steps.len().saturating_sub(1) {
                     self.current_step += 1;
                     ModalListKeyResult::Redraw

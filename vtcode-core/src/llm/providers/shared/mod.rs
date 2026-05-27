@@ -21,6 +21,7 @@ pub enum StreamAssemblyError {
 }
 
 impl StreamAssemblyError {
+    #[cold]
     pub fn into_llm_error(self, provider: &str) -> LLMError {
         let message = self.to_string();
         let formatted = error_display::format_llm_error(provider, &message);
@@ -137,9 +138,7 @@ impl ToolCallBuilder {
 
     pub fn finalize(self, fallback_index: usize) -> Option<ToolCall> {
         let name = self.name?;
-        let id = self
-            .id
-            .unwrap_or_else(|| format!("tool_call_{}", fallback_index));
+        let id = self.id.unwrap_or_else(|| format!("tool_call_{fallback_index}"));
         let arguments = if self.arguments.is_empty() {
             "{}".to_string()
         } else {

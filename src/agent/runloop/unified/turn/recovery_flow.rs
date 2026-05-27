@@ -333,6 +333,7 @@ pub(crate) fn build_recovery_prompt_from_diagnostics(
     builder
 }
 
+#[cold]
 fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     if diagnostics.recent_errors.is_empty() {
         return "No recent errors recorded.".to_string();

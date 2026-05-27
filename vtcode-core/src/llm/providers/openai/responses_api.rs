@@ -118,9 +118,17 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
                     ContentPart::Image {
                         data, mime_type, ..
                     } => {
+                        let image_url = {
+                            let mut s = String::with_capacity(13 + mime_type.len() + data.len());
+                            s.push_str("data:");
+                            s.push_str(mime_type);
+                            s.push_str(";base64,");
+                            s.push_str(data);
+                            s
+                        };
                         content_parts.push(json!({
                             "type": "input_image",
-                            "image_url": format!("data:{};base64,{}", mime_type, data)
+                            "image_url": image_url
                         }));
                     }
                     ContentPart::File {
@@ -180,7 +188,10 @@ fn append_assistant_text_to_instructions(instructions_segments: &mut Vec<String>
         return;
     }
 
-    instructions_segments.push(format!("Previous assistant response:\n{}", trimmed));
+    let mut s = String::with_capacity(30 + trimmed.len());
+    s.push_str("Previous assistant response:\n");
+    s.push_str(trimmed);
+    instructions_segments.push(s);
 }
 
 fn append_output_item_text(value: &Value, text: &mut String) {
@@ -239,13 +250,22 @@ fn append_tool_result_to_instructions(
         return;
     }
 
-    let heading = match tool_call_id {
-        Some(tool_call_id) if !tool_call_id.is_empty() => {
-            format!("Previous tool result ({tool_call_id}):")
-        }
-        _ => "Previous tool result:".to_string(),
+    let (heading_str, heading_cap) = match tool_call_id {
+        Some(id) if !id.is_empty() => (None, 26 + id.len()),
+        _ => (Some("Previous tool result:"), 0),
     };
-    instructions_segments.push(format!("{heading}\n{text}"));
+    let mut s = String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
+    match heading_str {
+        Some(h) => s.push_str(h),
+        None => {
+            s.push_str("Previous tool result (");
+            s.push_str(tool_call_id.unwrap());
+            s.push_str("):");
+        }
+    }
+    s.push('\n');
+    s.push_str(&text);
+    instructions_segments.push(s);
 }
 
 pub fn parse_responses_payload(

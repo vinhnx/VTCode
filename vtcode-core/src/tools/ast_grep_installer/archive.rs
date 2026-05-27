@@ -96,7 +96,7 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
         for index in 0..archive.len() {
             let mut file = archive
                 .by_index(index)
-                .with_context(|| format!("Failed to read {} entry {}", archive_name, index))?;
+                .with_context(|| format!("Failed to read {archive_name} entry {index}"))?;
             let outpath = destination.join(file.mangled_name());
 
             if file.is_dir() {

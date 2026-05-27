@@ -178,6 +178,7 @@ fn apply_edit_replacement(
     Some(new_content)
 }
 
+#[cold]
 fn edit_not_found_error(
     current_content: &str,
     effective_old_str: &str,

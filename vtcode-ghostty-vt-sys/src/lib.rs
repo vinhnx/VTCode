@@ -33,6 +33,7 @@ pub fn render_terminal_snapshot(
     platform::render_terminal_snapshot(request, vt_stream)
 }
 
+#[cold]
 fn unavailable_error() -> anyhow::Error {
     anyhow!("Ghostty VT library is unavailable; falling back to legacy_vt100")
 }

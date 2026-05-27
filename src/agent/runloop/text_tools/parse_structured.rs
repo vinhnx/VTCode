@@ -218,10 +218,9 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         Some(tools::GREP_FILE) => {
             // For grep_file, ensure pattern is present
             if !positional.is_empty()
-                && !object.contains_key("pattern")
                 && let Value::String(pattern) = &positional[0]
             {
-                object.insert("pattern".to_string(), Value::String(pattern.clone()));
+                object.entry("pattern".to_string()).or_insert_with(|| Value::String(pattern.clone()));
             }
             // Validate that pattern is required
             if !object.contains_key("pattern") {
@@ -231,10 +230,9 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         Some(tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE) => {
             // These tools require a 'path' parameter
             if !positional.is_empty()
-                && !object.contains_key("path")
                 && let Value::String(path) = &positional[0]
             {
-                object.insert("path".to_string(), Value::String(path.clone()));
+                object.entry("path".to_string()).or_insert_with(|| Value::String(path.clone()));
             }
             if !object.contains_key("path") {
                 return None;

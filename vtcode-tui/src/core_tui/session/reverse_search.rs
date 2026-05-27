@@ -52,9 +52,9 @@ impl ReverseSearchState {
     pub fn cancel_search(&mut self, input_manager: &mut InputManager) {
         self.active = false;
         self.search_term.clear();
-        input_manager.set_content(self.original_content.clone());
+        input_manager.set_content(std::mem::take(&mut self.original_content));
         input_manager.set_cursor(self.original_cursor);
-        input_manager.set_attachments(self.original_attachments.clone());
+        input_manager.set_attachments(std::mem::take(&mut self.original_attachments));
         self.matches.clear();
     }
 

@@ -117,16 +117,16 @@ impl PtyManager {
         self.format_working_dir(path)
     }
 
-    pub async fn run_command(&self, request: PtyCommandRequest) -> Result<PtyCommandResult> {
+    pub async fn run_command(&self, mut request: PtyCommandRequest) -> Result<PtyCommandResult> {
         if request.command.is_empty() {
             return Err(anyhow!("PTY command cannot be empty"));
         }
 
-        let mut command = request.command.clone();
+        let mut command = std::mem::take(&mut request.command);
         let program = command.remove(0);
         let args = command;
         let timeout = clamp_timeout(request.timeout);
-        let work_dir = request.working_dir.clone();
+        let work_dir = std::mem::take(&mut request.working_dir);
         let size = request.size;
         let start = Instant::now();
 
@@ -523,7 +523,7 @@ if output.len() > max_tokens * 4 {
             Entry::Vacant(e) => e,
         };
 
-        let mut command_parts = command.clone();
+        let mut command_parts = command;
         let program = command_parts.remove(0);
         let args = command_parts;
         let extra_paths = self.extra_paths.lock().clone();

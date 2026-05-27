@@ -393,19 +393,16 @@ impl ResponseBuilder {
     }
 
     fn handle_item_completed<E: StreamEventEmitter>(&mut self, item: &ThreadItem, emitter: &mut E) {
-        let was_started = self.item_id_to_index.contains_key(&item.id);
-
-        let output_index = self
-            .item_id_to_index
-            .get(&item.id)
-            .copied()
-            .unwrap_or_else(|| {
+        let (was_started, output_index) = match self.item_id_to_index.get(&item.id) {
+            Some(&idx) => (true, idx),
+            None => {
                 // Item was completed without being started (atomic item)
                 let idx = self.next_output_index;
                 self.next_output_index += 1;
                 self.item_id_to_index.insert(item.id.clone(), idx);
-                idx
-            });
+                (false, idx)
+            }
+        };
 
         // Determine final status
         let status = self.determine_item_status(&item.details);

@@ -99,6 +99,7 @@ impl CommandStatus {
         self.code
     }
 
+    #[cold]
     pub fn failure(code: Option<i32>) -> Self {
         Self {
             success: false,

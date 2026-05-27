@@ -440,7 +440,7 @@ impl ConfigManager {
         new: &toml_edit::Table,
         default_table: &toml_edit::Table,
     ) {
-        let mut remove_keys = Vec::new();
+        let mut remove_keys = Vec::with_capacity(default_table.len());
 
         for (key, default_value) in default_table.iter() {
             if let Some(new_value) = new.get(key) {

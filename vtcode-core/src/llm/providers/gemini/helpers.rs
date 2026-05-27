@@ -165,7 +165,7 @@ impl GeminiProvider {
             }
         }
 
-        let mut contents: Vec<Content> = Vec::new();
+        let mut contents: Vec<Content> = Vec::with_capacity(request.messages.len());
         let history_system_directives = collect_history_system_directives(request);
         for message in &request.messages {
             if message.role == MessageRole::System {
@@ -421,16 +421,7 @@ impl GeminiProvider {
                     function_call,
                     thought_signature,
                 } => {
-                    let call_id = function_call.id.clone().unwrap_or_else(|| {
-                        format!(
-                            "call_{}_{}",
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_nanos(),
-                            tool_calls.len()
-                        )
-                    });
+                    let call_id = function_call.id.clone().unwrap_or_else(|| format!("call_{}", tool_calls.len()));
 
                     // Use the signature from the function call, or fall back to the one from preceding text
                     let effective_signature =
@@ -561,16 +552,7 @@ impl GeminiProvider {
                             )
                         };
 
-                    let call_id = id.unwrap_or_else(|| {
-                        format!(
-                            "call_{}_{}",
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_nanos(),
-                            tool_calls.len()
-                        )
-                    });
+                    let call_id = id.unwrap_or_else(|| format!("call_{}", tool_calls.len()));
 
                     tool_calls.push(ToolCall {
                         id: call_id,
@@ -759,6 +741,7 @@ impl GeminiProvider {
         Self::convert_from_gemini_response(converted, model)
     }
 
+    #[cold]
     pub(super) fn map_streaming_error(error: StreamingError) -> LLMError {
         match error {
             StreamingError::NetworkError { message, .. } => {
@@ -939,7 +922,13 @@ fn build_interaction_content(content: &MessageContent) -> Vec<InteractionContent
                             .or_else(|| file_url.clone())
                             .unwrap_or_else(|| "attached file".to_string());
                         converted.push(InteractionContent::Text {
-                            text: format!("[File input not directly supported: {fallback}]"),
+                            text: {
+                                let mut s = String::with_capacity(38 + fallback.len());
+                                s.push_str("[File input not directly supported: ");
+                                s.push_str(&fallback);
+                                s.push(']');
+                                s
+                            },
                         });
                     }
                 }

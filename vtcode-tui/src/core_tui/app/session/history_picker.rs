@@ -77,9 +77,9 @@ impl HistoryPickerState {
         self.search_query.clear();
         self.matches.clear();
         self.navigator.set_item_count(0);
-        input_manager.set_content(self.original_content.clone());
+        input_manager.set_content(std::mem::take(&mut self.original_content));
         input_manager.set_cursor(self.original_cursor);
-        input_manager.set_attachments(self.original_attachments.clone());
+        input_manager.set_attachments(std::mem::take(&mut self.original_attachments));
     }
 
     /// Accept the current selection and close the picker

@@ -113,6 +113,7 @@ pub fn alias_ast_grep_binary_name() -> Option<&'static str> {
     }
 }
 
+#[cold]
 pub fn missing_ast_grep_message(suffix: &str) -> String {
     let extra = if suffix.is_empty() {
         String::new()

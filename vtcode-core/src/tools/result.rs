@@ -149,7 +149,7 @@ impl ToolResult {
     /// Add metadata to the result
     pub fn with_metadata(mut self, metadata: ToolMetadata) -> Self {
         // Preserve token counts from construction
-        let token_counts = self.metadata.token_counts.clone();
+        let token_counts = std::mem::take(&mut self.metadata.token_counts);
         self.metadata = metadata;
         self.metadata.token_counts = token_counts;
         self

@@ -3,6 +3,7 @@ use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::clean_reasoning_text;
 
+#[cold]
 pub(super) fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
         provider_name,

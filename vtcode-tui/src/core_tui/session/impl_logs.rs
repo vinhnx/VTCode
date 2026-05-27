@@ -56,7 +56,7 @@ impl Session {
         }
 
         for entry in self.log_lines.iter() {
-            text.lines.extend(entry.lines.clone());
+            text.lines.extend(entry.lines.iter().cloned());
         }
 
         if text.lines.is_empty() {

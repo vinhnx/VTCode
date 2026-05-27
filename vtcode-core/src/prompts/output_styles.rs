@@ -66,7 +66,7 @@ impl OutputStyleApplier {
         guard
             .list_styles()
             .into_iter()
-            .map(|(name, _)| name.clone())
+            .map(|(name, _)| name.to_string())
             .collect()
     }
 }

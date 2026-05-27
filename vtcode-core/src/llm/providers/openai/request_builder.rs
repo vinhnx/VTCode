@@ -544,10 +544,8 @@ pub(crate) fn build_responses_request(
         && let Some(map) = openai_request.as_object_mut()
     {
         let reasoning_value = map.entry("reasoning").or_insert(json!({}));
-        if let Some(reasoning_obj) = reasoning_value.as_object_mut()
-            && !reasoning_obj.contains_key("summary")
-        {
-            reasoning_obj.insert("summary".to_string(), json!("auto"));
+        if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
+            reasoning_obj.entry("summary".to_string()).or_insert_with(|| json!("auto"));
         }
     }
 

@@ -476,6 +476,7 @@ pub(crate) fn codex_sidecar_requirement_note() -> &'static str {
     "The default `[agent.codex_app_server].command = \"codex\"` requires the `codex` CLI to be installed and available on `$PATH`. Install `codex` and ensure it is on `$PATH`, or set `[agent.codex_app_server].command` to a custom executable path."
 }
 
+#[cold]
 fn codex_cli_unavailable_error() -> anyhow::Error {
     anyhow!(
         "{} {}",
@@ -616,6 +617,7 @@ fn mcp_server_status_list_params() -> Value {
     })
 }
 
+#[cold]
 fn overloaded_request_error(method: &str, retry_policy: RequestRetryPolicy) -> anyhow::Error {
     match retry_policy {
         RequestRetryPolicy::Idempotent => anyhow!(

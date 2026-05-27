@@ -145,17 +145,11 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
             }
         }
 
-        if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
-            obj.insert("offset".to_string(), obj["offset_lines"].clone());
+        if let Some(src) = obj.get("offset_lines").or_else(|| obj.get("o")).cloned() {
+            obj.entry("offset".to_string()).or_insert(src);
         }
-        if !obj.contains_key("offset") && obj.contains_key("o") {
-            obj.insert("offset".to_string(), obj["o"].clone());
-        }
-        if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
-            obj.insert("limit".to_string(), obj["page_size_lines"].clone());
-        }
-        if !obj.contains_key("limit") && obj.contains_key("l") {
-            obj.insert("limit".to_string(), obj["l"].clone());
+        if let Some(src) = obj.get("page_size_lines").or_else(|| obj.get("l")).cloned() {
+            obj.entry("limit".to_string()).or_insert(src);
         }
 
         if obj.get("offset").and_then(parse_usize_value) == Some(0) {
@@ -240,14 +234,11 @@ fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -
 
         obj.insert("offset".to_string(), json!(offset));
         obj.insert("limit".to_string(), json!(limit));
-        if !obj.contains_key("max_tokens") {
-            // Preserve narrow chunking behavior by bypassing MIN_BATCH_LIMIT expansion
-            // in ReadFileHandler::handle (which only applies when max_tokens is absent).
-            obj.insert(
-                "max_tokens".to_string(),
-                json!(SPOOL_CHUNK_SENTINEL_MAX_TOKENS),
-            );
-        }
+        // Preserve narrow chunking behavior by bypassing MIN_BATCH_LIMIT expansion
+        // in ReadFileHandler::handle (which only applies when max_tokens is absent).
+        obj.entry("max_tokens".to_string()).or_insert_with(|| {
+            json!(SPOOL_CHUNK_SENTINEL_MAX_TOKENS)
+        });
     }
 
     SpoolChunkPlan { offset, limit }

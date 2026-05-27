@@ -34,10 +34,8 @@ pub(super) fn set_command_environment(
 
     // Ensure HOME is set - this is crucial for proper path expansion in cargo and other tools
     let home_key = OsString::from("HOME");
-    if !env_map.contains_key(&home_key)
-        && let Some(home_dir) = dirs::home_dir()
-    {
-        env_map.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
+    if let Some(home_dir) = dirs::home_dir() {
+        env_map.entry(home_key).or_insert_with(|| OsString::from(home_dir.as_os_str()));
     }
 
     let path_key = OsString::from("PATH");

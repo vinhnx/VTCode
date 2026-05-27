@@ -132,6 +132,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Architecture, Security Measures, Implementation Details, Testing, Security Philosophy
   - **User Questions**: "What can you tell me about Process Hardening?", "How does Architecture work?", "How does Security Measures work?"
 
+- **File**: `docs/development/rust-performance-principles.md`
+  - **Content**: Rust-Specific Performance Principles for VT Code
+  - **Topics**: Table of Contents, Core Insight: Rust Is Not Faster Than C/C++ — It Is *Safer While Being Equally Fast*, Destructive Move Semantics, Aliasing Guarantees (`noalias`), Immutable by Default & `const` Semantics
+  - **User Questions**: "What can you tell me about Rust-Specific Performance Principles for VT Code?", "How does Table of Contents work?", "How does Core Insight: Rust Is Not Faster Than C/C++ — It Is *Safer While Being Equally Fast* work?"
+
 - **File**: `docs/development/TUI_ONLY_REFACTORING.md`
   - **Content**: TUI-Only Tool Permission Refactoring
   - **Topics**: Overview, Problem Statement, Solution, Usage, Backward Compatibility

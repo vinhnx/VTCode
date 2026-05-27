@@ -227,16 +227,19 @@ impl JsonRpcError {
     }
 
     /// Create a parse error
+    #[cold]
     pub fn parse_error(details: impl Into<String>) -> Self {
         Self::new(error_codes::PARSE_ERROR, details)
     }
 
     /// Create an invalid request error
+    #[cold]
     pub fn invalid_request(details: impl Into<String>) -> Self {
         Self::new(error_codes::INVALID_REQUEST, details)
     }
 
     /// Create a method not found error
+    #[cold]
     pub fn method_not_found(method: impl Into<String>) -> Self {
         Self::new(
             error_codes::METHOD_NOT_FOUND,
@@ -245,11 +248,13 @@ impl JsonRpcError {
     }
 
     /// Create an invalid params error
+    #[cold]
     pub fn invalid_params(details: impl Into<String>) -> Self {
         Self::new(error_codes::INVALID_PARAMS, details)
     }
 
     /// Create an internal error
+    #[cold]
     pub fn internal_error(details: impl Into<String>) -> Self {
         Self::new(error_codes::INTERNAL_ERROR, details)
     }
@@ -258,6 +263,7 @@ impl JsonRpcError {
     ///
     /// Per ACP spec, includes authMethods in error data to help clients
     /// present appropriate UI for authentication options.
+    #[cold]
     pub fn auth_required(auth_methods: Vec<super::AuthMethod>) -> Self {
         let data = serde_json::json!({
             "authMethods": auth_methods,

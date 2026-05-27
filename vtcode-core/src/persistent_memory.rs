@@ -296,7 +296,11 @@ struct MemoryClassificationPlan {
 }
 
 pub fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    text.split_whitespace().fold(String::new(), |mut acc, s| {
+        if !acc.is_empty() { acc.push(' '); }
+        acc.push_str(s);
+        acc
+    })
 }
 
 pub fn truncate_for_fact(text: &str, max_chars: usize) -> String {

@@ -224,8 +224,7 @@ impl FilePalette {
         }
 
         // Bonus for query appearing in path segments
-        let path_segments: Vec<&str> = path.split('/').collect();
-        for segment in path_segments {
+        for segment in path.split('/') {
             if segment.contains(query) {
                 score += 50;
             }
