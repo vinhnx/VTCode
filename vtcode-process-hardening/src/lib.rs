@@ -3,8 +3,11 @@ use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
-/// This is designed to be called pre-main() (using `#[ctor::ctor]`) to perform
-/// various process hardening steps, such as:
+/// Perform early process hardening as the first operation in `main()`.
+///
+/// Call this before any other operations, thread spawning, or heap
+/// allocation to ensure the process is locked down before potential
+/// adversaries can influence its state. Steps include:
 /// - disabling core dumps
 /// - disabling ptrace attach on Linux and macOS
 /// - removing dangerous environment variables such as LD_PRELOAD and DYLD_*
@@ -133,7 +136,10 @@ fn set_core_file_size_limit_to_zero() {
 /// Linux allows `RLIMIT_STACK` to be `RLIM_INFINITY` (unlimited).  We set it
 /// to a fixed cap (8 MiB) when that is the case.  If the current stack usage
 /// already exceeds the cap the call will fail harmlessly with `EINVAL`.
-// Prevent unused warning when RLIMIT_STACK is not available on all targets
+// This function is a no-op on targets without RLIMIT_STACK (e.g., Windows).
+// The cfg gate prevents dead_code on those targets; the allow attribute
+// suppresses the remaining unused-variables warning on the function-level
+// `current` borrow when no cfg branch matches.
 #[allow(unused_variables)]
 fn cap_stack_rlimit() {
     #[cfg(any(
@@ -164,8 +170,11 @@ fn cap_stack_rlimit() {
             rlim_cur: STACK_CAP_BYTES,
             rlim_max: STACK_CAP_BYTES,
         };
-        // Ignore EINVAL — that just means we cannot lower the limit below
-        // the current usage, which is fine.
+        // SAFETY: `capped` is a fully initialized POD struct with valid
+        // `rlim_t` values. `setrlimit` is memory-safe regardless of the
+        // kernel policy decision; failure returns -1 with errno, which we
+        // intentionally ignore (best-effort hardening — EINVAL just means
+        // the current stack usage exceeds the cap, which is harmless).
         let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
     }
 }

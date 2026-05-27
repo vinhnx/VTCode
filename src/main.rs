@@ -40,10 +40,15 @@ enum BootstrapOutcome {
 fn main() -> std::process::ExitCode {
     // Apply process hardening before any other operations.
     // This disables core dumps, caps RLIMIT_STACK (defense-in-depth complement
-    // to -C probe-stack=inline), removes dangerous env vars, and prevents
-    // ptrace attach on supported platforms.
+    // to Rust's built-in stack clash protection — see rustc exploit-mitigations
+    // docs), removes dangerous env vars, and prevents ptrace attach.
     vtcode_process_hardening::pre_main_hardening();
 
+    // The hardening layer caps RLIMIT_STACK at 8 MiB (only when unlimited).
+    // The spawned thread below uses 16 MiB — this is safe because
+    // RLIMIT_STACK only constrains the main thread's stack on Linux/macOS;
+    // thread stacks allocated via pthread_attr_setstacksize come from the
+    // heap and are unaffected by the rlimit.
     const MAIN_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 
     let handle = match std::thread::Builder::new()
