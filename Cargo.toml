@@ -190,7 +190,10 @@ unnecessary_safety_comment = "warn"
 # Don't Do Potentially Incorrect Things with Numbers
 # Integer overflow in Rust: arithmetic panics in debug, wraps as two's complement in release.
 # Prefer checked_*, saturating_*, wrapping_* methods over raw arithmetic when overflow is
-# a concern. See https://huonw.github.io/blog/2016/04/myths-and-legends-about-integer-overflow-in-rust/
+# a concern. Performance intuition: overflow checking is near-zero cost with proper compiler
+# optimization — range analysis eliminates unnecessary checks, and late lowering avoids
+# inhibiting optimizations (see docs/development/rust-performance-principles.md).
+# See https://huonw.github.io/blog/2016/04/myths-and-legends-about-integer-overflow-in-rust/
 float_cmp = "warn"
 float_cmp_const = "warn"
 lossy_float_literal = "warn"
