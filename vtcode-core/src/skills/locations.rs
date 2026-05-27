@@ -329,8 +329,8 @@ fn walk_directory(
                 let existing_entry = discovered.get(&manifest.name);
                 let had_existing = existing_entry.is_some();
 
-                if let Some(existing) = existing_entry
-                    .filter(|e| e.location_type > location.location_type)
+                if let Some(existing) =
+                    existing_entry.filter(|e| e.location_type > location.location_type)
                 {
                     // Existing skill has higher precedence, skip this one
                     stats.skips_due_to_precedence += 1;

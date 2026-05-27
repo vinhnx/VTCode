@@ -17,7 +17,9 @@ fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
 
 fn compact_loop_text(value: &str, max_chars: usize) -> String {
     let collapsed = value.split_whitespace().fold(String::new(), |mut acc, s| {
-        if !acc.is_empty() { acc.push(' '); }
+        if !acc.is_empty() {
+            acc.push(' ');
+        }
         acc.push_str(s);
         acc
     });

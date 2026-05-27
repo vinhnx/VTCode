@@ -519,11 +519,7 @@ fn render_run_script(
     }
 
     if let Some(models_path) = models_path {
-        let _ = writeln!(
-            script,
-            "export MODELS_PATH={}",
-            shell_quote(models_path)
-        );
+        let _ = writeln!(script, "export MODELS_PATH={}", shell_quote(models_path));
     }
 
     let command = render_template(

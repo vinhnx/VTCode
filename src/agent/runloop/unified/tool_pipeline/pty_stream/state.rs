@@ -118,7 +118,8 @@ impl LegacyPtyStreamState {
 
         let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
         let head_count = head_count.min(head_len);
-        let mut tail_preview: Vec<_> = self.tail_lines
+        let mut tail_preview: Vec<_> = self
+            .tail_lines
             .iter()
             .rev()
             .take(tail_count)

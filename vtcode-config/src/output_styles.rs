@@ -127,7 +127,11 @@ impl OutputStyleManager {
             .map(|(name, style)| {
                 (
                     name.as_str(),
-                    style.config.description.as_deref().unwrap_or("No description"),
+                    style
+                        .config
+                        .description
+                        .as_deref()
+                        .unwrap_or("No description"),
                 )
             })
             .collect()

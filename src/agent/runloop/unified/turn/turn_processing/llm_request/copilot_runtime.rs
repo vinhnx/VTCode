@@ -214,6 +214,29 @@ impl<'a> CopilotRuntimeHost<'a> {
         )
         .await?;
 
+        // Record the user's decision for auto-accept pattern learning.
+        let approved = matches!(
+            decision,
+            HitlDecision::Approved | HitlDecision::ApprovedSession | HitlDecision::ApprovedPermanent
+        );
+        if let Err(err) = self
+            .approval_recorder
+            .record_approval(
+                &summary.cache_key,
+                Some(&summary.learning_label),
+                approved,
+                None,
+            )
+            .await
+        {
+            tracing::debug!(
+                approval_key = %summary.cache_key,
+                approved,
+                error = %err,
+                "Failed to record builtin permission decision for pattern learning"
+            );
+        }
+
         let (permission_decision, cache_for_session) =
             map_builtin_permission_prompt_decision(decision, summary.reason.clone());
         if cache_for_session {

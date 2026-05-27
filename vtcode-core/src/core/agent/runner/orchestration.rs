@@ -7,11 +7,11 @@ use crate::core::agent::task::Task;
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
 use crate::tools::handlers::TaskTrackerTool;
-use std::fmt::Write;
 use crate::tools::traits::Tool;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::json;
+use std::fmt::Write;
 
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {

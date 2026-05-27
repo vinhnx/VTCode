@@ -19,7 +19,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 use super::HitlDecision;
-use super::shell_approval::PersistentApprovalTarget;
+use super::shell_approval::{ApprovalLearningTarget, PersistentApprovalTarget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolPermissionPromptKind {
@@ -528,8 +528,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     tool_name: &str,
     tool_args: Option<&Value>,
-    approval_learning_key: &str,
-    approval_learning_label: &str,
+    learning_target: &ApprovalLearningTarget,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     session: &mut S,
@@ -543,18 +542,23 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     hitl_notification_bell: bool,
     source_thread_label: Option<&str>,
 ) -> Result<HitlDecision> {
-    // Auto-approve if the approval recorder indicates high-frequency approval history
-    // (≥3 approvals with >80% approval rate), skipping the prompt entirely.
-    if let Some(recorder) = approval_recorder
-        && recorder.should_auto_approve(approval_learning_key).await
-    {
-        tracing::info!(
-            tool = %tool_name,
-            key = %approval_learning_key,
-            "Auto-approved based on learned approval pattern"
-        );
-        return Ok(HitlDecision::Approved);
+    // Auto-approve if the approval recorder indicates high-frequency approval
+    // history (≥3 approvals with >80% approval rate) for the exact invocation
+    // OR any broader learned pattern (e.g. safe `find <subdir>` family).
+    if let Some(recorder) = approval_recorder {
+        for (key, _label) in learning_target.iter_keys() {
+            if recorder.should_auto_approve(key).await {
+                tracing::info!(
+                    tool = %tool_name,
+                    key = %key,
+                    "Auto-approved based on learned approval pattern"
+                );
+                return Ok(HitlDecision::Approved);
+            }
+        }
     }
+    let approval_learning_key = learning_target.approval_key.as_str();
+    let approval_learning_label = learning_target.display_label.as_str();
 
     let prompt_kind = tool_permission_prompt_kind(tool_name);
     let mut description_lines = vec![

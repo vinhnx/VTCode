@@ -138,7 +138,9 @@ impl ToolCallBuilder {
 
     pub fn finalize(self, fallback_index: usize) -> Option<ToolCall> {
         let name = self.name?;
-        let id = self.id.unwrap_or_else(|| format!("tool_call_{fallback_index}"));
+        let id = self
+            .id
+            .unwrap_or_else(|| format!("tool_call_{fallback_index}"));
         let arguments = if self.arguments.is_empty() {
             "{}".to_string()
         } else {

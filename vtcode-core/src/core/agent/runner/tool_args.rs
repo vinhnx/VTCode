@@ -70,11 +70,15 @@ impl AgentRunner {
                 Some("grep" | "list")
             )
         {
-            normalized.entry("path".to_string()).or_insert_with(|| Value::String(fallback_dir.clone()));
+            normalized
+                .entry("path".to_string())
+                .or_insert_with(|| Value::String(fallback_dir.clone()));
         }
 
         if name == tools::LIST_FILES {
-            normalized.entry("path".to_string()).or_insert_with(|| Value::String(fallback_dir));
+            normalized
+                .entry("path".to_string())
+                .or_insert_with(|| Value::String(fallback_dir));
         }
 
         if matches!(
@@ -83,7 +87,9 @@ impl AgentRunner {
         ) && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
             && let Some(last_file) = session_state.last_file_path.clone()
         {
-            normalized.entry("path".to_string()).or_insert_with(|| Value::String(last_file));
+            normalized
+                .entry("path".to_string())
+                .or_insert_with(|| Value::String(last_file));
         }
 
         let normalized = Value::Object(normalized);

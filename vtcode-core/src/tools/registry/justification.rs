@@ -123,6 +123,23 @@ impl ApprovalPattern {
     }
 }
 
+/// Merge an on-disk pattern into the in-memory entry by taking the max of
+/// counters and preferring any non-`None` metadata from disk. Conservative:
+/// undercount is safer (more prompts) than overcount (fewer prompts → risk).
+fn merge_pattern_from_disk(local: &mut ApprovalPattern, disk: &ApprovalPattern) {
+    local.approve_count = local.approve_count.max(disk.approve_count);
+    local.deny_count = local.deny_count.max(disk.deny_count);
+    if disk.display_name.is_some() {
+        local.display_name = disk.display_name.clone();
+    }
+    if disk.last_decision.is_some() {
+        local.last_decision = disk.last_decision;
+    }
+    if disk.recent_reason.is_some() {
+        local.recent_reason = disk.recent_reason.clone();
+    }
+}
+
 /// Manager for approval pattern learning and justifications
 pub struct JustificationManager {
     cache_dir: PathBuf,
@@ -144,7 +161,12 @@ impl JustificationManager {
         manager
     }
 
-    /// Load approval patterns from disk
+    /// Load approval patterns from disk and merge into the in-memory map.
+    ///
+    /// Merging (rather than replacing) keeps in-memory increments that have not
+    /// yet been flushed to disk — important when refreshing right before an
+    /// auto-approval check while a concurrent vtcode session may have written
+    /// newer counts to the same file.
     fn load_patterns(&self) -> Result<()> {
         let patterns_file = self.cache_dir.join("approval_patterns.json");
         if !patterns_file.exists() {
@@ -158,9 +180,20 @@ impl JustificationManager {
             .patterns
             .lock()
             .map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
-        *patterns = loaded_patterns;
+
+        for (key, disk) in loaded_patterns {
+            patterns
+                .entry(key)
+                .and_modify(|local| merge_pattern_from_disk(local, &disk))
+                .or_insert(disk);
+        }
 
         Ok(())
+    }
+
+    /// Re-read patterns from disk, merging with any in-memory state.
+    pub fn refresh_patterns(&self) -> Result<()> {
+        self.load_patterns()
     }
 
     /// Get approval pattern for a key

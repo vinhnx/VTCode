@@ -470,12 +470,15 @@ impl SharedLifecycleEmitter {
         }
 
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer = self.tool_calls.entry(call_id.to_string()).or_insert_with(|| ToolCallStreamState {
-            item_id: generated_item_id,
-            name: None,
-            arguments: String::new(),
-            started: false,
-        });
+        let buffer = self
+            .tool_calls
+            .entry(call_id.to_string())
+            .or_insert_with(|| ToolCallStreamState {
+                item_id: generated_item_id,
+                name: None,
+                arguments: String::new(),
+                started: false,
+            });
 
         if !buffer.started {
             buffer.started = true;
@@ -542,12 +545,15 @@ impl SharedLifecycleEmitter {
         item_id: Option<String>,
     ) -> bool {
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer = self.tool_calls.entry(call_id.to_string()).or_insert_with(|| ToolCallStreamState {
-            item_id: generated_item_id,
-            name: None,
-            arguments: String::new(),
-            started: false,
-        });
+        let buffer = self
+            .tool_calls
+            .entry(call_id.to_string())
+            .or_insert_with(|| ToolCallStreamState {
+                item_id: generated_item_id,
+                name: None,
+                arguments: String::new(),
+                started: false,
+            });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;

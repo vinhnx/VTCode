@@ -410,7 +410,9 @@ fn push_unique(values: &mut Vec<String>, value: String) {
 
 fn normalize_for_dedup(value: &str) -> String {
     value.split_whitespace().fold(String::new(), |mut acc, s| {
-        if !acc.is_empty() { acc.push(' '); }
+        if !acc.is_empty() {
+            acc.push(' ');
+        }
         acc.push_str(s);
         acc
     })

@@ -538,7 +538,9 @@ pub(super) fn fallback_from_error(
         fallback_args.remove("fork_context");
 
         if let Some(agent_name) = extract_background_subagent_name_from_error(error_msg) {
-            fallback_args.entry("agent_type".to_string()).or_insert_with(|| serde_json::Value::String(agent_name));
+            fallback_args
+                .entry("agent_type".to_string())
+                .or_insert_with(|| serde_json::Value::String(agent_name));
         }
 
         return Some((

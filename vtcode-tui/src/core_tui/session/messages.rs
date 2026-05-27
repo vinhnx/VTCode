@@ -287,7 +287,8 @@ impl Session {
         self.collapsed_pastes
             .retain(|paste| paste.line_index < first_removed);
         let first_dirty = self.lines.len().saturating_sub(remove_count);
-        self.lines.truncate(self.lines.len().saturating_sub(remove_count));
+        self.lines
+            .truncate(self.lines.len().saturating_sub(remove_count));
         let mut link_ranges = link_ranges.unwrap_or_default().into_iter();
         for segments in lines {
             let revision = self.next_revision();

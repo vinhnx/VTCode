@@ -298,7 +298,9 @@ struct MemoryClassificationPlan {
 
 pub fn normalize_whitespace(text: &str) -> String {
     text.split_whitespace().fold(String::new(), |mut acc, s| {
-        if !acc.is_empty() { acc.push(' '); }
+        if !acc.is_empty() {
+            acc.push(' ');
+        }
         acc.push_str(s);
         acc
     })

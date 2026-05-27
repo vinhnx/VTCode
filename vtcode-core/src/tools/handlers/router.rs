@@ -347,7 +347,7 @@ impl ToolRouter {
 
     /// Create a failure response for a tool call.
     #[cold]
-pub fn failure_response(_call_id: String, error: ToolCallError) -> ToolOutput {
+    pub fn failure_response(_call_id: String, error: ToolCallError) -> ToolOutput {
         ToolOutput::error(error.to_string())
     }
 }

@@ -102,7 +102,9 @@ impl ToolInventory {
     }
 
     pub(super) fn update_commands_config(&self, commands_config: &CommandsConfig) {
-        self.command_tool.write().update_commands_config(commands_config);
+        self.command_tool
+            .write()
+            .update_commands_config(commands_config);
     }
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
@@ -150,11 +152,14 @@ impl ToolInventory {
             if tools.contains_key(&name_lower) {
                 return Err(anyhow::anyhow!("Tool '{}' is already registered", name));
             }
-            tools.insert(name_lower.clone(), Arc::new(ToolCacheEntry {
-                registration,
-                last_used: RwLock::new(Instant::now()),
-                use_count: std::sync::atomic::AtomicU64::new(0),
-            }));
+            tools.insert(
+                name_lower.clone(),
+                Arc::new(ToolCacheEntry {
+                    registration,
+                    last_used: RwLock::new(Instant::now()),
+                    use_count: std::sync::atomic::AtomicU64::new(0),
+                }),
+            );
             let mut state = self.state.write();
             let pos = state
                 .sorted_names
@@ -164,7 +169,10 @@ impl ToolInventory {
         }
 
         if self.is_common_tool(&name_lower) {
-            self.state.write().frequently_used.insert(name_lower.clone());
+            self.state
+                .write()
+                .frequently_used
+                .insert(name_lower.clone());
         }
 
         if !aliases.is_empty() {
@@ -196,7 +204,8 @@ impl ToolInventory {
             state.frequently_used.remove(&name_lower);
         }
 
-        self.alias_metrics.lock()
+        self.alias_metrics
+            .lock()
             .usage
             .retain(|_, (canonical, _)| canonical != &name_lower);
 
@@ -322,7 +331,10 @@ impl ToolInventory {
             .ok_or_else(|| anyhow::anyhow!("tool '{}' not found for handler replacement", name))?;
 
         let old_reg = &entry.registration;
-        if !matches!(&new_handler, super::registration::ToolHandler::TraitObject(_)) {
+        if !matches!(
+            &new_handler,
+            super::registration::ToolHandler::TraitObject(_)
+        ) {
             return Err(anyhow::anyhow!(
                 "CGP handler replacement requires a TraitObject handler"
             ));

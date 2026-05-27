@@ -1,8 +1,8 @@
 use hashbrown::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
 use std::sync::mpsc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 

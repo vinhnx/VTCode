@@ -85,8 +85,19 @@ impl ApprovalRecorder {
     /// Rules:
     /// - At least 3 approvals
     /// - Approval rate > 80%
+    ///
+    /// Refreshes the in-memory pattern map from disk first so we observe
+    /// approvals recorded by concurrent sessions (e.g. another running vtcode
+    /// instance sharing the same `~/.vtcode/cache/approval_patterns.json`).
     pub async fn should_auto_approve(&self, approval_key: &str) -> bool {
-        let manager = self.manager.read().await;
+        let manager = self.manager.write().await;
+        if let Err(err) = manager.refresh_patterns() {
+            tracing::debug!(
+                approval_key = %approval_key,
+                error = %err,
+                "Failed to refresh approval patterns before auto-approve check"
+            );
+        }
         if let Some(pattern) = manager.get_pattern(approval_key) {
             pattern.has_high_approval_rate()
         } else {
@@ -226,6 +237,41 @@ mod tests {
             .await
             .expect("suggestion");
         assert!(suggestion.contains("commands starting with `cargo test`"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_should_auto_approve_refreshes_patterns_from_disk() {
+        // Simulates a second vtcode session: one ApprovalRecorder records
+        // approvals to disk, then a separately constructed recorder must
+        // observe them on the next auto-approve check without restart.
+        let temp_dir = std::env::temp_dir().join(format!(
+            "vtcode_test_refresh_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let key = "find src -type f -name '*.rs' '|' sort|sandbox_permissions=\"use_default\"|additional_permissions=null";
+
+        let reader = ApprovalRecorder::new(temp_dir.clone());
+        assert!(!reader.should_auto_approve(key).await);
+
+        let writer = ApprovalRecorder::new(temp_dir.clone());
+        for _ in 0..3 {
+            writer
+                .record_approval(key, Some("find src"), true, None)
+                .await
+                .unwrap();
+        }
+
+        // Without the disk refresh in should_auto_approve, the reader's
+        // in-memory map would still be empty and this assertion would fail.
+        assert!(reader.should_auto_approve(key).await);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

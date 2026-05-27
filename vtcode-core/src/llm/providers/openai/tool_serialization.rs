@@ -187,7 +187,8 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
             }
 
             if map.get("type").and_then(Value::as_str) == Some("object") {
-                map.entry("properties".to_string()).or_insert_with(|| json!({}));
+                map.entry("properties".to_string())
+                    .or_insert_with(|| json!({}));
             }
 
             Value::Object(map)

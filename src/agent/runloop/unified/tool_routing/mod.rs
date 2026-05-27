@@ -39,7 +39,7 @@ use crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext;
 use crate::agent::runloop::unified::state::SessionStats;
 
 use super::state::CtrlCState;
-use approval_cache::{cache_key, spawn_approval_record_task};
+use approval_cache::{cache_key, record_approval_blocking};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
 use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
 use hook_messages::render_hook_messages;
@@ -518,7 +518,7 @@ async fn finalize_permission_decision(
             };
 
             if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, approval_learning_target, true);
+                record_approval_blocking(recorder, approval_learning_target, true).await;
             }
 
             Ok(approve_tool_permission(
@@ -607,7 +607,7 @@ async fn finalize_permission_decision(
             .await;
 
             if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, approval_learning_target, true);
+                record_approval_blocking(recorder, approval_learning_target, true).await;
             }
 
             Ok(approve_tool_permission(
@@ -647,14 +647,9 @@ async fn finalize_permission_decision(
             }
 
             if let Some(recorder) = approval_recorder {
-                let _ = recorder
-                    .record_approval(
-                        &approval_learning_target.approval_key,
-                        Some(&approval_learning_target.display_label),
-                        false,
-                        None,
-                    )
-                    .await;
+                // Record denial against the same key family as approvals so
+                // pattern approval-rate stays honest when the user pushes back.
+                record_approval_blocking(recorder, approval_learning_target, false).await;
             }
 
             Ok(ToolPermissionFlow::Denied)
@@ -1284,8 +1279,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         &display_labels.prompt_label,
         tool_name,
         tool_args,
-        &approval_learning_target.approval_key,
-        &approval_learning_target.display_label,
+        &approval_learning_target,
         renderer,
         handle,
         session,
@@ -1334,12 +1328,15 @@ pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(
     hitl_notification_bell: bool,
     active_thread_label: Option<&str>,
 ) -> Result<HitlDecision> {
+    let learning_target = shell_approval::ApprovalLearningTarget::new(
+        approval_learning_key.to_owned(),
+        approval_learning_label.to_owned(),
+    );
     prompt_tool_permission(
         display_name,
         tool_name,
         tool_args,
-        approval_learning_key,
-        approval_learning_label,
+        &learning_target,
         renderer,
         handle,
         session,

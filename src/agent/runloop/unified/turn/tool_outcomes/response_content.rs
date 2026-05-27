@@ -167,14 +167,16 @@ fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serd
     if let Some(stderr) = original.get("stderr").and_then(serde_json::Value::as_str)
         && !stderr.trim().is_empty()
     {
-        obj.entry("stderr_preview".to_string()).or_insert_with(|| serde_json::Value::String(truncate_stderr_preview(stderr)));
+        obj.entry("stderr_preview".to_string())
+            .or_insert_with(|| serde_json::Value::String(truncate_stderr_preview(stderr)));
     }
 
     if let Some(spool_path) = original
         .get("spool_path")
         .and_then(serde_json::Value::as_str)
     {
-        obj.entry("spool_path".to_string()).or_insert_with(|| serde_json::Value::String(spool_path.to_string()));
+        obj.entry("spool_path".to_string())
+            .or_insert_with(|| serde_json::Value::String(spool_path.to_string()));
     }
 
     obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));

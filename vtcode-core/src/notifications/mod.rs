@@ -842,8 +842,8 @@ pub async fn notify_command_failure(
 }
 
 /// Convenience function to send an error notification
-    #[cold]
-    pub async fn notify_error(message: &str, context: Option<&str>) -> Result<(), anyhow::Error> {
+#[cold]
+pub async fn notify_error(message: &str, context: Option<&str>) -> Result<(), anyhow::Error> {
     let event = NotificationEvent::Error {
         message: message.to_string(),
         context: context.map(|s| s.to_string()),

@@ -736,8 +736,7 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             .or_insert_with(|| value.clone());
     }
 
-    let inferred_action = unified_search_action_from_object(&normalized)
-        .map(|a| a.to_string());
+    let inferred_action = unified_search_action_from_object(&normalized).map(|a| a.to_string());
     if let Some(action) = inferred_action {
         normalized
             .entry("action".to_string())
@@ -773,7 +772,9 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
 
     if action.eq_ignore_ascii_case("grep") {
         if let Some(pattern) = pattern_alias.clone() {
-            normalized.entry("pattern".to_string()).or_insert_with(|| Value::String(pattern));
+            normalized
+                .entry("pattern".to_string())
+                .or_insert_with(|| Value::String(pattern));
         }
     }
 
@@ -782,9 +783,13 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         && !normalized.contains_key("name_pattern")
     {
         if let Some(keyword) = keyword_alias {
-            normalized.entry("name_pattern".to_string()).or_insert_with(|| Value::String(keyword));
+            normalized
+                .entry("name_pattern".to_string())
+                .or_insert_with(|| Value::String(keyword));
         } else if let Some(pattern) = pattern_alias {
-            normalized.entry("pattern".to_string()).or_insert_with(|| Value::String(pattern));
+            normalized
+                .entry("pattern".to_string())
+                .or_insert_with(|| Value::String(pattern));
         }
     }
 

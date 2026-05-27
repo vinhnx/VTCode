@@ -427,7 +427,8 @@ impl ToolOutputSpooler {
             obj.insert("spool_path".to_string(), json!(spool_path));
 
             if let Some(src) = source_path {
-                obj.entry("source_path".to_string()).or_insert_with(|| json!(src));
+                obj.entry("source_path".to_string())
+                    .or_insert_with(|| json!(src));
             }
             if let Some(stderr) = stderr_preview {
                 obj.insert("stderr_preview".to_string(), json!(stderr));

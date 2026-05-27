@@ -254,7 +254,8 @@ fn append_tool_result_to_instructions(
         Some(id) if !id.is_empty() => (None, 26 + id.len()),
         _ => (Some("Previous tool result:"), 0),
     };
-    let mut s = String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
+    let mut s =
+        String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
     match heading_str {
         Some(h) => s.push_str(h),
         None => {

@@ -421,7 +421,10 @@ impl GeminiProvider {
                     function_call,
                     thought_signature,
                 } => {
-                    let call_id = function_call.id.clone().unwrap_or_else(|| format!("call_{}", tool_calls.len()));
+                    let call_id = function_call
+                        .id
+                        .clone()
+                        .unwrap_or_else(|| format!("call_{}", tool_calls.len()));
 
                     // Use the signature from the function call, or fall back to the one from preceding text
                     let effective_signature =
@@ -1104,11 +1107,7 @@ fn collect_gemini_tool_spec(definitions: Option<&[ToolDefinition]>) -> GeminiToo
             description: description.clone(),
             parameters: parameters.clone(),
         });
-        interaction_tools.push(InteractionTool::function(
-            name,
-            description,
-            parameters,
-        ));
+        interaction_tools.push(InteractionTool::function(name, description, parameters));
     }
 
     if !function_declarations.is_empty() {
