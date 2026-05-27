@@ -75,10 +75,11 @@ fn jaro_count_transpositions(
     s2_matched: &[bool],
 ) -> usize {
     let mut transpositions = 0usize;
-    let mut s2_matched_iter = s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]);
 
-    for (_, &a) in s1c.iter().enumerate().filter(|&(i, _)| s1_matched[i]) {
-        if let Some((_, &b)) = s2_matched_iter.next() {
+    let mut s2_matched_iter = s2c.iter().zip(s2_matched.iter()).filter(|&(_, &m)| m);
+
+    for (&a, _) in s1c.iter().zip(s1_matched.iter()).filter(|&(_, &m)| m) {
+        if let Some((&b, _)) = s2_matched_iter.next() {
             if a != b {
                 transpositions += 1;
             }

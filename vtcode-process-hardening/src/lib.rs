@@ -283,7 +283,10 @@ mod tests {
                 OsString::from("/tmp/inject.dylib"),
             ),
             (OsString::from("DYLD_FOO"), OsString::from("bar")),
-            (OsString::from("LD_PRELOAD"), OsString::from("/tmp/other.so")),
+            (
+                OsString::from("LD_PRELOAD"),
+                OsString::from("/tmp/other.so"),
+            ),
         ];
 
         let keys = env_keys_with_prefix(vars, b"DYLD_");

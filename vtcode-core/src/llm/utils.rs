@@ -72,9 +72,10 @@ pub fn parse_response_openai_format(
         tool_calls: None,
         model,
         usage: Some(crate::llm::provider::Usage {
-            prompt_tokens: input_tokens as u32,
-            completion_tokens: output_tokens as u32,
-            total_tokens: (input_tokens + output_tokens) as u32,
+            prompt_tokens: u32::try_from(input_tokens).unwrap_or(u32::MAX),
+            completion_tokens: u32::try_from(output_tokens).unwrap_or(u32::MAX),
+            total_tokens: u32::try_from(input_tokens.saturating_add(output_tokens))
+                .unwrap_or(u32::MAX),
             cached_prompt_tokens: if include_cache {
                 response
                     .get("cache_hit")

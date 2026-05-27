@@ -78,7 +78,7 @@ fn format_unified_search_result_for_display(tool_name: &str, result: &Value) -> 
         && matches.len() > 5
     {
         let truncated: Vec<_> = matches.iter().take(5).cloned().collect();
-        let overflow = matches.len() - 5;
+        let overflow = matches.len().saturating_sub(5);
         let summary = serde_json::json!({
             "matches": truncated,
             "overflow": format!("[+{} more matches]", overflow),

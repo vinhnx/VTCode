@@ -118,7 +118,7 @@ impl ExecutionTracker {
             pos as u32
         } else {
             self.tool_ids.push(tool_name.to_string());
-            (self.tool_ids.len() - 1) as u32
+            self.tool_ids.len().saturating_sub(1) as u32
         }
     }
 

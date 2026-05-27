@@ -128,7 +128,7 @@ impl HistoryPickerState {
             // Calculate fuzzy score or use substring match as fallback
             let score = if query.is_empty() {
                 // No query - include all with recency score
-                Some((history.len() - idx) as u32)
+                Some(history.len().saturating_sub(idx) as u32)
             } else {
                 fuzzy_score(&query, content)
             };

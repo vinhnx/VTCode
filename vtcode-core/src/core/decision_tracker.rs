@@ -189,16 +189,16 @@ impl DecisionTracker {
             .filter(|d| matches!(d.action, Action::ToolCall { .. }))
             .count();
 
-        let avg_confidence = self
+        let (sum, count) = self
             .decisions
             .iter()
             .filter_map(|d| d.confidence_score)
-            .collect::<Vec<f64>>();
+            .fold((0.0, 0usize), |(s, c), v| (s + v, c + 1));
 
-        let avg_confidence = if avg_confidence.is_empty() {
+        let avg_confidence = if count == 0 {
             None
         } else {
-            Some(avg_confidence.iter().sum::<f64>() / avg_confidence.len() as f64)
+            Some(sum / count as f64)
         };
 
         TransparencyReport {

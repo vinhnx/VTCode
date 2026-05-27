@@ -104,12 +104,19 @@ impl RateLimiterInner {
         let effective_rate = (self.config.per_sec as f64 * speed_multiplier) as u64;
 
         // Using integer math: tokens = (effective_rate * millis) / 1000
-        let added = (effective_rate.saturating_mul(millis) / 1000) as u32;
+        let added = u32::try_from(effective_rate.saturating_mul(millis) / 1000).unwrap_or(u32::MAX);
 
         if added > 0 {
-            // Burst is also scaled by multiplier to allow larger spikes for high priority
-            let effective_burst = (self.config.burst as f64 * speed_multiplier.max(1.0)) as u32;
-            self.tokens = (self.tokens + added).min(effective_burst);
+            let effective_burst = self.config.burst as f64 * speed_multiplier.max(1.0);
+            let effective_burst: u32 = if effective_burst.is_finite()
+                && effective_burst >= 0.0
+                && effective_burst <= u32::MAX as f64
+            {
+                effective_burst as u32
+            } else {
+                u32::MAX
+            };
+            self.tokens = self.tokens.saturating_add(added).min(effective_burst);
             self.last_refill = now;
         }
     }

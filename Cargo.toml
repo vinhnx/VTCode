@@ -188,11 +188,16 @@ unnecessary_safety_doc = "warn"
 unnecessary_safety_comment = "warn"
 
 # Don't Do Potentially Incorrect Things with Numbers
+# Integer overflow in Rust: arithmetic panics in debug, wraps as two's complement in release.
+# Prefer checked_*, saturating_*, wrapping_* methods over raw arithmetic when overflow is
+# a concern. See https://huonw.github.io/blog/2016/04/myths-and-legends-about-integer-overflow-in-rust/
 float_cmp = "warn"
 float_cmp_const = "warn"
 lossy_float_literal = "warn"
 cast_sign_loss = "warn"
 invalid_upcast_comparisons = "warn"
+cast_possible_truncation = "allow"  # TODO: Phase in after overflow audit
+cast_possible_wrap = "allow"  # TODO: Phase in after overflow audit
 
 # Don't Do Bad Things That are Easy to Avoid
 rc_mutex = "warn"
@@ -280,6 +285,8 @@ split-debuginfo = "unpacked"
 
 [profile.test]
 inherits = "dev"
+# Explicitly enable overflow checks during tests to catch bugs early.
+overflow-checks = true
 
 # Optimize build dependencies for faster proc-macro execution
 [profile.dev.build-override]

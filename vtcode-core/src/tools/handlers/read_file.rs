@@ -763,6 +763,7 @@ mod indentation {
         }
 
         // Bidirectional cursors
+        // SAFETY: `i` starts as `anchor_index - 1` (isize) and is guarded by `i >= 0` before being cast to usize.
         let mut i: isize = anchor_index as isize - 1; // up
         let mut j: usize = anchor_index + 1; // down
         let mut i_counter_min_indent = 0;

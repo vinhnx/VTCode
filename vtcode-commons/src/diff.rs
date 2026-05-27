@@ -160,7 +160,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
         return vec![Edit::Delete; n];
     }
 
-    let max_d = n + m;
+    let max_d = n.saturating_add(m).min(i32::MAX as usize);
     let max_d_i32 = max_d as i32;
     let mut v = vec![0; 2 * max_d + 1];
     let mut v_index = vec![0usize; (max_d + 1) * (2 * max_d + 1)];
@@ -225,8 +225,9 @@ fn backtrack_myers(
         let k_idx = (k + max_d_i32) as usize;
         let prev_row_start = (cur_d - 1) * row_len;
 
-        let prev_k = if k == -(cur_d as i32)
-            || (k != cur_d as i32
+        let cur_d_i32 = cur_d as i32;
+        let prev_k = if k == cur_d_i32.wrapping_neg()
+            || (k != cur_d_i32
                 && v_index[prev_row_start + k_idx - 1] < v_index[prev_row_start + k_idx + 1])
         {
             k + 1
