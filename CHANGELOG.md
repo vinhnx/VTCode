@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.112.0 - 2026-05-28
+
+### Highlights
+#### Bug Fixes
+
+- Remove invalid -C probe-stack codegen flag (74cd4eda) (@vinhnx)
+### Other Changes
+#### Other
+
+- Add Xiaomi MiMo models and provider integration (fa121dd7) 
 ## 0.111.1 - 2026-05-28
 
 ### Highlights
