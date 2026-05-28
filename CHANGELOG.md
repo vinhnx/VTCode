@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.113.0 - 2026-05-28
+
+### Highlights
+#### Bug Fixes
+
+- Update parameter types for setrlimit and getrlimit functions (700440e8) 
+#### Features
+
+- Add HTTP headers for OpenRouter requests (66d456a9) 
+### Other Changes
+#### Other
+
+- Add support for Qwen models in the model ID system (7445df05) 
+#### Refactors
+
+- Streamline model resolution and remove error handling duplication in OpenRouterProvider (764b088b) 
 ## 0.112.0 - 2026-05-28
 
 ### Highlights
