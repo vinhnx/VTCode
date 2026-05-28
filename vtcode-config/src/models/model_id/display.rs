@@ -47,6 +47,12 @@ impl ModelId {
             ModelId::DeepSeekV4Flash => "DeepSeek V4 Flash",
             // Mistral models
             ModelId::MistralLarge3 => "Mistral Large 3",
+            // MiMo models
+            ModelId::MiMoV25Pro => "MiMo V2.5 Pro",
+            ModelId::MiMoV25 => "MiMo V2.5",
+            ModelId::MiMoV2Pro => "MiMo V2 Pro",
+            ModelId::MiMoV2Omni => "MiMo V2 Omni",
+            ModelId::MiMoV2Flash => "MiMo V2 Flash",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",

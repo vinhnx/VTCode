@@ -173,6 +173,10 @@ impl<'a> InlineModalProcessor<'a> {
             };
             let result =
                 build_lightweight_palette_view(self.model_picker.config, vt_cfg.as_ref()).await;
+            if let Some(ref s) = loading_spinner {
+                // Explicitly restore after loading is done (override defer_restore).
+                s.finish_with_restore(true);
+            }
             drop(loading_spinner);
             result
         };
@@ -624,6 +628,10 @@ impl<'a> ModelPickerCoordinator<'a> {
                 Some(Arc::clone(self.ctrl_c_notify)),
             )
             .await;
+            if let Some(ref s) = loading_spinner {
+                // Explicitly restore after loading is done (override defer_restore).
+                s.finish_with_restore(true);
+            }
             drop(loading_spinner);
             result
         };

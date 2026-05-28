@@ -723,7 +723,9 @@ impl Session {
                 }
             }
             CrosstermEvent::Paste(content) => {
-                events::handle_paste(self, &content);
+                if let Some(event) = events::handle_paste(self, &content) {
+                    events::emit_inline_event(&event, events, callback);
+                }
             }
             CrosstermEvent::Resize(_, rows) => {
                 self.apply_view_rows(rows);

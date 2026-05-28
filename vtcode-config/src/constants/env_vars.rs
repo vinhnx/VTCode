@@ -11,6 +11,7 @@ pub const ZAI_BASE_URL: &str = "ZAI_BASE_URL";
 pub const MOONSHOT_BASE_URL: &str = "MOONSHOT_BASE_URL";
 pub const LMSTUDIO_BASE_URL: &str = "LMSTUDIO_BASE_URL";
 pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
+pub const MIMO_BASE_URL: &str = "MIMO_BASE_URL";
 pub const MINIMAX_BASE_URL: &str = "MINIMAX_BASE_URL";
 pub const OPENRESPONSES_BASE_URL: &str = "OPENRESPONSES_BASE_URL";
 pub const LITELLM_BASE_URL: &str = "LITELLM_BASE_URL";

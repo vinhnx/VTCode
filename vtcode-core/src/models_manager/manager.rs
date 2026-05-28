@@ -295,6 +295,9 @@ impl ModelsManager {
             Provider::OpenCodeGo => {
                 crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string()
             }
+            Provider::MiMo => {
+                crate::config::constants::models::mimo::DEFAULT_MODEL.to_string()
+            }
         }
     }
 

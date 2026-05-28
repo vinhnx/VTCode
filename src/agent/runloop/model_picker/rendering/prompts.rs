@@ -351,12 +351,13 @@ pub(crate) fn show_secure_api_modal(
             "Bring your own key (BYOK) for {}.",
             selection.provider_label
         ),
+        format!("Expected env: {}", selection.env_key),
         format!("Secure display hint: {}", mask_preview),
         storage_line,
         "Key will NOT be stored in vtcode.toml.".to_string(),
-        "Paste the key and press Enter when ready.".to_string(),
+        "Paste the key — it will be auto-detected and saved securely.".to_string(),
     ];
-    let prompt_label = format!("{} API key", selection.provider_label);
+    let prompt_label = format!("{} API key ({})", selection.provider_label, selection.env_key);
     renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
 }
 

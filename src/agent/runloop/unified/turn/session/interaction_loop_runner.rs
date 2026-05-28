@@ -537,6 +537,11 @@ pub(super) async fn run_interaction_loop_impl(
                     };
                     let target = ctx.session_stats.model_picker_target;
                     ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
+                    let env_key_for_recovery = if target == ModelPickerTarget::Main {
+                        Some(selection.env_key.clone())
+                    } else {
+                        None
+                    };
                     if target == ModelPickerTarget::Main
                         && let Err(err) = finalize_model_selection(
                             ctx.renderer,
@@ -557,6 +562,23 @@ pub(super) async fn run_interaction_loop_impl(
                             MessageStyle::Error,
                             &format!("Failed to apply model selection: {}", err),
                         )?;
+                        if let Some(env_key) = &env_key_for_recovery
+                            && !env_key.is_empty()
+                        {
+                            ctx.renderer.line(
+                                MessageStyle::Info,
+                                &format!(
+                                    "Recovery: add your API key manually to {}/.env: echo '{}=<your-key>' >> {}/.env",
+                                    ctx.config.workspace.display(),
+                                    env_key,
+                                    ctx.config.workspace.display(),
+                                ),
+                            )?;
+                            ctx.renderer.line(
+                                MessageStyle::Info,
+                                "Then type /model to reselect and choose 'skip' when prompted for an API key.",
+                            )?;
+                        }
                     }
                     continue;
                 }

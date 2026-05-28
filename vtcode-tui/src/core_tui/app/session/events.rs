@@ -22,7 +22,24 @@ fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
         .collect()
 }
 
-pub(super) fn handle_paste(session: &mut Session, content: &str) {
+pub(super) fn handle_paste(session: &mut Session, content: &str) -> Option<InlineEvent> {
+    // Secure prompt modal: auto-submit pasted content directly without requiring Enter.
+    // This saves the API key to .env immediately and dismisses the modal.
+    if let Some(modal) = session.modal_state_mut()
+        && modal.secure_prompt.is_some()
+        && modal.list.is_none()
+    {
+        let submitted = content.trim().to_string();
+        if submitted.is_empty() {
+            return None;
+        }
+        // Close the modal immediately so the UI does not show a stale overlay
+        // while the event is in-flight to the interaction loop.
+        session.close_overlay();
+        session.mark_dirty();
+        return Some(InlineEvent::Submit(submitted));
+    }
+
     if let Some(review) = session.transcript_review_state_mut()
         && review.search_active()
     {
@@ -52,6 +69,7 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) {
         }
         session.mark_dirty();
     }
+    None
 }
 
 fn copy_selected_input_if_requested(

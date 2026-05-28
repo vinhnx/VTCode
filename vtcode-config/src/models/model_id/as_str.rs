@@ -49,6 +49,12 @@ impl ModelId {
             ModelId::DeepSeekV4Flash => models::deepseek::DEEPSEEK_V4_FLASH,
             // Mistral models
             ModelId::MistralLarge3 => models::mistral::MISTRAL_LARGE_3,
+            // MiMo models
+            ModelId::MiMoV25Pro => models::mimo::MIMO_V2_5_PRO,
+            ModelId::MiMoV25 => models::mimo::MIMO_V2_5,
+            ModelId::MiMoV2Pro => models::mimo::MIMO_V2_PRO,
+            ModelId::MiMoV2Omni => models::mimo::MIMO_V2_OMNI,
+            ModelId::MiMoV2Flash => models::mimo::MIMO_V2_FLASH,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,

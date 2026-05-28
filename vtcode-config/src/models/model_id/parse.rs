@@ -98,6 +98,12 @@ impl FromStr for ModelId {
             s if s == models::deepseek::DEEPSEEK_V4_FLASH => Ok(ModelId::DeepSeekV4Flash),
             // Mistral models
             s if s == models::mistral::MISTRAL_LARGE_3 => Ok(ModelId::MistralLarge3),
+            // MiMo models
+            s if s == models::mimo::MIMO_V2_5_PRO => Ok(ModelId::MiMoV25Pro),
+            s if s == models::mimo::MIMO_V2_5 => Ok(ModelId::MiMoV25),
+            s if s == models::mimo::MIMO_V2_PRO => Ok(ModelId::MiMoV2Pro),
+            s if s == models::mimo::MIMO_V2_OMNI => Ok(ModelId::MiMoV2Omni),
+            s if s == models::mimo::MIMO_V2_FLASH => Ok(ModelId::MiMoV2Flash),
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),

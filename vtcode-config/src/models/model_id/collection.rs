@@ -55,6 +55,12 @@ impl ModelId {
             // Z.AI models
             ModelId::ZaiGlm5,
             ModelId::ZaiGlm51,
+            // MiMo models
+            ModelId::MiMoV25Pro,
+            ModelId::MiMoV25,
+            ModelId::MiMoV2Pro,
+            ModelId::MiMoV2Omni,
+            ModelId::MiMoV2Flash,
             // Moonshot models
             ModelId::MoonshotKimiK26,
             ModelId::MoonshotKimiK25,

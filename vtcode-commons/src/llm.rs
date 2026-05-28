@@ -15,6 +15,7 @@ pub enum BackendKind {
     Moonshot,
     HuggingFace,
     Minimax,
+    MiMo,
     OpenCodeZen,
     OpenCodeGo,
 }

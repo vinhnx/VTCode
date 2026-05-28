@@ -148,6 +148,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    MiMoProviderConfig,
+    "mimo",
+    "Xiaomi MiMo",
+    crate::config::constants::models::mimo::DEFAULT_MODEL,
+    crate::config::constants::urls::MIMO_API_BASE,
+    Some(crate::config::constants::env_vars::MIMO_BASE_URL),
+    ()
+);
+define_provider_config!(
     MinimaxProviderConfig,
     "minimax",
     "Minimax",

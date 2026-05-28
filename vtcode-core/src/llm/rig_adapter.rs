@@ -83,6 +83,9 @@ impl RigProviderCapabilities {
             Provider::OpenCodeZen | Provider::OpenCodeGo => {
                 // OpenCode Zen/Go are API gateways; rig has no direct client.
             }
+            Provider::MiMo => {
+                // Xiaomi MiMo is an OpenAI-compatible API; rig has no dedicated client.
+            }
         }
 
         Ok(RigValidationSummary {

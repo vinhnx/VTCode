@@ -15,16 +15,16 @@ use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
-    HuggingFaceProviderConfig, LmStudioProviderConfig, MinimaxProviderConfig,
+    HuggingFaceProviderConfig, LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig,
     MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
     OpenRouterProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LmStudioProvider, MinimaxProvider, MistralProvider, MoonshotProvider, OllamaProvider,
-    OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
-    OpenRouterProvider, ZAIProvider,
+    LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
+    OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider,
+    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -254,6 +254,7 @@ macro_rules! impl_standard_provider_constructor {
 impl_standard_provider_constructor!(
     GeminiProvider,
     HuggingFaceProvider,
+    MiMoProvider,
     MinimaxProvider,
     DeepSeekProvider,
     MistralProvider,
@@ -290,6 +291,10 @@ crate::delegate_components!(HuggingFaceProviderConfig {
 crate::delegate_components!(DeepSeekProviderConfig {
     ProviderMetadataComponent => DeepSeekProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<DeepSeekProvider>,
+});
+crate::delegate_components!(MiMoProviderConfig {
+    ProviderMetadataComponent => MiMoProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<MiMoProvider>,
 });
 crate::delegate_components!(MinimaxProviderConfig {
     ProviderMetadataComponent => MinimaxProviderConfig,
@@ -340,6 +345,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<AnthropicProviderConfig>();
     factory.register_cgp_provider::<CopilotProviderConfig>();
     factory.register_cgp_provider::<MinimaxProviderConfig>();
+    factory.register_cgp_provider::<MiMoProviderConfig>();
     factory.register_cgp_provider::<DeepSeekProviderConfig>();
     factory.register_cgp_provider::<OpenRouterProviderConfig>();
     factory.register_cgp_provider::<OpenResponsesProviderConfig>();
@@ -458,6 +464,7 @@ mod tests {
                 "gemini",
                 "huggingface",
                 "lmstudio",
+                "mimo",
                 "minimax",
                 "mistral",
                 "moonshot",

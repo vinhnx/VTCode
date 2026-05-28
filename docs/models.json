@@ -3344,5 +3344,110 @@
         "context": 4096
       }
     }
+  },
+  "mimo": {
+    "id": "mimo",
+    "env": [
+      "MIMO_API_KEY"
+    ],
+    "api": "https://api.xiaomimimo.com/v1",
+    "name": "Xiaomi MiMo",
+    "doc": "https://platform.xiaomimimo.com",
+    "default_model": "mimo-v2.5-pro",
+    "models": {
+      "mimo-v2.5-pro": {
+        "id": "mimo-v2.5-pro",
+        "name": "MiMo V2.5 Pro",
+        "description": "Xiaomi MiMo flagship Pro model with 1M context window and deep thinking",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 131072,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "mimo-v2.5": {
+        "id": "mimo-v2.5",
+        "name": "MiMo V2.5",
+        "description": "Xiaomi MiMo omni-modal model with full-modal understanding and 1M context",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text", "image", "audio", "video"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 131072,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "mimo-v2-pro": {
+        "id": "mimo-v2-pro",
+        "name": "MiMo V2 Pro",
+        "description": "Xiaomi MiMo V2 Pro model with 1M context and deep thinking",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 131072,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true
+        }
+      },
+      "mimo-v2-omni": {
+        "id": "mimo-v2-omni",
+        "name": "MiMo V2 Omni",
+        "description": "Xiaomi MiMo omni-modal agentic foundation model that sees, understands and acts",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text", "image", "audio", "video"],
+          "output": ["text"]
+        },
+        "context": 262144,
+        "max_output_tokens": 131072,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true
+        }
+      },
+      "mimo-v2-flash": {
+        "id": "mimo-v2-flash",
+        "name": "MiMo V2 Flash",
+        "description": "Xiaomi MiMo fast inference model for high-concurrency, low-cost tasks",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 262144,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
   }
 }

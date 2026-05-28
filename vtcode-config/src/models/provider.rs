@@ -31,6 +31,8 @@ pub enum Provider {
     ZAI,
     /// MiniMax models
     Minimax,
+    /// Xiaomi MiMo models
+    MiMo,
     /// Mistral AI models
     Mistral,
     /// Hugging Face Inference Providers
@@ -56,6 +58,7 @@ impl Provider {
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
+            Provider::MiMo => "MIMO_API_KEY",
             Provider::Mistral => "MISTRAL_API_KEY",
             Provider::HuggingFace => "HF_TOKEN",
             Provider::OpenCodeZen => "OPENCODE_ZEN_API_KEY",
@@ -70,6 +73,7 @@ impl Provider {
             Provider::Anthropic,
             Provider::Copilot,
             Provider::Minimax,
+            Provider::MiMo,
             Provider::Mistral,
             Provider::Gemini,
             Provider::DeepSeek,
@@ -98,6 +102,7 @@ impl Provider {
             Provider::Moonshot => "Moonshot",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
+            Provider::MiMo => "Xiaomi MiMo",
             Provider::Mistral => "Mistral",
             Provider::HuggingFace => "Hugging Face",
             Provider::OpenCodeZen => "OpenCode Zen",
@@ -155,6 +160,7 @@ impl Provider {
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => models::minimax::SUPPORTED_MODELS.contains(&model),
+            Provider::MiMo => models::mimo::SUPPORTED_MODELS.contains(&model),
             Provider::Mistral => models::mistral::SUPPORTED_MODELS.contains(&model),
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
             Provider::OpenCodeZen => {
@@ -199,6 +205,7 @@ impl fmt::Display for Provider {
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
+            Provider::MiMo => write!(f, "mimo"),
             Provider::Mistral => write!(f, "mistral"),
             Provider::HuggingFace => write!(f, "huggingface"),
             Provider::OpenCodeZen => write!(f, "opencode-zen"),
@@ -221,6 +228,7 @@ impl AsRef<str> for Provider {
             Provider::Moonshot => "moonshot",
             Provider::ZAI => "zai",
             Provider::Minimax => "minimax",
+            Provider::MiMo => "mimo",
             Provider::Mistral => "mistral",
             Provider::HuggingFace => "huggingface",
             Provider::OpenCodeZen => "opencode-zen",
@@ -245,6 +253,7 @@ impl FromStr for Provider {
             "moonshot" => Ok(Provider::Moonshot),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
+            "mimo" => Ok(Provider::MiMo),
             "mistral" => Ok(Provider::Mistral),
             "huggingface" => Ok(Provider::HuggingFace),
             "opencode-zen" | "opencodezen" => Ok(Provider::OpenCodeZen),

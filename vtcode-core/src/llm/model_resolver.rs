@@ -372,6 +372,7 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::LmStudio => 12,
         Provider::OpenCodeZen => 13,
         Provider::OpenCodeGo => 14,
+        Provider::MiMo => 15,
     }
 }
 
@@ -427,6 +428,8 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::ZAI)
     } else if model.starts_with("lmstudio-community/") {
         Some(Provider::LmStudio)
+    } else if model.starts_with("mimo-") {
+        Some(Provider::MiMo)
     } else if model.starts_with("moonshot-") || model.starts_with("kimi-") {
         Some(Provider::Moonshot)
     } else if model.starts_with("opencode/") || model.starts_with("opencode-zen/") {

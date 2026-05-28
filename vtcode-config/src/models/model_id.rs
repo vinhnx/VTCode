@@ -135,6 +135,18 @@ pub enum ModelId {
     /// GLM-5.1 - Next-gen Z.ai foundation model with improved reasoning
     ZaiGlm51,
 
+    // MiMo models
+    /// MiMo V2.5 Pro - Xiaomi's flagship reasoning model with 1M context
+    MiMoV25Pro,
+    /// MiMo V2.5 - Xiaomi's omni-modal model with full-modal understanding and 1M context
+    MiMoV25,
+    /// MiMo V2 Pro - Xiaomi's strong reasoning model (1M context)
+    MiMoV2Pro,
+    /// MiMo V2 Omni - Xiaomi's multimodal vision-language model with 256K context
+    MiMoV2Omni,
+    /// MiMo V2 Flash - Xiaomi's lightweight fast model for high-throughput tasks
+    MiMoV2Flash,
+
     // Moonshot models
     /// Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship (32B active, MLA, MoonViT vision)
     MoonshotKimiK26,

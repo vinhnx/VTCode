@@ -109,6 +109,22 @@ impl ModelId {
             ModelId::MistralLarge3 => {
                 "State-of-the-art open-weight general-purpose multimodal model with Mixture-of-Experts architecture"
             }
+            // MiMo models
+            ModelId::MiMoV25Pro => {
+                "Xiaomi's flagship reasoning model with advanced capabilities (1M context)"
+            }
+            ModelId::MiMoV25 => {
+                "Xiaomi's omni-modal model with full-modal understanding and 1M context"
+            }
+            ModelId::MiMoV2Pro => {
+                "Xiaomi's strong reasoning model with 1M context"
+            }
+            ModelId::MiMoV2Omni => {
+                "Xiaomi's multimodal vision-language model with 256K context"
+            }
+            ModelId::MiMoV2Flash => {
+                "Xiaomi's lightweight fast model for high-throughput tasks (256K context)"
+            }
             // Z.AI models
             ModelId::ZaiGlm5 => {
                 "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows"
