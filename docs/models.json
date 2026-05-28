@@ -3449,5 +3449,131 @@
         }
       }
     }
+  },
+  "qwen": {
+    "id": "qwen",
+    "env": [
+      "QWEN_API_KEY"
+    ],
+    "api": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "name": "Alibaba Cloud Qwen",
+    "doc": "https://docs.qwencloud.com",
+    "default_model": "qwen3.6-plus",
+    "models": {
+      "qwen3.7-max": {
+        "id": "qwen3.7-max",
+        "name": "Qwen 3.7 Max",
+        "description": "Alibaba Cloud's flagship reasoning model with 131K context, advanced thinking, and strong tool-use capabilities",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "qwen3.6-flash": {
+        "id": "qwen3.6-flash",
+        "name": "Qwen 3.6 Flash",
+        "description": "Alibaba Cloud's fast inference model with 1M context, optimized for speed and cost-efficiency",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "qwen3.6-plus": {
+        "id": "qwen3.6-plus",
+        "name": "Qwen 3.6 Plus",
+        "description": "Alibaba Cloud's balanced model with 131K context, strong reasoning and coding performance",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "deepseek-v4-flash": {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash (Qwen)",
+        "description": "DeepSeek V4 Flash fast inference model served through Qwen Cloud API (1M context)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "deepseek-v4-pro": {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro (Qwen)",
+        "description": "DeepSeek V4 Pro high-performance reasoning model served through Qwen Cloud API (1M context)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "glm-5.1": {
+        "id": "glm-5.1",
+        "name": "GLM-5.1 (Qwen)",
+        "description": "Z.AI GLM-5.1 next-gen foundation model served through Qwen Cloud API",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
   }
 }

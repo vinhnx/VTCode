@@ -120,6 +120,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::HuggingFace => "huggingface",
         Provider::OpenCodeZen => "opencode-zen",
         Provider::OpenCodeGo => "opencode-go",
+        Provider::Qwen => "qwen",
     }
 }
 
@@ -512,6 +513,11 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"
             }
+            // Qwen models
+            ModelId::Qwen37Max => "3.7",
+            ModelId::Qwen36Flash | ModelId::Qwen36Plus => "3.6",
+            ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro => "v4",
+            ModelId::QwenGlm51 => "5.1",
             _ => "unknown",
         }
     }

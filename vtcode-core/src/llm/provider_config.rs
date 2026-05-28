@@ -183,6 +183,15 @@ define_provider_config!(
     Some(crate::config::constants::env_vars::OPENCODE_GO_BASE_URL),
     ()
 );
+define_provider_config!(
+    QwenProviderConfig,
+    "qwen",
+    "Qwen",
+    crate::config::constants::models::qwen::DEFAULT_MODEL,
+    crate::config::constants::urls::QWEN_API_BASE,
+    Some(crate::config::constants::env_vars::QWEN_BASE_URL),
+    ()
+);
 
 /// Macro kept for source compatibility with older builder-based call sites.
 #[macro_export]

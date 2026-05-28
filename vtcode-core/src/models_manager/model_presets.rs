@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::constants::models::copilot as copilot_models;
 use crate::config::constants::models::mimo as mimo_models;
+use crate::config::constants::models::qwen as qwen_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
@@ -197,6 +198,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::OpenCodeZen => opencode_zen_presets(),
         Provider::OpenCodeGo => opencode_go_presets(),
         Provider::MiMo => mimo_presets(),
+        Provider::Qwen => qwen_presets(),
     }
 }
 
@@ -1197,6 +1199,125 @@ fn mimo_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(262_144),
+        },
+    ]
+}
+
+fn qwen_presets() -> Vec<ModelPreset> {
+    vec![
+        ModelPreset {
+            id: qwen_models::QWEN3_7_MAX.to_string(),
+            model: qwen_models::QWEN3_7_MAX.to_string(),
+            display_name: "Qwen 3.7 Max".to_string(),
+            description:
+                "Alibaba Cloud's flagship reasoning model with 131K context and advanced thinking"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(131_072),
+        },
+        ModelPreset {
+            id: qwen_models::QWEN3_6_FLASH.to_string(),
+            model: qwen_models::QWEN3_6_FLASH.to_string(),
+            display_name: "Qwen 3.6 Flash".to_string(),
+            description:
+                "Alibaba Cloud's fast inference model with 1M context, optimized for speed and cost-efficiency"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Low,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Low,
+                description: "Fast".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
+        ModelPreset {
+            id: qwen_models::QWEN3_6_PLUS.to_string(),
+            model: qwen_models::QWEN3_6_PLUS.to_string(),
+            display_name: "Qwen 3.6 Plus".to_string(),
+            description:
+                "Alibaba Cloud's balanced model with 131K context, strong reasoning and coding performance"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(131_072),
+        },
+        ModelPreset {
+            id: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
+            model: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
+            display_name: "DeepSeek V4 Flash (Qwen)".to_string(),
+            description:
+                "DeepSeek V4 Flash fast inference model served through Qwen Cloud API (1M context)"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Low,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Low,
+                description: "Fast".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
+        ModelPreset {
+            id: qwen_models::DEEPSEEK_V4_PRO.to_string(),
+            model: qwen_models::DEEPSEEK_V4_PRO.to_string(),
+            display_name: "DeepSeek V4 Pro (Qwen)".to_string(),
+            description:
+                "DeepSeek V4 Pro high-performance reasoning model served through Qwen Cloud API (1M context)"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
+        ModelPreset {
+            id: qwen_models::GLM_5_1.to_string(),
+            model: qwen_models::GLM_5_1.to_string(),
+            display_name: "GLM-5.1 (Qwen)".to_string(),
+            description:
+                "Z.AI GLM-5.1 next-gen foundation model served through Qwen Cloud API"
+                    .to_string(),
+            provider: Provider::Qwen,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(131_072),
         },
     ]
 }

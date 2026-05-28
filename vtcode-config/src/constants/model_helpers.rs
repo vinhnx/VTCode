@@ -19,6 +19,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         "opencode-zen" => Some(models::opencode_zen::CONFIGURED_MODELS),
         "opencode-go" => Some(models::opencode_go::CONFIGURED_MODELS),
         "ollama" => Some(models::ollama::SUPPORTED_MODELS),
+        "qwen" => Some(models::qwen::SUPPORTED_MODELS),
         _ => None,
     }
 }
@@ -42,6 +43,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "opencode-zen" => Some(models::opencode_zen::DEFAULT_MODEL),
         "opencode-go" => Some(models::opencode_go::DEFAULT_MODEL),
         "ollama" => Some(models::ollama::DEFAULT_MODEL),
+        "qwen" => Some(models::qwen::DEFAULT_MODEL),
         _ => None,
     }
 }

@@ -104,6 +104,13 @@ impl FromStr for ModelId {
             s if s == models::mimo::MIMO_V2_PRO => Ok(ModelId::MiMoV2Pro),
             s if s == models::mimo::MIMO_V2_OMNI => Ok(ModelId::MiMoV2Omni),
             s if s == models::mimo::MIMO_V2_FLASH => Ok(ModelId::MiMoV2Flash),
+            // Qwen models
+            s if s == models::qwen::QWEN3_7_MAX => Ok(ModelId::Qwen37Max),
+            s if s == models::qwen::QWEN3_6_FLASH => Ok(ModelId::Qwen36Flash),
+            s if s == models::qwen::QWEN3_6_PLUS => Ok(ModelId::Qwen36Plus),
+            // Note: deepseek-v4-flash, deepseek-v4-pro, glm-5.1 resolve to their native
+            // variants (DeepSeekV4Flash, DeepSeekV4Pro, ZaiGlm51) via the matches above.
+            // The Qwen-prefixed variants (QwenDeepSeekV4Flash, etc.) are picker-only entries.
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),

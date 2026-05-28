@@ -115,6 +115,13 @@ impl ModelId {
                 models::huggingface::DEEPSEEK_V4_PRO_TOGETHER
             }
             ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
+            // Qwen models
+            ModelId::Qwen37Max => models::qwen::QWEN3_7_MAX,
+            ModelId::Qwen36Flash => models::qwen::QWEN3_6_FLASH,
+            ModelId::Qwen36Plus => models::qwen::QWEN3_6_PLUS,
+            ModelId::QwenDeepSeekV4Flash => models::qwen::DEEPSEEK_V4_FLASH,
+            ModelId::QwenDeepSeekV4Pro => models::qwen::DEEPSEEK_V4_PRO,
+            ModelId::QwenGlm51 => models::qwen::GLM_5_1,
             // MiniMax models
             ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,

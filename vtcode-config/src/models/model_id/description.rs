@@ -253,6 +253,25 @@ impl ModelId {
             ModelId::HuggingFaceStep35Flash => {
                 "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
             }
+            // Qwen models
+            ModelId::Qwen37Max => {
+                "Alibaba Cloud's flagship reasoning model with 131K context, advanced thinking, and strong tool-use capabilities"
+            }
+            ModelId::Qwen36Flash => {
+                "Alibaba Cloud's fast inference model with 1M context window, optimized for speed and cost-efficiency"
+            }
+            ModelId::Qwen36Plus => {
+                "Alibaba Cloud's balanced model with 131K context, strong reasoning and coding performance"
+            }
+            ModelId::QwenDeepSeekV4Flash => {
+                "DeepSeek V4 Flash fast inference model served through Qwen Cloud API (1M context)"
+            }
+            ModelId::QwenDeepSeekV4Pro => {
+                "DeepSeek V4 Pro high-performance reasoning model served through Qwen Cloud API (1M context)"
+            }
+            ModelId::QwenGlm51 => {
+                "Z.AI GLM-5.1 next-gen foundation model served through Qwen Cloud API"
+            }
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 flagship model via OpenRouter",
             ModelId::OpenRouterQwen3CoderNext => {
                 "Next-generation Qwen3 coding model optimized for agentic workflows via OpenRouter"

@@ -18,6 +18,7 @@ pub enum BackendKind {
     MiMo,
     OpenCodeZen,
     OpenCodeGo,
+    Qwen,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

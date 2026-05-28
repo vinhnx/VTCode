@@ -230,6 +230,17 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "huggingface" => {
             read_env_var("HF_TOKEN").ok_or_else(|| anyhow::anyhow!("HF_TOKEN not set"))
         }
+        "qwen" => {
+            if let Some(key) = read_env_var("QWEN_API_KEY").filter(|k| !k.is_empty()) {
+                return Ok(key);
+            }
+            if let Some(key) = read_env_var("DASHSCOPE_API_KEY").filter(|k| !k.is_empty()) {
+                return Ok(key);
+            }
+            Err(anyhow::anyhow!(
+                "QWEN_API_KEY or DASHSCOPE_API_KEY not set. Get your key from https://dashscope.console.aliyun.com"
+            ))
+        }
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }

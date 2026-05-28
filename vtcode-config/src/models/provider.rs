@@ -41,6 +41,8 @@ pub enum Provider {
     OpenCodeZen,
     /// OpenCode Go subscription
     OpenCodeGo,
+    /// Alibaba Cloud Qwen models
+    Qwen,
 }
 
 impl Provider {
@@ -63,6 +65,7 @@ impl Provider {
             Provider::HuggingFace => "HF_TOKEN",
             Provider::OpenCodeZen => "OPENCODE_ZEN_API_KEY",
             Provider::OpenCodeGo => "OPENCODE_GO_API_KEY",
+            Provider::Qwen => "QWEN_API_KEY",
         }
     }
 
@@ -85,6 +88,7 @@ impl Provider {
             Provider::ZAI,
             Provider::OpenCodeZen,
             Provider::OpenCodeGo,
+            Provider::Qwen,
         ]
     }
 
@@ -107,6 +111,7 @@ impl Provider {
             Provider::HuggingFace => "Hugging Face",
             Provider::OpenCodeZen => "OpenCode Zen",
             Provider::OpenCodeGo => "OpenCode Go",
+            Provider::Qwen => "Qwen",
         }
     }
 
@@ -173,6 +178,7 @@ impl Provider {
                 }
             }
             Provider::OpenCodeGo => false,
+            Provider::Qwen => models::qwen::REASONING_MODELS.contains(&model),
         }
     }
 
@@ -210,6 +216,7 @@ impl fmt::Display for Provider {
             Provider::HuggingFace => write!(f, "huggingface"),
             Provider::OpenCodeZen => write!(f, "opencode-zen"),
             Provider::OpenCodeGo => write!(f, "opencode-go"),
+            Provider::Qwen => write!(f, "qwen"),
         }
     }
 }
@@ -233,6 +240,7 @@ impl AsRef<str> for Provider {
             Provider::HuggingFace => "huggingface",
             Provider::OpenCodeZen => "opencode-zen",
             Provider::OpenCodeGo => "opencode-go",
+            Provider::Qwen => "qwen",
         }
     }
 }
@@ -258,6 +266,7 @@ impl FromStr for Provider {
             "huggingface" => Ok(Provider::HuggingFace),
             "opencode-zen" | "opencodezen" => Ok(Provider::OpenCodeZen),
             "opencode-go" | "opencodego" => Ok(Provider::OpenCodeGo),
+            "qwen" => Ok(Provider::Qwen),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }

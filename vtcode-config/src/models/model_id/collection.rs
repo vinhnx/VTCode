@@ -75,6 +75,13 @@ impl ModelId {
             ModelId::OpenCodeGoKimiK25,
             ModelId::OpenCodeGoMinimaxM25,
             ModelId::OpenCodeGoMinimaxM27,
+            // Qwen models
+            ModelId::Qwen37Max,
+            ModelId::Qwen36Flash,
+            ModelId::Qwen36Plus,
+            ModelId::QwenDeepSeekV4Flash,
+            ModelId::QwenDeepSeekV4Pro,
+            ModelId::QwenGlm51,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
