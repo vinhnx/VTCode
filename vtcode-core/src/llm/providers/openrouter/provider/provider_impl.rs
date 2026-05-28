@@ -1,5 +1,4 @@
 use super::super::OpenRouterProvider;
-use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
     NormalizedStreamEvent,
@@ -44,21 +43,8 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let model = request.model.clone();
+        let model = self.resolve_model(&request).to_string();
         let response = self.send_with_tool_fallback(&request, Some(false)).await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
 
         let response_json: Value = response
             .json()
@@ -71,21 +57,8 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let model = request.model.clone();
+        let model = self.resolve_model(&request).to_string();
         let response = self.send_with_tool_fallback(&request, Some(true)).await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
@@ -178,23 +151,8 @@ impl LLMProvider for OpenRouterProvider {
         &self,
         request: LLMRequest,
     ) -> Result<LLMNormalizedStream, LLMError> {
-        let request = self.enforce_tool_capabilities(&request).into_owned();
         let resolved_model = self.resolve_model(&request).to_string();
-        let (payload, url) = self.build_provider_payload(&request)?;
-        let response = self.dispatch_request(&url, &payload).await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
+        let response = self.send_with_tool_fallback(&request, Some(true)).await?;
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
