@@ -16,6 +16,10 @@ use serde_json::Value;
 use std::borrow::Cow;
 use std::str::FromStr;
 
+const OPENROUTER_REFERER: &str = "https://github.com/vinhnx/vtcode";
+const OPENROUTER_TITLE: &str = "VT Code";
+const OPENROUTER_CATEGORIES: &str = "agents,coding";
+
 mod client_impl;
 mod parsing;
 mod provider_impl;
@@ -204,6 +208,9 @@ impl OpenRouterProvider {
         self.http_client
             .post(url)
             .bearer_auth(&self.api_key)
+            .header("HTTP-Referer", OPENROUTER_REFERER)
+            .header("X-OpenRouter-Title", OPENROUTER_TITLE)
+            .header("X-OpenRouter-Categories", OPENROUTER_CATEGORIES)
             .json(payload)
             .send()
             .await
