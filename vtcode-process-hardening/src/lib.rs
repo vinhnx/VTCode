@@ -23,13 +23,13 @@ fn remove_env_var(key: OsString) {
 
 #[cfg(unix)]
 #[allow(unsafe_code)]
-fn setrlimit(resource: libc::c_int, rlim: &libc::rlimit) -> i32 {
+fn setrlimit(resource: libc::__rlimit_resource_t, rlim: &libc::rlimit) -> i32 {
     unsafe { libc::setrlimit(resource, rlim) }
 }
 
 #[cfg(unix)]
 #[allow(unsafe_code)]
-fn getrlimit(resource: libc::c_int, rlim: &mut libc::rlimit) -> i32 {
+fn getrlimit(resource: libc::__rlimit_resource_t, rlim: &mut libc::rlimit) -> i32 {
     unsafe { libc::getrlimit(resource, rlim) }
 }
 
