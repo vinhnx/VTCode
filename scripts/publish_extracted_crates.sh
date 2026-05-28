@@ -164,7 +164,7 @@ wait_for_crates_io_version() {
 
     print_info "Waiting for ${crate} ${version} to be indexed on crates.io..."
     while [[ $attempt -le $max_attempts ]]; do
-        if curl --silent --show-error --fail --location "$endpoint" >/dev/null; then
+        if curl --silent --show-error --fail --location --user-agent "vtcode-publish-script" "$endpoint" >/dev/null; then
             print_success "${crate} ${version} is available on crates.io"
             return 0
         fi
