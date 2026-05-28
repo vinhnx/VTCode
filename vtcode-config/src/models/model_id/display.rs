@@ -56,6 +56,13 @@ impl ModelId {
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",
+            // Qwen models
+            ModelId::Qwen37Max => "Qwen 3.7 Max",
+            ModelId::Qwen36Flash => "Qwen 3.6 Flash",
+            ModelId::Qwen36Plus => "Qwen 3.6 Plus",
+            ModelId::QwenDeepSeekV4Flash => "DeepSeek V4 Flash (Qwen)",
+            ModelId::QwenDeepSeekV4Pro => "DeepSeek V4 Pro (Qwen)",
+            ModelId::QwenGlm51 => "GLM-5.1 (Qwen)",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",

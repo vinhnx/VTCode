@@ -53,6 +53,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::Minimax => models::minimax::MINIMAX_M2_5,
         Provider::MiMo => models::mimo::DEFAULT_MODEL,
         Provider::Mistral => models::mistral::MISTRAL_LARGE_3,
+        Provider::Qwen => models::qwen::DEFAULT_MODEL,
         Provider::OpenCodeZen => models::opencode_zen::DEFAULT_MODEL,
         Provider::OpenCodeGo => models::opencode_go::DEFAULT_MODEL,
     }

@@ -47,6 +47,7 @@ impl ModelId {
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
             Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
+            Provider::Qwen => ModelId::Qwen37Max,
         }
     }
 
@@ -69,6 +70,7 @@ impl ModelId {
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
             Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
+            Provider::Qwen => ModelId::Qwen36Plus,
         }
     }
 }

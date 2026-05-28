@@ -18,13 +18,13 @@ use crate::llm::provider_config::{
     HuggingFaceProviderConfig, LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig,
     MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
-    OpenRouterProviderConfig, ZAIProviderConfig,
+    OpenRouterProviderConfig, QwenProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
     LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
     OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider,
-    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
+    OpenResponsesProvider, OpenRouterProvider, QwenProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -266,6 +266,7 @@ impl_standard_provider_constructor!(
     ZAIProvider,
     OpenCodeZenProvider,
     OpenCodeGoProvider,
+    QwenProvider,
 );
 
 crate::delegate_components!(GeminiProviderConfig {
@@ -336,6 +337,10 @@ crate::delegate_components!(OpenCodeGoProviderConfig {
     ProviderMetadataComponent => OpenCodeGoProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<OpenCodeGoProvider>,
 });
+crate::delegate_components!(QwenProviderConfig {
+    ProviderMetadataComponent => QwenProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<QwenProvider>,
+});
 
 /// Register all built-in provider contexts into the runtime factory.
 pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
@@ -356,6 +361,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<MistralProviderConfig>();
     factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
     factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
+    factory.register_cgp_provider::<QwenProviderConfig>();
 }
 
 #[cfg(test)]
@@ -474,6 +480,7 @@ mod tests {
                 "opencode-zen",
                 "openresponses",
                 "openrouter",
+                "qwen",
                 "zai",
             ]
         );

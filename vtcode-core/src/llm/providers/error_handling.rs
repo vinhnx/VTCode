@@ -288,6 +288,13 @@ fn authentication_error_message(provider_name: &str, error_message: &str) -> Str
         );
     }
 
+    if provider_name.eq_ignore_ascii_case("Qwen") {
+        return format!(
+            "authentication failed: {}. set QWEN_API_KEY to your DashScope API key from https://dashscope.console.aliyun.com",
+            trimmed
+        );
+    }
+
     format!("authentication failed: {}", trimmed)
 }
 

@@ -32,6 +32,7 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "openresponses",
     "opencode-zen",
     "opencode-go",
+    "qwen",
 ];
 
 /// LLM provider factory and registry
@@ -350,6 +351,7 @@ mod tests {
                 "opencode-zen",
                 "openresponses",
                 "openrouter",
+                "qwen",
                 "zai",
             ]
         );

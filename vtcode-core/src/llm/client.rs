@@ -65,6 +65,7 @@ impl LLMClient for ProviderClientAdapter {
             "zai" => BackendKind::ZAI,
             "moonshot" => BackendKind::Moonshot,
             "mimo" => BackendKind::MiMo,
+            "qwen" => BackendKind::Qwen,
             _ => BackendKind::OpenAI, // Default fallback
         }
     }

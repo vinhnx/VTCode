@@ -175,6 +175,20 @@ pub enum ModelId {
     /// MiniMax M2.7 - Higher-tier OpenCode Go subscription model
     OpenCodeGoMinimaxM27,
 
+    // Qwen models
+    /// Qwen 3.7 Max - Alibaba Cloud's flagship reasoning model with 131K context
+    Qwen37Max,
+    /// Qwen 3.6 Flash - Alibaba Cloud's fast inference model with 1M context
+    Qwen36Flash,
+    /// Qwen 3.6 Plus - Alibaba Cloud's balanced model with 131K context
+    Qwen36Plus,
+    /// DeepSeek V4 Flash via Qwen Cloud API
+    QwenDeepSeekV4Flash,
+    /// DeepSeek V4 Pro via Qwen Cloud API
+    QwenDeepSeekV4Pro,
+    /// GLM-5.1 via Qwen Cloud API
+    QwenGlm51,
+
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
     OllamaGptOss20b,
