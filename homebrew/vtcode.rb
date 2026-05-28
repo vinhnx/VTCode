@@ -2,15 +2,15 @@ class Vtcode < Formula
   desc "Rust-based terminal coding agent with semantic code intelligence"
   homepage "https://github.com/vinhnx/vtcode"
   license "MIT"
-  version "0.111.1"
+  version "0.112.0"
 
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "a7ab449ec71baaf52c8b04acdd3d1f4003b13e63c73a13c1cbae5d0b06580bc4"
+      sha256 "9d885bd2211b3f8173b7ae1a9fba68b0c5d5f554fd97f04ce69039021af40253"
     else
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "b9d72d40319aa81b98fc2493d1d0af3f7d57b4192e8b41b833745482b1a05de3"
+      sha256 "ec67fbc29b52fb64a5e6d1bd033b27da73e81fe4e7f62ec1ae2d71161a36d9cf"
     end
   end
 
