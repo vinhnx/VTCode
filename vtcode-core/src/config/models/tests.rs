@@ -228,7 +228,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-        ModelId::ClaudeOpus47
+        ModelId::ClaudeOpus48
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::DeepSeek),

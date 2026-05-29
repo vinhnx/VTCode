@@ -125,6 +125,9 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
+            // Poolside models
+            ModelId::PoolsideLagunaM1 => models::poolside::LAGUNA_M1,
+            ModelId::PoolsideLagunaXs2 => models::poolside::LAGUNA_XS2,
             // OpenRouter models
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
             ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",

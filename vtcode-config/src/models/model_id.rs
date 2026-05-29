@@ -320,4 +320,10 @@ pub enum ModelId {
     OpenRouterPoolsideLagunaXs2Free,
     /// Laguna M.1 (free) - Poolside's flagship free coding agent model via OpenRouter
     OpenRouterPoolsideLagunaM1Free,
+
+    // Poolside models
+    /// Laguna M.1 - Poolside's flagship MoE coding agent model
+    PoolsideLagunaM1,
+    /// Laguna XS.2 - Poolside's efficient MoE coding agent model
+    PoolsideLagunaXs2,
 }

@@ -140,6 +140,7 @@ impl ModelId {
             | ModelId::OpenRouterXiaomiMimoV25Pro
             | ModelId::OpenRouterPoolsideLagunaXs2Free
             | ModelId::OpenRouterPoolsideLagunaM1Free => Provider::OpenRouter,
+            ModelId::PoolsideLagunaM1 | ModelId::PoolsideLagunaXs2 => Provider::Poolside,
         }
     }
 

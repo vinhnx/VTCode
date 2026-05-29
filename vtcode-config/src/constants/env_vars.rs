@@ -19,6 +19,7 @@ pub const LITELLM_BASE_URL: &str = "LITELLM_BASE_URL";
 pub const OPENCODE_ZEN_BASE_URL: &str = "OPENCODE_ZEN_BASE_URL";
 pub const OPENCODE_GO_BASE_URL: &str = "OPENCODE_GO_BASE_URL";
 pub const QWEN_BASE_URL: &str = "QWEN_BASE_URL";
+pub const POOLSIDE_BASE_URL: &str = "POOLSIDE_BASE_URL";
 
 /// Environment variable for setting maximum thinking budget tokens
 /// Set to 63999 to get 2x the default thinking budget on 64K output models

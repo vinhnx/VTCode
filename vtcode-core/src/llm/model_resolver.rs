@@ -374,6 +374,7 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::OpenCodeGo => 14,
         Provider::MiMo => 15,
         Provider::Qwen => 16,
+        Provider::Poolside => 17,
     }
 }
 
@@ -439,6 +440,8 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::OpenCodeZen)
     } else if model.starts_with("opencode-go/") {
         Some(Provider::OpenCodeGo)
+    } else if model.starts_with("poolside/") {
+        Some(Provider::Poolside)
     } else if model.starts_with("deepseek-ai/")
         || model.starts_with("openai/gpt-oss-")
         || model.starts_with("zai-org/")

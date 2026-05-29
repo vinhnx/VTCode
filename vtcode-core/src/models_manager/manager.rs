@@ -297,6 +297,9 @@ impl ModelsManager {
             }
             Provider::MiMo => crate::config::constants::models::mimo::DEFAULT_MODEL.to_string(),
             Provider::Qwen => crate::config::constants::models::qwen::DEFAULT_MODEL.to_string(),
+            Provider::Poolside => {
+                crate::config::constants::models::poolside::DEFAULT_MODEL.to_string()
+            }
         }
     }
 

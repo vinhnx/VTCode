@@ -192,6 +192,15 @@ define_provider_config!(
     Some(crate::config::constants::env_vars::QWEN_BASE_URL),
     ()
 );
+define_provider_config!(
+    PoolsideProviderConfig,
+    "poolside",
+    "Poolside",
+    crate::config::constants::models::poolside::DEFAULT_MODEL,
+    crate::config::constants::urls::POOLSIDE_API_BASE,
+    Some(crate::config::constants::env_vars::POOLSIDE_BASE_URL),
+    ()
+);
 
 /// Macro kept for source compatibility with older builder-based call sites.
 #[macro_export]

@@ -19,6 +19,7 @@ pub enum BackendKind {
     OpenCodeZen,
     OpenCodeGo,
     Qwen,
+    Poolside,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

@@ -15,6 +15,7 @@ pub mod opencode_zen;
 pub mod openresponses;
 pub mod openrouter;
 pub mod qwen;
+pub mod poolside;
 pub mod zai;
 
 // Backwards compatibility - keep old constants working

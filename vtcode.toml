@@ -27,7 +27,7 @@ api_key_env = "OLLAMA_API_KEY"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "laguna-xs.2:cloud"
+default_model = "gpt-oss:120b-cloud"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai

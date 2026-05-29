@@ -18,13 +18,13 @@ use crate::llm::provider_config::{
     HuggingFaceProviderConfig, LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig,
     MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
-    OpenRouterProviderConfig, QwenProviderConfig, ZAIProviderConfig,
+    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
     LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
     OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
-    OpenRouterProvider, QwenProvider, ZAIProvider,
+    OpenRouterProvider, PoolsideProvider, QwenProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -267,6 +267,7 @@ impl_standard_provider_constructor!(
     OpenCodeZenProvider,
     OpenCodeGoProvider,
     QwenProvider,
+    PoolsideProvider,
 );
 
 crate::delegate_components!(GeminiProviderConfig {
@@ -341,6 +342,10 @@ crate::delegate_components!(QwenProviderConfig {
     ProviderMetadataComponent => QwenProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<QwenProvider>,
 });
+crate::delegate_components!(PoolsideProviderConfig {
+    ProviderMetadataComponent => PoolsideProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<PoolsideProvider>,
+});
 
 /// Register all built-in provider contexts into the runtime factory.
 pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
@@ -362,6 +367,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
     factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
     factory.register_cgp_provider::<QwenProviderConfig>();
+    factory.register_cgp_provider::<PoolsideProviderConfig>();
 }
 
 #[cfg(test)]
@@ -480,6 +486,7 @@ mod tests {
                 "opencode-zen",
                 "openresponses",
                 "openrouter",
+                "poolside",
                 "qwen",
                 "zai",
             ]

@@ -97,6 +97,8 @@ fn catalog_provider_key(provider: &str) -> &str {
         "minimax"
     } else if provider.eq_ignore_ascii_case("huggingface") {
         "huggingface"
+    } else if provider.eq_ignore_ascii_case("poolside") {
+        "poolside"
     } else {
         provider
     }
@@ -121,6 +123,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::OpenCodeZen => "opencode-zen",
         Provider::OpenCodeGo => "opencode-go",
         Provider::Qwen => "qwen",
+        Provider::Poolside => "poolside",
     }
 }
 
@@ -198,6 +201,7 @@ impl ModelId {
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
+            ModelId::PoolsideLagunaM1 => Some(ModelId::PoolsideLagunaXs2),
             _ => None,
         }
     }
@@ -343,6 +347,7 @@ impl ModelId {
                 | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::OpenRouterMoonshotaiKimiK26
+                | ModelId::PoolsideLagunaM1
         )
     }
 
@@ -364,6 +369,7 @@ impl ModelId {
                 | ModelId::DeepSeekV4Flash
                 | ModelId::HuggingFaceStep35Flash
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
+                | ModelId::PoolsideLagunaXs2
         )
     }
 
@@ -410,6 +416,7 @@ impl ModelId {
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
                 | ModelId::HuggingFaceDeepseekV4ProTogether
                 | ModelId::OpenRouterMoonshotaiKimiK26
+                | ModelId::PoolsideLagunaM1
         )
     }
 
@@ -519,6 +526,9 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"
             }
+            // Poolside models
+            ModelId::PoolsideLagunaM1 => "laguna-m.1",
+            ModelId::PoolsideLagunaXs2 => "laguna-xs.2",
             // Qwen models
             ModelId::Qwen37Max => "3.7",
             ModelId::Qwen36Flash | ModelId::Qwen36Plus => "3.6",

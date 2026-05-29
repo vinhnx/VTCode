@@ -123,6 +123,9 @@ impl ModelId {
             ModelId::OpenRouterQwen3CoderNext,
             ModelId::OpenRouterZaiGlm47,
             ModelId::OpenRouterMoonshotaiKimiK26,
+            // Poolside models
+            ModelId::PoolsideLagunaM1,
+            ModelId::PoolsideLagunaXs2,
         ];
         models.extend(Self::openrouter_models());
         let mut seen = HashSet::new();

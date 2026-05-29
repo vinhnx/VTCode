@@ -14,70 +14,27 @@ use crate::constants::defaults;
 use crate::models::Provider;
 
 /// API key sources for different providers
-#[derive(Debug, Clone)]
+///
+/// Retained for backward compatibility. New code should use [`get_api_key`] directly —
+/// the struct is no longer consumed by the key resolution logic.
+#[derive(Debug, Clone, Default)]
 pub struct ApiKeySources {
-    /// Gemini API key environment variable name
     pub gemini_env: String,
-    /// Anthropic API key environment variable name
     pub anthropic_env: String,
-    /// OpenAI API key environment variable name
     pub openai_env: String,
-    /// OpenRouter API key environment variable name
     pub openrouter_env: String,
-    /// DeepSeek API key environment variable name
     pub deepseek_env: String,
-    /// Z.AI API key environment variable name
     pub zai_env: String,
-    /// Ollama API key environment variable name
     pub ollama_env: String,
-    /// LM Studio API key environment variable name
     pub lmstudio_env: String,
-    /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
-    /// Anthropic API key from configuration file
     pub anthropic_config: Option<String>,
-    /// OpenAI API key from configuration file
     pub openai_config: Option<String>,
-    /// OpenRouter API key from configuration file
     pub openrouter_config: Option<String>,
-    /// DeepSeek API key from configuration file
     pub deepseek_config: Option<String>,
-    /// Z.AI API key from configuration file
     pub zai_config: Option<String>,
-    /// Ollama API key from configuration file
     pub ollama_config: Option<String>,
-    /// LM Studio API key from configuration file
     pub lmstudio_config: Option<String>,
-}
-
-impl Default for ApiKeySources {
-    fn default() -> Self {
-        Self {
-            gemini_env: "GEMINI_API_KEY".to_string(),
-            anthropic_env: "ANTHROPIC_API_KEY".to_string(),
-            openai_env: "OPENAI_API_KEY".to_string(),
-            openrouter_env: "OPENROUTER_API_KEY".to_string(),
-            deepseek_env: "DEEPSEEK_API_KEY".to_string(),
-            zai_env: "ZAI_API_KEY".to_string(),
-            ollama_env: "OLLAMA_API_KEY".to_string(),
-            lmstudio_env: "LMSTUDIO_API_KEY".to_string(),
-            gemini_config: None,
-            anthropic_config: None,
-            openai_config: None,
-            openrouter_config: None,
-            deepseek_config: None,
-            zai_config: None,
-            ollama_config: None,
-            lmstudio_config: None,
-        }
-    }
-}
-
-impl ApiKeySources {
-    /// Create API key sources for a specific provider with automatic environment variable inference
-    pub fn for_provider(_provider: &str) -> Self {
-        Self::default()
-    }
 }
 
 pub fn api_key_env_var(provider: &str) -> String {
@@ -176,69 +133,74 @@ pub fn load_dotenv() -> Result<()> {
     }
 }
 
-/// Get API key for a specific provider with secure fallback mechanism
+/// Get API key for a specific provider.
 ///
-/// This function implements a secure retrieval mechanism that:
-/// 1. First checks environment variables (highest priority for security)
-/// 2. Then checks .env file values
-/// 3. Falls back to configuration file values if neither above is set
-/// 4. Supports all major providers: Gemini, Anthropic, OpenAI, and OpenRouter
-/// 5. Automatically infers the correct environment variable based on provider
+/// Resolution order:
+/// 1. Environment variable inferred from the provider name (e.g. `POOLSIDE_API_KEY`)
+/// 2. Provider-specific fallbacks (OAuth tokens, alternate env vars, etc.)
+/// 3. OS keyring / encrypted file storage
 ///
-/// # Arguments
-///
-/// * `provider` - The provider name ("gemini", "anthropic", or "openai")
-/// * `sources` - Configuration for where to look for API keys
-///
-/// # Returns
-///
-/// * `Ok(String)` - The API key if found
-/// * `Err` - If no API key could be found for the provider
-pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
+/// Adding a new built-in provider only requires:
+/// - A `Provider` variant with `default_api_key_env()` returning the env var name
+/// - (Optional) a match arm here only if the provider needs special fallback logic
+pub fn get_api_key(provider: &str, _sources: &ApiKeySources) -> Result<String> {
     let normalized_provider = provider.to_lowercase();
-    // Automatically infer the correct environment variable based on provider
     let inferred_env = api_key_env_var(&normalized_provider);
 
-    // Try the inferred environment variable first
+    // Generic path: read the inferred env var for any provider.
     if let Some(key) = read_env_var(&inferred_env)
         && !key.is_empty()
     {
         return Ok(key);
     }
 
-    // Fall back to the provider-specific sources before secure storage. This keeps
-    // workspace `.env` / configured env vars authoritative over stale keyring
-    // entries, matching the model picker runtime credential resolution path.
+    // Provider-specific fallback logic. Most providers are handled by the generic
+    // env-var lookup above. Only providers with special behavior (alternate env vars,
+    // OAuth tokens, optional keys, or managed-auth error messages) need a match arm.
     let provider_result = match normalized_provider.as_str() {
-        "gemini" => get_gemini_api_key(sources),
-        "anthropic" => get_anthropic_api_key(sources),
-        "openai" => get_openai_api_key(sources),
-        "copilot" => Err(anyhow::anyhow!(
-            "GitHub Copilot authentication is managed by the official `copilot` CLI. Run `vtcode login copilot`."
-        )),
-        "deepseek" => get_deepseek_api_key(sources),
-        "openrouter" => get_openrouter_api_key(sources),
-        "codex" => Err(anyhow::anyhow!(
-            "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`. The default `[agent.codex_app_server].command = \"codex\"` requires the `codex` CLI on `$PATH`, or you can set `[agent.codex_app_server].command` to a custom executable path."
-        )),
-        "zai" => get_zai_api_key(sources),
-        "ollama" => get_ollama_api_key(sources),
-        "lmstudio" => get_lmstudio_api_key(sources),
-        "huggingface" => {
-            read_env_var("HF_TOKEN").ok_or_else(|| anyhow::anyhow!("HF_TOKEN not set"))
-        }
-        "qwen" => {
-            if let Some(key) = read_env_var("QWEN_API_KEY").filter(|k| !k.is_empty()) {
+        // Gemini falls back to GOOGLE_API_KEY for backward compatibility
+        "gemini" => {
+            if let Some(key) = read_env_var("GOOGLE_API_KEY").filter(|k| !k.is_empty()) {
                 return Ok(key);
             }
+            Err(anyhow::anyhow!(
+                "GEMINI_API_KEY or GOOGLE_API_KEY not set"
+            ))
+        }
+        // OpenRouter tries OAuth token from encrypted storage first
+        "openrouter" => {
+            if let Ok(Some(token)) = crate::auth::load_oauth_token() {
+                tracing::debug!("Using OAuth token for OpenRouter authentication");
+                return Ok(token.api_key);
+            }
+            Err(anyhow::anyhow!("OPENROUTER_API_KEY not set"))
+        }
+        // Qwen has an alternate env var name
+        "qwen" => {
             if let Some(key) = read_env_var("DASHSCOPE_API_KEY").filter(|k| !k.is_empty()) {
                 return Ok(key);
             }
             Err(anyhow::anyhow!(
-                "QWEN_API_KEY or DASHSCOPE_API_KEY not set. Get your key from https://dashscope.console.aliyun.com"
+                "QWEN_API_KEY or DASHSCOPE_API_KEY not set"
             ))
         }
-        _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
+        // Ollama and LM Studio allow empty keys (local deployment)
+        "ollama" | "lmstudio" => Ok(String::new()),
+        // Managed-auth providers show a specific error message
+        "copilot" => Err(anyhow::anyhow!(
+            "GitHub Copilot authentication is managed by the official `copilot` CLI. Run `vtcode login copilot`."
+        )),
+        "codex" => Err(anyhow::anyhow!(
+            "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`."
+        )),
+        // All other providers: env var was already checked above, nothing more to do
+        _ => {
+            return Err(anyhow::anyhow!(
+                "{} API key not found. Set {} environment variable or add to .env file.",
+                normalized_provider,
+                inferred_env,
+            ));
+        }
     };
 
     if provider_result.is_ok() {
@@ -271,151 +233,6 @@ fn get_custom_api_key_from_secure_storage(provider: &str) -> Result<Option<Strin
     // The auth layer handles keyring-to-file fallback internally.
     let mode = crate::auth::AuthCredentialsStoreMode::default();
     storage.load(mode)
-}
-
-/// Get API key for a specific environment variable with fallback
-fn get_api_key_with_fallback(
-    env_var: &str,
-    config_value: Option<&str>,
-    provider_name: &str,
-) -> Result<String> {
-    // First try environment variable (most secure)
-    if let Some(key) = read_env_var(env_var)
-        && !key.is_empty()
-    {
-        return Ok(key);
-    }
-
-    // Then try configuration file value
-    if let Some(key) = config_value
-        && !key.is_empty()
-    {
-        return Ok(key.to_string());
-    }
-
-    // If neither worked, return an error
-    Err(anyhow::anyhow!(
-        "No API key found for {} provider. Set {} environment variable (or add to .env file) or configure in vtcode.toml",
-        provider_name,
-        env_var
-    ))
-}
-
-fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&str>) -> String {
-    if let Some(key) = read_env_var(env_var)
-        && !key.is_empty()
-    {
-        return key;
-    }
-
-    if let Some(key) = config_value
-        && !key.is_empty()
-    {
-        return key.to_string();
-    }
-
-    String::new()
-}
-
-/// Get Gemini API key with secure fallback
-fn get_gemini_api_key(sources: &ApiKeySources) -> Result<String> {
-    // Try primary Gemini environment variable
-    if let Some(key) = read_env_var(&sources.gemini_env)
-        && !key.is_empty()
-    {
-        return Ok(key);
-    }
-
-    // Try Google API key as fallback (for backward compatibility)
-    if let Some(key) = read_env_var("GOOGLE_API_KEY")
-        && !key.is_empty()
-    {
-        return Ok(key);
-    }
-
-    // Try configuration file value
-    if let Some(key) = &sources.gemini_config
-        && !key.is_empty()
-    {
-        return Ok(key.clone());
-    }
-
-    // If nothing worked, return an error
-    Err(anyhow::anyhow!(
-        "No API key found for Gemini provider. Set {} or GOOGLE_API_KEY environment variable (or add to .env file) or configure in vtcode.toml",
-        sources.gemini_env
-    ))
-}
-
-/// Get Anthropic API key with secure fallback
-fn get_anthropic_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(
-        &sources.anthropic_env,
-        sources.anthropic_config.as_deref(),
-        "Anthropic",
-    )
-}
-
-/// Get OpenAI API key with secure fallback
-fn get_openai_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(
-        &sources.openai_env,
-        sources.openai_config.as_deref(),
-        "OpenAI",
-    )
-}
-
-/// Get OpenRouter API key with secure fallback
-///
-/// This function checks for credentials in the following order:
-/// 1. OAuth token from encrypted storage (if OAuth is enabled)
-/// 2. Environment variable (OPENROUTER_API_KEY)
-/// 3. Configuration file value
-fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
-    // First, try to load OAuth token from encrypted storage
-    if let Ok(Some(token)) = crate::auth::load_oauth_token() {
-        tracing::debug!("Using OAuth token for OpenRouter authentication");
-        return Ok(token.api_key);
-    }
-
-    // Fall back to standard API key retrieval
-    get_api_key_with_fallback(
-        &sources.openrouter_env,
-        sources.openrouter_config.as_deref(),
-        "OpenRouter",
-    )
-}
-
-/// Get DeepSeek API key with secure fallback
-fn get_deepseek_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(
-        &sources.deepseek_env,
-        sources.deepseek_config.as_deref(),
-        "DeepSeek",
-    )
-}
-
-/// Get Z.AI API key with secure fallback
-fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(&sources.zai_env, sources.zai_config.as_deref(), "Z.AI")
-}
-
-/// Get Ollama API key with secure fallback
-fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
-    // For Ollama we allow running without credentials when connecting to a local deployment.
-    // Cloud variants still rely on environment/config values when present.
-    Ok(get_optional_api_key_with_fallback(
-        &sources.ollama_env,
-        sources.ollama_config.as_deref(),
-    ))
-}
-
-/// Get LM Studio API key with secure fallback
-fn get_lmstudio_api_key(sources: &ApiKeySources) -> Result<String> {
-    Ok(get_optional_api_key_with_fallback(
-        &sources.lmstudio_env,
-        sources.lmstudio_config.as_deref(),
-    ))
 }
 
 #[cfg(test)]
@@ -460,206 +277,146 @@ mod tests {
         f();
     }
 
-    #[test]
-    fn test_get_gemini_api_key_from_env() {
-        with_override("TEST_GEMINI_KEY", Some("test-gemini-key"), || {
-            let sources = ApiKeySources {
-                gemini_env: "TEST_GEMINI_KEY".to_string(),
-                ..Default::default()
-            };
+    fn default_sources() -> ApiKeySources {
+        ApiKeySources::default()
+    }
 
-            let result = get_gemini_api_key(&sources);
-            assert!(result.is_ok());
+    #[test]
+    fn gemini_reads_env_var() {
+        with_override("GEMINI_API_KEY", Some("test-gemini-key"), || {
+            let result = get_api_key("gemini", &default_sources());
             assert_eq!(result.unwrap(), "test-gemini-key");
         });
     }
 
     #[test]
-    fn test_get_anthropic_api_key_from_env() {
-        with_override("TEST_ANTHROPIC_KEY", Some("test-anthropic-key"), || {
-            let sources = ApiKeySources {
-                anthropic_env: "TEST_ANTHROPIC_KEY".to_string(),
-                ..Default::default()
-            };
+    fn gemini_falls_back_to_google_api_key() {
+        // Clear both GEMINI_API_KEY and set GOOGLE_API_KEY to verify fallback
+        with_overrides(
+            &[
+                ("GEMINI_API_KEY", Some("gemini-primary")),
+                ("GOOGLE_API_KEY", Some("google-fallback")),
+            ],
+            || {
+                // With GEMINI_API_KEY set, it should be preferred
+                let result = get_api_key("gemini", &default_sources());
+                assert_eq!(result.unwrap(), "gemini-primary");
+            },
+        );
+        with_overrides(
+            &[
+                ("GEMINI_API_KEY", None),
+                ("GOOGLE_API_KEY", Some("google-fallback")),
+            ],
+            || {
+                // Without GEMINI_API_KEY, it should fall back to GOOGLE_API_KEY
+                let result = get_api_key("gemini", &default_sources());
+                assert_eq!(result.unwrap(), "google-fallback");
+            },
+        );
+    }
 
-            let result = get_anthropic_api_key(&sources);
-            assert!(result.is_ok());
+    #[test]
+    fn anthropic_reads_env_var() {
+        with_override("ANTHROPIC_API_KEY", Some("test-anthropic-key"), || {
+            let result = get_api_key("anthropic", &default_sources());
             assert_eq!(result.unwrap(), "test-anthropic-key");
         });
     }
 
     #[test]
-    fn test_get_openai_api_key_from_env() {
-        with_override("TEST_OPENAI_KEY", Some("test-openai-key"), || {
-            let sources = ApiKeySources {
-                openai_env: "TEST_OPENAI_KEY".to_string(),
-                ..Default::default()
-            };
-
-            let result = get_openai_api_key(&sources);
-            assert!(result.is_ok());
+    fn openai_reads_env_var() {
+        with_override("OPENAI_API_KEY", Some("test-openai-key"), || {
+            let result = get_api_key("openai", &default_sources());
             assert_eq!(result.unwrap(), "test-openai-key");
         });
     }
 
     #[test]
-    fn test_get_deepseek_api_key_from_env() {
-        with_override("TEST_DEEPSEEK_KEY", Some("test-deepseek-key"), || {
-            let sources = ApiKeySources {
-                deepseek_env: "TEST_DEEPSEEK_KEY".to_string(),
-                ..Default::default()
-            };
-
-            let result = get_deepseek_api_key(&sources);
-            assert!(result.is_ok());
+    fn deepseek_reads_env_var() {
+        with_override("DEEPSEEK_API_KEY", Some("test-deepseek-key"), || {
+            let result = get_api_key("deepseek", &default_sources());
             assert_eq!(result.unwrap(), "test-deepseek-key");
         });
     }
 
     #[test]
-    fn test_get_gemini_api_key_from_config() {
+    fn qwen_falls_back_to_dashscope() {
         with_overrides(
             &[
-                ("TEST_GEMINI_CONFIG_KEY", None),
-                ("GOOGLE_API_KEY", None),
-                ("GEMINI_API_KEY", None),
+                ("QWEN_API_KEY", None),
+                ("DASHSCOPE_API_KEY", Some("dashscope-key")),
             ],
             || {
-                let sources = ApiKeySources {
-                    gemini_env: "TEST_GEMINI_CONFIG_KEY".to_string(),
-                    gemini_config: Some("config-gemini-key".to_string()),
-                    ..Default::default()
-                };
-
-                let result = get_gemini_api_key(&sources);
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), "config-gemini-key");
+                let result = get_api_key("qwen", &default_sources());
+                assert_eq!(result.unwrap(), "dashscope-key");
             },
         );
     }
 
     #[test]
-    fn test_get_api_key_with_fallback_prefers_env() {
-        with_override("TEST_FALLBACK_KEY", Some("env-key"), || {
-            let sources = ApiKeySources {
-                openai_env: "TEST_FALLBACK_KEY".to_string(),
-                openai_config: Some("config-key".to_string()),
-                ..Default::default()
-            };
-
-            let result = get_openai_api_key(&sources);
+    fn ollama_allows_empty_key() {
+        with_override("OLLAMA_API_KEY", None, || {
+            let result = get_api_key("ollama", &default_sources());
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "env-key"); // Should prefer env var
+            assert!(result.unwrap().is_empty());
         });
     }
 
     #[test]
-    fn test_get_api_key_fallback_to_config() {
-        let sources = ApiKeySources {
-            openai_env: "NONEXISTENT_ENV_VAR".to_string(),
-            openai_config: Some("config-key".to_string()),
-            ..Default::default()
-        };
-
-        let result = get_openai_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "config-key");
-    }
-
-    #[test]
-    fn test_get_api_key_error_when_not_found() {
-        let sources = ApiKeySources {
-            openai_env: "NONEXISTENT_ENV_VAR".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_openai_api_key(&sources);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_get_ollama_api_key_missing_sources() {
-        let sources = ApiKeySources {
-            ollama_env: "NONEXISTENT_OLLAMA_ENV".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_ollama_api_key(&sources).expect("Ollama key retrieval should succeed");
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_get_ollama_api_key_from_env() {
-        with_override("TEST_OLLAMA_KEY", Some("test-ollama-key"), || {
-            let sources = ApiKeySources {
-                ollama_env: "TEST_OLLAMA_KEY".to_string(),
-                ..Default::default()
-            };
-
-            let result = get_ollama_api_key(&sources);
+    fn lmstudio_allows_empty_key() {
+        with_override("LMSTUDIO_API_KEY", None, || {
+            let result = get_api_key("lmstudio", &default_sources());
             assert!(result.is_ok());
+            assert!(result.unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn ollama_reads_env_var_when_set() {
+        with_override("OLLAMA_API_KEY", Some("test-ollama-key"), || {
+            let result = get_api_key("ollama", &default_sources());
             assert_eq!(result.unwrap(), "test-ollama-key");
         });
     }
 
     #[test]
-    fn test_get_lmstudio_api_key_missing_sources() {
-        let sources = ApiKeySources {
-            lmstudio_env: "NONEXISTENT_LMSTUDIO_ENV".to_string(),
-            ..Default::default()
-        };
-
-        let result =
-            get_lmstudio_api_key(&sources).expect("LM Studio key retrieval should succeed");
-        assert!(result.is_empty());
+    fn copilot_returns_managed_auth_error() {
+        let result = get_api_key("copilot", &default_sources());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("copilot"));
     }
 
     #[test]
-    fn test_get_lmstudio_api_key_from_env() {
-        with_override("TEST_LMSTUDIO_KEY", Some("test-lmstudio-key"), || {
-            let sources = ApiKeySources {
-                lmstudio_env: "TEST_LMSTUDIO_KEY".to_string(),
-                ..Default::default()
-            };
+    fn codex_returns_managed_auth_error() {
+        let result = get_api_key("codex", &default_sources());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("codex"));
+    }
 
-            let result = get_lmstudio_api_key(&sources);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "test-lmstudio-key");
+    #[test]
+    fn unknown_provider_returns_error_with_env_hint() {
+        let result = get_api_key("someunknown", &default_sources());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("SOMEUNKNOWN_API_KEY"));
+    }
+
+    #[test]
+    fn poolside_reads_env_var() {
+        with_override("POOLSIDE_API_KEY", Some("test-poolside-key"), || {
+            let result = get_api_key("poolside", &default_sources());
+            assert_eq!(result.unwrap(), "test-poolside-key");
         });
     }
 
     #[test]
-    fn test_get_api_key_ollama_provider() {
-        with_override(
-            "TEST_OLLAMA_PROVIDER_KEY",
-            Some("test-ollama-env-key"),
-            || {
-                let sources = ApiKeySources {
-                    ollama_env: "TEST_OLLAMA_PROVIDER_KEY".to_string(),
-                    ..Default::default()
-                };
-                let result = get_api_key("ollama", &sources);
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), "test-ollama-env-key");
-            },
-        );
-    }
-
-    #[test]
-    fn test_get_api_key_lmstudio_provider() {
-        with_override(
-            "TEST_LMSTUDIO_PROVIDER_KEY",
-            Some("test-lmstudio-env-key"),
-            || {
-                let sources = ApiKeySources {
-                    lmstudio_env: "TEST_LMSTUDIO_PROVIDER_KEY".to_string(),
-                    ..Default::default()
-                };
-                let result = get_api_key("lmstudio", &sources);
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), "test-lmstudio-env-key");
-            },
-        );
+    fn poolside_returns_error_when_missing() {
+        with_override("POOLSIDE_API_KEY", None, || {
+            let result = get_api_key("poolside", &default_sources());
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("POOLSIDE_API_KEY"));
+        });
     }
 
     #[test]
@@ -667,6 +424,7 @@ mod tests {
         assert_eq!(api_key_env_var("codex"), "");
         assert_eq!(api_key_env_var("minimax"), "MINIMAX_API_KEY");
         assert_eq!(api_key_env_var("huggingface"), "HF_TOKEN");
+        assert_eq!(api_key_env_var("poolside"), "POOLSIDE_API_KEY");
     }
 
     #[test]

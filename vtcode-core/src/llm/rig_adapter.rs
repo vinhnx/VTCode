@@ -89,6 +89,9 @@ impl RigProviderCapabilities {
             Provider::Qwen => {
                 // Alibaba Cloud Qwen uses an OpenAI-compatible API; rig has no dedicated client.
             }
+            Provider::Poolside => {
+                // Poolside uses an OpenAI-compatible API; rig has no dedicated client.
+            }
         }
 
         Ok(RigValidationSummary {

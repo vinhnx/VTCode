@@ -17,6 +17,7 @@ mod opencode_shared;
 pub mod opencode_zen;
 pub mod openresponses;
 pub mod openrouter;
+pub mod poolside;
 pub mod qwen;
 pub mod streaming_progress;
 pub mod zai;
@@ -53,6 +54,7 @@ pub use opencode_go::OpenCodeGoProvider;
 pub use opencode_zen::OpenCodeZenProvider;
 pub use openresponses::OpenResponsesProvider;
 pub use openrouter::OpenRouterProvider;
+pub use poolside::PoolsideProvider;
 pub use qwen::QwenProvider;
 pub use streaming_progress::{
     StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,

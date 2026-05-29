@@ -20,3 +20,4 @@ pub const LITELLM_API_BASE: &str = "http://localhost:4000";
 pub const OPENCODE_ZEN_API_BASE: &str = "https://opencode.ai/zen/v1";
 pub const OPENCODE_GO_API_BASE: &str = "https://opencode.ai/zen/go/v1";
 pub const QWEN_API_BASE: &str = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+pub const POOLSIDE_API_BASE: &str = "https://api.poolsi.de/openai/v1";

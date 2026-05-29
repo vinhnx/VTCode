@@ -3802,5 +3802,61 @@
         }
       }
     }
+  },
+  "poolside": {
+    "id": "poolside",
+    "env": [
+      "POOLSIDE_API_KEY"
+    ],
+    "api": "https://api.poolsi.de/openai/v1",
+    "name": "Poolside",
+    "doc": "https://docs.poolside.ai",
+    "default_model": "laguna-m.1",
+    "models": {
+      "laguna-m.1": {
+        "id": "laguna-m.1",
+        "name": "Laguna M.1",
+        "description": "Poolside's flagship MoE coding agent model optimized for multi-step agentic tasks, tool use, and validation",
+        "version": "m.1",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "laguna-xs.2": {
+        "id": "laguna-xs.2",
+        "name": "Laguna XS.2",
+        "description": "Poolside's efficient MoE coding agent model optimized for fast agentic coding with lower resource requirements",
+        "version": "xs.2",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
   }
 }

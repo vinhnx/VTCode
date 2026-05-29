@@ -103,6 +103,9 @@ impl ModelId {
             // OpenRouter models
             ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
+            // Poolside models
+            ModelId::PoolsideLagunaM1 => "Laguna M.1",
+            ModelId::PoolsideLagunaXs2 => "Laguna XS.2",
             // Moonshot models
             ModelId::MoonshotKimiK26 => "Kimi K2.6 (Moonshot)",
             ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",

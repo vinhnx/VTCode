@@ -184,6 +184,13 @@ impl ModelId {
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }
+            // Poolside models
+            ModelId::PoolsideLagunaM1 => {
+                "Poolside's flagship MoE coding agent model with 128K context, optimized for multi-step agentic tasks, tool use, and validation"
+            }
+            ModelId::PoolsideLagunaXs2 => {
+                "Poolside's efficient MoE coding agent model with 128K context, optimized for fast agentic coding with lower resource requirements"
+            }
             ModelId::MoonshotKimiK26 => {
                 "Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship with 32B active parameters, MLA attention, and MoonViT vision"
             }
