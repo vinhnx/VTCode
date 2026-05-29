@@ -80,6 +80,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
+            ModelId::OllamaLagunaXs2 => "Laguna XS.2 (local)",
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",

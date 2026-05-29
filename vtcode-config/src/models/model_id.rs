@@ -222,6 +222,8 @@ pub enum ModelId {
     OllamaKimiK26Cloud,
     /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
     OllamaNemotron3SuperCloud,
+    /// Laguna XS.2 - Poolside's 33B MoE model (3B activated) for agentic coding via Ollama
+    OllamaLagunaXs2,
 
     // MiniMax models
     /// MiniMax-M2.7 - Recursive self-improvement flagship with 204.8K context
@@ -306,4 +308,16 @@ pub enum ModelId {
     OpenRouterMinimaxM25,
     /// Kimi K2.6 - Moonshot AI's next-generation multimodal model via OpenRouter
     OpenRouterMoonshotaiKimiK26,
+    /// Qwen3.7 Max - Alibaba's flagship Qwen3.7 model for coding and agentic workloads via OpenRouter
+    OpenRouterQwenQwen37Max,
+    /// Hy3 Preview - Tencent's high-efficiency MoE model for agentic workflows via OpenRouter
+    OpenRouterTencentHy3Preview,
+    /// Grok Build 0.1 - xAI's fast coding model for agentic software engineering via OpenRouter
+    OpenRouterXAiGrokBuild01,
+    /// MiMo-V2.5-Pro - Xiaomi's flagship agentic model for complex software engineering via OpenRouter
+    OpenRouterXiaomiMimoV25Pro,
+    /// Laguna XS.2 (free) - Poolside's efficient free coding agent model via OpenRouter
+    OpenRouterPoolsideLagunaXs2Free,
+    /// Laguna M.1 (free) - Poolside's flagship free coding agent model via OpenRouter
+    OpenRouterPoolsideLagunaM1Free,
 }

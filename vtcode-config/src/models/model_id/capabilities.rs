@@ -496,6 +496,7 @@ impl ModelId {
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
+            ModelId::OllamaLagunaXs2 => "laguna-xs.2",
             // MiniMax models
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
