@@ -2,6 +2,33 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.114.0 - 2026-05-29
+
+### Highlights
+#### Bug Fixes
+
+- Remove setrlimit/getrlimit wrappers to fix type mismatch on Linux (eb2744d1) 
+- Update validation messages for structured outputs and task budget tokens in Claude Opus 4.8 (705f7def) 
+- Update API response thinking modes and configuration defaults for Anthropic provider (b814f5f5) 
+- Expose matches_model function for public use and update validation logic (4da619bf) 
+- Update model descriptions for Claude Haiku and Claude Sonnet to enhance clarity and detail (ee381fc1) 
+#### Documentation
+
+- Update LLM provider integration instructions for clarity (a3f6166b) 
+#### Features
+
+- Add support for mid-conversation system messages in Claude Opus 4.8 (076d8162) 
+- Add Laguna XS.2 model support and update configurations (5782eb5b) 
+### Other Changes
+#### Other
+
+- Update Anthropic model to Claude Opus 4.8 and adjust related configurations (6ec1aecf) 
+- Add Poolside provider and models support (4b9aa40d) 
+- Add compaction support to response structures and documentation (4ad4f344) 
+#### Refactors
+
+- Remove MiMo V2 Pro and MiMo V2 Omni models from configurations and related files (6926f102) 
+- Streamline error handling and improve code readability across multiple files (966569c2) 
 ## 0.113.0 - 2026-05-28
 
 ### Highlights
