@@ -20,6 +20,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M25_CLOUD,
     KIMI_K2_6_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
+    LAGUNA_XS_2,
 ];
 
 /// Models that emit structured reasoning traces when `think` is enabled
@@ -40,6 +41,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MINIMAX_M27_CLOUD,
     MINIMAX_M25_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
+    LAGUNA_XS_2,
 ];
 
 /// Models that require an explicit reasoning effort level instead of boolean toggle
@@ -73,3 +75,4 @@ pub const MINIMAX_M27_CLOUD: &str = "minimax-m2.7:cloud";
 pub const MINIMAX_M25_CLOUD: &str = "minimax-m2.5:cloud";
 pub const KIMI_K2_6_CLOUD: &str = "kimi-k2.6:cloud";
 pub const NEMOTRON_3_SUPER_CLOUD: &str = "nemotron-3-super:cloud";
+pub const LAGUNA_XS_2: &str = "laguna-xs.2";

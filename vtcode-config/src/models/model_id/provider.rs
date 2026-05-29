@@ -92,7 +92,8 @@ impl ModelId {
             | ModelId::OllamaNemotron3SuperCloud
             | ModelId::OllamaKimiK26Cloud
             | ModelId::OllamaGlm5Cloud
-            | ModelId::OllamaGlm51Cloud => Provider::Ollama,
+            | ModelId::OllamaGlm51Cloud
+            | ModelId::OllamaLagunaXs2 => Provider::Ollama,
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter
@@ -132,7 +133,13 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm51
-            | ModelId::OpenRouterMoonshotaiKimiK26 => Provider::OpenRouter,
+            | ModelId::OpenRouterMoonshotaiKimiK26
+            | ModelId::OpenRouterQwenQwen37Max
+            | ModelId::OpenRouterTencentHy3Preview
+            | ModelId::OpenRouterXAiGrokBuild01
+            | ModelId::OpenRouterXiaomiMimoV25Pro
+            | ModelId::OpenRouterPoolsideLagunaXs2Free
+            | ModelId::OpenRouterPoolsideLagunaM1Free => Provider::OpenRouter,
         }
     }
 

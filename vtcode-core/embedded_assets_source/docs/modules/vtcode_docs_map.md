@@ -427,7 +427,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/providers/ollama.md`
   - **Content**: Ollama Provider Guide
-  - **Topics**: Configuration, Using Custom Ollama Models, OpenAI OSS Models Support, Tool calling and web search integration, Thinking traces and streaming
+  - **Topics**: Configuration, Using Custom Ollama Models, OpenAI OSS Models Support, Laguna XS.2 Model, Tool calling and web search integration
   - **User Questions**: "What can you tell me about Ollama Provider Guide?", "How does Configuration work?", "How does Using Custom Ollama Models work?"
 
 - **File**: `docs/providers/openrouter.md`

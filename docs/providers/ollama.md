@@ -82,6 +82,7 @@ The `/model` picker now lists the core Ollama catalog so you can choose them wit
 - `minimax-m2.7:cloud`
 - `minimax-m2.5:cloud`
 - `nemotron-3-super:cloud`
+- `laguna-xs.2` (local, 33B MoE with 3B activated — optimized for agentic coding)
 
 These entries appear beneath the Ollama provider section alongside the "Custom Ollama model" option.
 
@@ -102,6 +103,25 @@ ollama pull gpt-oss:120b-cloud
 # Use in VT Code
 vtcode --provider ollama --model gpt-oss-20b ask "Code review this function"
 vtcode --provider ollama --model gpt-oss:120b-cloud ask "Assist with this architecture review"
+```
+
+## Laguna XS.2 Model
+
+[Laguna XS.2](https://ollama.com/library/laguna-xs.2) is a 33B total parameter Mixture-of-Experts model with 3B activated parameters per token, designed for agentic coding and long-horizon work on a local machine.
+
+**Key features:**
+- Mixed Sliding Window Attention (SWA) and global attention in a 3:1 ratio across 40 layers
+- KV cache quantized to FP8 for reduced memory per token
+- Native reasoning support with interleaved thinking between tool calls
+- 128K context window
+- Apache 2.0 license
+
+```bash
+# Pull the model
+ollama pull laguna-xs.2
+
+# Use in VT Code
+vtcode --provider ollama --model laguna-xs.2 ask "Review this code"
 ```
 
 ## Tool calling and web search integration
@@ -132,6 +152,18 @@ vtcode --provider ollama --model gpt-oss:120b-cloud ask "Summarize this spec"
 ```
 
 VT Code automatically attaches the bearer token to requests when the API key is present.
+
+### Direct API Example
+
+You can also interact with Ollama directly via the HTTP API:
+
+```bash
+curl http://localhost:11434/api/chat \
+  -d '{
+    "model": "laguna-xs.2",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
 
 ## Troubleshooting
 

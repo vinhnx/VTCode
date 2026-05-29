@@ -3000,6 +3000,193 @@
           "generation": "K2.6",
           "doc_comment": "Kimi K2.6 - Moonshot AI's next-generation multimodal model for long-horizon coding and design via OpenRouter"
         }
+      },
+      "qwen/qwen3.7-max": {
+        "id": "qwen/qwen3.7-max",
+        "name": "Qwen: Qwen3.7 Max",
+        "description": "Qwen3.7-Max is the flagship model in Alibaba's Qwen3.7 series, designed for agent-centric workloads with particular strengths in coding, office and productivity tasks, and long-horizon autonomous execution.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "cost": {
+          "input": 1.25e-06,
+          "output": 3.75e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterQwenQwen37Max",
+          "constant": "QWEN_QWEN3_7_MAX",
+          "vendor": "qwen",
+          "display": "Qwen3.7 Max",
+          "description": "Qwen3.7 Max flagship model for coding and agentic workloads via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "Qwen3.7",
+          "doc_comment": "Qwen3.7 Max - Alibaba's flagship Qwen3.7 model for coding and agentic workloads via OpenRouter"
+        }
+      },
+      "tencent/hy3-preview": {
+        "id": "tencent/hy3-preview",
+        "name": "Tencent: Hy3 preview",
+        "description": "Hy3 preview is a high-efficiency Mixture-of-Experts model from Tencent designed for agentic workflows and production use, with configurable reasoning levels across disabled, low, and high modes.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "cost": {
+          "input": 6.3e-08,
+          "output": 2.1e-07
+        },
+        "vtcode": {
+          "variant": "OpenRouterTencentHy3Preview",
+          "constant": "TENCENT_HY3_PREVIEW",
+          "vendor": "tencent",
+          "display": "Hy3 Preview",
+          "description": "Tencent Hy3 high-efficiency MoE model with configurable reasoning via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "Hy3",
+          "doc_comment": "Hy3 Preview - Tencent's high-efficiency MoE model for agentic workflows via OpenRouter"
+        }
+      },
+      "x-ai/grok-build-0.1": {
+        "id": "x-ai/grok-build-0.1",
+        "name": "xAI: Grok Build 0.1",
+        "description": "Grok Build 0.1 is xAI's fast coding model trained specifically for agentic software engineering workflows, optimized for interactive coding agents, tool use, and multi-step development tasks.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "cost": {
+          "input": 1e-06,
+          "output": 2e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterXAiGrokBuild01",
+          "constant": "X_AI_GROK_BUILD_0_1",
+          "vendor": "xai",
+          "display": "Grok Build 0.1",
+          "description": "xAI Grok Build 0.1 coding model for agentic software engineering via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "Grok-Build-0.1",
+          "doc_comment": "Grok Build 0.1 - xAI's fast coding model for agentic software engineering via OpenRouter"
+        }
+      },
+      "xiaomi/mimo-v2.5-pro": {
+        "id": "xiaomi/mimo-v2.5-pro",
+        "name": "Xiaomi: MiMo-V2.5-Pro",
+        "description": "MiMo-V2.5-Pro is Xiaomi's flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "cost": {
+          "input": 4.35e-07,
+          "output": 8.7e-07
+        },
+        "vtcode": {
+          "variant": "OpenRouterXiaomiMimoV25Pro",
+          "constant": "XIAOMI_MIMO_V2_5_PRO",
+          "vendor": "xiaomi",
+          "display": "MiMo-V2.5-Pro",
+          "description": "Xiaomi MiMo-V2.5-Pro flagship agentic model for complex software engineering via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "MiMo-V2.5",
+          "doc_comment": "MiMo-V2.5-Pro - Xiaomi's flagship agentic model for complex software engineering via OpenRouter"
+        }
+      },
+      "poolside/laguna-xs.2:free": {
+        "id": "poolside/laguna-xs.2:free",
+        "name": "Poolside: Laguna XS.2 (free)",
+        "description": "Laguna XS.2 is Poolside's efficient coding agent model, combining tool calling and reasoning capabilities with a compact footprint, quantized to fp8 for fast, cost-efficient agentic coding workflows.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "vtcode": {
+          "variant": "OpenRouterPoolsideLagunaXs2Free",
+          "constant": "POOLSIDE_LAGUNA_XS_2_FREE",
+          "vendor": "poolside",
+          "display": "Laguna XS.2 (free)",
+          "description": "Poolside Laguna XS.2 compact free coding agent model via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "Laguna-XS.2",
+          "doc_comment": "Laguna XS.2 (free) - Poolside's efficient free coding agent model via OpenRouter"
+        }
+      },
+      "poolside/laguna-m.1:free": {
+        "id": "poolside/laguna-m.1:free",
+        "name": "Poolside: Laguna M.1 (free)",
+        "description": "Laguna M.1 is Poolside's flagship coding agent model, optimized for complex software engineering tasks with tool calling and reasoning support, quantized to fp8 for efficient inference.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "vtcode": {
+          "variant": "OpenRouterPoolsideLagunaM1Free",
+          "constant": "POOLSIDE_LAGUNA_M_1_FREE",
+          "vendor": "poolside",
+          "display": "Laguna M.1 (free)",
+          "description": "Poolside Laguna M.1 flagship free coding agent model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "Laguna-M.1",
+          "doc_comment": "Laguna M.1 (free) - Poolside's flagship free coding agent model via OpenRouter"
+        }
       }
     },
     "default_model": "z-ai/glm-5"
@@ -3250,6 +3437,22 @@
         "id": "nemotron-3-super:cloud",
         "name": "Nemotron-3-Super (cloud)",
         "description": "NVIDIA Nemotron\u2122 is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "laguna-xs.2": {
+        "id": "laguna-xs.2",
+        "name": "Laguna XS.2 (local)",
+        "description": "Poolside's 33B MoE model with 3B activated parameters, optimized for agentic coding with sliding window attention and native reasoning support (128K context)",
         "reasoning": true,
         "tool_call": true,
         "modalities": {

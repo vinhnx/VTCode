@@ -99,6 +99,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaKimiK26Cloud,
             ModelId::OllamaNemotron3SuperCloud,
+            ModelId::OllamaLagunaXs2,
             // MiniMax models
             ModelId::MinimaxM27,
             ModelId::MinimaxM25,

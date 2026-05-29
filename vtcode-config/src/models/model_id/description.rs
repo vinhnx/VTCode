@@ -167,7 +167,10 @@ impl ModelId {
             }
             ModelId::OllamaKimiK26Cloud => "Cloud-hosted Kimi K2.6 model served via Ollama Cloud",
             ModelId::OllamaNemotron3SuperCloud => {
-                "NVIDIA Nemotron™ is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
+                "NVIDIA Nemotron\u{2122} is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
+            }
+            ModelId::OllamaLagunaXs2 => {
+                "Poolside's 33B MoE model with 3B activated parameters, optimized for agentic coding with sliding window attention and native reasoning support (128K context)"
             }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
