@@ -803,8 +803,7 @@ mod tests {
         let payload = provider
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
-        let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None);
+        let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
         if let Some(header) = &beta_header {
@@ -1047,8 +1046,7 @@ mod tests {
             let payload = provider
                 .convert_to_anthropic_format(&request)
                 .expect("payload conversion");
-            let beta_header = provider
-                .beta_header_for_request(&request, &payload, false, None);
+            let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
             if let Some(header) = &beta_header {
                 assert!(!header.contains("context-1m-2025-08-07"));
@@ -1071,8 +1069,7 @@ mod tests {
         let payload = provider
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
-        let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None);
+        let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
         if let Some(header) = &beta_header {
@@ -1120,8 +1117,7 @@ mod tests {
         let payload = provider
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
-        let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None);
+        let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         if let Some(header) = &beta_header {
             assert!(!header.contains("interleaved-thinking-2025-05-14"));

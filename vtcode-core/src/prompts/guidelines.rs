@@ -63,6 +63,12 @@ pub fn generate_tool_guidelines(
                 .to_string(),
         );
     }
+    if has_search || has_file || has_exec {
+        lines.push(
+            "- When calling multiple tools with no dependencies, run them in parallel (e.g., read files or run independent commands at once)."
+                .to_string(),
+        );
+    }
 
     if lines.is_empty() {
         return String::new();
@@ -411,7 +417,25 @@ mod tests {
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         let approx_tokens = guidelines.len() / 4;
-        assert!(approx_tokens < 110, "got ~{} tokens", approx_tokens);
+        assert!(approx_tokens < 145, "got ~{} tokens", approx_tokens);
+    }
+
+    #[test]
+    fn test_parallel_tool_call_guidance() {
+        let tools = vec![
+            "unified_exec".to_string(),
+            "unified_search".to_string(),
+            "unified_file".to_string(),
+        ];
+        let guidelines = generate_tool_guidelines(&tools, None);
+        assert!(
+            guidelines.contains("parallel"),
+            "Should include parallel tool call guidance"
+        );
+        assert!(
+            guidelines.contains("read files"),
+            "Should mention reading files in parallel"
+        );
     }
 
     #[test]

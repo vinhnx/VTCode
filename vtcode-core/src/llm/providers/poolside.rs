@@ -278,7 +278,8 @@ impl LLMProvider for PoolsideProvider {
 
         let payload = self.convert_to_poolside_format(&request)?;
         let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
 
         let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
             message: error_display::format_llm_error(
@@ -302,7 +303,8 @@ impl LLMProvider for PoolsideProvider {
 
         let payload = self.convert_to_poolside_format(&request)?;
         let response = self.send_request(&payload).await?;
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
 
         let bytes_stream = response.bytes_stream();
         let (event_tx, event_rx) =

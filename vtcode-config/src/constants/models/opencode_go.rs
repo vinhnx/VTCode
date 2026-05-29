@@ -11,13 +11,8 @@ pub const QWEN3_6_PLUS: &str = "qwen3.6-plus";
 pub const QWEN3_5_PLUS: &str = "qwen3.5-plus";
 
 pub const MESSAGES_API_MODELS: &[&str] = &[MINIMAX_M2_7, MINIMAX_M2_5];
-pub const CHAT_COMPLETIONS_MODELS: &[&str] = &[
-    GLM_5_1,
-    GLM_5,
-    KIMI_K2_5,
-    QWEN3_6_PLUS,
-    QWEN3_5_PLUS,
-];
+pub const CHAT_COMPLETIONS_MODELS: &[&str] =
+    &[GLM_5_1, GLM_5, KIMI_K2_5, QWEN3_6_PLUS, QWEN3_5_PLUS];
 
 // Curated models VT Code currently exposes in config flows and ModelId metadata.
 pub const CONFIGURED_MODELS: &[&str] = &[GLM_5_1, KIMI_K2_5, MINIMAX_M2_5, MINIMAX_M2_7];

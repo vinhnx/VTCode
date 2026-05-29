@@ -83,9 +83,13 @@ pub fn validate_request(
         });
     }
 
-    if (matches_model(resolved_model, crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8)
-        || matches_model(resolved_model, crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7))
-        && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
+    if (matches_model(
+        resolved_model,
+        crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8,
+    ) || matches_model(
+        resolved_model,
+        crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7,
+    )) && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",

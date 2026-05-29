@@ -44,9 +44,6 @@ pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-onl
 const PROMPT_TITLE: &str = "# VT Code";
 const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
 const CONTRACT_HEADER: &str = "## Contract";
-const HANDLE_CONTEXT_PROMPT_LINE: &str =
-    "Prefer explicit handles plus an owning context when state gets tangled.";
-const DONE_CRITERIA_PROMPT_LINE: &str = "Treat \"done\" as observable: keep `task_tracker` current, keep blockers/verification open, and leave resumable state.";
 
 const OPENAI_GPT55_CONTRACT_HEADER: &str = "## GPT-5.5 OpenAI Addendum";
 const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
@@ -58,29 +55,26 @@ const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
 ];
 
 const DEFAULT_CONTRACT_LINES: &[&str] = &[
-    "Start with `AGENTS.md`; inspect code, match local patterns, and use `@file` when helpful.",
-    "If context is missing, say so, do not guess, and finish unblocked slices.",
-    "Take safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external changes.",
-    HANDLE_CONTEXT_PROMPT_LINE,
-    "Keep control on the main thread. Delegate only bounded, independent work that won't block the next step.",
-    "Prefer simple changes. Measure before optimizing.",
+    "Start with `AGENTS.md`; inspect code first, match local patterns, use `@file`.",
+    "If context is missing, say so, do not guess, finish unblocked slices first.",
+    "Take safe, reversible steps; ask only for material behavior, API, UX, or credential changes.",
+    "Keep control on the main thread. Delegate bounded, independent work only.",
     "Verify changes yourself; never claim a check passed unless you ran it.",
-    DONE_CRITERIA_PROMPT_LINE,
-    "Keep outputs concise and in the requested format. Keep user updates brief and high-signal.",
+    "Keep outputs concise. Keep user updates brief and high-signal.",
     "Use retrieved evidence for citation-sensitive work. Preserve task goal, tracker state, touched files, verification status, and decisions across compaction.",
-    "NEVER use emoji in any output. Use plain text only.",
+    "NEVER use emoji. Use plain text only.",
+    "Read files before answering. Never speculate about code you have not opened.",
+    "Make only requested changes. Keep solutions simple. Implement by default; suggest only when intent is unclear.",
 ];
 
 const MINIMAL_CONTRACT_LINES: &[&str] = &[
     "Use `AGENTS.md`; inspect code first.",
-    "If context is missing, say so, do not guess, and finish unblocked slices.",
-    HANDLE_CONTEXT_PROMPT_LINE,
+    "If context is missing, say so, do not guess, finish unblocked slices.",
     "Take safe, reversible steps; verify changes yourself.",
-    DONE_CRITERIA_PROMPT_LINE,
     "Keep delegation bounded and explicit.",
     "Preserve tracker state, touched files, and verification status across compaction.",
     "Use retrieved evidence when citation-sensitive.",
-    "Keep outputs concise and in the requested format.",
+    "Keep outputs concise.",
 ];
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
@@ -557,8 +551,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 1400,
-            "Default mode should stay sparse (<=1.4K chars, was {} chars)",
+            result.len() <= 1700,
+            "Default mode should stay sparse (<=1.7K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -580,8 +574,8 @@ mod tests {
 
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 1200,
-            "Lightweight should be compact (<1.2K chars, was {} chars)",
+            result.len() < 1550,
+            "Lightweight should be compact (<1.55K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -656,8 +650,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 1700,
-            "Specialized should stay sparse (<=1.7K chars, was {} chars)",
+            result.len() <= 2050,
+            "Specialized should stay sparse (<=2.05K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -701,7 +695,7 @@ mod tests {
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 350,
+            approx_tokens < 420,
             "Default prompt should stay compact, got ~{}",
             approx_tokens
         );
@@ -931,16 +925,12 @@ mod tests {
             "Default prompt should include the lean contract section"
         );
         assert!(
-            prompt.contains("Keep outputs concise and in the requested format"),
+            prompt.contains("Keep outputs concise"),
             "Default prompt should clamp output shape"
         );
         assert!(
             prompt.contains("Verify changes yourself"),
             "Default prompt should require verification before finalizing"
-        );
-        assert!(
-            prompt.contains(DONE_CRITERIA_PROMPT_LINE),
-            "Default prompt should define observable done criteria"
         );
         assert!(
             prompt.contains("Keep user updates brief and high-signal"),
@@ -958,8 +948,9 @@ mod tests {
         ] {
             assert!(
                 prompt.contains("completion language as a checkpoint")
-                    || prompt.contains(DONE_CRITERIA_PROMPT_LINE),
-                "{mode_name} prompt should treat completion as a checkpoint"
+                    || prompt.contains("Verify changes yourself")
+                    || prompt.contains("verification"),
+                "{mode_name} prompt should include verification guidance"
             );
         }
     }
@@ -973,7 +964,7 @@ mod tests {
             "Default prompt should keep control on the main thread"
         );
         assert!(
-            prompt.contains("Delegate only bounded, independent work"),
+            prompt.contains("Delegate bounded, independent work"),
             "Default prompt should restrict delegation to bounded independent work"
         );
         assert!(
@@ -983,14 +974,19 @@ mod tests {
     }
 
     #[test]
-    fn test_prompts_prefer_handle_context_design_for_tangled_state() {
+    fn test_default_prompt_includes_grounding_and_action_bias() {
+        let prompt = default_system_prompt();
         assert!(
-            default_system_prompt().contains(HANDLE_CONTEXT_PROMPT_LINE),
-            "Default prompt should prefer explicit handle/context designs for tangled state"
+            prompt.contains("Never speculate about code you have not opened"),
+            "Default prompt should include grounding guidance"
         );
         assert!(
-            minimal_system_prompt().contains(HANDLE_CONTEXT_PROMPT_LINE),
-            "Minimal prompt should keep the handle/context guidance"
+            prompt.contains("Make only requested changes"),
+            "Default prompt should include anti-overengineering guidance"
+        );
+        assert!(
+            prompt.contains("Implement by default"),
+            "Default prompt should include action bias"
         );
     }
 

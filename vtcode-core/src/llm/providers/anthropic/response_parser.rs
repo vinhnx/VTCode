@@ -118,7 +118,10 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 }
             }
             Some("compaction") => {
-                compaction = block.get("content").and_then(|t| t.as_str()).map(|s| s.to_string());
+                compaction = block
+                    .get("content")
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string());
             }
             _ => {} // Ignore unknown block types
         }

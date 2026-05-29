@@ -163,9 +163,7 @@ pub fn get_api_key(provider: &str, _sources: &ApiKeySources) -> Result<String> {
             if let Some(key) = read_env_var("GOOGLE_API_KEY").filter(|k| !k.is_empty()) {
                 return Ok(key);
             }
-            Err(anyhow::anyhow!(
-                "GEMINI_API_KEY or GOOGLE_API_KEY not set"
-            ))
+            Err(anyhow::anyhow!("GEMINI_API_KEY or GOOGLE_API_KEY not set"))
         }
         // OpenRouter tries OAuth token from encrypted storage first
         "openrouter" => {
@@ -180,9 +178,7 @@ pub fn get_api_key(provider: &str, _sources: &ApiKeySources) -> Result<String> {
             if let Some(key) = read_env_var("DASHSCOPE_API_KEY").filter(|k| !k.is_empty()) {
                 return Ok(key);
             }
-            Err(anyhow::anyhow!(
-                "QWEN_API_KEY or DASHSCOPE_API_KEY not set"
-            ))
+            Err(anyhow::anyhow!("QWEN_API_KEY or DASHSCOPE_API_KEY not set"))
         }
         // Ollama and LM Studio allow empty keys (local deployment)
         "ollama" | "lmstudio" => Ok(String::new()),
