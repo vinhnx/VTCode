@@ -193,6 +193,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    StepFunProviderConfig,
+    "stepfun",
+    "StepFun",
+    crate::config::constants::models::stepfun::DEFAULT_MODEL,
+    crate::config::constants::urls::STEPFUN_API_BASE,
+    Some(crate::config::constants::env_vars::STEPFUN_BASE_URL),
+    ()
+);
+define_provider_config!(
     PoolsideProviderConfig,
     "poolside",
     "Poolside",

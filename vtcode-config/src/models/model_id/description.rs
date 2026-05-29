@@ -260,6 +260,9 @@ impl ModelId {
             ModelId::HuggingFaceStep35Flash => {
                 "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
             }
+            ModelId::StepFun37Flash => {
+                "StepFun's flagship multimodal reasoning model with 256K context, native image/video input, and tool calling."
+            }
             // Qwen models
             ModelId::Qwen37Max => {
                 "Alibaba Cloud's flagship reasoning model with 131K context, advanced thinking, and strong tool-use capabilities"

@@ -10,8 +10,29 @@ use crate::tools::handlers::TaskTrackerTool;
 use crate::tools::traits::Tool;
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use serde::Deserializer;
 use serde_json::json;
 use std::fmt::Write;
+
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::String(s) => Ok(vec![s]),
+        serde_json::Value::Array(arr) => {
+            let mut result = Vec::new();
+            for item in arr {
+                if let serde_json::Value::String(s) = item {
+                    result.push(s);
+                }
+            }
+            Ok(result)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {
@@ -53,7 +74,7 @@ struct PlannerItem {
     files: Vec<String>,
     #[serde(default)]
     outcome: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     verify: Vec<String>,
 }
 
@@ -526,7 +547,6 @@ impl AgentRunner {
         T: for<'de> Deserialize<'de>,
     {
         let model = self.get_selected_model();
-        eprintln!("[DEBUG] request_json_only called with model: {:?}", model);
         let response = self
             .provider_client
             .generate(LLMRequest {
@@ -542,11 +562,6 @@ impl AgentRunner {
             .await
             .context(request_label)?;
         let content = response.content.unwrap_or_default();
-        // Debug: print raw response
-        eprintln!(
-            "[DEBUG] Raw model response (first 500 chars): {}",
-            &content[..content.len().min(500)]
-        );
         parse_json_response::<T>(content.as_str()).context(parse_label)
     }
 
@@ -743,19 +758,9 @@ where
     T: for<'de> Deserialize<'de>,
 {
     let trimmed = text.trim();
-    eprintln!(
-        "[DEBUG] parse_json_response called with text length: {}",
-        trimmed.len()
-    );
     if trimmed.is_empty() {
         anyhow::bail!("empty model response")
     }
-
-    // Debug: print raw response
-    eprintln!(
-        "[DEBUG] Raw model response (first 500 chars): {}",
-        &trimmed[..trimmed.len().min(500)]
-    );
 
     if let Ok(parsed) = serde_json::from_str::<T>(trimmed) {
         return Ok(parsed);

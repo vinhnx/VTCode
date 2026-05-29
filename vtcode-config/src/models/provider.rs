@@ -43,6 +43,8 @@ pub enum Provider {
     OpenCodeGo,
     /// Alibaba Cloud Qwen models
     Qwen,
+    /// StepFun models
+    StepFun,
     /// Poolside AI models
     Poolside,
 }
@@ -68,6 +70,7 @@ impl Provider {
             Provider::OpenCodeZen => "OPENCODE_ZEN_API_KEY",
             Provider::OpenCodeGo => "OPENCODE_GO_API_KEY",
             Provider::Qwen => "QWEN_API_KEY",
+            Provider::StepFun => "STEPFUN_API_KEY",
             Provider::Poolside => "POOLSIDE_API_KEY",
         }
     }
@@ -92,6 +95,7 @@ impl Provider {
             Provider::OpenCodeZen,
             Provider::OpenCodeGo,
             Provider::Qwen,
+            Provider::StepFun,
             Provider::Poolside,
         ]
     }
@@ -116,6 +120,7 @@ impl Provider {
             Provider::OpenCodeZen => "OpenCode Zen",
             Provider::OpenCodeGo => "OpenCode Go",
             Provider::Qwen => "Qwen",
+            Provider::StepFun => "StepFun",
             Provider::Poolside => "Poolside",
         }
     }
@@ -184,6 +189,7 @@ impl Provider {
             }
             Provider::OpenCodeGo => false,
             Provider::Qwen => models::qwen::REASONING_MODELS.contains(&model),
+            Provider::StepFun => models::stepfun::REASONING_MODELS.contains(&model),
             Provider::Poolside => false,
         }
     }
@@ -223,6 +229,7 @@ impl fmt::Display for Provider {
             Provider::OpenCodeZen => write!(f, "opencode-zen"),
             Provider::OpenCodeGo => write!(f, "opencode-go"),
             Provider::Qwen => write!(f, "qwen"),
+            Provider::StepFun => write!(f, "stepfun"),
             Provider::Poolside => write!(f, "poolside"),
         }
     }
@@ -248,6 +255,7 @@ impl AsRef<str> for Provider {
             Provider::OpenCodeZen => "opencode-zen",
             Provider::OpenCodeGo => "opencode-go",
             Provider::Qwen => "qwen",
+            Provider::StepFun => "stepfun",
             Provider::Poolside => "poolside",
         }
     }
@@ -275,6 +283,7 @@ impl FromStr for Provider {
             "opencode-zen" | "opencodezen" => Ok(Provider::OpenCodeZen),
             "opencode-go" | "opencodego" => Ok(Provider::OpenCodeGo),
             "qwen" => Ok(Provider::Qwen),
+            "stepfun" => Ok(Provider::StepFun),
             "poolside" => Ok(Provider::Poolside),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }

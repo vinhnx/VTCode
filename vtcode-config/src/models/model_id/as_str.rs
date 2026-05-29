@@ -115,6 +115,7 @@ impl ModelId {
                 models::huggingface::DEEPSEEK_V4_PRO_TOGETHER
             }
             ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
+            ModelId::StepFun37Flash => models::stepfun::STEP_3_7_FLASH,
             // Qwen models
             ModelId::Qwen37Max => models::qwen::QWEN3_7_MAX,
             ModelId::Qwen36Flash => models::qwen::QWEN3_6_FLASH,

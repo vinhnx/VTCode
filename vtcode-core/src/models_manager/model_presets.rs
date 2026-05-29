@@ -9,6 +9,7 @@ use crate::config::constants::models::copilot as copilot_models;
 use crate::config::constants::models::mimo as mimo_models;
 use crate::config::constants::models::poolside as poolside_models;
 use crate::config::constants::models::qwen as qwen_models;
+use crate::config::constants::models::stepfun as stepfun_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
@@ -180,6 +181,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // Poolside presets
     presets.extend(poolside_presets());
 
+    // StepFun presets
+    presets.extend(stepfun_presets());
+
     presets
 }
 
@@ -203,6 +207,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::OpenCodeGo => opencode_go_presets(),
         Provider::MiMo => mimo_presets(),
         Provider::Qwen => qwen_presets(),
+        Provider::StepFun => stepfun_presets(),
         Provider::Poolside => poolside_presets(),
     }
 }
@@ -1457,6 +1462,29 @@ fn qwen_presets() -> Vec<ModelPreset> {
             context_window: Some(131_072),
         },
     ]
+}
+
+fn stepfun_presets() -> Vec<ModelPreset> {
+    vec![ModelPreset {
+        id: stepfun_models::STEP_3_7_FLASH.to_string(),
+        model: stepfun_models::STEP_3_7_FLASH.to_string(),
+        display_name: "Step 3.7 Flash".to_string(),
+        description:
+            "StepFun's flagship multimodal reasoning model with 256K context and tool calling."
+                .to_string(),
+        provider: Provider::StepFun,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            reasoning_preset(ReasoningEffortLevel::Low, "Fast"),
+            reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"),
+            reasoning_preset(ReasoningEffortLevel::High, "Deep"),
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(262_144),
+    }]
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {

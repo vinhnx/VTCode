@@ -33,6 +33,7 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "opencode-zen",
     "opencode-go",
     "qwen",
+    "stepfun",
     "poolside",
 ];
 

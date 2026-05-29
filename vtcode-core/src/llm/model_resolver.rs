@@ -374,7 +374,8 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::OpenCodeGo => 14,
         Provider::MiMo => 15,
         Provider::Qwen => 16,
-        Provider::Poolside => 17,
+        Provider::StepFun => 17,
+        Provider::Poolside => 18,
     }
 }
 
@@ -434,6 +435,8 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::MiMo)
     } else if model.starts_with("qwen3.") || model.starts_with("qwen-") {
         Some(Provider::Qwen)
+    } else if model.starts_with("step-") {
+        Some(Provider::StepFun)
     } else if model.starts_with("moonshot-") || model.starts_with("kimi-") {
         Some(Provider::Moonshot)
     } else if model.starts_with("opencode/") || model.starts_with("opencode-zen/") {

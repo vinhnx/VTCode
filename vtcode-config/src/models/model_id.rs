@@ -132,6 +132,10 @@ pub enum ModelId {
     /// Step 3.5 Flash via Hugging Face router
     HuggingFaceStep35Flash,
 
+    // StepFun models
+    /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling
+    StepFun37Flash,
+
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,
     /// GLM-5.1 - Next-gen Z.ai foundation model with improved reasoning

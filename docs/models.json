@@ -3803,6 +3803,43 @@
       }
     }
   },
+  "stepfun": {
+    "id": "stepfun",
+    "env": [
+      "STEPFUN_API_KEY",
+      "STEP_API_KEY"
+    ],
+    "api": "https://api.stepfun.ai/v1",
+    "name": "StepFun",
+    "doc": "https://platform.stepfun.ai/docs/en/guides/models/step-3.7-flash-quickstart",
+    "default_model": "step-3.7-flash",
+    "models": {
+      "step-3.7-flash": {
+        "id": "step-3.7-flash",
+        "name": "Step 3.7 Flash",
+        "description": "StepFun's flagship multimodal reasoning model with 256K context, native image/video input, and tool calling.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
+  },
   "poolside": {
     "id": "poolside",
     "env": [

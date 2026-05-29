@@ -47,6 +47,8 @@ pub struct ProviderConfigs {
     pub lmstudio: Option<ProviderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minimax: Option<ProviderConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stepfun: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

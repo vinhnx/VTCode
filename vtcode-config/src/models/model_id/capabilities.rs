@@ -97,6 +97,8 @@ fn catalog_provider_key(provider: &str) -> &str {
         "minimax"
     } else if provider.eq_ignore_ascii_case("huggingface") {
         "huggingface"
+    } else if provider.eq_ignore_ascii_case("stepfun") {
+        "stepfun"
     } else if provider.eq_ignore_ascii_case("poolside") {
         "poolside"
     } else {
@@ -123,6 +125,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::OpenCodeZen => "opencode-zen",
         Provider::OpenCodeGo => "opencode-go",
         Provider::Qwen => "qwen",
+        Provider::StepFun => "stepfun",
         Provider::Poolside => "poolside",
     }
 }
@@ -201,6 +204,7 @@ impl ModelId {
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
+            ModelId::StepFun37Flash => None,
             ModelId::PoolsideLagunaM1 => Some(ModelId::PoolsideLagunaXs2),
             _ => None,
         }
@@ -294,6 +298,7 @@ impl ModelId {
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::OllamaGemini3FlashPreviewCloud
                 | ModelId::HuggingFaceStep35Flash
+                | ModelId::StepFun37Flash
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
         )
     }
