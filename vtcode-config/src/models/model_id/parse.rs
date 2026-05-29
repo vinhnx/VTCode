@@ -190,6 +190,7 @@ impl FromStr for ModelId {
             {
                 Ok(ModelId::HuggingFaceStep35Flash)
             }
+            s if s == models::stepfun::STEP_3_7_FLASH => Ok(ModelId::StepFun37Flash),
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             "moonshotai/kimi-k2.6" => Ok(ModelId::OpenRouterMoonshotaiKimiK26),

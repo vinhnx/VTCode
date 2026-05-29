@@ -304,6 +304,7 @@ impl ToolChoice {
         "openrouter",
         "zai",
         "moonshot",
+        "stepfun",
         "lmstudio",
     ];
 

@@ -96,6 +96,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4FlashNovita => "DeepSeek V4 Flash (Novita)",
             ModelId::HuggingFaceDeepseekV4ProTogether => "DeepSeek V4 Pro (Together)",
             ModelId::HuggingFaceStep35Flash => "Step 3.5 Flash (HF)",
+            ModelId::StepFun37Flash => "Step 3.7 Flash",
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",

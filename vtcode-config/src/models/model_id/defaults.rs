@@ -49,6 +49,7 @@ impl ModelId {
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
             Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
             Provider::Qwen => ModelId::Qwen37Max,
+            Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Poolside => ModelId::PoolsideLagunaM1,
         }
     }
@@ -73,6 +74,7 @@ impl ModelId {
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
             Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
             Provider::Qwen => ModelId::Qwen36Plus,
+            Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Poolside => ModelId::PoolsideLagunaXs2,
         }
     }

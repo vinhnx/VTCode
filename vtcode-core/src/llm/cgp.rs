@@ -18,13 +18,14 @@ use crate::llm::provider_config::{
     HuggingFaceProviderConfig, LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig,
     MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
-    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, ZAIProviderConfig,
+    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig,
+    ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
     LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
     OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
-    OpenRouterProvider, PoolsideProvider, QwenProvider, ZAIProvider,
+    OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -267,6 +268,7 @@ impl_standard_provider_constructor!(
     OpenCodeZenProvider,
     OpenCodeGoProvider,
     QwenProvider,
+    StepFunProvider,
     PoolsideProvider,
 );
 
@@ -342,6 +344,10 @@ crate::delegate_components!(QwenProviderConfig {
     ProviderMetadataComponent => QwenProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<QwenProvider>,
 });
+crate::delegate_components!(StepFunProviderConfig {
+    ProviderMetadataComponent => StepFunProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<StepFunProvider>,
+});
 crate::delegate_components!(PoolsideProviderConfig {
     ProviderMetadataComponent => PoolsideProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<PoolsideProvider>,
@@ -367,6 +373,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
     factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
     factory.register_cgp_provider::<QwenProviderConfig>();
+    factory.register_cgp_provider::<StepFunProviderConfig>();
     factory.register_cgp_provider::<PoolsideProviderConfig>();
 }
 

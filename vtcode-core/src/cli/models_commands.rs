@@ -108,6 +108,7 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
         "openrouter" => (config.providers.openrouter.as_ref(), false),
         "ollama" => (config.providers.ollama.as_ref(), true),
         "lmstudio" => (config.providers.lmstudio.as_ref(), true),
+        "stepfun" => (config.providers.stepfun.as_ref(), false),
         _ => return false,
     };
     provider_config
@@ -199,7 +200,8 @@ async fn handle_config_provider(
     let mut config = manager.load_config().await?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio" => {
+        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio"
+        | "stepfun" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
@@ -235,6 +237,7 @@ fn configure_standard_provider(
         "ollama" => get_provider_config!(ollama),
         "lmstudio" => get_provider_config!(lmstudio),
         "minimax" => get_provider_config!(anthropic), // Note: maps to anthropic
+        "stepfun" => get_provider_config!(stepfun),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -322,6 +325,7 @@ fn get_provider_credentials(
         "openrouter" => config.providers.openrouter.as_ref(),
         "ollama" => config.providers.ollama.as_ref(),
         "lmstudio" => config.providers.lmstudio.as_ref(),
+        "stepfun" => config.providers.stepfun.as_ref(),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 

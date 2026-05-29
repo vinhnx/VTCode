@@ -89,6 +89,9 @@ impl RigProviderCapabilities {
             Provider::Qwen => {
                 // Alibaba Cloud Qwen uses an OpenAI-compatible API; rig has no dedicated client.
             }
+            Provider::StepFun => {
+                // StepFun uses an OpenAI-compatible API; rig has no dedicated client.
+            }
             Provider::Poolside => {
                 // Poolside uses an OpenAI-compatible API; rig has no dedicated client.
             }
@@ -196,6 +199,16 @@ impl RigProviderCapabilities {
                     "thinking": { "type": "enabled" },
                     "thinking_effort": "high"
                 })),
+            },
+            Provider::StepFun => match effort {
+                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
+                    Some(json!({ "reasoning_effort": "low" }))
+                }
+                ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
             },
             _ => None,
         }

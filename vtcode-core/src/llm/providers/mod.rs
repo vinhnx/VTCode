@@ -19,6 +19,7 @@ pub mod openresponses;
 pub mod openrouter;
 pub mod poolside;
 pub mod qwen;
+pub mod stepfun;
 pub mod streaming_progress;
 pub mod zai;
 
@@ -56,6 +57,7 @@ pub use openresponses::OpenResponsesProvider;
 pub use openrouter::OpenRouterProvider;
 pub use poolside::PoolsideProvider;
 pub use qwen::QwenProvider;
+pub use stepfun::StepFunProvider;
 pub use streaming_progress::{
     StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
 };

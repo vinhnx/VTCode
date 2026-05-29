@@ -306,6 +306,7 @@ fn known_provider_from_name(provider_name: &str) -> Option<Provider> {
         "zai" => Some(Provider::ZAI),
         "minimax" => Some(Provider::Minimax),
         "huggingface" => Some(Provider::HuggingFace),
+        "stepfun" => Some(Provider::StepFun),
         _ => None,
     }
 }
@@ -387,6 +388,7 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
             }
             None
         }
+        Provider::StepFun => Some(trimmed_model.to_string()),
         _ => None,
     }
 }
@@ -400,6 +402,7 @@ fn provider_default_lightweight_model(provider: Provider) -> Option<&'static str
         Provider::Gemini => Some(ModelId::Gemini3FlashPreview.as_str()),
         Provider::ZAI => Some(ModelId::ZaiGlm5.as_str()),
         Provider::Minimax => Some(ModelId::MinimaxM25.as_str()),
+        Provider::StepFun => Some(ModelId::StepFun37Flash.as_str()),
         _ => None,
     }
 }
