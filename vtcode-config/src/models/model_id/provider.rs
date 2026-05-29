@@ -44,11 +44,7 @@ impl ModelId {
             | ModelId::CopilotClaudeSonnet46 => Provider::Copilot,
             ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => Provider::DeepSeek,
             ModelId::MistralLarge3 => Provider::Mistral,
-            ModelId::MiMoV25Pro
-            | ModelId::MiMoV25
-            | ModelId::MiMoV2Pro
-            | ModelId::MiMoV2Omni
-            | ModelId::MiMoV2Flash => Provider::MiMo,
+            ModelId::MiMoV25Pro | ModelId::MiMoV25 | ModelId::MiMoV2Flash => Provider::MiMo,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b

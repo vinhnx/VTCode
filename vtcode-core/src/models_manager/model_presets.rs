@@ -1185,42 +1185,6 @@ fn mimo_presets() -> Vec<ModelPreset> {
             context_window: Some(1_048_576),
         },
         ModelPreset {
-            id: mimo_models::MIMO_V2_PRO.to_string(),
-            model: mimo_models::MIMO_V2_PRO.to_string(),
-            display_name: "MiMo V2 Pro".to_string(),
-            description: "Xiaomi's strong reasoning model with 1M context".to_string(),
-            provider: Provider::MiMo,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_048_576),
-        },
-        ModelPreset {
-            id: mimo_models::MIMO_V2_OMNI.to_string(),
-            model: mimo_models::MIMO_V2_OMNI.to_string(),
-            display_name: "MiMo V2 Omni".to_string(),
-            description:
-                "Xiaomi's multimodal model supporting text, image, and audio inputs (256K context)"
-                    .to_string(),
-            provider: Provider::MiMo,
-            default_reasoning_effort: ReasoningEffortLevel::Low,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Low,
-                description: "Fast".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(262_144),
-        },
-        ModelPreset {
             id: mimo_models::MIMO_V2_FLASH.to_string(),
             model: mimo_models::MIMO_V2_FLASH.to_string(),
             display_name: "MiMo V2 Flash".to_string(),

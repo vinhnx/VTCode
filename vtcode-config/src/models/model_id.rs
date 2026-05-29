@@ -142,10 +142,6 @@ pub enum ModelId {
     MiMoV25Pro,
     /// MiMo V2.5 - Xiaomi's omni-modal model with full-modal understanding and 1M context
     MiMoV25,
-    /// MiMo V2 Pro - Xiaomi's strong reasoning model (1M context)
-    MiMoV2Pro,
-    /// MiMo V2 Omni - Xiaomi's multimodal vision-language model with 256K context
-    MiMoV2Omni,
     /// MiMo V2 Flash - Xiaomi's lightweight fast model for high-throughput tasks
     MiMoV2Flash,
 

@@ -3425,53 +3425,6 @@
           "structured_output": true
         }
       },
-      "mimo-v2-pro": {
-        "id": "mimo-v2-pro",
-        "name": "MiMo V2 Pro",
-        "description": "Xiaomi MiMo V2 Pro model with 1M context and deep thinking",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1048576,
-        "max_output_tokens": 131072,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true
-        }
-      },
-      "mimo-v2-omni": {
-        "id": "mimo-v2-omni",
-        "name": "MiMo V2 Omni",
-        "description": "Xiaomi MiMo omni-modal agentic foundation model that sees, understands and acts",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "audio",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 262144,
-        "max_output_tokens": 131072,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true
-        }
-      },
       "mimo-v2-flash": {
         "id": "mimo-v2-flash",
         "name": "MiMo V2 Flash",
