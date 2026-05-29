@@ -93,7 +93,11 @@ impl Session {
                 self.invalidate_scroll_metrics();
             }
             InlineCommand::SetHeaderContext { context } => {
-                self.header_context = *context;
+                let mut next_context = *context;
+                next_context.editing_mode = self.header_context.editing_mode;
+                next_context.autonomous_mode = self.header_context.autonomous_mode;
+                next_context.reasoning_stage = self.header_context.reasoning_stage.clone();
+                self.header_context = next_context;
                 self.invalidate_header_cache();
             }
             InlineCommand::SetInputStatus { left, right } => {
@@ -203,11 +207,11 @@ impl Session {
             InlineCommand::SetEditingMode(mode) => {
                 self.clear_inline_prompt_suggestion();
                 self.header_context.editing_mode = mode;
-                self.needs_redraw = true;
+                self.invalidate_header_cache();
             }
             InlineCommand::SetAutonomousMode(enabled) => {
                 self.header_context.autonomous_mode = enabled;
-                self.needs_redraw = true;
+                self.invalidate_header_cache();
             }
             InlineCommand::SetSkipConfirmations(skip) => {
                 self.skip_confirmations = skip;

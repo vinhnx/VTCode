@@ -91,6 +91,12 @@ pub fn create_stream(
                             });
                         }
                         AnthropicStreamEvent::ContentBlockStart {
+                            index,
+                            content_block: AnthropicContentBlock::RedactedThinking { data, .. },
+                        } => {
+                            reasoning_blocks.insert(index, ReasoningBlockState::Redacted { data });
+                        }
+                        AnthropicStreamEvent::ContentBlockStart {
                             content_block: AnthropicContentBlock::Compaction { content, .. },
                             ..
                         } => {

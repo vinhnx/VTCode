@@ -41,7 +41,7 @@ provider = "mimo"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
@@ -99,14 +99,8 @@ memories = true
 # Type: `string`
 version = "0.96.12"
 
-
-# Permissions
-# Default approval and trust behavior.
 [permissions]
-# Default unified permission mode for the current session.
-# Default: "default"
-# Type: `string`
-default_mode = "auto"
+default_mode = "plan"
 
 
 # Provider Endpoints

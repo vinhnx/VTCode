@@ -52,6 +52,8 @@ pub(crate) async fn handle_toggle_plan_mode(
             true,
         )
         .await;
+        ctx.header_context.editing_mode = EditingMode::Plan;
+        ctx.header_context.autonomous_mode = false;
         sync_workspace_trust_prompt_policy(&mut ctx, SessionMode::Plan).await?;
         ctx.renderer.line(
             MessageStyle::Info,
@@ -81,6 +83,8 @@ pub(crate) async fn handle_toggle_plan_mode(
             true,
         )
         .await;
+        ctx.header_context.editing_mode = EditingMode::Edit;
+        ctx.header_context.autonomous_mode = false;
         sync_workspace_trust_prompt_policy(&mut ctx, SessionMode::Edit).await?;
         ctx.renderer.line(
             MessageStyle::Info,
@@ -247,6 +251,8 @@ async fn apply_session_mode(
                 false,
             )
             .await;
+            ctx.header_context.editing_mode = EditingMode::Plan;
+            ctx.header_context.autonomous_mode = false;
         }
         SessionMode::Edit | SessionMode::Auto => {
             ctx.tool_registry.disable_plan_mode();
@@ -256,6 +262,8 @@ async fn apply_session_mode(
             ctx.session_stats.set_plan_mode(false);
             ctx.session_stats
                 .set_autonomous_mode(matches!(new_mode, SessionMode::Auto));
+            ctx.header_context.editing_mode = EditingMode::Edit;
+            ctx.header_context.autonomous_mode = matches!(new_mode, SessionMode::Auto);
             ctx.handle.set_editing_mode(EditingMode::Edit);
             ctx.handle
                 .set_autonomous_mode(matches!(new_mode, SessionMode::Auto));
