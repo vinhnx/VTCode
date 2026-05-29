@@ -732,6 +732,11 @@ publish_homebrew_tap() {
             GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
             git commit -m "chore: update homebrew formula to $version [skip ci]"; then
             print_success "Local Homebrew formula updated and committed"
+            if git push origin main --no-verify; then
+                print_success "Homebrew formula commit pushed to origin"
+            else
+                print_warning "Failed to push Homebrew formula commit to origin"
+            fi
         else
             print_warning "Failed to commit local Homebrew formula update"
         fi
