@@ -59,8 +59,6 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro,
             ModelId::MiMoV25,
-            ModelId::MiMoV2Pro,
-            ModelId::MiMoV2Omni,
             ModelId::MiMoV2Flash,
             // Moonshot models
             ModelId::MoonshotKimiK26,

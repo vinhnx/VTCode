@@ -53,8 +53,6 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro => models::mimo::MIMO_V2_5_PRO,
             ModelId::MiMoV25 => models::mimo::MIMO_V2_5,
-            ModelId::MiMoV2Pro => models::mimo::MIMO_V2_PRO,
-            ModelId::MiMoV2Omni => models::mimo::MIMO_V2_OMNI,
             ModelId::MiMoV2Flash => models::mimo::MIMO_V2_FLASH,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,

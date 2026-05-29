@@ -119,8 +119,6 @@ impl ModelId {
             ModelId::MiMoV25 => {
                 "Xiaomi's omni-modal model with full-modal understanding and 1M context"
             }
-            ModelId::MiMoV2Pro => "Xiaomi's strong reasoning model with 1M context",
-            ModelId::MiMoV2Omni => "Xiaomi's multimodal vision-language model with 256K context",
             ModelId::MiMoV2Flash => {
                 "Xiaomi's lightweight fast model for high-throughput tasks (256K context)"
             }

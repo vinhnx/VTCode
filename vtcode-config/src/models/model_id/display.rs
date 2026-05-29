@@ -51,8 +51,6 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro => "MiMo V2.5 Pro",
             ModelId::MiMoV25 => "MiMo V2.5",
-            ModelId::MiMoV2Pro => "MiMo V2 Pro",
-            ModelId::MiMoV2Omni => "MiMo V2 Omni",
             ModelId::MiMoV2Flash => "MiMo V2 Flash",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",

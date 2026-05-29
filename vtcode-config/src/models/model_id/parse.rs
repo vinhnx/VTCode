@@ -102,8 +102,6 @@ impl FromStr for ModelId {
             // MiMo models
             s if s == models::mimo::MIMO_V2_5_PRO => Ok(ModelId::MiMoV25Pro),
             s if s == models::mimo::MIMO_V2_5 => Ok(ModelId::MiMoV25),
-            s if s == models::mimo::MIMO_V2_PRO => Ok(ModelId::MiMoV2Pro),
-            s if s == models::mimo::MIMO_V2_OMNI => Ok(ModelId::MiMoV2Omni),
             s if s == models::mimo::MIMO_V2_FLASH => Ok(ModelId::MiMoV2Flash),
             // Qwen models
             s if s == models::qwen::QWEN3_7_MAX => Ok(ModelId::Qwen37Max),

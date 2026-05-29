@@ -279,7 +279,7 @@ impl LLMProvider for MiMoProvider {
     }
 
     fn supports_vision(&self, model: &str) -> bool {
-        model == models::mimo::MIMO_V2_5 || model == models::mimo::MIMO_V2_OMNI
+        model == models::mimo::MIMO_V2_5
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
@@ -295,8 +295,6 @@ impl LLMProvider for MiMoProvider {
             .unwrap_or(false)
             || requested == models::mimo::MIMO_V2_5_PRO
             || requested == models::mimo::MIMO_V2_5
-            || requested == models::mimo::MIMO_V2_PRO
-            || requested == models::mimo::MIMO_V2_OMNI
             || requested == models::mimo::MIMO_V2_FLASH
     }
 
@@ -314,10 +312,8 @@ impl LLMProvider for MiMoProvider {
             model
         };
         match requested {
-            models::mimo::MIMO_V2_5_PRO | models::mimo::MIMO_V2_5 | models::mimo::MIMO_V2_PRO => {
-                1_048_576
-            }
-            models::mimo::MIMO_V2_OMNI | models::mimo::MIMO_V2_FLASH => 262_144,
+            models::mimo::MIMO_V2_5_PRO | models::mimo::MIMO_V2_5 => 1_048_576,
+            models::mimo::MIMO_V2_FLASH => 262_144,
             _ => 128_000,
         }
     }
