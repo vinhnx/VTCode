@@ -21,18 +21,6 @@ fn remove_env_var(key: OsString) {
     unsafe { std::env::remove_var(key) }
 }
 
-#[cfg(unix)]
-#[allow(unsafe_code)]
-fn setrlimit(resource: libc::__rlimit_resource_t, rlim: &libc::rlimit) -> i32 {
-    unsafe { libc::setrlimit(resource, rlim) }
-}
-
-#[cfg(unix)]
-#[allow(unsafe_code)]
-fn getrlimit(resource: libc::__rlimit_resource_t, rlim: &mut libc::rlimit) -> i32 {
-    unsafe { libc::getrlimit(resource, rlim) }
-}
-
 /// Perform early process hardening as the first operation in `main()`.
 ///
 /// Call this before any other operations, thread spawning, or heap
@@ -135,12 +123,13 @@ pub(crate) fn pre_main_hardening_macos() {
 }
 
 #[cfg(unix)]
+#[allow(unsafe_code)]
 fn set_core_file_size_limit_to_zero() {
     let rlim = libc::rlimit {
         rlim_cur: 0,
         rlim_max: 0,
     };
-    let ret_code = setrlimit(libc::RLIMIT_CORE, &rlim);
+    let ret_code = unsafe { libc::setrlimit(libc::RLIMIT_CORE, &rlim) };
     if ret_code != 0 {
         eprintln!(
             "ERROR: setrlimit(RLIMIT_CORE) failed: {}",
@@ -165,6 +154,7 @@ fn set_core_file_size_limit_to_zero() {
 // suppresses the remaining unused-variables warning on the function-level
 // `current` borrow when no cfg branch matches.
 #[allow(unused_variables)]
+#[allow(unsafe_code)]
 fn cap_stack_rlimit() {
     #[cfg(any(
         target_os = "linux",
@@ -181,7 +171,7 @@ fn cap_stack_rlimit() {
             rlim_cur: 0,
             rlim_max: 0,
         };
-        let ret = getrlimit(libc::RLIMIT_STACK, &mut current);
+        let ret = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut current) };
         if ret != 0 {
             return;
         }
@@ -193,7 +183,7 @@ fn cap_stack_rlimit() {
             rlim_cur: STACK_CAP_BYTES,
             rlim_max: STACK_CAP_BYTES,
         };
-        let _ = setrlimit(libc::RLIMIT_STACK, &capped);
+        let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
     }
 }
 
