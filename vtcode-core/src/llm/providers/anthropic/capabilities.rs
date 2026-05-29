@@ -54,7 +54,7 @@ pub(crate) fn resolve_model_name<'a>(model: &'a str, default_model: &'a str) -> 
     }
 }
 
-fn matches_model(model: &str, candidate: &str) -> bool {
+pub(crate) fn matches_model(model: &str, candidate: &str) -> bool {
     model == candidate || model.contains(candidate)
 }
 

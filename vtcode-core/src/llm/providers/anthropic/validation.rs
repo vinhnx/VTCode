@@ -15,9 +15,9 @@ use crate::llm::provider::{
 
 use super::capabilities::{
     adaptive_thinking_is_default, allowed_efforts_for_model, claude_thinking_profile,
-    effort_allowed_for_model, resolve_model_name, supports_assistant_prefill, supports_effort,
-    supports_manual_interleaved_beta, supports_manual_thinking_budget, supports_structured_output,
-    supports_task_budget,
+    effort_allowed_for_model, matches_model, resolve_model_name, supports_assistant_prefill,
+    supports_effort, supports_manual_interleaved_beta, supports_manual_thinking_budget,
+    supports_structured_output, supports_task_budget,
 };
 
 pub fn validate_request(
@@ -83,8 +83,8 @@ pub fn validate_request(
         });
     }
 
-    if (resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8
-        || resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7)
+    if (matches_model(resolved_model, crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8)
+        || matches_model(resolved_model, crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7))
         && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
     {
         let formatted_error = error_display::format_llm_error(
