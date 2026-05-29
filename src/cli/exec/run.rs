@@ -302,6 +302,7 @@ async fn handle_codex_exec_command_impl(
             organization_id: None,
             request_id: None,
             tool_references: Vec::new(),
+            compaction: None,
         };
         let payload = serde_json::json!({
             "response": response,

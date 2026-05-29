@@ -645,6 +645,7 @@ mod tests {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -684,6 +685,7 @@ mod tests {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -721,6 +723,7 @@ mod tests {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -758,6 +761,7 @@ mod tests {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -801,6 +805,7 @@ mod tests {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -869,6 +874,7 @@ Outro"#
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -974,6 +980,7 @@ Open questions for alignment:
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -1021,6 +1028,7 @@ Open questions for alignment:
                 r#"{"type":"reasoning_content","text":"trace"}"#.to_string(),
             ]),
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -1071,6 +1079,7 @@ Open questions for alignment:
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };
@@ -1115,6 +1124,7 @@ Open questions for alignment:
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            compaction: None,
             request_id: None,
             organization_id: None,
         };

@@ -547,6 +547,12 @@ impl LLMProvider for AnthropicProvider {
         true
     }
 
+    fn supports_responses_compaction(&self, model: &str) -> bool {
+        // Anthropic server-side compaction is supported on Claude Opus 4.x,
+        // Sonnet 4.6+, and Mythos Preview models via context_management.edits.
+        capabilities::supports_compaction(model)
+    }
+
     fn effective_context_size(&self, model: &str) -> usize {
         capabilities::effective_context_size(model)
     }
@@ -705,6 +711,7 @@ impl LLMClient for AnthropicProvider {
             finish_reason: response.finish_reason,
             tool_calls: response.tool_calls,
             tool_references: response.tool_references,
+            compaction: None,
         })
     }
 

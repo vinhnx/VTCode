@@ -729,6 +729,7 @@ impl OllamaProvider {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         }
     }
 

@@ -373,6 +373,18 @@ pub struct AnthropicUsage {
     pub output_tokens: u32,
     pub cache_creation_input_tokens: Option<u32>,
     pub cache_read_input_tokens: Option<u32>,
+    /// Per-iteration token usage, populated when compaction triggers.
+    /// Each entry represents one sampling pass (compaction or message).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iterations: Option<Vec<AnthropicUsageIteration>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnthropicUsageIteration {
+    #[serde(rename = "type")]
+    pub iteration_type: String,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
 }
 
 #[derive(Debug, Deserialize)]

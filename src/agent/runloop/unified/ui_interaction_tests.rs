@@ -67,6 +67,7 @@ impl uni::LLMProvider for CompletedOnlyProvider {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         })
     }
 
@@ -110,6 +111,7 @@ impl uni::LLMProvider for ReasoningThenContentProvider {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         })
     }
 
@@ -159,6 +161,7 @@ impl uni::LLMProvider for StagedReasoningProvider {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         })
     }
 
@@ -211,6 +214,7 @@ impl uni::LLMProvider for ReasoningThenChunkedContentProvider {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         })
     }
 
@@ -264,6 +268,7 @@ impl uni::LLMProvider for NormalizedToolCallProvider {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         })
     }
 

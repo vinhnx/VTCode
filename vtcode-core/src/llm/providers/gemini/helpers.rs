@@ -394,6 +394,7 @@ impl GeminiProvider {
                 tool_references: Vec::new(),
                 request_id: None,
                 organization_id: None,
+                compaction: None,
             });
         }
 
@@ -504,6 +505,7 @@ impl GeminiProvider {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         })
     }
 
@@ -625,6 +627,7 @@ impl GeminiProvider {
             tool_references: Vec::new(),
             request_id: Some(response.id),
             organization_id: None,
+            compaction: None,
         })
     }
 

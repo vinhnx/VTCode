@@ -635,6 +635,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
                         tool_references: Vec::new(),
                         request_id: None,
                         organization_id: None,
+                        compaction: None,
                     });
                 }
 
@@ -759,6 +760,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         })
     }
 

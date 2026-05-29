@@ -359,6 +359,19 @@ pub struct AgentHarnessConfig {
     /// When unset, VT Code derives a threshold from the provider context window.
     #[serde(default)]
     pub auto_compaction_threshold_tokens: Option<u64>,
+    /// Optional custom instructions for the compaction summarization prompt.
+    /// When set, replaces the default Anthropic compaction prompt entirely.
+    /// Useful for tool-use scenarios to prevent the model from calling tools
+    /// during summarization. Only applies to Anthropic provider.
+    #[serde(default)]
+    pub auto_compaction_instructions: Option<String>,
+    /// Whether to pause after compaction (Anthropic only).
+    /// When true and compaction triggers, the API returns early with
+    /// `stop_reason: "compaction"` and only the compaction block.
+    /// The caller can then insert additional messages before the model
+    /// generates its text response.
+    #[serde(default)]
+    pub auto_compaction_pause_after: bool,
     /// Provider-native tool-result clearing policy.
     #[serde(default)]
     pub tool_result_clearing: ToolResultClearingConfig,
@@ -389,6 +402,8 @@ impl Default for AgentHarnessConfig {
             max_parallel_tool_calls: default_harness_max_parallel_tool_calls(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             auto_compaction_threshold_tokens: None,
+            auto_compaction_instructions: None,
+            auto_compaction_pause_after: false,
             tool_result_clearing: ToolResultClearingConfig::default(),
             max_budget_usd: None,
             continuation_policy: ContinuationPolicy::default(),

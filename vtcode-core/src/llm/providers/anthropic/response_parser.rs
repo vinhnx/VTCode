@@ -34,6 +34,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
     let mut tool_calls = Vec::new();
     let mut reasoning_details_vec = Vec::with_capacity(block_count);
     let mut tool_references = Vec::new();
+    let mut compaction: Option<String> = None;
 
     for block in content {
         match block.get("type").and_then(|t| t.as_str()) {
@@ -116,6 +117,9 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                     }
                 }
             }
+            Some("compaction") => {
+                compaction = block.get("content").and_then(|t| t.as_str()).map(|s| s.to_string());
+            }
             _ => {} // Ignore unknown block types
         }
     }
@@ -165,6 +169,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         tool_references,
         request_id: None,
         organization_id: None,
+        compaction,
     })
 }
 

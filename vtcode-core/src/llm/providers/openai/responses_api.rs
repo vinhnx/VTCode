@@ -486,6 +486,7 @@ pub fn parse_responses_payload(
                     .map(ToOwned::to_owned)
             }),
         organization_id: None,
+        compaction: None,
     })
 }
 

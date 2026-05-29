@@ -549,6 +549,12 @@ pub struct LLMResponse {
 
     /// Organization ID from the provider
     pub organization_id: Option<String>,
+
+    /// Compaction summary content from Anthropic's server-side compaction.
+    /// Populated when `stop_reason` is `Pause` (from `"compaction"`).
+    /// The caller should pass this back in subsequent requests so the API
+    /// can drop prior messages before the compaction block.
+    pub compaction: Option<String>,
 }
 
 impl LLMResponse {
@@ -565,6 +571,7 @@ impl LLMResponse {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         }
     }
 

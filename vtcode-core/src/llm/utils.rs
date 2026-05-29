@@ -93,6 +93,7 @@ pub fn parse_response_openai_format(
         tool_references: Vec::new(),
         request_id: None,
         organization_id: None,
+        compaction: None,
     };
 
     // Set content based on function call or regular content

@@ -69,6 +69,7 @@ impl uni::LLMProvider for ScriptedProvider {
                 organization_id: None,
                 request_id: request_id.map(str::to_string),
                 tool_references: Vec::new(),
+                compaction: None,
             }),
             ScriptedProviderOutcome::Error(error) => Err(error),
         }

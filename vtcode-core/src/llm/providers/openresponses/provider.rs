@@ -143,6 +143,7 @@ impl OpenResponsesProvider {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             organization_id: None,
+            compaction: None,
         })
     }
 
@@ -643,6 +644,7 @@ impl OpenResponsesProvider {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             organization_id: None,
+            compaction: None,
         })
     }
 

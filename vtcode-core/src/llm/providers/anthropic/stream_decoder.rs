@@ -91,12 +91,15 @@ pub fn create_stream(
                             });
                         }
                         AnthropicStreamEvent::ContentBlockStart {
-                            index,
-                            content_block: AnthropicContentBlock::RedactedThinking { data, .. },
+                            content_block: AnthropicContentBlock::Compaction { content, .. },
+                            ..
                         } => {
-                            reasoning_blocks.insert(index, ReasoningBlockState::Redacted { data });
+                            aggregator.compaction = Some(content);
                         }
-                        AnthropicStreamEvent::ContentBlockStart { index, content_block: AnthropicContentBlock::ToolUse(tool_use) } => {
+                        AnthropicStreamEvent::ContentBlockStart {
+                            index,
+                            content_block: AnthropicContentBlock::ToolUse(tool_use),
+                        } => {
                             if aggregator.tool_builders.len() <= index {
                                 aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
                             }
@@ -148,6 +151,9 @@ pub fn create_stream(
                                     }
                                     yield LLMStreamEvent::ReasoningSignature { signature };
                                 }
+                                AnthropicStreamDelta::CompactionDelta { content } => {
+                                    aggregator.compaction = Some(content);
+                                }
                                 AnthropicStreamDelta::InputJsonDelta { partial_json } => {
                                     if aggregator.tool_builders.len() <= index {
                                         aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
@@ -158,7 +164,6 @@ pub fn create_stream(
                                     delta_map.insert("function".to_string(), Value::Object(func));
                                     aggregator.tool_builders[index].apply_delta(&Value::Object(delta_map));
                                 }
-                                AnthropicStreamDelta::CompactionDelta { .. } => {}
                             }
                         }
                         AnthropicStreamEvent::ContentBlockStop { index } => {

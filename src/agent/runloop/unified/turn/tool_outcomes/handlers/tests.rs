@@ -75,6 +75,7 @@ impl uni::LLMProvider for NoopProvider {
             organization_id: None,
             request_id: None,
             tool_references: Vec::new(),
+            compaction: None,
         })
     }
 

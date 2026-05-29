@@ -590,6 +590,7 @@ pub struct StreamAggregator {
     pub usage: Option<crate::llm::provider::Usage>,
     pub finish_reason: crate::llm::provider::FinishReason,
     pub sanitizer: TagStreamSanitizer,
+    pub compaction: Option<String>,
 }
 
 impl StreamAggregator {
@@ -604,6 +605,7 @@ impl StreamAggregator {
             usage: None,
             finish_reason: crate::llm::provider::FinishReason::Stop,
             sanitizer: TagStreamSanitizer::new(),
+            compaction: None,
         }
     }
 
@@ -700,6 +702,7 @@ impl StreamAggregator {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: self.compaction,
         }
     }
 }
@@ -767,6 +770,7 @@ where
         tool_references: Vec::new(),
         request_id: None,
         organization_id: None,
+        compaction: None,
     };
 
     if let Some(value) = last_response_value

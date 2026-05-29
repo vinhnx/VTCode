@@ -267,6 +267,7 @@ pub(crate) async fn handle_codex_ask_command(
             organization_id: None,
             request_id: None,
             tool_references: Vec::new(),
+            compaction: None,
         };
         let payload = json!({
             "response": response,

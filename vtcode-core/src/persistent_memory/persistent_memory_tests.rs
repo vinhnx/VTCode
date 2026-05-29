@@ -479,6 +479,7 @@ impl LLMProvider for StreamingOnlyMemoryProvider {
                     organization_id: None,
                     request_id: None,
                     tool_references: Vec::new(),
+                    compaction: None,
                 }),
             },
         )])))

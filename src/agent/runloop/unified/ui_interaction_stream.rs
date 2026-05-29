@@ -1011,6 +1011,7 @@ mod tests {
             organization_id: None,
             request_id: None,
             tool_references: vec![],
+            compaction: None,
         }
     }
 

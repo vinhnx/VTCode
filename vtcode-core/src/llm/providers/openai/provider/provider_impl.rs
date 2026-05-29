@@ -211,6 +211,7 @@ impl LLMClient for OpenAIProvider {
             finish_reason: response.finish_reason,
             tool_calls: response.tool_calls,
             tool_references: response.tool_references,
+            compaction: None,
         })
     }
 

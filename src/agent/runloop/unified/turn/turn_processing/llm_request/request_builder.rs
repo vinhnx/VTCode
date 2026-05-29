@@ -365,13 +365,34 @@ fn build_anthropic_context_management(
             turn.context_window_size,
         )
     {
-        edits.push(serde_json::json!({
-            "type": "compact_20260112",
-            "trigger": {
+        let mut compact_edit = serde_json::Map::new();
+        compact_edit.insert(
+            "type".to_string(),
+            serde_json::Value::String("compact_20260112".to_string()),
+        );
+        compact_edit.insert(
+            "trigger".to_string(),
+            serde_json::json!({
                 "type": "input_tokens",
                 "value": trigger_tokens,
-            },
-        }));
+            }),
+        );
+
+        if let Some(instructions) = &vt_cfg.agent.harness.auto_compaction_instructions {
+            compact_edit.insert(
+                "instructions".to_string(),
+                serde_json::Value::String(instructions.clone()),
+            );
+        }
+
+        if vt_cfg.agent.harness.auto_compaction_pause_after {
+            compact_edit.insert(
+                "pause_after_compaction".to_string(),
+                serde_json::Value::Bool(true),
+            );
+        }
+
+        edits.push(serde_json::Value::Object(compact_edit));
     }
 
     (!edits.is_empty()).then(|| {

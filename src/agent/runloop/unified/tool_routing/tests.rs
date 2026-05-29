@@ -117,6 +117,7 @@ impl uni::LLMProvider for StaticProvider {
             organization_id: None,
             request_id: None,
             tool_references: Vec::new(),
+            compaction: None,
         })
     }
 

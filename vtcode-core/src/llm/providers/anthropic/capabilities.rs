@@ -248,6 +248,14 @@ pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort:
         .is_some_and(|allowed| allowed.contains(&normalized.as_str()))
 }
 
+pub fn supports_compaction(model: &str) -> bool {
+    matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
+        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_7)
+        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_6)
+        || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
+        || matches_model(model, models::anthropic::CLAUDE_MYTHOS_PREVIEW)
+}
+
 pub fn supports_parallel_tool_config(_model: &str) -> bool {
     true
 }

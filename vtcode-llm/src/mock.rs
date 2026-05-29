@@ -96,6 +96,7 @@ mod tests {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         };
         let response_two = LLMResponse {
             content: Some("second".to_string()),
@@ -108,6 +109,7 @@ mod tests {
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
+            compaction: None,
         };
 
         let mut client = StaticResponseClient::new("test", BackendKind::OpenAI);
