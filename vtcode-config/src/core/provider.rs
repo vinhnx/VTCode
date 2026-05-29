@@ -481,8 +481,8 @@ pub struct AnthropicConfig {
     pub task_budget_beta: String,
 
     /// Controls how thinking content is returned in API responses.
-    ///   - "summarized": Thinking blocks contain summarized text (default on Claude 4 models).
-    ///   - "omitted": Thinking blocks have an empty `thinking` field (default on Opus 4.7).
+    ///   - "summarized": Thinking blocks contain summarized text (default on Opus 4.6 and earlier).
+    ///   - "omitted": Thinking blocks have an empty `thinking` field (default on Opus 4.7+).
     ///
     /// When set, this overrides the model-specific default.
     /// See: <https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#controlling-thinking-display>
