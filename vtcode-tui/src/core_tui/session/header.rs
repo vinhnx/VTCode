@@ -14,6 +14,7 @@ use super::super::types::{
     InlineHeaderStatusTone,
 };
 use super::terminal_capabilities;
+use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
 
 fn clean_reasoning_text(text: &str) -> String {
@@ -30,6 +31,14 @@ fn capitalize_first_letter(s: &str) -> String {
         None => String::new(),
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
     }
+}
+
+fn format_model_summary_label(model: &str) -> String {
+    model
+        .split('-')
+        .map(capitalize_first_letter)
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 fn compact_context_window_label(context_window_size: usize) -> String {
@@ -70,7 +79,7 @@ impl Session {
         }
 
         let lines = if self.appearance.hide_header {
-            vec![self.header_block_title()]
+            vec![self.header_block_title_for_width(self.transcript_width)]
         } else {
             vec![self.header_compact_line()]
         };
@@ -138,6 +147,10 @@ impl Session {
     }
 
     pub fn header_block_title(&self) -> Line<'static> {
+        self.header_block_title_for_width(0)
+    }
+
+    fn header_block_title_for_width(&self, width: u16) -> Line<'static> {
         let fallback = InlineHeaderContext::default();
         let version = if self.header_context.version.trim().is_empty() {
             fallback.version
@@ -161,10 +174,129 @@ impl Session {
         let prompt_style = self.section_title_style();
         let version_style = self.header_secondary_style().add_modifier(Modifier::DIM);
 
-        Line::from(vec![
+        let mut spans = vec![
             Span::styled(prompt, prompt_style),
             Span::styled(version_text, version_style),
-        ])
+        ];
+
+        if self.appearance.hide_header && width > 0 {
+            let right_spans = self.header_compact_right_spans();
+            if right_spans.is_empty() {
+                return Line::from(spans);
+            }
+
+            let left_width = spans.iter().map(Span::width).sum::<usize>();
+            let summary_width = right_spans.iter().map(Span::width).sum::<usize>();
+            let available_width = usize::from(width);
+            let spacer_width = available_width
+                .saturating_sub(left_width.saturating_add(summary_width))
+                .max(1);
+            spans.push(Span::raw(" ".repeat(spacer_width)));
+            spans.extend(right_spans);
+        }
+
+        let line = Line::from(spans);
+        if width > 0 {
+            truncate_line_with_ellipsis_if_overflow(line, usize::from(width))
+        } else {
+            line
+        }
+    }
+
+    fn header_compact_right_spans(&self) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let model_summary_spans = self.header_compact_model_summary_spans();
+        if let Some((mode_text, mode_style)) = self.header_active_mode_summary() {
+            spans.push(Span::styled(mode_text, mode_style));
+            if !model_summary_spans.is_empty() {
+                spans.push(Span::styled(
+                    " · ".to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+        }
+
+        spans.extend(model_summary_spans);
+
+        spans
+    }
+
+    fn header_compact_model_summary_spans(&self) -> Vec<Span<'static>> {
+        let provider = self.header_provider_short_value();
+        let model = self.header_model_short_value();
+        let reasoning = self.header_reasoning_short_value();
+        let mut spans = Vec::new();
+        let mut provider_model_parts = Vec::new();
+
+        match (
+            !provider.is_empty() && !provider.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER),
+            !model.is_empty() && !model.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER),
+        ) {
+            (true, true) => provider_model_parts.push(format!(
+                "{} {}",
+                capitalize_first_letter(&provider),
+                format_model_summary_label(&model)
+            )),
+            (true, false) => provider_model_parts.push(capitalize_first_letter(&provider)),
+            (false, true) => provider_model_parts.push(format_model_summary_label(&model)),
+            (false, false) => {}
+        }
+
+        if let Some(summary) =
+            (!provider_model_parts.is_empty()).then(|| provider_model_parts.join(" "))
+        {
+            spans.push(Span::styled(
+                summary,
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ));
+        }
+
+        if !reasoning.is_empty() && !reasoning.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)
+        {
+            if !spans.is_empty() {
+                spans.push(Span::styled(
+                    " · ".to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let label_style = self
+                .header_secondary_style()
+                .add_modifier(Modifier::ITALIC | Modifier::DIM);
+            let value_style = self.header_secondary_style().add_modifier(Modifier::ITALIC);
+            spans.push(Span::styled("effort:".to_owned(), label_style));
+            spans.push(Span::styled(" ".to_owned(), label_style));
+            spans.push(Span::styled(reasoning, value_style));
+        }
+
+        spans
+    }
+
+    fn header_active_mode_summary(&self) -> Option<(String, Style)> {
+        use super::super::types::EditingMode;
+
+        if self.header_context.autonomous_mode {
+            return Some((
+                "Auto".to_string(),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        match self.header_context.editing_mode {
+            EditingMode::Plan => Some((
+                "Plan".to_string(),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            EditingMode::Edit => Some((
+                "Edit".to_string(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )),
+        }
     }
 
     pub fn header_title_line(&self) -> Line<'static> {

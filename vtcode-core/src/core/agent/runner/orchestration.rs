@@ -526,6 +526,7 @@ impl AgentRunner {
         T: for<'de> Deserialize<'de>,
     {
         let model = self.get_selected_model();
+        eprintln!("[DEBUG] request_json_only called with model: {:?}", model);
         let response = self
             .provider_client
             .generate(LLMRequest {
@@ -540,7 +541,13 @@ impl AgentRunner {
             })
             .await
             .context(request_label)?;
-        parse_json_response::<T>(response.content.unwrap_or_default().as_str()).context(parse_label)
+        let content = response.content.unwrap_or_default();
+        // Debug: print raw response
+        eprintln!(
+            "[DEBUG] Raw model response (first 500 chars): {}",
+            &content[..content.len().min(500)]
+        );
+        parse_json_response::<T>(content.as_str()).context(parse_label)
     }
 
     async fn request_planner_response(&mut self, task: &Task) -> Result<PlannerResponse> {
@@ -736,9 +743,19 @@ where
     T: for<'de> Deserialize<'de>,
 {
     let trimmed = text.trim();
+    eprintln!(
+        "[DEBUG] parse_json_response called with text length: {}",
+        trimmed.len()
+    );
     if trimmed.is_empty() {
         anyhow::bail!("empty model response")
     }
+
+    // Debug: print raw response
+    eprintln!(
+        "[DEBUG] Raw model response (first 500 chars): {}",
+        &trimmed[..trimmed.len().min(500)]
+    );
 
     if let Ok(parsed) = serde_json::from_str::<T>(trimmed) {
         return Ok(parsed);

@@ -415,6 +415,122 @@ fn header_title_line_shows_model_context_window() {
 }
 
 #[test]
+fn hidden_header_summary_combines_provider_model_and_styles_effort_label() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.provider = format!("{}mimo", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}mimo-v2-flash", ui::HEADER_MODEL_PREFIX);
+    session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let line = &lines[0];
+    let summary = line_text(line);
+    assert!(summary.contains("Mimo Mimo-V2-Flash"));
+    assert!(!summary.contains("Mimo · Mimo-V2-Flash"));
+    assert!(summary.contains("effort: medium"));
+
+    let effort_label = line
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == "effort:")
+        .expect("effort label should be rendered");
+    assert!(effort_label.style.add_modifier.contains(Modifier::ITALIC));
+    assert!(effort_label.style.add_modifier.contains(Modifier::DIM));
+}
+
+#[test]
+fn hidden_header_summary_live_reloads_mode_changes() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+
+    let initial = header_line_text(&mut session);
+    assert!(initial.contains("Edit"));
+
+    session.handle_command(InlineCommand::SetAutonomousMode(true));
+    let auto = header_line_text(&mut session);
+    assert!(auto.contains("Auto"));
+    assert!(!auto.contains("Edit"));
+
+    session.handle_command(InlineCommand::SetAutonomousMode(false));
+    session.handle_command(InlineCommand::SetEditingMode(
+        crate::core_tui::EditingMode::Plan,
+    ));
+    let plan = header_line_text(&mut session);
+    assert!(plan.contains("Plan"));
+    assert!(!plan.contains("Auto"));
+}
+
+#[test]
+fn hidden_header_summary_live_reloads_model_changes() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.provider = format!("{}mimo", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}mimo-v2-flash", ui::HEADER_MODEL_PREFIX);
+    session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+
+    let initial = header_line_text(&mut session);
+    assert!(initial.contains("Mimo Mimo-V2-Flash"));
+
+    let mut next_context = session.header_context.clone();
+    next_context.provider = format!("{}moonshot", ui::HEADER_PROVIDER_PREFIX);
+    next_context.model = format!("{}kimi-k2", ui::HEADER_MODEL_PREFIX);
+    next_context.reasoning = format!("{}high", ui::HEADER_REASONING_PREFIX);
+    session.handle_command(InlineCommand::SetHeaderContext {
+        context: Box::new(next_context),
+    });
+
+    let updated = header_line_text(&mut session);
+    assert!(updated.contains("Moonshot Kimi-K2"));
+    assert!(updated.contains("effort: high"));
+    assert!(!updated.contains("Mimo Mimo-V2-Flash"));
+}
+
+#[test]
+fn header_context_updates_preserve_live_mode_state() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+
+    session.handle_command(InlineCommand::SetAutonomousMode(true));
+    let mut replacement = session.header_context.clone();
+    replacement.provider = format!("{}mimo", ui::HEADER_PROVIDER_PREFIX);
+    replacement.model = format!("{}mimo-v2-flash", ui::HEADER_MODEL_PREFIX);
+    replacement.reasoning = format!("{}low", ui::HEADER_REASONING_PREFIX);
+    replacement.editing_mode = crate::core_tui::EditingMode::Edit;
+    replacement.autonomous_mode = false;
+    session.handle_command(InlineCommand::SetHeaderContext {
+        context: Box::new(replacement),
+    });
+
+    let auto = header_line_text(&mut session);
+    assert!(auto.contains("Auto"));
+    assert!(!auto.contains("Edit ·"));
+
+    session.handle_command(InlineCommand::SetAutonomousMode(false));
+    session.handle_command(InlineCommand::SetEditingMode(
+        crate::core_tui::EditingMode::Plan,
+    ));
+    let mut replacement = session.header_context.clone();
+    replacement.provider = format!("{}moonshot", ui::HEADER_PROVIDER_PREFIX);
+    replacement.model = format!("{}kimi-k2", ui::HEADER_MODEL_PREFIX);
+    replacement.reasoning = format!("{}high", ui::HEADER_REASONING_PREFIX);
+    replacement.editing_mode = crate::core_tui::EditingMode::Edit;
+    replacement.autonomous_mode = false;
+    session.handle_command(InlineCommand::SetHeaderContext {
+        context: Box::new(replacement),
+    });
+
+    let plan = header_line_text(&mut session);
+    assert!(plan.contains("Plan"));
+    assert!(!plan.contains("Edit ·"));
+}
+
+#[test]
 fn header_highlights_collapse_to_single_line() {
     let mut session = session_with_highlights(vec![
         InlineHeaderHighlight {
