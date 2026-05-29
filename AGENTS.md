@@ -61,38 +61,7 @@ Choose placement before adding code:
 
 ## Adding a New LLM Provider
 
-When adding a new LLM provider + models, the following files must be touched in order:
-
-| Step | File | What to do |
-|------|------|------------|
-| 1 | `vtcode-config/src/constants/models/<provider>.rs` | Model ID constants + `SUPPORTED_MODELS` + `DEFAULT_MODEL` |
-| 2 | `vtcode-config/src/constants/models/mod.rs` | Add `pub mod <provider>;` |
-| 3 | `vtcode-config/src/constants/urls.rs` | Add `*_API_BASE` constant |
-| 4 | `vtcode-config/src/constants/env_vars.rs` | Add `*_BASE_URL` env var constant |
-| 5 | `vtcode-config/src/constants/model_helpers.rs` | Add `"<key>" => Some(models::<provider>::...)` in both `supported_for` and `default_for` |
-| 6 | `vtcode-config/src/models/provider.rs` | Add `Provider::<Name>` variant, all match arms (`label`, `display`, `from_str`, `as_ref`, `all_providers`, env key, `supports_reasoning_effort`) |
-| 7 | `vtcode-core/src/llm/providers/<provider>.rs` | Provider implementation — struct, `LLMProvider` impl, `LLMClient` impl |
-| 8 | `vtcode-core/src/llm/providers/mod.rs` | Add `pub mod <provider>;` + re-export |
-| 9 | `vtcode-core/src/llm/provider_config.rs` | Add `define_provider_config!(<Name>ProviderConfig, ...)` |
-| 10 | `vtcode-core/src/llm/cgp.rs` | Add import + `crate::delegate_components!(...)` + `register_builtin_cgp_providers` entry |
-| 11 | `vtcode-core/src/llm/factory.rs` | Add provider key to `BUILTIN_PROVIDER_KEYS` if needed |
-| 12 | `vtcode-core/src/llm/client.rs` | Add backend kind if new variant needed |
-| 13 | `vtcode-commons/src/llm.rs` | Add `BackendKind::<Name>` variant |
-| 14 | `vtcode-config/src/models/model_id.rs` | Add `ModelId` enum variants (CRITICAL: model picker uses `ModelId::all_models()`, not presets) |
-| 15 | `vtcode-config/src/models/model_id/collection.rs` | Add to `all_models()` |
-| 16 | `vtcode-config/src/models/model_id/provider.rs` | Map `ModelId` → `Provider` |
-| 17 | `vtcode-config/src/models/model_id/as_str.rs` | Map `ModelId` → model string constant |
-| 18 | `vtcode-config/src/models/model_id/display.rs` | Human-readable display names |
-| 19 | `vtcode-config/src/models/model_id/description.rs` | Model descriptions |
-| 20 | `vtcode-config/src/models/model_id/parse.rs` | Parse string → `ModelId` |
-| 21 | `vtcode-config/src/models/model_id/defaults.rs` | `default_orchestrator_for_provider` / `default_single_for_provider` |
-| 22 | `vtcode-core/src/models_manager/model_presets.rs` | Add preset function + match arm in `presets_for_provider` |
-| 23 | `vtcode-core/src/models_manager/manager.rs` | Add default model in `get_default_model_for_provider` |
-| 24 | `vtcode-core/src/llm/model_resolver.rs` | Add to `provider_precedence` + `heuristic_provider_from_model` |
-| 25 | `vtcode-core/src/llm/rig_adapter.rs` | Add `Provider::<Name>` arm |
-| 26 | `src/startup/first_run_prompts/model.rs` | Add to `default_model_for_provider` |
-| 27 | `vtcode-config/src/models/model_id/capabilities.rs` | Add to `capability_provider_key` |
-| 28 | `docs/models.json` | Add provider entry with model list (auto-generates capability tables via build.rs) |
+Use the `adding-llm-providers` skill for new provider integrations, adding models to existing providers, provider defaults, model picker support, and `docs/models.json` capability metadata.
 
 **Key insight**: The `/model` splash picker uses `ModelId::all_models()` — `builtin_model_presets()` is a separate system used by `ModelsManager`. Both must be updated for a provider/models to appear in the picker.
 
