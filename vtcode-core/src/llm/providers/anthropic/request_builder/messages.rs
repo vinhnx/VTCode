@@ -5,6 +5,7 @@ use crate::llm::error_display;
 use crate::llm::provider::{
     ContentPart, LLMError, LLMRequest, Message, MessageContent, MessageRole,
 };
+use crate::llm::providers::anthropic::capabilities::supports_mid_conversation_system_messages;
 use crate::llm::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicMessage, AnthropicToolResultBlock, AnthropicToolUseBlock,
     CacheControl, ImageSource,
@@ -43,13 +44,15 @@ pub(crate) fn build_messages(
 ) -> Result<Vec<AnthropicMessage>, LLMError> {
     let mut messages = Vec::with_capacity(messages_to_process.len());
     let mut tool_use_ids = HashSet::new();
+    let allow_mid_conversation_system =
+        supports_mid_conversation_system_messages(&request.model, &request.model);
     let allow_container_uploads = request
         .tools
         .as_ref()
         .is_some_and(|tools| tools.iter().any(|tool| tool.is_anthropic_code_execution()));
 
     for msg in messages_to_process {
-        if msg.role == MessageRole::System {
+        if msg.role == MessageRole::System && !allow_mid_conversation_system {
             continue;
         }
 
