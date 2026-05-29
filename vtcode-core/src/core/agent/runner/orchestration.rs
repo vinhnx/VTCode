@@ -34,6 +34,19 @@ where
     }
 }
 
+fn deserialize_string_or_object<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::String(s) => Ok(Some(s)),
+        serde_json::Value::Object(_) => Ok(Some(value.to_string())),
+        serde_json::Value::Null => Ok(None),
+        _ => Ok(None),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {
     pub spec_path: std::path::PathBuf,
@@ -57,12 +70,13 @@ pub(super) enum EvaluatorGateOutcome {
 
 #[derive(Debug, Deserialize)]
 struct PlannerResponse {
-    spec_markdown: String,
-    #[serde(default)]
+    #[serde(alias = "execution_spec", deserialize_with = "deserialize_string_or_object")]
+    spec_markdown: Option<String>,
+    #[serde(default, alias = "execution_contract", deserialize_with = "deserialize_string_or_object")]
     contract_markdown: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "task_title")]
     task_title: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "tracker_items")]
     items: Vec<PlannerItem>,
 }
 
@@ -74,7 +88,7 @@ struct PlannerItem {
     files: Vec<String>,
     #[serde(default)]
     outcome: String,
-    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
+    #[serde(default, alias = "verification_command", deserialize_with = "deserialize_string_or_vec")]
     verify: Vec<String>,
 }
 
@@ -263,11 +277,10 @@ impl AgentRunner {
         );
 
         let planner_response = self.request_planner_response(task).await?;
-        let spec_markdown = if planner_response.spec_markdown.trim().is_empty() {
-            self.fallback_spec_markdown(task)
-        } else {
-            planner_response.spec_markdown
-        };
+        let spec_markdown = planner_response
+            .spec_markdown
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| self.fallback_spec_markdown(task));
         let spec_path = harness_artifacts::write_spec(&self._workspace, &spec_markdown).await?;
 
         let tracker_items = self.build_planner_tracker_items(task, planner_response.items);
@@ -577,7 +590,7 @@ impl AgentRunner {
             SYSTEM_PROMPT,
             user_prompt,
             0.2,
-            1600,
+            4096,
             "planner request failed",
             "parse planner response",
         )
