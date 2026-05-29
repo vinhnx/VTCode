@@ -43,7 +43,7 @@ pub fn validate_request(
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5/4.6, Claude Opus 4.5/4.7, and Claude Haiku 4.5 models.",
+                "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5/4.6, Claude Opus 4.5/4.7/4.8, and Claude Haiku 4.5 models.",
                 request.model
             ),
         );
@@ -177,7 +177,7 @@ pub fn validate_request(
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
-                "task_budget_tokens ({}) must be at least 20000 for Claude Opus 4.7.",
+                "task_budget_tokens ({}) must be at least 20000 for Claude Opus 4.7/4.8.",
                 task_budget
             ),
         );

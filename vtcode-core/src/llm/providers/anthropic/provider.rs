@@ -804,11 +804,12 @@ mod tests {
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
         let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None)
-            .expect("beta header");
+            .beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
-        assert!(!beta_header.contains("structured-outputs-2025-11-13"));
+        if let Some(header) = &beta_header {
+            assert!(!header.contains("structured-outputs-2025-11-13"));
+        }
     }
 
     #[test]
@@ -1047,10 +1048,11 @@ mod tests {
                 .convert_to_anthropic_format(&request)
                 .expect("payload conversion");
             let beta_header = provider
-                .beta_header_for_request(&request, &payload, false, None)
-                .expect("beta header");
+                .beta_header_for_request(&request, &payload, false, None);
 
-            assert!(!beta_header.contains("context-1m-2025-08-07"));
+            if let Some(header) = &beta_header {
+                assert!(!header.contains("context-1m-2025-08-07"));
+            }
         }
     }
 
@@ -1070,11 +1072,12 @@ mod tests {
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
         let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None)
-            .expect("beta header");
+            .beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
-        assert!(!beta_header.contains("interleaved-thinking-2025-05-14"));
+        if let Some(header) = &beta_header {
+            assert!(!header.contains("interleaved-thinking-2025-05-14"));
+        }
     }
 
     #[test]
@@ -1118,10 +1121,11 @@ mod tests {
             .convert_to_anthropic_format(&request)
             .expect("payload conversion");
         let beta_header = provider
-            .beta_header_for_request(&request, &payload, false, None)
-            .expect("beta header");
+            .beta_header_for_request(&request, &payload, false, None);
 
-        assert!(!beta_header.contains("interleaved-thinking-2025-05-14"));
+        if let Some(header) = &beta_header {
+            assert!(!header.contains("interleaved-thinking-2025-05-14"));
+        }
     }
 
     #[test]

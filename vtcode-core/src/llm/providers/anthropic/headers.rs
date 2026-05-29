@@ -68,8 +68,6 @@ pub fn combined_beta_header_value(
         pieces.push(config.config.task_budget_beta.clone());
     }
 
-    pieces.push("output-64k-2025-02-19".to_owned());
-
     if let Some(betas) = config.request_betas {
         for b in betas {
             if !pieces.contains(b) {
