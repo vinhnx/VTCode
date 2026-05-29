@@ -10,6 +10,7 @@ impl ModelId {
             ModelId::GPT52,
             ModelId::GPT5,
             ModelId::OpenAIGptOss20b,
+            ModelId::ClaudeOpus48,
             ModelId::ClaudeOpus47,
             ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
@@ -33,7 +34,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini31ProPreview,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus47,
+            Provider::Anthropic => ModelId::ClaudeOpus48,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
             Provider::MiMo => ModelId::MiMoV25Pro,

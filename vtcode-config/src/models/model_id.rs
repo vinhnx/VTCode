@@ -68,7 +68,9 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
-    /// Claude Opus 4.7 - Next-gen flagship Anthropic model with adaptive thinking
+    /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
+    ClaudeOpus48,
+    /// Claude Opus 4.7 - Previous flagship Anthropic model with adaptive thinking
     ClaudeOpus47,
     /// Claude Opus 4.6 - Previous Anthropic flagship retained for compatibility
     ClaudeOpus46,

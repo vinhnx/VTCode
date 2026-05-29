@@ -43,6 +43,7 @@ pub const GPT_OSS_120B: &str = openai::GPT_OSS_120B;
 pub const CLAUDE_SONNET_4_6: &str = anthropic::CLAUDE_SONNET_4_6;
 pub const CLAUDE_OPUS_4_6: &str = anthropic::CLAUDE_OPUS_4_6;
 pub const CLAUDE_OPUS_4_7: &str = anthropic::CLAUDE_OPUS_4_7;
+pub const CLAUDE_OPUS_4_8: &str = anthropic::CLAUDE_OPUS_4_8;
 pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
 pub const CLAUDE_HAIKU_4_5_20251001: &str = anthropic::CLAUDE_HAIKU_4_5_20251001;
 pub const CLAUDE_MYTHOS_PREVIEW: &str = anthropic::CLAUDE_MYTHOS_PREVIEW;

@@ -32,7 +32,7 @@ const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
 
 /// Default model for Anthropic provider
-const ANTHROPIC_DEFAULT_MODEL: &str = "claude-opus-4-7";
+const ANTHROPIC_DEFAULT_MODEL: &str = "claude-opus-4-8";
 
 /// Coordinates remote model discovery plus cached metadata on disk.
 #[derive(Debug)]
@@ -295,12 +295,8 @@ impl ModelsManager {
             Provider::OpenCodeGo => {
                 crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string()
             }
-            Provider::MiMo => {
-                crate::config::constants::models::mimo::DEFAULT_MODEL.to_string()
-            }
-            Provider::Qwen => {
-                crate::config::constants::models::qwen::DEFAULT_MODEL.to_string()
-            }
+            Provider::MiMo => crate::config::constants::models::mimo::DEFAULT_MODEL.to_string(),
+            Provider::Qwen => crate::config::constants::models::qwen::DEFAULT_MODEL.to_string(),
         }
     }
 

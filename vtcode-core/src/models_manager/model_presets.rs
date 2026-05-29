@@ -554,6 +554,44 @@ fn openai_presets() -> Vec<ModelPreset> {
 fn anthropic_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
+            id: "claude-opus-4-8".to_string(),
+            model: "claude-opus-4-8".to_string(),
+            display_name: "Claude Opus 4.8".to_string(),
+            description:
+                "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work"
+                    .to_string(),
+            provider: Provider::Anthropic,
+            default_reasoning_effort: ReasoningEffortLevel::XHigh,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::XHigh,
+                    description: "Recommended Opus 4.8 effort for coding and agentic work".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum adaptive effort for intelligence-demanding tasks"
+                        .to_string(),
+                },
+            ],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+        ModelPreset {
             id: "claude-opus-4-7".to_string(),
             model: "claude-opus-4-7".to_string(),
             display_name: "Claude Opus 4.7".to_string(),
@@ -585,7 +623,7 @@ fn anthropic_presets() -> Vec<ModelPreset> {
                         .to_string(),
                 },
             ],
-            is_default: true,
+            is_default: false,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
@@ -1113,8 +1151,9 @@ fn mimo_presets() -> Vec<ModelPreset> {
             id: mimo_models::MIMO_V2_5_PRO.to_string(),
             model: mimo_models::MIMO_V2_5_PRO.to_string(),
             display_name: "MiMo V2.5 Pro".to_string(),
-            description: "Xiaomi's flagship reasoning model with advanced capabilities (1M context)"
-                .to_string(),
+            description:
+                "Xiaomi's flagship reasoning model with advanced capabilities (1M context)"
+                    .to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1149,8 +1188,7 @@ fn mimo_presets() -> Vec<ModelPreset> {
             id: mimo_models::MIMO_V2_PRO.to_string(),
             model: mimo_models::MIMO_V2_PRO.to_string(),
             display_name: "MiMo V2 Pro".to_string(),
-            description: "Xiaomi's strong reasoning model with 1M context"
-                .to_string(),
+            description: "Xiaomi's strong reasoning model with 1M context".to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {

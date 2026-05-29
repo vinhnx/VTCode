@@ -229,6 +229,7 @@ fn normalize_subagent_model_alias(model: &str) -> &str {
     match model.trim() {
         "claude-haiku-4.5" => models::anthropic::CLAUDE_HAIKU_4_5,
         "claude-sonnet-4.6" => models::anthropic::CLAUDE_SONNET_4_6,
+        "claude-opus-4.8" => models::anthropic::CLAUDE_OPUS_4_8,
         "claude-opus-4.7" => models::anthropic::CLAUDE_OPUS_4_7,
         other => other,
     }
@@ -238,7 +239,7 @@ fn alias_model_for_provider(parent_provider: &str, alias: &str, parent_model: &s
     match infer_provider(Some(parent_provider), parent_model) {
         Some(Provider::Anthropic) => match alias.to_ascii_lowercase().as_str() {
             "haiku" => models::anthropic::CLAUDE_HAIKU_4_5.to_string(),
-            "opus" => models::anthropic::CLAUDE_OPUS_4_7.to_string(),
+            "opus" => models::anthropic::CLAUDE_OPUS_4_8.to_string(),
             _ => models::anthropic::CLAUDE_SONNET_4_6.to_string(),
         },
         Some(Provider::OpenAI) => match alias.to_ascii_lowercase().as_str() {

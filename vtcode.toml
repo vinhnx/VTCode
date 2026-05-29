@@ -22,18 +22,18 @@ enabled = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "QWEN_API_KEY"
+api_key_env = "ANTHROPIC_API_KEY"
 
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "deepseek-v4-flash"
+default_model = "claude-opus-4-8"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "qwen"
+provider = "anthropic"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is

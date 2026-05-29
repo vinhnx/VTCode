@@ -308,9 +308,15 @@ impl LLMProvider for MiMoProvider {
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        let requested = if model.trim().is_empty() { &self.model } else { model };
+        let requested = if model.trim().is_empty() {
+            &self.model
+        } else {
+            model
+        };
         match requested {
-            models::mimo::MIMO_V2_5_PRO | models::mimo::MIMO_V2_5 | models::mimo::MIMO_V2_PRO => 1_048_576,
+            models::mimo::MIMO_V2_5_PRO | models::mimo::MIMO_V2_5 | models::mimo::MIMO_V2_PRO => {
+                1_048_576
+            }
             models::mimo::MIMO_V2_OMNI | models::mimo::MIMO_V2_FLASH => 262_144,
             _ => 128_000,
         }

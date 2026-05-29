@@ -30,7 +30,8 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus47
+            ModelId::ClaudeOpus48
+            | ModelId::ClaudeOpus47
             | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeHaiku45

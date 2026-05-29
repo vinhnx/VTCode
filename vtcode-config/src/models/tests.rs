@@ -729,9 +729,9 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             ModelId::OpenRouterZaiGlm5 => continue,
             // Qwen third-party variants share model strings with their native providers;
             // `deepseek-v4-flash`, `deepseek-v4-pro`, `glm-5.1` resolve to native variants.
-            ModelId::QwenDeepSeekV4Flash
-            | ModelId::QwenDeepSeekV4Pro
-            | ModelId::QwenGlm51 => continue,
+            ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro | ModelId::QwenGlm51 => {
+                continue;
+            }
             _ => ModelId::from_str(model.as_str()),
         };
         assert_eq!(parsed.unwrap(), model);

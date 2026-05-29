@@ -1325,8 +1325,29 @@
     "api": "https://api.anthropic.com/v1",
     "name": "Anthropic",
     "doc": "https://docs.anthropic.com/claude/docs/models-overview",
-    "default_model": "claude-opus-4-7",
+    "default_model": "claude-opus-4-8",
     "models": {
+      "claude-opus-4-8": {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "4.8"
+      },
       "claude-haiku-4-5-20251001": {
         "id": "claude-haiku-4-5-20251001",
         "name": "Claude Haiku 4.5",
@@ -3228,7 +3249,7 @@
       "nemotron-3-super:cloud": {
         "id": "nemotron-3-super:cloud",
         "name": "Nemotron-3-Super (cloud)",
-        "description": "NVIDIA Nemotron™ is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads.",
+        "description": "NVIDIA Nemotron\u2122 is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -3362,8 +3383,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 131072,
@@ -3381,8 +3406,15 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text", "image", "audio", "video"],
-          "output": ["text"]
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 131072,
@@ -3400,8 +3432,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 131072,
@@ -3418,8 +3454,15 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text", "image", "audio", "video"],
-          "output": ["text"]
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 262144,
         "max_output_tokens": 131072,
@@ -3436,8 +3479,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 262144,
         "max_output_tokens": 65536,
@@ -3467,8 +3514,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 131072,
         "max_output_tokens": 8192,
@@ -3486,8 +3537,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 8192,
@@ -3505,8 +3560,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 131072,
         "max_output_tokens": 8192,
@@ -3524,8 +3583,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 65536,
@@ -3543,8 +3606,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 1048576,
         "max_output_tokens": 65536,
@@ -3562,8 +3629,12 @@
         "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": ["text"],
-          "output": ["text"]
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
         "context": 131072,
         "max_output_tokens": 8192,

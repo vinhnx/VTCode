@@ -83,12 +83,13 @@ pub fn validate_request(
         });
     }
 
-    if resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
+    if (resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8
+        || resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7)
         && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            "Claude Opus 4.7 rejects explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+            "Claude Opus 4.8/4.7 rejects explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
         );
         return Err(LLMError::InvalidRequest {
             message: formatted_error,

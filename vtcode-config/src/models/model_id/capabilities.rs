@@ -181,7 +181,8 @@ impl ModelId {
             | ModelId::GPT51CodexMax
             | ModelId::GPT5
             | ModelId::GPT5Codex => Some(ModelId::GPT5Mini),
-            ModelId::ClaudeOpus47
+            ModelId::ClaudeOpus48
+            | ModelId::ClaudeOpus47
             | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeHaiku45),
@@ -260,7 +261,8 @@ impl ModelId {
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeOpus47
+            ModelId::ClaudeOpus48
+            | ModelId::ClaudeOpus47
             | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeSonnet46),
@@ -313,6 +315,7 @@ impl ModelId {
                 | ModelId::CopilotGPT54
                 | ModelId::CopilotClaudeSonnet46
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus48
                 | ModelId::ClaudeOpus47
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
@@ -386,6 +389,7 @@ impl ModelId {
                 | ModelId::GPT51Codex
                 | ModelId::GPT51CodexMax
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus48
                 | ModelId::ClaudeOpus47
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
@@ -458,6 +462,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
+            ModelId::ClaudeOpus48 => "4.8",
             ModelId::ClaudeOpus47 => "4.7",
             ModelId::ClaudeOpus46 => "4.6",
             ModelId::ClaudeSonnet46 => "4.6",

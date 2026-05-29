@@ -2,13 +2,14 @@
 
 VT Code currently splits direct Anthropic Claude thinking into two runtime paths:
 
-- Adaptive by default: `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-mythos-preview`
+- Adaptive by default: `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-mythos-preview`
 - Manual budget only: `claude-haiku-4-5`
 
 ## Compact Runtime Matrix
 
 | Model                   | VT Code default | What VT Code emits                                                                                              |
 | ----------------------- | --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `claude-opus-4-8`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = xhigh`, optional `task_budget`                              |
 | `claude-opus-4-7`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = xhigh`, optional `task_budget`                              |
 | `claude-mythos-preview` | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, disabled thinking is rejected                        |
 | `claude-opus-4-6`       | Adaptive        | `thinking: { type: "adaptive" }`, default `effort = high`, explicit `thinking_budget` falls back to manual mode |
@@ -31,10 +32,10 @@ thinking_display = "summarized"
 ### Important defaults
 
 - `effort` now defaults to `xhigh`; models that do not support `xhigh` fall back to their supported default, typically `high`
-- `xhigh` is only valid for Claude Opus 4.7
-- `task_budget_tokens` is only sent for Claude Opus 4.7
+- `xhigh` is only valid for Claude Opus 4.8/4.7
+- `task_budget_tokens` is only sent for Claude Opus 4.8/4.7
 - `thinking_display` defaults to the Anthropic API default when unset
-- Claude Opus 4.7 and Claude Mythos Preview default to omitted thinking at the API level
+- Claude Opus 4.8/4.7 and Claude Mythos Preview default to omitted thinking at the API level
 
 ## Adaptive Thinking Behavior
 
@@ -49,12 +50,12 @@ For adaptive models, VT Code sends:
 
 ### Adaptive model notes
 
-- Claude Opus 4.7 is adaptive-only in VT Code
+- Claude Opus 4.8/4.7 is adaptive-only in VT Code
 - Claude Mythos Preview is adaptive-only and cannot be used with disabled thinking
 - Claude Opus 4.6 and Claude Sonnet 4.6 are adaptive by default, but still accept explicit manual budgets for backward compatibility
 - `thinking_budget` is rejected on adaptive-only models and forces manual mode only on Claude Opus 4.6 / Sonnet 4.6
-- `effort` is enabled on Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Mythos Preview
-- Claude Opus 4.7 supports `low`, `medium`, `high`, `xhigh`, and `max`
+- `effort` is enabled on Claude Opus 4.8/4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Mythos Preview
+- Claude Opus 4.8/4.7 supports `low`, `medium`, `high`, `xhigh`, and `max`
 - Claude Opus 4.6 and Claude Sonnet 4.6 support `low`, `medium`, `high`, and `max`
 - Claude Mythos Preview supports `low`, `medium`, `high`, and `max`
 
@@ -92,7 +93,7 @@ When thinking is active, VT Code enforces or normalizes the following behavior:
 - `tool_choice` is limited to `auto` or `none`
 - assistant prefills are incompatible with Claude Opus 4.6/4.7 and Claude Sonnet 4.6
 - `thinking_display = "summarized"` restores visible summarized thinking on models that default to omitted output
-- Claude Opus 4.7 rejects explicit `temperature`, `top_p`, and `top_k`
+- Claude Opus 4.8/4.7 rejects explicit `temperature`, `top_p`, and `top_k`
 
 ## Disabling Thinking
 
@@ -105,7 +106,7 @@ extended_thinking_enabled = false
 
 Current VT Code behavior:
 
-- Disabled thinking is allowed for Claude Opus 4.7
+- Disabled thinking is allowed for Claude Opus 4.8/4.7
 - Disabled thinking is allowed for Claude Opus 4.6 and Claude Sonnet 4.6
 - Disabled thinking is rejected for Claude Mythos Preview
 - Budgeted models stop emitting `thinking` blocks when disabled

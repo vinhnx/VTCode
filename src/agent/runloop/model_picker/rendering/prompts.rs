@@ -357,7 +357,10 @@ pub(crate) fn show_secure_api_modal(
         "Key will NOT be stored in vtcode.toml.".to_string(),
         "Paste the key — it will be auto-detected and saved securely.".to_string(),
     ];
-    let prompt_label = format!("{} API key ({})", selection.provider_label, selection.env_key);
+    let prompt_label = format!(
+        "{} API key ({})",
+        selection.provider_label, selection.env_key
+    );
     renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
 }
 

@@ -67,6 +67,9 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
+            ModelId::ClaudeOpus48 => {
+                "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work"
+            }
             ModelId::ClaudeOpus47 => {
                 "Next-gen Anthropic flagship with adaptive thinking and task budget support"
             }
@@ -116,12 +119,8 @@ impl ModelId {
             ModelId::MiMoV25 => {
                 "Xiaomi's omni-modal model with full-modal understanding and 1M context"
             }
-            ModelId::MiMoV2Pro => {
-                "Xiaomi's strong reasoning model with 1M context"
-            }
-            ModelId::MiMoV2Omni => {
-                "Xiaomi's multimodal vision-language model with 256K context"
-            }
+            ModelId::MiMoV2Pro => "Xiaomi's strong reasoning model with 1M context",
+            ModelId::MiMoV2Omni => "Xiaomi's multimodal vision-language model with 256K context",
             ModelId::MiMoV2Flash => {
                 "Xiaomi's lightweight fast model for high-throughput tasks (256K context)"
             }

@@ -206,13 +206,10 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         return Ok(key);
     }
 
-    // Try secure storage (keyring) for custom API keys
-    if let Ok(Some(key)) = get_custom_api_key_from_secure_storage(&normalized_provider) {
-        return Ok(key);
-    }
-
-    // Fall back to the provider-specific sources
-    match normalized_provider.as_str() {
+    // Fall back to the provider-specific sources before secure storage. This keeps
+    // workspace `.env` / configured env vars authoritative over stale keyring
+    // entries, matching the model picker runtime credential resolution path.
+    let provider_result = match normalized_provider.as_str() {
         "gemini" => get_gemini_api_key(sources),
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
@@ -242,7 +239,18 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
             ))
         }
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
+    };
+
+    if provider_result.is_ok() {
+        return provider_result;
     }
+
+    // Try secure storage (keyring) only after env/config lookup fails.
+    if let Ok(Some(key)) = get_custom_api_key_from_secure_storage(&normalized_provider) {
+        return Ok(key);
+    }
+
+    provider_result
 }
 
 /// Get a custom API key from secure storage.

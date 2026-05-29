@@ -23,8 +23,8 @@ use crate::llm::provider_config::{
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
     LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
-    OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider,
-    OpenResponsesProvider, OpenRouterProvider, QwenProvider, ZAIProvider,
+    OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
+    OpenRouterProvider, QwenProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.

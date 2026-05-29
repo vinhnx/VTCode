@@ -211,6 +211,7 @@ pub fn convert_to_anthropic_format(
         };
 
     let effective_temperature = if thinking_val.is_some()
+        || resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_8
         || resolved_model == crate::config::constants::models::anthropic::CLAUDE_OPUS_4_7
     {
         None

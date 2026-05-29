@@ -80,7 +80,9 @@ pub(crate) fn claude_thinking_profile(
         });
     }
 
-    if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7) {
+    if matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7)
+    {
         return Some(ClaudeThinkingProfile {
             mode: ClaudeThinkingMode::Adaptive,
             supports_manual_budget: false,
@@ -149,6 +151,7 @@ pub(crate) fn claude_thinking_profile(
 
 fn supports_native_1m_context(model: &str) -> bool {
     matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
+        || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_6)
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_7)
         || matches_model(model, models::anthropic::CLAUDE_MYTHOS_PREVIEW)
@@ -200,6 +203,7 @@ pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bo
     let requested = resolve_model_name(model, default_model);
 
     !(matches_model(requested, models::anthropic::CLAUDE_OPUS_4_6)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_8)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_4_7)
         || matches_model(requested, models::anthropic::CLAUDE_SONNET_4_6))
 }

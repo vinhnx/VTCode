@@ -207,10 +207,7 @@ impl QwenProvider {
 
         if let Some(effort) = request.reasoning_effort {
             let enable_thinking = effort != crate::config::types::ReasoningEffortLevel::None;
-            payload.insert(
-                "enable_thinking".to_owned(),
-                Value::Bool(enable_thinking),
-            );
+            payload.insert("enable_thinking".to_owned(), Value::Bool(enable_thinking));
         }
 
         if let Some(meta) = &request.metadata {
@@ -315,14 +312,18 @@ impl LLMProvider for QwenProvider {
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        let requested = if model.trim().is_empty() { &self.model } else { model };
+        let requested = if model.trim().is_empty() {
+            &self.model
+        } else {
+            model
+        };
         match requested {
             models::qwen::QWEN3_6_FLASH
             | models::qwen::DEEPSEEK_V4_FLASH
             | models::qwen::DEEPSEEK_V4_PRO => 1_048_576,
-            models::qwen::QWEN3_7_MAX
-            | models::qwen::QWEN3_6_PLUS
-            | models::qwen::GLM_5_1 => 131_072,
+            models::qwen::QWEN3_7_MAX | models::qwen::QWEN3_6_PLUS | models::qwen::GLM_5_1 => {
+                131_072
+            }
             _ => 131_072,
         }
     }
