@@ -1351,7 +1351,7 @@
       "claude-haiku-4-5-20251001": {
         "id": "claude-haiku-4-5-20251001",
         "name": "Claude Haiku 4.5",
-        "description": "Fastest model with near-frontier intelligence. Most cost-effective option.",
+        "description": "The fastest model with near-frontier intelligence. Supports extended thinking with manual budget.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -1409,7 +1409,7 @@
       "claude-sonnet-4-6": {
         "id": "claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",
-        "description": "Balanced flagship model for coding. VT Code currently keeps it on the budgeted-thinking path.",
+        "description": "The best combination of speed and intelligence. Supports extended thinking and adaptive thinking with 1M context.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -1448,7 +1448,7 @@
       "claude-haiku-4-5": {
         "id": "claude-haiku-4-5",
         "name": "Claude Haiku 4.5 (alias)",
-        "description": "Alias for latest Claude Haiku 4.5. Auto-updates with new releases.",
+        "description": "The fastest model with near-frontier intelligence. Alias for latest Claude Haiku 4.5.",
         "alias": "claude-haiku-4-5-20251001",
         "reasoning": true,
         "tool_call": true,

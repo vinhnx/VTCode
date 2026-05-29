@@ -705,7 +705,7 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             model: "claude-sonnet-4-6".to_string(),
             display_name: "Claude Sonnet 4.6".to_string(),
             description:
-                "Balanced Anthropic model using adaptive thinking by default, with legacy manual-budget fallback"
+                "The best combination of speed and intelligence. Supports extended thinking and adaptive thinking with 1M context."
                     .to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::High,
@@ -737,13 +737,11 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             id: "claude-haiku-4-5".to_string(),
             model: "claude-haiku-4-5".to_string(),
             display_name: "Claude Haiku 4.5".to_string(),
-            description: "Efficient Anthropic model".to_string(),
+            description: "The fastest model with near-frontier intelligence. Supports extended thinking with manual budget."
+                .to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Fast".to_string(),
-            }],
+            supported_reasoning_efforts: Vec::new(),
             is_default: false,
             upgrade: None,
             show_in_picker: true,
