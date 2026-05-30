@@ -1,11 +1,10 @@
 /// High-level LM Studio client for server interaction and model management.
-/// Adapted from OpenAI Codex's codex-rs/lmstudio/src/client.rs
 ///
-/// Supports both LM Studio v1 REST API (0.4.0+) and OpenAI-compatible endpoints.
-/// The v1 API provides enhanced features like stateful chats, MCP via API, and
-/// model management endpoints.
+/// Supports both LM Studio native REST API (`/api/v0/*`) and OpenAI-compatible
+/// endpoints (`/v1/*`). The native API provides enhanced features like model
+/// management (load/unload), richer model metadata, and TTL-based auto-evict.
 ///
-/// See: https://lmstudio.ai/docs/developer/rest
+/// See: https://lmstudio.ai/docs/developer
 use std::io;
 use std::path::Path;
 use std::time::Duration;
@@ -16,13 +15,13 @@ const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install fr
 
 /// Client for interacting with a local LM Studio instance.
 ///
-/// Supports both v1 REST API (`/api/v1/*`) and OpenAI-compatible endpoints (`/v1/*`).
+/// Supports both native REST API (`/api/v0/*`) and OpenAI-compatible endpoints (`/v1/*`).
 #[derive(Clone, Debug)]
 pub struct LMStudioClient {
     client: reqwest::Client,
     base_url: String,
-    /// Use v1 REST API endpoints (default: false, uses OpenAI-compatible endpoints)
-    use_v1_api: bool,
+    /// Use native REST API endpoints (default: false, uses OpenAI-compatible endpoints)
+    use_native_api: bool,
 }
 
 impl LMStudioClient {
@@ -33,11 +32,11 @@ impl LMStudioClient {
 
     /// Create a client with explicit API version selection.
     ///
-    /// - `use_v1_api = false`: Use OpenAI-compatible endpoints at `/v1/*` (default)
-    /// - `use_v1_api = true`: Use native v1 REST API at `/api/v1/*` (LM Studio 0.4.0+)
+    /// - `use_native_api = false`: Use OpenAI-compatible endpoints at `/v1/*` (default)
+    /// - `use_native_api = true`: Use native REST API at `/api/v0/*`
     pub async fn try_from_base_url_with_api_version(
         base_url: &str,
-        use_v1_api: bool,
+        use_native_api: bool,
     ) -> io::Result<Self> {
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
@@ -47,7 +46,7 @@ impl LMStudioClient {
         let instance = Self {
             client,
             base_url: base_url.to_string(),
-            use_v1_api,
+            use_native_api,
         };
 
         instance.check_server().await?;
@@ -57,8 +56,8 @@ impl LMStudioClient {
     /// Get the models endpoint URL based on API version.
     fn models_endpoint(&self) -> String {
         let base = self.base_url.trim_end_matches('/');
-        if self.use_v1_api {
-            format!("{base}/api/v1/models")
+        if self.use_native_api {
+            format!("{base}/api/v0/models")
         } else {
             format!("{base}/v1/models")
         }
@@ -117,14 +116,16 @@ impl LMStudioClient {
         }
     }
 
-    /// Load a model by sending a minimal request (pre-loads into memory).
+    /// Load a model into memory (pre-loads for faster inference).
     ///
-    /// Uses `/v1/responses` endpoint for OpenAI-compatible API or
-    /// `/api/v1/models/load` for native v1 API.
+    /// Uses native REST API `/api/v0/models/load` when `use_native_api` is true,
+    /// otherwise sends a minimal request via `/v1/chat/completions`.
     pub async fn load_model(&self, model: &str) -> io::Result<()> {
-        if self.use_v1_api {
-            // Use native v1 API endpoint
-            let url = format!("{}/api/v1/models/load", self.base_url.trim_end_matches('/'));
+        if self.use_native_api {
+            let url = format!(
+                "{}/api/v0/models/load",
+                self.base_url.trim_end_matches('/')
+            );
             let request_body = serde_json::json!({
                 "model": model
             });
@@ -139,7 +140,7 @@ impl LMStudioClient {
                 .map_err(|e| io::Error::other(format!("Request failed: {e}")))?;
 
             if response.status().is_success() {
-                tracing::info!("Successfully loaded model '{model}' via v1 API");
+                tracing::info!("Successfully loaded model '{model}' via native API");
                 Ok(())
             } else {
                 Err(io::Error::other(format!(
@@ -148,12 +149,15 @@ impl LMStudioClient {
                 )))
             }
         } else {
-            // Use OpenAI-compatible endpoint
-            let url = format!("{}/v1/responses", self.base_url.trim_end_matches('/'));
+            // Use OpenAI-compatible endpoint with minimal chat completion
+            let url = format!(
+                "{}/v1/chat/completions",
+                self.base_url.trim_end_matches('/')
+            );
             let request_body = serde_json::json!({
                 "model": model,
-                "input": "",
-                "max_output_tokens": 1
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1
             });
 
             let response = self
@@ -177,18 +181,18 @@ impl LMStudioClient {
         }
     }
 
-    /// Unload a model from memory (v1 API only).
+    /// Unload a model from memory (native REST API only).
     ///
-    /// This endpoint is only available in LM Studio 0.4.0+ native v1 API.
+    /// This endpoint requires `use_native_api = true`.
     pub async fn unload_model(&self, model: &str) -> io::Result<()> {
-        if !self.use_v1_api {
+        if !self.use_native_api {
             return Err(io::Error::other(
-                "Model unload requires v1 API (LM Studio 0.4.0+)",
+                "Model unload requires native API (use_native_api = true)",
             ));
         }
 
         let url = format!(
-            "{}/api/v1/models/unload",
+            "{}/api/v0/models/unload",
             self.base_url.trim_end_matches('/')
         );
         let request_body = serde_json::json!({
@@ -380,7 +384,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_models_v1_api() {
+    async fn test_fetch_models_native_api() {
         if std::env::var("CODEX_SANDBOX_NETWORK_DISABLED").is_ok() {
             return;
         }
@@ -389,7 +393,7 @@ mod tests {
             return;
         };
         wiremock::Mock::given(wiremock::matchers::method("GET"))
-            .and(wiremock::matchers::path("/api/v1/models"))
+            .and(wiremock::matchers::path("/api/v0/models"))
             .respond_with(
                 wiremock::ResponseTemplate::new(200).set_body_raw(
                     serde_json::json!({

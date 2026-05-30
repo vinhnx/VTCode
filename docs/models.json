@@ -3435,22 +3435,40 @@
     ],
     "api": "http://localhost:1234/v1",
     "name": "LM Studio",
-    "doc": "https://lmstudio.ai/docs/developer/openai-compat",
+    "doc": "https://lmstudio.ai/docs/developer",
     "models": {
-      "lmstudio-community/meta-llama-3-8b-instruct": {
-        "id": "lmstudio-community/meta-llama-3-8b-instruct",
-        "name": "Meta Llama 3 8B (local)",
-        "reasoning": false,
+      "lmstudio-community/DeepSeek-R1-0528-Qwen3-8B": {
+        "id": "lmstudio-community/DeepSeek-R1-0528-Qwen3-8B",
+        "name": "DeepSeek R1 0528 Qwen3 8B (local)",
+        "reasoning": true,
         "tool_call": true,
         "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
+          "input": ["text"],
+          "output": ["text"]
         },
-        "context": 8192
+        "context": 131072
+      },
+      "lmstudio-community/Qwen3-8B": {
+        "id": "lmstudio-community/Qwen3-8B",
+        "name": "Qwen 3 8B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 131072
+      },
+      "lmstudio-community/openai-gpt-oss-20b": {
+        "id": "lmstudio-community/openai-gpt-oss-20b",
+        "name": "GPT-OSS 20B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": ["text"],
+          "output": ["text"]
+        },
+        "context": 131072
       },
       "lmstudio-community/meta-llama-3.1-8b-instruct": {
         "id": "lmstudio-community/meta-llama-3.1-8b-instruct",
@@ -3458,74 +3476,32 @@
         "reasoning": false,
         "tool_call": true,
         "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
+          "input": ["text"],
+          "output": ["text"]
         },
         "context": 131072
       },
       "lmstudio-community/qwen2.5-7b-instruct": {
         "id": "lmstudio-community/qwen2.5-7b-instruct",
-        "name": "Qwen2.5 7B (local)",
+        "name": "Qwen 2.5 7B (local)",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
+          "input": ["text"],
+          "output": ["text"]
         },
         "context": 32768
       },
-      "lmstudio-community/gemma-2-2b-it": {
-        "id": "lmstudio-community/gemma-2-2b-it",
-        "name": "Gemma 2 2B (local)",
+      "lmstudio-community/gemma-3-12b-it": {
+        "id": "lmstudio-community/gemma-3-12b-it",
+        "name": "Gemma 3 12B (local)",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
+          "input": ["text"],
+          "output": ["text"]
         },
-        "context": 8192
-      },
-      "lmstudio-community/gemma-2-9b-it": {
-        "id": "lmstudio-community/gemma-2-9b-it",
-        "name": "Gemma 2 9B (local)",
-        "reasoning": false,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 8192
-      },
-      "lmstudio-community/phi-3.1-mini-4k-instruct": {
-        "id": "lmstudio-community/phi-3.1-mini-4k-instruct",
-        "name": "Phi-3.1 Mini 4K (local)",
-        "reasoning": false,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 4096
+        "context": 32768
       }
     }
   },

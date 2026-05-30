@@ -1,16 +1,16 @@
 #![allow(clippy::result_large_err)]
 //! LM Studio provider implementation
 //!
-//! LM Studio 0.4.0+ provides multiple API surfaces:
-//! - Native v1 REST API at `/api/v1/*` (recommended for new integrations)
+//! LM Studio provides multiple API surfaces:
 //! - OpenAI-compatible endpoints at `/v1/*` (used by this implementation)
-//! - Anthropic-compatible endpoints at `/v1/*` (added in 0.4.1)
+//! - Native REST API at `/api/v0/*` (enhanced stats, model info, model management)
+//! - Tool calling (since 0.3.6), structured output, and reasoning content (since 0.3.9)
 //!
-//! This implementation currently uses OpenAI-compatible endpoints for maximum
-//! compatibility. Future versions may migrate to the native v1 API for enhanced
-//! features like stateful chats, MCP via API, and model management endpoints.
+//! This implementation uses OpenAI-compatible endpoints for maximum compatibility.
+//! The native REST API at `/api/v0/*` provides richer model metadata, load/unload
+//! endpoints, and TTL-based auto-evict for JIT-loaded models.
 //!
-//! See: <https://lmstudio.ai/docs/developer/rest>
+//! See: <https://lmstudio.ai/docs/developer>
 
 use super::common::resolve_model;
 use super::openai::OpenAIProvider;
@@ -25,6 +25,7 @@ use crate::llm::types as llm_types;
 use crate::utils::http_client;
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 pub mod client;
 
@@ -48,10 +49,22 @@ struct LmStudioModel {
 
 const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
+/// Derives the server root URL by stripping the `/v1` suffix from the API base.
+///
+/// `LMSTUDIO_API_BASE` is `http://localhost:1234/v1`. The native REST API
+/// lives at `/api/v0/*` on the server root, so we need `http://localhost:1234`.
+fn server_root_from_api_base(api_base: &str) -> String {
+    let trimmed = api_base.trim_end_matches('/');
+    trimmed
+        .strip_suffix("/v1")
+        .unwrap_or(trimmed)
+        .to_string()
+}
+
 /// Fetches available models from the LM Studio API endpoint
 ///
 /// Uses OpenAI-compatible `/v1/models` endpoint by default.
-/// Set `LMSTUDIO_USE_V1_API=true` to use native v1 API at `/api/v1/models`.
+/// Set `LMSTUDIO_USE_NATIVE_API=true` to use native REST API at `/api/v0/models`.
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     let resolved_base_url = override_base_url(
         urls::LMSTUDIO_API_BASE,
@@ -59,17 +72,19 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
         Some(env_vars::LMSTUDIO_BASE_URL),
     );
 
-    // Check if v1 API should be used
-    let use_v1_api = std::env::var("LMSTUDIO_USE_V1_API")
+    let use_native_api = std::env::var("LMSTUDIO_USE_NATIVE_API")
         .ok()
         .and_then(|v| v.parse::<bool>().ok())
         .unwrap_or(false);
 
-    // Construct the models endpoint URL
-    let models_url = if use_v1_api {
-        format!("{}/api/v1/models", resolved_base_url)
+    // LMSTUDIO_API_BASE already includes `/v1`, so for the OpenAI-compatible
+    // endpoint we append `/models` directly. For the native REST API we need
+    // the server root (without `/v1`) and then append `/api/v0/models`.
+    let models_url = if use_native_api {
+        let root = server_root_from_api_base(&resolved_base_url);
+        format!("{root}/api/v0/models")
     } else {
-        format!("{}/v1/models", resolved_base_url)
+        format!("{}/models", resolved_base_url.trim_end_matches('/'))
     };
 
     // Create HTTP client with connection timeout
@@ -113,7 +128,6 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
 
     Ok(model_ids)
 }
-use serde::{Deserialize, Serialize};
 
 pub struct LmStudioProvider {
     inner: OpenAIProvider,
@@ -133,8 +147,8 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
+        timeouts: Option<TimeoutsConfig>,
+        anthropic: Option<AnthropicConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> OpenAIProvider {
         let resolved_model = resolve_model(model, models::lmstudio::DEFAULT_MODEL);
@@ -145,8 +159,8 @@ impl LmStudioProvider {
             Some(resolved_model),
             Some(resolved_base),
             prompt_cache,
-            _timeouts,
-            _anthropic,
+            timeouts,
+            anthropic,
             None,
             model_behavior,
         )
@@ -182,11 +196,20 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
-        _anthropic: Option<AnthropicConfig>,
+        timeouts: Option<TimeoutsConfig>,
+        anthropic: Option<AnthropicConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
-        Self::with_model_internal(api_key, model, base_url, prompt_cache, model_behavior)
+        let inner = Self::build_inner(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+            timeouts,
+            anthropic,
+            model_behavior,
+        );
+        Self { inner }
     }
 
     fn with_model_internal(

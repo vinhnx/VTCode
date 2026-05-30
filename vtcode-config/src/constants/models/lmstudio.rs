@@ -1,17 +1,28 @@
-pub const DEFAULT_MODEL: &str = META_LLAMA_31_8B_INSTRUCT;
+pub const DEFAULT_MODEL: &str = QWEN3_8B;
 pub const SUPPORTED_MODELS: &[&str] = &[
-    META_LLAMA_3_8B_INSTRUCT,
+    // Reasoning models
+    DEEPSEEK_R1_0528_QWEN3_8B,
+    QWEN3_8B,
+    OPENAI_GPT_OSS_20B,
+    // General-purpose models
     META_LLAMA_31_8B_INSTRUCT,
     QWEN25_7B_INSTRUCT,
-    GEMMA_2_2B_IT,
-    GEMMA_2_9B_IT,
+    GEMMA_3_12B_IT,
     PHI_31_MINI_4K_INSTRUCT,
 ];
-pub const REASONING_MODELS: &[&str] = &[];
+pub const REASONING_MODELS: &[&str] = &[
+    DEEPSEEK_R1_0528_QWEN3_8B,
+    QWEN3_8B,
+    OPENAI_GPT_OSS_20B,
+];
 
-pub const META_LLAMA_3_8B_INSTRUCT: &str = "lmstudio-community/meta-llama-3-8b-instruct";
+// Reasoning models
+pub const DEEPSEEK_R1_0528_QWEN3_8B: &str = "lmstudio-community/DeepSeek-R1-0528-Qwen3-8B";
+pub const QWEN3_8B: &str = "lmstudio-community/Qwen3-8B";
+pub const OPENAI_GPT_OSS_20B: &str = "lmstudio-community/openai-gpt-oss-20b";
+
+// General-purpose models
 pub const META_LLAMA_31_8B_INSTRUCT: &str = "lmstudio-community/meta-llama-3.1-8b-instruct";
 pub const QWEN25_7B_INSTRUCT: &str = "lmstudio-community/qwen2.5-7b-instruct";
-pub const GEMMA_2_2B_IT: &str = "lmstudio-community/gemma-2-2b-it";
-pub const GEMMA_2_9B_IT: &str = "lmstudio-community/gemma-2-9b-it";
+pub const GEMMA_3_12B_IT: &str = "lmstudio-community/gemma-3-12b-it";
 pub const PHI_31_MINI_4K_INSTRUCT: &str = "lmstudio-community/phi-3.1-mini-4k-instruct";

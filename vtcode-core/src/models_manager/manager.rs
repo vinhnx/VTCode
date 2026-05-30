@@ -324,7 +324,9 @@ impl ModelsManager {
             }
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
-            Provider::LmStudio => "local-model".to_string(),
+            Provider::LmStudio => {
+                crate::config::constants::models::lmstudio::DEFAULT_MODEL.to_string()
+            }
             Provider::LlamaCpp => {
                 crate::config::constants::models::llamacpp::DEFAULT_MODEL.to_string()
             }
