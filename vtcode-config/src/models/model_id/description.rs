@@ -139,6 +139,24 @@ impl ModelId {
             ModelId::OllamaLagunaXs2 => {
                 "Poolside's 33B MoE model with 3B activated parameters, optimized for agentic coding with sliding window attention and native reasoning support (128K context)"
             }
+            ModelId::LlamaCppQwen3627b => {
+                "Dense Qwen 3.6 local model served through llama.cpp with strong reasoning and coding ability"
+            }
+            ModelId::LlamaCppQwen3635bA3b => {
+                "Qwen 3.6 MoE local model served through llama.cpp for higher reasoning quality with lower active compute"
+            }
+            ModelId::LlamaCppGemma426bA4b => {
+                "Gemma 4 desktop MoE model served through llama.cpp with strong reasoning and fast local inference"
+            }
+            ModelId::LlamaCppGemma4E4b => {
+                "Tiny-footprint Gemma 4 local model served through llama.cpp for phones and low-end laptops"
+            }
+            ModelId::LlamaCppGptOss20b => {
+                "OpenAI's open-weight GPT-OSS 20B model served locally through llama.cpp"
+            }
+            ModelId::LlamaCppStep35Flash => {
+                "StepFun's efficient reasoning model served locally through llama.cpp"
+            }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
             }

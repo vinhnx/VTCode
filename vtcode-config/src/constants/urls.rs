@@ -13,6 +13,7 @@ pub const Z_AI_API_BASE: &str = "https://api.z.ai/api/paas/v4";
 pub const ZAI_API_BASE: &str = "https://api.z.ai/api/paas/v4";
 pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
 pub const LMSTUDIO_API_BASE: &str = "http://localhost:1234/v1";
+pub const LLAMACPP_API_BASE: &str = "http://localhost:8080/v1";
 pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
 pub const OLLAMA_CLOUD_API_BASE: &str = "https://ollama.com";
 pub const OPENRESPONSES_API_BASE: &str = "https://api.openresponses.com/v1";

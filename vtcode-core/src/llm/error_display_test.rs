@@ -29,6 +29,7 @@ mod tests {
             "anthropic",
             "ollama",
             "lmstudio",
+            "llamacpp",
             "unknown",
         ];
         for provider in providers {

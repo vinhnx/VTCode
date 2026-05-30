@@ -77,8 +77,9 @@ pub(super) fn find_option_index(provider: Provider, model_id: &str) -> Option<us
 pub(super) fn picker_provider_order() -> Vec<Provider> {
     let mut providers: Vec<Provider> = Provider::all_providers()
         .into_iter()
-        .filter(|provider| !matches!(provider, Provider::Ollama))
+        .filter(|provider| !matches!(provider, Provider::Ollama | Provider::LlamaCpp))
         .collect();
+    providers.push(Provider::LlamaCpp);
     providers.push(Provider::Ollama);
     providers
 }

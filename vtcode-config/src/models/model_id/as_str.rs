@@ -74,6 +74,13 @@ impl ModelId {
             ModelId::OllamaKimiK26Cloud => models::ollama::KIMI_K2_6_CLOUD,
             ModelId::OllamaNemotron3SuperCloud => models::ollama::NEMOTRON_3_SUPER_CLOUD,
             ModelId::OllamaLagunaXs2 => models::ollama::LAGUNA_XS_2,
+            // llama.cpp models
+            ModelId::LlamaCppQwen3627b => models::llamacpp::QWEN36_27B,
+            ModelId::LlamaCppQwen3635bA3b => models::llamacpp::QWEN36_35B_A3B,
+            ModelId::LlamaCppGemma426bA4b => models::llamacpp::GEMMA_4_26B_A4B,
+            ModelId::LlamaCppGemma4E4b => models::llamacpp::GEMMA_4_E4B,
+            ModelId::LlamaCppGptOss20b => models::llamacpp::GPT_OSS_20B,
+            ModelId::LlamaCppStep35Flash => models::llamacpp::STEP_3_5_FLASH,
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,

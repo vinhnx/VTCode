@@ -214,6 +214,7 @@ impl CustomProviderConfig {
             "openrouter",
             "ollama",
             "lmstudio",
+            "llamacpp",
             "moonshot",
             "zai",
             "minimax",

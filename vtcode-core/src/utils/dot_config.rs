@@ -45,6 +45,7 @@ pub struct ProviderConfigs {
     pub openrouter: Option<ProviderConfig>,
     pub ollama: Option<ProviderConfig>,
     pub lmstudio: Option<ProviderConfig>,
+    pub llamacpp: Option<ProviderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minimax: Option<ProviderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]

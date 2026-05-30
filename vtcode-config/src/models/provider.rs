@@ -25,6 +25,8 @@ pub enum Provider {
     Ollama,
     /// LM Studio local models
     LmStudio,
+    /// llama.cpp local models
+    LlamaCpp,
     /// Moonshot.ai models
     Moonshot,
     /// Z.AI GLM models
@@ -61,6 +63,7 @@ impl Provider {
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
             Provider::LmStudio => "LMSTUDIO_API_KEY",
+            Provider::LlamaCpp => "LLAMACPP_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
@@ -90,6 +93,7 @@ impl Provider {
             Provider::OpenRouter,
             Provider::Ollama,
             Provider::LmStudio,
+            Provider::LlamaCpp,
             Provider::Moonshot,
             Provider::ZAI,
             Provider::OpenCodeZen,
@@ -111,6 +115,7 @@ impl Provider {
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
             Provider::LmStudio => "LM Studio",
+            Provider::LlamaCpp => "llama.cpp",
             Provider::Moonshot => "Moonshot",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
@@ -130,7 +135,10 @@ impl Provider {
     }
 
     pub fn is_local(&self) -> bool {
-        matches!(self, Provider::Ollama | Provider::LmStudio)
+        matches!(
+            self,
+            Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp
+        )
     }
 
     pub fn local_install_instructions(&self) -> Option<&'static str> {
@@ -140,6 +148,9 @@ impl Provider {
             ),
             Provider::LmStudio => Some(
                 "LM Studio server is not running. To start:\n  1. Install LM Studio from https://lmstudio.ai\n  2. Open LM Studio and start the Local Server on port 1234\n  3. Load the model you want to use",
+            ),
+            Provider::LlamaCpp => Some(
+                "llama.cpp server is not running. To start:\n  1. Install llama.cpp from https://llama.app or your package manager\n  2. Run 'llama-server -m /path/to/model.gguf --port 8080'\n  3. Keep the server running while VT Code connects",
             ),
             _ => None,
         }
@@ -172,6 +183,7 @@ impl Provider {
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => models::lmstudio::REASONING_MODELS.contains(&model),
+            Provider::LlamaCpp => models::llamacpp::REASONING_MODELS.contains(&model),
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => models::minimax::SUPPORTED_MODELS.contains(&model),
@@ -220,6 +232,7 @@ impl fmt::Display for Provider {
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
             Provider::LmStudio => write!(f, "lmstudio"),
+            Provider::LlamaCpp => write!(f, "llamacpp"),
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
@@ -246,6 +259,7 @@ impl AsRef<str> for Provider {
             Provider::OpenRouter => "openrouter",
             Provider::Ollama => "ollama",
             Provider::LmStudio => "lmstudio",
+            Provider::LlamaCpp => "llamacpp",
             Provider::Moonshot => "moonshot",
             Provider::ZAI => "zai",
             Provider::Minimax => "minimax",
@@ -274,6 +288,7 @@ impl FromStr for Provider {
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
             "lmstudio" => Ok(Provider::LmStudio),
+            "llamacpp" | "llama.cpp" | "llama-cpp" => Ok(Provider::LlamaCpp),
             "moonshot" => Ok(Provider::Moonshot),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),

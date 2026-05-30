@@ -78,6 +78,12 @@ impl ModelId {
             | ModelId::OllamaGlm5Cloud
             | ModelId::OllamaGlm51Cloud
             | ModelId::OllamaLagunaXs2 => Provider::Ollama,
+            ModelId::LlamaCppQwen3627b
+            | ModelId::LlamaCppQwen3635bA3b
+            | ModelId::LlamaCppGemma426bA4b
+            | ModelId::LlamaCppGemma4E4b
+            | ModelId::LlamaCppGptOss20b
+            | ModelId::LlamaCppStep35Flash => Provider::LlamaCpp,
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter

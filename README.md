@@ -323,6 +323,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
     - [OpenRouter](./docs/providers/openrouter.md)
     - [Ollama](./docs/providers/ollama.md)
     - [LM Studio](./docs/providers/lmstudio.md)
+    - [llama.cpp](./docs/providers/llamacpp.md)
 - [**Context Engineering**](./docs/context/context_engineering.md)
     - [Token budget management](./docs/context/context_engineering.md#3-token-budget-management)
     - [Dynamic context curation](./docs/context/context_engineering.md#2-just-in-time-context-loading)

@@ -67,6 +67,9 @@ impl RigProviderCapabilities {
             Provider::Ollama => {
                 // Rig does not provide an Ollama integration; validation is skipped.
             }
+            Provider::LlamaCpp => {
+                // llama.cpp provides an OpenAI-compatible API; rig has no direct client.
+            }
             Provider::LmStudio => {
                 // LM Studio provides an OpenAI-compatible API; rig has no direct client.
             }
@@ -179,6 +182,7 @@ impl RigProviderCapabilities {
             },
             Provider::Minimax => None,
             Provider::Ollama => None,
+            Provider::LlamaCpp => None,
             Provider::ZAI => match effort {
                 ReasoningEffortLevel::None => None,
                 ReasoningEffortLevel::Minimal => Some(json!({

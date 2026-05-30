@@ -1965,7 +1965,13 @@ async fn classify_facts_strict(
 macro_rules! try_with_memory_routes {
     ($runtime_config:expr, $vt_cfg:expr, $workspace_root:expr, $phase:expr, $provider_fn:expr) => {
         async {
-            let _ = ($runtime_config, $vt_cfg, $workspace_root, $phase, $provider_fn);
+            let _ = (
+                $runtime_config,
+                $vt_cfg,
+                $workspace_root,
+                $phase,
+                $provider_fn,
+            );
             Err(anyhow!(
                 "persistent memory routing is unavailable in creusot builds"
             ))

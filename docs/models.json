@@ -567,6 +567,145 @@
     },
     "default_model": "gpt-5.4"
   },
+  "llamacpp": {
+    "id": "llamacpp",
+    "env": [
+      "LLAMACPP_BASE_URL",
+      "LLAMACPP_MODEL_PATH"
+    ],
+    "api": "http://localhost:8080/v1",
+    "name": "llama.cpp",
+    "doc": "https://llama.app/",
+    "default_model": "gpt-oss-20b",
+    "models": {
+      "qwen3.6-27b": {
+        "id": "qwen3.6-27b",
+        "name": "Qwen 3.6 27B",
+        "description": "Dense Qwen 3.6 local model for llama.cpp with strong reasoning and coding ability.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "output_tokens": 32768,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      },
+      "qwen3.6-35b-a3b": {
+        "id": "qwen3.6-35b-a3b",
+        "name": "Qwen 3.6 35B A3B",
+        "description": "Qwen 3.6 mixture-of-experts local model for llama.cpp with lower active compute and strong reasoning.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "output_tokens": 32768,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      },
+      "gemma-4-26b-a4b": {
+        "id": "gemma-4-26b-a4b",
+        "name": "Gemma 4 26B A4B",
+        "description": "Google's desktop Gemma 4 MoE model for llama.cpp with strong reasoning and fast local inference.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "output_tokens": 32768,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      },
+      "gemma-4-e4b": {
+        "id": "gemma-4-e4b",
+        "name": "Gemma 4 E4B",
+        "description": "Tiny-footprint Gemma 4 local model for llama.cpp that can run on phones and low-end laptops.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "output_tokens": 16384,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      },
+      "gpt-oss-20b": {
+        "id": "gpt-oss-20b",
+        "name": "GPT-OSS 20B",
+        "description": "OpenAI's open-weight GPT-OSS 20B model for frontier-style local reasoning in llama.cpp.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "output_tokens": 32768,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      },
+      "step-3.5-flash": {
+        "id": "step-3.5-flash",
+        "name": "Step 3.5 Flash",
+        "description": "StepFun's efficient reasoning model configured for local llama.cpp inference.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "output_tokens": 32768,
+        "capabilities": {
+          "structured_output": true,
+          "thinking": true
+        }
+      }
+    }
+  },
   "copilot": {
     "id": "copilot",
     "env": [

@@ -1011,10 +1011,10 @@ mod tests {
             .find(|item| {
                 item.selection
                     == Some(InlineListSelection::ConfigAction(
-                        "lightweight_model:gpt-5-mini".to_string(),
+                        "lightweight_model:gpt-5.5".to_string(),
                     ))
             })
-            .expect("gpt-5-mini entry");
+            .expect("gpt-5.5 entry");
 
         let search = explicit_model
             .search_value
@@ -1022,6 +1022,6 @@ mod tests {
             .expect("search value")
             .to_ascii_lowercase();
         assert!(search.contains("openai"));
-        assert!(search.contains("gpt-5-mini"));
+        assert!(search.contains("gpt-5.5"));
     }
 }

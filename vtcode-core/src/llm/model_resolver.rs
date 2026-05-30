@@ -370,12 +370,13 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::Copilot => 10,
         Provider::Ollama => 11,
         Provider::LmStudio => 12,
-        Provider::OpenCodeZen => 13,
-        Provider::OpenCodeGo => 14,
-        Provider::MiMo => 15,
-        Provider::Qwen => 16,
-        Provider::StepFun => 17,
-        Provider::Poolside => 18,
+        Provider::LlamaCpp => 13,
+        Provider::OpenCodeZen => 14,
+        Provider::OpenCodeGo => 15,
+        Provider::MiMo => 16,
+        Provider::Qwen => 17,
+        Provider::StepFun => 18,
+        Provider::Poolside => 19,
     }
 }
 
@@ -481,20 +482,20 @@ mod tests {
 
     #[test]
     fn resolver_uses_model_id_to_disambiguate_shared_opencode_slugs() {
-        let moonshot = ModelResolver::resolve(None, "kimi-k2.5", &[], None).expect("moonshot");
-        assert_eq!(moonshot.provider, Provider::Moonshot);
+        let bare = ModelResolver::resolve(None, "glm-5.1", &[], None).expect("bare model");
+        assert_eq!(bare.provider, Provider::ZAI);
 
         let zen =
-            ModelResolver::resolve(None, "opencode/kimi-k2.5", &[], None).expect("opencode zen");
+            ModelResolver::resolve(None, "opencode/glm-5.1", &[], None).expect("opencode zen");
         assert_eq!(zen.provider, Provider::OpenCodeZen);
         assert!(zen.known_model());
-        assert_eq!(zen.display_name(), "Kimi K2.5 (OpenCode Zen)");
+        assert_eq!(zen.display_name(), "GLM-5.1 (OpenCode Zen)");
 
         let go =
-            ModelResolver::resolve(None, "opencode-go/kimi-k2.5", &[], None).expect("opencode go");
+            ModelResolver::resolve(None, "opencode-go/glm-5.1", &[], None).expect("opencode go");
         assert_eq!(go.provider, Provider::OpenCodeGo);
         assert!(go.known_model());
-        assert_eq!(go.display_name(), "Kimi K2.5 (OpenCode Go)");
+        assert_eq!(go.display_name(), "GLM-5.1 (OpenCode Go)");
     }
 
     #[test]

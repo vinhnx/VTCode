@@ -62,6 +62,7 @@ impl LLMClient for ProviderClientAdapter {
             "deepseek" => BackendKind::DeepSeek,
             "openrouter" => BackendKind::OpenRouter,
             "ollama" => BackendKind::Ollama,
+            "llamacpp" => BackendKind::LlamaCpp,
             "zai" => BackendKind::ZAI,
             "moonshot" => BackendKind::Moonshot,
             "mimo" => BackendKind::MiMo,

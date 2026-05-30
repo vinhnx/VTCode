@@ -68,6 +68,12 @@ impl ModelId {
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
             ModelId::OllamaLagunaXs2 => "Laguna XS.2 (local)",
+            ModelId::LlamaCppQwen3627b => "Qwen 3.6 27B (llama.cpp)",
+            ModelId::LlamaCppQwen3635bA3b => "Qwen 3.6 35B A3B (llama.cpp)",
+            ModelId::LlamaCppGemma426bA4b => "Gemma 4 26B A4B (llama.cpp)",
+            ModelId::LlamaCppGemma4E4b => "Gemma 4 E4B (llama.cpp)",
+            ModelId::LlamaCppGptOss20b => "GPT-OSS 20B (llama.cpp)",
+            ModelId::LlamaCppStep35Flash => "Step 3.5 Flash (llama.cpp)",
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
