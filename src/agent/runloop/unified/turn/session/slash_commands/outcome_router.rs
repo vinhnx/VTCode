@@ -49,7 +49,10 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::Update { .. }
         | SlashCommandOutcome::StartTerminalSetup
         | SlashCommandOutcome::ManageLoop { .. }
-        | SlashCommandOutcome::ManageSchedule { .. }) => route_runtime_outcome(outcome, ctx).await,
+        | SlashCommandOutcome::ManageSchedule { .. }
+        | SlashCommandOutcome::ManageLocalServer { .. }) => {
+            route_runtime_outcome(outcome, ctx).await
+        }
         outcome @ (SlashCommandOutcome::NewSession
         | SlashCommandOutcome::OpenDocs
         | SlashCommandOutcome::LaunchEditor { .. }
@@ -161,6 +164,9 @@ async fn route_runtime_outcome(
         }
         SlashCommandOutcome::ManageSchedule { action } => {
             handlers::handle_manage_schedule(ctx, action).await
+        }
+        SlashCommandOutcome::ManageLocalServer { action } => {
+            handlers::handle_manage_local_server(ctx, action).await
         }
         _ => unreachable!("unexpected runtime outcome"),
     }

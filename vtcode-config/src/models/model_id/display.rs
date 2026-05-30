@@ -90,6 +90,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
+            ModelId::OpenRouterZaiGlm51 => "GLM-5.1 (OpenRouter)",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 (OpenRouter)",
             // OpenRouter models
             ModelId::MinimaxM27 => "MiniMax-M2.7",

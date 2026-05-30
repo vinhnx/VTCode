@@ -111,6 +111,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
             ModelId::OpenRouterMoonshotaiKimiK26,
+            ModelId::OpenRouterZaiGlm51,
             // Poolside models
             ModelId::PoolsideLagunaM1,
             ModelId::PoolsideLagunaXs2,

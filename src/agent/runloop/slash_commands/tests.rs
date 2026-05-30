@@ -857,3 +857,164 @@ async fn every_registered_slash_command_resolves_without_prompt_fallback() {
         );
     }
 }
+
+// -- /local command tests --
+
+use super::LocalServerAction;
+
+#[tokio::test]
+async fn local_no_args_returns_interactive() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Interactive
+        }
+    ));
+}
+
+#[tokio::test]
+async fn local_status_all() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local status", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Status { provider: None }
+        }
+    ));
+}
+
+#[tokio::test]
+async fn local_status_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local status ollama", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Status {
+                provider: Some(ref p)
+            }
+        } if p == "ollama"
+    ));
+}
+
+#[tokio::test]
+async fn local_start_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local start lm-studio", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Start {
+                provider: Some(ref p)
+            }
+        } if p == "lmstudio"
+    ));
+}
+
+#[tokio::test]
+async fn local_stop_llamacpp() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local stop llama.cpp", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Stop {
+                provider: Some(ref p)
+            }
+        } if p == "llamacpp"
+    ));
+}
+
+#[tokio::test]
+async fn local_troubleshoot_no_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local troubleshoot", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Troubleshoot { provider: None }
+        }
+    ));
+}
+
+#[tokio::test]
+async fn local_configure_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local configure ollama", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Configure {
+                provider: Some(ref p)
+            }
+        } if p == "ollama"
+    ));
+}
+
+#[tokio::test]
+async fn local_provider_name_only() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local ollama", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Provider {
+                name: ref n
+            }
+        } if n == "ollama"
+    ));
+}
+
+#[tokio::test]
+async fn local_provider_then_action() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local ollama status", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Status {
+                provider: Some(ref p)
+            }
+        } if p == "ollama"
+    ));
+}
+
+#[tokio::test]
+async fn local_help_renders_usage() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("local help", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}

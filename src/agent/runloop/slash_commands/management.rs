@@ -1,9 +1,12 @@
 use anyhow::Result;
 use shell_words::split as shell_split;
+use vtcode_core::llm::providers::local_server::LocalProvider;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::rendering::{render_loop_usage, render_mcp_usage, render_schedule_usage};
-use super::{McpCommandAction, ScheduleCommandAction, SlashCommandOutcome};
+use super::rendering::{
+    render_local_usage, render_loop_usage, render_mcp_usage, render_schedule_usage,
+};
+use super::{LocalServerAction, McpCommandAction, ScheduleCommandAction, SlashCommandOutcome};
 
 pub(super) fn handle_mcp_command(
     args: &str,
@@ -199,6 +202,117 @@ pub(super) fn handle_schedule_command(
         _ => {
             render_schedule_usage(renderer)?;
             Ok(SlashCommandOutcome::Handled)
+        }
+    }
+}
+
+pub(super) fn handle_local_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Interactive,
+        });
+    }
+
+    let tokens = match shell_split(trimmed) {
+        Ok(tokens) => tokens,
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to parse arguments: {}", err),
+            )?;
+            render_local_usage(renderer)?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    if tokens.is_empty() {
+        return Ok(SlashCommandOutcome::ManageLocalServer {
+            action: LocalServerAction::Interactive,
+        });
+    }
+
+    // Normalize a provider argument to its canonical key (e.g. "lm-studio" -> "lmstudio")
+    let normalize = |s: &str| -> Option<String> {
+        LocalProvider::from_key(&s.to_ascii_lowercase()).map(|p| p.key().to_string())
+    };
+
+    let first = tokens[0].to_ascii_lowercase();
+    match first.as_str() {
+        "status" => {
+            let provider = tokens.get(1).and_then(|s| normalize(s));
+            Ok(SlashCommandOutcome::ManageLocalServer {
+                action: LocalServerAction::Status { provider },
+            })
+        }
+        "start" => {
+            let provider = tokens.get(1).and_then(|s| normalize(s));
+            Ok(SlashCommandOutcome::ManageLocalServer {
+                action: LocalServerAction::Start { provider },
+            })
+        }
+        "stop" => {
+            let provider = tokens.get(1).and_then(|s| normalize(s));
+            Ok(SlashCommandOutcome::ManageLocalServer {
+                action: LocalServerAction::Stop { provider },
+            })
+        }
+        "configure" | "config" => {
+            let provider = tokens.get(1).and_then(|s| normalize(s));
+            Ok(SlashCommandOutcome::ManageLocalServer {
+                action: LocalServerAction::Configure { provider },
+            })
+        }
+        "troubleshoot" | "diagnose" | "fix" => {
+            let provider = tokens.get(1).and_then(|s| normalize(s));
+            Ok(SlashCommandOutcome::ManageLocalServer {
+                action: LocalServerAction::Troubleshoot { provider },
+            })
+        }
+        "help" | "--help" => {
+            render_local_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        _ => {
+            // Check if it's a valid provider name (from_key handles aliases)
+            if let Some(resolved) = LocalProvider::from_key(&first) {
+                let canonical = resolved.key().to_string();
+                if tokens.len() > 1 {
+                    let action_str = tokens[1].to_ascii_lowercase();
+                    let action = match action_str.as_str() {
+                        "status" => LocalServerAction::Status {
+                            provider: Some(canonical.clone()),
+                        },
+                        "start" => LocalServerAction::Start {
+                            provider: Some(canonical.clone()),
+                        },
+                        "stop" => LocalServerAction::Stop {
+                            provider: Some(canonical.clone()),
+                        },
+                        "configure" | "config" => LocalServerAction::Configure {
+                            provider: Some(canonical.clone()),
+                        },
+                        "troubleshoot" | "diagnose" | "fix" => LocalServerAction::Troubleshoot {
+                            provider: Some(canonical.clone()),
+                        },
+                        _ => {
+                            render_local_usage(renderer)?;
+                            return Ok(SlashCommandOutcome::Handled);
+                        }
+                    };
+                    Ok(SlashCommandOutcome::ManageLocalServer { action })
+                } else {
+                    Ok(SlashCommandOutcome::ManageLocalServer {
+                        action: LocalServerAction::Provider { name: canonical },
+                    })
+                }
+            } else {
+                render_local_usage(renderer)?;
+                Ok(SlashCommandOutcome::Handled)
+            }
         }
     }
 }

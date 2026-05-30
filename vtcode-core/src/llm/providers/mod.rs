@@ -7,6 +7,7 @@ pub mod gemini;
 pub mod huggingface;
 pub mod llamacpp;
 pub mod lmstudio;
+pub mod local_server;
 pub mod mimo;
 pub mod minimax;
 pub mod mistral;

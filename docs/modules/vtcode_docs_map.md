@@ -420,6 +420,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Configuration, API Endpoints, Using Custom LM Studio Models, Tool Calling, Structured Output, and Streaming, Troubleshooting
   - **User Questions**: "What can you tell me about LM Studio Provider Guide?", "How does Configuration work?", "How does API Endpoints work?"
 
+- **File**: `docs/providers/local-servers.md`
+  - **Content**: Local Inference Servers
+  - **Topics**: Supported Providers, Running Ollama, Running LM Studio, Running llama.cpp, Command Reference
+  - **User Questions**: "What can you tell me about Local Inference Servers?", "How does Supported Providers work?", "How does Running Ollama work?"
+
 - **File**: `docs/providers/OLLAMA_INDEX.md`
   - **Content**: Ollama Integration Documentation Index
   - **Topics**: Quick Links, Modules Overview, Data Flow, Integration Roadmap, Common Patterns
