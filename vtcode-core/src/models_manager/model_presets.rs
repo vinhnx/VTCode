@@ -1529,23 +1529,6 @@ fn moonshot_presets() -> Vec<ModelPreset> {
 fn huggingface_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "huggingface/deepseek-v3.2".to_string(),
-            model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
-            display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
-            description: "DeepSeek via Hugging Face Inference".to_string(),
-            provider: Provider::HuggingFace,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-        ModelPreset {
             id: "huggingface/deepseek-v4-flash".to_string(),
             model: "deepseek-ai/DeepSeek-V4-Flash:novita".to_string(),
             display_name: "DeepSeek V4 Flash (HF/Novita)".to_string(),

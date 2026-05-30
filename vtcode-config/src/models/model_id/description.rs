@@ -145,9 +145,6 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => {
                 "Qwen3-Coder-Next served via Ollama Cloud with 256K context, strong coding/tool-use performance, and non-thinking mode responses"
             }
-            ModelId::OllamaDeepseekV32Cloud => {
-                "DeepSeek V3.2 cloud deployment via Ollama with enhanced reasoning and instruction following"
-            }
             ModelId::OllamaDeepseekV4FlashCloud => {
                 "DeepSeek V4 Flash cloud deployment via Ollama with fast inference and efficient reasoning"
             }
@@ -222,16 +219,10 @@ impl ModelId {
             ModelId::OpenCodeGoMinimaxM27 => {
                 "MiniMax-M2.7 included with the OpenCode Go subscription for stronger agentic coding"
             }
-            ModelId::HuggingFaceDeepseekV32 => {
-                "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
-            }
             ModelId::HuggingFaceOpenAIGptOss20b => "OpenAI GPT-OSS 20B via Hugging Face router",
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
             ModelId::HuggingFaceMinimaxM25Novita => {
                 "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
-            }
-            ModelId::HuggingFaceDeepseekV32Novita => {
-                "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
             }
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."

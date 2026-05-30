@@ -380,7 +380,6 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
-    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV32Cloud));
 }
 
 #[test]

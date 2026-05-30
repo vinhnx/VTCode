@@ -103,14 +103,10 @@ pub enum ModelId {
     /// Mistral Large 3 - State-of-the-art open-weight general-purpose multimodal model
     MistralLarge3,
     // Hugging Face models
-    /// DeepSeek V3.2 via Hugging Face router
-    HuggingFaceDeepseekV32,
     /// OpenAI GPT-OSS 20B via Hugging Face router
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// DeepSeek V3.2 via Novita on Hugging Face router
-    HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
     HuggingFaceXiaomiMimoV2FlashNovita,
     /// MiniMax M2.5 via Novita on Hugging Face router
@@ -202,8 +198,6 @@ pub enum ModelId {
     OllamaQwen317b,
     /// Qwen3 Coder Next - Coding-optimized Qwen3 Next model served via Ollama locally
     OllamaQwen3CoderNext,
-    /// DeepSeek V3.2 Cloud - DeepSeek V3.2 reasoning deployment via Ollama Cloud
-    OllamaDeepseekV32Cloud,
     /// DeepSeek V4 Flash Cloud - Fast inference DeepSeek V4 Flash model via Ollama Cloud
     OllamaDeepseekV4FlashCloud,
     /// DeepSeek V4 Pro Cloud - High-performance DeepSeek V4 Pro model via Ollama Cloud

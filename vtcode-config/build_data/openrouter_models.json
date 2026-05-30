@@ -371,66 +371,6 @@
         "doc_comment": "DeepSeek V4 Pro - Thinking mode via OpenRouter"
       }
     },
-    "deepseek/deepseek-v3.2": {
-      "id": "deepseek/deepseek-v3.2",
-      "name": "DeepSeek: DeepSeek V3.2",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 128000,
-      "max_output_tokens": 8192,
-      "cost": {
-        "input": 2.8e-07,
-        "output": 1.1e-06
-      }
-    },
-    "deepseek/deepseek-v3.2-exp": {
-      "id": "deepseek/deepseek-v3.2-exp",
-      "name": "DeepSeek: DeepSeek V3.2 Exp",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 163840,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 2.7e-07,
-        "output": 4e-07
-      }
-    },
-    "deepseek/deepseek-v3.2-speciale": {
-      "id": "deepseek/deepseek-v3.2-speciale",
-      "name": "DeepSeek: DeepSeek V3.2 Speciale",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 128000,
-      "max_output_tokens": 8192,
-      "cost": {
-        "input": 5.5e-06,
-        "output": 2.2e-05
-      }
-    },
     "openai/gpt-5": {
       "id": "openai/gpt-5",
       "name": "OpenAI: GPT-5",

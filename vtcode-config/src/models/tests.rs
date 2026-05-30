@@ -451,7 +451,6 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3CoderNext));
-    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV32Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4FlashCloud));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4ProCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
@@ -463,7 +462,6 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaGlm51Cloud));
 
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
-    assert!(hf_models.contains(&ModelId::HuggingFaceDeepseekV32));
     assert!(hf_models.contains(&ModelId::HuggingFaceGlm51ZaiOrg));
     assert!(hf_models.contains(&ModelId::HuggingFaceQwen3CoderNextNovita));
     assert!(hf_models.contains(&ModelId::HuggingFaceXiaomiMimoV2FlashNovita));
@@ -482,10 +480,6 @@ fn test_ollama_cloud_models() {
         (
             ModelId::OllamaGptOss120bCloud,
             models::ollama::GPT_OSS_120B_CLOUD,
-        ),
-        (
-            ModelId::OllamaDeepseekV32Cloud,
-            models::ollama::DEEPSEEK_V32_CLOUD,
         ),
         (
             ModelId::OllamaDeepseekV4FlashCloud,

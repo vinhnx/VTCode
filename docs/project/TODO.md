@@ -11,11 +11,4 @@ https://nextjs.org/evals
 
 --
 
-remove
-warning: vtcode-config@0.115.0: Skipping openrouter model 'deepseek/deepseek-v3.2' without vtcode metadata
-warning: vtcode-config@0.115.0: Skipping openrouter model 'deepseek/deepseek-v3.2-exp' without vtcode metadata
-warning: vtcode-config@0.115.0: Skipping openrouter model 'deepseek/deepseek-v3.2-speciale' without vtcode metadata
-
---
-
 support https://llama.app/

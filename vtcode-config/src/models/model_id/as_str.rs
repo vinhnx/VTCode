@@ -77,7 +77,6 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             ModelId::OllamaQwen3CoderNext => models::ollama::QWEN3_CODER_NEXT,
-            ModelId::OllamaDeepseekV32Cloud => models::ollama::DEEPSEEK_V32_CLOUD,
             ModelId::OllamaDeepseekV4FlashCloud => models::ollama::DEEPSEEK_V4_FLASH_CLOUD,
             ModelId::OllamaDeepseekV4ProCloud => models::ollama::DEEPSEEK_V4_PRO_CLOUD,
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
@@ -91,11 +90,9 @@ impl ModelId {
             ModelId::OllamaNemotron3SuperCloud => models::ollama::NEMOTRON_3_SUPER_CLOUD,
             ModelId::OllamaLagunaXs2 => models::ollama::LAGUNA_XS_2,
             // Hugging Face models
-            ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
-            ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
             }

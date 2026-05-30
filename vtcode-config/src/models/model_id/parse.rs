@@ -122,7 +122,6 @@ impl FromStr for ModelId {
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             s if s == models::ollama::QWEN3_CODER_NEXT => Ok(ModelId::OllamaQwen3CoderNext),
             "qwen3-coder-next" => Ok(ModelId::OllamaQwen3CoderNext),
-            s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
             s if s == models::ollama::DEEPSEEK_V4_FLASH_CLOUD => {
                 Ok(ModelId::OllamaDeepseekV4FlashCloud)
             }
@@ -149,7 +148,6 @@ impl FromStr for ModelId {
             s if s == models::minimax::MINIMAX_M2_7 => Ok(ModelId::MinimaxM27),
             s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             // Hugging Face models
-            s if s == models::huggingface::DEEPSEEK_V32 => Ok(ModelId::HuggingFaceDeepseekV32),
             s if s == models::huggingface::OPENAI_GPT_OSS_20B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss20b)
             }
@@ -158,9 +156,6 @@ impl FromStr for ModelId {
             }
             s if s == models::huggingface::MINIMAX_M2_5_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM25Novita)
-            }
-            s if s == models::huggingface::DEEPSEEK_V32_NOVITA => {
-                Ok(ModelId::HuggingFaceDeepseekV32Novita)
             }
             s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)

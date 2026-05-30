@@ -38,7 +38,6 @@ model = "deepseek-ai/deepseek-v4-flash"
 #     "deepseek-ai/deepseek-v4-pro",
 #     "deepseek-ai/DeepSeek-V3-0324",
 #     "deepseek-ai/DeepSeek-V3.1",
-#     "deepseek-ai/deepseek-v3.2",
 #     "deepseek-ai/deepseek-r1-0528",
 #     "qwen/qwen3.6-35b-a3b",
 #     "qwen/qwen3.6-plus",
