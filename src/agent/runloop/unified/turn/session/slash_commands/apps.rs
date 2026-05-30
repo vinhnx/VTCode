@@ -8,7 +8,8 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{
-    InlineHandle, InlineListItem, InlineListSelection, WizardModalMode, WizardStep,
+    InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest,
+    TransientSubmission, WizardModalMode, WizardStep,
 };
 
 use vtcode_core::hooks::SessionEndReason;
@@ -17,18 +18,22 @@ use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::external_url_guard::{
     ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
 };
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, refresh_runtime_config_from_manager,
 };
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
 };
+use crate::agent::runloop::unified::url_guard::open_external_url;
 use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 
 const EXTERNAL_APP_EVENT_LOOP_SETTLE_DELAY: Duration = Duration::from_millis(50);
 const DOCS_URL: &str = "https://deepwiki.com/vinhnx/vtcode";
+const DONATE_URL: &str = "https://buymeacoffee.com/vinhnx";
+const PROJECT_URL: &str = "https://github.com/vinhnx/vtcode";
 const EXTERNAL_EDITOR_TITLE: &str = "External Editor";
 const FILE_OPENER_SETTINGS_PATH: &str = "file_opener";
 const EDITOR_ENABLED_ID: &str = "tools_editor_enabled";
@@ -86,6 +91,83 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
             )?;
         }
     }
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_open_donate_links(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    let request = TransientRequest::List(ListOverlayRequest {
+        title: "Support VT Code".to_string(),
+        lines: vec![
+            "Choose a link to open in your browser.".to_string(),
+            format!("Coffee: {DONATE_URL}"),
+            format!("Project: {PROJECT_URL}"),
+        ],
+        footer_hint: Some("Esc cancels".to_string()),
+        items: vec![
+            InlineListItem {
+                title: "Buy me a coffee".to_string(),
+                subtitle: Some(DONATE_URL.to_string()),
+                badge: Some("Support".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
+                search_value: None,
+            },
+            InlineListItem {
+                title: "Open GitHub repository".to_string(),
+                subtitle: Some(PROJECT_URL.to_string()),
+                badge: Some("GitHub".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(PROJECT_URL.to_string())),
+                search_value: None,
+            },
+        ],
+        selected: Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
+        search: None,
+        hotkeys: Vec::new(),
+    });
+
+    let outcome = show_overlay_and_wait(
+        ctx.handle,
+        ctx.session,
+        request,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        |submission| match submission {
+            TransientSubmission::Selection(InlineListSelection::ConfigAction(url))
+                if url == DONATE_URL || url == PROJECT_URL =>
+            {
+                Some(url)
+            }
+            _ => None,
+        },
+    )
+    .await?;
+
+    ctx.handle.close_modal();
+    ctx.handle.force_redraw();
+
+    match outcome {
+        OverlayWaitOutcome::Submitted(url) => match open_external_url(&url) {
+            Ok(()) => ctx
+                .renderer
+                .line(MessageStyle::Info, &format!("Opening browser: {url}"))?,
+            Err(err) => ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to open browser: {err}"),
+            )?,
+        },
+        OverlayWaitOutcome::Exit => {
+            return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+        }
+        OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Cancelled opening support link.")?;
+        }
+    }
+
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }

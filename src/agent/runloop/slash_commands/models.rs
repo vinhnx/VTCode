@@ -124,6 +124,7 @@ pub(crate) enum SlashCommandOutcome {
     Exit,
     NewSession,
     OpenDocs,
+    OpenDonateLinks,
     StartModelSelection,
     SetEffort {
         level: Option<ReasoningEffortLevel>,

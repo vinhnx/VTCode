@@ -31,13 +31,9 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "donate" => {
             renderer.line(
                 MessageStyle::Info,
-                "Your support is invaluable, it enables me to dedicate more time to research, exploration, and creating work that pushes boundaries. Thank you for making this possible.",
+                "I build VT Code in my spare time. It supports open-weight models and will stay open source, no matter what. If it has saved you some time, you can buy me a coffee:",
             )?;
-            renderer.line(
-                MessageStyle::Info,
-                "You can donate at: https://buymeacoffee.com/vinhnx",
-            )?;
-            Ok(SlashCommandOutcome::Handled)
+            Ok(SlashCommandOutcome::OpenDonateLinks)
         }
         "theme" => {
             let mut tokens = args.split_whitespace();

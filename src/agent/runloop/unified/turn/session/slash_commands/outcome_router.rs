@@ -55,6 +55,7 @@ pub(super) async fn route_outcome(
         }
         outcome @ (SlashCommandOutcome::NewSession
         | SlashCommandOutcome::OpenDocs
+        | SlashCommandOutcome::OpenDonateLinks
         | SlashCommandOutcome::LaunchEditor { .. }
         | SlashCommandOutcome::LaunchGit
         | SlashCommandOutcome::ManageSkills { .. }
@@ -179,6 +180,7 @@ async fn route_navigation_outcome(
     match outcome {
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
+        SlashCommandOutcome::OpenDonateLinks => handlers::handle_open_donate_links(ctx).await,
         SlashCommandOutcome::LaunchEditor { file } => {
             handlers::handle_launch_editor(ctx, file).await
         }
