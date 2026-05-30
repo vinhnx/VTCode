@@ -2,6 +2,31 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.116.0 - 2026-05-30
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update TODO (c4e2d4a0) (@vinhnx)
+- Update changelog (9ba9979b) (@vinhnx)
+- Add support section with donation link in README (cfd63e1d) (@vinhnx)
+- Refactor LLM provider handling and improve error context management (b2cd624a) 
+- Remove deprecated DeepSeek V3.2 model references and update related tests (5ce314cf) 
+- Refactor model IDs and descriptions; remove deprecated models and update defaults (9b967eeb) 
+- Add LlamaCpp provider support and related configurations (12c5982c) 
+- Add support for managing local inference servers and new model integration (82ae1a5c) 
+- Add Ctrl+M shortcut to open model picker and update related tests (73538876) 
+- Add donation command and update related UI prompts (fd1a354d) 
+- Fix minimum Ollama version for Responses API and update model fields to be optional (4dc547e3) 
+- Add PR code review agent and related instructions (4f443419) 
+- Add PR code review guidelines to AGENTS.md (14d0e5cc) 
+- Add workspace structure and build guidelines to AGENTS.md (5009acb7) 
+- Refactor AGENTS.md to streamline rules and workspace structure (0ad20837) 
+- Add AGENTS.md files for new modules and update .gitignore to include memory directory (2be6f557) 
+- Update LM Studio provider to support new models and enhance API integration (86671657) 
+- Refactor file operations to use async Tokio methods for improved performance (e4582be4) 
+- Add criterion for benchmarking and improve text editing functions (dc22c528) 
 ## 0.115.0 - 2026-05-30
 
 ### Highlights
