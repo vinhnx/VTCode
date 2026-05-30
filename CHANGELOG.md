@@ -2,6 +2,19 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.115.0 - 2026-05-30
+
+### Highlights
+#### Features
+
+- Enhance deserialization for optional strings and update PlannerResponse structure (3d6643d2) 
+### Other Changes
+#### Other
+
+- Add StepFun provider and model integration (c3f73b10) 
+#### Refactors
+
+- Update header context handling and improve reasoning effort configuration (bb71e501) 
 ## 0.114.0 - 2026-05-29
 
 ### Highlights
