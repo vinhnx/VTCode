@@ -258,6 +258,7 @@ impl ModelId {
             ModelId::OpenRouterMoonshotaiKimiK26 => {
                 "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter"
             }
+            ModelId::OpenRouterZaiGlm51 => "Z.AI GLM-5.1 next-gen foundation model via OpenRouter",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 model accessed through OpenRouter",
             _ => unreachable!(),
         }

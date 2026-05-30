@@ -335,6 +335,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "integration"
     ),
     built_in_command_spec!(
+        "local",
+        "Manage local inference servers: Ollama, LM Studio, llama.cpp (usage: /local [action] [provider])",
+        "/local [status|start|stop|configure|troubleshoot] [ollama|lmstudio|llamacpp]",
+        "integration"
+    ),
+    built_in_command_spec!(
         "resume",
         "List archived sessions when idle; resume the active turn while it is paused",
         "/resume [limit|--all]",

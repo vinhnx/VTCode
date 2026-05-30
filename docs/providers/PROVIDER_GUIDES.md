@@ -65,6 +65,7 @@ This index collects provider-specific guides for configuring VT Code with differ
 
 ## Ollama Local & Cloud Models
 
+-   **Guide:** [Local Inference Servers](./local-servers.md) (unified `/local` command)
 -   **Setup:** Install and run Ollama locally ([official install](https://ollama.com/download))
 -   **Configuration:** Local usage needs no key; set `OLLAMA_API_KEY` to access Ollama Cloud
 -   **Default model:** Any locally available model (e.g., `llama3:8b`, `mistral:7b`, `qwen3:1.7b`)

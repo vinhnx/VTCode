@@ -90,6 +90,17 @@ pub(crate) enum ScheduleCommandAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum LocalServerAction {
+    Interactive,
+    Status { provider: Option<String> },
+    Start { provider: Option<String> },
+    Stop { provider: Option<String> },
+    Configure { provider: Option<String> },
+    Troubleshoot { provider: Option<String> },
+    Provider { name: String },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum CompactConversationCommand {
     Run { options: ResponsesCompactionOptions },
     EditDefaultPrompt,
@@ -166,6 +177,9 @@ pub(crate) enum SlashCommandOutcome {
     },
     ManageSchedule {
         action: ScheduleCommandAction,
+    },
+    ManageLocalServer {
+        action: LocalServerAction,
     },
     LaunchEditor {
         file: Option<String>,

@@ -119,6 +119,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
             ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",
             ModelId::OpenRouterMoonshotaiKimiK26 => "moonshotai/kimi-k2.6",
+            ModelId::OpenRouterZaiGlm51 => "z-ai/glm-5.1",
             _ => unreachable!(),
         }
     }

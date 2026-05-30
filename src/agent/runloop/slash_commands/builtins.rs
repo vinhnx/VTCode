@@ -10,7 +10,9 @@ use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
     handle_mode_command, handle_plan_command, handle_resume_command, handle_rewind_command,
 };
-use super::management::{handle_loop_command, handle_mcp_command, handle_schedule_command};
+use super::management::{
+    handle_local_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
+};
 use super::models::{
     AgentDefinitionScope, AgentManagerAction, SlashCommandOutcome, SubprocessManagerAction,
     ThemePaletteMode,
@@ -210,6 +212,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "mcp" => handle_mcp_command(args, renderer),
+        "local" => handle_local_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "effort" => match parse_effort_args(args) {
             Ok((level, persist)) => Ok(SlashCommandOutcome::SetEffort { level, persist }),

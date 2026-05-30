@@ -18,6 +18,8 @@ mod diagnostics;
 mod effort;
 #[path = "interactive.rs"]
 mod interactive;
+#[path = "local_server.rs"]
+mod local_server;
 #[path = "mcp.rs"]
 mod mcp;
 #[path = "modes.rs"]
@@ -61,6 +63,7 @@ pub(super) use effort::handle_set_effort;
 pub(super) use interactive::{
     handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,
 };
+pub(super) use local_server::handle_manage_local_server;
 pub(super) use mcp::handle_manage_mcp;
 pub(super) use modes::{
     handle_cycle_mode, handle_set_mode, handle_start_mode_selection, handle_toggle_plan_mode,

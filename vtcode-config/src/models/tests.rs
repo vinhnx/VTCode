@@ -687,6 +687,9 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             ModelId::QwenDeepSeekV4Flash | ModelId::QwenDeepSeekV4Pro | ModelId::QwenGlm51 => {
                 continue;
             }
+            // LlamaCpp/Ollama GPT-OSS-20B share the same model string as OpenAI's variant;
+            // `gpt-oss-20b` resolves to OpenAIGptOss20b first.
+            ModelId::LlamaCppGptOss20b | ModelId::OllamaGptOss20b => continue,
             _ => ModelId::from_str(model.as_str()),
         };
         assert_eq!(parsed.unwrap(), model);

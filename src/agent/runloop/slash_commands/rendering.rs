@@ -94,6 +94,52 @@ pub(super) fn render_schedule_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
+pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        "Usage: /local                          (open interactive manager)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local status                   (check all local servers)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local status <provider>        (check specific server)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local start <provider>         (start a server)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local stop <provider>          (stop a server)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local configure <provider>     (show config and env vars)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local troubleshoot <provider>  (diagnose and fix issues)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /local <provider>               (open provider actions)",
+    )?;
+    renderer.line(MessageStyle::Info, "")?;
+    renderer.line(MessageStyle::Info, "Providers: ollama, lmstudio, llama.cpp")?;
+    renderer.line(
+        MessageStyle::Info,
+        "Aliases: lm-studio -> lmstudio, llama.cpp -> llamacpp",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Examples: /local, /local ollama, /local start lmstudio, /local troubleshoot llamacpp",
+    )?;
+    Ok(())
+}
+
 pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     let available_themes = theme::available_themes();
     renderer.line(MessageStyle::Info, "Available themes:")?;
