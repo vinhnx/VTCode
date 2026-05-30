@@ -7179,6 +7179,7 @@ dependencies = [
 name = "vtcode-vim"
 version = "0.115.0"
 dependencies = [
+ "criterion",
  "crossterm",
 ]
 

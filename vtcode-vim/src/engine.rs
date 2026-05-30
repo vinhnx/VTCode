@@ -22,6 +22,15 @@ pub trait Editor {
     fn delete_char_forward(&mut self);
     fn insert_text(&mut self, text: &str);
     fn replace(&mut self, content: String, cursor: usize);
+
+    /// Replace the byte range `start..end` with `text` in-place.
+    /// Default implementation delegates to `content().to_string()` + `replace()`.
+    fn replace_range(&mut self, start: usize, end: usize, text: &str) {
+        let mut content = self.content().to_string();
+        content.replace_range(start..end, text);
+        let cursor = start + text.len();
+        self.replace(content, cursor);
+    }
 }
 
 /// Result of routing a single key through the Vim engine.
@@ -631,7 +640,7 @@ impl<E: Editor> VimContext<'_, E> {
         let mut line_start = 0;
         for segment in content.split_inclusive('\n') {
             let line_end = line_start + segment.len();
-            if line_end > start && line_start <= end {
+            if line_end > start && line_start < end {
                 if indent {
                     out.push_str(INDENT);
                     out.push_str(segment);
@@ -647,7 +656,7 @@ impl<E: Editor> VimContext<'_, E> {
         }
         if !content.ends_with('\n') && line_start < content.len() {
             let tail = &content[line_start..];
-            if line_start <= end && content.len() > start {
+            if line_start < end && content.len() > start {
                 if indent {
                     out.push_str(INDENT);
                     out.push_str(tail);
@@ -662,9 +671,7 @@ impl<E: Editor> VimContext<'_, E> {
     }
 
     fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
-        let mut content = self.editor.content().to_string();
-        content.replace_range(start..end, replacement);
-        self.editor.replace(content, start + replacement.len());
+        self.editor.replace_range(start, end, replacement);
     }
 
     fn capture_range(&mut self, start: usize, end: usize) {
@@ -702,9 +709,8 @@ impl<E: Editor> VimContext<'_, E> {
         } else {
             vim_line_start(self.editor.content(), self.editor.cursor())
         };
-        let mut content = self.editor.content().to_string();
-        content.insert(insert_at, '\n');
-        self.editor.replace(content, insert_at + 1);
+        self.editor.replace_range(insert_at, insert_at, "\n");
+        self.editor.set_cursor(insert_at + 1);
     }
 
     fn paste(&mut self, after: bool) {
@@ -713,22 +719,20 @@ impl<E: Editor> VimContext<'_, E> {
         }
         match self.state.clipboard_kind {
             ClipboardKind::CharWise => {
-                let mut content = self.editor.content().to_string();
-                let insert_at = if after && self.editor.cursor() < content.len() {
-                    next_char_boundary(&content, self.editor.cursor())
+                let insert_at = if after && self.editor.cursor() < self.editor.content().len() {
+                    next_char_boundary(self.editor.content(), self.editor.cursor())
                 } else {
                     self.editor.cursor()
                 };
-                content.insert_str(insert_at, self.clipboard);
                 self.editor
-                    .replace(content, insert_at + self.clipboard.len());
+                    .replace_range(insert_at, insert_at, self.clipboard);
+                self.editor.set_cursor(insert_at + self.clipboard.len());
             }
             ClipboardKind::LineWise => {
-                let mut content = self.editor.content().to_string();
                 let (line_start, line_end) =
-                    vim_current_line_bounds(&content, self.editor.cursor());
+                    vim_current_line_bounds(self.editor.content(), self.editor.cursor());
                 let insert_at = if after {
-                    if line_end < content.len() {
+                    if line_end < self.editor.content().len() {
                         line_end + 1
                     } else {
                         line_end
@@ -736,27 +740,27 @@ impl<E: Editor> VimContext<'_, E> {
                 } else {
                     line_start
                 };
-                content.insert_str(insert_at, self.clipboard);
-                let cursor = (insert_at + self.clipboard.len()).min(content.len());
-                self.editor.replace(content, cursor);
+                self.editor
+                    .replace_range(insert_at, insert_at, self.clipboard);
+                let cursor =
+                    (insert_at + self.clipboard.len()).min(self.editor.content().len());
+                self.editor.set_cursor(cursor);
             }
         }
     }
 
     fn join_lines(&mut self) {
-        let content = self.editor.content().to_string();
-        let (_, line_end) = vim_current_line_bounds(&content, self.editor.cursor());
-        if line_end >= content.len() {
+        let (_, line_end) = vim_current_line_bounds(self.editor.content(), self.editor.cursor());
+        if line_end >= self.editor.content().len() {
             return;
         }
         let next_start = line_end + 1;
-        let next_non_ws = content[next_start..]
+        let next_non_ws = self.editor.content()[next_start..]
             .char_indices()
             .find_map(|(idx, ch)| (!ch.is_whitespace()).then_some(next_start + idx))
             .unwrap_or(next_start);
-        let mut joined = content;
-        joined.replace_range(line_end..next_non_ws, " ");
-        self.editor.replace(joined, line_end + 1);
+        self.editor.replace_range(line_end, next_non_ws, " ");
+        self.editor.set_cursor(line_end + 1);
     }
 
     fn repeat_last_change(&mut self) {

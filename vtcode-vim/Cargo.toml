@@ -15,8 +15,15 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 crossterm = { workspace = true }
 
+[dev-dependencies]
+criterion = { workspace = true }
+
 [lints]
 workspace = true
 
 [lib]
 doctest = false
+
+[[bench]]
+name = "vim_engine"
+harness = false

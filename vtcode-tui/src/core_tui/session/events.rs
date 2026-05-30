@@ -1,6 +1,5 @@
 use super::*;
-use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
-use std::time::Instant;
+use ratatui::crossterm::event::KeyModifiers;
 
 use super::super::types::{OverlayEvent, OverlaySubmission};
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
@@ -66,78 +65,6 @@ fn handle_interrupt(session: &mut Session) -> Option<InlineEvent> {
     }
     session.mark_dirty();
     Some(InlineEvent::Interrupt)
-}
-
-#[expect(dead_code)]
-pub(super) fn handle_event(
-    session: &mut Session,
-    event: CrosstermEvent,
-    events: &UnboundedSender<InlineEvent>,
-    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-) {
-    match event {
-        CrosstermEvent::Key(key) => {
-            if matches!(key.kind, KeyEventKind::Press)
-                && let Some(outbound) = process_key(session, key)
-            {
-                session.emit_inline_event(&outbound, events, callback);
-            }
-        }
-        CrosstermEvent::Mouse(MouseEvent {
-            kind, column, row, ..
-        }) => {
-            if !session.fullscreen.interaction.mouse_capture {
-                return;
-            }
-
-            match kind {
-                MouseEventKind::ScrollDown => {
-                    session.mouse_selection.clear_click_history();
-                    session.scroll_line_down();
-                    session.mark_dirty();
-                }
-                MouseEventKind::ScrollUp => {
-                    session.mouse_selection.clear_click_history();
-                    session.scroll_line_up();
-                    session.mark_dirty();
-                }
-                MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                    if session
-                        .mouse_selection
-                        .register_click(column, row, Instant::now())
-                    {
-                        let _ = session.select_transcript_word_at(column, row);
-                        session.mouse_selection.clear_click_history();
-                    } else {
-                        session.mouse_selection.start_selection(column, row);
-                    }
-                    session.mark_dirty();
-                }
-                MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                    session.mouse_selection.update_selection(column, row);
-                    session.mark_dirty();
-                }
-                MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
-                    session.mouse_selection.finish_selection(column, row);
-                    session.mark_dirty();
-                }
-                _ => {}
-            }
-        }
-        CrosstermEvent::Paste(content) => {
-            handle_paste(session, &content);
-        }
-        CrosstermEvent::Resize(_, rows) => {
-            session.apply_view_rows(rows);
-            session.mark_dirty();
-        }
-        CrosstermEvent::FocusGained => {
-            // No-op: focus tracking is host/application concern.
-        }
-        CrosstermEvent::FocusLost => {
-            // No-op: focus tracking is host/application concern.
-        }
-    }
 }
 
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
@@ -716,43 +643,4 @@ fn clear_submitted_input(session: &mut Session) {
     session.clear_inline_prompt_suggestion();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
-}
-
-/// Emits an InlineEvent through the event channel and callback
-#[inline]
-pub(super) fn emit_inline_event(
-    event: &InlineEvent,
-    events: &UnboundedSender<InlineEvent>,
-    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-) {
-    if let Some(cb) = callback {
-        cb(event);
-    }
-    let _ = events.send(event.clone());
-}
-
-/// Handles scroll down event from mouse input
-#[inline]
-#[expect(dead_code)]
-pub(super) fn handle_scroll_down(
-    session: &mut Session,
-    events: &UnboundedSender<InlineEvent>,
-    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-) {
-    session.scroll_line_down();
-    session.mark_dirty();
-    emit_inline_event(&InlineEvent::ScrollLineDown, events, callback);
-}
-
-/// Handles scroll up event from mouse input
-#[inline]
-#[expect(dead_code)]
-pub(super) fn handle_scroll_up(
-    session: &mut Session,
-    events: &UnboundedSender<InlineEvent>,
-    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-) {
-    session.scroll_line_up();
-    session.mark_dirty();
-    emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
 }

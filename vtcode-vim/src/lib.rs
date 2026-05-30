@@ -5,13 +5,14 @@ mod text;
 mod types;
 
 pub use engine::{Editor, HandleKeyOutcome, handle_key};
+pub use text::{next_char_boundary, prev_char_boundary};
 pub use types::{VimMode, VimState};
 
 #[cfg(test)]
 mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-    use super::{Editor, VimState, handle_key};
+    use super::{Editor, VimState, handle_key, next_char_boundary, prev_char_boundary};
 
     #[derive(Debug)]
     struct TestEditor {
@@ -42,35 +43,18 @@ mod tests {
         }
 
         fn move_left(&mut self) {
-            if self.cursor == 0 {
-                return;
-            }
-            let mut pos = self.cursor - 1;
-            while pos > 0 && !self.content.is_char_boundary(pos) {
-                pos -= 1;
-            }
-            self.cursor = pos;
+            self.cursor = prev_char_boundary(&self.content, self.cursor);
         }
 
         fn move_right(&mut self) {
-            if self.cursor >= self.content.len() {
-                return;
-            }
-            let mut pos = self.cursor + 1;
-            while pos < self.content.len() && !self.content.is_char_boundary(pos) {
-                pos += 1;
-            }
-            self.cursor = pos;
+            self.cursor = next_char_boundary(&self.content, self.cursor);
         }
 
         fn delete_char_forward(&mut self) {
             if self.cursor >= self.content.len() {
                 return;
             }
-            let mut end = self.cursor + 1;
-            while end < self.content.len() && !self.content.is_char_boundary(end) {
-                end += 1;
-            }
+            let end = next_char_boundary(&self.content, self.cursor);
             self.content.drain(self.cursor..end);
         }
 
@@ -82,6 +66,11 @@ mod tests {
         fn replace(&mut self, content: String, cursor: usize) {
             self.content = content;
             self.cursor = cursor.min(self.content.len());
+        }
+
+        fn replace_range(&mut self, start: usize, end: usize, text: &str) {
+            self.content.replace_range(start..end, text);
+            self.cursor = (start + text.len()).min(self.content.len());
         }
     }
 
@@ -287,5 +276,250 @@ mod tests {
             &KeyEvent::new(KeyCode::Char(','), KeyModifiers::NONE),
         );
         assert_eq!(editor.cursor, 2);
+    }
+
+    #[test]
+    fn x_deletes_character_at_cursor() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello", 1);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "hllo");
+        assert_eq!(editor.cursor, 1);
+    }
+
+    #[test]
+    fn dw_deletes_word_forward() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello world", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+        );
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "world");
+        assert_eq!(editor.cursor, 0);
+    }
+
+    #[test]
+    fn j_joins_lines() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello\nworld", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('J'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "hello world");
+        // Cursor lands after the join space (on 'w'), not on the space itself
+        assert_eq!(editor.cursor, 6);
+    }
+
+    #[test]
+    fn p_pastes_charwise_after_cursor() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("abc", 1);
+        let mut clipboard = "XY".to_string();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        state.clipboard_kind = crate::types::ClipboardKind::CharWise;
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
+        );
+        // Paste after cursor char 'b' (pos 1) → inserts at pos 2
+        assert_eq!(editor.content, "abXYc");
+    }
+
+    #[test]
+    fn p_pastes_linewise_after_current_line() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("one\nthree", 0);
+        let mut clipboard = "two\n".to_string();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        state.clipboard_kind = crate::types::ClipboardKind::LineWise;
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "one\ntwo\nthree");
+    }
+
+    #[test]
+    fn y_then_p_yanks_and_pastes_line() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("one\ntwo\nthree", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        // Yank current line
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::NONE),
+        );
+        assert_eq!(clipboard, "one\n");
+
+        // Paste after
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "one\none\ntwo\nthree");
+    }
+
+    #[test]
+    fn d_deletes_to_line_end() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello world", 5);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "hello");
+        assert_eq!(editor.cursor, 5);
+    }
+
+    #[test]
+    fn w_moves_to_next_word_start() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello world foo", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.cursor, 6);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.cursor, 12);
+    }
+
+    #[test]
+    fn b_moves_to_prev_word_start() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello world foo", 12);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.cursor, 6);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.cursor, 0);
+    }
+
+    #[test]
+    fn indent_adds_whitespace() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello\nworld", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('>'), KeyModifiers::NONE),
+        );
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('>'), KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "    hello\nworld");
+    }
+
+    #[test]
+    fn ciw_changes_inner_word() {
+        let mut state = VimState::new(false);
+        let mut editor = TestEditor::new("hello world", 0);
+        let mut clipboard = String::new();
+        enable_normal_mode(&mut state, &mut editor, &mut clipboard);
+
+        // ciw
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE),
+        );
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+        );
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+        );
+        // Now in insert mode, type replacement
+        editor.insert_text("hi");
+        let _ = handle_key(
+            &mut state,
+            &mut editor,
+            &mut clipboard,
+            &KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+        );
+        assert_eq!(editor.content, "hi world");
     }
 }

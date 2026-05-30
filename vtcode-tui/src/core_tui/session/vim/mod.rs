@@ -43,6 +43,10 @@ impl VimEditor for SessionVimEditor<'_> {
         self.input_manager.set_content(content);
         self.input_manager.set_cursor(cursor);
     }
+
+    fn replace_range(&mut self, start: usize, end: usize, text: &str) {
+        self.input_manager.replace_range(start, end, text);
+    }
 }
 
 impl Session {

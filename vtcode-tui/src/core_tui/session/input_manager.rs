@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use super::super::types::ContentPart;
 use super::mouse_selection::MouseSelectionState;
+use vtcode_vim::{next_char_boundary, prev_char_boundary};
 
 #[derive(Clone, Debug)]
 pub struct InputHistoryEntry {
@@ -161,7 +162,7 @@ impl InputManager {
         self.selection_copied = false;
     }
 
-    fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
+    pub(crate) fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
         self.content.replace_range(start..end, replacement);
         self.cursor = start + replacement.len();
         self.clear_selection();
@@ -182,13 +183,7 @@ impl InputManager {
             self.clear_selection();
             return;
         }
-        if self.cursor > 0 {
-            let mut pos = self.cursor - 1;
-            while pos > 0 && !self.content.is_char_boundary(pos) {
-                pos -= 1;
-            }
-            self.cursor = pos;
-        }
+        self.cursor = prev_char_boundary(&self.content, self.cursor);
     }
 
     /// Moves cursor right by one character (UTF-8 aware)
@@ -198,13 +193,7 @@ impl InputManager {
             self.clear_selection();
             return;
         }
-        if self.cursor < self.content.len() {
-            let mut pos = self.cursor + 1;
-            while pos < self.content.len() && !self.content.is_char_boundary(pos) {
-                pos += 1;
-            }
-            self.cursor = pos;
-        }
+        self.cursor = next_char_boundary(&self.content, self.cursor);
     }
 
     /// Moves cursor to the beginning
@@ -242,10 +231,7 @@ impl InputManager {
             return;
         }
         if self.cursor > 0 {
-            let mut pos = self.cursor - 1;
-            while pos > 0 && !self.content.is_char_boundary(pos) {
-                pos -= 1;
-            }
+            let pos = prev_char_boundary(&self.content, self.cursor);
             self.content.drain(pos..self.cursor);
             self.cursor = pos;
         }
@@ -257,10 +243,7 @@ impl InputManager {
             return;
         }
         if self.cursor < self.content.len() {
-            let mut end = self.cursor + 1;
-            while end < self.content.len() && !self.content.is_char_boundary(end) {
-                end += 1;
-            }
+            let end = next_char_boundary(&self.content, self.cursor);
             self.content.drain(self.cursor..end);
         }
     }
