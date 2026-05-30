@@ -32,6 +32,43 @@ Cargo workspace, ~20 crates. `default-members` = root, `vtcode-core`, `vtcode-tu
 
 New reusable logic: put it in an existing small crate or a new one. Keep it out of `vtcode-core` by default unless tightly coupled to the core runtime.
 
+## Per-Module Guidance
+
+Every crate has its own AGENTS.md with crate-specific conventions:
+
+| Crate | AGENTS.md |
+|---|---|
+| `vtcode` (binary) | [src/AGENTS.md](src/AGENTS.md) |
+| `vtcode-core` | [vtcode-core/AGENTS.md](vtcode-core/AGENTS.md) |
+| `vtcode-tui` | [vtcode-tui/AGENTS.md](vtcode-tui/AGENTS.md) |
+| `vtcode-config` | [vtcode-config/AGENTS.md](vtcode-config/AGENTS.md) |
+| `vtcode-llm` | [vtcode-llm/AGENTS.md](vtcode-llm/AGENTS.md) |
+| `vtcode-tools` | [vtcode-tools/AGENTS.md](vtcode-tools/AGENTS.md) |
+| `vtcode-bash-runner` | [vtcode-bash-runner/AGENTS.md](vtcode-bash-runner/AGENTS.md) |
+| `vtcode-acp` | [vtcode-acp/AGENTS.md](vtcode-acp/AGENTS.md) |
+| `vtcode-auth` | [vtcode-auth/AGENTS.md](vtcode-auth/AGENTS.md) |
+| `vtcode-indexer` | [vtcode-indexer/AGENTS.md](vtcode-indexer/AGENTS.md) |
+| `vtcode-exec-events` | [vtcode-exec-events/AGENTS.md](vtcode-exec-events/AGENTS.md) |
+| `vtcode-commons` | [vtcode-commons/AGENTS.md](vtcode-commons/AGENTS.md) |
+| `vtcode-process-hardening` | [vtcode-process-hardening/AGENTS.md](vtcode-process-hardening/AGENTS.md) |
+| `vtcode-ghostty-vt-sys` | [vtcode-ghostty-vt-sys/AGENTS.md](vtcode-ghostty-vt-sys/AGENTS.md) |
+
+**Maintaining per-module files**: After significant changes (new modules, convention shifts, discovered gotchas), use the `audit-module-agents` skill to check if the affected crate's AGENTS.md needs updating. Keep each file under 30 lines — only document what's unique to that crate. This workflow is also referenced in `CLAUDE.md` for persistent agent memory.
+
+## Project Memory
+
+Session-independent knowledge lives in `.vtcode/memory/` (gitignored). Use it to persist learnings across sessions:
+
+| File | Use for |
+|---|---|
+| `gotchas.md` | Non-obvious behaviors, pitfalls, workarounds |
+| `issues.md` | Recurring problems, flaky tests, env-specific failures |
+| `library.md` | Useful patterns, snippets, idioms |
+| `decisions.md` | Architecture decisions, trade-offs, rationale |
+| `scratch.md` | Ephemeral notes — safe to clear |
+
+Read these files at session start when context is needed. Write to them when you discover something worth persisting. See `.vtcode/memory/README.md` for format rules.
+
 ## Build
 
 - Rust stable, MSRV 1.88, edition 2024.

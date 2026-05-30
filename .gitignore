@@ -825,5 +825,6 @@ plans/
 .vtcode/state/
 .vtcode/tasks/
 .vtcode/tasks/current_task.md
+.vtcode/memory/
 .vtcode/history/vtcode-share-hf/
 .vtcode/history/
