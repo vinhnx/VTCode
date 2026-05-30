@@ -142,9 +142,9 @@ define_provider_config!(
     LmStudioProviderConfig,
     "lmstudio",
     "LM Studio",
-    "local-model",
-    "http://localhost:1234",
-    None,
+    crate::config::constants::models::lmstudio::DEFAULT_MODEL,
+    crate::config::constants::urls::LMSTUDIO_API_BASE,
+    Some(crate::config::constants::env_vars::LMSTUDIO_BASE_URL),
     ()
 );
 define_provider_config!(

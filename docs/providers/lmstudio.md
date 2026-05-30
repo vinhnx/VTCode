@@ -1,22 +1,22 @@
 # LM Studio Provider Guide
 
-LM Studio exposes both a native v1 REST API and OpenAI-compatible HTTP server so you can run local or LAN-hosted models without changing your existing API integration. VT Code supports both the native LM Studio v1 API (introduced in 0.4.0) and OpenAI-compatible endpoints, which means streaming, tool calling, structured outputs, and stateful chats work seamlessly while keeping inference on your own hardware.
+LM Studio exposes both a native REST API and OpenAI-compatible HTTP server so you can run local or LAN-hosted models without changing your existing API integration. VT Code uses the OpenAI-compatible endpoints for inference, which means streaming, tool calling, structured outputs work seamlessly while keeping inference on your own hardware.
 
 ## Prerequisites
 
-- LM Studio 0.4.0+ installed on your machine ([download](https://lmstudio.ai/download))
+- LM Studio 0.3.6+ installed on your machine ([download](https://lmstudio.ai/download))
 - Enable the Developer HTTP server via the LM Studio desktop app or CLI
   ([docs](https://lmstudio.ai/docs/developer))
-- At least one model downloaded inside LM Studio (e.g., Meta Llama 3.1 8B or 3 8B,
-  Qwen2.5 7B, Gemma 2 2B/9B IT, or Phi-3.1 Mini 4K)
+- At least one model downloaded inside LM Studio (e.g., Qwen 3 8B, DeepSeek R1 Qwen3 8B,
+  GPT-OSS 20B, Llama 3.1 8B, Qwen 2.5 7B, or Gemma 3 12B)
 
 ## Installation and Setup
 
 1. **Install LM Studio**: Follow the platform-specific installer from
    [lmstudio.ai/download](https://lmstudio.ai/download).
 2. **Download a model**: In the app, open the "Models" tab and pull one of the
-   supported open models (Meta Llama 3.1 8B, Meta Llama 3 8B, Qwen2.5 7B, Gemma 2
-   2B/9B IT, Phi-3.1 Mini 4K, or any other compatible model hosted in the LM Studio
+   supported open models (Qwen 3 8B, DeepSeek R1 Qwen3 8B, GPT-OSS 20B, Llama 3.1
+   8B, Qwen 2.5 7B, Gemma 3 12B, or any other compatible model hosted in the LM Studio
    catalog). Alternatively, use the CLI:
     ```bash
     lms get deepseek-r1  # Download by keyword
@@ -28,10 +28,10 @@ LM Studio exposes both a native v1 REST API and OpenAI-compatible HTTP server so
 4. **Verify the server**: Send a quick health check:
 
     ```bash
-    # Native v1 API
-    curl http://localhost:1234/api/v1/models
+    # Native REST API
+    curl http://localhost:1234/api/v0/models
 
-    # OpenAI-compatible API (still supported)
+    # OpenAI-compatible API
     curl http://localhost:1234/v1/models
     ```
 
@@ -42,9 +42,9 @@ LM Studio exposes both a native v1 REST API and OpenAI-compatible HTTP server so
 ### Environment Variables
 
 - `LMSTUDIO_BASE_URL` (optional): Override the API endpoint (defaults to
-  `http://localhost:1234/v1` for OpenAI-compatible endpoints, or `http://localhost:1234/api/v1` for native v1 API). Useful when the server runs on another port or host.
+  `http://localhost:1234/v1`). Useful when the server runs on another port or host.
 - `LMSTUDIO_API_KEY` (optional): Set when you enable authentication in the LM Studio
-  server (introduced in 0.4.0). Leave unset for local testing without authentication.
+  server. Leave unset for local testing without authentication.
 
 ### VT Code Configuration
 
@@ -53,7 +53,7 @@ Configure `vtcode.toml` in your workspace to point at LM Studio:
 ```toml
 [agent]
 provider = "lmstudio"                     # LM Studio provider
-default_model = "lmstudio-community/meta-llama-3.1-8b-instruct"
+default_model = "lmstudio-community/Qwen3-8B"
 
 [tools]
 default_policy = "prompt"
@@ -72,35 +72,27 @@ vtcode --provider lmstudio --model lmstudio-community/qwen2.5-7b-instruct
 
 ## API Endpoints
 
-LM Studio 0.4.0+ provides multiple API surfaces:
-
-### Native v1 REST API (`/api/v1/*`)
-
-The recommended API for new integrations, offering enhanced features:
-
-- **`POST /api/v1/chat`**: Chat with a model (supports streaming, stateful chats, MCP)
-- **`GET /api/v1/models`**: List available models
-- **`POST /api/v1/models/load`**: Load a model into memory
-- **`POST /api/v1/models/unload`**: Unload a model from memory
-- **`POST /api/v1/models/download`**: Download a model
-- **`GET /api/v1/models/download/status`**: Check download status
+LM Studio provides multiple API surfaces:
 
 ### OpenAI-Compatible Endpoints (`/v1/*`)
 
-Maintained for backward compatibility:
+Used by VT Code for maximum compatibility:
 
-- **`POST /v1/chat/completions`**: Standard OpenAI chat completions
-- **`POST /v1/responses`**: Stateful interactions with `previous_response_id`, custom tools, and MCP support
+- **`POST /v1/chat/completions`**: Standard OpenAI chat completions (streaming, tool calling, structured output)
 - **`POST /v1/embeddings`**: Generate embeddings
-- **`GET /v1/models`**: List models
+- **`GET /v1/models`**: List loaded models (or all downloaded models when JIT is enabled)
 
-### Anthropic-Compatible Endpoints (`/v1/*`)
+### Native REST API (`/api/v0/*`)
 
-Added in LM Studio 0.4.1:
+Enhanced API with richer metadata:
 
-- **`POST /v1/messages`**: Anthropic Messages API compatibility
+- **`GET /api/v0/models`**: List all downloaded models with metadata (type, publisher, arch, quantization, context length)
+- **`GET /api/v0/models/{model}`**: Get detailed model info
+- **`POST /api/v0/chat/completions`**: Chat completions with enhanced stats (tokens/sec, time-to-first-token)
+- **`POST /api/v0/models/load`**: Load a model into memory
+- **`POST /api/v0/models/unload`**: Unload a model from memory
 
-VT Code currently uses the OpenAI-compatible endpoints for maximum compatibility. Future versions may migrate to the native v1 API for enhanced features.
+VT Code currently uses the OpenAI-compatible endpoints. Set `LMSTUDIO_USE_NATIVE_API=true` to use the native REST API for model listing.
 
 ## Using Custom LM Studio Models
 
@@ -118,40 +110,37 @@ LM Studio's API stack supports multiple inference endpoints with varying capabil
 
 ### Feature Comparison
 
-| Feature                  | `/api/v1/chat` | `/v1/responses` | `/v1/chat/completions` | `/v1/messages` |
-| ------------------------ | -------------- | --------------- | ---------------------- | -------------- |
-| Streaming                | v              | v               | v                      | v              |
-| Stateful chat            | v              | v               | x                      | x              |
-| Remote MCPs              | v              | v               | x                      | x              |
-| LM Studio MCPs           | v              | v               | x                      | x              |
-| Custom tools             | x              | v               | v                      | v              |
-| Assistant messages       | x              | v               | v                      | v              |
-| Model load events        | v              | x               | x                      | x              |
-| Prompt processing events | v              | x               | x                      | x              |
-| Context length control   | v              | x               | x                      | x              |
+| Feature                  | `/v1/chat/completions` | `/api/v0/chat/completions` |
+| ------------------------ | ---------------------- | -------------------------- |
+| Streaming                | v                      | v                          |
+| Tool calling             | v                      | v                          |
+| Structured output        | v                      | v                          |
+| Enhanced stats           | x                      | v                          |
+| Model info in response   | x                      | v                          |
 
 VT Code forwards tool definitions, function-calling metadata, and JSON schema expectations so models can call tools or produce structured output. Streaming is enabled by default, and you will see incremental tokens in the TUI just as you would with remote OpenAI deployments.
 
 Because the provider shares the OpenAI surface area, features such as `parallel_tool_calls`, reasoning effort flags, and JSON Schema validation behave consistently—subject to the capabilities of the model you are running locally.
 
-### New Features in 0.4.0+
+### Key LM Studio Features
 
-- **Stateful Chats**: Use `previous_response_id` to maintain conversation context across requests
-- **MCP via API**: Access Model Context Protocol tools through the API
-- **Authentication**: Configure API tokens for secure access
-- **Model Management**: Load, unload, and download models programmatically
-- **Idle TTL**: Set time-to-live for models loaded via API (auto-evict after inactivity)
+- **Tool Calling** (since 0.3.6): Native tool use via OpenAI-compatible API for Qwen, Llama 3.1+, Mistral models
+- **Structured Output**: JSON schema enforcement via `response_format` (GGUF uses grammar-based sampling, MLX uses Outlines)
+- **Reasoning Content** (since 0.3.9): Separate `reasoning_content` field for DeepSeek R1 models (enable in App Settings > Developer)
+- **Idle TTL**: Set time-to-live for JIT-loaded models to auto-unload after inactivity
+- **Auto-Evict**: Automatically unload previous JIT models when loading new ones
+- **JIT Loading**: On-demand model loading when enabled (default: on)
 
 ## Troubleshooting
 
 1. **Connection refused**: Ensure the LM Studio server is running and that
    `LMSTUDIO_BASE_URL` points to the correct host/port. Default is `http://localhost:1234`.
 2. **Model not found**: Confirm the model appears in the LM Studio catalog and that the
-   server exposes it via `GET /api/v1/models` or `GET /v1/models`.
+   server exposes it via `GET /v1/models` or `GET /api/v0/models`.
 3. **401 Unauthorized**: Provide the configured API key through `LMSTUDIO_API_KEY` if
-   authentication is enabled (LM Studio 0.4.0+).
+   authentication is enabled.
 4. **Slow responses**: Local inference speed depends on your hardware and the model
-   size. Consider using smaller models (Gemma 2 2B, Qwen2.5 7B) for faster iteration.
+   size. Consider using smaller models (Qwen 2.5 7B, Gemma 3 12B) for faster iteration.
 5. **Tool payload errors**: Check the LM Studio server logs to ensure your runtime
    supports the tools and structured outputs you are invoking.
 6. **Server not starting**: Run `lms server start` from the command line to see detailed error messages.
@@ -160,9 +149,8 @@ Because the provider shares the OpenAI surface area, features such as `parallel_
 ## Additional Resources
 
 - [LM Studio Developer Docs](https://lmstudio.ai/docs/developer)
-- [Native v1 REST API](https://lmstudio.ai/docs/developer/rest)
 - [OpenAI-Compatible Endpoints](https://lmstudio.ai/docs/developer/openai-compat)
-- [Anthropic-Compatible Endpoints](https://lmstudio.ai/docs/developer/anthropic-compat)
-- [API Changelog](https://lmstudio.ai/docs/developer/api-changelog)
-- [MCP via API](https://lmstudio.ai/docs/developer/core/mcp)
-- [Stateful Chats](https://lmstudio.ai/docs/developer/rest/stateful-chats)
+- [REST API Reference](https://lmstudio.ai/docs/developer/rest)
+- [Tool Use Documentation](https://lmstudio.ai/docs/developer/tools)
+- [TTL and Auto-Evict](https://lmstudio.ai/docs/developer/ttl-and-auto-evict)
+- [Structured Output](https://lmstudio.ai/docs/developer/structured-output)
