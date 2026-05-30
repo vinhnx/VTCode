@@ -96,6 +96,18 @@ async fn pause_command_is_idle_noop() {
 }
 
 #[tokio::test]
+async fn donate_command_is_handled() {
+    let workspace = std::env::current_dir().expect("workspace");
+    let mut renderer = renderer_for_tests();
+
+    let outcome = handle_slash_command("donate", &mut renderer, &workspace)
+        .await
+        .expect("donate command should parse");
+
+    assert!(matches!(outcome, SlashCommandOutcome::OpenDonateLinks));
+}
+
+#[tokio::test]
 async fn share_defaults_to_json_and_html_export() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
