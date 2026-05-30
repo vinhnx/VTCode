@@ -87,3 +87,7 @@ This section is managed by `codemod` CLI.
 - List installed Codemod skills: `npx codemod ai list --harness codex --format json`
 
 <!-- codemod-skill-discovery:end -->
+
+## PR Code Review
+
+Use `/pr-code-review` to run a bug review loop: scan diff, triage (critical/high/medium/low), eliminate false positives, fix with KISS/DRY (main logic only, skip tests), re-review after every change, loop until done. See `.agents/skills/pr-code-review/SKILL.md` for the skill and `.claude/agents/pr-code-review.md` for the agent.
