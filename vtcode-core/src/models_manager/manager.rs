@@ -18,6 +18,7 @@ use super::cache::{self, ModelsCache};
 use super::model_family::{ModelFamily, find_family_for_model};
 use super::model_presets::{ModelInfo, ModelPreset, builtin_model_presets, presets_for_provider};
 use crate::config::models::Provider;
+use crate::llm::providers::llamacpp::fetch_llamacpp_models;
 
 /// Cache file name
 const MODEL_CACHE_FILE: &str = "models_cache.json";
@@ -163,6 +164,21 @@ impl ModelsManager {
                     }
                 }
             }
+            Provider::LlamaCpp => {
+                debug!("Fetching remote models for llama.cpp...");
+                match self.fetch_llamacpp_models().await {
+                    Ok(models) => {
+                        info!("Fetched {} models from llama.cpp", models.len());
+                        self.apply_remote_models(models.clone()).await;
+                        self.persist_cache(&models, None).await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("Failed to fetch llama.cpp models: {e}");
+                        Ok(())
+                    }
+                }
+            }
             _ => {
                 // For other providers, we don't have remote discovery yet
                 info!(
@@ -207,6 +223,30 @@ impl ModelsManager {
                     });
                 }
             }
+        }
+
+        Ok(models)
+    }
+
+    async fn fetch_llamacpp_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
+        let mut models = Vec::new();
+        for model in fetch_llamacpp_models(None).await? {
+            models.push(ModelInfo {
+                slug: model.clone(),
+                display_name: format!("{model} (llama.cpp)"),
+                description: format!("llama.cpp model: {model}"),
+                provider: Provider::LlamaCpp,
+                default_reasoning_level: crate::config::types::ReasoningEffortLevel::Medium,
+                supported_reasoning_levels: vec![],
+                context_window: Some(131_072),
+                supports_tool_use: true,
+                supports_streaming: true,
+                supports_reasoning: true,
+                priority: 100,
+                visibility: "list".to_string(),
+                supported_in_api: true,
+                upgrade: None,
+            });
         }
 
         Ok(models)
@@ -285,6 +325,9 @@ impl ModelsManager {
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => "local-model".to_string(),
+            Provider::LlamaCpp => {
+                crate::config::constants::models::llamacpp::DEFAULT_MODEL.to_string()
+            }
             Provider::Moonshot => {
                 crate::config::constants::models::moonshot::DEFAULT_MODEL.to_string()
             }

@@ -1259,7 +1259,7 @@ fn gemini_provider_supports_reasoning_effort_for_gemini3() {
     // Test model IDs as well
     assert!(ModelId::Gemini31ProPreview.supports_reasoning_effort());
     assert!(ModelId::Gemini31ProPreviewCustomTools.supports_reasoning_effort());
-    assert!(ModelId::Gemini3FlashPreview.supports_reasoning_effort());
+    assert!(ModelId::Gemini35Flash.supports_reasoning_effort());
 }
 
 #[test]

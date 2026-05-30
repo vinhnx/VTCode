@@ -306,6 +306,7 @@ impl ToolChoice {
         "moonshot",
         "stepfun",
         "lmstudio",
+        "llamacpp",
     ];
 
     /// Convert to provider-specific format

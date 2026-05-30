@@ -11,6 +11,7 @@ pub enum BackendKind {
     Mistral,
     OpenRouter,
     Ollama,
+    LlamaCpp,
     ZAI,
     Moonshot,
     HuggingFace,

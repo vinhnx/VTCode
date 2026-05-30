@@ -302,6 +302,7 @@ fn known_provider_from_name(provider_name: &str) -> Option<Provider> {
         "openrouter" => Some(Provider::OpenRouter),
         "ollama" => Some(Provider::Ollama),
         "lmstudio" => Some(Provider::LmStudio),
+        "llamacpp" | "llama.cpp" | "llama-cpp" => Some(Provider::LlamaCpp),
         "moonshot" => Some(Provider::Moonshot),
         "zai" => Some(Provider::ZAI),
         "minimax" => Some(Provider::Minimax),

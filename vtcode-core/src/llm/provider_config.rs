@@ -148,6 +148,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    LlamaCppProviderConfig,
+    "llamacpp",
+    "llama.cpp",
+    crate::config::constants::models::llamacpp::DEFAULT_MODEL,
+    crate::config::constants::urls::LLAMACPP_API_BASE,
+    Some(crate::config::constants::env_vars::LLAMACPP_BASE_URL),
+    ()
+);
+define_provider_config!(
     MiMoProviderConfig,
     "mimo",
     "Xiaomi MiMo",

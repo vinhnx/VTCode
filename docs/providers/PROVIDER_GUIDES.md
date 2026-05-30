@@ -82,6 +82,15 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
 -   **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
 
+## llama.cpp Local Server
+
+-   **Guide:** [llama.cpp Provider Guide](./llamacpp.md)
+-   **Server:** VT Code targets `llama-server` and defaults to `http://localhost:8080/v1`
+-   **Environment:** `LLAMACPP_BASE_URL` overrides the endpoint; `LLAMACPP_MODEL_PATH` enables VT Code-managed startup
+-   **Managed startup:** VT Code can launch `llama-server -m /path/to/model.gguf --port ...` when the endpoint is localhost and a GGUF path is configured
+-   **Starter catalog:** `gpt-oss-20b`, `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gemma-4-26b-a4b`, `gemma-4-e4b`, and `step-3.5-flash`
+-   **Features:** Streaming, dynamic `/v1/models` discovery, local no-auth defaults, and OpenAI-compatible request handling
+
 ## Anthropic API Compatibility Server
 
 VT Code provides compatibility with the Anthropic Messages API to help connect existing applications to VT Code, including tools like Claude Code.

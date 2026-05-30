@@ -15,17 +15,18 @@ use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
-    HuggingFaceProviderConfig, LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig,
-    MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
-    OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
-    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig,
-    ZAIProviderConfig,
+    HuggingFaceProviderConfig, LlamaCppProviderConfig, LmStudioProviderConfig, MiMoProviderConfig,
+    MinimaxProviderConfig, MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig,
+    OpenAIProviderConfig, OpenCodeGoProviderConfig, OpenCodeZenProviderConfig,
+    OpenResponsesProviderConfig, OpenRouterProviderConfig, PoolsideProviderConfig,
+    QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
-    OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider,
-    OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider, ZAIProvider,
+    LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider,
+    MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider,
+    OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider,
+    ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -263,6 +264,7 @@ impl_standard_provider_constructor!(
     OpenResponsesProvider,
     MoonshotProvider,
     OllamaProvider,
+    LlamaCppProvider,
     LmStudioProvider,
     ZAIProvider,
     OpenCodeZenProvider,
@@ -324,6 +326,10 @@ crate::delegate_components!(LmStudioProviderConfig {
     ProviderMetadataComponent => LmStudioProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<LmStudioProvider>,
 });
+crate::delegate_components!(LlamaCppProviderConfig {
+    ProviderMetadataComponent => LlamaCppProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<LlamaCppProvider>,
+});
 crate::delegate_components!(ZAIProviderConfig {
     ProviderMetadataComponent => ZAIProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<ZAIProvider>,
@@ -368,6 +374,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<MoonshotProviderConfig>();
     factory.register_cgp_provider::<OllamaProviderConfig>();
     factory.register_cgp_provider::<LmStudioProviderConfig>();
+    factory.register_cgp_provider::<LlamaCppProviderConfig>();
     factory.register_cgp_provider::<ZAIProviderConfig>();
     factory.register_cgp_provider::<MistralProviderConfig>();
     factory.register_cgp_provider::<OpenCodeZenProviderConfig>();
@@ -482,6 +489,7 @@ mod tests {
                 "deepseek",
                 "gemini",
                 "huggingface",
+                "llamacpp",
                 "lmstudio",
                 "mimo",
                 "minimax",

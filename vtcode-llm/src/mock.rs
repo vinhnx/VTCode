@@ -69,7 +69,7 @@ impl LLMClient for StaticResponseClient {
     }
 
     fn backend_kind(&self) -> BackendKind {
-        self.backend.clone()
+        self.backend
     }
 
     fn model_id(&self) -> &str {

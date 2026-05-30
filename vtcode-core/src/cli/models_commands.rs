@@ -108,6 +108,7 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
         "openrouter" => (config.providers.openrouter.as_ref(), false),
         "ollama" => (config.providers.ollama.as_ref(), true),
         "lmstudio" => (config.providers.lmstudio.as_ref(), true),
+        "llamacpp" => (config.providers.llamacpp.as_ref(), true),
         "stepfun" => (config.providers.stepfun.as_ref(), false),
         _ => return false,
     };
@@ -201,7 +202,7 @@ async fn handle_config_provider(
 
     match provider {
         "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio"
-        | "stepfun" => {
+        | "llamacpp" | "stepfun" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
@@ -236,6 +237,7 @@ fn configure_standard_provider(
         "openrouter" => get_provider_config!(openrouter),
         "ollama" => get_provider_config!(ollama),
         "lmstudio" => get_provider_config!(lmstudio),
+        "llamacpp" => get_provider_config!(llamacpp),
         "minimax" => get_provider_config!(anthropic), // Note: maps to anthropic
         "stepfun" => get_provider_config!(stepfun),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
@@ -252,7 +254,7 @@ fn configure_standard_provider(
     }
 
     // Local providers are enabled by default; others require an API key
-    provider_config.enabled = matches!(provider, "ollama" | "lmstudio")
+    provider_config.enabled = matches!(provider, "ollama" | "lmstudio" | "llamacpp")
         || api_key.is_some()
         || provider_config.api_key.is_some();
 
@@ -325,6 +327,7 @@ fn get_provider_credentials(
         "openrouter" => config.providers.openrouter.as_ref(),
         "ollama" => config.providers.ollama.as_ref(),
         "lmstudio" => config.providers.lmstudio.as_ref(),
+        "llamacpp" => config.providers.llamacpp.as_ref(),
         "stepfun" => config.providers.stepfun.as_ref(),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };

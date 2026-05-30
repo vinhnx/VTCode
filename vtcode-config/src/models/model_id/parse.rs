@@ -56,7 +56,9 @@ impl FromStr for ModelId {
             s if s == models::GEMINI_3_1_FLASH_LITE_PREVIEW => {
                 Ok(ModelId::Gemini31FlashLitePreview)
             }
-            s if s == models::GEMINI_3_5_FLASH => Ok(ModelId::Gemini35Flash),
+            s if s == models::GEMINI_3_5_FLASH || s == models::GEMINI_3_FLASH_PREVIEW => {
+                Ok(ModelId::Gemini35Flash)
+            }
             // OpenAI models
             s if s == models::GPT => Ok(ModelId::GPT54),
             s if s == models::openai::GPT_5_5 || s == models::openai::GPT_5_5_DATED => {
@@ -127,6 +129,12 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaNemotron3SuperCloud)
             }
             s if s == models::ollama::LAGUNA_XS_2 => Ok(ModelId::OllamaLagunaXs2),
+            s if s == models::llamacpp::QWEN36_27B => Ok(ModelId::LlamaCppQwen3627b),
+            s if s == models::llamacpp::QWEN36_35B_A3B => Ok(ModelId::LlamaCppQwen3635bA3b),
+            s if s == models::llamacpp::GEMMA_4_26B_A4B => Ok(ModelId::LlamaCppGemma426bA4b),
+            s if s == models::llamacpp::GEMMA_4_E4B => Ok(ModelId::LlamaCppGemma4E4b),
+            s if s == models::llamacpp::GPT_OSS_20B => Ok(ModelId::LlamaCppGptOss20b),
+            s if s == models::llamacpp::STEP_3_5_FLASH => Ok(ModelId::LlamaCppStep35Flash),
             // Poolside models
             s if s == models::poolside::LAGUNA_M1 => Ok(ModelId::PoolsideLagunaM1),
             s if s == models::poolside::LAGUNA_XS2 => Ok(ModelId::PoolsideLagunaXs2),

@@ -191,6 +191,20 @@ pub enum ModelId {
     /// Laguna XS.2 - Poolside's 33B MoE model (3B activated) for agentic coding via Ollama
     OllamaLagunaXs2,
 
+    // llama.cpp models
+    /// Qwen 3.6 27B - Dense Qwen 3.6 local model served through llama.cpp
+    LlamaCppQwen3627b,
+    /// Qwen 3.6 35B A3B - MoE Qwen 3.6 local model served through llama.cpp
+    LlamaCppQwen3635bA3b,
+    /// Gemma 4 26B A4B - Desktop Gemma 4 MoE model served through llama.cpp
+    LlamaCppGemma426bA4b,
+    /// Gemma 4 E4B - Tiny-footprint Gemma 4 model served through llama.cpp
+    LlamaCppGemma4E4b,
+    /// GPT-OSS 20B - OpenAI open-weight model served through llama.cpp
+    LlamaCppGptOss20b,
+    /// Step 3.5 Flash - StepFun local model served through llama.cpp
+    LlamaCppStep35Flash,
+
     // MiniMax models
     /// MiniMax-M2.7 - Recursive self-improvement flagship with 204.8K context
     MinimaxM27,

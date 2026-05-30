@@ -81,7 +81,10 @@ fn generate_artifacts() -> Result<()> {
     // Debug: count entries and check for deprecated models
     for entry in &entries {
         if entry.id.contains("claude-sonnet-4.5") || entry.id.contains("deepseek-chat-v3.1") {
-            println!("cargo:warning=DEPRECATED MODEL STILL IN BUILD DATA: {}", entry.id);
+            println!(
+                "cargo:warning=DEPRECATED MODEL STILL IN BUILD DATA: {}",
+                entry.id
+            );
         }
     }
 

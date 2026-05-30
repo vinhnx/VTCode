@@ -25,7 +25,7 @@ fn has_model(options: &[ModelOption], model: ModelId) -> bool {
 #[test]
 fn model_picker_lists_new_anthropic_models() {
     let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::ClaudeOpus47));
+    assert!(has_model(options, ModelId::ClaudeOpus48));
     assert!(has_model(options, ModelId::ClaudeSonnet46));
     assert!(has_model(options, ModelId::ClaudeHaiku45));
 
@@ -36,7 +36,7 @@ fn model_picker_lists_new_anthropic_models() {
     ));
     assert!(has_model(
         options,
-        ModelId::OpenRouterAnthropicClaudeSonnet45
+        ModelId::OpenRouterAnthropicClaudeSonnet46
     ));
 }
 
@@ -80,10 +80,6 @@ fn model_picker_lists_new_gemini_models() {
 fn model_picker_lists_new_openai_codex_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::GPT53Codex));
-    assert!(has_model(options, ModelId::GPT52Codex));
-    assert!(has_model(options, ModelId::GPT51Codex));
-    assert!(has_model(options, ModelId::GPT51CodexMax));
-    assert!(has_model(options, ModelId::GPT5Codex));
 }
 
 #[test]
@@ -121,7 +117,7 @@ fn subagent_dynamic_model_filter_keeps_only_parseable_model_ids() {
 
 #[test]
 fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
-    let supported = subagent_reasoning_levels("gpt-5.2", true);
+    let supported = subagent_reasoning_levels("gpt-5.4", true);
     assert!(supported.contains(&ReasoningEffortLevel::XHigh));
     assert!(!supported.contains(&ReasoningEffortLevel::Max));
 
@@ -159,8 +155,8 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
 
     let concrete = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::OpenAI,
-        "gpt-5.2",
-        "gpt-5.2",
+        "gpt-5.4",
+        "gpt-5.4",
         None,
         None,
     ));
@@ -204,15 +200,15 @@ fn model_search_value_includes_provider_model_aliases() {
     ];
     let value = model_search_value(
         Provider::OpenAI,
-        "GPT-5.2",
-        "gpt-5.2",
+        "GPT-5.4",
+        "gpt-5.4",
         Some("Latest frontier model"),
         &extra_terms,
     )
     .to_ascii_lowercase();
 
-    assert!(value.contains("openai gpt-5.2"));
-    assert!(value.contains("openai/gpt-5.2"));
+    assert!(value.contains("openai gpt-5.4"));
+    assert!(value.contains("openai/gpt-5.4"));
     assert!(value.contains("reasoning"));
     assert!(value.contains("tools"));
     assert!(value.contains("image"));
@@ -363,7 +359,7 @@ fn session_with_channels() -> (InlineHandle, InlineSession) {
 
 #[test]
 fn preferred_model_selection_matches_current_static_model() {
-    let model_id = ModelId::ClaudeOpus47.as_str();
+    let model_id = ModelId::ClaudeOpus48.as_str();
     let picker = base_picker_state("anthropic", model_id);
 
     let selection = picker.preferred_model_selection();
@@ -460,8 +456,8 @@ fn selection_marks_openai_service_tier_support_for_supported_models() {
     let detail = selection_from_option(
         MODEL_OPTIONS
             .iter()
-            .find(|option| option.id == "gpt-5.2")
-            .expect("gpt-5.2 option should exist"),
+            .find(|option| option.id == "gpt-5.4")
+            .expect("gpt-5.4 option should exist"),
     );
 
     assert!(detail.service_tier_supported);
@@ -504,13 +500,13 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
 
 #[test]
 fn build_result_uses_selected_service_tier() {
-    let mut picker = base_picker_state("openai", "gpt-5.2");
+    let mut picker = base_picker_state("openai", "gpt-5.4");
     picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),
-        model_id: "gpt-5.2".to_string(),
-        model_display: "GPT-5.2".to_string(),
+        model_id: "gpt-5.4".to_string(),
+        model_display: "GPT-5.4".to_string(),
         known_model: true,
         reasoning_supported: true,
         reasoning_optional: false,
@@ -531,13 +527,13 @@ fn build_result_uses_selected_service_tier() {
 
 #[test]
 fn build_result_uses_selected_flex_service_tier() {
-    let mut picker = base_picker_state("openai", "gpt-5.2");
+    let mut picker = base_picker_state("openai", "gpt-5.4");
     picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),
-        model_id: "gpt-5.2".to_string(),
-        model_display: "GPT-5.2".to_string(),
+        model_id: "gpt-5.4".to_string(),
+        model_display: "GPT-5.4".to_string(),
         known_model: true,
         reasoning_supported: true,
         reasoning_optional: false,
@@ -558,13 +554,13 @@ fn build_result_uses_selected_flex_service_tier() {
 
 #[tokio::test]
 async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
-    let mut picker = base_picker_state("openai", "gpt-5.2");
+    let mut picker = base_picker_state("openai", "gpt-5.4");
     picker.selection = Some(SelectionDetail {
         provider_key: "openai".to_string(),
         provider_label: "OpenAI".to_string(),
         provider_enum: Some(Provider::OpenAI),
-        model_id: "gpt-5.2".to_string(),
-        model_display: "GPT-5.2".to_string(),
+        model_id: "gpt-5.4".to_string(),
+        model_display: "GPT-5.4".to_string(),
         known_model: true,
         reasoning_supported: true,
         reasoning_optional: false,

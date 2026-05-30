@@ -414,7 +414,7 @@ mod tests {
         assert!(view.items.iter().any(|item| {
             item.selection
                 == Some(InlineListSelection::ConfigAction(
-                    "lightweight_model:gpt-5-mini".to_string(),
+                    "lightweight_model:gpt-5.5".to_string(),
                 ))
         }));
     }
@@ -459,10 +459,10 @@ mod tests {
             .find(|item| {
                 item.selection
                     == Some(InlineListSelection::ConfigAction(
-                        "lightweight_model:gpt-5-mini".to_string(),
+                        "lightweight_model:gpt-5.5".to_string(),
                     ))
             })
-            .expect("gpt-5-mini entry");
+            .expect("gpt-5.5 entry");
 
         let search = model_item
             .search_value
@@ -470,7 +470,7 @@ mod tests {
             .expect("search value")
             .to_ascii_lowercase();
         assert!(search.contains("openai"));
-        assert!(search.contains("gpt-5-mini"));
+        assert!(search.contains("gpt-5.5"));
         assert!(search.contains("tools"));
     }
 
@@ -478,7 +478,7 @@ mod tests {
     fn lightweight_palette_marks_explicit_current_selection() {
         let config = runtime_config("openai", models::openai::GPT_5_4);
         let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.agent.small_model.model = "gpt-5-mini".to_string();
+        vt_cfg.agent.small_model.model = "gpt-5.5".to_string();
 
         let view = build_lightweight_model_palette_view(
             "lightweight_model:",
@@ -490,7 +490,7 @@ mod tests {
         assert_eq!(
             view.selected,
             Some(InlineListSelection::ConfigAction(
-                "lightweight_model:gpt-5-mini".to_string(),
+                "lightweight_model:gpt-5.5".to_string(),
             ))
         );
     }

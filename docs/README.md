@@ -98,6 +98,7 @@ Deploying VT Code in production? Focus on enterprise features:
 - **[Performance Analysis](./benchmarks/README.md)** - Optimization and benchmarking
 - **[Provider Guides](./providers/PROVIDER_GUIDES.md)** - LLM provider integration guides
     - [OpenRouter Integration](./providers/openrouter.md)
+    - [llama.cpp Provider Guide](./providers/llamacpp.md)
 
 ## Core Capabilities
 

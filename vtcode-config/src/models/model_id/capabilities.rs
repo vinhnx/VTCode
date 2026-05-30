@@ -89,6 +89,10 @@ fn catalog_provider_key(provider: &str) -> &str {
         "ollama"
     } else if provider.eq_ignore_ascii_case("lmstudio") {
         "lmstudio"
+    } else if provider.eq_ignore_ascii_case("llamacpp")
+        || provider.eq_ignore_ascii_case("llama.cpp")
+    {
+        "llamacpp"
     } else if provider.eq_ignore_ascii_case("moonshot") {
         "moonshot"
     } else if provider.eq_ignore_ascii_case("zai") {
@@ -116,6 +120,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::OpenRouter => "openrouter",
         Provider::Ollama => "ollama",
         Provider::LmStudio => "lmstudio",
+        Provider::LlamaCpp => "llamacpp",
         Provider::Moonshot => "moonshot",
         Provider::ZAI => "zai",
         Provider::Minimax => "minimax",
@@ -181,9 +186,9 @@ impl ModelId {
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
-            ModelId::ClaudeOpus48
-            | ModelId::ClaudeSonnet46
-            | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeHaiku45),
+            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 | ModelId::ClaudeMythosPreview => {
+                Some(ModelId::ClaudeHaiku45)
+            }
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
                 Some(ModelId::CopilotGPT54Mini)
@@ -259,9 +264,9 @@ impl ModelId {
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeOpus48
-            | ModelId::ClaudeSonnet46
-            | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeSonnet46),
+            ModelId::ClaudeOpus48 | ModelId::ClaudeSonnet46 | ModelId::ClaudeMythosPreview => {
+                Some(ModelId::ClaudeSonnet46)
+            }
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
@@ -281,6 +286,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini31FlashLitePreview
+                | ModelId::Gemini35Flash
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::HuggingFaceStep35Flash
@@ -340,6 +346,8 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini31FlashLitePreview
+                | ModelId::Gemini35Flash
+                | ModelId::GPT54Mini
                 | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
@@ -362,6 +370,7 @@ impl ModelId {
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini31FlashLitePreview
+                | ModelId::Gemini35Flash
                 | ModelId::GPT55
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
@@ -426,8 +435,7 @@ impl ModelId {
             ModelId::GPT55 => "5.5",
             ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
             ModelId::GPT53Codex => "5.3",
-            ModelId::OpenAIGptOss20b
-            | ModelId::OpenAIGptOss120b => "5",
+            ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeOpus48 => "4.8",
             ModelId::ClaudeSonnet46 => "4.6",
@@ -438,6 +446,7 @@ impl ModelId {
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
             ModelId::ZaiGlm51 => "5.1",
+            ModelId::Gemini35Flash => "3.5",
             ModelId::OpenCodeZenGPT54 | ModelId::OpenCodeZenGPT54Mini => "5.4",
             ModelId::OpenCodeZenClaudeSonnet46 => "4.6",
             ModelId::OpenCodeZenGlm51 | ModelId::OpenCodeGoGlm51 => "5.1",
@@ -459,6 +468,12 @@ impl ModelId {
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaLagunaXs2 => "laguna-xs.2",
+            ModelId::LlamaCppQwen3627b => "3.6",
+            ModelId::LlamaCppQwen3635bA3b => "3.6",
+            ModelId::LlamaCppGemma426bA4b => "4",
+            ModelId::LlamaCppGemma4E4b => "4",
+            ModelId::LlamaCppGptOss20b => "oss",
+            ModelId::LlamaCppStep35Flash => "3.5",
             // MiniMax models
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
@@ -493,10 +508,7 @@ impl ModelId {
     pub fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT55
-                | ModelId::GPT54
-                | ModelId::GPT54Pro
-                | ModelId::GPT53Codex
+            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT53Codex
         )
     }
 

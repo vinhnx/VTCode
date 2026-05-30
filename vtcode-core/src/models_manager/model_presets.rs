@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::constants::models::copilot as copilot_models;
+use crate::config::constants::models::llamacpp as llamacpp_models;
 use crate::config::constants::models::mimo as mimo_models;
 use crate::config::constants::models::poolside as poolside_models;
 use crate::config::constants::models::qwen as qwen_models;
@@ -169,6 +170,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // LM Studio presets
     presets.extend(lmstudio_presets());
 
+    // llama.cpp presets
+    presets.extend(llamacpp_presets());
+
     // MiniMax presets
     presets.extend(minimax_presets());
 
@@ -200,6 +204,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::OpenRouter => openrouter_presets(),
         Provider::Ollama => ollama_presets(),
         Provider::LmStudio => lmstudio_presets(),
+        Provider::LlamaCpp => llamacpp_presets(),
         Provider::Moonshot => moonshot_presets(),
         Provider::Mistral => mistral_presets(),
         Provider::HuggingFace => huggingface_presets(),
@@ -1206,6 +1211,114 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
         supported_in_api: true,
         context_window: Some(32_000),
     }]
+}
+
+fn llamacpp_presets() -> Vec<ModelPreset> {
+    vec![
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::GPT_OSS_20B),
+            model: llamacpp_models::GPT_OSS_20B.to_string(),
+            display_name: "GPT-OSS 20B (llama.cpp)".to_string(),
+            description: "OpenAI's open-weight GPT-OSS 20B model served locally through llama.cpp"
+                .to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(131_072),
+        },
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::QWEN36_27B),
+            model: llamacpp_models::QWEN36_27B.to_string(),
+            display_name: "Qwen 3.6 27B (llama.cpp)".to_string(),
+            description: "Dense Qwen 3.6 local model served through llama.cpp".to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(262_144),
+        },
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::QWEN36_35B_A3B),
+            model: llamacpp_models::QWEN36_35B_A3B.to_string(),
+            display_name: "Qwen 3.6 35B A3B (llama.cpp)".to_string(),
+            description: "Qwen 3.6 MoE local model served through llama.cpp".to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(262_144),
+        },
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::GEMMA_4_26B_A4B),
+            model: llamacpp_models::GEMMA_4_26B_A4B.to_string(),
+            display_name: "Gemma 4 26B A4B (llama.cpp)".to_string(),
+            description: "Gemma 4 desktop MoE model served through llama.cpp".to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(262_144),
+        },
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::GEMMA_4_E4B),
+            model: llamacpp_models::GEMMA_4_E4B.to_string(),
+            display_name: "Gemma 4 E4B (llama.cpp)".to_string(),
+            description: "Tiny-footprint Gemma 4 model served through llama.cpp".to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Low,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Low,
+                description: "Fast".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(131_072),
+        },
+        ModelPreset {
+            id: format!("llamacpp/{}", llamacpp_models::STEP_3_5_FLASH),
+            model: llamacpp_models::STEP_3_5_FLASH.to_string(),
+            display_name: "Step 3.5 Flash (llama.cpp)".to_string(),
+            description: "StepFun's efficient reasoning model served through llama.cpp".to_string(),
+            provider: Provider::LlamaCpp,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(262_144),
+        },
+    ]
 }
 
 fn opencode_zen_presets() -> Vec<ModelPreset> {

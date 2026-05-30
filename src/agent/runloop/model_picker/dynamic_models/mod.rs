@@ -11,6 +11,7 @@ use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::models::Provider;
 use vtcode_core::copilot::{CopilotAuthStatusKind, list_available_models, probe_auth_status};
+use vtcode_core::llm::providers::llamacpp::fetch_llamacpp_models;
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 
 use self::cache::CachedDynamicModelStore;
@@ -66,6 +67,14 @@ impl DynamicModelRegistry {
                 fetch_ollama_models,
             )
             .await;
+        let llamacpp_base_url = endpoints.resolved_base_url(Provider::LlamaCpp);
+        let (llamacpp_result, llamacpp_warning) = cache_store
+            .fetch_with_cache(
+                Provider::LlamaCpp,
+                endpoints.base_url(Provider::LlamaCpp),
+                fetch_llamacpp_models,
+            )
+            .await;
 
         let copilot_auth_cfg = vt_cfg
             .map(|cfg| cfg.auth.copilot.clone())
@@ -118,6 +127,15 @@ impl DynamicModelRegistry {
         );
         if let Some(warning) = ollama_warning {
             registry.record_warning(Provider::Ollama, warning);
+        }
+        registry.process_fetch(
+            Provider::LlamaCpp,
+            llamacpp_result,
+            llamacpp_base_url,
+            &static_index,
+        );
+        if let Some(warning) = llamacpp_warning {
+            registry.record_warning(Provider::LlamaCpp, warning);
         }
         if let Some((copilot_result, copilot_warning)) = copilot_fetch {
             registry.process_fetch(

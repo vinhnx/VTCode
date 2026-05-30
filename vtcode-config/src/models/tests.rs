@@ -5,27 +5,18 @@ use std::str::FromStr;
 #[test]
 fn test_model_string_conversion() {
     // Gemini models
-    assert_eq!(
-        ModelId::Gemini3FlashPreview.as_str(),
-        models::GEMINI_3_FLASH_PREVIEW
-    );
+    assert_eq!(ModelId::Gemini35Flash.as_str(), models::GEMINI_3_5_FLASH);
     assert_eq!(
         ModelId::Gemini31ProPreview.as_str(),
         models::GEMINI_3_1_PRO_PREVIEW
     );
     // OpenAI models
-    assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
-    assert_eq!(ModelId::GPT52Codex.as_str(), models::openai::GPT_5_2_CODEX);
-    assert_eq!(ModelId::GPT51Codex.as_str(), models::openai::GPT_5_1_CODEX);
-    assert_eq!(
-        ModelId::GPT51CodexMax.as_str(),
-        models::openai::GPT_5_1_CODEX_MAX
-    );
-    assert_eq!(ModelId::GPT5Codex.as_str(), models::openai::GPT_5_CODEX);
-    assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
-    assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
+    assert_eq!(ModelId::GPT55.as_str(), models::GPT_5_5);
+    assert_eq!(ModelId::GPT53Codex.as_str(), models::GPT_5_3_CODEX);
+    assert_eq!(ModelId::GPT54Mini.as_str(), models::openai::GPT_5_4_MINI);
+    assert_eq!(ModelId::GPT54Nano.as_str(), models::openai::GPT_5_4_NANO);
     // Anthropic models
-    assert_eq!(ModelId::ClaudeOpus47.as_str(), models::CLAUDE_OPUS_4_7);
+    assert_eq!(ModelId::ClaudeOpus48.as_str(), models::CLAUDE_OPUS_4_8);
     assert_eq!(ModelId::ClaudeSonnet46.as_str(), models::CLAUDE_SONNET_4_6);
     assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
     // DeepSeek models
@@ -62,8 +53,8 @@ fn test_model_string_conversion() {
         models::opencode_zen::GPT_5_4
     );
     assert_eq!(
-        ModelId::OpenCodeGoKimiK25.as_str(),
-        models::opencode_go::KIMI_K2_5
+        ModelId::OpenCodeGoMinimaxM25.as_str(),
+        models::opencode_go::MINIMAX_M2_5
     );
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.as_str(), entry.id);
@@ -74,36 +65,22 @@ fn test_model_string_conversion() {
 fn test_model_from_string() {
     // Gemini models
     assert_eq!(
-        models::GEMINI_3_FLASH_PREVIEW.parse::<ModelId>().unwrap(),
-        ModelId::Gemini3FlashPreview
+        models::GEMINI_3_5_FLASH.parse::<ModelId>().unwrap(),
+        ModelId::Gemini35Flash
     );
     // OpenAI models
-    assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
+    assert_eq!(models::GPT_5_5.parse::<ModelId>().unwrap(), ModelId::GPT55);
     assert_eq!(
-        models::openai::GPT_5_2_CODEX.parse::<ModelId>().unwrap(),
-        ModelId::GPT52Codex
+        models::GPT_5_3_CODEX.parse::<ModelId>().unwrap(),
+        ModelId::GPT53Codex
     );
     assert_eq!(
-        models::openai::GPT_5_1_CODEX.parse::<ModelId>().unwrap(),
-        ModelId::GPT51Codex
+        models::openai::GPT_5_4_MINI.parse::<ModelId>().unwrap(),
+        ModelId::GPT54Mini
     );
     assert_eq!(
-        models::openai::GPT_5_1_CODEX_MAX
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::GPT51CodexMax
-    );
-    assert_eq!(
-        models::openai::GPT_5_CODEX.parse::<ModelId>().unwrap(),
-        ModelId::GPT5Codex
-    );
-    assert_eq!(
-        models::GPT_5_MINI.parse::<ModelId>().unwrap(),
-        ModelId::GPT5Mini
-    );
-    assert_eq!(
-        models::GPT_5_NANO.parse::<ModelId>().unwrap(),
-        ModelId::GPT5Nano
+        models::openai::GPT_5_4_NANO.parse::<ModelId>().unwrap(),
+        ModelId::GPT54Nano
     );
     assert_eq!(
         models::openai::GPT_OSS_20B.parse::<ModelId>().unwrap(),
@@ -123,8 +100,8 @@ fn test_model_from_string() {
         ModelId::ClaudeHaiku45
     );
     assert_eq!(
-        models::CLAUDE_OPUS_4_7.parse::<ModelId>().unwrap(),
-        ModelId::ClaudeOpus47
+        models::CLAUDE_OPUS_4_8.parse::<ModelId>().unwrap(),
+        ModelId::ClaudeOpus48
     );
     assert_eq!(
         models::CLAUDE_SONNET_4_6.parse::<ModelId>().unwrap(),
@@ -186,8 +163,8 @@ fn test_model_from_string() {
         ModelId::OpenCodeZenClaudeSonnet46
     );
     assert_eq!(
-        "opencode-go/kimi-k2.5".parse::<ModelId>().unwrap(),
-        ModelId::OpenCodeGoKimiK25
+        "opencode-go/minimax-m2.5".parse::<ModelId>().unwrap(),
+        ModelId::OpenCodeGoMinimaxM25
     );
     for entry in openrouter_generated::ENTRIES {
         // Skip models that are shadowed by built-in variants with the same ID
@@ -229,22 +206,21 @@ fn test_provider_parsing() {
 
 #[test]
 fn test_model_providers() {
-    assert_eq!(ModelId::Gemini3FlashPreview.provider(), Provider::Gemini);
-    assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
-    assert_eq!(ModelId::ClaudeOpus47.provider(), Provider::Anthropic);
+    assert_eq!(ModelId::Gemini35Flash.provider(), Provider::Gemini);
+    assert_eq!(ModelId::GPT55.provider(), Provider::OpenAI);
+    assert_eq!(ModelId::ClaudeOpus48.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekV4Pro.provider(), Provider::DeepSeek);
     assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
     assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
-    assert_eq!(ModelId::OpenCodeGoKimiK25.provider(), Provider::OpenCodeGo);
+    assert_eq!(
+        ModelId::OpenCodeGoMinimaxM25.provider(),
+        Provider::OpenCodeGo
+    );
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
-    assert_eq!(
-        ModelId::OpenRouterAnthropicClaudeSonnet45.provider(),
-        Provider::OpenRouter
-    );
     assert_eq!(
         ModelId::OpenRouterAnthropicClaudeSonnet46.provider(),
         Provider::OpenRouter
@@ -263,7 +239,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenAI),
-        ModelId::GPT5
+        ModelId::GPT54
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Anthropic),
@@ -291,55 +267,53 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenCodeGo),
-        ModelId::OpenCodeGoKimiK25
+        ModelId::OpenCodeGoMinimaxM27
     );
 }
 
 #[test]
 fn test_model_defaults() {
-    assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
-    assert_eq!(ModelId::default_model(), ModelId::Gemini3FlashPreview);
+    assert_eq!(ModelId::default(), ModelId::Gemini35Flash);
+    assert_eq!(ModelId::default_model(), ModelId::Gemini35Flash);
     assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
 }
 
 #[test]
 fn test_model_variants() {
     // Flash variants
-    assert!(ModelId::Gemini3FlashPreview.is_flash_variant());
-    assert!(!ModelId::GPT5.is_flash_variant());
+    assert!(ModelId::Gemini35Flash.is_flash_variant());
+    assert!(!ModelId::GPT55.is_flash_variant());
 
     // Pro variants
-    assert!(ModelId::GPT5.is_pro_variant());
-    assert!(ModelId::GPT52Codex.is_pro_variant());
-    assert!(ModelId::GPT51CodexMax.is_pro_variant());
-    assert!(ModelId::ClaudeOpus47.is_pro_variant());
+    assert!(ModelId::GPT55.is_pro_variant());
+    assert!(ModelId::GPT53Codex.is_pro_variant());
+    assert!(ModelId::ClaudeOpus48.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::OpenCodeZenGPT54.is_pro_variant());
     assert!(ModelId::DeepSeekV4Pro.is_pro_variant());
     assert!(ModelId::ZaiGlm5.is_pro_variant());
-    assert!(!ModelId::Gemini3FlashPreview.is_pro_variant());
+    assert!(!ModelId::Gemini35Flash.is_pro_variant());
 
     // Efficient variants
-    assert!(ModelId::Gemini3FlashPreview.is_efficient_variant());
-    assert!(ModelId::GPT5Mini.is_efficient_variant());
+    assert!(ModelId::Gemini35Flash.is_efficient_variant());
+    assert!(ModelId::GPT54Mini.is_efficient_variant());
     assert!(ModelId::ClaudeHaiku45.is_efficient_variant());
     assert!(ModelId::OpenCodeZenGPT54Mini.is_efficient_variant());
     assert!(ModelId::DeepSeekV4Flash.is_efficient_variant());
-    assert!(!ModelId::GPT5.is_efficient_variant());
+    assert!(!ModelId::GPT55.is_efficient_variant());
 
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.is_efficient_variant(), entry.efficient);
     }
 
     // Top tier models
-    assert!(ModelId::GPT5.is_top_tier());
-    assert!(ModelId::GPT52Codex.is_top_tier());
-    assert!(ModelId::GPT5Codex.is_top_tier());
-    assert!(ModelId::ClaudeOpus47.is_top_tier());
+    assert!(ModelId::GPT55.is_top_tier());
+    assert!(ModelId::GPT53Codex.is_top_tier());
+    assert!(ModelId::ClaudeOpus48.is_top_tier());
     assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekV4Pro.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
-    assert!(ModelId::Gemini3FlashPreview.is_top_tier());
+    assert!(ModelId::Gemini35Flash.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
     for entry in openrouter_generated::ENTRIES {
@@ -375,18 +349,16 @@ fn test_preferred_lightweight_variant() {
 #[test]
 fn test_model_generation() {
     // Gemini generations
-    assert_eq!(ModelId::Gemini3FlashPreview.generation(), "3");
+    assert_eq!(ModelId::Gemini35Flash.generation(), "3.5");
 
     // OpenAI generations
-    assert_eq!(ModelId::GPT5.generation(), "5");
-    assert_eq!(ModelId::GPT52Codex.generation(), "5.2");
-    assert_eq!(ModelId::GPT51Codex.generation(), "5.1");
-    assert_eq!(ModelId::GPT5Codex.generation(), "5");
-    assert_eq!(ModelId::GPT5Mini.generation(), "5");
-    assert_eq!(ModelId::GPT5Nano.generation(), "5");
+    assert_eq!(ModelId::GPT55.generation(), "5.5");
+    assert_eq!(ModelId::GPT53Codex.generation(), "5.3");
+    assert_eq!(ModelId::GPT54Mini.generation(), "5.4");
+    assert_eq!(ModelId::GPT54Nano.generation(), "5.4");
 
     // Anthropic generations
-    assert_eq!(ModelId::ClaudeOpus47.generation(), "4.7");
+    assert_eq!(ModelId::ClaudeOpus48.generation(), "4.8");
     assert_eq!(ModelId::ClaudeSonnet46.generation(), "4.6");
     assert_eq!(ModelId::ClaudeHaiku45.generation(), "4.5");
 
@@ -397,7 +369,7 @@ fn test_model_generation() {
     // Z.AI generations
     assert_eq!(ModelId::ZaiGlm5.generation(), "5");
     assert_eq!(ModelId::OpenCodeZenGPT54.generation(), "5.4");
-    assert_eq!(ModelId::OpenCodeGoKimiK25.generation(), "k2.5");
+    assert_eq!(ModelId::OpenCodeGoMinimaxM25.generation(), "m2.5");
 
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.generation(), entry.generation);
@@ -407,22 +379,19 @@ fn test_model_generation() {
 #[test]
 fn test_models_for_provider() {
     let gemini_models = ModelId::models_for_provider(Provider::Gemini);
-    assert!(gemini_models.contains(&ModelId::Gemini3FlashPreview));
-    assert!(!gemini_models.contains(&ModelId::GPT5));
+    assert!(gemini_models.contains(&ModelId::Gemini35Flash));
+    assert!(!gemini_models.contains(&ModelId::GPT55));
 
     let openai_models = ModelId::models_for_provider(Provider::OpenAI);
-    assert!(openai_models.contains(&ModelId::GPT5));
-    assert!(openai_models.contains(&ModelId::GPT52Codex));
-    assert!(openai_models.contains(&ModelId::GPT51Codex));
-    assert!(openai_models.contains(&ModelId::GPT51CodexMax));
-    assert!(openai_models.contains(&ModelId::GPT5Codex));
-    assert!(!openai_models.contains(&ModelId::Gemini3FlashPreview));
+    assert!(openai_models.contains(&ModelId::GPT55));
+    assert!(openai_models.contains(&ModelId::GPT53Codex));
+    assert!(!openai_models.contains(&ModelId::Gemini35Flash));
 
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
-    assert!(anthropic_models.contains(&ModelId::ClaudeOpus47));
+    assert!(anthropic_models.contains(&ModelId::ClaudeOpus48));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet46));
     assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
-    assert!(!anthropic_models.contains(&ModelId::GPT5));
+    assert!(!anthropic_models.contains(&ModelId::GPT55));
 
     let deepseek_models = ModelId::models_for_provider(Provider::DeepSeek);
     assert!(deepseek_models.contains(&ModelId::DeepSeekV4Pro));
@@ -442,7 +411,7 @@ fn test_models_for_provider() {
     assert!(opencode_zen_models.contains(&ModelId::OpenCodeZenClaudeSonnet46));
 
     let opencode_go_models = ModelId::models_for_provider(Provider::OpenCodeGo);
-    assert!(opencode_go_models.contains(&ModelId::OpenCodeGoKimiK25));
+    assert!(opencode_go_models.contains(&ModelId::OpenCodeGoMinimaxM25));
     assert!(opencode_go_models.contains(&ModelId::OpenCodeGoMinimaxM27));
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
@@ -464,7 +433,7 @@ fn test_models_for_provider() {
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
     assert!(hf_models.contains(&ModelId::HuggingFaceGlm51ZaiOrg));
     assert!(hf_models.contains(&ModelId::HuggingFaceQwen3CoderNextNovita));
-    assert!(hf_models.contains(&ModelId::HuggingFaceXiaomiMimoV2FlashNovita));
+    assert!(hf_models.contains(&ModelId::HuggingFaceMinimaxM25Novita));
 }
 
 #[test]
@@ -529,10 +498,10 @@ fn test_ollama_cloud_models() {
 fn test_fallback_models() {
     let fallbacks = ModelId::fallback_models();
     assert!(!fallbacks.is_empty());
-    assert!(fallbacks.contains(&ModelId::Gemini3FlashPreview));
-    assert!(fallbacks.contains(&ModelId::GPT52));
-    assert!(fallbacks.contains(&ModelId::GPT5));
-    assert!(fallbacks.contains(&ModelId::ClaudeOpus47));
+    assert!(fallbacks.contains(&ModelId::Gemini35Flash));
+    assert!(fallbacks.contains(&ModelId::GPT54));
+    assert!(fallbacks.contains(&ModelId::GPT55));
+    assert!(fallbacks.contains(&ModelId::ClaudeOpus48));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::DeepSeekV4Pro));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
@@ -542,13 +511,16 @@ fn test_fallback_models() {
 fn test_provider_local_helpers() {
     assert!(Provider::Ollama.is_local());
     assert!(Provider::LmStudio.is_local());
+    assert!(Provider::LlamaCpp.is_local());
     assert!(!Provider::OpenAI.is_local());
     assert!(Provider::Ollama.is_dynamic());
     assert!(Provider::LmStudio.is_dynamic());
+    assert!(Provider::LlamaCpp.is_dynamic());
     assert!(Provider::Copilot.is_dynamic());
     assert!(!Provider::OpenAI.is_dynamic());
     assert!(Provider::Ollama.local_install_instructions().is_some());
     assert!(Provider::LmStudio.local_install_instructions().is_some());
+    assert!(Provider::LlamaCpp.local_install_instructions().is_some());
     assert!(Provider::OpenAI.local_install_instructions().is_none());
 }
 
@@ -558,11 +530,8 @@ fn test_core_capability_helpers() {
         ModelId::DeepSeekV4Pro.non_reasoning_variant(),
         Some(ModelId::DeepSeekV4Flash)
     );
-    assert!(ModelId::GPT52.supports_shell_tool());
-    assert!(ModelId::GPT52Codex.supports_shell_tool());
-    assert!(ModelId::GPT51Codex.supports_shell_tool());
-    assert!(ModelId::GPT51CodexMax.supports_shell_tool());
-    assert!(ModelId::GPT5Codex.supports_shell_tool());
+    assert!(ModelId::GPT54.supports_shell_tool());
+    assert!(ModelId::GPT53Codex.supports_shell_tool());
     assert!(!ModelId::GPT53Codex.supports_apply_patch_tool());
 }
 
@@ -588,25 +557,19 @@ fn test_generated_model_capability_lookup() {
     assert!(opencode_zen_models.contains(&models::opencode_zen::GPT_5_4));
     let opencode_go_models =
         supported_models_for_provider("opencode-go").expect("opencode go models");
-    assert!(opencode_go_models.contains(&models::opencode_go::KIMI_K2_5));
+    assert!(opencode_go_models.contains(&models::opencode_go::MINIMAX_M2_5));
 
     assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
     assert_eq!(
         ModelId::OpenCodeZenGPT54.input_modalities(),
         &["text", "image"]
     );
-    assert_eq!(ModelId::GPT52Codex.input_modalities(), &["text", "image"]);
-    assert_eq!(ModelId::GPT51Codex.input_modalities(), &["text", "image"]);
-    assert_eq!(
-        ModelId::GPT51CodexMax.input_modalities(),
-        &["text", "image"]
-    );
-    assert_eq!(ModelId::GPT5Codex.input_modalities(), &["text", "image"]);
+    assert_eq!(ModelId::GPT53Codex.input_modalities(), &["text", "image"]);
     assert_eq!(
         ModelId::Gemini31ProPreview.input_modalities(),
         &["text", "image", "video", "audio", "pdf"]
     );
-    assert_eq!(ModelId::ClaudeOpus47.input_modalities(), &["text", "image"]);
+    assert_eq!(ModelId::ClaudeOpus48.input_modalities(), &["text", "image"]);
     assert_eq!(
         ModelId::OpenRouterOpenAIGpt5Chat.input_modalities(),
         &["file", "image", "text"]
@@ -614,7 +577,7 @@ fn test_generated_model_capability_lookup() {
 
     assert!(ModelId::GPT54.supports_tool_calls());
     assert!(ModelId::OpenCodeZenGPT54.supports_tool_calls());
-    assert!(ModelId::GPT52Codex.supports_tool_calls());
+    assert!(ModelId::GPT53Codex.supports_tool_calls());
     assert!(ModelId::Gemini31ProPreview.supports_tool_calls());
     assert!(!ModelId::OpenRouterOpenAIGpt5Chat.supports_tool_calls());
 }
@@ -714,9 +677,7 @@ fn test_all_models_have_non_empty_metadata_and_parse() {
             ModelId::OpenCodeZenGPT54Mini => ModelId::from_str("opencode/gpt-5.4-mini"),
             ModelId::OpenCodeZenClaudeSonnet46 => ModelId::from_str("opencode/claude-sonnet-4-6"),
             ModelId::OpenCodeZenGlm51 => ModelId::from_str("opencode/glm-5.1"),
-            ModelId::OpenCodeZenKimiK25 => ModelId::from_str("opencode/kimi-k2.5"),
             ModelId::OpenCodeGoGlm51 => ModelId::from_str("opencode-go/glm-5.1"),
-            ModelId::OpenCodeGoKimiK25 => ModelId::from_str("opencode-go/kimi-k2.5"),
             ModelId::OpenCodeGoMinimaxM25 => ModelId::from_str("opencode-go/minimax-m2.5"),
             ModelId::OpenCodeGoMinimaxM27 => ModelId::from_str("opencode-go/minimax-m2.7"),
             // `z-ai/glm-5` intentionally resolves to the native Z.AI model alias first.

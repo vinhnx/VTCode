@@ -554,13 +554,14 @@ fn canonical_provider_name(raw: &str) -> String {
     match normalized.as_str() {
         "open-responses" => "openresponses".to_string(),
         "lm studio" | "lm_studio" => "lmstudio".to_string(),
+        "llama.cpp" | "llama-cpp" | "llama cpp" => "llamacpp".to_string(),
         "z.ai" | "z-ai" => "zai".to_string(),
         _ => normalized,
     }
 }
 
 fn provider_requires_api_key(provider: &str) -> bool {
-    !matches!(provider, "ollama" | "lmstudio")
+    !matches!(provider, "ollama" | "lmstudio" | "llamacpp")
 }
 
 fn api_key_env_hint(provider: &str) -> String {
@@ -576,6 +577,7 @@ fn api_key_env_hint(provider: &str) -> String {
         "huggingface" => "HF_TOKEN".to_string(),
         "ollama" => "OLLAMA_API_KEY".to_string(),
         "lmstudio" => "LMSTUDIO_API_KEY".to_string(),
+        "llamacpp" => "LLAMACPP_API_KEY".to_string(),
         other => format!("{}_API_KEY", other.to_ascii_uppercase()),
     }
 }

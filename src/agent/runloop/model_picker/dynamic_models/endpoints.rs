@@ -8,6 +8,7 @@ use vtcode_core::utils::dot_config::{DotConfig, load_user_config};
 pub(super) struct ProviderEndpointConfig {
     openai: Option<String>,
     ollama: Option<String>,
+    llamacpp: Option<String>,
 }
 
 impl ProviderEndpointConfig {
@@ -16,6 +17,7 @@ impl ProviderEndpointConfig {
         Self {
             openai: Self::extract_base_url(Provider::OpenAI, dot_config.as_ref()),
             ollama: Self::extract_base_url(Provider::Ollama, dot_config.as_ref()),
+            llamacpp: Self::extract_base_url(Provider::LlamaCpp, dot_config.as_ref()),
         }
     }
 
@@ -23,6 +25,7 @@ impl ProviderEndpointConfig {
         match provider {
             Provider::OpenAI => self.openai.clone(),
             Provider::Ollama => self.ollama.clone(),
+            Provider::LlamaCpp => self.llamacpp.clone(),
             _ => None,
         }
     }
@@ -42,6 +45,11 @@ impl ProviderEndpointConfig {
             Provider::Ollama => cfg
                 .providers
                 .ollama
+                .as_ref()
+                .and_then(|c| c.base_url.clone()),
+            Provider::LlamaCpp => cfg
+                .providers
+                .llamacpp
                 .as_ref()
                 .and_then(|c| c.base_url.clone()),
             _ => None,
@@ -65,6 +73,7 @@ impl ProviderEndpointConfig {
         let key = match provider {
             Provider::OpenAI => env_vars::OPENAI_BASE_URL,
             Provider::Ollama => env_vars::OLLAMA_BASE_URL,
+            Provider::LlamaCpp => env_vars::LLAMACPP_BASE_URL,
             _ => return None,
         };
         std::env::var(key)
@@ -78,6 +87,7 @@ pub(super) fn default_provider_base(provider: Provider) -> &'static str {
     match provider {
         Provider::OpenAI => urls::OPENAI_API_BASE,
         Provider::Ollama => urls::OLLAMA_API_BASE,
+        Provider::LlamaCpp => urls::LLAMACPP_API_BASE,
         _ => "",
     }
 }

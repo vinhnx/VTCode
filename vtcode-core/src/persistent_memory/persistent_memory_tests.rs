@@ -849,7 +849,7 @@ fn resolve_memory_model_route_prefers_explicit_small_model_provider() {
     let routes = resolve_memory_model_routes(&runtime, Some(&vt_cfg), MemoryPhase::Extract);
 
     assert_eq!(routes.primary.provider_name, "openai");
-    assert_eq!(routes.primary.model, ModelId::GPT5Mini.as_str());
+    assert_eq!(routes.primary.model, ModelId::GPT54Mini.as_str());
     assert!(routes.warning.is_some());
 }
 

@@ -445,6 +445,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Google Gemini, OpenAI GPT, Anthropic Claude, GitHub Copilot, OpenRouter Marketplace
   - **User Questions**: "What can you tell me about Provider Guides?", "How does Google Gemini work?", "How does OpenAI GPT work?"
 
+- **File**: `docs/providers/llamacpp.md`
+  - **Content**: llama.cpp Provider Guide
+  - **Topics**: What VT Code manages, Manual server mode, Configuration, Notes
+  - **User Questions**: "What can you tell me about llama.cpp Provider Guide?", "How does What VT Code manages work?", "How does Manual server mode work?"
+
 - **File**: `docs/models.json`
   - **Content**: models.json Metadata
   - **Topics**: Model Specifications, Capabilities, Context Limits
