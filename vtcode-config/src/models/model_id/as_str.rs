@@ -14,28 +14,17 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools => models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
             ModelId::Gemini31FlashLitePreview => models::GEMINI_3_1_FLASH_LITE_PREVIEW,
             ModelId::Gemini35Flash => models::GEMINI_3_5_FLASH,
-            ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
             ModelId::GPT55 => models::openai::GPT_5_5,
-            ModelId::GPT5 => models::GPT_5,
-            ModelId::GPT52 => models::GPT_5_2,
-            ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,
             ModelId::GPT54 => models::GPT_5_4,
             ModelId::GPT54Pro => models::GPT_5_4_PRO,
             ModelId::GPT54Nano => models::openai::GPT_5_4_NANO,
             ModelId::GPT54Mini => models::openai::GPT_5_4_MINI,
             ModelId::GPT53Codex => models::openai::GPT_5_3_CODEX,
-            ModelId::GPT51Codex => models::openai::GPT_5_1_CODEX,
-            ModelId::GPT51CodexMax => models::openai::GPT_5_1_CODEX_MAX,
-            ModelId::GPT5Mini => models::GPT_5_MINI,
-            ModelId::GPT5Nano => models::GPT_5_NANO,
-            ModelId::GPT5Codex => models::openai::GPT_5_CODEX,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
             ModelId::ClaudeOpus48 => models::CLAUDE_OPUS_4_8,
-            ModelId::ClaudeOpus47 => models::CLAUDE_OPUS_4_7,
-            ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
             ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::ClaudeMythosPreview => models::CLAUDE_MYTHOS_PREVIEW,
@@ -53,22 +42,18 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro => models::mimo::MIMO_V2_5_PRO,
             ModelId::MiMoV25 => models::mimo::MIMO_V2_5,
-            ModelId::MiMoV2Flash => models::mimo::MIMO_V2_FLASH,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm51 => models::zai::GLM_5_1,
             // Moonshot models
             ModelId::MoonshotKimiK26 => models::moonshot::KIMI_K2_6,
-            ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54 => models::opencode_zen::GPT_5_4,
             ModelId::OpenCodeZenGPT54Mini => models::opencode_zen::GPT_5_4_MINI,
             ModelId::OpenCodeZenClaudeSonnet46 => models::opencode_zen::CLAUDE_SONNET_4_6,
             ModelId::OpenCodeZenGlm51 => models::opencode_zen::GLM_5_1,
-            ModelId::OpenCodeZenKimiK25 => models::opencode_zen::KIMI_K2_5,
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51 => models::opencode_go::GLM_5_1,
-            ModelId::OpenCodeGoKimiK25 => models::opencode_go::KIMI_K2_5,
             ModelId::OpenCodeGoMinimaxM25 => models::opencode_go::MINIMAX_M2_5,
             ModelId::OpenCodeGoMinimaxM27 => models::opencode_go::MINIMAX_M2_7,
             // Ollama models
@@ -93,9 +78,6 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
-                models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
-            }
             ModelId::HuggingFaceGlm5Novita => models::huggingface::ZAI_GLM_5_NOVITA,
             ModelId::HuggingFaceGlm51ZaiOrg => models::huggingface::ZAI_GLM_5_1_ZAI_ORG,
             ModelId::HuggingFaceQwen3CoderNextNovita => {

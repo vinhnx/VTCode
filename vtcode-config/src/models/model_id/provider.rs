@@ -12,27 +12,16 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview
-            | ModelId::Gemini35Flash
-            | ModelId::Gemini3FlashPreview => Provider::Gemini,
+            | ModelId::Gemini35Flash => Provider::Gemini,
             ModelId::GPT55
-            | ModelId::GPT5
-            | ModelId::GPT52
-            | ModelId::GPT52Codex
             | ModelId::GPT54
             | ModelId::GPT54Pro
             | ModelId::GPT54Nano
             | ModelId::GPT54Mini
-            | ModelId::GPT5Mini
-            | ModelId::GPT5Nano
             | ModelId::GPT53Codex
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT5Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus48
-            | ModelId::ClaudeOpus47
-            | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeHaiku45
             | ModelId::ClaudeMythosPreview => Provider::Anthropic,
@@ -44,11 +33,10 @@ impl ModelId {
             | ModelId::CopilotClaudeSonnet46 => Provider::Copilot,
             ModelId::DeepSeekV4Pro | ModelId::DeepSeekV4Flash => Provider::DeepSeek,
             ModelId::MistralLarge3 => Provider::Mistral,
-            ModelId::MiMoV25Pro | ModelId::MiMoV25 | ModelId::MiMoV2Flash => Provider::MiMo,
+            ModelId::MiMoV25Pro | ModelId::MiMoV25 => Provider::MiMo,
             ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceMinimaxM25Novita
-            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
             | ModelId::HuggingFaceGlm5Novita
             | ModelId::HuggingFaceGlm51ZaiOrg
             | ModelId::HuggingFaceQwen3CoderNextNovita
@@ -59,14 +47,12 @@ impl ModelId {
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
             ModelId::StepFun37Flash => Provider::StepFun,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
-            ModelId::MoonshotKimiK26 | ModelId::MoonshotKimiK25 => Provider::Moonshot,
+            ModelId::MoonshotKimiK26 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54
             | ModelId::OpenCodeZenGPT54Mini
             | ModelId::OpenCodeZenClaudeSonnet46
-            | ModelId::OpenCodeZenGlm51
-            | ModelId::OpenCodeZenKimiK25 => Provider::OpenCodeZen,
+            | ModelId::OpenCodeZenGlm51 => Provider::OpenCodeZen,
             ModelId::OpenCodeGoGlm51
-            | ModelId::OpenCodeGoKimiK25
             | ModelId::OpenCodeGoMinimaxM25
             | ModelId::OpenCodeGoMinimaxM27 => Provider::OpenCodeGo,
             ModelId::Qwen37Max
@@ -113,7 +99,6 @@ impl ModelId {
             | ModelId::OpenRouterDeepSeekV4Pro
             | ModelId::OpenRouterDeepSeekV4Flash
             | ModelId::OpenRouterDeepSeekR1
-            | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
@@ -121,7 +106,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt55
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
-            | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterMistralaiMistralLarge2512
@@ -129,7 +113,6 @@ impl ModelId {
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
             | ModelId::OpenRouterZaiGlm5
-            | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm51
             | ModelId::OpenRouterMoonshotaiKimiK26
             | ModelId::OpenRouterQwenQwen37Max

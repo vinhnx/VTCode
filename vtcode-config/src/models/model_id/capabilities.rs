@@ -180,16 +180,8 @@ impl ModelId {
             }
             ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
-            ModelId::GPT52
-            | ModelId::GPT52Codex
-            | ModelId::GPT53Codex
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT5
-            | ModelId::GPT5Codex => Some(ModelId::GPT5Mini),
+            ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
             ModelId::ClaudeOpus48
-            | ModelId::ClaudeOpus47
-            | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
@@ -253,14 +245,12 @@ impl ModelId {
         let direct = match self {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
-            | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
+            | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini35Flash),
             ModelId::GPT55
-            | ModelId::GPT52
             | ModelId::GPT54
             | ModelId::GPT54Pro
             | ModelId::GPT54Nano
-            | ModelId::GPT54Mini
-            | ModelId::GPT5 => Some(ModelId::GPT5Mini),
+            | ModelId::GPT54Mini => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
@@ -270,8 +260,6 @@ impl ModelId {
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus48
-            | ModelId::ClaudeOpus47
-            | ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
             | ModelId::ClaudeMythosPreview => Some(ModelId::ClaudeSonnet46),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
@@ -292,11 +280,9 @@ impl ModelId {
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini3FlashPreview
-                | ModelId::Gemini31FlashLitePreview
+            ModelId::Gemini31FlashLitePreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
-                | ModelId::OllamaGemini3FlashPreviewCloud
                 | ModelId::HuggingFaceStep35Flash
                 | ModelId::StepFun37Flash
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
@@ -311,30 +297,20 @@ impl ModelId {
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::GPT55
-                | ModelId::GPT5
-                | ModelId::GPT52
-                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
-                | ModelId::GPT51Codex
-                | ModelId::GPT51CodexMax
                 | ModelId::CopilotGPT52Codex
                 | ModelId::CopilotGPT51CodexMax
                 | ModelId::CopilotGPT54
                 | ModelId::CopilotClaudeSonnet46
-                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus48
-                | ModelId::ClaudeOpus47
-                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeMythosPreview
                 | ModelId::OpenCodeZenGPT54
                 | ModelId::OpenCodeZenClaudeSonnet46
                 | ModelId::OpenCodeZenGlm51
-                | ModelId::OpenCodeZenKimiK25
                 | ModelId::OpenCodeGoGlm51
-                | ModelId::OpenCodeGoKimiK25
                 | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
                 | ModelId::ZaiGlm5
@@ -363,10 +339,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini3FlashPreview
-                | ModelId::Gemini31FlashLitePreview
-                | ModelId::GPT5Mini
-                | ModelId::GPT5Nano
+            ModelId::Gemini31FlashLitePreview
                 | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
                 | ModelId::OpenCodeZenGPT54Mini
@@ -388,29 +361,18 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
-                | ModelId::Gemini3FlashPreview
                 | ModelId::Gemini31FlashLitePreview
                 | ModelId::GPT55
-                | ModelId::GPT5
-                | ModelId::GPT52
-                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
-                | ModelId::GPT51Codex
-                | ModelId::GPT51CodexMax
-                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus48
-                | ModelId::ClaudeOpus47
-                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeMythosPreview
                 | ModelId::OpenCodeZenGPT54
                 | ModelId::OpenCodeZenClaudeSonnet46
                 | ModelId::OpenCodeZenGlm51
-                | ModelId::OpenCodeZenKimiK25
                 | ModelId::OpenCodeGoGlm51
-                | ModelId::OpenCodeGoKimiK25
                 | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
                 | ModelId::ZaiGlm5
@@ -460,23 +422,14 @@ impl ModelId {
             // Gemini generations
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
             ModelId::Gemini31FlashLitePreview => "3.1-lite",
-            ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT55 => "5.5",
-            ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
             ModelId::GPT53Codex => "5.3",
-            ModelId::GPT51Codex | ModelId::GPT51CodexMax => "5.1",
-            ModelId::GPT5
-            | ModelId::GPT5Codex
-            | ModelId::GPT5Mini
-            | ModelId::GPT5Nano
-            | ModelId::OpenAIGptOss20b
+            ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeOpus48 => "4.8",
-            ModelId::ClaudeOpus47 => "4.7",
-            ModelId::ClaudeOpus46 => "4.6",
             ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeMythosPreview => "preview",
@@ -488,7 +441,6 @@ impl ModelId {
             ModelId::OpenCodeZenGPT54 | ModelId::OpenCodeZenGPT54Mini => "5.4",
             ModelId::OpenCodeZenClaudeSonnet46 => "4.6",
             ModelId::OpenCodeZenGlm51 | ModelId::OpenCodeGoGlm51 => "5.1",
-            ModelId::OpenCodeZenKimiK25 | ModelId::OpenCodeGoKimiK25 => "k2.5",
             ModelId::OpenCodeGoMinimaxM25 => "m2.5",
             ModelId::OpenCodeGoMinimaxM27 => "m2.7",
             ModelId::OllamaGptOss20b => "oss",
@@ -506,19 +458,16 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
-            ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             ModelId::OllamaLagunaXs2 => "laguna-xs.2",
             // MiniMax models
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
             // Moonshot models
             ModelId::MoonshotKimiK26 => "k2.6",
-            ModelId::MoonshotKimiK25 => "k2.5",
             // Hugging Face generations
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             ModelId::HuggingFaceMinimaxM25Novita => "m2.5",
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
             ModelId::HuggingFaceKimiK26Novita => "k2.6",
@@ -545,14 +494,9 @@ impl ModelId {
         matches!(
             self,
             ModelId::GPT55
-                | ModelId::GPT52
-                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
-                | ModelId::GPT51Codex
-                | ModelId::GPT51CodexMax
-                | ModelId::GPT5Codex
         )
     }
 

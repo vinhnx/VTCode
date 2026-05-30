@@ -17,7 +17,6 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools,
             ModelId::Gemini31FlashLitePreview,
             ModelId::Gemini35Flash,
-            ModelId::Gemini3FlashPreview,
             // OpenAI models
             ModelId::GPT55,
             ModelId::GPT54,
@@ -25,20 +24,10 @@ impl ModelId {
             ModelId::GPT54Nano,
             ModelId::GPT54Mini,
             ModelId::GPT53Codex,
-            ModelId::GPT52Codex,
-            ModelId::GPT51Codex,
-            ModelId::GPT51CodexMax,
-            ModelId::GPT5Codex,
-            ModelId::GPT52,
-            ModelId::GPT5,
-            ModelId::GPT5Mini,
-            ModelId::GPT5Nano,
             ModelId::OpenAIGptOss20b,
             ModelId::OpenAIGptOss120b,
             // Anthropic models
             ModelId::ClaudeOpus48,
-            ModelId::ClaudeOpus47,
-            ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
             ModelId::ClaudeHaiku45,
             ModelId::ClaudeMythosPreview,
@@ -59,19 +48,15 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro,
             ModelId::MiMoV25,
-            ModelId::MiMoV2Flash,
             // Moonshot models
             ModelId::MoonshotKimiK26,
-            ModelId::MoonshotKimiK25,
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54,
             ModelId::OpenCodeZenGPT54Mini,
             ModelId::OpenCodeZenClaudeSonnet46,
             ModelId::OpenCodeZenGlm51,
-            ModelId::OpenCodeZenKimiK25,
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51,
-            ModelId::OpenCodeGoKimiK25,
             ModelId::OpenCodeGoMinimaxM25,
             ModelId::OpenCodeGoMinimaxM27,
             // Qwen models
@@ -106,7 +91,6 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceMinimaxM25Novita,
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceGlm51ZaiOrg,
             ModelId::HuggingFaceQwen3CoderNextNovita,
@@ -119,7 +103,6 @@ impl ModelId {
             ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree,
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
-            ModelId::OpenRouterZaiGlm47,
             ModelId::OpenRouterMoonshotaiKimiK26,
             // Poolside models
             ModelId::PoolsideLagunaM1,

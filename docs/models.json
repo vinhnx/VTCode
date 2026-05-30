@@ -692,22 +692,6 @@
         },
         "context": 1000000
       },
-      "claude-sonnet-4.5": {
-        "id": "claude-sonnet-4.5",
-        "name": "Claude Sonnet 4.5",
-        "description": "Verified GitHub Copilot CLI raw model id for Claude Sonnet 4.5.",
-        "reasoning": true,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000
-      },
       "claude-haiku-4.5": {
         "id": "claude-haiku-4.5",
         "name": "Claude Haiku 4.5",
@@ -1641,31 +1625,6 @@
           "structured_output": true,
           "tool_streaming": true
         }
-      },
-      "glm-4.7": {
-        "id": "glm-4.7",
-        "name": "Z.AI: GLM-4.7",
-        "description": "Advancing the Coding Capability",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072,
-        "max_output_tokens": 128000,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true,
-          "context_caching": true,
-          "structured_output": true,
-          "tool_streaming": true
-        }
       }
     }
   },
@@ -1958,39 +1917,6 @@
           "doc_comment": "Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing"
         }
       },
-      "anthropic/claude-sonnet-4.5": {
-        "id": "anthropic/claude-sonnet-4.5",
-        "name": "Anthropic: Claude Sonnet 4.5",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "file"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 1000000,
-        "max_output_tokens": 64000,
-        "cost": {
-          "input": 3e-06,
-          "output": 1.5e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterAnthropicClaudeSonnet45",
-          "constant": "ANTHROPIC_CLAUDE_SONNET_4_5",
-          "vendor": "anthropic",
-          "display": "Claude Sonnet 4.5",
-          "description": "Anthropic Claude Sonnet 4.5 listing",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "2025-10-15",
-          "doc_comment": "Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing"
-        }
-      },
       "anthropic/claude-sonnet-4.6": {
         "id": "anthropic/claude-sonnet-4.6",
         "name": "Anthropic: Claude Sonnet 4.6",
@@ -2049,37 +1975,6 @@
           "top_tier": true,
           "generation": "4",
           "doc_comment": "DeepSeek V4 Flash - Fast inference model via OpenRouter"
-        }
-      },
-      "deepseek/deepseek-chat-v3.1": {
-        "id": "deepseek/deepseek-chat-v3.1",
-        "name": "DeepSeek: DeepSeek V3.1",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 163840,
-        "max_output_tokens": 163840,
-        "cost": {
-          "input": 2e-07,
-          "output": 8e-07
-        },
-        "vtcode": {
-          "variant": "OpenRouterDeepSeekChatV31",
-          "constant": "DEEPSEEK_CHAT_V3_1",
-          "vendor": "deepseek",
-          "display": "DeepSeek V3.1",
-          "description": "DeepSeek V3.1 chat model via OpenRouter",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "V3.1",
-          "doc_comment": "DeepSeek V3.1 - DeepSeek V3.1 chat model via OpenRouter"
         }
       },
       "deepseek/deepseek-v4-pro": {
@@ -2910,64 +2805,6 @@
           "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
         }
       },
-      "z-ai/glm-4.7": {
-        "id": "z-ai/glm-4.7",
-        "name": "Z.AI: GLM-4.7",
-        "description": "Z.ai's GLM-4.7 flagship reasoning model with stronger programming performance and more stable multi-step execution.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 202752,
-        "cost": {
-          "input": 3.9e-07,
-          "output": 1.75e-06
-        },
-        "vtcode": {
-          "variant": "OpenRouterZaiGlm47",
-          "constant": "Z_AI_GLM_4_7",
-          "vendor": "zai",
-          "display": "GLM-4.7",
-          "description": "Z.ai GLM-4.7 model via OpenRouter",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "GLM-4.7",
-          "doc_comment": "GLM-4.7 - Z.AI GLM-4.7 model via OpenRouter"
-        }
-      },
-      "z-ai/glm-5.1": {
-        "id": "z-ai/glm-5.1",
-        "name": "Z.AI: GLM-5.1",
-        "description": "Z.ai next-gen GLM-5.1 foundation model with improved reasoning, enhanced agent capabilities, and stronger agentic coding performance.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 200000,
-        "vtcode": {
-          "variant": "OpenRouterZaiGlm51",
-          "constant": "Z_AI_GLM_5_1",
-          "vendor": "zai",
-          "display": "GLM-5.1",
-          "description": "Z.ai next-gen GLM-5.1 model via OpenRouter",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "GLM-5.1",
-          "doc_comment": "GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter"
-        }
-      },
       "moonshotai/kimi-k2.6": {
         "id": "moonshotai/kimi-k2.6",
         "name": "MoonshotAI: Kimi K2.6",
@@ -3341,22 +3178,6 @@
       "minimax-m2:cloud": {
         "id": "minimax-m2:cloud",
         "name": "MiniMax-M2 (cloud)",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072
-      },
-      "glm-4.7:cloud": {
-        "id": "glm-4.7:cloud",
-        "name": "GLM 4.7 (cloud)",
-        "description": "Advancing the Coding Capability",
         "reasoning": true,
         "tool_call": true,
         "modalities": {

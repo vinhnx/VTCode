@@ -336,7 +336,7 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
                 return Some(trimmed_model.to_string());
             }
             if lower.contains("gpt-5.") || lower == "gpt-5" || lower.contains("gpt-5-codex") {
-                return Some(ModelId::GPT5Mini.as_str().to_string());
+                return Some(ModelId::GPT54Mini.as_str().to_string());
             }
             None
         }
@@ -366,7 +366,7 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
                 return Some(ModelId::Gemini31FlashLitePreview.as_str().to_string());
             }
             if lower.contains("gemini-3") || lower.contains("gemini 3") {
-                return Some(ModelId::Gemini3FlashPreview.as_str().to_string());
+                return Some(ModelId::Gemini35Flash.as_str().to_string());
             }
             None
         }
@@ -395,11 +395,11 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
 
 fn provider_default_lightweight_model(provider: Provider) -> Option<&'static str> {
     match provider {
-        Provider::OpenAI => Some(ModelId::GPT5Mini.as_str()),
+        Provider::OpenAI => Some(ModelId::GPT54Mini.as_str()),
         Provider::Anthropic => Some(ModelId::ClaudeHaiku45.as_str()),
         Provider::Copilot => Some(ModelId::CopilotGPT54Mini.as_str()),
         Provider::DeepSeek => Some(ModelId::DeepSeekV4Flash.as_str()),
-        Provider::Gemini => Some(ModelId::Gemini3FlashPreview.as_str()),
+        Provider::Gemini => Some(ModelId::Gemini35Flash.as_str()),
         Provider::ZAI => Some(ModelId::ZaiGlm5.as_str()),
         Provider::Minimax => Some(ModelId::MinimaxM25.as_str()),
         Provider::StepFun => Some(ModelId::StepFun37Flash.as_str()),

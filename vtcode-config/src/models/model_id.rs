@@ -28,20 +28,12 @@ pub enum ModelId {
     /// Gemini 3.1 Flash Lite Preview - Most cost-efficient model, offering fastest performance for high-frequency, lightweight tasks
     Gemini31FlashLitePreview,
     /// Gemini 3.5 Flash - High-efficiency frontier model for fast inference
-    Gemini35Flash,
-    /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
     #[default]
-    Gemini3FlashPreview,
+    Gemini35Flash,
 
     // OpenAI models
     /// GPT-5.5 - Next-gen OpenAI model dated release (2026-04-23)
     GPT55,
-    /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
-    GPT5,
-    /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
-    GPT52,
-    /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding with xhigh reasoning support
-    GPT52Codex,
     /// GPT-5.4 - Mainline frontier GPT model for general-purpose and coding work
     GPT54,
     /// GPT-5.4 Pro - Higher-compute GPT-5.4 variant for difficult problems
@@ -52,16 +44,6 @@ pub enum ModelId {
     GPT54Mini,
     /// GPT-5.3 Codex - Code-focused GPT-5.3 variant optimized for agentic coding with reasoning effort support (low, medium, high, xhigh)
     GPT53Codex,
-    /// GPT-5.1 Codex - Code-focused GPT-5.1 variant optimized for agentic coding
-    GPT51Codex,
-    /// GPT-5.1 Codex Max - Higher-compute GPT-5.1 Codex variant for longer-running engineering tasks
-    GPT51CodexMax,
-    /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
-    GPT5Mini,
-    /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
-    GPT5Nano,
-    /// GPT-5 Codex - Code-focused GPT-5 variant optimized for agentic coding
-    GPT5Codex,
     /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
     OpenAIGptOss20b,
     /// GPT-OSS 120B - OpenAI's open-source 120B parameter model using harmony
@@ -70,10 +52,6 @@ pub enum ModelId {
     // Anthropic models
     /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
     ClaudeOpus48,
-    /// Claude Opus 4.7 - Previous flagship Anthropic model with adaptive thinking
-    ClaudeOpus47,
-    /// Claude Opus 4.6 - Previous Anthropic flagship retained for compatibility
-    ClaudeOpus46,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout
     ClaudeSonnet46,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
@@ -107,8 +85,6 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
-    HuggingFaceXiaomiMimoV2FlashNovita,
     /// MiniMax M2.5 via Novita on Hugging Face router
     HuggingFaceMinimaxM25Novita,
     /// Z.AI GLM-5 via Novita on Hugging Face router
@@ -142,14 +118,10 @@ pub enum ModelId {
     MiMoV25Pro,
     /// MiMo V2.5 - Xiaomi's omni-modal model with full-modal understanding and 1M context
     MiMoV25,
-    /// MiMo V2 Flash - Xiaomi's lightweight fast model for high-throughput tasks
-    MiMoV2Flash,
 
     // Moonshot models
     /// Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship (32B active, MLA, MoonViT vision)
     MoonshotKimiK26,
-    /// Kimi K2.5 - Moonshot.ai's previous flagship reasoning model
-    MoonshotKimiK25,
 
     // OpenCode Zen models
     /// GPT-5.4 - OpenCode Zen default flagship model
@@ -160,14 +132,10 @@ pub enum ModelId {
     OpenCodeZenClaudeSonnet46,
     /// GLM-5.1 - Z.AI model served through OpenCode Zen
     OpenCodeZenGlm51,
-    /// Kimi K2.5 - Moonshot model served through OpenCode Zen
-    OpenCodeZenKimiK25,
 
     // OpenCode Go models
     /// GLM-5.1 - Z.AI model included with OpenCode Go
     OpenCodeGoGlm51,
-    /// Kimi K2.5 - Moonshot model included with OpenCode Go
-    OpenCodeGoKimiK25,
     /// MiniMax M2.5 - OpenCode Go subscription model
     OpenCodeGoMinimaxM25,
     /// MiniMax M2.7 - Higher-tier OpenCode Go subscription model
@@ -264,8 +232,6 @@ pub enum ModelId {
     OpenRouterDeepSeekV4Flash,
     /// DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought
     OpenRouterDeepSeekR1,
-    /// DeepSeek V3.1 - DeepSeek V3.1 chat model via OpenRouter
-    OpenRouterDeepSeekChatV31,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
     /// OpenAI gpt-oss-120b:free - Open-weight 120B reasoning model free tier via OpenRouter
@@ -282,8 +248,6 @@ pub enum ModelId {
     /// Gemini 3.1 Pro Preview - Google's latest Gemini 3.1 Pro model via OpenRouter
     OpenRouterGoogleGemini31ProPreview,
 
-    /// Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing
-    OpenRouterAnthropicClaudeSonnet45,
     /// Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing
     OpenRouterAnthropicClaudeSonnet46,
     /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing
@@ -298,8 +262,6 @@ pub enum ModelId {
     OpenRouterNvidiaNemotron3Super120bA12bFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
-    /// GLM-4.7 - Z.AI GLM-4.7 model via OpenRouter
-    OpenRouterZaiGlm47,
     /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
     OpenRouterZaiGlm51,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter

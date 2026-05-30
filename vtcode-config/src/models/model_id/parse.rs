@@ -30,7 +30,6 @@ impl FromStr for ModelId {
                     Ok(ModelId::OpenCodeZenClaudeSonnet46)
                 }
                 m if m == models::opencode_zen::GLM_5_1 => Ok(ModelId::OpenCodeZenGlm51),
-                m if m == models::opencode_zen::KIMI_K2_5 => Ok(ModelId::OpenCodeZenKimiK25),
                 _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
             };
         }
@@ -38,7 +37,6 @@ impl FromStr for ModelId {
         if let Some(opencode_model) = trimmed.strip_prefix("opencode-go/") {
             return match opencode_model {
                 m if m == models::opencode_go::GLM_5_1 => Ok(ModelId::OpenCodeGoGlm51),
-                m if m == models::opencode_go::KIMI_K2_5 => Ok(ModelId::OpenCodeGoKimiK25),
                 m if m == models::opencode_go::MINIMAX_M2_5 => Ok(ModelId::OpenCodeGoMinimaxM25),
                 m if m == models::opencode_go::MINIMAX_M2_7 => Ok(ModelId::OpenCodeGoMinimaxM27),
                 _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
@@ -59,31 +57,20 @@ impl FromStr for ModelId {
                 Ok(ModelId::Gemini31FlashLitePreview)
             }
             s if s == models::GEMINI_3_5_FLASH => Ok(ModelId::Gemini35Flash),
-            s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
             s if s == models::GPT => Ok(ModelId::GPT54),
             s if s == models::openai::GPT_5_5 || s == models::openai::GPT_5_5_DATED => {
                 Ok(ModelId::GPT55)
             }
-            s if s == models::GPT_5 => Ok(ModelId::GPT5),
-            s if s == models::GPT_5_2 => Ok(ModelId::GPT52),
-            s if s == models::openai::GPT_5_2_CODEX => Ok(ModelId::GPT52Codex),
             s if s == models::GPT_5_4 => Ok(ModelId::GPT54),
             s if s == models::GPT_5_4_PRO => Ok(ModelId::GPT54Pro),
             s if s == models::openai::GPT_5_4_NANO => Ok(ModelId::GPT54Nano),
             s if s == models::openai::GPT_5_4_MINI => Ok(ModelId::GPT54Mini),
             s if s == models::openai::GPT_5_3_CODEX => Ok(ModelId::GPT53Codex),
-            s if s == models::openai::GPT_5_1_CODEX => Ok(ModelId::GPT51Codex),
-            s if s == models::openai::GPT_5_1_CODEX_MAX => Ok(ModelId::GPT51CodexMax),
-            s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
-            s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
-            s if s == models::openai::GPT_5_CODEX => Ok(ModelId::GPT5Codex),
             s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_8 => Ok(ModelId::ClaudeOpus48),
-            s if s == models::CLAUDE_OPUS_4_7 => Ok(ModelId::ClaudeOpus47),
-            s if s == models::CLAUDE_OPUS_4_6 => Ok(ModelId::ClaudeOpus46),
             s if s == models::CLAUDE_SONNET_4_6 => Ok(ModelId::ClaudeSonnet46),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
             s if s == models::CLAUDE_HAIKU_4_5_20251001 => Ok(ModelId::ClaudeHaiku45),
@@ -102,7 +89,6 @@ impl FromStr for ModelId {
             // MiMo models
             s if s == models::mimo::MIMO_V2_5_PRO => Ok(ModelId::MiMoV25Pro),
             s if s == models::mimo::MIMO_V2_5 => Ok(ModelId::MiMoV25),
-            s if s == models::mimo::MIMO_V2_FLASH => Ok(ModelId::MiMoV2Flash),
             // Qwen models
             s if s == models::qwen::QWEN3_7_MAX => Ok(ModelId::Qwen37Max),
             s if s == models::qwen::QWEN3_6_FLASH => Ok(ModelId::Qwen36Flash),
@@ -115,7 +101,6 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),
             // Moonshot models
             s if s == models::moonshot::KIMI_K2_6 => Ok(ModelId::MoonshotKimiK26),
-            s if s == models::moonshot::KIMI_K2_5 => Ok(ModelId::MoonshotKimiK25),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
@@ -156,9 +141,6 @@ impl FromStr for ModelId {
             }
             s if s == models::huggingface::MINIMAX_M2_5_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM25Novita)
-            }
-            s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
-                Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
             s if s == models::huggingface::ZAI_GLM_5_NOVITA => Ok(ModelId::HuggingFaceGlm5Novita),
             s if s == models::huggingface::ZAI_GLM_5_1_ZAI_ORG => {

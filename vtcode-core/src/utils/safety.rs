@@ -26,7 +26,7 @@ impl SafetyValidator {
         // Parse the requested model
         let model_id = match requested_model {
             s if s == models::google::GEMINI_3_1_PRO_PREVIEW => Some(ModelId::Gemini31ProPreview),
-            s if s == models::google::GEMINI_3_FLASH_PREVIEW => Some(ModelId::Gemini3FlashPreview),
+            s if s == models::GEMINI_3_5_FLASH => Some(ModelId::Gemini35Flash),
             _ => None,
         };
 

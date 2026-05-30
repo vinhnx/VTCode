@@ -12,28 +12,17 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools => "Gemini 3.1 Pro Preview (Custom Tools)",
             ModelId::Gemini31FlashLitePreview => "Gemini 3.1 Flash Lite Preview",
             ModelId::Gemini35Flash => "Gemini 3.5 Flash",
-            ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
             ModelId::GPT55 => "GPT-5.5",
-            ModelId::GPT5 => "GPT-5",
-            ModelId::GPT52 => "GPT-5.2",
-            ModelId::GPT52Codex => "GPT-5.2 Codex",
             ModelId::GPT54 => "GPT-5.4",
             ModelId::GPT54Pro => "GPT-5.4 Pro",
             ModelId::GPT54Nano => "GPT-5.4 Nano",
             ModelId::GPT54Mini => "GPT-5.4 Mini",
             ModelId::GPT53Codex => "GPT-5.3 Codex",
-            ModelId::GPT51Codex => "GPT-5.1 Codex",
-            ModelId::GPT51CodexMax => "GPT-5.1 Codex Max",
-            ModelId::GPT5Mini => "GPT-5 Mini",
-            ModelId::GPT5Nano => "GPT-5 Nano",
-            ModelId::GPT5Codex => "GPT-5 Codex",
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
             ModelId::ClaudeOpus48 => "Claude Opus 4.8",
-            ModelId::ClaudeOpus47 => "Claude Opus 4.7",
-            ModelId::ClaudeOpus46 => "Claude Opus 4.6",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::ClaudeMythosPreview => "Claude Mythos Preview",
@@ -51,7 +40,6 @@ impl ModelId {
             // MiMo models
             ModelId::MiMoV25Pro => "MiMo V2.5 Pro",
             ModelId::MiMoV25 => "MiMo V2.5",
-            ModelId::MiMoV2Flash => "MiMo V2 Flash",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             ModelId::ZaiGlm51 => "GLM 5.1",
@@ -84,7 +72,6 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
             ModelId::HuggingFaceMinimaxM25Novita => "MiniMax-M2.5 (Novita)",
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
             ModelId::HuggingFaceGlm51ZaiOrg => "GLM-5.1 (zai-org)",
             ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
@@ -106,16 +93,13 @@ impl ModelId {
             ModelId::PoolsideLagunaXs2 => "Laguna XS.2",
             // Moonshot models
             ModelId::MoonshotKimiK26 => "Kimi K2.6 (Moonshot)",
-            ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",
             // OpenCode Zen models
             ModelId::OpenCodeZenGPT54 => "GPT-5.4 (OpenCode Zen)",
             ModelId::OpenCodeZenGPT54Mini => "GPT-5.4 Mini (OpenCode Zen)",
             ModelId::OpenCodeZenClaudeSonnet46 => "Claude Sonnet 4.6 (OpenCode Zen)",
             ModelId::OpenCodeZenGlm51 => "GLM-5.1 (OpenCode Zen)",
-            ModelId::OpenCodeZenKimiK25 => "Kimi K2.5 (OpenCode Zen)",
             // OpenCode Go models
             ModelId::OpenCodeGoGlm51 => "GLM-5.1 (OpenCode Go)",
-            ModelId::OpenCodeGoKimiK25 => "Kimi K2.5 (OpenCode Go)",
             ModelId::OpenCodeGoMinimaxM25 => "MiniMax-M2.5 (OpenCode Go)",
             ModelId::OpenCodeGoMinimaxM27 => "MiniMax-M2.7 (OpenCode Go)",
             // OpenRouter models

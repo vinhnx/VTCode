@@ -13,6 +13,9 @@ const EMBEDDED_OPENROUTER_MODELS: &str = include_str!("build_data/openrouter_mod
 fn main() {
     let is_docsrs = env::var_os("DOCS_RS").is_some();
 
+    // Force rebuild when embedded OpenRouter models change
+    println!("cargo:rerun-if-changed=build_data/openrouter_models.json");
+
     if is_docsrs {
         // When building on docs.rs, generate empty placeholder files to prevent compilation errors
         println!("cargo:warning=docs.rs build detected, generating placeholder files");
@@ -74,6 +77,13 @@ fn generate_artifacts() -> Result<()> {
 
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let entries = provider.collect_entries()?;
+
+    // Debug: count entries and check for deprecated models
+    for entry in &entries {
+        if entry.id.contains("claude-sonnet-4.5") || entry.id.contains("deepseek-chat-v3.1") {
+            println!("cargo:warning=DEPRECATED MODEL STILL IN BUILD DATA: {}", entry.id);
+        }
+    }
 
     write_variants(&out_dir, &entries)?;
     write_constants(&out_dir, &provider, &entries)?;

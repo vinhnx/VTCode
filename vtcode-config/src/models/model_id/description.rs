@@ -20,19 +20,9 @@ impl ModelId {
             ModelId::Gemini35Flash => {
                 "High-efficiency frontier model for fast inference with excellent quality-to-speed balance"
             }
-            ModelId::Gemini3FlashPreview => {
-                "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
-            }
             // OpenAI models
             ModelId::GPT55 => {
                 "Next-gen OpenAI model with frontier reasoning and long context (2026-04-23 dated release)"
-            }
-            ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
-            ModelId::GPT52 => {
-                "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
-            }
-            ModelId::GPT52Codex => {
-                "GPT-5.2 Codex variant optimized for agentic coding tasks with xhigh reasoning support"
             }
             ModelId::GPT54 => {
                 "Mainline frontier GPT model for general-purpose work, coding, long context, and multi-step agents"
@@ -49,17 +39,6 @@ impl ModelId {
             ModelId::GPT53Codex => {
                 "GPT-5.3 variant optimized for agentic coding tasks with reasoning effort support (low, medium, high, xhigh)"
             }
-            ModelId::GPT51Codex => {
-                "GPT-5.1 variant optimized for agentic coding tasks and software engineering workflows"
-            }
-            ModelId::GPT51CodexMax => {
-                "Higher-compute GPT-5.1 Codex variant optimized for longer-running engineering tasks"
-            }
-            ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
-            ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
-            ModelId::GPT5Codex => {
-                "GPT-5 variant optimized for agentic coding tasks and software engineering workflows"
-            }
             ModelId::OpenAIGptOss20b => {
                 "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization"
             }
@@ -69,12 +48,6 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus48 => {
                 "Anthropic's most capable model for complex reasoning, long-horizon agentic coding, and high-autonomy work"
-            }
-            ModelId::ClaudeOpus47 => {
-                "Next-gen Anthropic flagship with adaptive thinking and task budget support"
-            }
-            ModelId::ClaudeOpus46 => {
-                "Previous Anthropic flagship retained on VT Code's budgeted-thinking path for compatibility"
             }
             ModelId::ClaudeSonnet46 => {
                 "Balanced flagship model for coding with budgeted thinking in VT Code's current Anthropic rollout"
@@ -118,9 +91,6 @@ impl ModelId {
             }
             ModelId::MiMoV25 => {
                 "Xiaomi's omni-modal model with full-modal understanding and 1M context"
-            }
-            ModelId::MiMoV2Flash => {
-                "Xiaomi's lightweight fast model for high-throughput tasks (256K context)"
             }
             // Z.AI models
             ModelId::ZaiGlm5 => {
@@ -191,9 +161,6 @@ impl ModelId {
             ModelId::MoonshotKimiK26 => {
                 "Kimi K2.6 - Moonshot.ai's latest 1T MoE flagship with 32B active parameters, MLA attention, and MoonViT vision"
             }
-            ModelId::MoonshotKimiK25 => {
-                "Kimi K2.5 - Moonshot.ai's previous flagship reasoning model"
-            }
             ModelId::OpenCodeZenGPT54 => {
                 "OpenCode Zen flagship GPT-5.4 route using OpenCode's curated pay-as-you-go gateway"
             }
@@ -206,13 +173,9 @@ impl ModelId {
             ModelId::OpenCodeZenGlm51 => {
                 "GLM-5.1 served through OpenCode Zen for lower-cost reasoning and coding work"
             }
-            ModelId::OpenCodeZenKimiK25 => {
-                "Kimi K2.5 served through OpenCode Zen's curated open-model gateway"
-            }
             ModelId::OpenCodeGoGlm51 => {
                 "GLM-5.1 included with the OpenCode Go subscription for open-model coding workflows"
             }
-            ModelId::OpenCodeGoKimiK25 => "Kimi K2.5 included with the OpenCode Go subscription",
             ModelId::OpenCodeGoMinimaxM25 => {
                 "MiniMax-M2.5 included with the OpenCode Go subscription"
             }
@@ -223,9 +186,6 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
             ModelId::HuggingFaceMinimaxM25Novita => {
                 "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
-            }
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
-                "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
             }
             ModelId::HuggingFaceGlm5Novita => {
                 "Z.ai GLM-5 flagship model via Novita inference provider on HuggingFace router."

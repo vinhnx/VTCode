@@ -6,13 +6,11 @@ impl ModelId {
     /// Get recommended fallback models in order of preference
     pub fn fallback_models() -> Vec<ModelId> {
         vec![
-            ModelId::Gemini3FlashPreview,
-            ModelId::GPT52,
-            ModelId::GPT5,
+            ModelId::Gemini35Flash,
+            ModelId::GPT54,
+            ModelId::GPT55,
             ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus48,
-            ModelId::ClaudeOpus47,
-            ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
             ModelId::DeepSeekV4Pro,
             ModelId::ZaiGlm5,
@@ -21,7 +19,7 @@ impl ModelId {
 
     /// Get the default model for general use
     pub fn default_model() -> Self {
-        ModelId::Gemini3FlashPreview
+        ModelId::Gemini35Flash
     }
 
     /// Get the default orchestrator model (more capable)
@@ -33,7 +31,7 @@ impl ModelId {
     pub fn default_orchestrator_for_provider(provider: Provider) -> Self {
         match provider {
             Provider::Gemini => ModelId::Gemini31ProPreview,
-            Provider::OpenAI => ModelId::GPT5,
+            Provider::OpenAI => ModelId::GPT54,
             Provider::Anthropic => ModelId::ClaudeOpus48,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
@@ -44,10 +42,10 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK26,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
-            Provider::LmStudio => ModelId::GPT5,
+            Provider::LmStudio => ModelId::GPT54,
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
-            Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
+            Provider::OpenCodeGo => ModelId::OpenCodeGoMinimaxM27,
             Provider::Qwen => ModelId::Qwen37Max,
             Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Poolside => ModelId::PoolsideLagunaM1,
@@ -57,9 +55,9 @@ impl ModelId {
     /// Get provider-specific defaults for single agent
     pub fn default_single_for_provider(provider: Provider) -> Self {
         match provider {
-            Provider::Gemini => ModelId::Gemini3FlashPreview,
-            Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus47,
+            Provider::Gemini => ModelId::Gemini35Flash,
+            Provider::OpenAI => ModelId::GPT54,
+            Provider::Anthropic => ModelId::ClaudeSonnet46,
             Provider::Copilot => ModelId::CopilotAuto,
             Provider::Minimax => ModelId::MinimaxM27,
             Provider::MiMo => ModelId::MiMoV25Pro,
@@ -69,10 +67,10 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK26,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
-            Provider::LmStudio => ModelId::GPT5,
+            Provider::LmStudio => ModelId::GPT54,
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::OpenCodeZen => ModelId::OpenCodeZenGPT54,
-            Provider::OpenCodeGo => ModelId::OpenCodeGoKimiK25,
+            Provider::OpenCodeGo => ModelId::OpenCodeGoMinimaxM27,
             Provider::Qwen => ModelId::Qwen36Plus,
             Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Poolside => ModelId::PoolsideLagunaXs2,
