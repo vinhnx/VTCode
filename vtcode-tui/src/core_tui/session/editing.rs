@@ -9,6 +9,7 @@ use crate::config::constants::ui;
 /// - Input history navigation
 /// - Newline handling with capacity limits
 use unicode_segmentation::UnicodeSegmentation;
+use vtcode_vim::{next_char_boundary, prev_char_boundary};
 
 const WORD_SEPARATORS: &str = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?";
 
@@ -249,12 +250,7 @@ impl Session {
         let delete_start = previous_word_boundary(self.input_manager.content(), cursor);
 
         if delete_start < cursor {
-            let before = &self.input_manager.content()[..delete_start];
-            let after = &self.input_manager.content()[cursor..];
-            let mut new_content = String::with_capacity(before.len() + after.len());
-            new_content.push_str(before);
-            new_content.push_str(after);
-            self.input_manager.set_content(new_content);
+            self.input_manager.replace_range(delete_start, cursor, "");
             self.input_manager.set_cursor(delete_start);
             self.refresh_input_edit_state();
         }
@@ -265,6 +261,7 @@ impl Session {
         self.input_manager.delete_word_forward();
         self.refresh_input_edit_state();
     }
+
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
     pub(crate) fn delete_to_start_of_line(&mut self) {
         if self.input_manager.delete_selection() {
@@ -274,21 +271,15 @@ impl Session {
         let content = self.input_manager.content();
         let cursor = self.input_manager.cursor();
 
-        // Find the previous newline or start of string
         let before = &content[..cursor];
         let delete_start = if let Some(newline_pos) = before.rfind('\n') {
-            newline_pos + 1 // Delete after the newline
+            newline_pos + 1
         } else {
-            0 // Delete from start
+            0
         };
 
         if delete_start < cursor {
-            let before = &content[..delete_start];
-            let after = &content[cursor..];
-            let mut new_content = String::with_capacity(before.len() + after.len());
-            new_content.push_str(before);
-            new_content.push_str(after);
-            self.input_manager.set_content(new_content);
+            self.input_manager.replace_range(delete_start, cursor, "");
             self.input_manager.set_cursor(delete_start);
             self.refresh_input_edit_state();
         }
@@ -303,7 +294,6 @@ impl Session {
         let content = self.input_manager.content();
         let cursor = self.input_manager.cursor();
 
-        // Find the next newline or end of string
         let rest = &content[cursor..];
         let delete_len = if let Some(newline_pos) = rest.find('\n') {
             newline_pos
@@ -312,12 +302,7 @@ impl Session {
         };
 
         if delete_len > 0 {
-            let before = &content[..cursor];
-            let after = &content[cursor + delete_len..];
-            let mut new_content = String::with_capacity(before.len() + after.len());
-            new_content.push_str(before);
-            new_content.push_str(after);
-            self.input_manager.set_content(new_content);
+            self.input_manager.replace_range(cursor, cursor + delete_len, "");
             self.refresh_input_edit_state();
         }
     }
@@ -334,31 +319,15 @@ impl Session {
 
     pub(crate) fn select_left(&mut self) {
         let cursor = self.input_manager.cursor();
-        if cursor == 0 {
-            self.input_manager.set_cursor_with_selection(0);
-            return;
-        }
-
-        let mut pos = cursor - 1;
         let content = self.input_manager.content();
-        while pos > 0 && !content.is_char_boundary(pos) {
-            pos -= 1;
-        }
+        let pos = prev_char_boundary(content, cursor);
         self.input_manager.set_cursor_with_selection(pos);
     }
 
     pub(crate) fn select_right(&mut self) {
         let cursor = self.input_manager.cursor();
         let content = self.input_manager.content();
-        if cursor >= content.len() {
-            self.input_manager.set_cursor_with_selection(content.len());
-            return;
-        }
-
-        let mut pos = cursor + 1;
-        while pos < content.len() && !content.is_char_boundary(pos) {
-            pos += 1;
-        }
+        let pos = next_char_boundary(content, cursor);
         self.input_manager.set_cursor_with_selection(pos);
     }
 
@@ -401,7 +370,6 @@ impl Session {
     }
 
     /// Navigate to previous history entry (disabled to prevent cursor flickering)
-    #[expect(dead_code)]
     pub(crate) fn navigate_history_previous(&mut self) -> bool {
         if let Some(previous) = self.input_manager.go_to_previous_history() {
             self.input_manager.apply_history_entry(previous);
@@ -412,7 +380,6 @@ impl Session {
     }
 
     /// Navigate to next history entry (disabled to prevent cursor flickering)
-    #[expect(dead_code)]
     pub(crate) fn navigate_history_next(&mut self) -> bool {
         if let Some(next) = self.input_manager.go_to_next_history() {
             self.input_manager.apply_history_entry(next);

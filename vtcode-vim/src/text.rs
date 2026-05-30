@@ -1,6 +1,6 @@
 use crate::types::{Motion, TextObjectSpec};
 
-pub(crate) fn next_char_boundary(content: &str, mut pos: usize) -> usize {
+pub fn next_char_boundary(content: &str, mut pos: usize) -> usize {
     if pos >= content.len() {
         return content.len();
     }
@@ -11,7 +11,7 @@ pub(crate) fn next_char_boundary(content: &str, mut pos: usize) -> usize {
     pos
 }
 
-pub(crate) fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
+pub fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
     if pos == 0 {
         return 0;
     }
@@ -60,9 +60,9 @@ pub(crate) fn vim_next_word_start(content: &str, cursor: usize) -> usize {
         return 0;
     }
     let cursor = cursor.min(content.len());
-    let mut chars = content[cursor..].char_indices();
-    let Some((_, first_ch)) = chars.next() else {
-        return content.len();
+    let first_ch = match content[cursor..].chars().next() {
+        Some(ch) => ch,
+        None => return content.len(),
     };
     let mut seen_separator = !vim_is_word_char(first_ch);
     for (offset, ch) in content[cursor..].char_indices() {
@@ -197,14 +197,6 @@ pub(crate) fn vim_text_object_range(
 ) -> Option<(usize, usize)> {
     match object {
         TextObjectSpec::Word { around, big } => {
-            let chars: Vec<(usize, char)> = content.char_indices().collect();
-            let current_idx = chars
-                .iter()
-                .position(|(idx, _)| *idx == cursor)
-                .unwrap_or_else(|| chars.len().saturating_sub(1));
-            if chars.is_empty() {
-                return None;
-            }
             let classify = |ch: char| {
                 if big {
                     !ch.is_whitespace()
@@ -212,24 +204,42 @@ pub(crate) fn vim_text_object_range(
                     vim_is_word_char(ch)
                 }
             };
-            let mut start = current_idx;
-            while start > 0 && classify(chars[start].1) {
-                let prev = start - 1;
-                if !classify(chars[prev].1) {
+
+            let current_byte = cursor.min(content.len());
+            let current_ch = content[current_byte..].chars().next();
+            if current_ch.is_none() && !around {
+                return None;
+            }
+            if let Some(ch) = current_ch
+                && !classify(ch)
+                && !around
+            {
+                return None;
+            }
+
+            let mut byte_start = current_byte;
+            while byte_start > 0 {
+                let prev = prev_char_boundary(content, byte_start);
+                let ch = content[prev..].chars().next().unwrap_or('\0');
+                if !classify(ch) {
                     break;
                 }
-                start = prev;
+                byte_start = prev;
             }
-            let mut end = current_idx;
-            while end + 1 < chars.len() && classify(chars[end].1) && classify(chars[end + 1].1) {
-                end += 1;
+
+            let mut byte_end = current_byte;
+            while byte_end < content.len() {
+                let ch = content[byte_end..].chars().next().unwrap_or('\0');
+                if !classify(ch) {
+                    break;
+                }
+                byte_end = next_char_boundary(content, byte_end);
             }
-            let mut byte_start = chars[start].0;
-            let mut byte_end = if end + 1 < chars.len() {
-                chars[end + 1].0
-            } else {
-                content.len()
-            };
+
+            if byte_start == byte_end && !around {
+                return None;
+            }
+
             if around {
                 while byte_start > 0 {
                     let prev = prev_char_boundary(content, byte_start);
@@ -247,6 +257,7 @@ pub(crate) fn vim_text_object_range(
                     byte_end = next_char_boundary(content, byte_end);
                 }
             }
+
             Some((byte_start, byte_end))
         }
         TextObjectSpec::Delimited {
