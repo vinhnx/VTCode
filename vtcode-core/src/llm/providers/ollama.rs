@@ -62,9 +62,9 @@ pub struct WireApiDetection {
 }
 
 /// Minimum Ollama version that supports the Responses API.
-/// Ollama versions >= 0.13.4 support the Responses API.
+/// Ollama versions >= 0.13.3 support the Responses API.
 fn min_responses_version() -> Version {
-    Version::new(0, 13, 4)
+    Version::new(0, 13, 3)
 }
 
 /// Determine which wire API to use based on the Ollama server version.
@@ -159,24 +159,33 @@ struct OllamaTagsResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct OllamaTag {
-    name: String,
-    model: String,
-    modified_at: String,
-    size: u64,
-    digest: String,
-    details: OllamaModelDetails,
+    name: Option<String>,
+    model: Option<String>,
+    modified_at: Option<String>,
+    size: Option<u64>,
+    digest: Option<String>,
+    details: Option<OllamaModelDetails>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct OllamaModelDetails {
-    format: String,
-    family: String,
+    format: Option<String>,
+    family: Option<String>,
     families: Option<Vec<String>>,
-    parameter_size: String,
-    quantization_level: String,
+    parameter_size: Option<String>,
+    quantization_level: Option<String>,
 }
 
-const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\
+pub(super) fn ollama_model_name_from_fields<'a>(
+    name: Option<&'a str>,
+    model: Option<&'a str>,
+) -> Option<&'a str> {
+    name.or(model)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+pub(super) const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
      Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
 
 /// Fetches available local Ollama models from the Ollama API endpoint
@@ -228,7 +237,10 @@ pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>
     let model_names: Vec<String> = tags_response
         .models
         .into_iter()
-        .map(|model| model.name) // Use 'name' field which is the full model name including tag
+        .filter_map(|model| {
+            ollama_model_name_from_fields(model.name.as_deref(), model.model.as_deref())
+                .map(str::to_string)
+        })
         .collect();
 
     Ok(model_names)
@@ -456,6 +468,7 @@ impl OllamaProvider {
             messages.push(OllamaChatMessage {
                 role: "system".to_string(),
                 content: Some(system),
+                thinking: None,
                 tool_calls: None,
                 tool_call_id: None,
                 tool_name: None,
@@ -464,9 +477,9 @@ impl OllamaProvider {
         }
 
         for message in &request.messages {
-            let (content_text, images) = if let Some(interleaved_content) =
-                assistant_interleaved_history_text(message, &request.model)
-            {
+            let interleaved_content = assistant_interleaved_history_text(message, &request.model);
+            let used_interleaved_content = interleaved_content.is_some();
+            let (content_text, images) = if let Some(interleaved_content) = interleaved_content {
                 (interleaved_content, None)
             } else {
                 Self::extract_content_and_images(&message.content)
@@ -487,6 +500,7 @@ impl OllamaProvider {
                     messages.push(OllamaChatMessage {
                         role: "tool".to_string(),
                         content: Some(content_text),
+                        thinking: None,
                         tool_calls: None,
                         tool_call_id,
                         tool_name,
@@ -494,9 +508,15 @@ impl OllamaProvider {
                     });
                 }
                 _ => {
+                    let thinking = if used_interleaved_content {
+                        None
+                    } else {
+                        Self::assistant_thinking_history_text(message)
+                    };
                     let mut payload_message = OllamaChatMessage {
                         role: message.role.as_generic_str().to_string(),
                         content: Some(content_text),
+                        thinking,
                         tool_calls: None,
                         tool_call_id: None,
                         tool_name: None,
@@ -582,6 +602,25 @@ impl OllamaProvider {
             tools,
             think: Self::think_value(request),
         })
+    }
+
+    fn assistant_thinking_history_text(message: &Message) -> Option<String> {
+        if message.role != MessageRole::Assistant {
+            return None;
+        }
+
+        message
+            .reasoning
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .or_else(|| {
+                message
+                    .reasoning_details
+                    .as_deref()
+                    .and_then(extract_reasoning_text_from_detail_values)
+            })
     }
 
     fn extract_content_and_images(content: &MessageContent) -> (String, Option<Vec<String>>) {
@@ -877,6 +916,8 @@ struct OllamaChatMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     images: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<OllamaToolCall>>,
@@ -1061,6 +1102,9 @@ impl LLMProvider for OllamaProvider {
         let fallback_api_key = self.api_key.clone();
         let fallback_model = model.clone();
         let fallback_url = url.clone();
+        let any_interleaved = request.messages.iter().any(|msg| {
+            assistant_interleaved_history_text(msg, &request.model).is_some()
+        });
         let stream = try_stream! {
             let mut prompt_tokens: Option<u32> = None;
             let mut completion_tokens: Option<u32> = None;
@@ -1137,7 +1181,9 @@ impl LLMProvider for OllamaProvider {
                         if let Some(content) = message.content {
                             for event in aggregator.handle_content(&content) {
                                 match &event {
-                                    LLMStreamEvent::Reasoning { .. } if has_explicit_thinking => {
+                                    LLMStreamEvent::Reasoning { .. }
+                                        if has_explicit_thinking || any_interleaved =>
+                                    {
                                     }
                                     _ => yield event,
                                 }
@@ -1527,6 +1573,28 @@ mod tests {
             payload.messages[0].content.as_deref(),
             Some("<think>trace</think>done")
         );
+        assert!(payload.messages[0].thinking.is_none());
+    }
+
+    #[test]
+    fn build_payload_replays_assistant_reasoning_as_ollama_thinking() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: models::ollama::GPT_OSS_20B.to_string(),
+            messages: vec![
+                Message::assistant("need a tool".to_string())
+                    .with_reasoning(Some("reasoning trace".to_string())),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+
+        assert_eq!(payload.messages[0].content.as_deref(), Some("need a tool"));
+        assert_eq!(
+            payload.messages[0].thinking.as_deref(),
+            Some("reasoning trace")
+        );
     }
 
     #[test]
@@ -1580,5 +1648,22 @@ mod tests {
         let parsed_detail: Value =
             serde_json::from_str(first_detail).expect("reasoning detail should be json");
         assert_eq!(parsed_detail["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn tags_response_accepts_partial_model_summaries() {
+        let parsed: OllamaTagsResponse = serde_json::from_value(json!({
+            "models": [
+                { "model": "qwen3:8b" }
+            ]
+        }))
+        .expect("partial model summaries should parse");
+
+        let names: Vec<String> = parsed
+            .models
+            .into_iter()
+            .filter_map(|model| model.name.or(model.model))
+            .collect();
+        assert_eq!(names, vec!["qwen3:8b".to_string()]);
     }
 }

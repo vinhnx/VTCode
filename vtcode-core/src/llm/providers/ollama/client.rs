@@ -8,6 +8,8 @@ use futures::stream::BoxStream;
 use semver::Version;
 use serde_json::Value as JsonValue;
 
+use super::OLLAMA_CONNECTION_ERROR;
+use super::ollama_model_name_from_fields;
 use super::pull::{OllamaPullEvent, OllamaPullProgressReporter};
 use super::url::base_url_to_host_root;
 
@@ -16,9 +18,6 @@ pub struct OllamaClient {
     client: reqwest::Client,
     host_root: String,
 }
-
-const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
-     Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
 
 impl OllamaClient {
     /// Create a client from a base URL and verify the server is reachable.
@@ -74,7 +73,12 @@ impl OllamaClient {
             .and_then(|m| m.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|v| v.get("name").and_then(|n| n.as_str()))
+                    .filter_map(|v| {
+                        ollama_model_name_from_fields(
+                            v.get("name").and_then(|n| n.as_str()),
+                            v.get("model").and_then(|n| n.as_str()),
+                        )
+                    })
                     .map(str::to_string)
                     .collect::<Vec<_>>()
             })
