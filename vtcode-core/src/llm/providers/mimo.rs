@@ -15,9 +15,9 @@ use crate::llm::types as llm_types;
 
 use super::{
     common::{
-        extract_prompt_cache_settings_default, map_finish_reason_common, override_base_url,
-        parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-        serialize_tools_openai_format, validate_request_common,
+        extract_prompt_cache_settings_default, override_base_url, parse_response_openai_format,
+        resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
+        validate_request_common,
     },
     error_handling::handle_openai_http_error,
     extract_reasoning_trace,
@@ -207,10 +207,10 @@ impl MiMoProvider {
             }
         }
 
-        if let Some(meta) = &request.metadata {
-            if let Some(user_id) = meta.get("user_id").and_then(|v| v.as_str()) {
-                payload.insert("user_id".to_owned(), Value::String(user_id.to_owned()));
-            }
+        if let Some(meta) = &request.metadata
+            && let Some(user_id) = meta.get("user_id").and_then(|v| v.as_str())
+        {
+            payload.insert("user_id".to_owned(), Value::String(user_id.to_owned()));
         }
 
         Ok(Value::Object(payload))
@@ -368,43 +368,13 @@ impl LLMProvider for MiMoProvider {
                 PROVIDER_NAME,
                 model_clone,
                 |value| {
-                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
-                        && let Some(choice) = choices.first()
-                    {
-                        if let Some(delta) = choice.get("delta") {
-                            if let Some(reasoning) =
-                                delta.get("reasoning_content").and_then(|r| r.as_str())
-                            {
-                                if let Some(delta) = aggregator.handle_reasoning(reasoning) {
-                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta }));
-                                }
-                            }
-
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                for event in aggregator.handle_content(content) {
-                                    let _ = tx.send(Ok(event));
-                                }
-                            }
-
-                            if let Some(tool_calls) =
-                                delta.get("tool_calls").and_then(|tc| tc.as_array())
-                            {
-                                aggregator.handle_tool_calls(tool_calls);
-                            }
-                        }
-
-                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                            aggregator.set_finish_reason(map_finish_reason_common(reason));
-                        }
-                    }
-
-                    if let Some(_usage_value) = value.get("usage") {
-                        if let Some(usage) =
-                            crate::llm::providers::common::parse_usage_openai_format(&value, true)
-                        {
-                            aggregator.set_usage(usage);
-                        }
-                    }
+                    crate::llm::providers::shared::handle_openai_compatible_chunk(
+                        &value,
+                        &mut aggregator,
+                        &tx,
+                        Some("reasoning_content"),
+                        crate::llm::providers::shared::OpenAiDeltaOrder::ReasoningFirst,
+                    );
                     Ok(())
                 },
             )

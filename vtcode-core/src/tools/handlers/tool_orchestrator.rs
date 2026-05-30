@@ -27,6 +27,7 @@ impl Default for ToolOrchestrator {
     }
 }
 
+#[cfg(not(creusot))]
 impl ToolOrchestrator {
     pub fn new() -> Self {
         Self {
@@ -160,6 +161,46 @@ impl ToolOrchestrator {
             }
             Err(other) => Err(other),
         }
+    }
+}
+
+#[cfg(creusot)]
+impl ToolOrchestrator {
+    pub fn new() -> Self {
+        Self {
+            sandbox: SandboxManager::new(),
+        }
+    }
+
+    pub async fn run<Req, Out, T>(
+        &mut self,
+        tool: &mut T,
+        req: &Req,
+        tool_ctx: &ToolCtx,
+        turn_ctx: &TurnContext,
+        _approval_policy: AskForApproval,
+    ) -> Result<Out, ToolError>
+    where
+        Req: Send + Sync,
+        Out: Send + Sync,
+        T: ToolRuntime<Req, Out>,
+    {
+        let canonical_policy = canonical_sandbox_policy(turn_ctx);
+        let initial_sandbox = match tool.sandbox_mode_for_first_attempt(req) {
+            SandboxOverride::BypassSandboxFirstAttempt => SandboxType::None,
+            SandboxOverride::NoOverride => self
+                .sandbox
+                .select_initial_for_canonical(&canonical_policy, tool.sandbox_preference()),
+        };
+
+        let initial_attempt = SandboxAttempt {
+            sandbox: initial_sandbox,
+            policy: turn_ctx.sandbox_policy.get(),
+            sandbox_cwd: &turn_ctx.cwd,
+            codex_linux_sandbox_exe: turn_ctx.codex_linux_sandbox_exe.as_ref(),
+        };
+
+        tool.run(req, &initial_attempt, tool_ctx).await
     }
 }
 

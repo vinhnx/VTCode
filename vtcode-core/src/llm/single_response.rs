@@ -2,7 +2,7 @@ use super::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, Normalized
 use futures::StreamExt as _;
 
 pub async fn collect_single_response(
-    provider: &dyn LLMProvider,
+    provider: &(impl LLMProvider + ?Sized),
     request: LLMRequest,
 ) -> Result<LLMResponse, LLMError> {
     if provider.supports_non_streaming(&request.model) {

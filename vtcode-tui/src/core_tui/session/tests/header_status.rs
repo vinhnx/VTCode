@@ -6,7 +6,9 @@ use std::time::Instant;
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 fn fresh_session() -> Session {
-    Session::new(InlineTheme::default(), None, VIEW_ROWS)
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.appearance.hide_header = false;
+    session
 }
 
 fn header_line_text(session: &mut Session) -> String {

@@ -164,6 +164,7 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
     }
 }
 
+#[cfg(not(creusot))]
 #[async_trait]
 impl ToolHandler for ApplyPatchHandler {
     fn kind(&self) -> ToolKind {
@@ -260,6 +261,57 @@ impl ToolHandler for ApplyPatchHandler {
 
         Ok(ToolOutput::Function {
             content,
+            content_items: None,
+            success: Some(true),
+        })
+    }
+}
+
+#[cfg(creusot)]
+#[async_trait]
+impl ToolHandler for ApplyPatchHandler {
+    fn kind(&self) -> ToolKind {
+        ToolKind::Function
+    }
+
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        matches!(
+            payload,
+            ToolPayload::Function { .. } | ToolPayload::Custom { .. }
+        )
+    }
+
+    async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
+        true
+    }
+    async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
+        let ToolInvocation { payload, .. } = invocation;
+
+        let patch_input = match payload {
+            ToolPayload::Function { arguments } => {
+                let args: Value = serde_json::from_str(&arguments).map_err(|e| {
+                    ToolCallError::respond(format!("Failed to parse function arguments: {}", e))
+                })?;
+                crate::tools::apply_patch::decode_apply_patch_input(&args)
+                    .map_err(|e| {
+                        ToolCallError::respond(format!("Failed to decode patch input: {e}"))
+                    })?
+                    .map(|input| input.text)
+                    .ok_or_else(|| ToolCallError::respond("Missing patch input"))?
+            }
+            ToolPayload::Custom { input } => input,
+            _ => {
+                return Err(ToolCallError::respond(
+                    "apply_patch handler received unsupported payload",
+                ));
+            }
+        };
+
+        let _ = Patch::parse(&patch_input)
+            .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {}", e)))?;
+
+        Ok(ToolOutput::Function {
+            content: "Patch handled".to_string(),
             content_items: None,
             success: Some(true),
         })
@@ -364,6 +416,7 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
 /// This checks if a shell command is actually an apply_patch invocation
 /// and handles it through the apply_patch handler instead.
 #[expect(clippy::too_many_arguments)]
+#[cfg(not(creusot))]
 pub async fn intercept_apply_patch(
     command: &[String],
     ctx: InterceptApplyPatchContext<'_>,
@@ -440,6 +493,40 @@ pub async fn intercept_apply_patch(
 
     Ok(Some(ToolOutput::Function {
         content,
+        content_items: None,
+        success: Some(true),
+    }))
+}
+
+#[cfg(creusot)]
+#[expect(clippy::too_many_arguments)]
+pub async fn intercept_apply_patch(
+    command: &[String],
+    ctx: InterceptApplyPatchContext<'_>,
+) -> Result<Option<ToolOutput>, ToolCallError> {
+    let (is_apply_patch, patch_content) = parse_apply_patch_command(command);
+
+    if !is_apply_patch {
+        return Ok(None);
+    }
+
+    let Some(patch_input) = patch_content else {
+        return Ok(None);
+    };
+
+    let patch = Patch::parse(&patch_input)
+        .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {}", e)))?;
+
+    let _changes = convert_patch_to_changes(&patch, ctx.cwd);
+    let req = ApplyPatchRequest {
+        patch: patch_input,
+        cwd: ctx.cwd.to_path_buf(),
+        timeout_ms: ctx.timeout_ms,
+        user_explicitly_approved: true,
+    };
+
+    Ok(Some(ToolOutput::Function {
+        content: "Patch handled".to_string(),
         content_items: None,
         success: Some(true),
     }))

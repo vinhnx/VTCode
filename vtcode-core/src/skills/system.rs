@@ -2,12 +2,10 @@ use crate::utils::file_utils::{
     ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
 };
 use include_dir::Dir;
-use std::collections::hash_map::DefaultHasher;
 use std::fs;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use vtcode_commons::utils::calculate_sha256;
 
 const SYSTEM_SKILLS_DIR: Dir =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/skills/assets/samples");
@@ -81,31 +79,45 @@ fn read_marker(path: &Path) -> Result<String, SystemSkillsError> {
         .to_string())
 }
 
+fn stable_manifest_fingerprint<'a, I>(salt: &str, items: I) -> String
+where
+    I: IntoIterator<Item = (&'a str, Option<&'a str>)>,
+{
+    let mut manifest = String::new();
+    manifest.push_str("salt\t");
+    manifest.push_str(salt);
+    manifest.push('\n');
+
+    for (path, contents_hash) in items {
+        manifest.push_str(path);
+        manifest.push('\t');
+        manifest.push_str(contents_hash.unwrap_or("<dir>"));
+        manifest.push('\n');
+    }
+
+    calculate_sha256(manifest.as_bytes())
+}
+
 fn embedded_system_skills_fingerprint() -> String {
-    let mut items: Vec<(String, Option<u64>)> = SYSTEM_SKILLS_DIR
+    let mut items: Vec<(String, Option<String>)> = SYSTEM_SKILLS_DIR
         .entries()
         .iter()
         .map(|entry| match entry {
             include_dir::DirEntry::Dir(dir) => (dir.path().to_string_lossy().to_string(), None),
-            include_dir::DirEntry::File(file) => {
-                let mut file_hasher = DefaultHasher::new();
-                file.contents().hash(&mut file_hasher);
-                (
-                    file.path().to_string_lossy().to_string(),
-                    Some(file_hasher.finish()),
-                )
-            }
+            include_dir::DirEntry::File(file) => (
+                file.path().to_string_lossy().to_string(),
+                Some(calculate_sha256(file.contents())),
+            ),
         })
         .collect();
     items.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
 
-    let mut hasher = DefaultHasher::new();
-    SYSTEM_SKILLS_MARKER_SALT.hash(&mut hasher);
-    for (path, contents_hash) in items {
-        path.hash(&mut hasher);
-        contents_hash.hash(&mut hasher);
-    }
-    format!("{:x}", hasher.finish())
+    stable_manifest_fingerprint(
+        SYSTEM_SKILLS_MARKER_SALT,
+        items
+            .iter()
+            .map(|(path, contents_hash)| (path.as_str(), contents_hash.as_deref())),
+    )
 }
 
 /// Writes the embedded `include_dir::Dir` to disk under `dest`.
@@ -135,14 +147,15 @@ fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsErro
                         )
                     })?;
                 }
-                write_file_with_context_sync(
-                    &path,
-                    std::str::from_utf8(file.contents()).unwrap_or_default(),
-                    "system skill file",
-                )
-                .map_err(|source| {
-                    SystemSkillsError::io("write system skill file", anyhow_to_io(source))
+                let contents = std::str::from_utf8(file.contents()).map_err(|source| {
+                    SystemSkillsError::Utf8 {
+                        path: file.path().to_path_buf(),
+                        source,
+                    }
                 })?;
+                write_file_with_context_sync(&path, contents, "system skill file").map_err(
+                    |source| SystemSkillsError::io("write system skill file", anyhow_to_io(source)),
+                )?;
             }
         }
     }
@@ -158,10 +171,51 @@ pub enum SystemSkillsError {
         #[source]
         source: std::io::Error,
     },
+    #[error("embedded system skill {path} is not valid UTF-8: {source}")]
+    Utf8 {
+        path: PathBuf,
+        #[source]
+        source: std::str::Utf8Error,
+    },
 }
 
 impl SystemSkillsError {
     fn io(action: &'static str, source: std::io::Error) -> Self {
         Self::Io { action, source }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SYSTEM_SKILLS_MARKER_SALT, embedded_system_skills_fingerprint, stable_manifest_fingerprint,
+    };
+
+    #[test]
+    fn stable_manifest_fingerprint_matches_known_digest() {
+        let fingerprint = stable_manifest_fingerprint(
+            SYSTEM_SKILLS_MARKER_SALT,
+            [
+                ("alpha", None),
+                (
+                    "alpha/config.json",
+                    Some("77c7ce9a5d86bb386d443bb96390dcf0ecf6afb7b74f84a88d64e6d4e8dcb5e0"),
+                ),
+                (
+                    "beta.md",
+                    Some("3f89f6a04a1a1f8cb46fc4b356f7b81b8d18102fdb8b795f5b2f89e7cfefb3af"),
+                ),
+            ],
+        );
+
+        assert_eq!(
+            fingerprint,
+            "218ca69badb47208804e293074956e23ed68d6946dde5d36e6fe8d56df170170"
+        );
+    }
+
+    #[test]
+    fn embedded_system_skills_fingerprint_uses_full_sha256_digest() {
+        assert_eq!(embedded_system_skills_fingerprint().len(), 64);
     }
 }

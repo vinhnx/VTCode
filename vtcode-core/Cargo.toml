@@ -170,6 +170,9 @@ tokio-tungstenite = { version = "0.29", default-features = false, features = [
 ] }
 smallvec = "1.15.1"
 
+[target.'cfg(creusot)'.dependencies]
+creusot-std = "0.12.0-dev"
+
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.115.0" }
 
@@ -234,4 +237,4 @@ unreachable = "allow"
 
 [lints.rust]
 unfulfilled_lint_expectations = "allow"
-
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(creusot)'] }

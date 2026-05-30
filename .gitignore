@@ -68,6 +68,10 @@ test_results/
 fuzz/artifacts/
 fuzz/coverage/
 fuzz/target/
+why3find.json
+verif/
+_creusot_erasure/
+.why3find/
 
 # Database Files
 *.db

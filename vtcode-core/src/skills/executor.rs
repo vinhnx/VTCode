@@ -583,7 +583,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
 pub async fn execute_skill_with_sub_llm(
     skill: &Skill,
     user_input: String,
-    provider: &dyn LLMProvider,
+    provider: &(impl LLMProvider + ?Sized),
     tool_registry: &mut ToolRegistry,
     available_tools: Vec<ToolDefinition>,
     model: String,

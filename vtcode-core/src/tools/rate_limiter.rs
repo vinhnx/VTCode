@@ -27,7 +27,7 @@
 //! library free of additional runtime configuration files:
 //!
 //! * `VTTOOL_RATE_LIMIT` – maximum calls per second (default = 20).
-//! * `VTTOOL_BURST` – maximum burst size (default = 5).
+//! * `VTTOOL_BURST` – maximum burst size (default = rate limit, min 5).
 //!
 //! The values are read once at startup.
 //!
@@ -58,7 +58,7 @@ impl Default for RateLimiterConfig {
         let burst = std::env::var("VTTOOL_BURST")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(5);
+            .unwrap_or(per_sec.max(5));
         RateLimiterConfig { per_sec, burst }
     }
 }
@@ -275,7 +275,8 @@ mod tests {
     fn test_reset_tool_restores_tokens() {
         let mut limiter = PerToolRateLimiter::new();
         // Exhaust tokens
-        for _ in 0..10 {
+        let burst = limiter.default_config.burst;
+        for _ in 0..burst {
             let _ = limiter.try_acquire_for("tool_x");
         }
         assert!(limiter.is_limited("tool_x"));

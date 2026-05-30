@@ -327,14 +327,12 @@ pub fn extract_human_error_message(body: &str) -> String {
         .get("message")
         .and_then(|m| m.get("detail"))
         .and_then(|d| d.as_array())
-    {
-        if let Some(first) = detail
+        && let Some(first) = detail
             .first()
             .and_then(|d| d.get("msg"))
             .and_then(|m| m.as_str())
-        {
-            return first.to_string();
-        }
+    {
+        return first.to_string();
     }
     // HuggingFace simple: {"error": "..."}
     if let Some(msg) = json

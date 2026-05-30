@@ -124,6 +124,7 @@ impl Session {
         self.clear_suggested_prompt_state();
         self.clear_inline_prompt_suggestion();
         self.input_compact_mode = self.input_compact_placeholder().is_some();
+        self.invalidate_header_cache();
     }
 
     pub(crate) fn set_inline_prompt_suggestion(&mut self, suggestion: String, llm_generated: bool) {

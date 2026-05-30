@@ -770,12 +770,12 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         })
         .or_else(|| keyword_alias.clone());
 
-    if action.eq_ignore_ascii_case("grep") {
-        if let Some(pattern) = pattern_alias.clone() {
-            normalized
-                .entry("pattern".to_string())
-                .or_insert_with(|| Value::String(pattern));
-        }
+    if action.eq_ignore_ascii_case("grep")
+        && let Some(pattern) = pattern_alias.clone()
+    {
+        normalized
+            .entry("pattern".to_string())
+            .or_insert_with(|| Value::String(pattern));
     }
 
     if action.eq_ignore_ascii_case("list")

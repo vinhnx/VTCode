@@ -10,29 +10,80 @@
 //! Run with: `cargo test --test tool_serialization_stability_test -- --nocapture`
 
 use anyhow::{Context, Result};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use vtcode_commons::utils::calculate_sha256;
 
 /// Snapshot directory for baseline tool schemas
 const SNAPSHOT_DIR: &str = "tests/snapshots/tool_schemas";
 
-/// Generates a stable hash of a tool's serialized form using SHA256
+/// Generates a stable hash of a tool's canonical serialized form using SHA-256.
 fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    let canonical = canonicalize_json(schema)?;
 
-    // Use deterministic JSON serialization (sorted keys, no pretty-print)
-    let canonical =
-        serde_json::to_string(schema).context("Failed to serialize schema for hashing")?;
+    Ok(format!(
+        "{}-{}",
+        tool_name,
+        calculate_sha256(canonical.as_bytes())
+    ))
+}
 
-    // Generate hash
-    let mut hasher = DefaultHasher::new();
-    canonical.hash(&mut hasher);
-    let hash = hasher.finish();
+fn canonicalize_json(value: &Value) -> Result<String> {
+    fn write_canonical_json(value: &Value, output: &mut String) -> Result<()> {
+        match value {
+            Value::Null => output.push_str("null"),
+            Value::Bool(boolean) => {
+                if *boolean {
+                    output.push_str("true");
+                } else {
+                    output.push_str("false");
+                }
+            }
+            Value::Number(number) => output.push_str(&number.to_string()),
+            Value::String(string) => {
+                output.push_str(
+                    &serde_json::to_string(string)
+                        .context("Failed to serialize JSON string canonically")?,
+                );
+            }
+            Value::Array(values) => {
+                output.push('[');
+                for (index, item) in values.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    write_canonical_json(item, output)?;
+                }
+                output.push(']');
+            }
+            Value::Object(map) => {
+                output.push('{');
+                let mut entries: Vec<_> = map.iter().collect();
+                entries.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
 
-    Ok(format!("{}-{:016x}", tool_name, hash))
+                for (index, (key, item)) in entries.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    output.push_str(
+                        &serde_json::to_string(key)
+                            .context("Failed to serialize JSON object key canonically")?,
+                    );
+                    output.push(':');
+                    write_canonical_json(item, output)?;
+                }
+                output.push('}');
+            }
+        }
+
+        Ok(())
+    }
+
+    let mut canonical = String::new();
+    write_canonical_json(value, &mut canonical)?;
+    Ok(canonical)
 }
 
 /// Records the current serialization format of all tools
@@ -211,6 +262,7 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
 mod tests {
     use super::*;
 
+    /// # Property: canonical schema hashing is deterministic across processes.
     #[test]
     fn test_snapshot_generation() {
         let schemas = snapshot_current_tool_schemas().unwrap();
@@ -220,12 +272,52 @@ mod tests {
         assert!(schemas.contains_key("unified_search"));
     }
 
+    /// # Property: the same schema produces the same stable digest every run.
     #[test]
     fn test_schema_hash_stability() {
         let schema = json!({"name": "test", "description": "Test tool"});
-        let hash1 = generate_tool_schema_hash("test", &schema).unwrap();
-        let hash2 = generate_tool_schema_hash("test", &schema).unwrap();
-        assert_eq!(hash1, hash2);
+        let hash = generate_tool_schema_hash("test", &schema).unwrap();
+
+        assert_eq!(
+            hash,
+            "test-364379e79bc97f346a9a8298dabe07c8f0ca5913c791bdbd93fe0d55b87d945f"
+        );
+    }
+
+    #[test]
+    fn test_schema_hash_ignores_object_key_order() {
+        let first = json!({
+            "name": "test",
+            "description": "Test tool",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "action"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "action": {"type": "string"},
+                },
+            },
+        });
+
+        let mut reversed_properties = Map::new();
+        reversed_properties.insert("action".to_string(), json!({"type": "string"}));
+        reversed_properties.insert("path".to_string(), json!({"type": "string"}));
+
+        let mut reversed_parameters = Map::new();
+        reversed_parameters.insert("properties".to_string(), Value::Object(reversed_properties));
+        reversed_parameters.insert("required".to_string(), json!(["path", "action"]));
+        reversed_parameters.insert("type".to_string(), json!("object"));
+
+        let mut second_map = Map::new();
+        second_map.insert("parameters".to_string(), Value::Object(reversed_parameters));
+        second_map.insert("description".to_string(), json!("Test tool"));
+        second_map.insert("name".to_string(), json!("test"));
+        let second = Value::Object(second_map);
+
+        assert_eq!(
+            generate_tool_schema_hash("test", &first).unwrap(),
+            generate_tool_schema_hash("test", &second).unwrap()
+        );
     }
 
     #[test]

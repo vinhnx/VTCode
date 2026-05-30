@@ -71,6 +71,7 @@ pub fn maybe_parse_apply_patch_from_command(command: &[String]) -> Option<String
 /// This function checks if a shell command is attempting to apply a patch
 /// and redirects it through the proper patch application flow.
 #[expect(clippy::too_many_arguments)]
+#[cfg(not(creusot))]
 pub async fn intercept_apply_patch(
     command: &[String],
     cwd: &Path,
@@ -99,6 +100,43 @@ pub async fn intercept_apply_patch(
     let result = execute_patch(&req).await;
 
     // Emit patch end event
+    if let Some(tracker) = tracker {
+        let mut t = tracker.write().await;
+        t.on_patch_end(result.is_ok());
+    }
+
+    match result {
+        Ok(output) => Ok(Some(ToolOutput::simple(output))),
+        Err(e) => Ok(Some(ToolOutput::error(e.to_string()))),
+    }
+}
+
+#[cfg(creusot)]
+#[expect(clippy::too_many_arguments)]
+pub async fn intercept_apply_patch(
+    command: &[String],
+    cwd: &Path,
+    timeout_ms: Option<u64>,
+    _session: &(),
+    _turn: &TurnContext,
+    tracker: Option<&SharedTurnDiffTracker>,
+    _call_id: &str,
+    _tool_name: &str,
+) -> Result<Option<ToolOutput>, ApplyPatchError> {
+    let Some(patch) = maybe_parse_apply_patch_from_command(command) else {
+        return Ok(None);
+    };
+
+    let req = ApplyPatchRequest::new(patch.clone(), cwd.to_path_buf())
+        .with_timeout(timeout_ms.unwrap_or(30000));
+
+    if let Some(tracker) = tracker {
+        let mut t = tracker.write().await;
+        t.on_patch_begin(Default::default());
+    }
+
+    let result = execute_patch(&req).await;
+
     if let Some(tracker) = tracker {
         let mut t = tracker.write().await;
         t.on_patch_end(result.is_ok());

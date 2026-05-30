@@ -70,9 +70,16 @@ pub(super) enum EvaluatorGateOutcome {
 
 #[derive(Debug, Deserialize)]
 struct PlannerResponse {
-    #[serde(alias = "execution_spec", deserialize_with = "deserialize_string_or_object")]
+    #[serde(
+        alias = "execution_spec",
+        deserialize_with = "deserialize_string_or_object"
+    )]
     spec_markdown: Option<String>,
-    #[serde(default, alias = "execution_contract", deserialize_with = "deserialize_string_or_object")]
+    #[serde(
+        default,
+        alias = "execution_contract",
+        deserialize_with = "deserialize_string_or_object"
+    )]
     contract_markdown: Option<String>,
     #[serde(default, alias = "task_title")]
     task_title: Option<String>,
@@ -88,7 +95,11 @@ struct PlannerItem {
     files: Vec<String>,
     #[serde(default)]
     outcome: String,
-    #[serde(default, alias = "verification_command", deserialize_with = "deserialize_string_or_vec")]
+    #[serde(
+        default,
+        alias = "verification_command",
+        deserialize_with = "deserialize_string_or_vec"
+    )]
     verify: Vec<String>,
 }
 

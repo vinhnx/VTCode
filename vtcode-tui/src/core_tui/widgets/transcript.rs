@@ -183,20 +183,20 @@ fn active_file_operation_spinner_frame(session: &Session) -> Option<&'static str
 
     let left = session.input_status_left.as_deref()?.to_ascii_lowercase();
     let tool_name = left.strip_prefix("running tool: ")?;
-    let is_active_file_tool = FILE_OPERATION_STATUS_TOOLS
-        .iter()
-        .any(|name| *name == tool_name);
+    let is_active_file_tool = FILE_OPERATION_STATUS_TOOLS.contains(&tool_name);
 
     is_active_file_tool.then(|| spinner_frame_for_phase(session.shimmer_state.phase()))
 }
 
 fn is_file_operation_indicator_line(line: &Line<'_>) -> bool {
-    line.spans.iter().any(|span| {
-        let content = span.content.as_ref();
-        FILE_OPERATION_INDICATORS
-            .iter()
-            .any(|pattern| content.contains(pattern))
-    })
+    let text = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    FILE_OPERATION_INDICATORS
+        .iter()
+        .any(|pattern| text.contains(pattern))
 }
 
 fn replace_indicator_icon(line: &mut Line<'static>, frame: &str) -> bool {
@@ -215,7 +215,6 @@ fn replace_indicator_icon(line: &mut Line<'static>, frame: &str) -> bool {
             new_spans.push(Span::styled(text, style));
             continue;
         };
-
         let icon_end = icon_index + '❋'.len_utf8();
         if icon_index > 0 {
             new_spans.push(Span::styled(text[..icon_index].to_string(), style));

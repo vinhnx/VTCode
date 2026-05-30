@@ -38,6 +38,7 @@ unreachable = "allow"
 
 [lints.rust]
 unfulfilled_lint_expectations = "allow"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(creusot)'] }
 
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]
@@ -136,6 +137,7 @@ exclude = ["zed-extension"]
 vtcode-commons = { path = "vtcode-commons" }
 vtcode-acp = { path = "vtcode-acp" }
 vtcode-auth = { path = "vtcode-auth" }
+creusot-std = { path = "../creusot/creusot-std" }
 vtcode-config = { path = "vtcode-config" }
 vtcode-core = { path = "vtcode-core" }
 vtcode-tui = { path = "vtcode-tui" }

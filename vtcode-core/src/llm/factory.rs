@@ -355,6 +355,7 @@ mod tests {
                 "openrouter",
                 "poolside",
                 "qwen",
+                "stepfun",
                 "zai",
             ]
         );

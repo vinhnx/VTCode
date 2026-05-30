@@ -178,7 +178,6 @@ fn active_file_operation_indicator_renders_spinner_frame() {
         left: Some("Running tool: edit_file".to_string()),
         right: None,
     });
-
     let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
 
     assert!(

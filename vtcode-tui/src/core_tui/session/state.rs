@@ -105,6 +105,7 @@ impl Session {
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
         self.header_lines_cache = None;
+        self.header_height_cache.clear();
         self.queued_inputs_preview_cache = None;
         self.subprocess_entries_preview_cache = None;
     }

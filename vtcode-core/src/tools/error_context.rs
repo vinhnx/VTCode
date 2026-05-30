@@ -21,8 +21,13 @@ pub enum ToolError {
     #[error("System error in {0}: {1}")]
     System(String, String),
 
+    #[cfg(not(creusot))]
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[cfg(creusot)]
+    #[error("other error")]
+    Other(String),
 }
 
 /// Error context for tool execution failures

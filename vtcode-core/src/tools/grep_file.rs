@@ -658,6 +658,7 @@ impl GrepSearchManager {
         Ok((Vec::new(), false))
     }
 
+    #[cfg(not(creusot))]
     fn is_ripgrep_missing(err: &AnyhowError) -> bool {
         err.chain().any(|cause| {
             cause
@@ -665,6 +666,11 @@ impl GrepSearchManager {
                 .map(|io_err| io_err.kind() == ErrorKind::NotFound)
                 .unwrap_or(false)
         })
+    }
+
+    #[cfg(creusot)]
+    fn is_ripgrep_missing(_err: &AnyhowError) -> bool {
+        false
     }
 
     fn spawn_grep_file(

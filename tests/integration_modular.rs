@@ -3,11 +3,13 @@
 //! These tests validate that all refactored modules work together correctly
 //! and maintain backward compatibility.
 
+use std::str::FromStr;
 use vtcode_core::{
     code::code_completion::{CompletionContext, CompletionEngine},
     code::code_quality::{FormattingOrchestrator, LintingOrchestrator, QualityMetrics},
     config::{ConfigManager, ToolPolicy, VTCodeConfig},
     gemini::{Client, ClientConfig},
+    models::Provider,
 };
 
 #[test]
@@ -38,21 +40,7 @@ fn test_config_module_integration() {
     let manager = ConfigManager::load_from_workspace(".").unwrap();
     let loaded_config = manager.config();
     assert!(
-        matches!(
-            loaded_config.agent.provider.as_str(),
-            "gemini"
-                | "openai"
-                | "anthropic"
-                | "openrouter"
-                | "xai"
-                | "zai"
-                | "moonshot"
-                | "deepseek"
-                | "minimax"
-                | "ollama"
-                | "lmstudio"
-                | "huggingface"
-        ),
+        Provider::from_str(loaded_config.agent.provider.as_str()).is_ok(),
         "unexpected provider '{}' in loaded config",
         loaded_config.agent.provider
     );

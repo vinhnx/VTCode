@@ -1,10 +1,12 @@
 use crate::llm::error_display;
 use crate::llm::provider::{
-    AssistantPhase, ContentPart, LLMError, LLMResponse, Message, MessageContent, MessageRole,
-    ToolCall,
+    AssistantPhase, ContentPart, LLMError, LLMResponse, LLMStreamEvent, Message, MessageContent,
+    MessageRole, ToolCall,
 };
 pub use crate::llm::providers::ReasoningBuffer;
-use crate::llm::providers::common::extract_reasoning_text_from_serialized_details;
+use crate::llm::providers::common::{
+    extract_reasoning_text_from_serialized_details, map_finish_reason_common,
+};
 mod responses_stream;
 mod tag_sanitizer;
 use crate::llm::providers::split_reasoning_from_text;
@@ -591,6 +593,82 @@ pub struct StreamAggregator {
     pub finish_reason: crate::llm::provider::FinishReason,
     pub sanitizer: TagStreamSanitizer,
     pub compaction: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpenAiDeltaOrder {
+    ReasoningFirst,
+    ContentFirst,
+}
+
+fn emit_reasoning_delta(
+    aggregator: &mut StreamAggregator,
+    tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
+    delta: &Value,
+    reasoning_field: Option<&'static str>,
+) {
+    let Some(reasoning_field) = reasoning_field else {
+        return;
+    };
+    let Some(reasoning) = delta.get(reasoning_field).and_then(Value::as_str) else {
+        return;
+    };
+    let Some(delta) = aggregator.handle_reasoning(reasoning) else {
+        return;
+    };
+    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta }));
+}
+
+fn emit_content_delta(
+    aggregator: &mut StreamAggregator,
+    tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
+    delta: &Value,
+) {
+    let Some(content) = delta.get("content").and_then(Value::as_str) else {
+        return;
+    };
+    for event in aggregator.handle_content(content) {
+        let _ = tx.send(Ok(event));
+    }
+}
+
+pub fn handle_openai_compatible_chunk(
+    value: &Value,
+    aggregator: &mut StreamAggregator,
+    tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
+    reasoning_field: Option<&'static str>,
+    delta_order: OpenAiDeltaOrder,
+) {
+    if let Some(choices) = value.get("choices").and_then(Value::as_array)
+        && let Some(choice) = choices.first()
+    {
+        if let Some(delta) = choice.get("delta") {
+            match delta_order {
+                OpenAiDeltaOrder::ReasoningFirst => {
+                    emit_reasoning_delta(aggregator, tx, delta, reasoning_field);
+                    emit_content_delta(aggregator, tx, delta);
+                }
+                OpenAiDeltaOrder::ContentFirst => {
+                    emit_content_delta(aggregator, tx, delta);
+                    emit_reasoning_delta(aggregator, tx, delta, reasoning_field);
+                }
+            }
+
+            if let Some(tool_calls) = delta.get("tool_calls").and_then(Value::as_array) {
+                aggregator.handle_tool_calls(tool_calls);
+            }
+        }
+
+        if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
+            aggregator.set_finish_reason(map_finish_reason_common(reason));
+        }
+    }
+
+    if let Some(_usage_value) = value.get("usage")
+        && let Some(usage) = crate::llm::providers::common::parse_usage_openai_format(value, true)
+    {
+        aggregator.set_usage(usage);
+    }
 }
 
 impl StreamAggregator {

@@ -6,18 +6,25 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[allow(unsafe_code)]
 fn prctl_set_dumpable() -> i32 {
+    // SAFETY: `prctl` is called with the documented `PR_SET_DUMPABLE` command and
+    // integer arguments only. No pointers are dereferenced.
     unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) }
 }
 
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 fn ptrace_deny_attach() -> i32 {
+    // SAFETY: `ptrace(PT_DENY_ATTACH, ...)` is the documented macOS hardening call.
+    // The null pointer argument is not dereferenced by this request type.
     unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) }
 }
 
 #[cfg(unix)]
 #[allow(unsafe_code)]
 fn remove_env_var(key: OsString) {
+    // SAFETY: Caller must ensure this runs during single-threaded early process
+    // startup, before any threads are spawned, which satisfies the environment
+    // mutation safety requirement.
     unsafe { std::env::remove_var(key) }
 }
 
@@ -129,6 +136,8 @@ fn set_core_file_size_limit_to_zero() {
         rlim_cur: 0,
         rlim_max: 0,
     };
+    // SAFETY: `rlim` is fully initialized and passed by shared reference for the
+    // duration of the syscall only.
     let ret_code = unsafe { libc::setrlimit(libc::RLIMIT_CORE, &rlim) };
     if ret_code != 0 {
         eprintln!(
@@ -171,6 +180,7 @@ fn cap_stack_rlimit() {
             rlim_cur: 0,
             rlim_max: 0,
         };
+        // SAFETY: `current` points to valid writable memory for the syscall to fill.
         let ret = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut current) };
         if ret != 0 {
             return;
@@ -183,6 +193,8 @@ fn cap_stack_rlimit() {
             rlim_cur: STACK_CAP_BYTES,
             rlim_max: STACK_CAP_BYTES,
         };
+        // SAFETY: `capped` is fully initialized and passed by shared reference for
+        // the duration of the syscall only.
         let _ = unsafe { libc::setrlimit(libc::RLIMIT_STACK, &capped) };
     }
 }
