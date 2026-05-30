@@ -417,6 +417,18 @@ When reporting an issue, please include enough details for others to reproduce t
 
 ---
 
+## Support VT Code's Development 
+
+I build VT Code in my spare time. It supports open-weight models and will stay open source, no matter what. If it has saved you some time, you can buy me a coffee: https://buymeacoffee.com/vinhnx
+
+<p align="center">
+  <img src="./resources/screenshots/qr_donate.png" alt="buymeacoffee"/>
+  
+  <a href="https://buymeacoffee.com/vinhnx">BuyMeACoffee</a>
+</p>
+
+---
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=vinhnx/vtcode&type=timeline&legend=top-left)](https://www.star-history.com/#vinhnx/vtcode&type=timeline&legend=top-left)
