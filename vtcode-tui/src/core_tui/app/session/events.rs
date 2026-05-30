@@ -315,6 +315,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::BackgroundOperation)
         }
+        KeyCode::Char('m') | KeyCode::Char('M') if has_control && !has_alt && !has_command => {
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/model".to_string()))
+        }
         KeyCode::Char('s') | KeyCode::Char('S') if has_alt && !has_control && !has_command => {
             session.mark_dirty();
             Some(InlineEvent::Submit("/subprocesses".to_string()))
@@ -828,6 +832,7 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
+        "Ctrl+M: Open the model picker.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),
         "Ctrl+Home / Ctrl+End: Jump transcript to top or bottom in fullscreen.".to_string(),
         "Ctrl+O: Copy last agent response as markdown to clipboard.".to_string(),

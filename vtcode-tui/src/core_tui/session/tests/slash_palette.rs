@@ -65,6 +65,19 @@ fn slash_palette_enter_submits_review_immediately() {
 }
 
 #[test]
+fn control_m_submits_model_command_without_clearing_draft() {
+    let mut session = app_session_with_input("draft prompt", "draft prompt".len());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL));
+
+    assert!(
+        matches!(event, Some(app_types::InlineEvent::Submit(value)) if value == "/model"),
+        "ctrl+m should open the model picker via /model"
+    );
+    assert_eq!(session.core.input_manager.content(), "draft prompt");
+}
+
+#[test]
 fn slash_palette_hides_entries_for_unmatched_keyword() {
     let mut session = session_with_slash_palette_commands();
 

@@ -228,6 +228,16 @@ fn control_a_moves_cursor_to_start() {
 }
 
 #[test]
+fn control_m_submits_model_command() {
+    let mut session = session_with_input("draft prompt", "draft prompt".len());
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL));
+
+    assert!(matches!(result, Some(InlineEvent::Submit(value)) if value == "/model"));
+    assert_eq!(session.input_manager.content(), "draft prompt");
+}
+
+#[test]
 fn control_w_deletes_previous_word() {
     let mut session = session_with_input("hello world", "hello world".len());
 
