@@ -570,10 +570,10 @@ async fn start_llamacpp() -> Result<String> {
         "--port".to_string(),
         port.to_string(),
     ];
-    if let Ok(extra) = std::env::var(env_vars::LLAMACPP_EXTRA_ARGS) {
-        if !extra.trim().is_empty() {
-            args.extend(shell_words::split(&extra).unwrap_or_default());
-        }
+    if let Ok(extra) = std::env::var(env_vars::LLAMACPP_EXTRA_ARGS)
+        && !extra.trim().is_empty()
+    {
+        args.extend(shell_words::split(&extra).unwrap_or_default());
     }
 
     let mut cmd = tokio::process::Command::new(&binary);

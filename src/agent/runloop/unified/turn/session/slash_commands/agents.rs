@@ -442,11 +442,12 @@ async fn legacy_create_agent_scaffold(
         bail!("Agent file already exists at {}", path.display());
     }
 
-    std::fs::create_dir_all(
+    tokio::fs::create_dir_all(
         path.parent()
             .ok_or_else(|| anyhow!("Invalid agent destination {}", path.display()))?,
-    )?;
-    std::fs::write(&path, scaffold_agent_markdown(name))?;
+    )
+    .await?;
+    tokio::fs::write(&path, scaffold_agent_markdown(name)).await?;
 
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
         let _ = controller.reload().await;
@@ -476,7 +477,7 @@ async fn handle_delete_agent(
     name: &str,
 ) -> Result<SlashCommandControl> {
     let path = resolve_custom_agent_path(ctx, name).await?;
-    std::fs::remove_file(&path)?;
+    tokio::fs::remove_file(&path).await?;
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
         let _ = controller.reload().await;
         refresh_agent_palette(ctx.handle, controller.as_ref()).await;

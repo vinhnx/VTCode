@@ -20,7 +20,7 @@ pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
     let skill_md = skill_path.join("SKILL.md");
     write_file_with_context_sync(&skill_md, &template, "SKILL.md")?;
 
-    std::fs::create_dir(skill_path.join("scripts")).ok();
+    let _ = tokio::fs::create_dir(skill_path.join("scripts")).await;
 
     println!("Created skill template at: {}", skill_path.display());
     println!("  • SKILL.md - Skill metadata and instructions");

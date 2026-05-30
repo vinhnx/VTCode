@@ -167,7 +167,8 @@ async fn migrate_existing_files(
 
         if destination.exists() {
             let backup = destination.with_extension("bak");
-            std::fs::rename(&destination, &backup)
+            tokio::fs::rename(&destination, &backup)
+                .await
                 .with_context(|| format!("failed to backup {}", destination.display()))?;
         }
 
@@ -182,23 +183,27 @@ async fn migrate_existing_files(
                     if let Some(parent) = dest_path.parent() {
                         ensure_dir_exists(parent).await?;
                     }
-                    std::fs::copy(file_path, &dest_path).with_context(|| {
-                        format!(
-                            "failed to copy {} to {}",
-                            file_path.display(),
-                            dest_path.display()
-                        )
-                    })?;
+                    tokio::fs::copy(file_path, &dest_path)
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "failed to copy {} to {}",
+                                file_path.display(),
+                                dest_path.display()
+                            )
+                        })?;
                 }
             }
         } else {
-            std::fs::copy(&path, &destination).with_context(|| {
-                format!(
-                    "failed to copy {} to {}",
-                    path.display(),
-                    destination.display()
-                )
-            })?;
+            tokio::fs::copy(&path, &destination)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to copy {} to {}",
+                        path.display(),
+                        destination.display()
+                    )
+                })?;
         }
     }
 

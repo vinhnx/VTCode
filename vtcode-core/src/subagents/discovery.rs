@@ -25,10 +25,11 @@ async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(Strin
             continue;
         }
 
-        for entry in std::fs::read_dir(&plugin_root)
-            .with_context(|| format!("Failed to read plugin directory {}", plugin_root.display()))?
-        {
-            let path = entry?.path();
+        let mut plugin_entries = tokio::fs::read_dir(&plugin_root).await.with_context(|| {
+            format!("Failed to read plugin directory {}", plugin_root.display())
+        })?;
+        while let Some(entry) = plugin_entries.next_entry().await? {
+            let path = entry.path();
             if !path.is_dir() {
                 continue;
             }
@@ -37,16 +38,19 @@ async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(Strin
                 continue;
             }
 
-            let manifest: PluginManifest =
-                serde_json::from_str(&std::fs::read_to_string(&manifest_path).with_context(
-                    || format!("Failed to read plugin manifest {}", manifest_path.display()),
-                )?)
-                .with_context(|| {
-                    format!(
-                        "Failed to parse plugin manifest {}",
-                        manifest_path.display()
-                    )
-                })?;
+            let manifest: PluginManifest = serde_json::from_str(
+                &tokio::fs::read_to_string(&manifest_path)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to read plugin manifest {}", manifest_path.display())
+                    })?,
+            )
+            .with_context(|| {
+                format!(
+                    "Failed to parse plugin manifest {}",
+                    manifest_path.display()
+                )
+            })?;
             for agent_path in AgentsHandler::process_agents(&path, manifest.agents.clone()).await? {
                 files.push((manifest.name.clone(), agent_path));
             }

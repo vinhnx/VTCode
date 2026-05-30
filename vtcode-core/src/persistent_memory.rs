@@ -1726,11 +1726,12 @@ async fn consolidate_memory_files(
     };
     let created_files =
         write_classified_memory(files, &classified, runtime_config, vt_cfg, workspace_root).await?;
-    let added_facts = pending_files
-        .iter()
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .flat_map(|c| c.lines().filter_map(parse_fact_line).collect::<Vec<_>>())
-        .count();
+    let mut added_facts = 0usize;
+    for p in &pending_files {
+        if let Ok(c) = tokio::fs::read_to_string(p).await {
+            added_facts += c.lines().filter_map(parse_fact_line).count();
+        }
+    }
     for pending in &pending_files {
         let finalized = finalize_rollout_summary_path(pending.clone());
         if !finalized.exists() {

@@ -1,14 +1,13 @@
 use hashbrown::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use shell_words::join;
 use tokio::sync::Mutex as TokioMutex;
@@ -110,7 +109,7 @@ impl PtyManager {
             &commands_config.extra_path_entries,
             &self.workspace_root,
         );
-        *self.extra_paths.write().unwrap() = Arc::new(new_paths);
+        *self.extra_paths.write() = Arc::new(new_paths);
     }
 
     pub fn describe_working_dir(&self, path: &Path) -> String {
@@ -138,7 +137,7 @@ impl PtyManager {
         gatekeeper::check_quarantine_for_program(&program);
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
-        let extra_paths = self.extra_paths.read().unwrap().clone();
+        let extra_paths = self.extra_paths.read().clone();
         let max_tokens = request.max_tokens;
 
         // Determine if this command needs serialization to avoid contention
@@ -526,7 +525,7 @@ if output.len() > max_tokens * 4 {
         let mut command_parts = command;
         let program = command_parts.remove(0);
         let args = command_parts;
-        let extra_paths = self.extra_paths.read().unwrap().clone();
+        let extra_paths = self.extra_paths.read().clone();
 
         // Use login shell for command execution to ensure user's PATH and environment
         // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).

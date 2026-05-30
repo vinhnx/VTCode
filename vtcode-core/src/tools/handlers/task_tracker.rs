@@ -626,13 +626,17 @@ impl TaskTrackerTool {
         }
 
         let selected = if global_exists && plan_exists {
-            let global_modified = std::fs::metadata(&task_file)
+            let global_modified = tokio::fs::metadata(&task_file)
+                .await
                 .ok()
                 .and_then(|meta| meta.modified().ok());
-            let plan_modified = plan_file
-                .as_ref()
-                .and_then(|path| std::fs::metadata(path).ok())
-                .and_then(|meta| meta.modified().ok());
+            let plan_modified = match &plan_file {
+                Some(path) => tokio::fs::metadata(path)
+                    .await
+                    .ok()
+                    .and_then(|meta| meta.modified().ok()),
+                None => None,
+            };
             newer_source(
                 global_modified,
                 plan_modified,

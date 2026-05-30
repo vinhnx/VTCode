@@ -9,6 +9,13 @@ pub(super) const REPO_OWNER: &str = "vinhnx";
 pub(super) const REPO_NAME: &str = "vtcode";
 const REPO_SLUG: &str = "vinhnx/vtcode";
 
+fn github_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("vtcode-updater")
+        .build()
+        .context("Failed to create HTTP client")
+}
+
 pub(super) fn release_url(version: &Version) -> String {
     format!("https://github.com/{REPO_SLUG}/releases/tag/v{version}")
 }
@@ -25,10 +32,7 @@ pub(super) async fn fetch_latest_release(updater: &Updater) -> Result<Option<Upd
 pub(super) async fn fetch_latest_release_info() -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases/latest");
 
-    let client = reqwest::Client::builder()
-        .user_agent("vtcode-updater")
-        .build()
-        .context("Failed to create HTTP client")?;
+    let client = github_client()?;
 
     let response = client
         .get(&url)
@@ -69,10 +73,7 @@ pub(super) async fn list_versions(limit: usize) -> Result<Vec<VersionInfo>> {
         limit
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("vtcode-updater")
-        .build()
-        .context("Failed to create HTTP client")?;
+    let client = github_client()?;
 
     let response = client
         .get(&url)

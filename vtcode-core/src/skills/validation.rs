@@ -495,7 +495,7 @@ impl SkillValidator {
         let start_time = Instant::now();
         let mut issues = vec![];
 
-        let entries = match std::fs::read_dir(scripts_dir) {
+        let mut entries = match tokio::fs::read_dir(scripts_dir).await {
             Ok(entries) => entries,
             Err(error) => {
                 return CheckResult {
@@ -511,12 +511,26 @@ impl SkillValidator {
                 };
             }
         };
-        for entry in entries.flatten() {
+        loop {
+            let entry = match entries.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    return CheckResult {
+                        name: "scripts_valid".to_string(),
+                        status: CheckStatus::Failed,
+                        message: format!("Failed to read scripts directory entry: {}", e),
+                        details: None,
+                        execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                }
+            };
             let path = entry.path();
             if path.is_file() {
                 // Check file size
                 if let Some(metadata) = entry
                     .metadata()
+                    .await
                     .ok()
                     .filter(|m| m.len() > self.config.max_script_size as u64)
                 {
@@ -600,7 +614,7 @@ impl SkillValidator {
 
         let mut issues = vec![];
 
-        let entries = match std::fs::read_dir(dir_path) {
+        let mut entries = match tokio::fs::read_dir(dir_path).await {
             Ok(entries) => entries,
             Err(error) => {
                 return CheckResult {
@@ -616,11 +630,28 @@ impl SkillValidator {
                 };
             }
         };
-        for entry in entries.flatten() {
+        loop {
+            let entry = match entries.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    return CheckResult {
+                        name: format!("resource_{}", resource_type),
+                        status: CheckStatus::Failed,
+                        message: format!("Failed to read resource directory entry: {}", e),
+                        details: None,
+                        execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                }
+            };
             let path = entry.path();
             if path.is_file() {
                 // Check file size
-                if let Some(metadata) = entry.metadata().ok().filter(|m| m.len() > 10 * 1024 * 1024)
+                if let Some(metadata) = entry
+                    .metadata()
+                    .await
+                    .ok()
+                    .filter(|m| m.len() > 10 * 1024 * 1024)
                 {
                     // 10MB limit for resources
                     issues.push(format!(
@@ -691,7 +722,7 @@ impl SkillValidator {
         {
             use std::os::unix::fs::PermissionsExt;
 
-            if let Ok(metadata) = std::fs::metadata(path) {
+            if let Ok(metadata) = tokio::fs::metadata(path).await {
                 let permissions = metadata.permissions();
                 let is_executable = permissions.mode() & 0o111 != 0;
 
@@ -786,7 +817,7 @@ impl SkillValidator {
         }
 
         // Check cache
-        if let Ok(metadata) = std::fs::metadata(schema_path)
+        if let Ok(metadata) = tokio::fs::metadata(schema_path).await
             && let Ok(mtime) = metadata.modified()
             && let Some((cached_mtime, cached_result)) =
                 self.schema_validation_cache.get(schema_path)
@@ -842,7 +873,7 @@ impl SkillValidator {
         };
 
         // Update cache
-        if let Ok(metadata) = std::fs::metadata(schema_path)
+        if let Ok(metadata) = tokio::fs::metadata(schema_path).await
             && let Ok(mtime) = metadata.modified()
         {
             self.schema_validation_cache

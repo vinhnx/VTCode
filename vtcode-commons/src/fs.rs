@@ -114,6 +114,52 @@ pub fn canonicalize_with_context(path: &Path, context: &str) -> Result<PathBuf> 
     })
 }
 
+/// Canonicalize path with context (async)
+pub async fn canonicalize_with_context_async(path: &Path, context: &str) -> Result<PathBuf> {
+    fs::canonicalize(path).await.with_context(|| {
+        format!(
+            "Failed to canonicalize {} path: {}",
+            context,
+            path.display()
+        )
+    })
+}
+
+/// Read a file to string with contextual error (async)
+pub async fn read_to_string_async(path: &Path) -> Result<String> {
+    fs::read_to_string(path)
+        .await
+        .with_context(|| format!("Failed to read {}", path.display()))
+}
+
+/// Write a file with contextual error (async)
+pub async fn write_async(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
+    fs::write(path, contents)
+        .await
+        .with_context(|| format!("Failed to write {}", path.display()))
+}
+
+/// Create directories recursively with contextual error (async)
+pub async fn create_dir_all_async(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)
+        .await
+        .with_context(|| format!("Failed to create {}", path.display()))
+}
+
+/// Remove a file with contextual error (async)
+pub async fn remove_file_async(path: &Path) -> Result<()> {
+    fs::remove_file(path)
+        .await
+        .with_context(|| format!("Failed to remove {}", path.display()))
+}
+
+/// Rename a file with contextual error (async)
+pub async fn rename_async(from: &Path, to: &Path) -> Result<()> {
+    fs::rename(from, to)
+        .await
+        .with_context(|| format!("Failed to rename {} to {}", from.display(), to.display()))
+}
+
 // --- Sync Versions ---
 
 /// Ensure a directory exists (sync)

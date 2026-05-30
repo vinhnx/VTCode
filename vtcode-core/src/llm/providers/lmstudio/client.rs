@@ -122,10 +122,7 @@ impl LMStudioClient {
     /// otherwise sends a minimal request via `/v1/chat/completions`.
     pub async fn load_model(&self, model: &str) -> io::Result<()> {
         if self.use_native_api {
-            let url = format!(
-                "{}/api/v0/models/load",
-                self.base_url.trim_end_matches('/')
-            );
+            let url = format!("{}/api/v0/models/load", self.base_url.trim_end_matches('/'));
             let request_body = serde_json::json!({
                 "model": model
             });

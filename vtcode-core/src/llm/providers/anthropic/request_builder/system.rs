@@ -11,10 +11,11 @@ pub(crate) struct SystemPromptBuildResult {
 
 const RUNTIME_CONTEXT_SECTION_HEADER: &str = "[Runtime Context]";
 const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
+const RUNTIME_CONTEXT_NEWLINE: &str = concat!("[Runtime Context]", "\n");
+const NEWLINE_RUNTIME_CONTEXT_NEWLINE: &str = concat!("\n", "[Runtime Context]", "\n");
 
 fn has_runtime_context_section(prompt: &str) -> bool {
-    prompt.starts_with(&format!("{RUNTIME_CONTEXT_SECTION_HEADER}\n"))
-        || prompt.contains(&format!("\n{RUNTIME_CONTEXT_SECTION_HEADER}\n"))
+    prompt.starts_with(RUNTIME_CONTEXT_NEWLINE) || prompt.contains(NEWLINE_RUNTIME_CONTEXT_NEWLINE)
 }
 
 fn append_history_system_directives(final_system_prompt: &mut String, request: &LLMRequest) {
@@ -44,15 +45,15 @@ fn append_history_system_directives(final_system_prompt: &mut String, request: &
 }
 
 fn split_runtime_context_section(prompt: &str) -> Option<(String, String)> {
-    let marker = format!("\n{RUNTIME_CONTEXT_SECTION_HEADER}\n");
-    let (stable_prefix, runtime_section) = if let Some(split_at) = prompt.rfind(&marker) {
-        let (stable_prefix, runtime_section) = prompt.split_at(split_at);
-        (stable_prefix, runtime_section.trim_start_matches('\n'))
-    } else if prompt.starts_with(&format!("{RUNTIME_CONTEXT_SECTION_HEADER}\n")) {
-        ("", prompt)
-    } else {
-        return None;
-    };
+    let (stable_prefix, runtime_section) =
+        if let Some(split_at) = prompt.rfind(NEWLINE_RUNTIME_CONTEXT_NEWLINE) {
+            let (stable_prefix, runtime_section) = prompt.split_at(split_at);
+            (stable_prefix, runtime_section.trim_start_matches('\n'))
+        } else if prompt.starts_with(RUNTIME_CONTEXT_NEWLINE) {
+            ("", prompt)
+        } else {
+            return None;
+        };
     let runtime_section = runtime_section.trim().to_string();
     if runtime_section.is_empty() {
         return None;

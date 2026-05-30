@@ -1102,9 +1102,10 @@ impl LLMProvider for OllamaProvider {
         let fallback_api_key = self.api_key.clone();
         let fallback_model = model.clone();
         let fallback_url = url.clone();
-        let any_interleaved = request.messages.iter().any(|msg| {
-            assistant_interleaved_history_text(msg, &request.model).is_some()
-        });
+        let any_interleaved = request
+            .messages
+            .iter()
+            .any(|msg| assistant_interleaved_history_text(msg, &request.model).is_some());
         let stream = try_stream! {
             let mut prompt_tokens: Option<u32> = None;
             let mut completion_tokens: Option<u32> = None;

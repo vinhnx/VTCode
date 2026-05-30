@@ -962,12 +962,14 @@ impl SchedulerDaemon {
                 let workspace_label = scheduled_workspace_label(&record.definition);
                 let workspace = resolve_scheduled_task_workspace(&record.definition);
                 let execution = async {
-                    fs::create_dir_all(&artifact_dir).with_context(|| {
-                        format!(
-                            "Failed to create run artifact dir {}",
-                            artifact_dir.display()
-                        )
-                    })?;
+                    tokio::fs::create_dir_all(&artifact_dir)
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "Failed to create run artifact dir {}",
+                                artifact_dir.display()
+                            )
+                        })?;
 
                     let mut command = Command::new(&self.executable_path);
                     command

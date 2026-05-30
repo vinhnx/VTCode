@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use tokio::task;
 use vtcode_core::SimpleIndexer;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
@@ -8,49 +8,48 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
 use crate::agent::agents::apply_runtime_overrides;
 
-pub(crate) async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
-    task::spawn_blocking(move || -> Result<Vec<String>> {
-        let indexer = SimpleIndexer::new(workspace.clone());
-        // Use discover_files instead of index_directory for high-performance startup
-        let files = indexer.discover_files(&workspace);
+async fn blocking_task<F, R>(label: &str, f: F) -> Result<R>
+where
+    F: FnOnce() -> Result<R> + Send + 'static,
+    R: Send + 'static,
+{
+    task::spawn_blocking(f)
+        .await
+        .map_err(|err| anyhow!("failed to join {label} task: {err}"))?
+}
 
-        Ok(files)
+pub(crate) async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
+    task::spawn_blocking(move || {
+        let indexer = SimpleIndexer::new(workspace.clone());
+        indexer.discover_files(&workspace)
     })
     .await
-    .map_err(|err| anyhow!("failed to join file loading task: {}", err))?
+    .map_err(|err| anyhow!("failed to join file loading task: {err}"))
 }
 
 pub(crate) async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
-    let label = workspace.display().to_string();
-    let result = task::spawn_blocking(move || VTCodeConfig::bootstrap_project(&workspace, force))
-        .await
-        .map_err(|err| anyhow!("failed to join configuration bootstrap task: {}", err))?;
-    result.with_context(|| format!("failed to initialize configuration in {}", label))
+    blocking_task("configuration bootstrap", move || {
+        VTCodeConfig::bootstrap_project(&workspace, force)
+    })
+    .await
 }
 
 pub(crate) async fn build_workspace_index(workspace: PathBuf) -> Result<()> {
-    let label = workspace.display().to_string();
-    let result = task::spawn_blocking(move || -> Result<()> {
+    blocking_task("workspace indexing", move || -> Result<()> {
         let mut indexer = SimpleIndexer::new(workspace.clone());
         indexer.init()?;
         indexer.index_directory(&workspace)?;
         Ok(())
     })
     .await
-    .map_err(|err| anyhow!("failed to join workspace indexing task: {}", err))?;
-    result.with_context(|| format!("failed to build workspace index in {}", label))
 }
 
 async fn load_workspace_config_snapshot(workspace: &Path) -> Result<VTCodeConfig> {
     let workspace_buf = workspace.to_path_buf();
-    let label = workspace_buf.display().to_string();
-    let result = task::spawn_blocking(move || {
+    blocking_task("workspace config load", move || {
         ConfigManager::load_from_workspace(&workspace_buf).map(|manager| manager.config().clone())
     })
     .await
-    .map_err(|err| anyhow!("failed to join workspace config load task: {}", err))?;
-
-    result.with_context(|| format!("failed to load configuration for {}", label))
 }
 
 pub(crate) async fn refresh_vt_config(

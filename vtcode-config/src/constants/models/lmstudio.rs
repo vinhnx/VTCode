@@ -10,11 +10,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GEMMA_3_12B_IT,
     PHI_31_MINI_4K_INSTRUCT,
 ];
-pub const REASONING_MODELS: &[&str] = &[
-    DEEPSEEK_R1_0528_QWEN3_8B,
-    QWEN3_8B,
-    OPENAI_GPT_OSS_20B,
-];
+pub const REASONING_MODELS: &[&str] = &[DEEPSEEK_R1_0528_QWEN3_8B, QWEN3_8B, OPENAI_GPT_OSS_20B];
 
 // Reasoning models
 pub const DEEPSEEK_R1_0528_QWEN3_8B: &str = "lmstudio-community/DeepSeek-R1-0528-Qwen3-8B";

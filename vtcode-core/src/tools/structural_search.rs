@@ -1138,12 +1138,14 @@ async fn resolve_config_path(
     let resolved = canonicalize_allow_missing(&normalized)
         .await
         .with_context(|| format!("Failed to resolve structural config path: {requested_path}"))?;
-    let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
-        format!(
-            "Failed to canonicalize workspace root {}",
-            workspace_root.display()
-        )
-    })?;
+    let workspace_root = tokio::fs::canonicalize(workspace_root)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to canonicalize workspace root {}",
+                workspace_root.display()
+            )
+        })?;
     if !resolved.starts_with(&workspace_root) {
         bail!(
             "Path {} escapes workspace root {}",
