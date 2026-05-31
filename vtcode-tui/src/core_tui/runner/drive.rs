@@ -319,13 +319,8 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                 Ok(command) => {
                     let action =
                         handle_inline_command(terminal, session, inputs, &event_channels, command)?;
-                    process_event_stream_action(
-                        action,
-                        &event_channels,
-                        inputs,
-                        event_stream,
-                    )
-                    .await;
+                    process_event_stream_action(action, &event_channels, inputs, event_stream)
+                        .await;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {

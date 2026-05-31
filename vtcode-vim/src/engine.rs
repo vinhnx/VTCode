@@ -742,8 +742,7 @@ impl<E: Editor> VimContext<'_, E> {
                 };
                 self.editor
                     .replace_range(insert_at, insert_at, self.clipboard);
-                let cursor =
-                    (insert_at + self.clipboard.len()).min(self.editor.content().len());
+                let cursor = (insert_at + self.clipboard.len()).min(self.editor.content().len());
                 self.editor.set_cursor(cursor);
             }
         }

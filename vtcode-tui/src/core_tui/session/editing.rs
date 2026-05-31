@@ -302,7 +302,8 @@ impl Session {
         };
 
         if delete_len > 0 {
-            self.input_manager.replace_range(cursor, cursor + delete_len, "");
+            self.input_manager
+                .replace_range(cursor, cursor + delete_len, "");
             self.refresh_input_edit_state();
         }
     }

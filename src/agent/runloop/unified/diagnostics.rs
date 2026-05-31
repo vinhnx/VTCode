@@ -561,7 +561,10 @@ fn canonical_provider_name(raw: &str) -> String {
 }
 
 fn provider_requires_api_key(provider: &str) -> bool {
-    !matches!(provider, "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp")
+    !matches!(
+        provider,
+        "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp"
+    )
 }
 
 fn api_key_env_hint(provider: &str) -> String {

@@ -90,7 +90,10 @@ impl TuiCommand for crate::core_tui::types::InlineCommand {
     }
 
     fn is_start_event_stream(&self) -> bool {
-        matches!(self, crate::core_tui::types::InlineCommand::StartEventStream)
+        matches!(
+            self,
+            crate::core_tui::types::InlineCommand::StartEventStream
+        )
     }
 }
 
