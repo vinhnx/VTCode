@@ -184,6 +184,24 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             )));
         }
 
+        // Text-only modals (no list): close on Esc or any keypress.
+        // Without a list, handle_list_key_event returns NotHandled for all keys,
+        // so we must handle the close/consume logic here to prevent keys from
+        // falling through to normal input processing.
+        if modal.list.is_none() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => {
+                    session.close_overlay();
+                    session.mark_dirty();
+                    return Some(InlineEvent::Overlay(OverlayEvent::Cancelled));
+                }
+                _ => {
+                    // Consume all other key events so they don't reach the input handler
+                    return None;
+                }
+            }
+        }
+
         let result = modal.handle_list_key_event(&key, modal_modifiers);
 
         match result {
@@ -734,20 +752,36 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
 fn quick_help_lines() -> Vec<String> {
     vec![
-        "Enter queues; Tab queues or accepts an inline suggestion.".to_string(),
-        "Alt+P: Generate an inline prompt suggestion.".to_string(),
-        "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
-        "Shift+Enter: Insert a newline.".to_string(),
-        "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
-        "Ctrl+A: Move to start of line • Ctrl+E: Move to end of line.".to_string(),
-        "Ctrl+G: Open external editor.".to_string(),
-        "Ctrl+W: Delete previous word.".to_string(),
-        "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
-        "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
-        "Ctrl+M: Open the model picker.".to_string(),
-        "Alt+Left / Alt+Right: Move by word.".to_string(),
-        "Ctrl+Z: Undo • Ctrl+Y: Redo.".to_string(),
-        "Esc: Close this overlay.".to_string(),
+        "─── Input ───────────────────────────────────────────────────".to_string(),
+        "  Enter          Submit     Shift+Tab    Auto-accept edits".to_string(),
+        "  Tab            Queue      Shift+Enter  Insert newline".to_string(),
+        "  Ctrl+Enter     Run now    Esc          Close overlay".to_string(),
+        "  ?              This help  /            Commands".to_string(),
+        "".to_string(),
+        "─── Readline (Emacs) ────────────────────────────────────────".to_string(),
+        "  Ctrl+A / E     Start / End of line".to_string(),
+        "  Ctrl+F / B     Forward / Backward character".to_string(),
+        "  Ctrl+P / N     Previous / Next history".to_string(),
+        "  Alt+F / B      Forward / Backward word".to_string(),
+        "  Ctrl+T         Transpose characters".to_string(),
+        "  Alt+T          Transpose words".to_string(),
+        "  Alt+U / L / C  Uppercase / Lowercase / Capitalize word".to_string(),
+        "  Ctrl+W         Delete previous word".to_string(),
+        "  Alt+D          Delete next word".to_string(),
+        "  Ctrl+U / K     Delete to start / end of line".to_string(),
+        "  Alt+\\          Delete whitespace around cursor".to_string(),
+        "  Ctrl+Z / Y     Undo / Redo".to_string(),
+        "  Ctrl+R / S     Reverse / Forward history search".to_string(),
+        "".to_string(),
+        "─── Navigation ──────────────────────────────────────────────".to_string(),
+        "  Ctrl+L         Clear screen".to_string(),
+        "  Ctrl+G         Open in $EDITOR".to_string(),
+        "  Ctrl+M         Model picker".to_string(),
+        "  Ctrl+I / /     Toggle inline lists".to_string(),
+        "  Ctrl+O         Copy last response".to_string(),
+        "  Alt+P          Prompt suggestion".to_string(),
+        "  Alt+O          Transcript review".to_string(),
+        "  Ctrl+Home/End  Jump transcript top/bottom".to_string(),
     ]
 }
 
