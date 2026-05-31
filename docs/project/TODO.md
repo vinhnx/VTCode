@@ -7,6 +7,4 @@ The plan is to have a benchmark suite that runs on a regular basis, but it is no
 
 https://deepswe.datacurve.ai/run
 
-https://nextjs.org/evals
-
 https://github.com/wfxr/rlt
