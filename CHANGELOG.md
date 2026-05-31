@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.116.1 - 2026-05-31
+
+### Highlights
+#### Features
+
+- Add start and stop event stream commands to InlineCommand (2897d600) 
+### Other Changes
 ## 0.116.0 - 2026-05-30
 
 ### Highlights
