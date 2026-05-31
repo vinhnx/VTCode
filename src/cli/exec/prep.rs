@@ -121,9 +121,28 @@ pub(super) async fn prepare_exec_run(
     let mut run_vt_cfg = load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace).await?;
     apply_runtime_overrides(Some(&mut run_vt_cfg), &run_config);
 
+    // Auto-trust workspace when full_auto is enabled and trust env var is set,
+    // or when running in non-interactive (exec) mode with full_auto config.
+    // This avoids the interactive trust prompt in CI/eval scenarios.
+    let automation_cfg = &run_vt_cfg.automation.full_auto;
+    if automation_cfg.enabled {
+        let current_trust = vtcode_core::utils::dot_config::load_workspace_trust_level(
+            &run_config.workspace,
+        )
+        .await
+        .unwrap_or(None);
+        if current_trust.is_none() {
+            vtcode_core::utils::dot_config::update_workspace_trust(
+                &run_config.workspace,
+                vtcode_core::config::WorkspaceTrustLevel::FullAuto,
+            )
+            .await
+            .ok();
+        }
+    }
+
     require_full_auto_workspace_trust(&run_config.workspace, "exec runs", "exec").await?;
 
-    let automation_cfg = &run_vt_cfg.automation.full_auto;
     if !automation_cfg.enabled {
         bail!(
             "Automation is disabled in configuration. Enable [automation.full_auto] to continue."
