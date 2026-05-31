@@ -8451,7 +8451,3 @@ dependencies = [
  "syn",
  "winnow 0.7.15",
 ]
-
-[[patch.unused]]
-name = "creusot-std"
-version = "0.12.0-dev"

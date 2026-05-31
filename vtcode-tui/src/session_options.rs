@@ -3,12 +3,15 @@ use std::sync::Arc;
 
 use crate::UiSurfacePreference;
 use crate::config::KeyboardProtocolConfig;
+use hashbrown::HashMap;
+
 use crate::core_tui::app::session::AppSession;
 use crate::core_tui::app::types::{
     FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem,
 };
 use crate::core_tui::log;
 use crate::core_tui::runner::{TuiOptions, run_tui};
+use crate::core_tui::session::action::BindingStore;
 use crate::core_tui::session::config::AppearanceConfig;
 use crate::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
@@ -29,6 +32,9 @@ pub struct SessionOptions {
     pub appearance: Option<AppearanceConfig>,
     pub app_name: String,
     pub non_interactive_hint: Option<String>,
+    /// User-customizable keybindings (action_name → key spec list).
+    /// Merged on top of built-in defaults.
+    pub key_bindings: HashMap<String, Vec<String>>,
 }
 
 impl Default for SessionOptions {
@@ -48,6 +54,7 @@ impl Default for SessionOptions {
             appearance: None,
             app_name: "Agent TUI".to_string(),
             non_interactive_hint: None,
+            key_bindings: HashMap::new(),
         }
     }
 }
@@ -106,7 +113,8 @@ pub fn spawn_session_with_options(
                 workspace_root: options.workspace_root,
             },
             move |rows| {
-                AppSession::new_with_logs(
+                let bindings = BindingStore::new(options.key_bindings.clone());
+                AppSession::new_with_logs_and_bindings(
                     theme,
                     options.placeholder,
                     rows,
@@ -114,6 +122,7 @@ pub fn spawn_session_with_options(
                     options.appearance,
                     options.slash_commands,
                     options.app_name,
+                    bindings,
                 )
             },
         )

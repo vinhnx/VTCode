@@ -56,6 +56,27 @@ impl Session {
             show_logs,
             appearance,
             app_name,
+            None,
+        )
+    }
+
+    pub fn new_with_bindings(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_logs: bool,
+        appearance: Option<AppearanceConfig>,
+        app_name: String,
+        bindings: BindingStore,
+    ) -> Self {
+        Self::new_with_options(
+            theme,
+            placeholder,
+            view_rows,
+            show_logs,
+            appearance,
+            app_name,
+            Some(bindings),
         )
     }
 
@@ -66,6 +87,7 @@ impl Session {
         show_logs: bool,
         appearance: Option<AppearanceConfig>,
         app_name: String,
+        bindings: Option<BindingStore>,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
@@ -167,6 +189,9 @@ impl Session {
 
             // --- PTY Session Management ---
             active_pty_sessions: None,
+
+            // --- Keybinding store ---
+            bindings: bindings.unwrap_or_default(),
 
             // --- Clipboard for yank/paste operations ---
             clipboard: String::new(),
