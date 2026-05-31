@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.116.2 - 2026-05-31
+
+### Highlights
+#### Bug Fixes
+
+- Update provider checks to include additional model names (52a57555) 
+### Other Changes
+#### Other
+
+- Fix dependency (208d6396) (@vinhnx)
 ## 0.116.1 - 2026-05-31
 
 ### Highlights
