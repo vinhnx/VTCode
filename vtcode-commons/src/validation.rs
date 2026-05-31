@@ -96,6 +96,89 @@ pub fn validate_identifier(id: &str, field_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// A validated string that is guaranteed to be non-empty after trimming.
+///
+/// Follows the **"Parse Don't Validate"** pattern (Ch 15): the constraint is
+/// enforced at construction time via [`TryFrom`], so downstream code never
+/// needs to re-check.
+///
+/// ```rust
+/// use vtcode_commons::validation::NonEmptyString;
+///
+/// let name = NonEmptyString::try_from("hello").unwrap();
+/// assert_eq!(name.as_str(), "hello");
+///
+/// assert!(NonEmptyString::try_from("").is_err());
+/// assert!(NonEmptyString::try_from("   ").is_err());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct NonEmptyString(String);
+
+impl NonEmptyString {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::ops::Deref for NonEmptyString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::borrow::Borrow<str> for NonEmptyString {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for NonEmptyString {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for NonEmptyString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl TryFrom<String> for NonEmptyString {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.trim().is_empty() {
+            Err("string must be non-empty".to_string())
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+
+impl TryFrom<&str> for NonEmptyString {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.trim().is_empty() {
+            Err("string must be non-empty".to_string())
+        } else {
+            Ok(Self(value.to_string()))
+        }
+    }
+}
+
+impl From<NonEmptyString> for String {
+    fn from(value: NonEmptyString) -> Self {
+        value.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +195,32 @@ mod tests {
         assert!(validate_all_non_empty(&["a".to_string(), "b".to_string()], "field").is_ok());
         assert!(validate_all_non_empty(&["a".to_string(), "".to_string()], "field").is_err());
         assert!(validate_all_non_empty(&[], "field").is_ok());
+    }
+
+    #[test]
+    fn non_empty_string_accepts_valid() {
+        let s = NonEmptyString::try_from("hello").unwrap();
+        assert_eq!(s.as_str(), "hello");
+        assert_eq!(s.len(), 5);
+    }
+
+    #[test]
+    fn non_empty_string_rejects_empty() {
+        assert!(NonEmptyString::try_from("").is_err());
+        assert!(NonEmptyString::try_from("   ").is_err());
+        assert!(NonEmptyString::try_from("\t\n").is_err());
+    }
+
+    #[test]
+    fn non_empty_string_from_owned() {
+        let s = NonEmptyString::try_from("test".to_string()).unwrap();
+        assert_eq!(s.into_inner(), "test");
+    }
+
+    #[test]
+    fn non_empty_string_deref() {
+        let s = NonEmptyString::try_from("hello").unwrap();
+        assert!(s.starts_with("hel"));
+        assert_eq!(&*s, "hello");
     }
 }

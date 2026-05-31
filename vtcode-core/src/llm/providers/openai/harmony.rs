@@ -53,22 +53,18 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
 }
 
 pub(super) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, Value)> {
-    let mut found_segment = false;
-    for segment in text.split("<|start|>") {
-        if segment.trim().is_empty() {
-            continue;
-        }
-        found_segment = true;
-        if let Some(parsed) = parse_harmony_tool_call_segment(segment) {
-            return Some(parsed);
-        }
-    }
+    let segments: Vec<&str> = text
+        .split("<|start|>")
+        .filter(|s| !s.trim().is_empty())
+        .collect();
 
-    if !found_segment {
+    if segments.is_empty() {
         return parse_harmony_tool_call_segment(text);
     }
 
-    None
+    segments
+        .iter()
+        .find_map(|segment| parse_harmony_tool_call_segment(segment))
 }
 
 pub(super) fn normalize_harmony_tool_arguments(raw: &str) -> Option<String> {

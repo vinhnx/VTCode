@@ -24,7 +24,7 @@ fn extract_text_content(parts: &[HarmonyContent]) -> Option<String> {
         })
         .collect::<String>();
 
-    if text.is_empty() { None } else { Some(text) }
+    (!text.is_empty()).then_some(text)
 }
 
 fn parse_harmony_completion_messages_with_recovery(

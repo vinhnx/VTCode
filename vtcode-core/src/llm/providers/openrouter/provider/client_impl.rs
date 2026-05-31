@@ -15,10 +15,6 @@ impl LLMClient for OpenRouterProvider {
         Ok(LLMProvider::generate(self, request).await?)
     }
 
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::OpenRouter
-    }
-
     fn model_id(&self) -> &str {
         &self.model
     }

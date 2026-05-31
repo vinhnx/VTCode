@@ -5,7 +5,6 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
-use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use std::env;
 
@@ -239,10 +238,6 @@ impl LLMClient for MinimaxProvider {
             ..Default::default()
         };
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::Minimax
     }
 
     fn model_id(&self) -> &str {

@@ -469,7 +469,7 @@ pub(super) async fn run_interaction_loop_impl(
             slash_command_handler::CommandProcessingResult::NotHandled => {}
         }
 
-        let turn_id = SessionId::new().0;
+        let turn_id = SessionId::new().into_inner();
 
         if let Some(hooks) = ctx.lifecycle_hooks {
             match hooks

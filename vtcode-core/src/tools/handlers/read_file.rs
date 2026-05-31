@@ -450,7 +450,7 @@ impl ReadFileHandler {
             offset,
             lines_read: original_len,
             condensed,
-            omitted_lines: if omitted > 0 { Some(omitted) } else { None },
+            omitted_lines: (omitted > 0).then_some(omitted),
             content: collected.join("\n"),
         })
     }

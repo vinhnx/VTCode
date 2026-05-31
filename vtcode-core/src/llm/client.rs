@@ -1,13 +1,16 @@
 use super::provider::LLMError;
-use super::types::{BackendKind, LLMResponse};
+use super::types::LLMResponse;
 use crate::config::models::ModelId;
 use async_trait::async_trait;
 
-/// Unified LLM client trait
+/// Unified LLM client trait.
+///
+/// Note: `backend_kind()` lives on [`LLMProvider`](super::provider::LLMProvider)
+/// rather than here, following the **single responsibility** principle — the
+/// provider knows its own backend identity.
 #[async_trait]
 pub trait LLMClient: Send + Sync {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError>;
-    fn backend_kind(&self) -> BackendKind;
     fn model_id(&self) -> &str;
 }
 
@@ -51,26 +54,6 @@ impl LLMClient for ProviderClientAdapter {
             ..Default::default()
         };
         Ok(self.provider.generate(request).await?)
-    }
-
-    fn backend_kind(&self) -> BackendKind {
-        // Determine backend kind from provider name
-        match self.provider.name() {
-            "gemini" => BackendKind::Gemini,
-            "openai" => BackendKind::OpenAI,
-            "anthropic" => BackendKind::Anthropic,
-            "deepseek" => BackendKind::DeepSeek,
-            "openrouter" => BackendKind::OpenRouter,
-            "ollama" => BackendKind::Ollama,
-            "llamacpp" => BackendKind::LlamaCpp,
-            "zai" => BackendKind::ZAI,
-            "moonshot" => BackendKind::Moonshot,
-            "mimo" => BackendKind::MiMo,
-            "qwen" => BackendKind::Qwen,
-            "stepfun" => BackendKind::StepFun,
-            "poolside" => BackendKind::Poolside,
-            _ => BackendKind::OpenAI, // Default fallback
-        }
     }
 
     fn model_id(&self) -> &str {

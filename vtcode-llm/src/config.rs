@@ -123,43 +123,40 @@ pub enum AdapterEvent {
     AdapterError { message: String },
 }
 
+/// Trait that bundles the adapter hook dependencies into a single interface.
+/// This replaces the previous four-parameter generic bound
+/// (`Paths`, `Telemetry`, `Reporter`, `Formatter`) with a single trait,
+/// following the **Config Trait pattern** from the Rust Patterns guide
+/// (Ch 3 — Config Trait Pattern).
+///
+/// Associated types keep the trait dyn-incompatible (which is intentional —
+/// these are compile-time wiring, not runtime polymorphism).
+pub trait AdapterHooksProvider: Send + Sync {
+    type Paths: WorkspacePaths + ?Sized;
+    type Telemetry: TelemetrySink<AdapterEvent> + ?Sized;
+    type Reporter: ErrorReporter + ?Sized;
+    type Formatter: ErrorFormatter + ?Sized;
+
+    fn workspace_paths(&self) -> &Self::Paths;
+    fn telemetry(&self) -> &Self::Telemetry;
+    fn error_reporter(&self) -> &Self::Reporter;
+    fn error_formatter(&self) -> &Self::Formatter;
+}
+
 /// Shared adapter that enriches [`ProviderConfig`] conversions with
 /// [`WorkspacePaths`], telemetry, and error-reporting hooks from
 /// `vtcode-commons`.
-pub struct AdapterHooks<'a, Paths, Telemetry, Reporter, Formatter>
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
-{
-    workspace_paths: &'a Paths,
-    telemetry: &'a Telemetry,
-    error_reporter: &'a Reporter,
-    error_formatter: &'a Formatter,
+///
+/// Uses the **Config Trait pattern** — one generic parameter (`Hooks`) instead
+/// of the previous four (`Paths`, `Telemetry`, `Reporter`, `Formatter`).
+pub struct AdapterHooks<'a, Hooks: AdapterHooksProvider> {
+    hooks: &'a Hooks,
 }
 
-impl<'a, Paths, Telemetry, Reporter, Formatter>
-    AdapterHooks<'a, Paths, Telemetry, Reporter, Formatter>
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
-{
+impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     /// Create a new adapter that enriches provider configuration conversions.
-    pub fn new(
-        workspace_paths: &'a Paths,
-        telemetry: &'a Telemetry,
-        error_reporter: &'a Reporter,
-        error_formatter: &'a Formatter,
-    ) -> Self {
-        Self {
-            workspace_paths,
-            telemetry,
-            error_reporter,
-            error_formatter,
-        }
+    pub fn new(hooks: &'a Hooks) -> Self {
+        Self { hooks }
     }
 
     /// Convert a [`ProviderConfig`] into the factory configuration while
@@ -176,8 +173,9 @@ where
     }
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
-        let resolved = prompt_cache.resolve_cache_dir(Some(self.workspace_paths.workspace_root()));
-        let scope = self.workspace_paths.scope_for_path(&resolved);
+        let resolved = prompt_cache
+            .resolve_cache_dir(Some(self.hooks.workspace_paths().workspace_root()));
+        let scope = self.hooks.workspace_paths().scope_for_path(&resolved);
         // Check absoluteness before moving `resolved` so we can report a meaningful error.
         let is_abs = resolved.is_absolute();
         let resolved_display = resolved.display().to_string();
@@ -199,14 +197,14 @@ where
     }
 
     fn record_event(&self, event: AdapterEvent) {
-        if let Err(err) = self.telemetry.record(&event) {
+        if let Err(err) = self.hooks.telemetry().record(&event) {
             self.handle_error(err.context("failed to record vtcode-llm adapter telemetry event"));
         }
     }
 
     fn capture_error_message(&self, error: &Error) -> String {
-        let message = self.error_formatter.format_error(error).into_owned();
-        let _ = self.error_reporter.capture(error);
+        let message = self.hooks.error_formatter().format_error(error).into_owned();
+        let _ = self.hooks.error_reporter().capture(error);
         message
     }
 
@@ -215,55 +213,40 @@ where
         // Best-effort recording of the formatted message; ignore additional
         // failures to avoid recursive error handling loops.
         let _ = self
-            .telemetry
+            .hooks
+            .telemetry()
             .record(&AdapterEvent::AdapterError { message });
     }
 
     fn handle_error(&self, error: Error) {
         let message = self.capture_error_message(&error);
         let _ = self
-            .telemetry
+            .hooks
+            .telemetry()
             .record(&AdapterEvent::TelemetryFailure { message });
     }
 }
 
-struct HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
-{
+struct HookedConfigProjectionCtx<'source, 'hooks, Hooks: AdapterHooksProvider> {
     source: &'source dyn ProviderConfig,
-    hooks: &'hooks AdapterHooks<'hooks, Paths, Telemetry, Reporter, Formatter>,
+    hooks: &'hooks AdapterHooks<'hooks, Hooks>,
 }
 
 struct HookedConfigProjection;
 
-impl<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
+impl<'source, 'hooks, Hooks: AdapterHooksProvider>
     HasComponent<FactoryConfigProjectionComponent>
-    for HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
+    for HookedConfigProjectionCtx<'source, 'hooks, Hooks>
 {
     type Provider = HookedConfigProjection;
 }
 
-impl<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
-    FactoryConfigProjectionProvider<
-        HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>,
-    > for HookedConfigProjection
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
+impl<'source, 'hooks, Hooks: AdapterHooksProvider>
+    FactoryConfigProjectionProvider<HookedConfigProjectionCtx<'source, 'hooks, Hooks>>
+    for HookedConfigProjection
 {
     fn project(
-        ctx: &HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>,
+        ctx: &HookedConfigProjectionCtx<'source, 'hooks, Hooks>,
     ) -> vtcode_core::llm::factory::ProviderConfig {
         let mut config =
             BorrowedConfigProjectionCtx { source: ctx.source }.project_factory_config();
@@ -276,16 +259,10 @@ where
 
 /// Convert a [`ProviderConfig`] into the factory configuration using the
 /// supplied adapter hooks for workspace, telemetry, and error integration.
-pub fn as_factory_config_with_hooks<'a, Paths, Telemetry, Reporter, Formatter>(
+pub fn as_factory_config_with_hooks<'a, Hooks: AdapterHooksProvider>(
     source: &dyn ProviderConfig,
-    hooks: &AdapterHooks<'a, Paths, Telemetry, Reporter, Formatter>,
-) -> vtcode_core::llm::factory::ProviderConfig
-where
-    Paths: WorkspacePaths + ?Sized,
-    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
-    Reporter: ErrorReporter + ?Sized,
-    Formatter: ErrorFormatter + ?Sized,
-{
+    hooks: &AdapterHooks<'a, Hooks>,
+) -> vtcode_core::llm::factory::ProviderConfig {
     HookedConfigProjectionCtx { source, hooks }.project_factory_config()
 }
 
@@ -400,6 +377,63 @@ mod tests {
         }
     }
 
+    /// Test harness that bundles all adapter hook dependencies into a single
+    /// struct, demonstrating the Config Trait pattern.
+    struct TestHooks {
+        paths: TestPaths,
+        telemetry: RecordingTelemetry,
+        reporter: RecordingReporter,
+        formatter: RecordingFormatter,
+    }
+
+    impl AdapterHooksProvider for TestHooks {
+        type Paths = TestPaths;
+        type Telemetry = RecordingTelemetry;
+        type Reporter = RecordingReporter;
+        type Formatter = RecordingFormatter;
+
+        fn workspace_paths(&self) -> &TestPaths {
+            &self.paths
+        }
+        fn telemetry(&self) -> &RecordingTelemetry {
+            &self.telemetry
+        }
+        fn error_reporter(&self) -> &RecordingReporter {
+            &self.reporter
+        }
+        fn error_formatter(&self) -> &RecordingFormatter {
+            &self.formatter
+        }
+    }
+
+    /// Test harness that uses a failing telemetry sink.
+    struct FailingHooks {
+        paths: TestPaths,
+        telemetry: FailingTelemetry,
+        reporter: RecordingReporter,
+        formatter: RecordingFormatter,
+    }
+
+    impl AdapterHooksProvider for FailingHooks {
+        type Paths = TestPaths;
+        type Telemetry = FailingTelemetry;
+        type Reporter = RecordingReporter;
+        type Formatter = RecordingFormatter;
+
+        fn workspace_paths(&self) -> &TestPaths {
+            &self.paths
+        }
+        fn telemetry(&self) -> &FailingTelemetry {
+            &self.telemetry
+        }
+        fn error_reporter(&self) -> &RecordingReporter {
+            &self.reporter
+        }
+        fn error_formatter(&self) -> &RecordingFormatter {
+            &self.formatter
+        }
+    }
+
     #[test]
     fn applies_workspace_paths_to_prompt_cache() {
         let temp_dir = TempDir::new().unwrap();
@@ -409,15 +443,17 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         std::fs::create_dir_all(&cache).unwrap();
 
-        let paths = TestPaths {
-            root,
-            config,
-            cache,
+        let hooks = TestHooks {
+            paths: TestPaths {
+                root,
+                config,
+                cache,
+            },
+            telemetry: RecordingTelemetry::default(),
+            reporter: RecordingReporter::default(),
+            formatter: RecordingFormatter::default(),
         };
-        let telemetry = RecordingTelemetry::default();
-        let reporter = RecordingReporter::default();
-        let formatter = RecordingFormatter::default();
-        let hooks = AdapterHooks::new(&paths, &telemetry, &reporter, &formatter);
+        let adapter = AdapterHooks::new(&hooks);
 
         let prompt_cache = PromptCachingConfig {
             cache_dir: "relative/cache".to_string(),
@@ -425,12 +461,12 @@ mod tests {
         };
 
         let config = OwnedProviderConfig::new().with_prompt_cache(prompt_cache);
-        let adapted = as_factory_config_with_hooks(&config, &hooks);
+        let adapted = as_factory_config_with_hooks(&config, &adapter);
 
         let prompt_cache = adapted.prompt_cache.expect("prompt cache present");
         assert!(prompt_cache.cache_dir.ends_with("relative/cache"));
 
-        let events = telemetry.events.lock().unwrap();
+        let events = hooks.telemetry.events.lock().unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
             AdapterEvent::PromptCacheResolved { scope, cache_dir } => {
@@ -450,32 +486,37 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         std::fs::create_dir_all(&cache).unwrap();
 
-        let paths = TestPaths {
-            root,
-            config,
-            cache,
+        let hooks = FailingHooks {
+            paths: TestPaths {
+                root,
+                config,
+                cache,
+            },
+            telemetry: {
+                let t = FailingTelemetry::default();
+                *t.fail_next.lock().unwrap() = true;
+                t
+            },
+            reporter: RecordingReporter::default(),
+            formatter: RecordingFormatter::default(),
         };
-        let telemetry = FailingTelemetry::default();
-        *telemetry.fail_next.lock().unwrap() = true;
-        let reporter = RecordingReporter::default();
-        let formatter = RecordingFormatter::default();
-        let hooks = AdapterHooks::new(&paths, &telemetry, &reporter, &formatter);
+        let adapter = AdapterHooks::new(&hooks);
 
         let prompt_cache = PromptCachingConfig {
             cache_dir: "relative/cache".to_string(),
             ..PromptCachingConfig::default()
         };
         let config = OwnedProviderConfig::new().with_prompt_cache(prompt_cache);
-        let _ = as_factory_config_with_hooks(&config, &hooks);
+        let _ = as_factory_config_with_hooks(&config, &adapter);
 
         // Ensure the error reporter observed the telemetry failure and the
         // formatter was invoked to produce a fallback message.
-        assert_eq!(reporter.errors.lock().unwrap().len(), 1);
-        assert_eq!(formatter.messages.lock().unwrap().len(), 1);
+        assert_eq!(hooks.reporter.errors.lock().unwrap().len(), 1);
+        assert_eq!(hooks.formatter.messages.lock().unwrap().len(), 1);
 
         // The fallback telemetry event should succeed after the initial
         // failure flag is cleared.
-        let events = telemetry.events.lock().unwrap();
+        let events = hooks.telemetry.events.lock().unwrap();
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0], AdapterEvent::TelemetryFailure { .. }));
     }

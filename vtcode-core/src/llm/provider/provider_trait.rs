@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::RwLock;
+use vtcode_commons::llm::BackendKind;
 
 use super::{
     LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
@@ -123,6 +124,35 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
 pub trait LLMProvider: Send + Sync {
     /// Provider name (e.g., "gemini", "openai", "anthropic")
     fn name(&self) -> &str;
+
+    /// The canonical backend kind for this provider.
+    ///
+    /// Defaults to matching on [`name()`](LLMProvider::name) against the
+    /// well-known provider names. Providers should override this when their
+    /// name does not match the canonical mapping (e.g., dynamic names).
+    fn backend_kind(&self) -> BackendKind {
+        match self.name() {
+            "gemini" => BackendKind::Gemini,
+            "openai" => BackendKind::OpenAI,
+            "anthropic" => BackendKind::Anthropic,
+            "deepseek" => BackendKind::DeepSeek,
+            "mistral" => BackendKind::Mistral,
+            "openrouter" => BackendKind::OpenRouter,
+            "ollama" => BackendKind::Ollama,
+            "llamacpp" => BackendKind::LlamaCpp,
+            "zai" => BackendKind::ZAI,
+            "moonshot" => BackendKind::Moonshot,
+            "huggingface" => BackendKind::HuggingFace,
+            "minimax" => BackendKind::Minimax,
+            "mimo" => BackendKind::MiMo,
+            "opencode-zen" => BackendKind::OpenCodeZen,
+            "opencode-go" => BackendKind::OpenCodeGo,
+            "qwen" => BackendKind::Qwen,
+            "stepfun" => BackendKind::StepFun,
+            "poolside" => BackendKind::Poolside,
+            _ => BackendKind::OpenAI,
+        }
+    }
 
     /// Whether the provider has native streaming support
     fn supports_streaming(&self) -> bool {

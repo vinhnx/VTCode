@@ -153,7 +153,7 @@ impl LoopDetector {
     }
 
     pub fn with_max_repeated_calls(limit: usize) -> Self {
-        let normalized_limit = if limit > 1 { Some(limit) } else { None };
+        let normalized_limit = (limit > 1).then_some(limit);
         Self {
             recent_calls: VecDeque::with_capacity(DETECTION_WINDOW),
             tool_counts: HashMap::new(),

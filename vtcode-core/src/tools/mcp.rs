@@ -55,20 +55,29 @@ pub fn model_visible_mcp_tool_name(provider: &str, tool_name: &str) -> String {
     format!("{prefix}_{hash}")
 }
 
-fn sanitize_tool_segment(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-            out.push(ch);
-        } else {
-            out.push('_');
-        }
+fn sanitize_tool_segment(input: &str) -> Cow<'_, str> {
+    if input.is_empty() {
+        return Cow::Borrowed("tool");
     }
 
-    if out.is_empty() {
-        "tool".to_string()
-    } else {
-        out
+    let first_bad = input
+        .bytes()
+        .position(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'-');
+
+    match first_bad {
+        None => Cow::Borrowed(input),
+        Some(pos) => {
+            let mut out = String::with_capacity(input.len());
+            out.push_str(&input[..pos]);
+            for ch in input[pos..].chars() {
+                if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                    out.push(ch);
+                } else {
+                    out.push('_');
+                }
+            }
+            Cow::Owned(out)
+        }
     }
 }
 

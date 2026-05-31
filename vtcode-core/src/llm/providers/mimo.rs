@@ -11,7 +11,6 @@ use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
-use crate::llm::types as llm_types;
 
 use super::{
     common::{
@@ -430,10 +429,6 @@ impl LLMClient for MiMoProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = super::common::make_default_request(prompt, &self.model);
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::MiMo
     }
 
     fn model_id(&self) -> &str {

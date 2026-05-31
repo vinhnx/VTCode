@@ -347,7 +347,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .unwrap_or_else(vtcode_config::context::default_max_context_tokens);
         let mut runtime = AgentRuntime::new(
             AgentSessionState::new(
-                SessionId::new().0,
+                SessionId::new().into_inner(),
                 config.max_conversation_turns,
                 max_tool_loops,
                 max_context_tokens,
@@ -501,7 +501,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 }
 
                 let interaction_outcome = if let Some(input) = runtime.run_until_idle() {
-                    let turn_id = SessionId::new().0;
+                    let turn_id = SessionId::new().into_inner();
                     InteractionOutcome::Continue {
                         input,
                         prompt_message_index: None,

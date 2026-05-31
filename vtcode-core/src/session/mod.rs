@@ -1,20 +1,20 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
+use std::fmt;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use crate::llm::provider::Message;
 use crate::utils::file_utils::{read_json_file_sync, write_json_file_sync};
 
 /// Session identifier for conversation persistence.
+///
+/// Follows the **newtype pattern** (Ch 3) with proper encapsulation:
+/// inner field is private, access goes through `as_str()`, `Deref`, or `Borrow`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SessionId(pub String);
-
-impl Default for SessionId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub struct SessionId(String);
 
 impl SessionId {
     pub fn new() -> Self {
@@ -23,6 +23,64 @@ impl SessionId {
 
     pub fn from_string(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Deref for SessionId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl Borrow<str> for SessionId {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for SessionId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for SessionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<String> for SessionId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for SessionId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<SessionId> for String {
+    fn from(value: SessionId) -> Self {
+        value.0
     }
 }
 
@@ -73,7 +131,7 @@ pub fn session_path(workspace_root: &Path, id: &SessionId) -> PathBuf {
     workspace_root
         .join(".vtcode")
         .join("sessions")
-        .join(format!("{}.json", id.0))
+        .join(format!("{}.json", id.as_str()))
 }
 
 #[cfg(test)]

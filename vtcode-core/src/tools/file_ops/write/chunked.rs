@@ -107,7 +107,7 @@ impl FileOpsTool {
             "file_path": file_path.to_string_lossy(),
             "bytes_written": bytes_written,
             "chunked": chunked,
-            "chunk_size": if chunked { Some(crate::config::constants::chunking::WRITE_CHUNK_SIZE) } else { None },
+            "chunk_size": chunked.then_some(crate::config::constants::chunking::WRITE_CHUNK_SIZE),
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
 

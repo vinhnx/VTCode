@@ -10,7 +10,6 @@ use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
-use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -506,10 +505,6 @@ impl LLMClient for DeepSeekProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = super::common::make_default_request(prompt, &self.model);
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::DeepSeek
     }
 
     fn model_id(&self) -> &str {

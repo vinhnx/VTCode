@@ -51,7 +51,7 @@ pub(crate) fn parse_chat_response(
                 .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
                 .collect::<Vec<_>>()
                 .join("");
-            if text.is_empty() { None } else { Some(text) }
+            (!text.is_empty()).then_some(text)
         }
         _ => None,
     };

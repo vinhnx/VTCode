@@ -184,7 +184,7 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
         .filter_map(|(index, builder)| builder.finalize(index))
         .collect();
 
-    if calls.is_empty() { None } else { Some(calls) }
+    (!calls.is_empty()).then_some(calls)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -991,7 +991,7 @@ pub fn extract_data_payload(event: &str) -> Option<String> {
         }
     }
 
-    if out.is_empty() { None } else { Some(out) }
+    (!out.is_empty()).then_some(out)
 }
 
 #[inline]

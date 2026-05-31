@@ -50,7 +50,7 @@ impl ZedAgent {
         let available_commands = build_available_commands(&slash_commands, &prompt_templates);
 
         tracing::debug!(
-            session_id = %session_id.0,
+            session_id = %session_id,
             command_count = available_commands.len(),
             slash_command_count = slash_commands.len(),
             template_count = prompt_templates.len(),

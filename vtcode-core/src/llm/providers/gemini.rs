@@ -20,7 +20,6 @@ use crate::llm::provider::{
     FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
     LLMStreamEvent, Message, MessageRole, ToolCall, ToolChoice,
 };
-use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
