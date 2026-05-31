@@ -38,6 +38,7 @@ fn handle_focus_change_event(
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 fn is_suspend_shortcut(event: &crossterm::event::Event) -> bool {
     use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
 
@@ -51,6 +52,7 @@ fn is_suspend_shortcut(event: &crossterm::event::Event) -> bool {
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
     terminal: &mut Terminal<B>,
     session: &mut S,
@@ -278,7 +280,9 @@ pub(super) struct DriveRuntimeOptions<E> {
     pub(super) event_callback: Option<super::EventCallback<E>>,
     pub(super) focus_callback: Option<FocusChangeCallback>,
     pub(super) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
+    #[allow(dead_code)]
     pub(super) use_alternate_screen: bool,
+    #[allow(dead_code)]
     pub(super) keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
     pub(super) fullscreen: FullscreenInteractionSettings,
 }
@@ -370,22 +374,6 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
                             counter.fetch_add(1, Ordering::Relaxed);
                         }
                         handle_focus_change_event(&event, runtime_options.focus_callback.as_ref());
-
-                        #[cfg(unix)]
-                        if is_suspend_shortcut(&event) {
-                            if let Err(error) = suspend_to_shell(
-                                terminal,
-                                session,
-                                inputs,
-                                &event_channels,
-                                runtime_options.use_alternate_screen,
-                                runtime_options.keyboard_flags,
-                                &runtime_options.fullscreen,
-                            ) {
-                                tracing::warn!(%error, "failed to suspend inline session");
-                            }
-                            continue 'main;
-                        }
 
                         // Skip event processing if the TUI is suspended (e.g., external editor is running)
                         if !event_channels.rx_paused.load(Ordering::Acquire) {
@@ -510,22 +498,4 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     }
 
     Ok(())
-}
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::is_suspend_shortcut;
-    use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
-
-    #[test]
-    fn ctrl_z_is_suspend_shortcut() {
-        let event = CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
-        assert!(is_suspend_shortcut(&event));
-    }
-
-    #[test]
-    fn plain_z_is_not_suspend_shortcut() {
-        let event = CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
-        assert!(!is_suspend_shortcut(&event));
-    }
 }

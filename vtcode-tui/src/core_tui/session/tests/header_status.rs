@@ -308,8 +308,7 @@ fn question_mark_opens_help_overlay_when_input_is_empty() {
         modal
             .lines
             .iter()
-            .any(|line| line
-                .contains("Ctrl+A: Move to start of line • Ctrl+E: Open external editor"))
+            .any(|line| line.contains("Ctrl+G: Open external editor"))
     );
 }
 

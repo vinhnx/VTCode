@@ -274,14 +274,12 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             None
         }
-        KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command && !has_alt => {
-            if !session.input_enabled {
-                None
-            } else {
-                let draft = session.input_manager.content().to_string();
-                session.mark_dirty();
-                Some(InlineEvent::LaunchEditor { draft })
-            }
+        KeyCode::Char('g') | KeyCode::Char('G')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            let draft = session.input_manager.content().to_string();
+            session.mark_dirty();
+            Some(InlineEvent::LaunchEditor { draft })
         }
         KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
             if session.input_enabled {
@@ -307,6 +305,20 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('j') if has_control => {
             // Ctrl+J is a line feed character, insert newline for multiline input
             session.insert_char('\n');
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('z') | KeyCode::Char('Z')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            session.input_manager.undo();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('y') | KeyCode::Char('Y')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            session.input_manager.redo();
             session.mark_dirty();
             None
         }
@@ -608,13 +620,14 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
         "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
-        "Ctrl+A: Move to start of line • Ctrl+E: Open external editor.".to_string(),
+        "Ctrl+A: Move to start of line • Ctrl+E: Move to end of line.".to_string(),
+        "Ctrl+G: Open external editor.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
         "Ctrl+M: Open the model picker.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),
-        "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
+        "Ctrl+Z: Undo • Ctrl+Y: Redo.".to_string(),
         "Esc: Close this overlay.".to_string(),
     ]
 }

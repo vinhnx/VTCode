@@ -51,6 +51,7 @@ mod queue;
 pub mod render;
 mod scroll;
 pub mod styling;
+mod textarea_bridge;
 mod text_utils;
 mod transcript;
 pub mod utils;
