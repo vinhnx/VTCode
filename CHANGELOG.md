@@ -2,6 +2,30 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.116.3 - 2026-05-31
+
+### Highlights
+#### Features
+
+- Add rebindable keybinding system with config integration (ddc2d952) 
+- Implement environment variable for non-interactive trust management (ed395835) 
+- Add workspace trust management details to documentation (a135f12b) 
+- Enable auto-trust for workspace in non-interactive mode (895437d8) 
+- Update default model and increase max tool calls per turn (7f6c3414) 
+- Add new models for DeepInfra and Novita inference providers (65527ea4) 
+- Add support for launching external editor with draft text (932f7197) 
+- Add Next.js agent evaluation details and leaderboard status (7f2faf53) 
+- Update README for improved clarity and structure (bb4ee130) 
+- Enhance badge section in README for better visibility and organization (30515213) 
+- Update README for improved clarity and organization (33c4a589) 
+- Add release packaging automation and shell completions support (575e4449) 
+### Other Changes
+#### Other
+
+- Update TODO (2cb0c40b) 
+#### Refactors
+
+- Improve code formatting and readability in multiple files (a2716021) 
 ## 0.116.2 - 2026-05-31
 
 ### Highlights
