@@ -1262,23 +1262,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "creusot-std"
-version = "0.12.0-dev"
-dependencies = [
- "creusot-std-proc",
- "num-rational",
-]
-
-[[package]]
-name = "creusot-std-proc"
-version = "0.12.0-dev"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "criterion"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6876,7 +6859,6 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice-clap",
- "creusot-std",
  "criterion",
  "crossterm",
  "dialoguer",
@@ -8469,3 +8451,7 @@ dependencies = [
  "syn",
  "winnow 0.7.15",
 ]
+
+[[patch.unused]]
+name = "creusot-std"
+version = "0.12.0-dev"

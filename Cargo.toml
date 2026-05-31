@@ -38,7 +38,6 @@ unreachable = "allow"
 
 [lints.rust]
 unfulfilled_lint_expectations = "allow"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(creusot)'] }
 
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]

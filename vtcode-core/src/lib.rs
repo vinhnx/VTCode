@@ -133,10 +133,6 @@
 //! This crate provides the core functionality for the VT Code agent,
 //! including tool implementations, LLM integration, and utility functions.
 
-#[cfg(creusot)]
-#[allow(unused_imports)]
-use creusot_std::prelude::*;
-
 // Public modules
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;

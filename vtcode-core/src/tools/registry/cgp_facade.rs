@@ -271,16 +271,9 @@ struct RegistrationBackedDynTool {
 }
 
 impl RegistrationBackedDynTool {
-    #[cfg(not(creusot))]
     fn from_registration(inner: Arc<dyn Tool>, registration: &ToolRegistration) -> Self {
         let metadata =
             RegistrationMetadataSnapshot::from_registration_with_tool(registration, inner.as_ref());
-        Self { inner, metadata }
-    }
-
-    #[cfg(creusot)]
-    fn from_registration(inner: Arc<dyn Tool>, registration: &ToolRegistration) -> Self {
-        let metadata = RegistrationMetadataSnapshot::from_registration(registration);
         Self { inner, metadata }
     }
 }

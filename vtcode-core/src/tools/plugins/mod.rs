@@ -137,7 +137,6 @@ impl PluginRuntime {
         Ok(handle)
     }
 
-    #[cfg(not(creusot))]
     pub async fn attach_to_registry(
         &self,
         registry: &ToolRegistry,
@@ -152,17 +151,6 @@ impl PluginRuntime {
 
         let registration = installer.materialize(manifest).await?;
         registry.register_tool(registration).await?;
-        Ok(())
-    }
-
-    #[cfg(creusot)]
-    #[allow(unused_variables)]
-    pub async fn attach_to_registry(
-        &self,
-        _registry: &ToolRegistry,
-        manifest: &PluginManifest,
-    ) -> Result<()> {
-        self.validate_trust(manifest)?;
         Ok(())
     }
 

@@ -169,7 +169,6 @@ tokio-tungstenite = { version = "0.29", default-features = false, features = [
     "rustls-tls-webpki-roots",
 ] }
 smallvec = "1.15.1"
-creusot-std = { version = "0.12.0-dev", optional = true }
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.116.2" }
@@ -196,7 +195,6 @@ path = "examples/migration_test.rs"
 [features]
 default = ["tui"]
 tui = ["dep:crossterm"]
-creusot = ["dep:creusot-std"]
 schema = ["dep:schemars", "vtcode-config/schema"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 anthropic-api = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
@@ -236,4 +234,3 @@ unreachable = "allow"
 
 [lints.rust]
 unfulfilled_lint_expectations = "allow"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(creusot)'] }

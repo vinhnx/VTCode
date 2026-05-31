@@ -18,7 +18,6 @@ use super::tool_handler::{
 };
 
 /// Context for emitting tool events
-#[cfg(not(creusot))]
 pub struct ToolEventCtx<'a> {
     pub session: &'a dyn ToolSession,
     pub turn: &'a TurnContext,
@@ -26,16 +25,7 @@ pub struct ToolEventCtx<'a> {
     pub turn_diff_tracker: Option<&'a Arc<tokio::sync::Mutex<DiffTracker>>>,
 }
 
-#[cfg(creusot)]
-pub struct ToolEventCtx<'a> {
-    pub session: &'a (),
-    pub turn: &'a TurnContext,
-    pub call_id: &'a str,
-    pub turn_diff_tracker: Option<&'a Arc<tokio::sync::Mutex<DiffTracker>>>,
-}
-
 impl<'a> ToolEventCtx<'a> {
-    #[cfg(not(creusot))]
     pub fn new(
         session: &'a dyn ToolSession,
         turn: &'a TurnContext,
@@ -44,21 +34,6 @@ impl<'a> ToolEventCtx<'a> {
     ) -> Self {
         Self {
             session,
-            turn,
-            call_id,
-            turn_diff_tracker: tracker,
-        }
-    }
-
-    #[cfg(creusot)]
-    pub fn new<S: ?Sized>(
-        _session: &'a S,
-        turn: &'a TurnContext,
-        call_id: &'a str,
-        tracker: Option<&'a Arc<tokio::sync::Mutex<DiffTracker>>>,
-    ) -> Self {
-        Self {
-            session: &(),
             turn,
             call_id,
             turn_diff_tracker: tracker,
@@ -188,12 +163,6 @@ impl ToolEmitter {
 
     /// Emit event for current stage
     pub async fn emit(&self, ctx: ToolEventCtx<'_>, stage: ToolEventStage) {
-        #[cfg(creusot)]
-        {
-            let _ = (ctx, stage);
-        }
-
-        #[cfg(not(creusot))]
         match (self, &stage) {
             // Apply patch begin
             (
@@ -402,12 +371,6 @@ impl ToolEmitter {
         stderr: String,
         success: bool,
     ) {
-        #[cfg(creusot)]
-        {
-            let _ = (ctx, stdout, stderr, success);
-        }
-
-        #[cfg(not(creusot))]
         // Update diff tracker
         {
             if let Some(tracker) = ctx.turn_diff_tracker {

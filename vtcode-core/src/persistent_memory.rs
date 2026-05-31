@@ -1962,25 +1962,6 @@ async fn classify_facts_strict(
 
 /// Try a memory LLM operation with primary route, falling back to the fallback route on error.
 /// This macro expands to the full routing/fallback pattern used by all memory LLM calls.
-#[cfg(creusot)]
-macro_rules! try_with_memory_routes {
-    ($runtime_config:expr, $vt_cfg:expr, $workspace_root:expr, $phase:expr, $provider_fn:expr) => {
-        async {
-            let _ = (
-                $runtime_config,
-                $vt_cfg,
-                $workspace_root,
-                $phase,
-                $provider_fn,
-            );
-            Err(anyhow!(
-                "persistent memory routing is unavailable in creusot builds"
-            ))
-        }
-    };
-}
-
-#[cfg(not(creusot))]
 macro_rules! try_with_memory_routes {
     ($runtime_config:expr, $vt_cfg:expr, $workspace_root:expr, $phase:expr, $provider_fn:expr) => {
         async {
@@ -2010,7 +1991,6 @@ macro_rules! try_with_memory_routes {
     };
 }
 
-#[cfg(not(creusot))]
 async fn classify_facts_with_llm(
     runtime_config: Option<&RuntimeAgentConfig>,
     vt_cfg: Option<&VTCodeConfig>,
@@ -2029,18 +2009,6 @@ async fn classify_facts_with_llm(
         }
     )
     .await
-}
-
-#[cfg(creusot)]
-async fn classify_facts_with_llm(
-    _runtime_config: Option<&RuntimeAgentConfig>,
-    _vt_cfg: Option<&VTCodeConfig>,
-    _workspace_root: &Path,
-    _candidates: &[GroundedFactRecord],
-) -> Result<ClassifiedFacts> {
-    Err(anyhow!(
-        "persistent memory classification is unavailable in creusot builds"
-    ))
 }
 
 async fn classify_facts_with_provider(
@@ -2144,7 +2112,6 @@ async fn classify_facts_with_provider(
     })
 }
 
-#[cfg(not(creusot))]
 async fn summarize_memory(
     runtime_config: Option<&RuntimeAgentConfig>,
     vt_cfg: Option<&VTCodeConfig>,
@@ -2172,18 +2139,6 @@ async fn summarize_memory(
     )
     .await
     .ok()
-}
-
-#[cfg(creusot)]
-async fn summarize_memory(
-    _runtime_config: Option<&RuntimeAgentConfig>,
-    _vt_cfg: Option<&VTCodeConfig>,
-    _workspace_root: &Path,
-    _preferences: &[GroundedFactRecord],
-    _repository_facts: &[GroundedFactRecord],
-    _notes: &[MemoryNoteSummary],
-) -> Option<String> {
-    None
 }
 
 async fn summarize_memory_with_provider(
@@ -2242,7 +2197,6 @@ async fn summarize_memory_with_provider(
     Ok(render_memory_summary_bullets(&bullets))
 }
 
-#[cfg(not(creusot))]
 async fn plan_memory_operation(
     runtime_config: &RuntimeAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -2270,21 +2224,6 @@ async fn plan_memory_operation(
         }
     )
     .await
-}
-
-#[cfg(creusot)]
-async fn plan_memory_operation(
-    _runtime_config: &RuntimeAgentConfig,
-    _vt_cfg: Option<&VTCodeConfig>,
-    _workspace_root: &Path,
-    _expected_kind: MemoryOpKind,
-    _request: &str,
-    _supplemental_answer: Option<&str>,
-    _candidates: &[MemoryOpCandidate],
-) -> Result<MemoryOpPlan> {
-    Err(anyhow!(
-        "persistent memory planning is unavailable in creusot builds"
-    ))
 }
 
 async fn plan_memory_operation_with_provider(
