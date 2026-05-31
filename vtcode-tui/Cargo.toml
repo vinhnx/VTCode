@@ -38,6 +38,7 @@ ratatui = { workspace = true, features = [
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
+ratatui-textarea = { version = "0.9", default-features = false, features = ["crossterm"] }
 regex = { workspace = true }
 serde = { workspace = true }
 signal-hook = "0.4"

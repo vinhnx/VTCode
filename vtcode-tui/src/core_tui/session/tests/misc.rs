@@ -28,21 +28,21 @@ fn input_compact_preview_for_quoted_image_path() {
 }
 
 #[test]
-fn control_e_launches_editor() {
+fn control_g_launches_editor() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
+    let event = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
 
     assert!(matches!(result, Some(InlineEvent::LaunchEditor { draft }) if draft.is_empty()));
 }
 
 #[test]
-fn control_e_launches_editor_with_draft() {
+fn control_g_launches_editor_with_draft() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);
 
-    let result = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL));
 
     assert!(matches!(result, Some(InlineEvent::LaunchEditor { draft }) if draft == text));
 }
