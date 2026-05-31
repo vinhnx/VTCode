@@ -851,8 +851,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/benchmarks/README.md`
   - **Content**: VT Code Benchmarks
-  - **Topics**: Overview, HumanEval Benchmark, Contributing, References
-  - **User Questions**: "What can you tell me about VT Code Benchmarks?", "How does Overview work?", "How does HumanEval Benchmark work?"
+  - **Topics**: Overview, Next.js AI Agent Evaluations, HumanEval Benchmark, Contributing, References
+  - **User Questions**: "What can you tell me about VT Code Benchmarks?", "How does Overview work?", "How does Next.js AI Agent Evaluations work?"
 
 - **File**: `docs/benchmarks/performance_benchmarks.md`
   - **Content**: VT Code Performance Benchmarks

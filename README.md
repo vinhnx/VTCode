@@ -10,6 +10,23 @@
 
 <strong>VT Code</strong> is an open-source coding agent with LLM-native code understanding and robust shell safety. Supports multiple LLM providers with automatic failover and efficient context management.
 
+### Next.js Agent Eval
+
+VT Code has a pending submission to
+[vercel/next-evals-oss](https://github.com/vercel/next-evals-oss/pull/83), the
+benchmark behind the [Next.js AI Agent Evaluations leaderboard](https://nextjs.org/evals).
+
+| Agent       | Model                         | Status      | Success Rate | Passed | Avg Duration |
+| ----------- | ----------------------------- | ----------- | ------------ | ------ | ------------ |
+| **VT Code** | `moonshotai/Kimi-K2.6:novita` | **Pending** | **33%**      | 8/24   | 90.5s        |
+
+```text
+Next.js eval success rate
+VT Code + Kimi K2.6  ████████░░░░░░░░░░░░░░░░  33%
+```
+
+See the detailed [benchmark notes](./docs/benchmarks/README.md#nextjs-ai-agent-evaluations).
+
 <p align="center">
   <img src="./resources/gif/vtcode.gif" alt="VT Code" />
 </p>

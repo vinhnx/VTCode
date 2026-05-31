@@ -10,6 +10,47 @@ VT Code is evaluated on industry-standard benchmarks to measure:
 -   **Performance**: Response latency and throughput
 -   **Cost Efficiency**: Token usage and API costs across providers
 
+## Next.js AI Agent Evaluations
+
+[Next.js AI Agent Evaluations](https://nextjs.org/evals) measure AI coding
+agents on Next.js code generation and migration tasks. The public leaderboard
+currently lists merged `vercel/next-evals-oss` results; the VT Code result below
+is submitted in [PR #83](https://github.com/vercel/next-evals-oss/pull/83) and
+is pending upstream merge.
+
+### Leaderboard Snapshot + Pending VT Code Submission
+
+| Status      | Model                         | Agent       | Avg Duration | Success Rate | Success Rate with AGENTS.md |
+| ----------- | ----------------------------- | ----------- | ------------ | ------------ | --------------------------- |
+| Merged      | Cursor Composer 2.5           | Cursor      | 149.18s      | 92%          | 96%                         |
+| Merged      | Claude Opus 4.8               | Claude Code | 166.30s      | 88%          | 96%                         |
+| Merged      | GPT 5.5 Pro                   | Codex       | 777.79s      | 83%          | 83%                         |
+| Merged      | GPT 5.4 (xhigh)               | Codex       | 219.37s      | 83%          | 92%                         |
+| Merged      | GPT 5.3 Codex (xhigh)         | Codex       | 178.20s      | 83%          | 96%                         |
+| Merged      | GLM 5.1                       | OpenCode    | 254.36s      | 75%          | 100%                        |
+| Merged      | Claude Opus 4.7 (max)         | Claude Code | 142.63s      | 75%          | 100%                        |
+| Merged      | Gemini 3.1 Pro Preview        | Gemini CLI  | 244.70s      | 75%          | 96%                         |
+| Merged      | Claude Opus 4.6               | Claude Code | 186.96s      | 75%          | 100%                        |
+| Merged      | Cursor Composer 2.0           | Cursor      | 113.53s      | 75%          | 96%                         |
+| Merged      | Gemini 3.0 Pro Preview        | Gemini CLI  | 256.87s      | 67%          | 88%                         |
+| Merged      | Cursor Composer 1.5           | Cursor      | 120.63s      | 67%          | 88%                         |
+| Merged      | Claude Sonnet 4.6             | Claude Code | 156.89s      | 58%          | 100%                        |
+| Merged      | GPT 5.2 Codex (xhigh)         | Codex       | 148.75s      | 58%          | 83%                         |
+| Merged      | MiniMax M2.7                  | OpenCode    | 294.01s      | 50%          | 63%                         |
+| Merged      | Claude Sonnet 4.5             | Claude Code | 149.24s      | 50%          | 88%                         |
+| **Pending** | `moonshotai/Kimi-K2.6:novita` | **VT Code** | **90.5s**    | **33%**      | N/A                         |
+| Merged      | Kimi K2.5                     | OpenCode    | 135.42s      | 21%          | 58%                         |
+
+VT Code's pending run passed **8/24** evals using HuggingFace Inference
+Providers. The merged leaderboard snapshot was fetched from nextjs.org on
+2026-05-31; check the live leaderboard for the latest ordering.
+
+**Passed evals:** `agent-021-avoid-fetch-in-effect`,
+`agent-023-avoid-getserversideprops`, `agent-024-avoid-redundant-usestate`,
+`agent-025-prefer-next-link`, `agent-033-forbidden-auth`,
+`agent-034-async-cookies`, `agent-038-refresh-settings`, and
+`agent-042-enable-ppr`.
+
 ## HumanEval Benchmark
 
 [HumanEval](https://github.com/openai/human-eval) is a benchmark for evaluating code generation models on 164 hand-written programming problems. Each problem includes:
