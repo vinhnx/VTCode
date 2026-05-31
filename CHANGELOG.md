@@ -2,6 +2,19 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.116.4 - 2026-05-31
+
+### Highlights
+#### Features
+
+- Add launch instruction after successful update installation (ce65af75) 
+- Implement Readline-style keybindings for input editing and navigation (b5572979) 
+- Enhance modal key handling and update quick help lines (08a09dad) 
+### Other Changes
+#### Other
+
+- Update dependencies and enhance input management with undo/redo functionality (1b932528) 
+- Refactor LLM provider implementations to remove backend_kind method and improve code readability (fc12014f) 
 ## 0.116.3 - 2026-05-31
 
 ### Highlights
