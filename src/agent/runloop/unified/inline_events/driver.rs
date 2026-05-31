@@ -216,6 +216,7 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::ForkSession { .. } => None,
             InlineLoopAction::PlanApproved { .. } => None,
             InlineLoopAction::PlanEditRequested => None,
+            InlineLoopAction::LaunchEditorWithDraft { .. } => None,
             InlineLoopAction::DiffApproved => None,
             InlineLoopAction::DiffRejected => None,
         }

@@ -155,9 +155,12 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::BackgroundOperation => self
                 .input_processor()
                 .submit("/subprocesses toggle".to_string()),
-            InlineEvent::LaunchEditor => {
-                // Ctrl+E pressed: submit /edit command
-                self.input_processor().submit("/edit".to_string())
+            InlineEvent::LaunchEditor { draft } => {
+                if draft.is_empty() {
+                    self.input_processor().submit("/edit".to_string())
+                } else {
+                    InlineLoopAction::LaunchEditorWithDraft { draft }
+                }
             }
             InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 self.state.reset_interrupt_state();

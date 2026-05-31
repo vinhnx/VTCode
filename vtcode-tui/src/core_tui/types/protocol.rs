@@ -130,7 +130,9 @@ pub enum InlineEvent {
     ScrollPageDown,
     OpenFileInEditor(String),
     OpenUrl(String),
-    LaunchEditor,
+    LaunchEditor {
+        draft: String,
+    },
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).

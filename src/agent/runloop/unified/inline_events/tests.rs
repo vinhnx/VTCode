@@ -146,12 +146,56 @@ async fn launch_editor_event_submits_edit_command() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(InlineEvent::LaunchEditor, &mut queue)
+        .process_event(InlineEvent::LaunchEditor { draft: "".to_string() }, &mut queue)
         .await
         .expect("process launch editor");
     assert!(matches!(
         action,
         InlineLoopAction::Submit(ref command) if command == "/edit"
+    ));
+}
+
+#[tokio::test]
+async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        0,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+    let action = context
+        .process_event(InlineEvent::LaunchEditor { draft: "hello world".to_string() }, &mut queue)
+        .await
+        .expect("process launch editor with draft");
+    assert!(matches!(
+        action,
+        InlineLoopAction::LaunchEditorWithDraft { ref draft } if draft == "hello world"
     ));
 }
 
