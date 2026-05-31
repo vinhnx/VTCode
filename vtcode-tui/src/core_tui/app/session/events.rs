@@ -333,13 +333,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command && !has_alt => {
             if !session.core.input_enabled() {
                 None
-            } else if session.core.input_manager.content().is_empty() {
-                session.mark_dirty();
-                Some(InlineEvent::LaunchEditor)
             } else {
-                session.move_to_end();
+                let draft = session.core.input_manager.content().to_string();
                 session.mark_dirty();
-                None
+                Some(InlineEvent::LaunchEditor { draft })
             }
         }
         KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
@@ -828,7 +825,7 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
         "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
-        "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
+        "Ctrl+A: Move to start of line • Ctrl+E: Open external editor.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),

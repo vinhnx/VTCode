@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -196,6 +197,59 @@ async fn open_transcript_review_in_editor(
         tracing::debug!(%err, path = %path.display(), "failed to remove transcript review temp file");
     }
 
+    Ok(())
+}
+
+async fn launch_input_editor_with_draft(
+    ctx: &mut InteractionLoopContext<'_>,
+    draft: &str,
+) -> Result<()> {
+    let editor_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|config| config.tools.editor.clone())
+        .unwrap_or_default();
+    if !editor_config.enabled {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            "External editor is disabled (`tools.editor.enabled = false`).",
+        )?;
+        return Ok(());
+    }
+
+    let mut temp = tempfile::NamedTempFile::new()?;
+    temp.write_all(draft.as_bytes())?;
+    temp.flush()?;
+    let (_, path) = temp.keep()?;
+    let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
+    let launch_config = review_editor_launch_config(&editor_config);
+    let result = run_with_event_loop_suspended(ctx.handle, editor_config.suspend_tui, || {
+        launcher.launch_editor_with_config(Some(path.clone()), launch_config)
+    })
+    .await;
+
+    let (message_style, message) = match result {
+        Ok(_) => {
+            let content = fs::read_to_string(&path)
+                .with_context(|| format!("failed to read edited content from {}", path.display()))?;
+            ctx.handle.set_input(content);
+            (
+                MessageStyle::Info,
+                "Editor closed. Input updated with edited content.".to_owned(),
+            )
+        }
+        Err(err) => (
+            MessageStyle::Error,
+            format!("Failed to launch editor: {}", err),
+        ),
+    };
+
+    if let Err(err) = fs::remove_file(&path) {
+        tracing::debug!(%err, path = %path.display(), "failed to remove input editor temp file");
+    }
+
+    ctx.handle.force_redraw();
+    ctx.renderer.line(message_style, &message)?;
     Ok(())
 }
 
@@ -741,6 +795,10 @@ pub(super) async fn resolve_inline_loop_action(
             } else {
                 InlineLoopActionResolution::ContinueLoop
             }
+        }
+        InlineLoopAction::LaunchEditorWithDraft { draft } => {
+            launch_input_editor_with_draft(ctx, &draft).await?;
+            InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
             InlineLoopActionResolution::ContinueLoop

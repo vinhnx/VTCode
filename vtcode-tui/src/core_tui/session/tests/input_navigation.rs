@@ -189,7 +189,7 @@ fn super_arrow_right_moves_cursor_to_end() {
 
     assert_eq!(session.cursor(), text.len());
     // Ensure Command+Right does NOT launch editor
-    assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+    assert!(!matches!(result, Some(InlineEvent::LaunchEditor { .. })));
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn control_alt_e_does_not_launch_editor() {
     );
     let result = session.process_key(event);
 
-    assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+    assert!(!matches!(result, Some(InlineEvent::LaunchEditor { .. })));
 }
 
 #[test]
@@ -306,5 +306,5 @@ fn control_super_e_does_not_launch_editor() {
     let result = session.process_key(event);
 
     // Should not launch editor when both Control and Super (Cmd) are pressed
-    assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+    assert!(!matches!(result, Some(InlineEvent::LaunchEditor { .. })));
 }

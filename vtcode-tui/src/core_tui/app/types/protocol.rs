@@ -134,7 +134,9 @@ pub enum InlineEvent {
     FileSelected(String),
     OpenFileInEditor(String),
     OpenUrl(String),
-    LaunchEditor,
+    LaunchEditor {
+        draft: String,
+    },
     OpenTranscriptReviewInEditor(String),
     OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
@@ -170,7 +172,9 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
                 Self::OpenFileInEditor(path)
             }
             crate::core_tui::types::InlineEvent::OpenUrl(url) => Self::OpenUrl(url),
-            crate::core_tui::types::InlineEvent::LaunchEditor => Self::LaunchEditor,
+            crate::core_tui::types::InlineEvent::LaunchEditor { draft } => {
+                Self::LaunchEditor { draft }
+            }
             crate::core_tui::types::InlineEvent::ForceCancelPtySession => {
                 Self::ForceCancelPtySession
             }

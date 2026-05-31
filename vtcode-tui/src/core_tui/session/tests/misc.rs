@@ -34,18 +34,17 @@ fn control_e_launches_editor() {
     let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
 
-    assert!(matches!(result, Some(InlineEvent::LaunchEditor)));
+    assert!(matches!(result, Some(InlineEvent::LaunchEditor { draft }) if draft.is_empty()));
 }
 
 #[test]
-fn control_e_moves_cursor_to_end_when_input_has_content() {
+fn control_e_launches_editor_with_draft() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);
 
     let result = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
 
-    assert!(result.is_none());
-    assert_eq!(session.cursor(), text.len());
+    assert!(matches!(result, Some(InlineEvent::LaunchEditor { draft }) if draft == text));
 }
 
 #[test]
@@ -135,7 +134,7 @@ fn arrow_keys_never_launch_editor() {
         let event = KeyEvent::new(KeyCode::Right, modifiers);
         let result = session.process_key(event);
         assert!(
-            !matches!(result, Some(InlineEvent::LaunchEditor)),
+            !matches!(result, Some(InlineEvent::LaunchEditor { .. })),
             "Right arrow with modifiers {:?} should not launch editor",
             modifiers
         );
@@ -146,7 +145,7 @@ fn arrow_keys_never_launch_editor() {
         let event = KeyEvent::new(key_code, KeyModifiers::SUPER);
         let result = session.process_key(event);
         assert!(
-            !matches!(result, Some(InlineEvent::LaunchEditor)),
+            !matches!(result, Some(InlineEvent::LaunchEditor { .. })),
             "{:?} with SUPER should not launch editor",
             key_code
         );
