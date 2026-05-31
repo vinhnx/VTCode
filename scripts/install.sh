@@ -27,6 +27,7 @@ GITHUB_API="https://api.github.com/repos/$REPO/releases?per_page=10"
 GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 WITH_AST_GREP=0
 WITH_SEARCH_TOOLS=1
+WITH_COMPLETIONS=0
 
 # Ensure INSTALL_DIR exists
 mkdir -p "$INSTALL_DIR"
@@ -217,7 +218,7 @@ get_download_url() {
 
     # Strip 'v' prefix from tag for filename only
     local version_tag="${release_tag#v}"
-    local filename="vtcode-${version_tag}-${platform}.${file_ext}"
+    local filename="vtcode-${platform}-v${version_tag}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
 }
 
@@ -343,7 +344,8 @@ verify_checksum() {
     log_success "Checksum verified: $expected_checksum"
 }
 
-# Extract binary from archive
+# Extract binary from archive.
+# Sets EXTRACTED_BINARY_PATH and EXTRACTED_TEMP_DIR as global variables.
 extract_binary() {
     local archive="$1"
     local platform="$2"
@@ -375,7 +377,8 @@ extract_binary() {
         exit 1
     fi
     
-    echo "$binary_path"
+    EXTRACTED_BINARY_PATH="$binary_path"
+    EXTRACTED_TEMP_DIR="$temp_dir"
 }
 
 # Install binary to target directory
@@ -423,6 +426,58 @@ install_ghostty_runtime_libraries() {
     fi
 
     log_success "Ghostty VT runtime libraries installed to $runtime_target"
+}
+
+install_man_and_completions() {
+    local archive_source="$1"
+    local install_dir="$2"
+
+    local man_source="$archive_source/man/man1/vtcode.1"
+    local completions_source="$archive_source/completions"
+
+    if [[ ! -f "$man_source" && ! -d "$completions_source" ]]; then
+        log_warning "Archive does not include man page or shell completions"
+        return 0
+    fi
+
+    local share_dir
+    share_dir="$(dirname "$install_dir")/share"
+
+    if [[ -f "$man_source" ]]; then
+        local man_dir="$share_dir/man/man1"
+        mkdir -p "$man_dir"
+        cp "$man_source" "$man_dir/vtcode.1"
+        log_success "Man page installed to $man_dir/vtcode.1"
+    fi
+
+    if [[ -d "$completions_source" ]]; then
+        if [[ -f "$completions_source/bash/vtcode" ]]; then
+            local bash_dir="$share_dir/bash-completion/completions"
+            mkdir -p "$bash_dir"
+            cp "$completions_source/bash/vtcode" "$bash_dir/vtcode"
+            log_success "Bash completions installed to $bash_dir/vtcode"
+        fi
+
+        if [[ -f "$completions_source/zsh/_vtcode" ]]; then
+            local zsh_dir="$share_dir/zsh/site-functions"
+            mkdir -p "$zsh_dir"
+            cp "$completions_source/zsh/_vtcode" "$zsh_dir/_vtcode"
+            log_success "Zsh completions installed to $zsh_dir/_vtcode"
+        fi
+
+        if [[ -f "$completions_source/fish/vtcode.fish" ]]; then
+            local fish_dir="$share_dir/fish/vendor_completions.d"
+            mkdir -p "$fish_dir"
+            cp "$completions_source/fish/vtcode.fish" "$fish_dir/vtcode.fish"
+            log_success "Fish completions installed to $fish_dir/vtcode.fish"
+        fi
+    fi
+
+    echo ""
+    log_info "To enable completions, add to your shell config:"
+    log_info "  Bash:  source $share_dir/bash-completion/completions/vtcode"
+    log_info "  Zsh:   fpath=($share_dir/zsh/site-functions \$fpath)"
+    log_info "  Fish:  fish_add_path $share_dir/fish/vendor_completions.d"
 }
 
 # Check if install directory is in PATH
@@ -545,13 +600,18 @@ main() {
     verify_checksum "$archive_file" "$release_tag" "$(basename "$download_url")"
 
     # Extract binary
-    local binary_path
-    binary_path=$(extract_binary "$archive_file" "$platform")
+    extract_binary "$archive_file" "$platform"
+    local binary_path="$EXTRACTED_BINARY_PATH"
+    local extract_dir="$EXTRACTED_TEMP_DIR"
 
     # Install binary
     local target_path="$INSTALL_DIR/$BIN_NAME"
     install_binary "$binary_path" "$target_path"
     install_ghostty_runtime_libraries "$binary_path" "$INSTALL_DIR"
+
+    if [[ "$WITH_COMPLETIONS" -eq 1 ]]; then
+        install_man_and_completions "$extract_dir" "$INSTALL_DIR"
+    fi
 
     # Check if in PATH
     if ! check_path "$INSTALL_DIR"; then
@@ -601,12 +661,14 @@ Options:
   --with-search-tools Install ripgrep and ast-grep after VT Code is installed (default)
   --without-search-tools Skip ripgrep and ast-grep during install
   --with-ast-grep    Install VT Code-managed ast-grep after VT Code is installed
+  --with-completions Install man page and shell completions (bash/zsh/fish)
   -h, --help         Show this help message
 
 Examples:
   ./install.sh                           # Install VT Code plus ripgrep and ast-grep
   ./install.sh --without-search-tools    # Install VT Code only
   ./install.sh --with-ast-grep           # Install VT Code and managed ast-grep only
+  ./install.sh --with-completions        # Install with man page and shell completions
   ./install.sh --dir /usr/local/bin    # Install to /usr/local/bin (may need sudo)
 
 Environment variables:
@@ -637,6 +699,10 @@ while [[ $# -gt 0 ]]; do
         --without-search-tools)
             WITH_SEARCH_TOOLS=0
             WITH_AST_GREP=0
+            shift
+            ;;
+        --with-completions)
+            WITH_COMPLETIONS=1
             shift
             ;;
         *)

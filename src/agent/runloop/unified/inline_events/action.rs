@@ -24,5 +24,7 @@ pub(crate) enum InlineLoopAction {
     /// Diff preview rejected - cancel the edit changes
     DiffRejected,
     /// Launch external editor pre-populated with the given draft text
-    LaunchEditorWithDraft { draft: String },
+    LaunchEditorWithDraft {
+        draft: String,
+    },
 }

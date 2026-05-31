@@ -54,6 +54,7 @@ serde = { version = "1.0", features = ["derive"] }
 regex = "1.12"
 num_cpus = "1.16"
 clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"
 libc = "0.2"
 rand = "0.10"
 semver = "1.0"
@@ -128,6 +129,7 @@ members = [
     "vtcode-exec-events",
     "vtcode-file-search",
     "vtcode-process-hardening",
+    "xtask",
 ]
 default-members = [".", "vtcode-core", "vtcode-tui"]
 exclude = ["zed-extension"]

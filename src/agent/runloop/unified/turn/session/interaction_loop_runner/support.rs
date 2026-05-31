@@ -230,8 +230,9 @@ async fn launch_input_editor_with_draft(
 
     let (message_style, message) = match result {
         Ok(_) => {
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("failed to read edited content from {}", path.display()))?;
+            let content = fs::read_to_string(&path).with_context(|| {
+                format!("failed to read edited content from {}", path.display())
+            })?;
             ctx.handle.set_input(content);
             (
                 MessageStyle::Info,

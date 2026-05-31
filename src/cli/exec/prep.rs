@@ -126,11 +126,10 @@ pub(super) async fn prepare_exec_run(
     // This avoids the interactive trust prompt in CI/eval scenarios.
     let automation_cfg = &run_vt_cfg.automation.full_auto;
     if automation_cfg.enabled {
-        let current_trust = vtcode_core::utils::dot_config::load_workspace_trust_level(
-            &run_config.workspace,
-        )
-        .await
-        .unwrap_or(None);
+        let current_trust =
+            vtcode_core::utils::dot_config::load_workspace_trust_level(&run_config.workspace)
+                .await
+                .unwrap_or(None);
         if current_trust.is_none() {
             vtcode_core::utils::dot_config::update_workspace_trust(
                 &run_config.workspace,

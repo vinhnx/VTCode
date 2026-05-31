@@ -304,7 +304,13 @@ fn question_mark_opens_help_overlay_when_input_is_empty() {
     assert!(result.is_none());
     let modal = session.modal_state().expect("help modal should open");
     assert_eq!(modal.title, "Keyboard Shortcuts");
-    assert!(modal.lines.iter().any(|line| line.contains("Ctrl+A: Move to start of line • Ctrl+E: Open external editor")));
+    assert!(
+        modal
+            .lines
+            .iter()
+            .any(|line| line
+                .contains("Ctrl+A: Move to start of line • Ctrl+E: Open external editor"))
+    );
 }
 
 #[test]
