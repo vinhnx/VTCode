@@ -142,5 +142,5 @@ pub(crate) fn parse_stream_payload(
         }
     }
 
-    if delta.is_empty() { None } else { Some(delta) }
+    (!delta.is_empty()).then_some(delta)
 }

@@ -19,10 +19,14 @@ pub mod execution;
 pub mod file_ops;
 pub mod search;
 
-/// Truncate a line to max length with ellipsis (shared by execution + file_ops summarizers)
-pub(super) fn truncate_line(line: &str, max_len: usize) -> String {
+use std::borrow::Cow;
+
+/// Truncate a line to max length with ellipsis (shared by execution + file_ops summarizers).
+///
+/// Returns `Cow::Borrowed` when no truncation is needed (zero allocation).
+pub(super) fn truncate_line<'a>(line: &'a str, max_len: usize) -> Cow<'a, str> {
     if line.len() <= max_len {
-        line.to_string()
+        Cow::Borrowed(line)
     } else {
         let target = max_len.saturating_sub(3);
         let end = line
@@ -30,7 +34,7 @@ pub(super) fn truncate_line(line: &str, max_len: usize) -> String {
             .map(|(i, _)| i)
             .rfind(|&i| i <= target)
             .unwrap_or(0);
-        format!("{}...", &line[..end])
+        Cow::Owned(format!("{}...", &line[..end]))
     }
 }
 

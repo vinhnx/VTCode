@@ -21,7 +21,6 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use crate::llm::providers::common::override_base_url;
-use crate::llm::types as llm_types;
 use crate::utils::http_client;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -302,10 +301,6 @@ impl LLMProvider for LmStudioProvider {
 impl LLMClient for LmStudioProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         LLMClient::generate(&mut self.inner, prompt).await
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        self.inner.backend_kind()
     }
 
     fn model_id(&self) -> &str {

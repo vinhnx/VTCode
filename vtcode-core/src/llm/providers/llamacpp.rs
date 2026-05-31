@@ -10,7 +10,6 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
 use crate::llm::providers::common::override_base_url;
-use crate::llm::types as llm_types;
 use crate::utils::http_client;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -752,10 +751,6 @@ impl LLMClient for LlamaCppProvider {
             },
         )
         .await
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::LlamaCpp
     }
 
     fn model_id(&self) -> &str {

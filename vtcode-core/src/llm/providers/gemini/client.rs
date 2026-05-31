@@ -11,10 +11,6 @@ impl LLMClient for GeminiProvider {
         Ok(LLMProvider::generate(self, request).await?)
     }
 
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::Gemini
-    }
-
     fn model_id(&self) -> &str {
         &self.model
     }

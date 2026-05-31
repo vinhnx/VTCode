@@ -8,7 +8,6 @@ use crate::llm::provider::{
     LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition,
     Usage,
 };
-use crate::llm::types as llm_types;
 use crate::utils::http_client;
 use anyhow::Result;
 use async_stream::try_stream;
@@ -1295,10 +1294,6 @@ impl LLMClient for OllamaProvider {
             request.model = self.model.clone();
         }
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::Ollama
     }
 
     fn model_id(&self) -> &str {

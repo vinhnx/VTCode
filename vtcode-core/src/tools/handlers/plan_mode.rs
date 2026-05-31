@@ -430,7 +430,7 @@ fn section_body(content: &str, header: &str) -> Option<String> {
         }
     }
     let body = lines.join("\n").trim().to_string();
-    if body.is_empty() { None } else { Some(body) }
+    (!body.is_empty()).then_some(body)
 }
 
 fn meaningful_section_lines(body: &str) -> Vec<&str> {

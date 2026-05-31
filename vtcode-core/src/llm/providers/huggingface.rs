@@ -16,7 +16,6 @@ use crate::llm::provider::{
 use crate::llm::providers::shared::{
     NoopStreamTelemetry, StreamTelemetry, function_output_value_from_message_content,
 };
-use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -1154,10 +1153,6 @@ impl LLMClient for HuggingFaceProvider {
             ..Default::default()
         };
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::HuggingFace
     }
 
     fn model_id(&self) -> &str {

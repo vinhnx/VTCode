@@ -1,14 +1,78 @@
 use crate::llm::provider::Message;
 use hashbrown::{HashMap, HashSet};
+use std::borrow::Borrow;
+use std::fmt;
+use std::ops::Deref;
 use std::time::Duration;
 
 // ============================================================================
 // Context Manager: Call/Output Pairing Invariants (OpenAI Codex pattern)
 // ============================================================================
 
-/// Unique identifier for a tool call
+/// Unique identifier for a tool call.
+///
+/// Follows the **newtype pattern** (Ch 3) with proper encapsulation:
+/// inner field is private, access goes through `as_str()`, `Deref`, or `Borrow`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ToolCallId(pub String);
+pub struct ToolCallId(String);
+
+impl ToolCallId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Deref for ToolCallId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl Borrow<str> for ToolCallId {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for ToolCallId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for ToolCallId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<String> for ToolCallId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for ToolCallId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<ToolCallId> for String {
+    fn from(value: ToolCallId) -> Self {
+        value.0
+    }
+}
 
 /// Status of a tool execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,7 +252,7 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
         .keys()
         .filter(|call_id| !output_ids.contains(*call_id))
         .map(|call_id| MissingOutput {
-            call_id: ToolCallId(call_id.clone()),
+            call_id: ToolCallId::new(call_id.clone()),
             tool_name: "unknown".to_string(),
         })
         .collect();
@@ -197,7 +261,7 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
     let orphan_outputs: Vec<_> = output_ids
         .iter()
         .filter(|output_id| !call_map.contains_key(*output_id))
-        .map(|output_id| ToolCallId(output_id.clone()))
+        .map(|output_id| ToolCallId::new(output_id.clone()))
         .collect();
 
     HistoryValidationReport {
@@ -256,7 +320,7 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
     // Create synthetic outputs for missing calls in reverse order to avoid index shifting
     for missing in report.missing_outputs.iter().rev() {
         let synthetic_message = Message::tool_response(
-            missing.call_id.0.clone(),
+            missing.call_id.as_str().to_string(),
             "canceled: Tool execution was interrupted. This synthetic output was created \
              during history normalization to maintain conversation invariants."
                 .to_string(),
@@ -264,7 +328,7 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
 
         tracing::warn!(
             "Creating synthetic output for call {} due to missing execution result",
-            missing.call_id.0
+            missing.call_id
         );
 
         // Find the position to insert: right after the corresponding call
@@ -273,7 +337,7 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
             .position(|msg| {
                 msg.tool_calls
                     .as_ref()
-                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.0))
+                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.as_str()))
             })
             .map(|pos| pos + 1);
 
@@ -297,7 +361,7 @@ pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
     let orphan_ids: HashSet<String> = report
         .orphan_outputs
         .iter()
-        .map(|id| id.0.clone())
+        .map(|id| id.as_str().to_string())
         .collect();
 
     let initial_len = messages.len();
@@ -409,7 +473,7 @@ mod tests {
         let report = validate_history_invariants(&messages);
         assert!(!report.is_valid());
         assert_eq!(report.missing_outputs.len(), 1);
-        assert_eq!(report.missing_outputs[0].call_id.0, "call_1");
+        assert_eq!(report.missing_outputs[0].call_id.as_str(), "call_1");
         assert!(report.orphan_outputs.is_empty());
     }
 
@@ -422,7 +486,7 @@ mod tests {
         assert!(!report.is_valid());
         assert!(report.missing_outputs.is_empty());
         assert_eq!(report.orphan_outputs.len(), 1);
-        assert_eq!(report.orphan_outputs[0].0, "orphan_call");
+        assert_eq!(report.orphan_outputs[0].as_str(), "orphan_call");
     }
 
     /// Test: ensure_call_outputs_present creates synthetic outputs
@@ -530,15 +594,15 @@ mod tests {
         let invalid = HistoryValidationReport {
             missing_outputs: vec![
                 MissingOutput {
-                    call_id: ToolCallId("call_1".into()),
+                    call_id: ToolCallId::new("call_1"),
                     tool_name: "tool_a".into(),
                 },
                 MissingOutput {
-                    call_id: ToolCallId("call_2".into()),
+                    call_id: ToolCallId::new("call_2"),
                     tool_name: "tool_b".into(),
                 },
             ],
-            orphan_outputs: vec![ToolCallId("orphan_1".into())],
+            orphan_outputs: vec![ToolCallId::new("orphan_1")],
         };
         assert_eq!(invalid.summary(), "2 missing outputs, 1 orphan outputs");
         assert!(!invalid.is_valid());
@@ -574,7 +638,7 @@ mod tests {
         let report = validate_history_invariants(&messages);
         assert!(!report.is_valid());
         assert_eq!(report.missing_outputs.len(), 1);
-        assert_eq!(report.missing_outputs[0].call_id.0, "call_2");
+        assert_eq!(report.missing_outputs[0].call_id.as_str(), "call_2");
 
         normalize_history(&mut messages);
         assert!(validate_history_invariants(&messages).is_valid());

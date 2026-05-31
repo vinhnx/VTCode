@@ -522,7 +522,7 @@ impl ToolExecutionHistory {
         let val = self
             .rate_limit_per_minute
             .load(std::sync::atomic::Ordering::Relaxed);
-        if val == 0 { None } else { Some(val) }
+        (val != 0).then_some(val)
     }
 
     fn effective_identical_limit_for_call(&self, tool_name: &str, args: &Value) -> usize {

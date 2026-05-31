@@ -21,7 +21,6 @@ use crate::llm::provider::{
     ContentPart, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message,
     MessageContent, ToolDefinition,
 };
-use crate::llm::types as llm_types;
 
 use super::capabilities;
 use super::headers;
@@ -421,7 +420,7 @@ impl AnthropicProvider {
             betas.push("files-api-2025-04-14".to_string());
         }
 
-        if betas.is_empty() { None } else { Some(betas) }
+        (!betas.is_empty()).then_some(betas)
     }
 
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
@@ -713,10 +712,6 @@ impl LLMClient for AnthropicProvider {
             tool_references: response.tool_references,
             compaction: None,
         })
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::Anthropic
     }
 
     fn model_id(&self) -> &str {

@@ -8,12 +8,12 @@ use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
-use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 
 use super::common::{
     map_finish_reason_common, parse_response_openai_format, resolve_model,
@@ -115,7 +115,7 @@ impl ZAIProvider {
                     .is_some_and(|reasoning| !reasoning.is_empty())
         });
 
-        payload.insert("model".to_owned(), Value::String(normalized_model));
+        payload.insert("model".to_owned(), Value::String(normalized_model.into_owned()));
         payload.insert(
             "messages".to_owned(),
             Value::Array(serialize_messages_openai_format(request, PROVIDER_KEY)?),
@@ -232,11 +232,11 @@ impl ZAIProvider {
     }
 }
 
-fn normalize_model_id(model: &str) -> String {
+fn normalize_model_id<'a>(model: &'a str) -> Cow<'a, str> {
     if model == models::zai::GLM_5_LEGACY {
-        models::zai::GLM_5.to_string()
+        Cow::Owned(models::zai::GLM_5.to_string())
     } else {
-        model.to_string()
+        Cow::Borrowed(model)
     }
 }
 
@@ -484,10 +484,6 @@ impl LLMClient for ZAIProvider {
             ..Default::default()
         };
         Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::ZAI
     }
 
     fn model_id(&self) -> &str {

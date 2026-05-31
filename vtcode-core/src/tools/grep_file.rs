@@ -487,14 +487,10 @@ impl GrepSearchManager {
         })?;
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        // Pre-allocate with reasonable estimate (typically less than max_results lines in output)
-        let line_count = output_str.lines().count();
-        let mut matches = Vec::with_capacity(line_count.min(max_results));
-        for line in output_str.lines() {
-            if let Ok(value) = serde_json::from_str::<Value>(line) {
-                matches.push(value);
-            }
-        }
+        let matches: Vec<Value> = output_str
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .collect();
 
         Ok(Self::finalize_matches(matches, input))
     }

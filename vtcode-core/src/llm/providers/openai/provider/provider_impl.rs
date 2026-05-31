@@ -215,10 +215,6 @@ impl LLMClient for OpenAIProvider {
         })
     }
 
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::OpenAI
-    }
-
     fn model_id(&self) -> &str {
         &self.model
     }

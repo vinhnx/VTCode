@@ -41,7 +41,7 @@ fn expand_entry(entry: &str, workspace_root: &Path) -> Option<PathBuf> {
         path = workspace_root.join(path);
     }
 
-    if path.is_dir() { Some(path) } else { None }
+    path.is_dir().then_some(path)
 }
 
 fn expand_environment_variables(input: &str) -> String {

@@ -110,7 +110,12 @@ pub trait Tool: Send + Sync {
     /// Mutating tools require more careful policy evaluation and typically
     /// cannot be run in parallel with other tools that touch the same resources.
     ///
-    /// Default: true (conservative - assume mutation unless overridden)
+    /// Default: true (conservative — assume mutation unless overridden).
+    ///
+    /// Per the Rust Patterns guide (Ch 7 — "accept the weakest bound your API
+    /// needs"), read-only tools SHOULD override this to return `false`. The
+    /// conservative default exists because accidentally treating a mutating tool
+    /// as read-only is worse than the reverse.
     fn is_mutating(&self) -> bool {
         true
     }

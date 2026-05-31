@@ -6,7 +6,6 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::model_catalog_entry;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
-use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 
@@ -291,10 +290,6 @@ impl LLMClient for OpenCodeZenProvider {
             ..Default::default()
         };
         LLMProvider::generate(self, request).await
-    }
-
-    fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::OpenCodeZen
     }
 
     fn model_id(&self) -> &str {

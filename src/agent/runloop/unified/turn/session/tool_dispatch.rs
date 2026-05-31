@@ -95,9 +95,10 @@ pub(crate) async fn execute_direct_tool_call(
 ) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
     let direct_turn_id = SessionId::new();
+    let direct_turn_id_str = direct_turn_id.as_str().to_string();
     let mut harness_state = HarnessTurnState::new(
-        TurnRunId(direct_turn_id.0.clone()),
-        TurnId(direct_turn_id.0),
+        TurnRunId(direct_turn_id_str.clone()),
+        TurnId(direct_turn_id_str),
         ctx.interaction_ctx.harness_config.max_tool_calls_per_turn,
         ctx.interaction_ctx.harness_config.max_tool_wall_clock_secs,
         ctx.interaction_ctx.harness_config.max_tool_retries,
