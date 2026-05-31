@@ -261,8 +261,46 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 
     // Binding store: resolve user-rebindable actions first.
+    // Readline keybindings (Ctrl+F/B/P/N/T, Alt+D/T/U/L/C/\) are hardcoded
+    // editing shortcuts and take priority over the binding store.
     if let Some(action) = session.bindings.resolve(&key) {
-        return dispatch_action(session, action);
+        // Skip binding store for Readline keybindings that are hardcoded below
+        let is_readline_key = has_control
+            && !has_command
+            && !has_alt
+            && matches!(
+                key.code,
+                KeyCode::Char('f')
+                    | KeyCode::Char('F')
+                    | KeyCode::Char('b')
+                    | KeyCode::Char('B')
+                    | KeyCode::Char('p')
+                    | KeyCode::Char('P')
+                    | KeyCode::Char('n')
+                    | KeyCode::Char('N')
+                    | KeyCode::Char('t')
+                    | KeyCode::Char('T')
+            );
+        let is_alt_key = has_alt
+            && !has_control
+            && !has_command
+            && matches!(
+                key.code,
+                KeyCode::Char('d')
+                    | KeyCode::Char('D')
+                    | KeyCode::Char('t')
+                    | KeyCode::Char('T')
+                    | KeyCode::Char('u')
+                    | KeyCode::Char('U')
+                    | KeyCode::Char('l')
+                    | KeyCode::Char('L')
+                    | KeyCode::Char('c')
+                    | KeyCode::Char('C')
+                    | KeyCode::Char('\\')
+            );
+        if !is_readline_key && !is_alt_key {
+            return dispatch_action(session, action);
+        }
     }
 
     match key.code {
@@ -319,6 +357,87 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             if has_control && !has_command && !has_alt && session.input_enabled =>
         {
             session.input_manager.redo();
+            session.mark_dirty();
+            None
+        }
+
+        // --- Readline-style editing shortcuts ---
+        KeyCode::Char('f') | KeyCode::Char('F')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            session.move_right();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('b') | KeyCode::Char('B')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            session.move_left();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('p') | KeyCode::Char('P')
+            if has_control && !has_command && !has_alt =>
+        {
+            if session.navigate_history_previous() {
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('n') | KeyCode::Char('N')
+            if has_control && !has_command && !has_alt =>
+        {
+            if session.navigate_history_next() {
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('t') | KeyCode::Char('T')
+            if has_control && !has_command && !has_alt && session.input_enabled =>
+        {
+            session.transpose_chars();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('d') | KeyCode::Char('D')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.delete_word_forward();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('t') | KeyCode::Char('T')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.transpose_words();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('u') | KeyCode::Char('U')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.uppercase_word();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('l') | KeyCode::Char('L')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.lowercase_word();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('c') | KeyCode::Char('C')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.capitalize_word();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('\\')
+            if has_alt && !has_control && !has_command && session.input_enabled =>
+        {
+            session.delete_whitespace_around_cursor();
             session.mark_dirty();
             None
         }

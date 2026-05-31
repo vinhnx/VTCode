@@ -401,6 +401,191 @@ impl InputManager {
         self.textarea.delete_next_word();
     }
 
+    pub fn delete_whitespace_around_cursor(&mut self) {
+        let content = self.content().to_string();
+        let cursor = self.cursor();
+        if content.is_empty() || cursor >= content.len() {
+            return;
+        }
+
+        let before = &content[..cursor];
+        let after = &content[cursor..];
+
+        let new_before = before.trim_end();
+        let new_after = after.trim_start();
+
+        let removed_before = before.len() - new_before.len();
+        let removed_after = after.len() - new_after.len();
+
+        if removed_before == 0 && removed_after == 0 {
+            return;
+        }
+
+        let new_content = format!("{}{}", new_before, new_after);
+        let new_cursor = cursor - removed_before;
+
+        self.set_content(new_content);
+        self.set_cursor(new_cursor);
+    }
+
+    pub fn transpose_chars(&mut self) {
+        let content = self.content().to_string();
+        let cursor = self.cursor();
+        if content.len() < 2 {
+            return;
+        }
+
+        let mut chars: Vec<char> = content.chars().collect();
+        let char_pos = content[..cursor].chars().count();
+
+        if char_pos == 0 {
+            // At start: swap first two chars
+            chars.swap(0, 1);
+            let new_content: String = chars.into_iter().collect();
+            self.set_content(new_content);
+            self.set_cursor(cursor + 1);
+        } else if char_pos >= chars.len() {
+            // At end: swap last two chars
+            let last = chars.len() - 1;
+            chars.swap(last - 1, last);
+            let new_content: String = chars.into_iter().collect();
+            self.set_content(new_content);
+        } else {
+            // In middle: swap char at cursor with char before
+            chars.swap(char_pos - 1, char_pos);
+            let new_content: String = chars.into_iter().collect();
+            self.set_content(new_content);
+            self.set_cursor(cursor + 1);
+        }
+    }
+
+    pub fn transpose_words(&mut self) {
+        let content = self.content().to_string();
+        let cursor = self.cursor();
+        if content.is_empty() {
+            return;
+        }
+
+        let chars: Vec<char> = content.chars().collect();
+        let char_pos = content[..cursor].chars().count();
+
+        // Find word boundaries
+        let is_word_char = |c: char| c.is_alphanumeric();
+
+        // Find start of current word
+        let mut word_start = char_pos;
+        while word_start > 0 && is_word_char(chars[word_start - 1]) {
+            word_start -= 1;
+        }
+
+        // Find end of current word
+        let mut word_end = char_pos;
+        while word_end < chars.len() && is_word_char(chars[word_end]) {
+            word_end += 1;
+        }
+
+        // Find start of previous word
+        let mut prev_start = word_start;
+        while prev_start > 0 && !is_word_char(chars[prev_start - 1]) {
+            prev_start -= 1;
+        }
+        while prev_start > 0 && is_word_char(chars[prev_start - 1]) {
+            prev_start -= 1;
+        }
+
+        // Find end of previous word
+        let mut prev_end = prev_start;
+        while prev_end < chars.len() && is_word_char(chars[prev_end]) {
+            prev_end += 1;
+        }
+
+        if prev_start >= word_start || prev_end >= word_start {
+            return;
+        }
+
+        // Extract words
+        let prev_word: String = chars[prev_start..prev_end].iter().collect();
+        let curr_word: String = chars[word_start..word_end].iter().collect();
+        let between: String = chars[prev_end..word_start].iter().collect();
+
+        // Reconstruct
+        let new_content = format!(
+            "{}{}{}{}{}",
+            &content[..prev_start],
+            curr_word,
+            between,
+            prev_word,
+            &content[word_end..]
+        );
+
+        self.set_content(new_content);
+        self.set_cursor(cursor);
+    }
+
+    pub fn uppercase_word(&mut self) {
+        self.transform_word(|s| s.to_uppercase());
+    }
+
+    pub fn lowercase_word(&mut self) {
+        self.transform_word(|s| s.to_lowercase());
+    }
+
+    pub fn capitalize_word(&mut self) {
+        self.transform_word(|s| {
+            let mut chars = s.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => {
+                    let mut result = c.to_uppercase().to_string();
+                    result.extend(chars.flat_map(|c| c.to_lowercase()));
+                    result
+                }
+            }
+        });
+    }
+
+    fn transform_word<F: Fn(&str) -> String>(&mut self, transform: F) {
+        let content = self.content().to_string();
+        let cursor = self.cursor();
+        if content.is_empty() {
+            return;
+        }
+
+        let chars: Vec<char> = content.chars().collect();
+        let char_pos = content[..cursor].chars().count();
+
+        let is_word_char = |c: char| c.is_alphanumeric();
+
+        // Find start of current word
+        let mut word_start = char_pos;
+        while word_start > 0 && is_word_char(chars[word_start - 1]) {
+            word_start -= 1;
+        }
+
+        // Find end of current word
+        let mut word_end = word_start;
+        while word_end < chars.len() && is_word_char(chars[word_end]) {
+            word_end += 1;
+        }
+
+        if word_start == word_end {
+            return;
+        }
+
+        let word: String = chars[word_start..word_end].iter().collect();
+        let transformed = transform(&word);
+
+        let new_content = format!(
+            "{}{}{}",
+            &content[..word_start],
+            transformed,
+            &content[word_end..]
+        );
+
+        self.set_content(new_content);
+        self.set_cursor(cursor);
+    }
+
     pub fn clear(&mut self) {
         self.textarea = TextArea::default();
         configure_textarea(&mut self.textarea);

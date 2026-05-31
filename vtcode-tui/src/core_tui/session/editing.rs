@@ -262,6 +262,42 @@ impl Session {
         self.refresh_input_edit_state();
     }
 
+    /// Delete whitespace around the cursor (Readline Alt+\)
+    pub(crate) fn delete_whitespace_around_cursor(&mut self) {
+        self.input_manager.delete_whitespace_around_cursor();
+        self.refresh_input_edit_state();
+    }
+
+    /// Transpose characters at cursor position (Readline Ctrl+T)
+    pub(crate) fn transpose_chars(&mut self) {
+        self.input_manager.transpose_chars();
+        self.refresh_input_edit_state();
+    }
+
+    /// Transpose words at cursor position (Readline Alt+T)
+    pub(crate) fn transpose_words(&mut self) {
+        self.input_manager.transpose_words();
+        self.refresh_input_edit_state();
+    }
+
+    /// Uppercase the current word (Readline Alt+U)
+    pub(crate) fn uppercase_word(&mut self) {
+        self.input_manager.uppercase_word();
+        self.refresh_input_edit_state();
+    }
+
+    /// Lowercase the current word (Readline Alt+L)
+    pub(crate) fn lowercase_word(&mut self) {
+        self.input_manager.lowercase_word();
+        self.refresh_input_edit_state();
+    }
+
+    /// Capitalize the current word (Readline Alt+C)
+    pub(crate) fn capitalize_word(&mut self) {
+        self.input_manager.capitalize_word();
+        self.refresh_input_edit_state();
+    }
+
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
     pub(crate) fn delete_to_start_of_line(&mut self) {
         if self.input_manager.delete_selection() {

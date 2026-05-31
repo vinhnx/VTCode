@@ -226,6 +226,15 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
+    // Handle forward search (Ctrl+S) - Readline forward search
+    if has_control
+        && matches!(key.code, KeyCode::Char('s') | KeyCode::Char('S'))
+        && !session.history_picker_visible()
+    {
+        open_history_picker(session);
+        return None;
+    }
+
     // Handle history picker if active
     if session.inline_lists_visible() && session.history_picker_visible() {
         let history = input_history_entries(session);
@@ -310,10 +319,44 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::Exit)
         }
-        KeyCode::Char('b') if has_control => {
-            // Ctrl+B - Background current operation or move to background
-            session.mark_dirty();
-            Some(InlineEvent::BackgroundOperation)
+        KeyCode::Char('b') if has_control && !has_alt && !has_command => {
+            // Ctrl+B: Move back a character (Readline) - overrides background operation
+            if session.core.input_enabled() {
+                session.move_left();
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('f') if has_control && !has_alt && !has_command => {
+            // Ctrl+F: Move forward a character (Readline)
+            if session.core.input_enabled() {
+                session.move_right();
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('p') if has_control && !has_alt && !has_command => {
+            // Ctrl+P: Fetch the previous command from history (Readline)
+            if session.navigate_history_previous() {
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('n') if has_control && !has_alt && !has_command => {
+            // Ctrl+N: Fetch the next command from history (Readline)
+            if session.navigate_history_next() {
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('t') if has_control && !has_alt && !has_command => {
+            // Ctrl+T: Transpose characters (Readline)
+            if session.core.input_enabled() {
+                session.transpose_chars();
+                session.update_input_triggers();
+                session.mark_dirty();
+            }
+            None
         }
         KeyCode::Char('m') | KeyCode::Char('M') if has_control && !has_alt && !has_command => {
             session.mark_dirty();
@@ -779,9 +822,102 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                         session.move_right_word();
                         session.mark_dirty();
                     }
+                    'd' | 'D' => {
+                        // Alt+D: Kill (cut) forwards to the end of the current word
+                        if session.core.input_enabled() {
+                            session.delete_word_forward();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
+                    'u' | 'U' => {
+                        // Alt+U: Uppercase the current word
+                        if session.core.input_enabled() {
+                            session.uppercase_word();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
+                    'l' | 'L' => {
+                        // Alt+L: Lowercase the current word
+                        if session.core.input_enabled() {
+                            session.lowercase_word();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
+                    'c' | 'C' => {
+                        // Alt+C: Capitalize the current word
+                        if session.core.input_enabled() {
+                            session.capitalize_word();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
+                    't' | 'T' => {
+                        // Alt+T: Transpose words
+                        if session.core.input_enabled() {
+                            session.transpose_words();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
+                    '\\' => {
+                        // Alt+\: Delete whitespace around the cursor
+                        if session.core.input_enabled() {
+                            session.delete_whitespace_around_cursor();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                    }
                     _ => {}
                 }
                 return None;
+            }
+
+            if has_control {
+                match ch {
+                    'f' | 'F' => {
+                        // Ctrl+F: Move forward a character (Readline)
+                        if session.core.input_enabled() {
+                            session.move_right();
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
+                    'b' | 'B' => {
+                        // Ctrl+B: Move back a character (Readline)
+                        if session.core.input_enabled() {
+                            session.move_left();
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
+                    'p' | 'P' => {
+                        // Ctrl+P: Fetch the previous command from history (Readline)
+                        if session.navigate_history_previous() {
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
+                    'n' | 'N' => {
+                        // Ctrl+N: Fetch the next command from history (Readline)
+                        if session.navigate_history_next() {
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
+                    't' | 'T' => {
+                        // Ctrl+T: Transpose characters (Readline)
+                        if session.core.input_enabled() {
+                            session.transpose_chars();
+                            session.update_input_triggers();
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
+                    _ => {}
+                }
             }
 
             if !has_control {
@@ -838,9 +974,16 @@ fn quick_help_lines() -> Vec<String> {
         "Shift+Enter: Insert a newline.".to_string(),
         "/config: Toggle Vim-style prompt editing via Editor mode.".to_string(),
         "Ctrl+A: Move to start of line • Ctrl+E: Move to end of line.".to_string(),
+        "Ctrl+F: Move forward a character • Ctrl+B: Move back a character.".to_string(),
+        "Ctrl+P: Previous history • Ctrl+N: Next history.".to_string(),
         "Ctrl+G: Open external editor.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
+        "Ctrl+T: Transpose characters.".to_string(),
+        "Alt+T: Transpose words.".to_string(),
+        "Alt+D: Delete word forward.".to_string(),
+        "Alt+U/L/C: Uppercase/lowercase/capitalize word.".to_string(),
+        "Alt+\\: Delete whitespace around cursor.".to_string(),
         "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
         "Ctrl+M: Open the model picker.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),

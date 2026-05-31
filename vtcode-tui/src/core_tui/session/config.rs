@@ -75,6 +75,12 @@ pub struct AppearanceConfig {
     #[serde(default)]
     pub vim_mode: bool,
 
+    /// Enable Readline-style input editing for the prompt.
+    /// This adds Emacs-style keybindings like Ctrl+F/B for navigation,
+    /// Ctrl+P/N for history, Alt+D for kill word forward, etc.
+    #[serde(default)]
+    pub readline_mode: bool,
+
     /// Screen reader mode (disables animation-heavy rendering paths)
     #[serde(default)]
     pub screen_reader_mode: bool,
@@ -111,6 +117,7 @@ impl Default for AppearanceConfig {
             reasoning_display_mode: ReasoningDisplayMode::Toggle,
             reasoning_visible_default: crate::config::constants::ui::DEFAULT_REASONING_VISIBLE,
             vim_mode: false,
+            readline_mode: false,
             screen_reader_mode: false,
             reduce_motion_mode: false,
             reduce_motion_keep_progress_animation: false,
