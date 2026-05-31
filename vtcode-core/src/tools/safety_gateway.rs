@@ -171,7 +171,7 @@ impl Default for SafetyGatewayConfig {
         let rate_limit_per_second = tool_calls_per_second_from_env().unwrap_or(5);
 
         Self {
-            max_per_turn: 10,
+            max_per_turn: 50,
             max_per_session: 100,
             rate_limit_per_second,
             rate_limit_per_minute: tool_calls_per_minute_from_env(),
