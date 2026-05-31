@@ -67,6 +67,88 @@ fn handle_interrupt(session: &mut Session) -> Option<InlineEvent> {
     Some(InlineEvent::Interrupt)
 }
 
+fn dispatch_action(session: &mut Session, action: Action) -> Option<InlineEvent> {
+    match action {
+        Action::Interrupt => handle_interrupt(session),
+        Action::Exit => {
+            session.mark_dirty();
+            Some(InlineEvent::Exit)
+        }
+        Action::BackgroundOperation => {
+            session.mark_dirty();
+            Some(InlineEvent::BackgroundOperation)
+        }
+        Action::OpenModelPicker => {
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/model".to_string()))
+        }
+        Action::ClearScreen => {
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/clear".to_string()))
+        }
+        Action::ToggleMode => {
+            session.clear_inline_prompt_suggestion();
+            session.mark_dirty();
+            Some(InlineEvent::ToggleMode)
+        }
+        Action::ScrollPageUp => {
+            session.scroll_page_up();
+            session.mark_dirty();
+            Some(InlineEvent::ScrollPageUp)
+        }
+        Action::ScrollPageDown => {
+            session.scroll_page_down();
+            session.mark_dirty();
+            Some(InlineEvent::ScrollPageDown)
+        }
+        Action::EditQueue => {
+            if !session.queued_inputs.is_empty() {
+                if let Some(latest) = session.pop_latest_queued_input() {
+                    session.clear_inline_prompt_suggestion();
+                    session.input_manager.set_content(latest);
+                    session.input_compact_mode = session.input_compact_placeholder().is_some();
+                    session.scroll_manager.set_offset(0);
+                }
+                session.mark_dirty();
+                Some(InlineEvent::EditQueue)
+            } else {
+                None
+            }
+        }
+        Action::HistoryPrevious => {
+            if session.navigate_history_previous() {
+                session.mark_dirty();
+                Some(InlineEvent::HistoryPrevious)
+            } else {
+                None
+            }
+        }
+        Action::HistoryNext => {
+            if session.navigate_history_next() {
+                session.clear_inline_prompt_suggestion();
+                session.mark_dirty();
+                Some(InlineEvent::HistoryNext)
+            } else {
+                None
+            }
+        }
+        Action::ToggleLogs => {
+            session.toggle_logs();
+            None
+        }
+        Action::GeneratePromptSuggestion => {
+            if !session.input_enabled {
+                return None;
+            }
+            session.clear_inline_prompt_suggestion();
+            session.mark_dirty();
+            Some(InlineEvent::RequestInlinePromptSuggestion(
+                session.input_manager.content().to_string(),
+            ))
+        }
+    }
+}
+
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
     let modifiers = key.modifiers;
     let has_control = modifiers.contains(KeyModifiers::CONTROL);
@@ -162,19 +244,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    // Legacy reverse search handling (kept for backward compatibility)
-    // Handle reverse search (Ctrl+R) - disabled in favor of history picker
-    // if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
-    //     if !session.reverse_search_state.active {
-    //         session.reverse_search_state.start_search(
-    //             &session.input_manager,
-    //             &session.input_manager.history_texts(),
-    //         );
-    //         session.mark_dirty();
-    //         return None;
-    //     }
-    // }
-
     // Handle reverse search if active (legacy)
     if session.reverse_search_state.active {
         // Get history first to avoid borrow conflicts
@@ -191,22 +260,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
+    // Binding store: resolve user-rebindable actions first.
+    if let Some(action) = session.bindings.resolve(&key) {
+        return dispatch_action(session, action);
+    }
+
     match key.code {
-        KeyCode::Char('c') | KeyCode::Char('C') if has_control => handle_interrupt(session),
-        KeyCode::Char('\u{3}') => handle_interrupt(session),
-        KeyCode::Char('d') if has_control => {
-            session.mark_dirty();
-            Some(InlineEvent::Exit)
-        }
-        KeyCode::Char('b') if has_control => {
-            // Ctrl+B - Background current operation or move to background
-            session.mark_dirty();
-            Some(InlineEvent::BackgroundOperation)
-        }
-        KeyCode::Char('m') | KeyCode::Char('M') if has_control && !has_alt && !has_command => {
-            session.mark_dirty();
-            Some(InlineEvent::Submit("/model".to_string()))
-        }
+        // --- Emacs-style editing shortcuts (hardcoded, not rebindable) ---
         KeyCode::Char('a') | KeyCode::Char('A') if has_control && !has_command && !has_alt => {
             if session.input_enabled {
                 session.move_to_start();
@@ -253,16 +313,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             None
         }
-        KeyCode::Char('l') | KeyCode::Char('L') if has_control => {
-            session.mark_dirty();
-            Some(InlineEvent::Submit("/clear".to_string()))
-        }
-        KeyCode::BackTab => {
-            // Shift+Tab: Toggle editing mode
-            session.clear_inline_prompt_suggestion();
-            session.mark_dirty();
-            Some(InlineEvent::ToggleMode)
-        }
+
+        // --- Context-sensitive keys (too complex to rebind) ---
         KeyCode::Esc => {
             if session.has_active_overlay() {
                 session.close_overlay();
@@ -295,52 +347,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 }
             }
         }
-        KeyCode::PageUp => {
-            session.scroll_page_up();
-            session.mark_dirty();
-            Some(InlineEvent::ScrollPageUp)
-        }
-        KeyCode::PageDown => {
-            session.scroll_page_down();
-            session.mark_dirty();
-            Some(InlineEvent::ScrollPageDown)
-        }
-        KeyCode::Up => {
-            let edit_queue_modifier = has_alt || (raw_meta && !has_super);
-            if !terminal_capabilities::queued_input_edit_uses_shift_left()
-                && edit_queue_modifier
-                && !session.queued_inputs.is_empty()
-            {
-                if let Some(latest) = session.pop_latest_queued_input() {
-                    session.clear_inline_prompt_suggestion();
-                    session.input_manager.set_content(latest);
-                    session.input_compact_mode = session.input_compact_placeholder().is_some();
-                    session.scroll_manager.set_offset(0);
-                }
-                session.mark_dirty();
-                Some(InlineEvent::EditQueue)
-            } else if session.navigate_history_previous() {
-                session.mark_dirty();
-                Some(InlineEvent::HistoryPrevious)
-            } else {
-                None
-            }
-        }
-        KeyCode::Down => {
-            if session.navigate_history_next() {
-                session.clear_inline_prompt_suggestion();
-                session.mark_dirty();
-                Some(InlineEvent::HistoryNext)
-            } else {
-                None
-            }
-        }
         KeyCode::Enter => {
             if !session.input_enabled {
                 return None;
             }
-
-            // No slash command palette in core session.
 
             if !has_control
                 && !has_shift
@@ -354,9 +364,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             // Check for backslash + Enter quick escape (insert newline without submitting)
             if !has_control && session.input_manager.content().ends_with('\\') {
-                // Remove the backslash and insert a newline
                 let mut content = session.input_manager.content().to_string();
-                content.pop(); // Remove the backslash
+                content.pop();
                 content.push('\n');
                 session.input_manager.set_content(content);
                 session.mark_dirty();
@@ -383,7 +392,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             // Check for multiline input options (Shift/Alt)
             if has_shift || has_alt {
-                // Insert newline for multiline input
                 session.insert_char('\n');
                 session.mark_dirty();
                 return None;
@@ -499,7 +507,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 }
                 session.mark_dirty();
             }
-            None // Right arrow never triggers any event, including editor launch
+            None
         }
         KeyCode::Home => {
             if session.input_enabled {
@@ -525,21 +533,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             None
         }
-        KeyCode::Char('t') | KeyCode::Char('T') if has_control => {
-            session.toggle_logs();
-            None
-        }
+
+        // --- Character input ---
         KeyCode::Char(ch) => {
             if !session.input_enabled {
                 return None;
-            }
-
-            if has_alt && matches!(ch, 'p' | 'P') {
-                session.clear_inline_prompt_suggestion();
-                session.mark_dirty();
-                return Some(InlineEvent::RequestInlinePromptSuggestion(
-                    session.input_manager.content().to_string(),
-                ));
             }
 
             if ch == '?'

@@ -60,6 +60,7 @@ pub mod wrapping;
 mod command;
 mod editing;
 
+pub mod action;
 pub mod config;
 mod driver;
 mod events;
@@ -82,6 +83,7 @@ pub(crate) use self::message::TranscriptLine;
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
 
+pub use self::action::{Action, BindingStore, parse_key_binding};
 use self::config::AppearanceConfig;
 pub(crate) use self::input::status_requires_shimmer;
 use self::mouse_selection::MouseSelectionState;
@@ -292,6 +294,9 @@ pub struct Session {
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+
+    // --- Keybinding store ---
+    pub(crate) bindings: BindingStore,
 
     // --- Clipboard for yank/paste operations ---
     #[expect(dead_code)]

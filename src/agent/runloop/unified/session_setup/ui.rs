@@ -26,6 +26,7 @@ use crate::agent::runloop::unified::turn::utils::{
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, state};
 use anyhow::{Context, Result};
+use hashbrown::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use tokio::sync::{Notify, mpsc::UnboundedSender};
@@ -46,6 +47,7 @@ use vtcode_core::ui::{
     to_tui_keyboard_protocol, to_tui_slash_commands, to_tui_surface,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::dot_config::load_user_config;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_tui::app::{
@@ -199,6 +201,17 @@ pub(crate) async fn initialize_session_ui(
         .collect::<Vec<_>>();
     slash_command_items.extend(template_slash_commands);
 
+    // Load user keybindings from dot config (best-effort)
+    let user_key_bindings: HashMap<String, Vec<String>> = match load_user_config().await {
+        Ok(dot) => dot
+            .preferences
+            .keybindings
+            .into_iter()
+            .map(|(action, key)| (action, vec![key]))
+            .collect(),
+        Err(_) => HashMap::new(),
+    };
+
     let mut session = spawn_session_with_options(
         theme_spec.clone(),
         SessionOptions {
@@ -230,6 +243,7 @@ pub(crate) async fn initialize_session_ui(
             non_interactive_hint: Some(
                 "Use `vtcode ask \"your prompt\"` for non-interactive input.".to_string(),
             ),
+            key_bindings: user_key_bindings,
         },
     )
     .context("failed to launch inline session")?;

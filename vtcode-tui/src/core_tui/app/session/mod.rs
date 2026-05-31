@@ -13,6 +13,7 @@ use crate::core_tui::app::types::{
 };
 use crate::core_tui::runner::TuiSessionDriver;
 use crate::core_tui::session::Session as CoreSessionState;
+use crate::core_tui::session::action::BindingStore;
 
 mod agent_palette;
 pub mod diff_preview;
@@ -81,6 +82,46 @@ impl AppSession {
             show_logs,
             appearance,
             app_name,
+        );
+
+        Self {
+            core,
+            agent_palette: None,
+            agent_palette_active: false,
+            file_palette: None,
+            file_palette_active: false,
+            inline_lists_visible: true,
+            slash_palette: SlashPalette::with_commands(slash_commands),
+            history_picker_state: HistoryPickerState::new(),
+            local_agents_state: LocalAgentsState::default(),
+            local_agents_auto_opened: false,
+            show_task_panel: false,
+            task_panel_lines: Vec::new(),
+            diff_preview_state: None,
+            transcript_review_state: None,
+            diff_overlay_queue: VecDeque::new(),
+            transient_host: TransientHost::default(),
+        }
+    }
+
+    pub fn new_with_logs_and_bindings(
+        theme: crate::core_tui::types::InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_logs: bool,
+        appearance: Option<crate::core_tui::session::config::AppearanceConfig>,
+        slash_commands: Vec<SlashCommandItem>,
+        app_name: String,
+        bindings: BindingStore,
+    ) -> Self {
+        let core = CoreSessionState::new_with_bindings(
+            theme,
+            placeholder,
+            view_rows,
+            show_logs,
+            appearance,
+            app_name,
+            bindings,
         );
 
         Self {
