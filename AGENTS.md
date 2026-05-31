@@ -29,6 +29,7 @@ Cargo workspace, ~20 crates. `default-members` = root, `vtcode-core`, `vtcode-tu
 | `vtcode-exec-events`       | `ThreadEvent` contract and ATIF export            |
 | `vtcode-commons`           | Shared utilities                                  |
 | `vtcode-ghostty-vt-sys`    | Ghostty VT runtime bindings                       |
+| `xtask`                    | Release packaging automation                      |
 
 New reusable logic: put it in an existing small crate or a new one. Keep it out of `vtcode-core` by default unless tightly coupled to the core runtime.
 
@@ -52,6 +53,7 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-commons` | [vtcode-commons/AGENTS.md](vtcode-commons/AGENTS.md) |
 | `vtcode-process-hardening` | [vtcode-process-hardening/AGENTS.md](vtcode-process-hardening/AGENTS.md) |
 | `vtcode-ghostty-vt-sys` | [vtcode-ghostty-vt-sys/AGENTS.md](vtcode-ghostty-vt-sys/AGENTS.md) |
+| `xtask` | [xtask/AGENTS.md](xtask/AGENTS.md) |
 
 **Maintaining per-module files**: After significant changes (new modules, convention shifts, discovered gotchas), use the `audit-module-agents` skill to check if the affected crate's AGENTS.md needs updating. Keep each file under 30 lines — only document what's unique to that crate. This workflow is also referenced in `CLAUDE.md` for persistent agent memory.
 

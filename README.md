@@ -17,18 +17,29 @@
 
 ## Table of contents
 
+- [Table of contents](#table-of-contents)
 - [What is VT Code?](#what-is-vt-code)
 - [Core capabilities](#core-capabilities)
 - [Install](#install)
+    - [macOS and Linux](#macos-and-linux)
+    - [Windows PowerShell](#windows-powershell)
+    - [Package managers](#package-managers)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
+    - [Atlas Cloud](#atlas-cloud)
 - [Extension points](#extension-points)
+    - [Skills](#skills)
+    - [MCP](#mcp)
+    - [Agents and editors](#agents-and-editors)
 - [Safety model](#safety-model)
 - [Protocols and exports](#protocols-and-exports)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Support](#support)
+- [Star History](#star-history)
+- [License](#license)
 
 ## What is VT Code?
 
@@ -38,14 +49,14 @@ The default workflow is intentionally simple: one reliable agent loop, explicit 
 
 ## Core capabilities
 
-| Area | What VT Code provides |
-| --- | --- |
-| Agent runtime | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation |
-| Coding tools | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution |
-| Model providers | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
-| Extensibility | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations |
-| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export |
-| Terminal UX | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback |
+| Area             | What VT Code provides                                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent runtime    | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation                                 |
+| Coding tools     | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution                            |
+| Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
+| Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                            |
+| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                             |
+| Terminal UX      | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback                                                       |
 
 ## Install
 
@@ -116,7 +127,9 @@ provider = "openai"
 default_model = "gpt-5.4"
 ```
 
-Custom OpenAI-compatible providers use `[[custom_providers]]`:
+### Atlas Cloud
+
+[Atlas Cloud](https://atlascloud.ai) is a new LLM provider in VT Code. It works through VT Code's `[[custom_providers]]` support, so you can point VT Code at `https://api.atlascloud.ai/v1` without adding a dedicated runtime provider.
 
 ```toml
 [agent]
@@ -130,6 +143,12 @@ base_url = "https://api.atlascloud.ai/v1"
 api_key_env = "ATLASCLOUD_API_KEY"
 model = "deepseek-ai/deepseek-v4-flash"
 ```
+
+<p align="center">
+  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="400" />
+</p>
+
+Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
 
 Useful configuration docs:
 
@@ -194,20 +213,20 @@ The model is designed to reduce prompt injection, argument injection, workspace 
 
 ## Protocols and exports
 
-| Protocol or format | What it enables | Docs |
-| --- | --- | --- |
-| Open Responses | Vendor-neutral response and item lifecycle model | [Open Responses](./docs/protocols/OPEN_RESPONSES.md) |
-| ATIF | Standardized session trajectory export | [ATIF Trajectory Format](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md) |
-| A2A | Agent discovery, task lifecycle, streaming, JSON-RPC | [A2A Protocol](./docs/a2a/a2a-protocol.md) |
-| Anthropic Messages API | Compatibility server for Anthropic-style clients | [Provider Guides](./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server) |
+| Protocol or format     | What it enables                                      | Docs                                                                                      |
+| ---------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Open Responses         | Vendor-neutral response and item lifecycle model     | [Open Responses](./docs/protocols/OPEN_RESPONSES.md)                                      |
+| ATIF                   | Standardized session trajectory export               | [ATIF Trajectory Format](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md)                      |
+| A2A                    | Agent discovery, task lifecycle, streaming, JSON-RPC | [A2A Protocol](./docs/a2a/a2a-protocol.md)                                                |
+| Anthropic Messages API | Compatibility server for Anthropic-style clients     | [Provider Guides](./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server) |
 
 ## Benchmarks
 
 VT Code has a pending submission to [vercel/next-evals-oss](https://github.com/vercel/next-evals-oss/pull/83), the benchmark behind the [Next.js AI Agent Evaluations leaderboard](https://nextjs.org/evals).
 
-| Agent | Model | Status | Success Rate | Passed | Avg Duration |
-| --- | --- | --- | --- | --- | --- |
-| **VT Code** | `moonshotai/Kimi-K2.6:novita` | **Pending** | **33%** | 8/24 | 90.5s |
+| Agent       | Model                         | Status      | Success Rate | Passed | Avg Duration |
+| ----------- | ----------------------------- | ----------- | ------------ | ------ | ------------ |
+| **VT Code** | `moonshotai/Kimi-K2.6:novita` | **Pending** | **33%**      | 8/24   | 90.5s        |
 
 Read: [benchmark notes](./docs/benchmarks/README.md#nextjs-ai-agent-evaluations), [eval framework](./evals/README.md).
 

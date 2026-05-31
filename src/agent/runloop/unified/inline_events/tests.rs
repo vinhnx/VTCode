@@ -146,7 +146,12 @@ async fn launch_editor_event_submits_edit_command() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(InlineEvent::LaunchEditor { draft: "".to_string() }, &mut queue)
+        .process_event(
+            InlineEvent::LaunchEditor {
+                draft: "".to_string(),
+            },
+            &mut queue,
+        )
         .await
         .expect("process launch editor");
     assert!(matches!(
@@ -190,7 +195,12 @@ async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(InlineEvent::LaunchEditor { draft: "hello world".to_string() }, &mut queue)
+        .process_event(
+            InlineEvent::LaunchEditor {
+                draft: "hello world".to_string(),
+            },
+            &mut queue,
+        )
         .await
         .expect("process launch editor with draft");
     assert!(matches!(
