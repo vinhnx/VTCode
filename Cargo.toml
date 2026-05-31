@@ -137,7 +137,6 @@ exclude = ["zed-extension"]
 vtcode-commons = { path = "vtcode-commons" }
 vtcode-acp = { path = "vtcode-acp" }
 vtcode-auth = { path = "vtcode-auth" }
-creusot-std = { path = "../creusot/creusot-std" }
 vtcode-config = { path = "vtcode-config" }
 vtcode-core = { path = "vtcode-core" }
 vtcode-tui = { path = "vtcode-tui" }
