@@ -1,132 +1,121 @@
-<img src="./resources/logo/vt_code_adaptive.svg" alt="vtcode"/>
-
-<a href="./docs/skills/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge" alt="Skills"/></a> <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-383B73?style=for-the-badge&logo=zedindustries" alt="zed"/></a> <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/model%20context%20protocol-A63333?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a>
-
-<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=171C26&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=171C26&label=Release" alt="GitHub Release"/></a>
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/VTCode)
-
----
-
-<strong>VT Code</strong> is an open-source coding agent with LLM-native code understanding and robust shell safety. Supports multiple LLM providers with automatic failover and efficient context management.
-
-### Next.js Agent Eval
-
-VT Code has a pending submission to
-[vercel/next-evals-oss](https://github.com/vercel/next-evals-oss/pull/83), the
-benchmark behind the [Next.js AI Agent Evaluations leaderboard](https://nextjs.org/evals).
-
-| Agent       | Model                         | Status      | Success Rate | Passed | Avg Duration |
-| ----------- | ----------------------------- | ----------- | ------------ | ------ | ------------ |
-| **VT Code** | `moonshotai/Kimi-K2.6:novita` | **Pending** | **33%**      | 8/24   | 90.5s        |
-
-```text
-Next.js eval success rate
-VT Code + Kimi K2.6  ████████░░░░░░░░░░░░░░░░  33%
-```
-
-See the detailed [benchmark notes](./docs/benchmarks/README.md#nextjs-ai-agent-evaluations).
-
 <p align="center">
-  <img src="./resources/gif/vtcode.gif" alt="VT Code" />
+  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" />
 </p>
 
----
+<p align="center">
+  <strong>An open-source terminal coding agent with multi-provider LLM support, rich TUI workflows, agent skills, and defense-in-depth shell safety.</strong>
+</p>
 
-## Installation
+<p align="center">
+  <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=171C26&label=crates.io" alt="Crates.io Version"/></a>
+  <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=171C26&label=Release" alt="GitHub Release"/></a>
+  <a href="./docs/skills/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=flat-square" alt="Skills"/></a>
+  <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/ACP-Zed-383B73?style=flat-square&logo=zedindustries" alt="Zed ACP"/></a>
+  <a href="https://deepwiki.com/vinhnx/VTCode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"/></a>
+</p>
 
-**Native Installer (Recommended)** - No dependencies, instant setup:
-The default macOS/Linux installer also attempts the recommended [ripgrep](https://github.com/BurntSushi/ripgrep) + [ast-grep](https://ast-grep.github.io/) bundle for enhanced semantic grep and programming language-level understanding (optional).
+<p align="center">
+  <img src="./resources/gif/vtcode.gif" alt="VT Code demo" />
+</p>
 
-> [!TIP]
-> Official macOS/Linux release archives bundle `ghostty-vt/` runtime libraries for richer PTY screen snapshots. VT Code still falls back to the built-in `legacy_vt100` backend when those assets are unavailable in non-release or custom installs.
+## Why VT Code?
 
-**macOS & Linux:**
+VT Code is built for developers who want a capable local-first coding agent without being locked into one model vendor. It combines a streaming terminal UI, safe shell execution, code-aware tools, OAuth support, and open agent protocols in one Rust workspace.
+
+- **Bring your model**: GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama, LM Studio, and OpenAI-compatible custom providers.
+- **Work in the terminal**: interactive TUI, `ask`/`exec` CLI flows, pipe-friendly stdout/stderr behavior, and rich PTY snapshots powered by Ghostty VT when available.
+- **Run safely**: command policy, workspace boundaries, OS sandboxing on macOS/Linux, approval gates, and audit-friendly execution logs.
+- **Extend the agent**: Agent Skills, MCP integration, lifecycle hooks, foreground subagents, optional background subprocess agents, and editor integrations through ACP.
+- **Export and interoperate**: ATIF trajectory export, Open Responses conformance, A2A support, and Anthropic Messages API compatibility.
+
+## Quick Start
+
+### Install
+
+macOS/Linux recommended installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
-
-# Or skip ripgrep + ast-grep during install
-curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s -- --without-search-tools
 ```
 
-**Windows (PowerShell):**
+Windows PowerShell best-effort installer:
 
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
-> [!NOTE]
-> Windows installs are currently best-effort and may lag behind macOS/Linux release builds. The current release pipeline is still being tuned for `cross`-based Windows builds, and Windows build minutes can be costly, so Windows artifacts may not be available in every release.
-
-**Alternative Installation Methods:**
+Other options:
 
 ```bash
-# Cargo (Rust package manager)
 cargo install vtcode
-
-# Homebrew (macOS/Linux)
-# From homebrew/core (official):
 brew install vtcode
 
-# From vinhnx/tap (development/bleeding edge):
+# Development/bleeding edge tap
 brew tap vinhnx/tap
-brew install vtcode
-
-# If switching between taps, uninstall first:
-brew uninstall vtcode
-brew install vtcode  # or: brew install vinhnx/tap/vtcode
-
-# Optional: install the search tools bundle later
-vtcode dependencies install search-tools
+brew install vinhnx/tap/vtcode
 ```
 
-Ghostty VT is not installed through `vtcode dependencies install ...`.
-Instead, VT Code uses runtime libraries that are either:
-
-- Bundled in official macOS/Linux release archives under `ghostty-vt/`
-- Copied by the native installers during release installs
-- Staged locally for development with `scripts/setup-ghostty-vt-dev.sh`
-- Auto-bootstrapped by `./scripts/run.sh` and `./scripts/run-debug.sh` when the runtime libraries are missing
-
-See [Installation Guide](./docs/installation/README.md), [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), and [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
-
-> **Note:** If you encounter "installed from different tap" errors, uninstall the existing formula first: `brew uninstall vtcode`, then install from your preferred tap.
-
-**See [Installation Guide](./docs/installation/) and [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md) for more options and troubleshooting.**
-
-## Usage
+The macOS/Linux installer also attempts to install `ripgrep` and `ast-grep` for faster search and semantic code queries. To skip them:
 
 ```bash
-# Set your API key
-export OPENAI_API_KEY="sk-..."
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s -- --without-search-tools
+```
 
-# Launch VT Code
+Official macOS/Linux release archives bundle `ghostty-vt/` runtime libraries for richer terminal snapshots. Custom installs fall back to the built-in `legacy_vt100` backend when those assets are unavailable.
+
+See the [Installation Guide](./docs/installation/README.md) and [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md) for platform notes and troubleshooting.
+
+### Configure a provider
+
+Set an API key for your preferred provider, then launch VT Code:
+
+```bash
+export OPENAI_API_KEY="sk-..."
 vtcode
 ```
 
-### Skills Support
+Provider selection lives in `vtcode.toml`:
 
-VT Code includes comprehensive support for Skills, following the [open Agent Skills standard](http://agentskills.io/). Skills enable VT Code to leverage external capabilities and extend its functionality through a standardized skill system.
+```toml
+[agent]
+provider = "openai"
+default_model = "gpt-4.1"
+```
 
-- **Skill Discovery**: VT Code can discover and load skills from multiple locations with precedence handling
-- **Standard Compliance**: Fully compliant with the Agent Skills specification for interoperability
-- **Multi-Location Support**: Skills can be loaded from local directories, remote repositories, or embedded resources
-- **Extensible Ecosystem**: Integrate with the growing ecosystem of Agent Skills for enhanced capabilities
+For all provider-specific environment variables and examples, see [AI Provider Setup](./docs/providers/PROVIDER_GUIDES.md).
 
-For more information about skills implementation in VT Code, see [Agent Skills Guide](./docs/skills/SKILLS_GUIDE.md).
+### Use the CLI
 
-### Subagents And Background Helpers
+```bash
+# Interactive TUI
+vtcode
 
-VT Code can delegate bounded work to foreground subagents and also run an explicitly configured background subagent as a managed subprocess.
+# Pipe generated output while logs stay on stderr
+vtcode ask "write a Rust factorial function" > factorial.rs
 
-- `/agent` and `/agents active` inspect delegated agents in place without switching the main session
-- Background subprocesses are opt-in; VT Code no longer ships with a preconfigured default background agent
-- `Ctrl+B` starts or stops the configured default background subagent only after `[subagents.background]` is enabled and `default_agent` is set
-- `/subprocesses` or `Alt+S` opens the Local Agents drawer
-- The wide-mode sidebar shows a unified Local Agents section for delegated agents and background subprocesses
+# Run an agent task non-interactively
+vtcode exec "summarize the current git diff"
+```
 
-The background runtime is configured under `[subagents.background]`:
+VT Code follows [Command Line Interface Guidelines](https://clig.dev/): primary command output goes to stdout, while logs, metadata, reasoning traces, and prompts go to stderr.
+
+## Feature Tour
+
+### Agent Skills
+
+VT Code supports the [open Agent Skills standard](http://agentskills.io/) so agents can discover and load reusable capabilities from local directories, remote sources, and embedded resources with deterministic precedence.
+
+Read more in the [Agent Skills Guide](./docs/skills/SKILLS_GUIDE.md).
+
+### Subagents and background helpers
+
+VT Code can delegate bounded work to foreground subagents and can run an explicitly configured background subagent as a managed subprocess.
+
+- `/agent` and `/agents active` inspect delegated agents.
+- `/subprocesses` or `Alt+S` opens the Local Agents drawer.
+- `Ctrl+B` starts or stops the configured default background subagent only after background agents are enabled.
+
+Example configuration:
 
 ```toml
 [subagents.background]
@@ -137,21 +126,22 @@ auto_restore = true
 toggle_shortcut = "ctrl+b"
 ```
 
-### Supported Providers
+See [Subagents](./docs/user-guide/subagents.md) for usage details.
 
-VT Code works with GitHub Copilot, OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), LM Studio (local), and OpenAI-compatible custom providers such as Atlas Cloud.
+### Authentication
 
-Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
+OAuth 2.0 flows are available for providers such as OpenAI ChatGPT, OpenRouter, and GitHub Copilot. Tokens are stored in OS-native credential stores when possible, with encrypted file fallback when needed.
 
-#### Atlas Cloud
+```bash
+vtcode
+# Then run: /login copilot
+```
 
-Atlas Cloud works through VT Code's `[[custom_providers]]` support, so you can
-point VT Code at `https://api.atlascloud.ai/v1` without adding a dedicated
-runtime provider.
+See [OAuth Authentication](./docs/guides/oauth-authentication.md) for setup and provider-specific notes.
 
-<p align="center">
-  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider setup" width="720" />
-</p>
+### Custom OpenAI-compatible providers
+
+Any OpenAI-compatible API can be registered through `[[custom_providers]]`. For example, Atlas Cloud:
 
 ```toml
 [agent]
@@ -166,292 +156,126 @@ api_key_env = "ATLASCLOUD_API_KEY"
 model = "deepseek-ai/deepseek-v4-flash"
 ```
 
-See [Atlas Cloud Integration](./docs/providers/atlascloud.md) for the full setup
-flow and troubleshooting notes.
+See [Atlas Cloud Integration](./docs/providers/atlascloud.md) for the full setup flow.
 
-#### GitHub Copilot Integration
+### Editor and protocol integrations
 
-VT Code includes first-class support for GitHub Copilot with OAuth device-flow authentication via the official `copilot` CLI:
+VT Code integrates with editors and agent ecosystems through open protocols:
 
-```bash
-# Install GitHub Copilot CLI
-brew install gh-copilot
+- [Agent Client Protocol / Zed](./docs/guides/zed-acp.md)
+- [MCP integration](./docs/guides/mcp-integration.md)
+- [Agent2Agent Protocol](./docs/a2a/a2a-protocol.md)
+- [Open Responses](./docs/protocols/OPEN_RESPONSES.md)
+- [ATIF Trajectory Format](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md)
+- Anthropic Messages API compatibility for tools that speak Anthropic-style `/v1/messages`
 
-# Authenticate
-copilot login
+For local Zed development, prefer a wrapper script that runs `target/debug/vtcode` or `target/release/vtcode` with an explicit `--config` path so Zed does not pick up an older installed binary.
 
-# Or use VT Code's TUI
-vtcode
-# Then: /login copilot
+### VS Code and compatible editors
+
+<a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
+  <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
+</a>
+
+<a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
+  <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
+</a>
+
+The companion extension is available on the Visual Studio Marketplace and Open VSX for Cursor, Windsurf, and other VS Code-compatible editors. See [IDE Downloads](./docs/ide/downloads.md) and [IDE Troubleshooting](./docs/ide/troubleshooting.md).
+
+## Configuration
+
+Most settings live in `vtcode.toml`. Common areas include provider selection, OAuth behavior, tool policies, workspace safety, lifecycle hooks, PTY backend selection, context budgets, and performance tuning.
+
+- [Configuration precedence](./docs/config/CONFIGURATION_PRECEDENCE.md)
+- [Lifecycle hooks](./docs/guides/lifecycle-hooks.md)
+- [Tool policies](./docs/modules/vtcode_tools_policy.md)
+- [Ghostty VT packaging](./docs/development/GHOSTTY_VT_PACKAGING.md)
+
+## Security and Safety
+
+VT Code uses a defense-in-depth model for prompt-injection and argument-injection resistance:
+
+- command allowlists and per-command validation
+- workspace isolation
+- macOS Seatbelt and Linux Landlock/seccomp sandboxing
+- configurable allow/deny/prompt policies for tools and MCP servers
+- human approval gates for sensitive operations
+- auditable command execution logs
+
+Read the [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/sandbox/SANDBOX_DEEP_DIVE.md).
+
+## Benchmarks
+
+VT Code has a pending submission to [vercel/next-evals-oss](https://github.com/vercel/next-evals-oss/pull/83), the benchmark behind the [Next.js AI Agent Evaluations leaderboard](https://nextjs.org/evals).
+
+| Agent       | Model                         | Status      | Success Rate | Passed | Avg Duration |
+| ----------- | ----------------------------- | ----------- | ------------ | ------ | ------------ |
+| **VT Code** | `moonshotai/Kimi-K2.6:novita` | **Pending** | **33%**      | 8/24   | 90.5s        |
+
+```text
+Next.js eval success rate
+VT Code + Kimi K2.6  ████████░░░░░░░░░░░░░░░░  33%
 ```
 
-For detailed setup, see [GitHub Copilot Authentication](./docs/guides/oauth-authentication.md#github-copilot-managed-auth).
+See [benchmark notes](./docs/benchmarks/README.md#nextjs-ai-agent-evaluations) and the formal [eval framework](./evals/README.md).
 
-### Agent Protocols
+## Documentation
 
-VT Code supports multiple agent protocols for integration:
+- [Getting started](./docs/user-guide/getting-started.md)
+- [Interactive mode](./docs/user-guide/interactive-mode.md)
+- [Commands](./docs/user-guide/commands.md)
+- [Exec mode](./docs/user-guide/exec-mode.md)
+- [Keyboard shortcuts](./docs/guides/tui-event-handling.md)
+- [Context engineering](./docs/context/context_engineering.md)
+- [Code intelligence](./docs/user-guide/tree-sitter-integration.md)
+- [Development guide](./docs/development/README.md)
+- [Architecture](./docs/ARCHITECTURE.md)
+- [FAQ](./docs/FAQ.md)
 
-#### Agent Client Protocol (ACP)
+Ask documentation assistants:
 
-VT Code can integrate with code editors like Zed. For setup and troubleshooting, refer to the
-[ACP docs](./docs/guides/zed-acp.md).
+- [Google Gemini CodeWiki](https://codewiki.google/github.com/vinhnx/vtcode)
+- [Devin DeepWiki](https://deepwiki.com/vinhnx/vtcode)
 
-For local development, prefer pointing Zed at a small wrapper script that runs the repo build
-(`target/debug/vtcode` or `target/release/vtcode`) with an explicit `--config` path, instead of
-relying on an older installed binary in `~/.local/bin`.
+## Development
 
-#### Agent2Agent (A2A) Protocol
+```bash
+git clone https://github.com/vinhnx/vtcode.git
+cd vtcode
+./scripts/run-debug.sh
+```
 
-VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), enabling communication and interoperability between AI agents. The A2A protocol supports:
+Useful checks:
 
-- **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
-- **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
-- **Real-time Streaming**: Via Server-Sent Events (SSE)
-- **Rich Content Types**: Text, file, and structured data parts
-- **Push Notifications**: Webhook-based async updates
-- **JSON-RPC 2.0**: Over HTTP(S) for interoperability
+```bash
+./scripts/check-dev.sh
+./scripts/check-dev.sh --test
+./scripts/check-dev.sh --workspace
+```
 
-For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a/a2a-protocol.md).
+The workspace uses Rust stable, edition 2024, and MSRV 1.88. See [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), [Testing](./docs/development/testing.md), and [CI/CD](./docs/development/ci-cd.md).
 
-#### Anthropic API Compatibility
+## Contributing
 
-VT Code provides compatibility with the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) to help connect existing applications to VT Code, including tools like Claude Code.
+Contributions are welcome: bug reports, documentation improvements, features, tests, and issue triage all help. Please read [CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [AGENTS.md](./AGENTS.md) before opening larger changes.
 
-The server supports:
+Good starting points:
 
-- Messages endpoint at `/v1/messages`
-- Streaming responses
-- Tool calling
-- Vision (image) support
-- Multi-turn conversations
-- System prompts
-- All major Anthropic API features
+- [Open issues](https://github.com/vinhnx/vtcode/issues)
+- [Good first issues](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 
-For more information about Anthropic API compatibility, see [Anthropic API Documentation](./docs/a2a/a2a-protocol.md).
+## Support
 
-#### Open Responses Specification
-
-VT Code conforms to the [Open Responses](https://www.openresponses.org/) specification, an open, vendor-neutral standard for large language model APIs. This enables interoperable LLM workflows across different providers.
-
-Key features of Open Responses conformance:
-
-- **Unified Item Types**: State machine-based items with defined lifecycle states
-- **Semantic Streaming**: Events describe meaningful transitions, not raw token deltas
-- **Agentic Loop Support**: Composable tool invocation and message orchestration
-- **Extension Points**: Provider-specific features via namespaced extensions (e.g., `vtcode:file_change`)
-
-For more information about Open Responses implementation, see [Open Responses Documentation](./docs/protocols/OPEN_RESPONSES.md).
-
-#### Agent Trajectory Interchange Format (ATIF)
-
-VT Code implements the [Agent Trajectory Interchange Format (ATIF)](https://www.harborframework.com/docs/agents/trajectory-format) v1.4 for standardized session trajectory export. ATIF captures complete interaction histories — user messages, agent responses, tool calls, observations, and LLM metrics — in a JSON format usable across debugging, visualization, SFT, and RL pipelines.
-
-- **Complete History**: Every agent step, tool invocation, and observation in one file
-- **LLM Metrics**: Per-step and aggregate token usage, costs, and cache statistics
-- **Interoperable**: Compatible with Harbor, OpenHands, Gemini CLI, Claude Code, and Codex trajectories
-- **Opt-in**: Enable via `telemetry.atif_enabled = true` in `vtcode.toml`
-
-For more information, see [ATIF Trajectory Format Documentation](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md).
-
-### Authentication
-
-VT Code supports secure OAuth 2.0 authentication for seamless account-based access:
-
-- **OAuth Providers**: OpenAI ChatGPT and OpenRouter with PKCE-secured flows
-- **Secure Token Storage**: OS-native credential stores (Keychain, Credential Manager, Secret Service)
-- **Automatic Token Refresh**: Transparent token renewal without user intervention
-- **Fallback Encryption**: AES-256-GCM encrypted files when keyring unavailable
-
-For detailed setup and provider guides, see [OAuth Authentication Guide](./docs/guides/oauth-authentication.md).
-
-### Configuration
-
-VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
-
-- **OAuth Settings**: Control authentication method and token storage per provider
-- **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
-- **Tool Policies**: Control which tools are allowed, prompted, or denied
-- **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
-- **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
-- **PTY Backend Selection**: Ghostty VT is the default backend; it falls back to `legacy_vt100` when runtime libraries are unavailable
-
-For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
-
-For Ghostty VT runtime library packaging details, see [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
-
-### CLI Design Principles
-
-VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and standard UNIX principles to ensure a robust and pipe-friendly experience:
-
-- **Output Streams**: Primary output (e.g., code from `ask`, events from `exec`) is sent to `stdout`. All logs, metadata, reasoning traces, and interaction prompts are sent to `stderr`. This allows you to safely pipe `vtcode` output to other tools.
-    ```bash
-    # Only the generated code is saved to file; metadata remains on screen
-    vtcode ask "factorial function in rust" > factorial.rs
-    ```
-- **Standard Arguments**: Adheres to GNU/POSIX argument parsing standards using `clap`, supporting standard flags like `--help`, `--version`, and `--` separator for positional arguments.
-
----
-
-### Key Features
-
-- **Security First**: Multi-layered security model with tree-sitter-bash command validation, execution policy, and sandbox isolation
-- **OAuth Authentication**: Secure PKCE-based OAuth flows with OS-native credential storage and automatic token refresh ([docs](./docs/guides/oauth-authentication.md))
-- **Multi-Provider AI**: OpenAI, Anthropic, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
-- **Semantic Code Understanding**: LLM-native code analysis and navigation (Rust, Python, JavaScript/TypeScript, Go, Java, and more)
-- **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
-- **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/skills/SKILLS_GUIDE.md))
-- **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
-- **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
-- **Context Management**: Advanced token budget tracking and context curation
-- **TUI Interface**: Rich terminal user interface with real-time streaming
-- **Ghostty VT Snapshots**: PTY sessions use Ghostty VT runtime libraries when available and fall back to built-in `legacy_vt100`
-- **Auto-Update System**: Built-in update manager with release channels, version pinning, and mirror support ([docs](./docs/guides/UPDATE_SYSTEM.md))
-
-### Security & Safety
-
-VT Code implements a **defense-in-depth security model** to protect against prompt injection and argument injection attacks:
-
-- **Execution Policy**: Command allowlist with per-command argument validation
-- **Workspace Isolation**: All operations confined to workspace boundaries
-- **OS-Native Sandboxing**: macOS Seatbelt and Linux Landlock + seccomp for kernel-enforced isolation
-- **Tool Policies**: Configurable allow/deny/prompt policies for MCP tools
-- **Human-in-the-Loop**: Configurable approval system for sensitive operations
-- **Audit Trail**: Comprehensive logging of all command executions
-
-See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/sandbox/SANDBOX_DEEP_DIVE.md) for details.
-
----
-
-### Docs & Examples
-
-- [**Installation**](./docs/installation/README.md)
-    - [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
-    - [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
-- [**Getting started**](./docs/user-guide/getting-started.md)
-    - [Interactive mode](./docs/user-guide/interactive-mode.md)
-    - [Command line interface](./docs/user-guide/commands.md)
-    - [Subagents](./docs/user-guide/subagents.md)
-- [**OAuth Authentication**](./docs/guides/oauth-authentication.md) - Secure OAuth 2.0 flows with PKCE, token storage, and automatic refresh
-- [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
-- [**Update System**](./docs/guides/UPDATE_SYSTEM.md) - Release channels, version pinning, and update management
-- [**AI Provider Setup**](./docs/providers/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
-    - [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
-    - [Atlas Cloud](./docs/providers/atlascloud.md)
-    - [OpenRouter](./docs/providers/openrouter.md)
-    - [Ollama](./docs/providers/ollama.md)
-    - [LM Studio](./docs/providers/lmstudio.md)
-    - [llama.cpp](./docs/providers/llamacpp.md)
-- [**Context Engineering**](./docs/context/context_engineering.md)
-    - [Token budget management](./docs/context/context_engineering.md#3-token-budget-management)
-    - [Dynamic context curation](./docs/context/context_engineering.md#2-just-in-time-context-loading)
-- [**Agent Skills**](./docs/skills/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
-    - [**Standard Compliance**](./docs/skills/AGENT_SKILLS_SPEC_IMPLEMENTATION.md) - How VT Code implements the Agent Skills standard
-- [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
-- [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
-- [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
-- [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
-- [**Keyboard Shortcuts**](./docs/guides/tui-event-handling.md)
-- [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
-- [**Exec Mode**](./docs/user-guide/exec-mode.md)
-- [**Development**](./docs/development/README.md)
-    - [Development Setup](./docs/development/DEVELOPMENT_SETUP.md)
-    - [Testing](./docs/development/testing.md)
-    - [CI/CD](./docs/development/ci-cd.md)
-    - [**Empirical Evaluation**](./evals/README.md) - Formal framework for measuring LLM performance across safety, logic, and coding benchmarks.
-- [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
-- [**TUI & Async Guides**](./docs/guides/)
-    - [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
-    - [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
-    - [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
-- [**Ratatui Integration**](./docs/README.md) - Complete integration of Ratatui FAQ best practices
-    - [Summary](./docs/README.md) - Overview of all improvements
-    - [FAQ Integration](./docs/styling/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
-    - [Async Improvements](./docs/README.md) - Tokio best practices applied
-- [**Architecture**](./docs/ARCHITECTURE.md)
-- [**Security**](./docs/security/SECURITY_MODEL.md)
-    - [Security Model](./docs/security/SECURITY_MODEL.md)
-    - [Security Documentation Index](./docs/security/SECURITY_DOCUMENTATION_INDEX.md)
-    - [Tool Policies](./docs/modules/vtcode_tools_policy.md)
-- [**Anthropic API Compatibility**](./docs/a2a/a2a-protocol.md) - Documentation for Anthropic Messages API compatibility server
-- [**ATIF Trajectory Format**](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md) - Standardized agent trajectory export for debugging, SFT, and RL pipelines
-
----
-
-## Documents
-
-- Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
-- Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-
----
-
-## Visual Studio Code Extension
-
-VT Code is available as an VS Code extension.
-
-  <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
-    <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
-  </a>
-
-The original VT Code extension for Visual Studio Code with full semantic code understanding and AI assistance.
-
-VT Code is also compatible with other VS Code-compatible editors:
-
-  <a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
-    <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
-  </a>
-
-Compatible with Cursor, Windsurf, and other VS Code-compatible editors through the Open VSX registry.
-
-For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide/downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/troubleshooting.md).
-
----
-
-### Contributing
-
-I warmly welcome contributions of all kinds! Please read [CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) for my project-specific rules and guidelines (for both humans and agents).
-
-Whether you're looking to fix bugs, add new features, improve documentation, or enhance the user experience, your help is greatly appreciated.
-
-How To Contribute:
-
-- Report issues you're experiencing
-- Upvote issues that matter to you
-- Help answer questions on the issue tracker
-
-If you're not sure where to start:
-
-- Check out the [issues page](https://github.com/vinhnx/vtcode/issues)
-- Browse by labels that interest you
-- Look for [good first issue](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) labeled items
-- Feel free to browse all open issues and pick one that resonates with you!
-
-Steps to get started:
-
-1. Fork the repository by clicking the Fork button in the top-right corner
-2. Clone your forked repository to your local machine
-3. Create a new branch for your changes and start contributing!
-
-When reporting an issue, please include enough details for others to reproduce the problem effectively.
-
----
-
-## Support VT Code's Development 
-
-I build VT Code in my spare time. It supports open-weight models and will stay open source, no matter what. If it has saved you some time, you can buy me a coffee: https://buymeacoffee.com/vinhnx
+VT Code is built in spare time and will stay open source. If it saves you time, you can support development here: [buymeacoffee.com/vinhnx](https://buymeacoffee.com/vinhnx)
 
 <p align="center">
-  <img src="./resources/screenshots/qr_donate.png" alt="buymeacoffee"/>
-  
-  <a href="https://buymeacoffee.com/vinhnx">BuyMeACoffee</a>
+  <img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee QR code" />
 </p>
-
----
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=vinhnx/vtcode&type=timeline&legend=top-left)](https://www.star-history.com/#vinhnx/vtcode&type=timeline&legend=top-left)
-
----
 
 ## License
 
