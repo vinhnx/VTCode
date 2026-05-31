@@ -352,6 +352,7 @@ async fn install_update(updater: &Updater, force: bool) -> Result<()> {
         InstallOutcome::Updated(version) => {
             println!("{} {} installed successfully!", "✓".green(), version.bold());
             println!("\n{} Restart VT Code to use the new version", "→".cyan());
+            println!("{} Launch with: {}", "→".cyan(), "vtcode".green());
         }
         InstallOutcome::UpToDate(version) => {
             println!("{} Already up to date ({})", "✓".green(), version.bold());
