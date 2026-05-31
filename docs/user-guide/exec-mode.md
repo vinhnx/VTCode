@@ -21,6 +21,23 @@ allowances or confirmation dialogs, so ensure the allow list covers every tool i
 `--last-message-file` or persist the raw JSON stream with `--events`. Use `--json` when you want to see the live JSONL feed on
 stdout.
 
+### Granting workspace trust
+
+If the workspace has not been trusted yet, exec mode resolves trust in this order:
+
+1. **Already trusted.** Persisted `full_auto` trust from a previous run is reused.
+2. **`VTCODE_TRUST_WORKSPACE=full-auto`.** Grants and persists full-auto trust for the current workspace before
+   running. Set `VTCODE_TRUST_WORKSPACE=deny` to explicitly refuse trust (the run aborts with an error instead of
+   prompting). Aliases `1`, `yes`, `on`, `trust`, `trusted` map to grant; `0`, `no`, `off`, `deny`, `denied` map to
+   refuse. Add `VTCODE_TRUST_WORKSPACE_QUIET=1` to suppress the "trusted via env" confirmation line.
+3. **Interactive TTY prompt.** When stdin and stdout are both connected to a terminal, exec mode prompts you to trust
+   the workspace inline — no separate interactive session required.
+4. **Hard error.** In every other case (non-TTY, no env override, untrusted) the run aborts with an error listing the
+   options above so CI logs are self-explanatory.
+
+`--auto/--full-auto` and `vtcode benchmark` honour the same precedence, so the same env-var works across every
+autonomous entry point.
+
 ## Dry-run mode
 
 Use `--dry-run` to force read-only execution while still allowing the agent to analyze and plan:
