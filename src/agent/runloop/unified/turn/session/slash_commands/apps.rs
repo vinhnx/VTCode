@@ -30,7 +30,9 @@ use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 
-const EXTERNAL_APP_EVENT_LOOP_SETTLE_DELAY: Duration = Duration::from_millis(50);
+/// Time to wait for the event stream to fully stop before launching an external editor.
+/// Covers the 100ms stop timeout + processing delay in the drive loop.
+const EVENT_STREAM_STOP_DELAY: Duration = Duration::from_millis(150);
 const DOCS_URL: &str = "https://deepwiki.com/vinhnx/vtcode";
 const DONATE_URL: &str = "https://buymeacoffee.com/vinhnx";
 const PROJECT_URL: &str = "https://github.com/vinhnx/vtcode";
@@ -374,8 +376,12 @@ where
     F: FnOnce() -> T,
 {
     if suspend_tui {
-        handle.suspend_event_loop();
-        tokio::time::sleep(EXTERNAL_APP_EVENT_LOOP_SETTLE_DELAY).await;
+        // Fully stop the background EventStream task so it stops reading stdin.
+        // The editor (e.g., nvim) must have exclusive access to the terminal.
+        handle.stop_event_stream();
+        // Wait for the stop to complete (100ms timeout in EventStreamController::stop()
+        // plus margin for command delivery through the event loop).
+        tokio::time::sleep(EVENT_STREAM_STOP_DELAY).await;
         handle.clear_input_queue();
     }
 
@@ -383,7 +389,10 @@ where
 
     if suspend_tui {
         handle.clear_input_queue();
+        // Resume event processing and restart the EventStream so the TUI
+        // can receive keyboard input again.
         handle.resume_event_loop();
+        handle.start_event_stream();
     }
 
     result

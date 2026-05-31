@@ -22,6 +22,8 @@ pub trait TuiCommand {
     fn is_resume_event_loop(&self) -> bool;
     fn is_clear_input_queue(&self) -> bool;
     fn is_force_redraw(&self) -> bool;
+    fn is_stop_event_stream(&self) -> bool;
+    fn is_start_event_stream(&self) -> bool;
 }
 
 pub trait TuiSessionDriver {
@@ -82,6 +84,14 @@ impl TuiCommand for crate::core_tui::types::InlineCommand {
     fn is_force_redraw(&self) -> bool {
         matches!(self, crate::core_tui::types::InlineCommand::ForceRedraw)
     }
+
+    fn is_stop_event_stream(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::StopEventStream)
+    }
+
+    fn is_start_event_stream(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::StartEventStream)
+    }
 }
 
 use super::types::FocusChangeCallback;
@@ -94,11 +104,76 @@ pub(crate) mod terminal_io;
 mod terminal_modes;
 
 use drive::{DriveRuntimeOptions, drive_terminal};
-use events::{EventListener, spawn_event_loop};
+use events::{EventListener, TerminalEvent, spawn_event_loop};
 use signal::SignalCleanupGuard;
 use surface::TerminalSurface;
 use terminal_io::{drain_terminal_events, finalize_terminal, prepare_terminal};
 use terminal_modes::{TerminalModeState, enable_terminal_modes, restore_terminal_modes};
+
+/// Controls the lifecycle of the async crossterm event stream.
+///
+/// The event loop must be fully stopped before launching an external editor
+/// that needs stdin (e.g., nvim), otherwise the background EventStream task
+/// competes with the editor for terminal input, causing freezes.
+pub(super) struct EventStreamController {
+    cancellation_token: CancellationToken,
+    join_handle: Option<tokio::task::JoinHandle<()>>,
+    event_tx: UnboundedSender<TerminalEvent>,
+    rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    last_input_elapsed_ms: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    session_start: std::time::Instant,
+}
+
+impl EventStreamController {
+    pub(super) fn new(
+        cancellation_token: CancellationToken,
+        join_handle: tokio::task::JoinHandle<()>,
+        event_tx: UnboundedSender<TerminalEvent>,
+        rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        last_input_elapsed_ms: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        session_start: std::time::Instant,
+    ) -> Self {
+        Self {
+            cancellation_token,
+            join_handle: Some(join_handle),
+            event_tx,
+            rx_paused,
+            last_input_elapsed_ms,
+            session_start,
+        }
+    }
+
+    /// Cancel the current event loop task and await its termination.
+    /// Creates a fresh CancellationToken for the next `start()` call.
+    pub(super) async fn stop(&mut self) {
+        self.cancellation_token.cancel();
+        if let Some(handle) = self.join_handle.take() {
+            let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
+        }
+        self.cancellation_token = CancellationToken::new();
+    }
+
+    /// Spawn a new event loop task with a fresh EventStream.
+    /// Safe to call multiple times after `stop()`.
+    pub(super) fn start(&mut self) {
+        let token = self.cancellation_token.clone();
+        let event_tx = self.event_tx.clone();
+        let rx_paused = self.rx_paused.clone();
+        let last_input = self.last_input_elapsed_ms.clone();
+        let session_start = self.session_start;
+        self.join_handle = Some(tokio::spawn(async move {
+            spawn_event_loop(event_tx, token, rx_paused, last_input, session_start).await;
+        }));
+    }
+
+    /// Ensure the event loop is stopped for final cleanup on TUI exit.
+    pub(super) async fn shutdown(&mut self) {
+        if let Some(handle) = self.join_handle.take() {
+            self.cancellation_token.cancel();
+            let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
+        }
+    }
+}
 
 struct TerminalModeRestoreGuard {
     state: Option<TerminalModeState>,
@@ -219,6 +294,9 @@ where
     // the user's first keystrokes.
     drain_terminal_events();
 
+    // Clone the sender before moving event_channels_for_loop into tokio::spawn.
+    let event_tx_for_controller = event_channels_for_loop.tx.clone();
+
     // Spawn the async event loop after the terminal is fully configured so the first keypress is
     // captured immediately (avoids cooked-mode buffering before raw mode is enabled).
     let event_loop_handle = tokio::spawn(async move {
@@ -231,6 +309,15 @@ where
         )
         .await;
     });
+
+    let mut event_stream = EventStreamController::new(
+        cancellation_token,
+        event_loop_handle,
+        event_tx_for_controller,
+        event_channels.rx_paused.clone(),
+        event_channels.last_input_elapsed_ms.clone(),
+        event_channels.session_start,
+    );
 
     let drive_result = drive_terminal(
         &mut terminal,
@@ -247,12 +334,12 @@ where
             keyboard_flags,
             fullscreen: options.fullscreen,
         },
+        &mut event_stream,
     )
     .await;
 
-    // Gracefully shutdown the event loop
-    cancellation_token.cancel();
-    let _ = tokio::time::timeout(Duration::from_millis(100), event_loop_handle).await;
+    // Gracefully shutdown the event loop (may already be stopped by StopEventStream)
+    event_stream.shutdown().await;
 
     // Drain any pending events before finalizing terminal and disabling modes
     drain_terminal_events();

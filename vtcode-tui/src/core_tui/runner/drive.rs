@@ -127,36 +127,70 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
     suspend_result
 }
 
+#[must_use]
+enum EventStreamAction {
+    None,
+    Stop,
+    Start,
+}
+
 fn handle_inline_command<S: TuiSessionDriver>(
     terminal: &mut Terminal<impl Backend>,
     session: &mut S,
     inputs: &mut EventListener,
     event_channels: &EventChannels,
     command: S::Command,
-) -> Result<()> {
+) -> Result<EventStreamAction> {
     if command.is_suspend_event_loop() {
         event_channels.pause();
-        return Ok(());
+        return Ok(EventStreamAction::None);
     }
     if command.is_resume_event_loop() {
         event_channels.resume();
-        return Ok(());
+        return Ok(EventStreamAction::None);
     }
     if command.is_clear_input_queue() {
         inputs.clear_queue();
-        return Ok(());
+        return Ok(EventStreamAction::None);
+    }
+    if command.is_stop_event_stream() {
+        return Ok(EventStreamAction::Stop);
+    }
+    if command.is_start_event_stream() {
+        return Ok(EventStreamAction::Start);
     }
     if command.is_force_redraw() {
         terminal
             .clear()
             .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
         session.handle_command(command);
-        return Ok(());
+        return Ok(EventStreamAction::None);
     }
 
     session.handle_command(command);
 
-    Ok(())
+    Ok(EventStreamAction::None)
+}
+
+/// Process an event-stream action (stop/start) that requires async work.
+async fn process_event_stream_action(
+    action: EventStreamAction,
+    event_channels: &EventChannels,
+    inputs: &mut EventListener,
+    event_stream: &mut super::EventStreamController,
+) {
+    match action {
+        EventStreamAction::Stop => {
+            event_channels.pause();
+            event_stream.stop().await;
+            super::terminal_io::drain_terminal_events();
+            inputs.clear_queue();
+        }
+        EventStreamAction::Start => {
+            event_stream.start();
+        }
+        EventStreamAction::None => {}
+    }
 }
 
 /// Maximum number of commands to drain per turn to prevent unbounded latency
@@ -266,6 +300,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     inputs: &mut EventListener,
     event_channels: EventChannels,
     runtime_options: DriveRuntimeOptions<S::Event>,
+    event_stream: &mut super::EventStreamController,
 ) -> Result<()> {
     #[cfg(not(unix))]
     let _ = (
@@ -282,7 +317,15 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
         for _ in 0..MAX_COMMANDS_PER_TURN {
             match commands.try_recv() {
                 Ok(command) => {
-                    handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+                    let action =
+                        handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+                    process_event_stream_action(
+                        action,
+                        &event_channels,
+                        inputs,
+                        event_stream,
+                    )
+                    .await;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -447,7 +490,16 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
             command = commands.recv() => {
                 match command {
                     Some(command) => {
-                        handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+                        let action = handle_inline_command(
+                            terminal, session, inputs, &event_channels, command,
+                        )?;
+                        process_event_stream_action(
+                            action,
+                            &event_channels,
+                            inputs,
+                            event_stream,
+                        )
+                        .await;
                         continue 'main;
                     }
                     None => {

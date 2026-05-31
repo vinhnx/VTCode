@@ -97,6 +97,8 @@ pub enum InlineCommand {
     SuspendEventLoop,
     ResumeEventLoop,
     ClearInputQueue,
+    StopEventStream,
+    StartEventStream,
     /// Update editing mode state in header context
     SetEditingMode(EditingMode),
     /// Update autonomous mode state in header context
@@ -212,6 +214,14 @@ impl InlineHandle {
 
     pub fn clear_input_queue(&self) {
         self.send_command(InlineCommand::ClearInputQueue);
+    }
+
+    pub fn stop_event_stream(&self) {
+        self.send_command(InlineCommand::StopEventStream);
+    }
+
+    pub fn start_event_stream(&self) {
+        self.send_command(InlineCommand::StartEventStream);
     }
 
     pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {

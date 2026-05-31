@@ -100,6 +100,8 @@ pub enum InlineCommand {
     SuspendEventLoop,
     ResumeEventLoop,
     ClearInputQueue,
+    StopEventStream,
+    StartEventStream,
     /// Update editing mode state in header context
     SetEditingMode(EditingMode),
     /// Update autonomous mode state in header context
@@ -254,6 +256,14 @@ impl InlineHandle {
 
     pub fn clear_input_queue(&self) {
         self.send_command(InlineCommand::ClearInputQueue);
+    }
+
+    pub fn stop_event_stream(&self) {
+        self.send_command(InlineCommand::StopEventStream);
+    }
+
+    pub fn start_event_stream(&self) {
+        self.send_command(InlineCommand::StartEventStream);
     }
 
     pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
@@ -520,5 +530,13 @@ impl crate::core_tui::runner::TuiCommand for InlineCommand {
 
     fn is_force_redraw(&self) -> bool {
         matches!(self, InlineCommand::ForceRedraw)
+    }
+
+    fn is_stop_event_stream(&self) -> bool {
+        matches!(self, InlineCommand::StopEventStream)
+    }
+
+    fn is_start_event_stream(&self) -> bool {
+        matches!(self, InlineCommand::StartEventStream)
     }
 }

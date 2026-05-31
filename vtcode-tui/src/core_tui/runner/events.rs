@@ -10,7 +10,7 @@ use super::TuiSessionDriver;
 use crate::config::constants::ui;
 
 #[derive(Debug, Clone)]
-pub(super) enum TerminalEvent {
+pub(crate) enum TerminalEvent {
     Tick,
     Crossterm(CrosstermEvent),
 }

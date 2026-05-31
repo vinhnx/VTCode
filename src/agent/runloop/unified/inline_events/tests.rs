@@ -827,5 +827,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetSkipConfirmations(_) => "SetSkipConfirmations",
         InlineCommand::Shutdown => "Shutdown",
         InlineCommand::SetReasoningStage(_) => "SetReasoningStage",
+        InlineCommand::StopEventStream => "StopEventStream",
+        InlineCommand::StartEventStream => "StartEventStream",
     }
 }

@@ -201,7 +201,9 @@ impl Session {
             }
             InlineCommand::SuspendEventLoop
             | InlineCommand::ResumeEventLoop
-            | InlineCommand::ClearInputQueue => {
+            | InlineCommand::ClearInputQueue
+            | InlineCommand::StopEventStream
+            | InlineCommand::StartEventStream => {
                 // Handled by drive_terminal
             }
             InlineCommand::SetEditingMode(mode) => {
