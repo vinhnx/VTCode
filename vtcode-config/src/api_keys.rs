@@ -181,7 +181,7 @@ pub fn get_api_key(provider: &str, _sources: &ApiKeySources) -> Result<String> {
             Err(anyhow::anyhow!("QWEN_API_KEY or DASHSCOPE_API_KEY not set"))
         }
         // Ollama and LM Studio allow empty keys (local deployment)
-        "ollama" | "lmstudio" | "llamacpp" => Ok(String::new()),
+        "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp" => Ok(String::new()),
         // Managed-auth providers show a specific error message
         "copilot" => Err(anyhow::anyhow!(
             "GitHub Copilot authentication is managed by the official `copilot` CLI. Run `vtcode login copilot`."

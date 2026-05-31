@@ -75,7 +75,11 @@ fn uses_provider_api_key(selection: &ModelSelectionResult) -> bool {
         return false;
     }
 
-    selection.provider_enum != Some(Provider::Ollama) || is_cloud_ollama_model(&selection.model)
+    match selection.provider_enum {
+        Some(Provider::Ollama) => is_cloud_ollama_model(&selection.model),
+        Some(Provider::LmStudio | Provider::LlamaCpp) => false,
+        _ => true,
+    }
 }
 
 fn is_cloud_ollama_model(model: &str) -> bool {
