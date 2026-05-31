@@ -1437,6 +1437,63 @@
         "capabilities": {
           "structured_output": true
         }
+      },
+      "zai-org/GLM-5.1:deepinfra": {
+        "id": "zai-org/GLM-5.1:deepinfra",
+        "name": "GLM-5.1 (DeepInfra)",
+        "description": "Z.ai GLM-5.1 model via DeepInfra inference provider on HuggingFace router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
+      "MiniMaxAI/MiniMax-M2.7:novita": {
+        "id": "MiniMaxAI/MiniMax-M2.7:novita",
+        "name": "MiniMax-M2.7 (Novita)",
+        "description": "MiniMax-M2.7 model via Novita inference provider on HuggingFace router. Recursive self-improvement with enhanced reasoning and coding capabilities.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
+      "deepseek-ai/DeepSeek-V4-Pro:novita": {
+        "id": "deepseek-ai/DeepSeek-V4-Pro:novita",
+        "name": "DeepSeek V4 Pro (Novita)",
+        "description": "DeepSeek V4 Pro via Novita inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "capabilities": {
+          "structured_output": true
+        }
       }
     }
   },

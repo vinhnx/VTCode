@@ -103,6 +103,12 @@ pub enum ModelId {
     HuggingFaceDeepseekV4ProTogether,
     /// Step 3.5 Flash via Hugging Face router
     HuggingFaceStep35Flash,
+    /// Z.AI GLM-5.1 via DeepInfra inference provider on Hugging Face router
+    HuggingFaceGlm51Deepinfra,
+    /// MiniMax M2.7 via Novita on Hugging Face router
+    HuggingFaceMinimaxM27Novita,
+    /// DeepSeek V4 Pro via Novita on Hugging Face router
+    HuggingFaceDeepseekV4ProNovita,
 
     // StepFun models
     /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling

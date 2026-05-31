@@ -175,6 +175,15 @@ impl FromStr for ModelId {
             {
                 Ok(ModelId::HuggingFaceStep35Flash)
             }
+            s if s == models::huggingface::ZAI_GLM_5_1_DEEPINFRA => {
+                Ok(ModelId::HuggingFaceGlm51Deepinfra)
+            }
+            s if s == models::huggingface::MINIMAX_M2_7_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM27Novita)
+            }
+            s if s == models::huggingface::DEEPSEEK_V4_PRO_NOVITA => {
+                Ok(ModelId::HuggingFaceDeepseekV4ProNovita)
+            }
             s if s == models::stepfun::STEP_3_7_FLASH => Ok(ModelId::StepFun37Flash),
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),

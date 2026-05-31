@@ -229,6 +229,15 @@ impl ModelId {
             ModelId::HuggingFaceStep35Flash => {
                 "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
             }
+            ModelId::HuggingFaceGlm51Deepinfra => {
+                "Z.ai GLM-5.1 model via DeepInfra inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceMinimaxM27Novita => {
+                "MiniMax-M2.7 model via Novita inference provider on HuggingFace router. Recursive self-improvement with enhanced reasoning."
+            }
+            ModelId::HuggingFaceDeepseekV4ProNovita => {
+                "DeepSeek V4 Pro via Novita inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params)."
+            }
             ModelId::StepFun37Flash => {
                 "StepFun's flagship multimodal reasoning model with 256K context, native image/video input, and tool calling."
             }

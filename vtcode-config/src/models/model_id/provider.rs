@@ -44,7 +44,10 @@ impl ModelId {
             | ModelId::HuggingFaceKimiK26Novita
             | ModelId::HuggingFaceDeepseekV4FlashNovita
             | ModelId::HuggingFaceDeepseekV4ProTogether
-            | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
+            | ModelId::HuggingFaceStep35Flash
+            | ModelId::HuggingFaceGlm51Deepinfra
+            | ModelId::HuggingFaceMinimaxM27Novita
+            | ModelId::HuggingFaceDeepseekV4ProNovita => Provider::HuggingFace,
             ModelId::StepFun37Flash => Provider::StepFun,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK26 => Provider::Moonshot,

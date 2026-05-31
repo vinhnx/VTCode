@@ -22,6 +22,11 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     QWEN3_5_397B_A17B_TOGETHER,
     DEEPSEEK_V4_PRO_TOGETHER,
     STEP_3_5_FLASH,
+    // DeepInfra inference provider models
+    ZAI_GLM_5_1_DEEPINFRA,
+    // Additional Novita models
+    MINIMAX_M2_7_NOVITA,
+    DEEPSEEK_V4_PRO_NOVITA,
 ];
 
 // Recommended conversational LLMs
@@ -51,6 +56,13 @@ pub const QWEN3_5_397B_A17B_TOGETHER: &str = "Qwen/Qwen3.5-397B-A17B:together";
 // DeepSeek V4 models via HF router
 pub const DEEPSEEK_V4_FLASH_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Flash:novita";
 pub const DEEPSEEK_V4_PRO_TOGETHER: &str = "deepseek-ai/DeepSeek-V4-Pro:together";
+pub const DEEPSEEK_V4_PRO_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Pro:novita";
+
+// DeepInfra inference provider models
+pub const ZAI_GLM_5_1_DEEPINFRA: &str = "zai-org/GLM-5.1:deepinfra";
+
+// Additional Novita models
+pub const MINIMAX_M2_7_NOVITA: &str = "MiniMaxAI/MiniMax-M2.7:novita";
 
 pub const REASONING_MODELS: &[&str] = &[
     // All recommended conversational LLMs support reasoning
@@ -64,8 +76,11 @@ pub const REASONING_MODELS: &[&str] = &[
     XIAOMI_MIMO_V2_FLASH_NOVITA,
     QWEN3_CODER_NEXT_NOVITA,
     ZAI_GLM_5_1_ZAI_ORG,
+    ZAI_GLM_5_1_DEEPINFRA,
+    MINIMAX_M2_7_NOVITA,
     QWEN3_5_397B_A17B_TOGETHER,
     DEEPSEEK_V4_PRO_TOGETHER,
+    DEEPSEEK_V4_PRO_NOVITA,
     DEEPSEEK_V4_FLASH_NOVITA,
     STEP_3_5_FLASH,
 ];

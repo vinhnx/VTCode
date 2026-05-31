@@ -197,6 +197,9 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4ProTogether => {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
+            ModelId::HuggingFaceDeepseekV4ProNovita => {
+                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
+            }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
@@ -260,6 +263,9 @@ impl ModelId {
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
             ModelId::HuggingFaceDeepseekV4ProTogether => {
+                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
+            }
+            ModelId::HuggingFaceDeepseekV4ProNovita => {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
@@ -333,6 +339,9 @@ impl ModelId {
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4ProTogether
+                | ModelId::HuggingFaceGlm51Deepinfra
+                | ModelId::HuggingFaceMinimaxM27Novita
+                | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::PoolsideLagunaM1
         )
@@ -391,6 +400,9 @@ impl ModelId {
                 | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4FlashNovita
                 | ModelId::HuggingFaceDeepseekV4ProTogether
+                | ModelId::HuggingFaceGlm51Deepinfra
+                | ModelId::HuggingFaceMinimaxM27Novita
+                | ModelId::HuggingFaceDeepseekV4ProNovita
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::PoolsideLagunaM1
         )
@@ -483,11 +495,14 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             ModelId::HuggingFaceMinimaxM25Novita => "m2.5",
+            ModelId::HuggingFaceMinimaxM27Novita => "m2.7",
             ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceGlm51ZaiOrg => "5.1",
+            ModelId::HuggingFaceGlm51Deepinfra => "5.1",
             ModelId::HuggingFaceKimiK26Novita => "k2.6",
             ModelId::HuggingFaceDeepseekV4FlashNovita => "v4-flash",
             ModelId::HuggingFaceDeepseekV4ProTogether => "v4-pro",
+            ModelId::HuggingFaceDeepseekV4ProNovita => "v4-pro",
             ModelId::HuggingFaceStep35Flash => "3.5",
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"
