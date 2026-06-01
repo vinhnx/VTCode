@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.0 - 2026-06-01
+
+### Highlights
+#### Documentation
+
+- Update README with Xiaomi MiMo V2.5 promotion details and add promotional image (786fa660) 
+#### Features
+
+- Add MiniMax-M3 model with multimodal capabilities and update default model (64b27402) 
+### Other Changes
 ## 0.116.4 - 2026-05-31
 
 ### Highlights
