@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.1 - 2026-06-01
+
+### Highlights
+#### Features
+
+- Add help modal for keyboard shortcuts and update related tests (20b360a1) 
+### Other Changes
+#### Other
+
+- Fix installer filename formatting  (86e9fcc7) (@uiYzzi)
 ## 0.117.0 - 2026-06-01
 
 ### Highlights
