@@ -218,7 +218,7 @@ get_download_url() {
 
     # Strip 'v' prefix from tag for filename only
     local version_tag="${release_tag#v}"
-    local filename="vtcode-${platform}-v${version_tag}.${file_ext}"
+    local filename="vtcode-${version_tag}-${platform}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
 }
 
