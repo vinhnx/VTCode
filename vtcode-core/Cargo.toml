@@ -139,7 +139,7 @@ schemars = { workspace = true, optional = true }
 
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
-rmcp = { version = "1.5", features = [
+rmcp = { version = "1.7", features = [
     "client",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
@@ -156,7 +156,7 @@ libloading = { workspace = true }
 webbrowser = "1.2"
 
 notify = "8.2.0"
-notify-rust = { version = "4.16", optional = true }
+notify-rust = { version = "4.17", optional = true }
 ring = { workspace = true }
 
 # A2A (Agent2Agent) Protocol HTTP server support
