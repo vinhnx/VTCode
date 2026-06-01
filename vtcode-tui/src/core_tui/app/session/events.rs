@@ -559,6 +559,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if maybe_show_help_modal(session) {
+                return None;
+            }
+
             if !has_control && let Some(event) = maybe_handle_busy_steering_command(session) {
                 return Some(event);
             }
@@ -983,37 +987,29 @@ fn is_inline_lists_toggle_shortcut(
 
 fn quick_help_lines() -> Vec<String> {
     vec![
-        "─── Input ───────────────────────────────────────────────────".to_string(),
-        "  Enter          Submit     Shift+Tab    Auto-accept edits".to_string(),
-        "  Tab            Queue      Shift+Enter  Insert newline".to_string(),
-        "  Ctrl+Enter     Run now    Esc          Close overlay".to_string(),
-        "  ?              This help  /            Commands".to_string(),
-        "".to_string(),
-        "─── Readline (Emacs) ────────────────────────────────────────".to_string(),
-        "  Ctrl+A / E     Start / End of line".to_string(),
-        "  Ctrl+F / B     Forward / Backward character".to_string(),
-        "  Ctrl+P / N     Previous / Next history".to_string(),
-        "  Alt+F / B      Forward / Backward word".to_string(),
-        "  Ctrl+T         Transpose characters".to_string(),
-        "  Alt+T          Transpose words".to_string(),
-        "  Alt+U / L / C  Uppercase / Lowercase / Capitalize word".to_string(),
-        "  Ctrl+W         Delete previous word".to_string(),
-        "  Alt+D          Delete next word".to_string(),
-        "  Ctrl+U / K     Delete to start / end of line".to_string(),
-        "  Alt+\\          Delete whitespace around cursor".to_string(),
-        "  Ctrl+Z / Y     Undo / Redo".to_string(),
-        "  Ctrl+R / S     Reverse / Forward history search".to_string(),
-        "".to_string(),
-        "─── Navigation ──────────────────────────────────────────────".to_string(),
-        "  Ctrl+L         Clear screen".to_string(),
-        "  Ctrl+G         Open in $EDITOR".to_string(),
-        "  Ctrl+M         Model picker".to_string(),
-        "  Ctrl+I / /     Toggle inline lists".to_string(),
-        "  Ctrl+O         Copy last response".to_string(),
-        "  Alt+P          Prompt suggestion".to_string(),
-        "  Alt+O          Transcript review".to_string(),
-        "  Ctrl+Home/End  Jump transcript top/bottom".to_string(),
+        "Common                  Readline editing          Navigation".to_string(),
+        "!cmd shell mode         Ctrl+A/E line ends       / commands".to_string(),
+        "@path file reference    Ctrl+F/B char move       ? or /help shortcuts".to_string(),
+        "Enter submit/queue      Alt+F/B word move        Shift+Tab mode picker".to_string(),
+        "Ctrl+Enter run/steer    Alt+Left/Right word      Tab accept/queue".to_string(),
+        "Shift+Enter/Ctrl+J new  Ctrl+P/N history         Ctrl+L clear screen".to_string(),
+        "Esc clear/cancel        Ctrl+R/S history search  Ctrl+M model picker".to_string(),
+        "Double Esc rewind       Ctrl+W delete prev word  Ctrl+O copy response".to_string(),
+        "Ctrl+C interrupt/copy   Alt+D delete next word   Alt+P prompt suggest".to_string(),
+        "Ctrl+D exit             Ctrl+U/K delete to edge  Alt+O transcript review".to_string(),
+        "PageUp/PageDown scroll  Ctrl+T/Alt+T transpose   Ctrl+I/Ctrl+/ lists".to_string(),
+        "Alt+S subprocesses      Alt+U/L/C case; Alt+\\  Ctrl+G editor; Ctrl+Z/Y undo".to_string(),
     ]
+}
+
+fn maybe_show_help_modal(session: &mut Session) -> bool {
+    if session.core.input_manager.content().trim() != "/help" {
+        return false;
+    }
+
+    clear_submitted_input(session);
+    session.show_modal("Keyboard Shortcuts".to_string(), quick_help_lines(), None);
+    true
 }
 
 enum TranscriptReviewKeyResult {

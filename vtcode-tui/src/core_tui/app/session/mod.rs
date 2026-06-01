@@ -510,6 +510,21 @@ impl AppSession {
         self.core.mark_dirty();
     }
 
+    pub(crate) fn show_modal(
+        &mut self,
+        title: String,
+        lines: Vec<String>,
+        secure_prompt: Option<crate::core_tui::app::types::SecurePromptConfig>,
+    ) {
+        self.show_transient(TransientRequest::Modal(
+            crate::core_tui::app::types::ModalOverlayRequest {
+                title,
+                lines,
+                secure_prompt,
+            },
+        ));
+    }
+
     fn should_auto_open_local_agents(&self) -> bool {
         if self.has_active_overlay() {
             return false;

@@ -78,6 +78,50 @@ fn control_m_submits_model_command_without_clearing_draft() {
 }
 
 #[test]
+fn app_question_mark_opens_visible_help_overlay() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(session.has_active_overlay());
+    let modal = session.modal_state().expect("help modal should be visible");
+    assert_eq!(modal.title, "Keyboard Shortcuts");
+
+    let lines = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    assert!(
+        lines.iter().any(|line| line.contains("Keyboard Shortcuts")),
+        "help overlay should render in the app session"
+    );
+}
+
+#[test]
+fn app_help_command_opens_same_visible_help_overlay() {
+    let mut session = app_session_with_input("/help", "/help".len());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(session.core.input_manager.content().is_empty());
+    assert!(session.has_active_overlay());
+    let modal = session.modal_state().expect("help modal should be visible");
+    assert_eq!(modal.title, "Keyboard Shortcuts");
+    assert!(
+        modal
+            .lines
+            .iter()
+            .any(|line| line.contains("Alt+Left/Right")),
+        "help modal should include readline word navigation shortcuts"
+    );
+
+    let lines = rendered_app_session_lines(&mut session, 32);
+    assert!(
+        lines.iter().any(|line| line.contains("Ctrl+Z/Y")),
+        "help overlay should render shortcuts beyond the first six rows"
+    );
+}
+
+#[test]
 fn slash_palette_hides_entries_for_unmatched_keyword() {
     let mut session = session_with_slash_palette_commands();
 

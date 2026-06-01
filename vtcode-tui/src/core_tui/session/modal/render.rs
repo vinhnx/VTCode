@@ -584,6 +584,14 @@ pub(crate) fn render_modal_body(
         .instructions
         .iter()
         .any(|line| !line.trim().is_empty());
+    let has_secure_prompt = context.secure_prompt.is_some();
+    let has_search = context.search.is_some();
+    let has_list = context.list.is_some();
+    let instruction_row_limit = if has_secure_prompt || has_search || has_list {
+        6
+    } else {
+        area.height.max(1) as usize
+    };
     let instruction_lines = if has_instructions {
         modal_instruction_lines(area, context.instructions, context.styles)
     } else {
@@ -592,17 +600,17 @@ pub(crate) fn render_modal_body(
     let instruction_row_count =
         wrapping::wrap_lines_preserving_urls(instruction_lines.clone(), area.width.max(1) as usize)
             .len()
-            .clamp(1, 6);
+            .clamp(1, instruction_row_limit);
     if has_instructions {
         sections.push(ModalSection::Instructions);
     }
-    if context.secure_prompt.is_some() {
+    if has_secure_prompt {
         sections.push(ModalSection::Prompt);
     }
-    if context.search.is_some() {
+    if has_search {
         sections.push(ModalSection::Search);
     }
-    if context.list.is_some() {
+    if has_list {
         sections.push(ModalSection::List);
     }
 
