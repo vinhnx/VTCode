@@ -5,9 +5,7 @@ use anyhow::{Context, Result};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
@@ -16,6 +14,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Notify;
+use vtcode_commons::utils::calculate_sha256;
 
 pub const FILE_CONFLICT_OVERRIDE_ARG: &str = "__vtcode_conflict_override";
 pub const FILE_CONFLICT_DETECTED_FIELD: &str = "conflict_detected";
@@ -84,15 +83,13 @@ impl FileSnapshot {
 
     fn from_text_content(content: &str) -> Self {
         let bytes = content.as_bytes();
-        let mut hasher = Sha256::new();
-        hasher.update(bytes);
-        let digest = hasher.finalize();
+        let sha256 = calculate_sha256(bytes);
 
         Self {
             exists: true,
             size_bytes: bytes.len() as u64,
             modified_millis: None,
-            sha256: hex_digest(&digest),
+            sha256,
             text_content: Some(content.to_string()),
         }
     }
@@ -791,10 +788,7 @@ fn snapshot_path_sync(path: &Path) -> Result<FileSnapshot> {
 
     let bytes = std::fs::read(path)
         .with_context(|| format!("Failed to read file bytes for {}", path.display()))?;
-    let mut hasher = Sha256::new();
-    hasher.update(&bytes);
-    let digest = hasher.finalize();
-    let sha256 = hex_digest(&digest);
+    let sha256 = calculate_sha256(&bytes);
 
     Ok(FileSnapshot {
         exists: true,
@@ -809,14 +803,6 @@ fn system_time_to_millis(time: SystemTime) -> Option<u128> {
     time.duration_since(UNIX_EPOCH)
         .ok()
         .map(|duration| duration.as_millis())
-}
-
-fn hex_digest(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
 }
 
 fn workspace_relative_display(workspace_root: &Path, path: &Path) -> String {
