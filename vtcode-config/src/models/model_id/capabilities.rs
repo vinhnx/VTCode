@@ -487,6 +487,7 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b => "oss",
             ModelId::LlamaCppStep35Flash => "3.5",
             // MiniMax models
+            ModelId::MinimaxM3 => "M3",
             ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
             // Moonshot models

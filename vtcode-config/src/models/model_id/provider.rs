@@ -87,7 +87,7 @@ impl ModelId {
             | ModelId::LlamaCppGemma4E4b
             | ModelId::LlamaCppGptOss20b
             | ModelId::LlamaCppStep35Flash => Provider::LlamaCpp,
-            ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
+            ModelId::MinimaxM3 | ModelId::MinimaxM27 | ModelId::MinimaxM25 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter
             }

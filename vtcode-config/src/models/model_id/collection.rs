@@ -92,6 +92,7 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b,
             ModelId::LlamaCppStep35Flash,
             // MiniMax models
+            ModelId::MinimaxM3,
             ModelId::MinimaxM27,
             ModelId::MinimaxM25,
             // Hugging Face models

@@ -51,7 +51,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::LlamaCpp => models::llamacpp::DEFAULT_MODEL,
         Provider::Moonshot => models::moonshot::DEFAULT_MODEL,
         Provider::ZAI => models::zai::DEFAULT_MODEL,
-        Provider::Minimax => models::minimax::MINIMAX_M2_5,
+        Provider::Minimax => models::minimax::DEFAULT_MODEL,
         Provider::MiMo => models::mimo::DEFAULT_MODEL,
         Provider::Mistral => models::mistral::MISTRAL_LARGE_3,
         Provider::Qwen => models::qwen::DEFAULT_MODEL,

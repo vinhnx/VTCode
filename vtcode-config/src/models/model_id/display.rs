@@ -95,7 +95,8 @@ impl ModelId {
             ModelId::OpenRouterMoonshotaiKimiK26 => "Kimi K2.6 (OpenRouter)",
             ModelId::OpenRouterZaiGlm51 => "GLM-5.1 (OpenRouter)",
             ModelId::OpenRouterOpenAIGpt55 => "OpenAI GPT-5.5 (OpenRouter)",
-            // OpenRouter models
+            // MiniMax models
+            ModelId::MinimaxM3 => "MiniMax-M3",
             ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Poolside models

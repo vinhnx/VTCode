@@ -212,6 +212,8 @@ pub enum ModelId {
     LlamaCppStep35Flash,
 
     // MiniMax models
+    /// MiniMax-M3 - Frontier multimodal coding model with 1M context
+    MinimaxM3,
     /// MiniMax-M2.7 - Recursive self-improvement flagship with 204.8K context
     MinimaxM27,
     /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding

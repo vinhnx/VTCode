@@ -138,6 +138,7 @@ impl FromStr for ModelId {
             // Poolside models
             s if s == models::poolside::LAGUNA_M1 => Ok(ModelId::PoolsideLagunaM1),
             s if s == models::poolside::LAGUNA_XS2 => Ok(ModelId::PoolsideLagunaXs2),
+            s if s == models::minimax::MINIMAX_M3 => Ok(ModelId::MinimaxM3),
             s if s == models::minimax::MINIMAX_M2_7 => Ok(ModelId::MinimaxM27),
             s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             // Hugging Face models

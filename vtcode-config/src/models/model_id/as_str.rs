@@ -113,6 +113,7 @@ impl ModelId {
             ModelId::QwenDeepSeekV4Pro => models::qwen::DEEPSEEK_V4_PRO,
             ModelId::QwenGlm51 => models::qwen::GLM_5_1,
             // MiniMax models
+            ModelId::MinimaxM3 => models::minimax::MINIMAX_M3,
             ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             // Poolside models

@@ -1655,6 +1655,23 @@
     "api": "https://api.minimax.chat/v1",
     "doc": "https://platform.minimaxi.com/document/ChatCompletion%20V2",
     "models": {
+      "MiniMax-M3": {
+        "id": "MiniMax-M3",
+        "name": "MiniMax-M3",
+        "description": "Frontier multimodal coding model with 1M context window",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
       "MiniMax-M2.5": {
         "id": "MiniMax-M2.5",
         "name": "MiniMax-M2.5",

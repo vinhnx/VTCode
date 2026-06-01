@@ -318,7 +318,9 @@ impl ModelsManager {
             }
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
             Provider::ZAI => "glm-5.1".to_string(),
-            Provider::Minimax => "MiniMax-M2.5".to_string(),
+            Provider::Minimax => {
+                crate::config::constants::models::minimax::DEFAULT_MODEL.to_string()
+            }
             Provider::Mistral => {
                 crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string()
             }

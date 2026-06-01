@@ -163,6 +163,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM27Cloud => {
                 "Cloud-hosted MiniMax-M2.7 model accessed through Ollama Cloud for reasoning tasks"
             }
+            ModelId::MinimaxM3 => "Frontier multimodal coding model with 1M context window",
             ModelId::MinimaxM27 => {
                 "Beginning the journey of recursive self-improvement with 204.8K context and strong reasoning/coding performance"
             }
