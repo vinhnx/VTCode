@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" />
+  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="520" />
 
   <p><strong>A Rust terminal coding agent with safe workspace tools, multi-provider LLM support, and open protocol integrations.</strong></p>
 
@@ -25,6 +25,8 @@
     - [Windows PowerShell](#windows-powershell)
     - [Package managers](#package-managers)
 - [Quick start](#quick-start)
+- [Model promotions](#model-promotions)
+    - [Xiaomi MiMo V2.5 Series](#xiaomi-mimo-v25-series)
 - [Configuration](#configuration)
     - [Atlas Cloud](#atlas-cloud)
 - [Extension points](#extension-points)
@@ -116,6 +118,20 @@ vtcode --continue
 ```
 
 VT Code keeps primary output on stdout and sends logs, metadata, reasoning traces, and prompts to stderr. This keeps `ask` and `exec` useful in shell pipelines.
+
+## Model promotions
+
+### Xiaomi MiMo V2.5 Series
+
+Try Xiaomi's MiMo V2.5 Pro with invite code `K5BCAP`. Enter the code in the console sidebar after signup to unlock the promotion.
+
+<p align="center">
+  <a href="https://platform.xiaomimimo.com/docs/en-US/welcome">
+    <img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 Pro promotion invite code K5BCAP" width="386" />
+  </a>
+</p>
+
+Read: [Xiaomi MiMo documentation](https://platform.xiaomimimo.com/docs/en-US/welcome).
 
 ## Configuration
 
