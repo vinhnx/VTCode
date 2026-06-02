@@ -49,7 +49,24 @@ USAGE
 check_cross_available() {
     command -v cross &>/dev/null || return 1
     docker info &>/dev/null || return 1
+
+    # On Apple Silicon, cross-rs images are linux/amd64 — set platform hint for Rosetta
+    if [[ "$(uname -m)" == "arm64" && "$OSTYPE" == "darwin"* ]]; then
+        export DOCKER_DEFAULT_PLATFORM=linux/amd64
+    fi
+
+    # Lightweight check: verify cross-rs Linux image is accessible on ghcr.io
+    if ! docker manifest inspect ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest &>/dev/null; then
+        print_warning "cross-rs images not accessible on ghcr.io (try: docker logout ghcr.io)"
+        return 1
+    fi
+
     return 0
+}
+
+check_windows_cross_available() {
+    # Windows cross-rs images on ghcr.io may require authentication
+    docker manifest inspect ghcr.io/cross-rs/x86_64-pc-windows-msvc:latest &>/dev/null
 }
 
 warn_low_disk_space() {
@@ -125,10 +142,18 @@ main() {
 
     # Decide: use local cross or CI?
     local use_cross=false
+    local use_cross_windows=false
     if [[ "$full_ci" == 'false' && "$ci_only" == 'false' && "$force_ci" == 'false' ]]; then
         if check_cross_available; then
             use_cross=true
-            print_info "Docker + cross available: building Linux/Windows locally"
+            print_info "Docker + cross available: building Linux locally"
+            if check_windows_cross_available; then
+                use_cross_windows=true
+                print_info "Windows cross images accessible: building Windows locally too"
+            else
+                print_info "Windows cross images not accessible (need ghcr.io login): Windows will use CI"
+                print_info "  To enable: docker login ghcr.io"
+            fi
             warn_low_disk_space
         else
             print_info "Docker/cross not available: will use CI for Linux/Windows"
@@ -180,9 +205,10 @@ main() {
     if [[ "$skip_binaries" == 'false' ]]; then
         local build_flag="--only-build-local"
         [[ "$use_cross" == 'true' ]] && build_flag="--only-build"
+        [[ "$use_cross_windows" == 'false' ]] && build_flag="$build_flag --no-windows-cross"
         print_info "Step 1: Building binaries ($([[ "$use_cross" == 'true' ]] && echo 'all targets via cross' || echo 'macOS'))..."
         env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= \
-            ./scripts/build-and-upload-binaries.sh -v "$next_version" "$build_flag"
+            ./scripts/build-and-upload-binaries.sh -v "$next_version" $build_flag
     fi
 
     # ── Step 2: Changelog ──
