@@ -397,7 +397,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/providers/atlascloud.md`
   - **Content**: Atlas Cloud Integration Guide
-  - **Topics**: Quickstart, Why This Works, Model Selection Notes, CLI Examples, Troubleshooting
+  - **Topics**: Quickstart, Why This Works, Model Selection Notes, Validated 50-model pool, CLI Examples
   - **User Questions**: "What can you tell me about Atlas Cloud Integration Guide?", "How does Quickstart work?", "How does Why This Works work?"
 
 - **File**: `docs/providers/copilot.md`
