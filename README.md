@@ -37,6 +37,7 @@
 - [Protocols and exports](#protocols-and-exports)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
+- [For AI agents](#for-ai-agents)
 - [Development](#development)
 - [Contributing](#contributing)
 - [Support](#support)
@@ -277,6 +278,19 @@ Start here:
 
 Ask docs assistants: [Google Gemini CodeWiki](https://codewiki.google/github.com/vinhnx/vtcode) or [Devin DeepWiki](https://deepwiki.com/vinhnx/vtcode).
 
+## For AI agents
+
+If you are an AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar), read [AGENTS.md](./AGENTS.md) before making changes. It is the authoritative source for workspace conventions.
+
+**Quick reference for agents:**
+
+- **Conventions**: Conventional Commits (`type(scope): subject`), 4-space indentation, `snake_case` functions, `PascalCase` types, `anyhow::Result<T>` with `.with_context()`.
+- **Verification**: Run `./scripts/check-dev.sh` for a fast gate (10-30s). Add `--test` for tests, `--workspace` for full workspace. CI uses `RUSTFLAGS="-D warnings"` and `--locked`.
+- **Crate layout**: ~20 crates. Key crates: `vtcode` (binary/CLI), `vtcode-core` (agent loop, tools, LLM orchestration), `vtcode-tui` (TUI surface), `vtcode-llm` (provider abstraction), `vtcode-config` (config schema). Each crate has its own `AGENTS.md` with crate-specific guidance.
+- **API contract**: `vtcode-exec-events::ThreadEvent` is the authoritative runtime event type. Do not invent parallel types. Harness config lives in `agent.harness`, `automation.full_auto`, `context.dynamic` -- do not add new top-level harness subsystems.
+- **Session memory**: `.vtcode/memory/` (gitignored) stores cross-session learnings. Read `gotchas.md` and `decisions.md` at session start when context is needed.
+- **Output discipline**: Cap large command output: `COMMAND 2>&1 | head -c 4000`.
+
 ## Development
 
 ```bash
@@ -285,15 +299,33 @@ cd vtcode
 ./scripts/run-debug.sh
 ```
 
-Useful checks:
+VT Code uses Rust stable, edition 2024, and MSRV 1.88. The dev profile disables incremental compilation (sccache). Set `CARGO_INCREMENTAL=1` to override.
+
+**Local checks:**
 
 ```bash
-./scripts/check-dev.sh
-./scripts/check-dev.sh --test
-./scripts/check-dev.sh --workspace
+./scripts/check-dev.sh             # fast gate (clippy, fmt, check)
+./scripts/check-dev.sh --test      # + unit and integration tests
+./scripts/check-dev.sh --workspace # + all workspace crates
+./scripts/check-dev.sh --lints     # + additional lints
 ```
 
-VT Code uses Rust stable, edition 2024, and MSRV 1.88.
+**Running tests:**
+
+```bash
+cargo nextest run                   # parallel runner (preferred)
+cargo nextest run -p vtcode-core    # single crate
+cargo nextest run test_name         # single test by name
+```
+
+**Launching VT Code:**
+
+```bash
+./scripts/run-debug.sh   # debug build + launch
+./scripts/run.sh         # release build + launch
+```
+
+Both auto-bootstrap the Ghostty VT runtime. Without it, PTY snapshots fall back to `legacy_vt100`.
 
 Read: [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), [Testing](./docs/development/testing.md), [CI/CD](./docs/development/ci-cd.md).
 
