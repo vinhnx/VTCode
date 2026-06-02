@@ -649,11 +649,13 @@ update_homebrew_formula_file() {
     local version=$2
     local x86_64_macos_sha=$3
     local aarch64_macos_sha=$4
+    local aarch64_linux_sha=${5:-}
 
     FORMULA_PATH="$formula_path" \
     FORMULA_VERSION="$version" \
     FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
     FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+    FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
         python3 <<'PYTHON_SCRIPT'
 import os
 import re
@@ -663,6 +665,7 @@ formula_path = Path(os.environ["FORMULA_PATH"])
 version = os.environ["FORMULA_VERSION"]
 x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
 aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
 
 content = formula_path.read_text()
 content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
@@ -676,6 +679,12 @@ content = re.sub(
     lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
     content,
 )
+if aarch64_linux_sha:
+    content = re.sub(
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
+        content,
+    )
 
 formula_path.write_text(content)
 PYTHON_SCRIPT
@@ -685,6 +694,7 @@ publish_homebrew_tap() {
     local version=$1
     local x86_64_macos_sha=${2:-}
     local aarch64_macos_sha=${3:-}
+    local aarch64_linux_sha=${4:-}
     local formula_path="homebrew/vtcode.rb"
 
     # If checksums were not passed as arguments, try dist/ then GitHub release
@@ -693,6 +703,9 @@ publish_homebrew_tap() {
     fi
     if [[ -z "$aarch64_macos_sha" ]]; then
         aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+    fi
+    if [[ -z "$aarch64_linux_sha" ]]; then
+        aarch64_linux_sha=$(cat "dist/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
     fi
 
     # Last resort: download .sha256 files from the GitHub release
@@ -707,6 +720,9 @@ publish_homebrew_tap() {
             if [[ -z "$aarch64_macos_sha" ]]; then
                 aarch64_macos_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
             fi
+            if [[ -z "$aarch64_linux_sha" ]]; then
+                aarch64_linux_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+            fi
         fi
         rm -rf "$sha_tmp"
     fi
@@ -717,7 +733,7 @@ publish_homebrew_tap() {
     fi
 
     print_info "Updating local Homebrew formula at $formula_path..."
-    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"; then
         print_error "Failed to update local Homebrew formula"
         return 1
     fi
@@ -1163,6 +1179,7 @@ main() {
 
         local linux_gnu_downloaded=false
         local linux_musl_downloaded=false
+        local linux_aarch64_downloaded=false
         local windows_downloaded=false
         local require_windows="${RELEASE_REQUIRE_WINDOWS:-false}"
 
@@ -1193,6 +1210,17 @@ main() {
                 print_warning "Could not download: Linux x86_64 musl"
             fi
 
+            # Download Linux aarch64 artifact
+            print_info "Downloading Linux aarch64 artifact..."
+            if gh run download "$run_id" --name "vtcode-${released_version}-aarch64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
+                print_success "Downloaded: Linux aarch64"
+                linux_aarch64_downloaded=true
+            else
+                print_warning "Could not download: Linux aarch64"
+            fi
+
             # Download Windows x86_64 artifact only when explicitly required.
             if [[ "$require_windows" == "true" ]]; then
                 print_info "Downloading Windows x86_64 artifact..."
@@ -1214,10 +1242,11 @@ main() {
         fi
 
         # Summary of what we have
-        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false ]] || [[ "$require_windows" == "true" && "$windows_downloaded" == false ]]; then
+        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || "$linux_aarch64_downloaded" == false ]] || [[ "$require_windows" == "true" && "$windows_downloaded" == false ]]; then
             print_warning "Some platform binaries are missing - release will include:"
             [[ "$linux_gnu_downloaded" == true ]] && print_info "  ✓ Linux x86_64 gnu" || print_warning "  ✗ Linux x86_64 gnu"
             [[ "$linux_musl_downloaded" == true ]] && print_info "  ✓ Linux x86_64 musl" || print_warning "  ✗ Linux x86_64 musl"
+            [[ "$linux_aarch64_downloaded" == true ]] && print_info "  ✓ Linux aarch64" || print_warning "  ✗ Linux aarch64"
             if [[ "$require_windows" == "true" ]]; then
                 [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
             else
@@ -1279,11 +1308,15 @@ main() {
         # Extract checksums before cleanup for Homebrew formula update
         local release_x86_sha=""
         local release_arm_sha=""
+        local release_arm_linux_sha=""
         if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256" ]]; then
             release_x86_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256")
         fi
         if [[ -f "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256" ]]; then
             release_arm_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256")
+        fi
+        if [[ -f "$binaries_dir/vtcode-$released_version-aarch64-unknown-linux-gnu.sha256" ]]; then
+            release_arm_linux_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-aarch64-unknown-linux-gnu.sha256")
         fi
 
         # Cleanup
@@ -1294,7 +1327,7 @@ main() {
     # 5. Publish Homebrew tap
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 5: Publishing Homebrew formula to vinhnx/homebrew-tap..."
-        publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}"
+        publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}" "${release_arm_linux_sha:-}"
     fi
 
     # 6. Handle docs.rs rebuild

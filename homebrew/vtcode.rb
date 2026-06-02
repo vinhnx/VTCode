@@ -18,8 +18,9 @@ class Vtcode < Formula
     if Hardware::CPU.intel?
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "6a730f5f2ba8a8f948bf5e3da2714ce49556036cd72243fe7ea56e1ee2b0840a"
-    else
-      odie "VT Code #{version} does not publish a Linux ARM64 Homebrew artifact"
+    elsif Hardware::CPU.arm?
+      url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "PLACEHOLDER_AARCH64_LINUX_SHA256"
     end
   end
 

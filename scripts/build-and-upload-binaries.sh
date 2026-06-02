@@ -204,14 +204,20 @@ build_binaries() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         # On Linux, build directly
         build_linux=true
-        print_info "Building Linux binary natively..."
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        print_info "Building Linux x86_64 binary natively..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
+        pids+=($!)
+        print_info "Building Linux aarch64 binary using cross..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
         pids+=($!)
     elif command -v cross &>/dev/null; then
         # Use cross for cross-compilation which handles dependencies better
         build_linux=true
-        print_info "Attempting Linux build using cross..."
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        print_info "Attempting Linux x86_64 build using cross..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
+        pids+=($!)
+        print_info "Attempting Linux aarch64 build using cross..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
         pids+=($!)
     else
         print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"
@@ -244,12 +250,20 @@ build_binaries() {
         "$dist_dir" \
         "vtcode-$version-aarch64-apple-darwin.tar.gz"
 
-    # Linux
+    # Linux x86_64
     if [ "$build_linux" = true ] && [ -f "target/x86_64-unknown-linux-gnu/release/vtcode" ]; then
         package_release_archive_with_ghostty \
             "x86_64-unknown-linux-gnu" \
             "$dist_dir" \
             "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz"
+    fi
+
+    # Linux aarch64
+    if [ "$build_linux" = true ] && [ -f "target/aarch64-unknown-linux-gnu/release/vtcode" ]; then
+        package_release_archive_with_ghostty \
+            "aarch64-unknown-linux-gnu" \
+            "$dist_dir" \
+            "vtcode-$version-aarch64-unknown-linux-gnu.tar.gz"
     fi
 
     print_success "Binaries build and packaging process completed"
@@ -465,11 +479,13 @@ update_homebrew_formula_file() {
     local version=$2
     local x86_64_macos_sha=$3
     local aarch64_macos_sha=$4
+    local aarch64_linux_sha=${5:-}
 
     FORMULA_PATH="$formula_path" \
     FORMULA_VERSION="$version" \
     FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
     FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+    FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
         python3 <<'PYTHON_SCRIPT'
 import os
 import re
@@ -479,6 +495,7 @@ formula_path = Path(os.environ["FORMULA_PATH"])
 version = os.environ["FORMULA_VERSION"]
 x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
 aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
 
 content = formula_path.read_text()
 content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
@@ -492,6 +509,12 @@ content = re.sub(
     lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
     content,
 )
+if aarch64_linux_sha:
+    content = re.sub(
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
+        content,
+    )
 
 formula_path.write_text(content)
 PYTHON_SCRIPT
@@ -501,6 +524,7 @@ publish_homebrew_tap() {
     local version=$1
     local x86_64_macos_sha=$2
     local aarch64_macos_sha=$3
+    local aarch64_linux_sha=${4:-}
 
     print_info "Publishing Homebrew formula to vinhnx/homebrew-tap..."
 
@@ -515,7 +539,7 @@ publish_homebrew_tap() {
             exit 1
         fi
 
-        if ! update_homebrew_formula_file "$temp_dir/vtcode.rb" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+        if ! update_homebrew_formula_file "$temp_dir/vtcode.rb" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"; then
             print_error "Failed to update Homebrew tap formula"
             exit 1
         fi
@@ -568,12 +592,14 @@ update_homebrew_formula() {
     x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
     local aarch64_macos_sha
     aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local aarch64_linux_sha
+    aarch64_linux_sha=$(cat "dist/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null || echo "")
     if [ -z "$x86_64_macos_sha" ] || [ -z "$aarch64_macos_sha" ]; then
         print_error "Missing macOS checksums, cannot update Homebrew formula"
         return 1
     fi
 
-    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"; then
         print_error "Failed to update local Homebrew formula"
         return 1
     fi
@@ -596,7 +622,7 @@ update_homebrew_formula() {
         print_info "Local Homebrew formula is already up to date"
     fi
 
-    publish_homebrew_tap "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"
+    publish_homebrew_tap "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"
 }
 
 # Main function
