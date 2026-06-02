@@ -70,6 +70,7 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaMinimaxM27Cloud => models::ollama::MINIMAX_M27_CLOUD,
+            ModelId::OllamaMinimaxM3Cloud => models::ollama::MINIMAX_M3_CLOUD,
             ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
             ModelId::OllamaKimiK26Cloud => models::ollama::KIMI_K2_6_CLOUD,
             ModelId::OllamaNemotron3SuperCloud => models::ollama::NEMOTRON_3_SUPER_CLOUD,

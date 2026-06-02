@@ -66,6 +66,7 @@ fn model_picker_lists_new_ollama_cloud_models() {
     assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
     assert!(has_model(options, ModelId::OllamaGlm5Cloud));
     assert!(has_model(options, ModelId::OllamaMinimaxM25Cloud));
+    assert!(has_model(options, ModelId::OllamaMinimaxM3Cloud));
     assert!(has_model(options, ModelId::OllamaGemini3FlashPreviewCloud));
     assert!(has_model(options, ModelId::MinimaxM25));
 }

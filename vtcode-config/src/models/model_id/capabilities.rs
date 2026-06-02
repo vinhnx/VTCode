@@ -336,6 +336,7 @@ impl ModelId {
                 | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaNemotron3SuperCloud
                 | ModelId::OllamaMinimaxM25Cloud
+                | ModelId::OllamaMinimaxM3Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
                 | ModelId::HuggingFaceDeepseekV4ProTogether
@@ -474,6 +475,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
+            ModelId::OllamaMinimaxM3Cloud => "minimax-m3",
             ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaGlm51Cloud => "glm-5.1",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",

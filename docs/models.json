@@ -3451,6 +3451,22 @@
         },
         "context": 204800
       },
+      "minimax-m3:cloud": {
+        "id": "minimax-m3:cloud",
+        "name": "MiniMax-M3 (cloud)",
+        "description": "Cloud-hosted MiniMax-M3 model served via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
       "gemini-3-flash-preview:cloud": {
         "id": "gemini-3-flash-preview:cloud",
         "name": "Gemini 3 Flash Preview (cloud)",
