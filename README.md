@@ -150,14 +150,14 @@ default_model = "gpt-5.4"
 ```toml
 [agent]
 provider = "atlascloud"
-default_model = "deepseek-ai/deepseek-v4-flash"
+default_model = "deepseek-ai/DeepSeek-V3-0324"
 
 [[custom_providers]]
 name = "atlascloud"
 display_name = "Atlas Cloud"
 base_url = "https://api.atlascloud.ai/v1"
 api_key_env = "ATLASCLOUD_API_KEY"
-model = "deepseek-ai/deepseek-v4-flash"
+model = "deepseek-ai/DeepSeek-V3-0324"
 ```
 
 <p align="center">
@@ -165,6 +165,20 @@ model = "deepseek-ai/deepseek-v4-flash"
 </p>
 
 Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
+
+Recommended validated Atlas chat model pool examples for `default_model` or
+`vtcode ask --model <model-id>` include:
+
+- `deepseek-ai/DeepSeek-V3-0324`
+- `deepseek-ai/deepseek-r1-0528`
+- `moonshotai/Kimi-K2-Instruct`
+- `Qwen/Qwen3-Coder`
+- `google/gemini-2.5-flash`
+- `openai/gpt-5.2-chat`
+- `anthropic/claude-opus-4.5-20251101`
+- `zai-org/glm-4.7`
+- `minimaxai/minimax-m2.1`
+- `xai/grok-4-0709`
 
 Useful configuration docs:
 
