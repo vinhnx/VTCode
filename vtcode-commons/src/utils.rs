@@ -20,7 +20,12 @@ pub fn current_timestamp_result() -> Result<u64> {
         .as_secs())
 }
 
-/// Calculate SHA256 hash of the given content
+/// Calculate the SHA256 hash of `content` and return it as a 64-character
+/// lowercase hex string (the standard hex encoding of the 32-byte digest).
+///
+/// Use this helper whenever a caller needs a stable, ASCII-safe fingerprint
+/// of arbitrary bytes - for example, hashing file contents for change
+/// detection, config fingerprints, or cache keys.
 pub fn calculate_sha256(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content);
