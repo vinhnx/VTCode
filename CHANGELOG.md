@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.4 - 2026-06-02
+
+### Highlights
+#### Bug Fixes
+
+- Cross-build platform compat, yanked core2 dep (a935bace) 
+- Build windows arm64 natively, cross images require ghcr auth (395c16d5) 
+### Other Changes
 ## 0.117.3 - 2026-06-02
 
 ### Highlights
