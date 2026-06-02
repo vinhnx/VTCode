@@ -151,25 +151,7 @@ configure_target_env() {
 
         TARGET_ENV_ASSIGNMENTS+=("MACOSX_DEPLOYMENT_TARGET=11.0")
     elif [[ "$target" == *"-linux-"* ]]; then
-        # Linux targets - don't set host-specific OpenSSL paths for cross-compilation
-        # Cross compilation should handle this automatically
-        if command -v cross &>/dev/null; then
-            # When using cross, we don't need to set these variables
-            :
-        else
-            # For direct cross-compilation, we might need to set different variables
-            local openssl_prefix=""
-            if command -v brew &> /dev/null; then
-                openssl_prefix=$(brew --prefix openssl@3 2>/dev/null || true)
-            fi
-
-            if [[ -n "$openssl_prefix" ]]; then
-                # Only set these if we're not using cross
-                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_DIR=$openssl_prefix")
-                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_LIB_DIR=$openssl_prefix/lib")
-                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_INCLUDE_DIR=$openssl_prefix/include")
-            fi
-        fi
+        :
     fi
 }
 
@@ -222,46 +204,28 @@ build_binaries() {
     for pid in "${mac_pids[@]}"; do wait "$pid"; done
     print_success "macOS builds completed"
 
-    # Linux x86_64 (only if on Linux or have cross setup)
+    # Phase 2: Cross-compiled builds using cargo-zigbuild (no Docker needed)
     local build_linux=false
     local build_windows=false
 
-    # Phase 2: Cross builds (Docker, memory-intensive) — run 2 at a time
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # On Linux, build Linux natively + cross for aarch64/Windows
+    if command -v zig &>/dev/null; then
         build_linux=true
-        print_info "Phase 2: Building Linux x86_64 natively..."
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
+        print_info "Phase 2: Building Linux x86_64 via zigbuild..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
 
-        if command -v cross &>/dev/null; then
-            print_info "Phase 2: Building Linux aarch64 via cross..."
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
-
-            if [ "$NO_WINDOWS_CROSS" = false ]; then
-                build_windows=true
-                print_info "Phase 3: Building Windows x86_64 via cross..."
-                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
-                print_info "Phase 3: Building Windows aarch64 via cross..."
-                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
-            fi
-        fi
-    elif command -v cross &>/dev/null; then
-        build_linux=true
-        print_info "Phase 2: Building Linux x86_64 via cross..."
-        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
-        # Linux aarch64 cross build skipped on macOS: Docker Rosetta + LTO requires >16GB RAM
-        print_info "Skipping Linux aarch64 cross build (OOM risk on macOS). Will use CI."
+        print_info "Phase 2: Building Linux aarch64 via zigbuild..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
 
         if [ "$NO_WINDOWS_CROSS" = false ]; then
             build_windows=true
-            print_info "Phase 3: Building Windows x86_64 via cross..."
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
-            print_info "Phase 3: Building Windows aarch64 via cross..."
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
+            print_info "Phase 3: Building Windows x86_64 via zigbuild..."
+            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
+            print_info "Phase 3: Building Windows aarch64 via zigbuild..."
+            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
         fi
     else
-        print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"
-        print_info "To enable Linux builds, install cross: cargo install cross"
+        print_warning "Skipping Linux/Windows builds - 'zig' not available"
+        print_info "To enable cross builds, install zig: https://ziglang.org/download/"
     fi
 
     if [ "$DRY_RUN" = true ]; then

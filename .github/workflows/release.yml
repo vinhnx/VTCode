@@ -74,13 +74,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
-      - name: Install Cross
+      - name: Install cargo-zigbuild
         uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
         with:
-          tool: cross
+          tool: cargo-zigbuild
 
       - name: Build (${{ matrix.target }})
-        run: cross build --release --target ${{ matrix.target }}
+        run: cargo zigbuild --release --target ${{ matrix.target }}
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
@@ -244,19 +244,14 @@ jobs:
           fi
 
       - name: Package
-        shell: bash
+        shell: pwsh
         run: |
-          TAG="${{ github.event.inputs.tag }}"
-          VERSION="${TAG#v}"
-          ARCHIVE="vtcode-${TAG}-aarch64-pc-windows-msvc.zip"
-          cd target/aarch64-pc-windows-msvc/release
-          zip -r "${OLDPWD}/${ARCHIVE}" vtcode.exe
-          cd "${OLDPWD}"
-          if command -v sha256sum &> /dev/null; then
-            sha256sum "$ARCHIVE" > "vtcode-${TAG}-aarch64-pc-windows-msvc.sha256"
-          elif command -v shasum &> /dev/null; then
-            shasum -a 256 "$ARCHIVE" > "vtcode-${TAG}-aarch64-pc-windows-msvc.sha256"
-          fi
+          $TAG = "${{ github.event.inputs.tag }}"
+          $VERSION = $TAG -replace '^v', ''
+          $ARCHIVE = "vtcode-${TAG}-aarch64-pc-windows-msvc.zip"
+          Compress-Archive -Path "target/aarch64-pc-windows-msvc/release/vtcode.exe" -DestinationPath $ARCHIVE -Force
+          $hash = (Get-FileHash -Path $ARCHIVE -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "vtcode-${TAG}-aarch64-pc-windows-msvc.sha256" -Value $hash -NoNewline
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

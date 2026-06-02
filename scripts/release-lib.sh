@@ -557,31 +557,6 @@ publish_homebrew_tap() {
     fi
 }
 
-# ── Cleanup ──────────────────────────────────────────────────────────
-
-cleanup_cross_resources() {
-    print_info "Cleaning up cross-compilation resources..."
-    local removed=false
-
-    # Remove cross Docker images (can be several GB)
-    local images
-    images=$(docker images ghcr.io/cross-rs/* --format '{{.Repository}}:{{.Tag}}' 2>/dev/null || true)
-    if [[ -n "$images" ]]; then
-        print_info "Removing cross Docker images..."
-        echo "$images" | xargs -r docker rmi -f 2>/dev/null || true
-        removed=true
-    fi
-
-    # Prune dangling builder cache
-    docker builder prune -f 2>/dev/null || true
-
-    if [[ "$removed" == 'true' ]]; then
-        print_success "Cross-compilation Docker images cleaned up"
-    else
-        print_info "No cross images to clean"
-    fi
-}
-
 # ── CI ───────────────────────────────────────────────────────────────
 
 trigger_and_wait_ci() {
@@ -652,8 +627,7 @@ trigger_and_wait_ci() {
 create_and_upload_release() {
     local released_version=$1
     local dry_run=$2
-    local use_cross=$3
-    local CI_RUN_ID=$4
+    local CI_RUN_ID=$3
 
     if [[ "$dry_run" == 'true' ]]; then
         print_info "Dry run - would create GitHub Release for $released_version"
@@ -690,8 +664,8 @@ create_and_upload_release() {
         done
     fi
 
-    # Download CI artifacts if cross wasn't used
-    if [[ "$use_cross" == 'false' && -n "$CI_RUN_ID" ]]; then
+    # Download CI artifacts if zig wasn't available locally
+    if [[ -n "$CI_RUN_ID" ]]; then
         print_info "Downloading CI-built binaries (run #$CI_RUN_ID)..."
         local ci_dir="/tmp/vtcode-ci-$released_version"
         mkdir -p "$ci_dir"

@@ -3,8 +3,8 @@
 # VT Code Release Script
 #
 # Orchestrator for the full release pipeline.
-# Default: macOS local, Linux/Windows via cross/Docker (saves ~30-60min CI wait).
-# Falls back to CI if cross/Docker unavailable.
+# Default: macOS local, Linux/Windows via zigbuild (saves ~30-60min CI wait).
+# Falls back to CI if zig unavailable.
 #
 # Usage: ./scripts/release.sh [version|level] [options]
 
@@ -36,48 +36,14 @@ Options:
   --skip-docs         Skip docs.rs rebuild trigger
   --full-ci           Build ALL platforms on GitHub Actions
   --ci-only           Trigger CI for Linux/Windows only (skip local build)
-  --force-ci          Use CI even if cross/Docker is available
+  --force-ci          Use CI even if zig is available locally
   -h, --help          Show this help message
 
 Default mode:
-  1. macOS built locally (saves CI cost)
-  2. Linux/Windows built via cross/Docker (saves ~30-60min CI wait)
-     Falls back to GitHub Actions CI if Docker/cross unavailable
+   1. macOS (native) + Linux/Windows (via zigbuild — no Docker needed)
+      Falls back to GitHub Actions CI if Zig unavailable
 USAGE
 }
-
-check_cross_available() {
-    command -v cross &>/dev/null || return 1
-    docker info &>/dev/null || return 1
-
-    # On Apple Silicon, cross-rs images are linux/amd64 — set platform hint for Rosetta
-    if [[ "$(uname -m)" == "arm64" && "$OSTYPE" == "darwin"* ]]; then
-        export DOCKER_DEFAULT_PLATFORM=linux/amd64
-    fi
-
-    # Lightweight check: verify cross-rs Linux image is accessible on ghcr.io
-    if ! docker manifest inspect ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest &>/dev/null; then
-        print_warning "cross-rs images not accessible on ghcr.io (try: docker logout ghcr.io)"
-        return 1
-    fi
-
-    return 0
-}
-
-check_windows_cross_available() {
-    # Windows cross-rs images on ghcr.io may require authentication
-    docker manifest inspect ghcr.io/cross-rs/x86_64-pc-windows-msvc:latest &>/dev/null
-}
-
-warn_low_disk_space() {
-    local available_gb
-    available_gb=$(df -g . | awk 'NR==2{print $4}' 2>/dev/null || echo "?")
-    if [[ "$available_gb" =~ ^[0-9]+$ && "$available_gb" -lt 20 ]]; then
-        print_warning "Low disk space: ${available_gb}GB free — cross Docker images need ~5-8GB"
-        print_info "  Run 'docker system prune -af' before release to free space"
-    fi
-}
-
 ensure_gh_auth() {
     local dry_run=$1
     if ! command -v gh >/dev/null 2>&1; then
@@ -140,25 +106,14 @@ main() {
     ensure_cargo_release
     ensure_gh_auth "$dry_run"
 
-    # Decide: use local cross or CI?
-    local use_cross=false
-    local use_cross_windows=false
-    if [[ "$full_ci" == 'false' && "$ci_only" == 'false' && "$force_ci" == 'false' ]]; then
-        if check_cross_available; then
-            use_cross=true
-            print_info "Docker + cross available: building Linux locally"
-            if check_windows_cross_available; then
-                use_cross_windows=true
-                print_info "Windows cross images accessible: building Windows locally too"
-            else
-                print_info "Windows cross images not accessible (need ghcr.io login): Windows will use CI"
-                print_info "  To enable: docker login ghcr.io"
-            fi
-            warn_low_disk_space
-        else
-            print_info "Docker/cross not available: will use CI for Linux/Windows"
-            print_info "  Install: brew install docker && cargo install cross"
-        fi
+    # Zig available = all targets local (macOS + Linux + Windows via zigbuild)
+    local zig_available=false
+    if command -v zig &>/dev/null; then
+        zig_available=true
+        print_info "Zig found: building all targets locally via zigbuild"
+    else
+        print_info "Zig not found: building macOS only, CI handles Linux/Windows"
+        print_info "  Install Zig: https://ziglang.org/download/"
     fi
 
     # Version calculation
@@ -203,10 +158,10 @@ main() {
 
     # ── Step 1: Build binaries ──
     if [[ "$skip_binaries" == 'false' ]]; then
-        local build_flag="--only-build-local"
-        [[ "$use_cross" == 'true' ]] && build_flag="--only-build"
-        [[ "$use_cross_windows" == 'false' ]] && build_flag="$build_flag --no-windows-cross"
-        print_info "Step 1: Building binaries ($([[ "$use_cross" == 'true' ]] && echo 'all targets via cross' || echo 'macOS'))..."
+        local build_flag="--only-build"
+        [[ "$zig_available" == 'false' ]] && build_flag="--only-build-local"
+        [[ "$force_ci" == 'true' ]] && build_flag="--only-build-local"
+        print_info "Step 1: Building binaries ($([[ "$zig_available" == 'true' && "$force_ci" == 'false' ]] && echo 'all targets via zigbuild' || echo 'macOS only, CI for rest'))..."
         env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= \
             ./scripts/build-and-upload-binaries.sh -v "$next_version" $build_flag
     fi
@@ -233,15 +188,17 @@ main() {
     local released_version
     released_version=$(get_current_version)
 
-    # ── Step 3.5: CI (only if cross not used) ──
+    # ── Step 3.5: CI (only if zig not available or forced) ──
     local CI_RUN_ID=""
-    if [[ "$skip_binaries" == 'false' && "$use_cross" == 'false' ]]; then
+    if [[ "$skip_binaries" == 'false' && "$zig_available" == 'false' ]]; then
+        CI_RUN_ID=$(trigger_and_wait_ci "$released_version" "$dry_run")
+    elif [[ "$skip_binaries" == 'false' && "$force_ci" == 'true' ]]; then
         CI_RUN_ID=$(trigger_and_wait_ci "$released_version" "$dry_run")
     fi
 
     # ── Step 4: GitHub Release + upload ──
     local sha_output
-    sha_output=$(create_and_upload_release "$released_version" "$dry_run" "$use_cross" "$CI_RUN_ID")
+    sha_output=$(create_and_upload_release "$released_version" "$dry_run" "$CI_RUN_ID")
     IFS='|' read -r x86_sha arm_sha arm_linux_sha <<< "$sha_output"
 
     # ── Step 5: Homebrew ──
@@ -254,12 +211,11 @@ main() {
     [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]] && \
         trigger_docs_rs_rebuild "$released_version" false
 
-    # ── Cleanup: remove cross Docker images ──
-    [[ "$use_cross" == 'true' ]] && cleanup_cross_resources
-
     print_success "Release $released_version complete"
     print_info "Distribution: crates.io + GitHub Releases + Homebrew"
-    [[ "$use_cross" == 'true' ]] && print_info "  All platforms built locally via cross — no CI wait"
+    if [[ "$zig_available" == 'true' && "$force_ci" == 'false' ]]; then
+        print_info "  All platforms built locally via zigbuild — no CI wait"
+    fi
 }
 
 main "$@"
