@@ -23,6 +23,7 @@ use tokio::fs;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 /// Default threshold for spooling tool output to files (8KB).
 /// Keep this aligned with `DynamicContextConfig::default().tool_output_threshold`
@@ -231,7 +232,7 @@ impl ToolOutputSpooler {
                     has_content = value.get("content").is_some(),
                     "read_file spool: could not extract content as string; falling back to JSON"
                 );
-                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+                json_to_string_pretty(value)
             }
         } else if is_command_session_tool_name(tool_name) && !is_mcp {
             // For command-session tools, including unified_exec and legacy PTY helpers,
@@ -291,12 +292,12 @@ impl ToolOutputSpooler {
                     }),
                     "PTY spool: could not extract output as string; falling back to JSON"
                 );
-                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+                json_to_string_pretty(value)
             }
         } else if let Some(s) = value.as_str() {
             s.to_string()
         } else {
-            serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+            json_to_string_pretty(value)
         };
 
         // Sanitize content to redact any secrets before writing to disk

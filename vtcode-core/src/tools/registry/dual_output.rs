@@ -3,6 +3,7 @@
 use anyhow::Result;
 use serde_json::Value;
 use tracing::{debug, warn};
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 use crate::config::constants::tools;
 use crate::tools::summarizers::{
@@ -40,7 +41,7 @@ impl ToolRegistry {
         let ui_content = if result.is_string() {
             result.as_str().unwrap_or("").to_string()
         } else {
-            serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string())
+            json_to_string_pretty(&result)
         };
 
         // Get canonical tool name for summarizer lookup

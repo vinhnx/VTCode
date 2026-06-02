@@ -3,6 +3,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,7 +49,7 @@ pub trait Tool: Send + Sync {
         let content = if result.is_string() {
             result.as_str().unwrap_or("").to_string()
         } else {
-            serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string())
+            json_to_string_pretty(&result)
         };
 
         Ok(SplitToolResult::simple(self.name(), content))

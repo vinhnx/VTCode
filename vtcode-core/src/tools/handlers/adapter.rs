@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 use super::tool_handler::{
     ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler,
@@ -205,7 +206,7 @@ impl ToolHandler for ToolToHandlerAdapter {
                 let text = if result.is_string() {
                     result.as_str().unwrap_or("").to_string()
                 } else {
-                    serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string())
+                    json_to_string_pretty(&result)
                 };
 
                 Ok(ToolOutput::simple(text))
