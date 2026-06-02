@@ -818,12 +818,7 @@ fn workspace_relative_display(workspace_root: &Path, path: &Path) -> String {
 }
 
 fn expand_tilde_path(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/")
-        && let Some(home) = dirs::home_dir()
-    {
-        return home.join(stripped);
-    }
-    PathBuf::from(path)
+    vtcode_commons::paths::expand_tilde(path)
 }
 
 pub fn conflict_override_snapshot(args: &Value) -> Option<FileSnapshot> {

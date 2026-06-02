@@ -6774,6 +6774,7 @@ dependencies = [
  "anstyle-query",
  "anyhow",
  "base64",
+ "dirs",
  "futures",
  "glob",
  "hashbrown 0.17.1",

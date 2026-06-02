@@ -806,15 +806,7 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
 }
 
 fn expand_tilde_path(path: &str) -> PathBuf {
-    if path == "~" {
-        return dirs::home_dir().unwrap_or_else(|| PathBuf::from(path));
-    }
-    if let Some(rest) = path.strip_prefix("~/")
-        && let Some(home) = dirs::home_dir()
-    {
-        return home.join(rest);
-    }
-    PathBuf::from(path)
+    vtcode_commons::paths::expand_tilde(path)
 }
 
 #[cfg(target_os = "linux")]

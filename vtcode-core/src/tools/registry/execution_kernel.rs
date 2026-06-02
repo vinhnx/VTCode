@@ -4,14 +4,13 @@ use serde_json::Value;
 use serde_json::json;
 
 use crate::config::constants::tools as tool_names;
+use crate::tools::apply_patch::{UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV, effective_max_payload_bytes};
 use crate::tools::error_messages::agent_execution;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::validation::{commands, paths};
 
 use super::ToolRegistry;
 
-pub(super) const UNIFIED_FILE_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
-const UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV: &str = "VTCODE_UNIFIED_FILE_MAX_PAYLOAD_BYTES";
 const DESCRIPTION_FIELD: &str = "description";
 const DETAILS_ALIAS_FIELD: &str = "details";
 
@@ -73,18 +72,17 @@ fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
     is_missing_arg_value(args, key)
 }
 
+#[cfg(test)]
 fn parse_unified_file_max_payload_bytes(raw: Option<&str>) -> Option<usize> {
     raw.and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|value| *value >= 1024)
 }
 
 fn configured_unified_file_max_payload_bytes() -> usize {
-    parse_unified_file_max_payload_bytes(
-        std::env::var(UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV)
-            .ok()
-            .as_deref(),
-    )
-    .unwrap_or(UNIFIED_FILE_MAX_PAYLOAD_BYTES)
+    // Single source of truth for the cap: both preflight and the post-decode
+    // size check in `apply_patch` resolve the env-var override the same way
+    // (including the 1 KiB safety floor), so the two stages always agree.
+    effective_max_payload_bytes()
 }
 
 fn schema_uses_description_alias(schema_properties: &Map<String, Value>) -> bool {

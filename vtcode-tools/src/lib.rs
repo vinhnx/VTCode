@@ -98,20 +98,6 @@ pub mod search {
 #[cfg(feature = "search")]
 pub use search::GrepSearchManager;
 
-// #[cfg(feature = "planner")]
-// pub mod planner {
-//     pub use vtcode_core::tools::plan::{
-//         PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
-//         StepStatus, TaskPlan, TaskTrackerArgs,
-//     };
-// }
-
-// #[cfg(feature = "planner")]
-// pub use planner::{
-//     PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
-//     StepStatus, TaskPlan, TaskTrackerArgs,
-// };
-
 #[cfg(feature = "policies")]
 pub mod policies {
     pub use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};

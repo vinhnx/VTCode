@@ -11,7 +11,10 @@ use anyhow::Result;
 use super::apply_patch_handler::parse_apply_patch_command;
 use super::tool_handler::{ToolOutput, ToolSession, TurnContext};
 use super::turn_diff_tracker::SharedTurnDiffTracker;
+use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::editing::Patch;
+use serde_json::json;
+use vtcode_commons::paths::ensure_path_within_workspace;
 
 /// The argument used to indicate apply_patch mode (from Codex)
 pub const CODEX_APPLY_PATCH_ARG: &str = "--codex-run-as-apply-patch";
@@ -75,18 +78,47 @@ pub async fn intercept_apply_patch(
     command: &[String],
     cwd: &Path,
     timeout_ms: Option<u64>,
-    _session: &dyn ToolSession,
+    session: &dyn ToolSession,
     _turn: &TurnContext,
     tracker: Option<&SharedTurnDiffTracker>,
-    _call_id: &str,
-    _tool_name: &str,
+    call_id: &str,
+    tool_name: &str,
 ) -> Result<Option<ToolOutput>, ApplyPatchError> {
     let Some(patch) = maybe_parse_apply_patch_from_command(command) else {
         return Ok(None);
     };
 
+    // Safety gate: decode the patch through the same path the registry uses, so the
+    // post-decode size cap and the env-var override apply uniformly. This prevents
+    // an oversized or base64-decompression patch from bypassing the preflight cap
+    // when it is delivered via a shell command.
+    let args = json!({ "input": &patch });
+    let decoded = match decode_apply_patch_input(&args)
+        .map_err(|e| ApplyPatchError::ParseError(e.to_string()))?
+    {
+        Some(decoded) => decoded,
+        None => return Ok(None),
+    };
+    if decoded.text.is_empty() {
+        return Ok(None);
+    }
+
+    // Path safety: ensure the working directory is contained within the session workspace.
+    // The session workspace is owned by the harness kernel and exposed via the tool
+    // session trait. This prevents intercepting a patch whose target is outside the
+    // workspace sandbox.
+    let workspace_root = session.workspace_root();
+    if let Err(reason) = ensure_path_within_workspace(cwd, workspace_root) {
+        return Err(ApplyPatchError::ParseError(format!(
+            "intercept_apply_patch rejected cwd '{}' (workspace='{}'): {}",
+            cwd.display(),
+            workspace_root.display(),
+            reason
+        )));
+    }
+
     // Create the request
-    let req = ApplyPatchRequest::new(patch.clone(), cwd.to_path_buf())
+    let req = ApplyPatchRequest::new(decoded.text.clone(), cwd.to_path_buf())
         .with_timeout(timeout_ms.unwrap_or(30000));
 
     // Emit patch begin event
@@ -95,7 +127,10 @@ pub async fn intercept_apply_patch(
         t.on_patch_begin(Default::default());
     }
 
-    // For now, execute patch directly (would use ApplyPatchRuntime in production)
+    // Execute the patch through the same `Patch::parse` + `apply` pipeline that the
+    // registry's `apply_patch` tool uses, but with the safety checks above applied.
+    // The result is funneled through the turn diff tracker so the diff is recorded
+    // the same way as a model-originated `apply_patch` call.
     let result = execute_patch(&req).await;
 
     // Emit patch end event
@@ -106,7 +141,9 @@ pub async fn intercept_apply_patch(
 
     match result {
         Ok(output) => Ok(Some(ToolOutput::simple(output))),
-        Err(e) => Ok(Some(ToolOutput::error(e.to_string()))),
+        Err(e) => Ok(Some(ToolOutput::error(format!(
+            "{e} (call_id={call_id}, tool_name={tool_name})"
+        )))),
     }
 }
 

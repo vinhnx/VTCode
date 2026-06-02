@@ -282,7 +282,7 @@ mimalloc = { version = "0.1", default-features = false }
 [features]
 default = ["tool-chat", "a2a-server", "desktop-notifications"]
 tool-chat = []
-profiling = []                            # Enable tracing instrumentation for performance profiling
+profiling = []
 anthropic-api = ["vtcode-core/anthropic-api"]
 a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for provider authentication
 desktop-notifications = ["vtcode-core/desktop-notifications"]

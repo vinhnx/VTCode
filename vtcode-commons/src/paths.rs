@@ -19,6 +19,25 @@ pub fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
+/// Expand a leading `~` or `~/` to the user's home directory. The function is
+/// intentionally forgiving: paths that don't start with `~` are returned as-is,
+/// and when the home directory cannot be determined the original path is
+/// preserved so callers can surface a downstream error rather than panicking.
+///
+/// This is the canonical implementation used by the tool registry and the
+/// sandbox runtime; both call sites previously carried near-identical copies.
+pub fn expand_tilde(path: &str) -> PathBuf {
+    if path == "~" {
+        return dirs::home_dir().unwrap_or_else(|| PathBuf::from(path));
+    }
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(rest);
+    }
+    PathBuf::from(path)
+}
+
 /// Canonicalize a path with fallback to the original path if canonicalization fails.
 pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
     std::fs::canonicalize(workspace_root).unwrap_or_else(|error| {
@@ -471,5 +490,32 @@ mod tests {
 
         // Cleanup
         tokio::fs::remove_dir(&test_dir).await.ok();
+    }
+
+    #[test]
+    fn expand_tilde_passes_through_absolute_paths() {
+        let absolute = "/etc/hosts";
+        assert_eq!(expand_tilde(absolute), PathBuf::from(absolute));
+    }
+
+    #[test]
+    fn expand_tilde_passes_through_relative_paths() {
+        let relative = "src/main.rs";
+        assert_eq!(expand_tilde(relative), PathBuf::from(relative));
+    }
+
+    #[test]
+    fn expand_tilde_resolves_bare_tilde_to_home() {
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(expand_tilde("~"), home);
+        }
+    }
+
+    #[test]
+    fn expand_tilde_resolves_tilde_slash_prefix() {
+        if let Some(home) = dirs::home_dir() {
+            let resolved = expand_tilde("~/projects/vtcode");
+            assert_eq!(resolved, home.join("projects/vtcode"));
+        }
     }
 }
