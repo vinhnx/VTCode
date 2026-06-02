@@ -720,6 +720,7 @@ create_and_upload_release() {
                 $shacmd "$f" >> checksums.txt
             fi
         done
+        touch checksums.txt
     )
 
     shopt -s nullglob
@@ -738,8 +739,8 @@ create_and_upload_release() {
     if gh release upload "$released_version" "${release_files[@]}" --clobber; then
         print_success "All binaries, checksums, and install scripts uploaded"
     else
-        print_error "Failed to upload binaries to GitHub Release"
-        exit 1
+        print_warning "Failed to upload binaries to GitHub Release"
+        print_info "You can upload manually: gh release upload $released_version ${release_files[*]} --clobber"
     fi
 
     # Extract SHAs for Homebrew

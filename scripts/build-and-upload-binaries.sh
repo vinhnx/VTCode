@@ -246,12 +246,11 @@ build_binaries() {
             fi
         fi
     elif command -v cross &>/dev/null; then
-        # Use cross for cross-compilation — sequential to avoid OOM on 16GB M4
         build_linux=true
         print_info "Phase 2: Building Linux x86_64 via cross..."
         ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
-        print_info "Phase 2: Building Linux aarch64 via cross..."
-        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
+        # Linux aarch64 cross build skipped on macOS: Docker Rosetta + LTO requires >16GB RAM
+        print_info "Skipping Linux aarch64 cross build (OOM risk on macOS). Will use CI."
 
         if [ "$NO_WINDOWS_CROSS" = false ]; then
             build_windows=true
