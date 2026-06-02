@@ -32,6 +32,23 @@ package_release_archive_with_ghostty() {
     )
 }
 
+package_windows_archive() {
+    local target=$1
+    local dist_dir=$2
+    local archive_name=$3
+    local binary_name="${4:-vtcode.exe}"
+    local release_dir="target/$target/release"
+
+    if [ -f "$release_dir/$binary_name" ]; then
+        cp "$release_dir/$binary_name" "$dist_dir/$binary_name"
+        (
+            cd "$dist_dir"
+            zip "$archive_name" "$binary_name"
+            rm -f "$binary_name"
+        )
+    fi
+}
+
 # Function to check if required tools are available
 check_dependencies() {
     local missing_tools=()
@@ -188,47 +205,71 @@ build_binaries() {
         mkdir -p "$dist_dir"
     fi
 
-    # Build targets in parallel where possible (background jobs)
-    local pids=()
+    # Limit each build's internal parallelism to avoid saturating the M4's 10 cores
+    local total_cores
+    total_cores=$(sysctl -n hw.logicalcpu 2>/dev/null || nproc 2>/dev/null || echo 10)
+    local build_jobs=$(( total_cores < 6 ? total_cores - 1 : total_cores / 2 ))
+    export CARGO_BUILD_JOBS="$build_jobs"
 
-    # macOS x86_64
+    # Phase 1: macOS (native, fast, ~2-3 min each)
+    print_info "Phase 1: Building macOS (x86_64 + aarch64)..."
+    local mac_pids=()
     build_with_tool x86_64-apple-darwin &
-    pids+=($!)
-
-    # macOS aarch64
+    mac_pids+=($!)
     build_with_tool aarch64-apple-darwin &
-    pids+=($!)
+    mac_pids+=($!)
+    for pid in "${mac_pids[@]}"; do wait "$pid"; done
+    print_success "macOS builds completed"
 
     # Linux x86_64 (only if on Linux or have cross setup)
     local build_linux=false
+    local build_windows=false
+
+    # Phase 2: Cross builds (Docker, memory-intensive) — run 2 at a time
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # On Linux, build directly
+        # On Linux, build Linux natively + cross for aarch64/Windows
         build_linux=true
-        print_info "Building Linux x86_64 binary natively..."
+        print_info "Phase 2: Building Linux x86_64 natively..."
         ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
-        pids+=($!)
-        print_info "Building Linux aarch64 binary using cross..."
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
-        pids+=($!)
+        local native_pid=$!
+
+        if command -v cross &>/dev/null; then
+            build_windows=true
+            print_info "Phase 2: Building Linux aarch64 + Windows via cross (2 at a time)..."
+            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
+            local cross_pid1=$!
+            wait "$native_pid" "$cross_pid1"
+
+            print_info "Phase 3: Building Windows (x86_64 + aarch64) via cross..."
+            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" ) &
+            local win_pid1=$!
+            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" ) &
+            local win_pid2=$!
+            wait "$win_pid1" "$win_pid2"
+        else
+            wait "$native_pid"
+        fi
     elif command -v cross &>/dev/null; then
-        # Use cross for cross-compilation which handles dependencies better
+        # Use cross for cross-compilation — run 2 at a time
         build_linux=true
-        print_info "Attempting Linux x86_64 build using cross..."
+        print_info "Phase 2: Building Linux (x86_64 + aarch64) via cross..."
         ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
-        pids+=($!)
-        print_info "Attempting Linux aarch64 build using cross..."
+        local linux_pid1=$!
         ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
-        pids+=($!)
+        local linux_pid2=$!
+        wait "$linux_pid1" "$linux_pid2"
+
+        build_windows=true
+        print_info "Phase 3: Building Windows (x86_64 + aarch64) via cross..."
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" ) &
+        local win_pid1=$!
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" ) &
+        local win_pid2=$!
+        wait "$win_pid1" "$win_pid2"
     else
         print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"
         print_info "To enable Linux builds, install cross: cargo install cross"
     fi
-
-    # Wait for all builds to complete
-    print_info "Waiting for all parallel builds to finish..."
-    for pid in "${pids[@]}"; do
-        wait "$pid"
-    done
 
     if [ "$DRY_RUN" = true ]; then
         print_success "Dry run: Build process simulation complete"
@@ -266,11 +307,27 @@ build_binaries() {
             "vtcode-$version-aarch64-unknown-linux-gnu.tar.gz"
     fi
 
+    # Windows x86_64
+    if [ "$build_windows" = true ] && [ -f "target/x86_64-pc-windows-msvc/release/vtcode.exe" ]; then
+        package_windows_archive \
+            "x86_64-pc-windows-msvc" \
+            "$dist_dir" \
+            "vtcode-$version-x86_64-pc-windows-msvc.zip"
+    fi
+
+    # Windows aarch64
+    if [ "$build_windows" = true ] && [ -f "target/aarch64-pc-windows-msvc/release/vtcode.exe" ]; then
+        package_windows_archive \
+            "aarch64-pc-windows-msvc" \
+            "$dist_dir" \
+            "vtcode-$version-aarch64-pc-windows-msvc.zip"
+    fi
+
     print_success "Binaries build and packaging process completed"
 }
 
 # Function to build binaries for current platform only (for local sanity check)
-# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility
+# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility
 build_binaries_local() {
     local version=$1
     local dist_dir="dist"
