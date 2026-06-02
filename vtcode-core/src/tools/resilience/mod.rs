@@ -109,11 +109,7 @@ impl ToolResilience {
     /// Try to acquire a token for the tool. Returns `Ok(())` when the call is
     /// allowed. When the tool is currently rate limited the suggested wait
     /// duration is returned in `Err`.
-    pub fn try_acquire(
-        &self,
-        tool_name: &str,
-        priority: Priority,
-    ) -> Result<(), Duration> {
+    pub fn try_acquire(&self, tool_name: &str, priority: Priority) -> Result<(), Duration> {
         // 1. Fault isolation first: a tool with an open circuit is rejected
         //    immediately, even if the rate limiter has tokens to spare.
         if !self.circuit_breaker.allow_request_for_tool(tool_name) {

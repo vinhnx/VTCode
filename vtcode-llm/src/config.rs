@@ -173,8 +173,8 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     }
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
-        let resolved = prompt_cache
-            .resolve_cache_dir(Some(self.hooks.workspace_paths().workspace_root()));
+        let resolved =
+            prompt_cache.resolve_cache_dir(Some(self.hooks.workspace_paths().workspace_root()));
         let scope = self.hooks.workspace_paths().scope_for_path(&resolved);
         // Check absoluteness before moving `resolved` so we can report a meaningful error.
         let is_abs = resolved.is_absolute();
@@ -203,7 +203,11 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     }
 
     fn capture_error_message(&self, error: &Error) -> String {
-        let message = self.hooks.error_formatter().format_error(error).into_owned();
+        let message = self
+            .hooks
+            .error_formatter()
+            .format_error(error)
+            .into_owned();
         let _ = self.hooks.error_reporter().capture(error);
         message
     }
@@ -234,8 +238,7 @@ struct HookedConfigProjectionCtx<'source, 'hooks, Hooks: AdapterHooksProvider> {
 
 struct HookedConfigProjection;
 
-impl<'source, 'hooks, Hooks: AdapterHooksProvider>
-    HasComponent<FactoryConfigProjectionComponent>
+impl<'source, 'hooks, Hooks: AdapterHooksProvider> HasComponent<FactoryConfigProjectionComponent>
     for HookedConfigProjectionCtx<'source, 'hooks, Hooks>
 {
     type Provider = HookedConfigProjection;

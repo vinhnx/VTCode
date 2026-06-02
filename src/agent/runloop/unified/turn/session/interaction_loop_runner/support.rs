@@ -473,9 +473,10 @@ fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String
     }
 
     let mut metadata = String::from("\n\n[file_reference_metadata]\n");
-    for (alias, full_path) in alias_to_full_path {
+    for (alias, full_path) in &alias_to_full_path {
         metadata.push_str(&format!("{}={}\n", alias, full_path));
     }
+    metadata.push_str("Hint: Read each referenced file once using the resolved path above. Do not re-read unless truncated.\n");
 
     Some(metadata)
 }

@@ -335,9 +335,9 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
         let insert_pos = messages
             .iter()
             .position(|msg| {
-                msg.tool_calls
-                    .as_ref()
-                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.as_str()))
+                msg.tool_calls.as_ref().is_some_and(|calls| {
+                    calls.iter().any(|call| call.id == missing.call_id.as_str())
+                })
             })
             .map(|pos| pos + 1);
 

@@ -1,6 +1,6 @@
 //! Diff theme configuration and color palettes
 //!
-//! Uses standard ANSI red/green for diff line backgrounds.
+//! Uses subtle red/green tints for diff line backgrounds.
 
 use anstyle::{AnsiColor, Color};
 
@@ -98,16 +98,16 @@ fn is_windows_terminal(term_program: Option<&str>) -> bool {
 /// Get background color for addition lines based on theme and color level.
 pub fn diff_add_bg(theme: DiffTheme, _level: DiffColorLevel) -> Color {
     match theme {
-        DiffTheme::Dark => Color::Ansi(AnsiColor::Green),
-        DiffTheme::Light => Color::Ansi(AnsiColor::BrightGreen),
+        DiffTheme::Dark => Color::Rgb(anstyle::RgbColor(20, 58, 45)),
+        DiffTheme::Light => Color::Rgb(anstyle::RgbColor(218, 246, 225)),
     }
 }
 
 /// Get background color for deletion lines based on theme and color level.
 pub fn diff_del_bg(theme: DiffTheme, _level: DiffColorLevel) -> Color {
     match theme {
-        DiffTheme::Dark => Color::Ansi(AnsiColor::Red),
-        DiffTheme::Light => Color::Ansi(AnsiColor::BrightRed),
+        DiffTheme::Dark => Color::Rgb(anstyle::RgbColor(70, 38, 42)),
+        DiffTheme::Light => Color::Rgb(anstyle::RgbColor(255, 224, 224)),
     }
 }
 
@@ -131,31 +131,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dark_add_bg_is_ansi_green() {
+    fn dark_add_bg_is_subtle_green_tint() {
         let bg = diff_add_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert_eq!(bg, Color::Ansi(AnsiColor::Green));
+        assert_eq!(bg, Color::Rgb(anstyle::RgbColor(20, 58, 45)));
     }
 
     #[test]
-    fn dark_del_bg_is_ansi_red() {
+    fn dark_del_bg_is_subtle_red_tint() {
         let bg = diff_del_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert_eq!(bg, Color::Ansi(AnsiColor::Red));
+        assert_eq!(bg, Color::Rgb(anstyle::RgbColor(70, 38, 42)));
     }
 
     #[test]
-    fn light_add_bg_is_ansi_bright_green() {
+    fn light_add_bg_is_subtle_green_tint() {
         let bg = diff_add_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert_eq!(bg, Color::Ansi(AnsiColor::BrightGreen));
+        assert_eq!(bg, Color::Rgb(anstyle::RgbColor(218, 246, 225)));
     }
 
     #[test]
-    fn light_del_bg_is_ansi_bright_red() {
+    fn light_del_bg_is_subtle_red_tint() {
         let bg = diff_del_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert_eq!(bg, Color::Ansi(AnsiColor::BrightRed));
+        assert_eq!(bg, Color::Rgb(anstyle::RgbColor(255, 224, 224)));
     }
 
     #[test]
-    fn all_levels_use_same_ansi_colors() {
+    fn all_levels_use_same_theme_tints() {
         for level in [
             DiffColorLevel::TrueColor,
             DiffColorLevel::Ansi256,
@@ -163,19 +163,19 @@ mod tests {
         ] {
             assert_eq!(
                 diff_add_bg(DiffTheme::Dark, level),
-                Color::Ansi(AnsiColor::Green)
+                Color::Rgb(anstyle::RgbColor(20, 58, 45))
             );
             assert_eq!(
                 diff_del_bg(DiffTheme::Dark, level),
-                Color::Ansi(AnsiColor::Red)
+                Color::Rgb(anstyle::RgbColor(70, 38, 42))
             );
             assert_eq!(
                 diff_add_bg(DiffTheme::Light, level),
-                Color::Ansi(AnsiColor::BrightGreen)
+                Color::Rgb(anstyle::RgbColor(218, 246, 225))
             );
             assert_eq!(
                 diff_del_bg(DiffTheme::Light, level),
-                Color::Ansi(AnsiColor::BrightRed)
+                Color::Rgb(anstyle::RgbColor(255, 224, 224))
             );
         }
     }

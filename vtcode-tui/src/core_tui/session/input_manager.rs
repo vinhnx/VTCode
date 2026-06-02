@@ -214,8 +214,7 @@ impl InputManager {
 
     pub(crate) fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
         let lines: Vec<String> = self.textarea.lines().to_vec();
-        let (start_line, start_col) =
-            textarea_bridge::byte_offset_to_row_col(&lines, start);
+        let (start_line, start_col) = textarea_bridge::byte_offset_to_row_col(&lines, start);
         let (end_line, end_col) = textarea_bridge::byte_offset_to_row_col(&lines, end);
 
         let rep_parts: Vec<&str> = replacement.split('\n').collect();
@@ -234,11 +233,13 @@ impl InputManager {
                 new_line.push_str(&line[..start_byte]);
                 new_line.push_str(replacement);
                 new_line.push_str(remaining);
-                self.textarea = TextArea::from(
-                    lines.iter().enumerate().map(|(i, l)| {
-                        if i == start_line { new_line.as_str() } else { l.as_str() }
-                    }),
-                );
+                self.textarea = TextArea::from(lines.iter().enumerate().map(|(i, l)| {
+                    if i == start_line {
+                        new_line.as_str()
+                    } else {
+                        l.as_str()
+                    }
+                }));
             } else {
                 // Multi-line replacement: split across lines.
                 let mut new_lines: Vec<String> =
@@ -247,8 +248,7 @@ impl InputManager {
                     if i < start_line {
                         new_lines.push(l.clone());
                     } else if i == start_line {
-                        let mut first =
-                            String::with_capacity(start_byte + rep_parts[0].len());
+                        let mut first = String::with_capacity(start_byte + rep_parts[0].len());
                         first.push_str(&line[..start_byte]);
                         first.push_str(rep_parts[0]);
                         new_lines.push(first);
@@ -256,8 +256,7 @@ impl InputManager {
                             new_lines.push(mid.to_string());
                         }
                         let last = rep_parts.last().unwrap();
-                        let mut last_line =
-                            String::with_capacity(last.len() + remaining.len());
+                        let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);
                         new_lines.push(last_line);
@@ -278,19 +277,16 @@ impl InputManager {
                 if i < start_line {
                     new_lines.push(line.clone());
                 } else if i == start_line {
-                    let start_byte =
-                        textarea_bridge::char_col_to_byte_offset(line, start_col);
+                    let start_byte = textarea_bridge::char_col_to_byte_offset(line, start_col);
                     if !has_newlines {
-                        let mut merged = String::with_capacity(
-                            start_byte + replacement.len() + remaining.len(),
-                        );
+                        let mut merged =
+                            String::with_capacity(start_byte + replacement.len() + remaining.len());
                         merged.push_str(&line[..start_byte]);
                         merged.push_str(replacement);
                         merged.push_str(remaining);
                         new_lines.push(merged);
                     } else {
-                        let mut first =
-                            String::with_capacity(start_byte + rep_parts[0].len());
+                        let mut first = String::with_capacity(start_byte + rep_parts[0].len());
                         first.push_str(&line[..start_byte]);
                         first.push_str(rep_parts[0]);
                         new_lines.push(first);
@@ -298,8 +294,7 @@ impl InputManager {
                             new_lines.push(mid.to_string());
                         }
                         let last = rep_parts.last().unwrap();
-                        let mut last_line =
-                            String::with_capacity(last.len() + remaining.len());
+                        let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);
                         new_lines.push(last_line);
@@ -329,8 +324,7 @@ impl InputManager {
 
     pub fn move_cursor_left(&mut self) {
         if let Some((start, _)) = self.selection_range() {
-            let (row, col) =
-                textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), start);
+            let (row, col) = textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), start);
             self.set_textarea_cursor(row, col);
             self.clear_selection();
             return;
@@ -341,8 +335,7 @@ impl InputManager {
 
     pub fn move_cursor_right(&mut self) {
         if let Some((_, end)) = self.selection_range() {
-            let (row, col) =
-                textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), end);
+            let (row, col) = textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), end);
             self.set_textarea_cursor(row, col);
             self.clear_selection();
             return;
@@ -358,7 +351,11 @@ impl InputManager {
 
     pub fn move_cursor_to_end(&mut self) {
         let last_row = self.textarea.lines().len().saturating_sub(1);
-        let last_col = self.textarea.lines().last().map_or(0, |l| l.chars().count());
+        let last_col = self
+            .textarea
+            .lines()
+            .last()
+            .map_or(0, |l| l.chars().count());
         self.set_textarea_cursor(last_row, last_col);
         self.clear_selection();
     }

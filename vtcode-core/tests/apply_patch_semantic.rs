@@ -306,7 +306,7 @@ async fn semantic_anchor_fails_when_multiple_locations_match() {
 
 #[tokio::test]
 #[serial]
-async fn semantic_anchor_fails_for_unsupported_language() {
+async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
     let temp_dir = TempDir::new().unwrap();
     let source = temp_dir.path().join("service.rb");
     fs::write(
@@ -328,8 +328,12 @@ async fn semantic_anchor_fails_for_unsupported_language() {
         .await
         .unwrap();
 
-    assert!(result["error"].is_object(), "{result:?}");
-    assert!(error_message(&result).contains("unsupported language"));
+    assert!(result["success"].as_bool().unwrap_or(false), "{result:?}");
+    let content = fs::read_to_string(&source).unwrap();
+    assert!(
+        content.contains("hello #{name}"),
+        "expected replacement: {content}"
+    );
 }
 
 #[tokio::test]
