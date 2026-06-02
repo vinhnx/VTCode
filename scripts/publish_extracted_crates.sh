@@ -235,7 +235,7 @@ for crate in "${CRATES[@]}"; do
     fi
     publish_cmd "$crate"
     wait_for_crates_io_version "$crate" "$CURRENT_VERSION"
-    tag="${crate}-0.1.0"
+    tag="${crate}-${CURRENT_VERSION}"
     maybe_tag "${tag}"
     post_publish_follow_up "${crate}"
     echo "Completed processing for ${crate}."

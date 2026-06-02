@@ -327,7 +327,7 @@ build_binaries() {
 }
 
 # Function to build binaries for current platform only (for local sanity check)
-# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility
+# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility
 build_binaries_local() {
     local version=$1
     local dist_dir="dist"
