@@ -3,10 +3,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
-use vtcode_commons::serde_helpers::json_to_string_pretty;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 use crate::tool_policy::ToolPolicy;
 use crate::tools::result::ToolResult as SplitToolResult;

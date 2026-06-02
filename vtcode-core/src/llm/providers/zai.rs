@@ -115,7 +115,10 @@ impl ZAIProvider {
                     .is_some_and(|reasoning| !reasoning.is_empty())
         });
 
-        payload.insert("model".to_owned(), Value::String(normalized_model.into_owned()));
+        payload.insert(
+            "model".to_owned(),
+            Value::String(normalized_model.into_owned()),
+        );
         payload.insert(
             "messages".to_owned(),
             Value::Array(serialize_messages_openai_format(request, PROVIDER_KEY)?),

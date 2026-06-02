@@ -159,7 +159,7 @@ pub(super) async fn compute_replacements(
                 .and_then(semantic_anchor_term)
                 .is_some()
         {
-            let semantic = resolve_semantic_match(
+            match resolve_semantic_match(
                 source_path,
                 path,
                 original_lines,
@@ -167,10 +167,28 @@ pub(super) async fn compute_replacements(
                 old_segment.clone(),
                 new_segment.clone(),
             )
-            .await?;
-            found = Some(semantic.start_idx);
-            old_segment = semantic.old_segment;
-            new_segment = semantic.new_segment;
+            .await
+            {
+                Ok(semantic) => {
+                    found = Some(semantic.start_idx);
+                    old_segment = semantic.old_segment;
+                    new_segment = semantic.new_segment;
+                }
+                Err(PatchError::SemanticResolutionFailed { reason, .. })
+                    if reason.contains("unsupported language") =>
+                {
+                    // Language not supported by ast-grep (e.g. markdown, yaml).
+                    // Fall back to exact text search from the beginning of the file.
+                    found = seek_segment(
+                        original_lines,
+                        &mut old_segment,
+                        &mut new_segment,
+                        0,
+                        chunk.is_end_of_file(),
+                    );
+                }
+                Err(err) => return Err(err),
+            }
         }
 
         if let Some(start_idx) = found {

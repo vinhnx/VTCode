@@ -394,17 +394,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             None
         }
-        KeyCode::Char('p') | KeyCode::Char('P')
-            if has_control && !has_command && !has_alt =>
-        {
+        KeyCode::Char('p') | KeyCode::Char('P') if has_control && !has_command && !has_alt => {
             if session.navigate_history_previous() {
                 session.mark_dirty();
             }
             None
         }
-        KeyCode::Char('n') | KeyCode::Char('N')
-            if has_control && !has_command && !has_alt =>
-        {
+        KeyCode::Char('n') | KeyCode::Char('N') if has_control && !has_command && !has_alt => {
             if session.navigate_history_next() {
                 session.mark_dirty();
             }
@@ -452,9 +448,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             None
         }
-        KeyCode::Char('\\')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('\\') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.delete_whitespace_around_cursor();
             session.mark_dirty();
             None

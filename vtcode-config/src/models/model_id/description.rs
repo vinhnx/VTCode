@@ -129,7 +129,9 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
-            ModelId::OllamaMinimaxM3Cloud => "Cloud-hosted MiniMax-M3 model served via Ollama Cloud",
+            ModelId::OllamaMinimaxM3Cloud => {
+                "Cloud-hosted MiniMax-M3 model served via Ollama Cloud"
+            }
             ModelId::OllamaGemini3FlashPreviewCloud => {
                 "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }

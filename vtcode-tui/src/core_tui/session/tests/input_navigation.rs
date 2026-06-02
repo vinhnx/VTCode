@@ -339,10 +339,12 @@ fn ctrl_p_navigates_to_previous_history() {
     let mut session = session_with_input("", 0);
 
     // Add a history entry
-    session.input_manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-        "previous command".to_string(),
-        Vec::new(),
-    ));
+    session
+        .input_manager
+        .add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "previous command".to_string(),
+            Vec::new(),
+        ));
 
     let event = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
@@ -356,14 +358,18 @@ fn ctrl_n_navigates_to_next_history() {
     let mut session = session_with_input("", 0);
 
     // Add history entries
-    session.input_manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-        "first command".to_string(),
-        Vec::new(),
-    ));
-    session.input_manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-        "second command".to_string(),
-        Vec::new(),
-    ));
+    session
+        .input_manager
+        .add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "first command".to_string(),
+            Vec::new(),
+        ));
+    session
+        .input_manager
+        .add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "second command".to_string(),
+            Vec::new(),
+        ));
 
     // Go to previous history (should be "second command")
     let event_p = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
