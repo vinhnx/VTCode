@@ -37,7 +37,9 @@
 - [Protocols and exports](#protocols-and-exports)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
-- [For AI agents](#for-ai-agents)
+- [Contributing guide](#contributing-guide)
+  - [For AI agents](#for-ai-agents)
+  - [For human contributors](#for-human-contributors)
 - [Development](#development)
 - [Contributing](#contributing)
 - [Support](#support)
@@ -278,18 +280,71 @@ Start here:
 
 Ask docs assistants: [Google Gemini CodeWiki](https://codewiki.google/github.com/vinhnx/vtcode) or [Devin DeepWiki](https://deepwiki.com/vinhnx/vtcode).
 
-## For AI agents
+## Contributing guide
+
+Whether you are an AI agent or a human contributor, read this section before opening a PR.
+
+### For AI agents
 
 If you are an AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar), read [AGENTS.md](./AGENTS.md) before making changes. It is the authoritative source for workspace conventions.
 
-**Quick reference for agents:**
+**Rules (non-negotiable):**
 
 - **Conventions**: Conventional Commits (`type(scope): subject`), 4-space indentation, `snake_case` functions, `PascalCase` types, `anyhow::Result<T>` with `.with_context()`.
-- **Verification**: Run `./scripts/check-dev.sh` for a fast gate (10-30s). Add `--test` for tests, `--workspace` for full workspace. CI uses `RUSTFLAGS="-D warnings"` and `--locked`.
-- **Crate layout**: ~20 crates. Key crates: `vtcode` (binary/CLI), `vtcode-core` (agent loop, tools, LLM orchestration), `vtcode-tui` (TUI surface), `vtcode-llm` (provider abstraction), `vtcode-config` (config schema). Each crate has its own `AGENTS.md` with crate-specific guidance.
 - **API contract**: `vtcode-exec-events::ThreadEvent` is the authoritative runtime event type. Do not invent parallel types. Harness config lives in `agent.harness`, `automation.full_auto`, `context.dynamic` -- do not add new top-level harness subsystems.
-- **Session memory**: `.vtcode/memory/` (gitignored) stores cross-session learnings. Read `gotchas.md` and `decisions.md` at session start when context is needed.
-- **Output discipline**: Cap large command output: `COMMAND 2>&1 | head -c 4000`.
+- **Keep changes surgical**. Preserve existing APIs unless the task requires a change. Do not reformat files you are not editing.
+
+**Verification workflow:**
+
+| Command | What it checks | Time |
+| --- | --- | --- |
+| `./scripts/check-dev.sh` | Fast gate: `cargo check --locked` + clippy | 10-30 s |
+| `./scripts/check-dev.sh --test` | Fast gate + `cargo test` | 30-90 s |
+| `./scripts/check-dev.sh --workspace` | Full workspace check + all tests | 1-3 min |
+
+CI sets `RUSTFLAGS="-D warnings"` and uses `--locked`. Match locally.
+
+**Workspace layout:**
+
+~20 crates. Key crates: `vtcode` (binary/CLI), `vtcode-core` (agent loop, tools, LLM orchestration), `vtcode-tui` (TUI surface), `vtcode-llm` (provider abstraction), `vtcode-config` (config schema). Each crate has its own `AGENTS.md` with crate-specific guidance.
+
+**Session memory:** `.vtcode/memory/` (gitignored) stores cross-session learnings. Read `gotchas.md` and `decisions.md` at session start when context is needed.
+
+**Output discipline:** Cap large command output: `COMMAND 2>&1 | head -c 4000`.
+
+### For human contributors
+
+**Getting started:**
+
+1. Fork the repo and clone your fork.
+2. Install Rust (stable). The project uses `rust-toolchain.toml` to pin the channel.
+3. Run `./scripts/check-dev.sh` to confirm your environment builds cleanly.
+4. Pick an [open issue](https://github.com/vinhnx/vtcode/issues) or a [good first issue](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
+
+**Before you commit:**
+
+- Run `./scripts/check-dev.sh` (fast) or `./scripts/check-dev.sh --test` (thorough).
+- Use Conventional Commits: `type(scope): subject`. Example: `fix(tools): handle empty glob result`.
+- Keep PRs focused. One logical change per PR is easier to review.
+
+**Where to put things:**
+
+| Change type | Where |
+| --- | --- |
+| New tool or tool behavior | `vtcode-tools` or `vtcode-bash-runner` |
+| Agent loop, prompt, or orchestration | `vtcode-core` |
+| LLM provider support | `vtcode-llm` |
+| Config schema or loading | `vtcode-config` |
+| TUI rendering | `vtcode-tui` |
+| Release packaging | `xtask` |
+
+If you are unsure, open an issue first and describe what you want to change.
+
+**Further reading:**
+
+- [AGENTS.md](./AGENTS.md) -- workspace conventions and rules
+- [CONTRIBUTING.md](./docs/CONTRIBUTING.md) -- detailed contribution process
+- [Architecture](./docs/ARCHITECTURE.md) -- system design overview
 
 ## Development
 
