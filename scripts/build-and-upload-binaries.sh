@@ -231,45 +231,34 @@ build_binaries() {
         # On Linux, build Linux natively + cross for aarch64/Windows
         build_linux=true
         print_info "Phase 2: Building Linux x86_64 natively..."
-        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
-        local native_pid=$!
+        ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "$BUILD_TOOL" build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
 
         if command -v cross &>/dev/null; then
             print_info "Phase 2: Building Linux aarch64 via cross..."
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
-            local cross_pid1=$!
-            wait "$native_pid" "$cross_pid1"
+            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
 
             if [ "$NO_WINDOWS_CROSS" = false ]; then
                 build_windows=true
-                print_info "Phase 3: Building Windows (x86_64 + aarch64) via cross..."
-                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" ) &
-                local win_pid1=$!
-                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" ) &
-                local win_pid2=$!
-                wait "$win_pid1" "$win_pid2"
+                print_info "Phase 3: Building Windows x86_64 via cross..."
+                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
+                print_info "Phase 3: Building Windows aarch64 via cross..."
+                ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
             fi
-        else
-            wait "$native_pid"
         fi
     elif command -v cross &>/dev/null; then
-        # Use cross for cross-compilation — run 2 at a time
+        # Use cross for cross-compilation — sequential to avoid OOM on 16GB M4
         build_linux=true
-        print_info "Phase 2: Building Linux (x86_64 + aarch64) via cross..."
-        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" ) &
-        local linux_pid1=$!
-        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" ) &
-        local linux_pid2=$!
-        wait "$linux_pid1" "$linux_pid2"
+        print_info "Phase 2: Building Linux x86_64 via cross..."
+        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux x86_64 build failed" )
+        print_info "Phase 2: Building Linux aarch64 via cross..."
+        ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
 
         if [ "$NO_WINDOWS_CROSS" = false ]; then
             build_windows=true
-            print_info "Phase 3: Building Windows (x86_64 + aarch64) via cross..."
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" ) &
-            local win_pid1=$!
-            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" ) &
-            local win_pid2=$!
-            wait "$win_pid1" "$win_pid2"
+            print_info "Phase 3: Building Windows x86_64 via cross..."
+            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
+            print_info "Phase 3: Building Windows aarch64 via cross..."
+            ( env DOCKER_DEFAULT_PLATFORM=linux/amd64 CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cross build --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
         fi
     else
         print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"
