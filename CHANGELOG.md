@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.5 - 2026-06-02
+
+### Highlights
+#### Bug Fixes
+
+- Run cross builds sequentially to avoid OOM on 16GB M4 (5ad249b4) 
+### Other Changes
 ## 0.117.4 - 2026-06-02
 
 ### Highlights
