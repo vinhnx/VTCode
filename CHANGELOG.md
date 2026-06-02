@@ -2,6 +2,34 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.2 - 2026-06-02
+
+### Highlights
+#### Bug Fixes
+
+- Pin compatible protocol SDK (ec6399d2) (@vinhnx)
+- Update API key and default model settings in vtcode.toml (fc4c1dd6) 
+#### Documentation
+
+- Add validated model pool guidance  (278975c1) (@lucaszhu-hue)
+- Document calculate_sha256 return format and use cases (c17ecad0) (@vinhnx)
+- Update contributing guide for AI and human contributors (bca21a97) 
+#### Features
+
+- Add MiniMax-M3 cloud model and update configurations (4d8b2cd2) (@vinhnx)
+- Feat(paths): add expand_tilde function for home directory expansion (f92ab297) (@vinhnx)
+- Add support for aarch64 target in Linux and update Homebrew formula (61f9f979) 
+### Other Changes
+#### Refactors
+
+- Route SHA256 hashing through vtcode-commons::utils::calculate_sha256 (0b73c956) (@vinhnx)
+- Consolidate serde_json pretty-print fallback into vtcode-commons (500dca36) (@vinhnx)
+- Regroup resilience primitives into tools::resilience (eea8d9aa) (@vinhnx)
+- Improve code readability and consistency across multiple files (eb4b169c) 
+- Extract release-lib.sh, add cross-as-default with M4 tuning, optimize CI caching (9b035778) 
+#### Tests
+
+- Add regression guard for vtcode_core::safety::hitl reachability (462b4e61) (@vinhnx)
 ## 0.117.1 - 2026-06-01
 
 ### Highlights
