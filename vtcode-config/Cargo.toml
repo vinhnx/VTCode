@@ -30,7 +30,7 @@ serde-saphyr = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }
 thiserror = { workspace = true }
-toml_edit = "0.25.4"
+toml_edit = "0.25.12"
 tracing = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.117.1" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.117.1" }

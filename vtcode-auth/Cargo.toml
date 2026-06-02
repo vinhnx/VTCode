@@ -39,7 +39,7 @@ dbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rus
 apple-native-keyring-store = { version = "1.0.0", features = ["keychain"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-native-keyring-store = "1.0.0"
+windows-native-keyring-store = "1.1.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["user"] }
