@@ -159,7 +159,9 @@ pub mod native_memory;
 pub mod path_env;
 pub mod plugins;
 pub mod pty;
-pub mod rate_limiter;
+pub mod resilience;
+
+pub use resilience::rate_limiter;
 pub mod registry;
 pub mod result;
 pub mod result_cache;
@@ -186,9 +188,9 @@ pub mod validation_cache;
 pub mod web_fetch;
 
 // Production-grade improvements modules
-pub mod adaptive_rate_limiter;
+pub use resilience::adaptive_rate_limiter;
 pub mod async_middleware;
-pub mod circuit_breaker;
+pub use resilience::circuit_breaker;
 pub mod health;
 pub mod improvement_algorithms;
 pub mod improvements_config;
