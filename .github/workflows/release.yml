@@ -1,4 +1,4 @@
-name: Release (Linux Free Tier by Default)
+name: Release
 
 on:
   workflow_dispatch:
@@ -7,11 +7,6 @@ on:
         description: 'Tag to release (e.g., 0.81.2)'
         required: true
         type: string
-      build_windows:
-        description: 'Also build Windows x86_64 artifact (disabled by default; higher runner cost)'
-        required: false
-        type: boolean
-        default: false
       build_macos:
         description: 'Also build macOS artifacts (higher runner cost)'
         required: false
@@ -21,8 +16,8 @@ on:
 permissions: {}
 
 # Cost-optimized release workflow
-# Default (free-tier friendly): Linux-only on ubuntu runners
-# Optional: Windows/macOS can be enabled per release via workflow inputs
+# Default (free-tier friendly): Linux + Windows on ubuntu-latest + windows-latest
+# Optional: macOS can be enabled per release via workflow input
 
 jobs:
   validate-release-input:
@@ -77,8 +72,12 @@ jobs:
         with:
           version: 0.15.2
 
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
       - name: Install Cross
-        run: cargo install cross --git https://github.com/cross-rs/cross.git --rev f8151ae777290430cf2108efacf3976d9528500b --locked
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cross
 
       - name: Build (${{ matrix.target }})
         run: cross build --release --target ${{ matrix.target }}
@@ -162,9 +161,6 @@ jobs:
           compression-level: 6
 
   build-windows:
-    # Windows builds are intentionally opt-in because they are costlier and still
-    # depend on the cross/Docker release path.
-    if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     needs: validate-release-input
     runs-on: windows-latest
@@ -180,6 +176,8 @@ jobs:
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Build (x86_64-pc-windows-msvc)
         run: cargo build --release --target x86_64-pc-windows-msvc
@@ -209,6 +207,74 @@ jobs:
           path: |
             vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.zip
             vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+  build-windows-arm64:
+    name: Build (aarch64-pc-windows-msvc)
+    needs: validate-release-input
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.15.2
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install Cross
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: cross
+
+      - name: Build (aarch64-pc-windows-msvc)
+        run: cross build --release --target aarch64-pc-windows-msvc
+        shell: bash
+
+      - name: Check Binary
+        shell: bash
+        run: |
+          if [ -f "target/aarch64-pc-windows-msvc/release/vtcode.exe" ]; then
+            echo "✓ Found Windows ARM64 binary: vtcode.exe"
+          else
+            echo "✗ Binary not found!" && exit 1
+          fi
+
+      - name: Package
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          VERSION="${TAG#v}"
+          ARCHIVE="vtcode-${TAG}-aarch64-pc-windows-msvc.zip"
+          cd target/aarch64-pc-windows-msvc/release
+          zip -r "${OLDPWD}/${ARCHIVE}" vtcode.exe
+          cd "${OLDPWD}"
+          if command -v sha256sum &> /dev/null; then
+            sha256sum "$ARCHIVE" > "vtcode-${TAG}-aarch64-pc-windows-msvc.sha256"
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 "$ARCHIVE" > "vtcode-${TAG}-aarch64-pc-windows-msvc.sha256"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: artifacts-aarch64-pc-windows-msvc
+          path: |
+            vtcode-${{ github.event.inputs.tag }}-aarch64-pc-windows-msvc.zip
+            vtcode-${{ github.event.inputs.tag }}-aarch64-pc-windows-msvc.sha256
           if-no-files-found: error
           retention-days: 7
           compression-level: 6
@@ -292,7 +358,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [validate-release-input, build-linux, build-windows, build-macos]
+    needs: [validate-release-input, build-linux, build-windows, build-windows-arm64, build-macos]
     if: ${{ always() && !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:

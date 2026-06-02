@@ -21,6 +21,8 @@ class Vtcode < Formula
     elsif Hardware::CPU.arm?
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "PLACEHOLDER_AARCH64_LINUX_SHA256"
+    else
+      odie "VT Code #{version} does not support this Linux architecture"
     end
   end
 
