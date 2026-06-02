@@ -196,7 +196,7 @@ jobs:
 
   build-windows-arm64:
     name: Build (aarch64-pc-windows-msvc)
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: read
     steps:
@@ -212,20 +212,10 @@ jobs:
           targets: aarch64-pc-windows-msvc
           components: rustfmt
 
-      - name: Install Zig
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.15.2
-
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
-      - name: Install Cross
-        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
-        with:
-          tool: cross
-
       - name: Build (aarch64-pc-windows-msvc)
-        run: cross build --release --target aarch64-pc-windows-msvc
+        run: cargo build --release --target aarch64-pc-windows-msvc
         shell: bash
 
       - name: Check Binary

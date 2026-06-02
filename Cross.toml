@@ -53,16 +53,4 @@ pre-build = [
     "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
-[target.x86_64-pc-windows-msvc]
-image = "ghcr.io/cross-rs/x86_64-pc-windows-msvc:latest"
-pre-build = [
-    "vcpkg install openssl:x64-windows",
-    "export PKG_CONFIG_ALLOW_CROSS=1",
-]
 
-[target.aarch64-pc-windows-msvc]
-image = "ghcr.io/cross-rs/aarch64-pc-windows-msvc:latest"
-pre-build = [
-    "vcpkg install openssl:arm64-windows",
-    "export PKG_CONFIG_ALLOW_CROSS=1",
-]
