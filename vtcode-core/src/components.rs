@@ -65,6 +65,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use serde_json::Value;
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 use crate::cache::{CacheKey, UnifiedCache};
 use crate::tool_policy::ToolPolicy;
@@ -603,7 +604,7 @@ fn value_to_text(value: &Value) -> String {
     if value.is_string() {
         value.as_str().unwrap_or("").to_string()
     } else {
-        serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+        json_to_string_pretty(value)
     }
 }
 

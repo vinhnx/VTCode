@@ -5,6 +5,7 @@ use std::sync::Mutex as StdMutex;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use tokio::time::timeout;
+use vtcode_commons::serde_helpers::json_to_string_pretty;
 use vtcode_config::auth::CopilotAuthConfig;
 
 use super::command::{
@@ -1408,8 +1409,8 @@ fn extract_observed_tool_raw_output(raw_output: &Value) -> Option<String> {
                     .filter(|text| !text.trim().is_empty())
                     .map(ToString::to_string)
             })
-            .or_else(|| Some(render_json_value(raw_output))),
-        _ => Some(render_json_value(raw_output)),
+            .or_else(|| Some(json_to_string_pretty(raw_output))),
+        _ => Some(json_to_string_pretty(raw_output)),
     }
 }
 
@@ -1447,10 +1448,6 @@ fn extract_tool_call_terminal_id(content: Option<&Value>) -> Option<String> {
                     .map(ToString::to_string)
             })
         })
-}
-
-fn render_json_value(value: &Value) -> String {
-    serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
 fn parse_legacy_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
