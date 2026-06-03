@@ -423,11 +423,21 @@ fn prefixed_line(prefix_segments: &[MarkdownSegment]) -> MarkdownLine {
 }
 
 fn line_number_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    if base_style == theme_styles.tool_output {
-        theme_styles.tool_detail.dimmed()
+    let source = if base_style == theme_styles.tool_output {
+        theme_styles.tool_detail
     } else {
-        base_style.dimmed()
+        base_style
+    };
+    let dimmed_fg = source
+        .get_fg_color()
+        .and_then(|fg| vtcode_commons::colors::blend_colors(&fg, &theme_styles.background, 0.55));
+    let mut style = Style::new().effects(source.get_effects() | Effects::DIMMED);
+    if let Some(color) = dimmed_fg {
+        style = style.fg_color(Some(color));
+    } else if let Some(fg) = source.get_fg_color() {
+        style = style.fg_color(Some(fg));
     }
+    style
 }
 
 /// Format the gutter text for a line. Returns `(gutter_text, source_line_advance)`.
