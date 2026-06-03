@@ -128,6 +128,7 @@ impl ModelId {
             | ModelId::OpenRouterQwenQwen37Max
             | ModelId::OpenRouterTencentHy3Preview
             | ModelId::OpenRouterXAiGrokBuild01
+            | ModelId::OpenRouterXiaomiMimoV25
             | ModelId::OpenRouterXiaomiMimoV25Pro
             | ModelId::OpenRouterPoolsideLagunaXs2Free
             | ModelId::OpenRouterPoolsideLagunaM1Free => Provider::OpenRouter,

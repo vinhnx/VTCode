@@ -298,6 +298,8 @@ pub enum ModelId {
     OpenRouterTencentHy3Preview,
     /// Grok Build 0.1 - xAI's fast coding model for agentic software engineering via OpenRouter
     OpenRouterXAiGrokBuild01,
+    /// MiMo-V2.5 - Xiaomi's omnimodal agentic model for complex software engineering via OpenRouter
+    OpenRouterXiaomiMimoV25,
     /// MiMo-V2.5-Pro - Xiaomi's flagship agentic model for complex software engineering via OpenRouter
     OpenRouterXiaomiMimoV25Pro,
     /// Laguna XS.2 (free) - Poolside's efficient free coding agent model via OpenRouter

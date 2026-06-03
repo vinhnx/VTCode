@@ -51,7 +51,10 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   [API overview](https://openrouter.ai/docs/api-reference/overview/llms)
     -   [Streaming](https://openrouter.ai/docs/api-reference/streaming/llms)
     -   [Model catalog](https://openrouter.ai/docs/llms)
--   Default model: `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
+-   Default model: `xiaomi/mimo-v2.5-pro` (VT Code's default). Xiaomi MiMo V2.5 and V2.5 Pro are also available.
+-   **Xiaomi MiMo models:**
+    -   `xiaomi/mimo-v2.5-pro` — flagship agentic model, 1M context, reasoning + tool calls
+    -   `xiaomi/mimo-v2.5` — omnimodal model, 1M context, reasoning + tool calls
 
 ## Atlas Cloud
 
@@ -62,6 +65,16 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Integration mode:** configure Atlas Cloud through VT Code's `[[custom_providers]]` support because the LLM endpoint is OpenAI-compatible.
 -   **Base URL:** `https://api.atlascloud.ai/v1`
 -   **Recommended model:** start with `deepseek-ai/deepseek-v4-flash` (DeepSeek's latest flash model, 1M context, $0.14/M input tokens).
+
+## Xiaomi MiMo
+
+-   **Provider key:** `mimo`
+-   **Docs:** [Xiaomi MiMo Platform](https://platform.xiaomimimo.com/docs/en-US/welcome)
+-   **Pricing:** [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access)
+-   **Setup:** Set `MIMO_API_KEY` or use the MiMo provider in VT Code's configuration
+-   **Models:**
+    -   `mimo-v2.5-pro` — flagship agentic model, 1M context, deep thinking
+    -   `mimo-v2.5` — omnimodal model (text, image, audio, video), 1M context
 
 ## Ollama Local & Cloud Models
 

@@ -3176,6 +3176,39 @@
           "doc_comment": "MiMo-V2.5-Pro - Xiaomi's flagship agentic model for complex software engineering via OpenRouter"
         }
       },
+      "xiaomi/mimo-v2.5": {
+        "id": "xiaomi/mimo-v2.5",
+        "name": "Xiaomi: MiMo-V2.5",
+        "description": "MiMo-V2.5 is a native omnimodal model by Xiaomi. It delivers Pro-level agentic performance at roughly half the inference cost, while surpassing MiMo-V2-Omni in multimodal perception across image and video understanding tasks. Its 1M context window supports complete documents, extended conversations, and complex task contexts in a single pass.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 131072,
+        "cost": {
+          "input": 1.4e-07,
+          "output": 2.8e-07
+        },
+        "vtcode": {
+          "variant": "OpenRouterXiaomiMimoV25",
+          "constant": "XIAOMI_MIMO_V2_5",
+          "vendor": "xiaomi",
+          "display": "MiMo-V2.5",
+          "description": "Xiaomi MiMo-V2.5 omnimodal agentic model for complex software engineering via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "MiMo-V2.5",
+          "doc_comment": "MiMo-V2.5 - Xiaomi's omnimodal agentic model for complex software engineering via OpenRouter"
+        }
+      },
       "poolside/laguna-xs.2:free": {
         "id": "poolside/laguna-xs.2:free",
         "name": "Poolside: Laguna XS.2 (free)",
@@ -3239,7 +3272,7 @@
         }
       }
     },
-    "default_model": "z-ai/glm-5"
+    "default_model": "xiaomi/mimo-v2.5-pro"
   },
   "ollama": {
     "id": "ollama",

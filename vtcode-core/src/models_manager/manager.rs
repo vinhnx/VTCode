@@ -324,7 +324,7 @@ impl ModelsManager {
             Provider::Mistral => {
                 crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string()
             }
-            Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
+            Provider::OpenRouter => "xiaomi/mimo-v2.5-pro".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => {
                 crate::config::constants::models::lmstudio::DEFAULT_MODEL.to_string()

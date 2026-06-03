@@ -251,7 +251,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenRouter),
-        ModelId::OpenRouterQwen3Coder
+        ModelId::OpenRouterXiaomiMimoV25Pro
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Ollama),

@@ -18,22 +18,28 @@ ENV
 
 ## Quickstart
 
-Run VT Code against the Qwen3 Coder model optimised for IDE workflows:
+Run VT Code against the Xiaomi MiMo V2.5 Pro model (the default OpenRouter model):
 
 ```bash
-vtcode --provider openrouter --model qwen/qwen3-coder chat
+vtcode --provider openrouter --model xiaomi/mimo-v2.5-pro chat
+```
+
+Or use the lightweight MiMo V2.5:
+
+```bash
+vtcode --provider openrouter --model xiaomi/mimo-v2.5 chat
 ```
 
 Both commands stream responses using the OpenRouter Responses API and support VT Code tooling out of the box.
 
 ## Persisting configuration
 
-Add OpenRouter to your workspace `vtcode.toml`:
+Add OpenRouter to your workspace `vtcode.toml` (MiMo V2.5 Pro is the default):
 
 ```toml
 [agent]
 provider = "openrouter"
-default_model = "qwen/qwen3-coder"
+default_model = "xiaomi/mimo-v2.5-pro"
 ```
 
 Custom model IDs are accepted. If you reference a model not listed in `docs/models.json`, ensure it is enabled for your

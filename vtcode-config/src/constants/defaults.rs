@@ -1,9 +1,9 @@
 use super::{models, ui};
 
-pub const DEFAULT_MODEL: &str = models::openai::DEFAULT_MODEL;
-pub const DEFAULT_CLI_MODEL: &str = models::openai::DEFAULT_MODEL;
-pub const DEFAULT_PROVIDER: &str = "openai";
-pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
+pub const DEFAULT_MODEL: &str = models::openrouter::DEFAULT_MODEL;
+pub const DEFAULT_CLI_MODEL: &str = models::openrouter::DEFAULT_MODEL;
+pub const DEFAULT_PROVIDER: &str = "openrouter";
+pub const DEFAULT_API_KEY_ENV: &str = "OPENROUTER_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre";
 pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 100;
 pub const DEFAULT_MAX_TOOL_LOOPS: usize = 0;

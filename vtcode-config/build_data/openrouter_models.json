@@ -957,7 +957,62 @@
         "generation": "K2.6",
         "doc_comment": "Kimi K2.6 - Moonshot AI's next-generation multimodal model for long-horizon coding and design via OpenRouter"
       }
+    },
+    "xiaomi/mimo-v2.5-pro": {
+      "id": "xiaomi/mimo-v2.5-pro",
+      "name": "Xiaomi: MiMo-V2.5-Pro",
+      "description": "MiMo-V2.5-Pro is Xiaomi's flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": ["text"],
+        "output": ["text"]
+      },
+      "context": 1000000,
+      "cost": {
+        "input": 4.35e-07,
+        "output": 8.7e-07
+      },
+      "vtcode": {
+        "variant": "OpenRouterXiaomiMimoV25Pro",
+        "constant": "XIAOMI_MIMO_V2_5_PRO",
+        "vendor": "xiaomi",
+        "display": "MiMo-V2.5-Pro",
+        "description": "Xiaomi MiMo-V2.5-Pro flagship agentic model for complex software engineering via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "MiMo-V2.5",
+        "doc_comment": "MiMo-V2.5-Pro - Xiaomi's flagship agentic model for complex software engineering via OpenRouter"
+      }
+    },
+    "xiaomi/mimo-v2.5": {
+      "id": "xiaomi/mimo-v2.5",
+      "name": "Xiaomi: MiMo-V2.5",
+      "description": "MiMo-V2.5 is a native omnimodal model by Xiaomi. It delivers Pro-level agentic performance at roughly half the inference cost, while surpassing MiMo-V2-Omni in multimodal perception across image and video understanding tasks. Its 1M context window supports complete documents, extended conversations, and complex task contexts in a single pass.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "context": 1000000,
+      "max_output_tokens": 131072,
+      "cost": {
+        "input": 1.4e-07,
+        "output": 2.8e-07
+      },
+      "vtcode": {
+        "variant": "OpenRouterXiaomiMimoV25",
+        "constant": "XIAOMI_MIMO_V2_5",
+        "vendor": "xiaomi",
+        "display": "MiMo-V2.5",
+        "description": "Xiaomi MiMo-V2.5 omnimodal agentic model for complex software engineering via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "MiMo-V2.5",
+        "doc_comment": "MiMo-V2.5 - Xiaomi's omnimodal agentic model for complex software engineering via OpenRouter"
+      }
     }
   },
-  "default_model": "qwen/qwen3-coder"
+  "default_model": "xiaomi/mimo-v2.5-pro"
 }
