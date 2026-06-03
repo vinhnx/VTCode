@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.6 - 2026-06-03
+
+### Highlights
+#### Bug Fixes
+
+- Upload failure, homebrew update, skip aarch64 cross on mac (44ea5199) (@vinhnx)
+### Other Changes
+#### Refactors
+
+- Replace cross with cargo-zigbuild for cross-compilation and update packaging scripts (d09699ed) 
 ## 0.117.5 - 2026-06-02
 
 ### Highlights
