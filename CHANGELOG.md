@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.117.7 - 2026-06-03
+
+### Highlights
+#### Bug Fixes
+
+- Skip Windows builds when targets missing, upload assets individually (ced93f5f) 
+### Other Changes
 ## 0.117.6 - 2026-06-03
 
 ### Highlights
