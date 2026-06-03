@@ -27,7 +27,7 @@ api_key_env = "MIMO_API_KEY"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "mimo-v2.5-pro"
+default_model = "mimo-v2.5"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
@@ -41,7 +41,7 @@ provider = "mimo"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
