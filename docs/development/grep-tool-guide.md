@@ -6,7 +6,7 @@ The `grep_file` tool is VT Code's primary code search mechanism, powered by **ri
 
 ## Architecture
 
--   **Backend**: ripgrep (rg) with fallback to perg for environments where ripgrep is unavailable
+-   **Backend**: ripgrep (`rg`) — requires `rg` on PATH
 -   **Search Type**: Regex-based (default) or literal string matching
 -   **File Filtering**: Glob patterns, file type matching, size limits
 -   **Performance**: Respects `.gitignore` and `.ignore` files by default for faster searches

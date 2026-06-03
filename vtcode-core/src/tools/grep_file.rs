@@ -13,13 +13,10 @@
 
 use super::file_search_bridge::{self, FileSearchConfig};
 use super::grep_cache::GrepSearchCache;
-use anyhow::{Context, Error as AnyhowError, Result};
-use glob::Pattern;
-use regex::escape;
-use serde_json::{self, Value, json};
-use std::io::ErrorKind;
+use anyhow::{Context, Result};
+use serde_json::{self, Value};
 use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -29,9 +26,6 @@ use std::thread;
 use std::time::Duration;
 use tokio::task::spawn_blocking;
 use tracing::warn;
-
-#[cfg(not(docsrs))]
-use perg::{SearchConfig, search_paths};
 
 /// Maximum number of search results to return - AGENTS.md requires max 5 results
 const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
@@ -161,17 +155,6 @@ impl GrepSearchInput {
             extra_ignore_globs: None,
         }
     }
-}
-
-fn is_hidden_path(path: &str) -> bool {
-    // Fast path for non-hidden files without full path decomposition
-    if !path.contains("/.") && !path.starts_with('.') {
-        return false;
-    }
-    Path::new(path)
-        .components()
-        .filter_map(|component| component.as_os_str().to_str())
-        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
 }
 
 /// Result of a ripgrep search
@@ -341,29 +324,7 @@ impl GrepSearchManager {
     }
 
     fn execute_with_backends(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
-        match Self::run_ripgrep_backend(input) {
-            Ok(matches) => Ok(matches),
-            Err(err) => {
-                if Self::is_ripgrep_missing(&err) {
-                    #[cfg(not(docsrs))]
-                    {
-                        Self::run_perg_backend(input).with_context(|| {
-                            format!(
-                                "perg fallback failed for pattern '{}' under '{}'",
-                                input.pattern, input.path
-                            )
-                        })
-                    }
-                    #[cfg(docsrs)]
-                    {
-                        // When building docs.rs, return an empty result since perg functionality is not available
-                        Ok(Vec::new())
-                    }
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Self::run_ripgrep_backend(input)
     }
 
     fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
@@ -498,9 +459,48 @@ impl GrepSearchManager {
     fn finalize_matches(mut matches: Vec<Value>, input: &GrepSearchInput) -> (Vec<Value>, bool) {
         let mut truncated = false;
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
-        if matches.len() > max_results {
-            matches.truncate(max_results);
+
+        if max_results == 0 {
+            return (Vec::new(), !matches.is_empty());
+        }
+
+        // Count only "match" type entries (not "context", "begin", "end") so that
+        // context lines don't crowd out actual matches from the result set.
+        let mut match_count = 0usize;
+        let mut cut_index = matches.len();
+        for (i, entry) in matches.iter().enumerate() {
+            let is_match = entry
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(|t| t == "match");
+            if is_match {
+                match_count += 1;
+                if match_count >= max_results {
+                    // Keep everything up to and including this match, plus any
+                    // trailing context lines that belong to it.
+                    cut_index = i + 1;
+                    // Advance past trailing context lines for this match.
+                    for rest in matches.iter().skip(i + 1) {
+                        let tp = rest.get("type").and_then(Value::as_str);
+                        if tp == Some("context") {
+                            cut_index += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        // Check if there are more match-type entries beyond our cut point.
+        if matches[cut_index..]
+            .iter()
+            .any(|e| e.get("type").and_then(Value::as_str) == Some("match"))
+        {
             truncated = true;
+        }
+        if cut_index < matches.len() {
+            matches.truncate(cut_index);
         }
 
         if let Some(limit) = input.max_result_bytes {
@@ -519,148 +519,6 @@ impl GrepSearchManager {
         }
 
         (matches, truncated)
-    }
-
-    #[cfg(not(docsrs))]
-    fn run_perg_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
-        let mut pattern = input.pattern.clone();
-        if input.literal.unwrap_or(false) {
-            pattern = escape(&pattern);
-        }
-
-        // Map the most relevant grep options into perg's configuration structure.
-        let case_sensitive = input.case_sensitive.unwrap_or(false);
-        let config = SearchConfig::new(
-            pattern,
-            !case_sensitive,
-            input.line_number.unwrap_or(true),
-            true,
-            input.invert_match.unwrap_or(false),
-            input.files_with_matches.unwrap_or(false),
-            false,
-            false,
-            0,
-            0,
-            input.context_lines.unwrap_or(0),
-            input.max_results,
-            input.only_matching.unwrap_or(false),
-            false,
-            String::from("never"),
-        );
-
-        // Pre-allocate output buffer with reasonable estimate for search results
-        let mut output_buffer = Vec::with_capacity(8192); // 8KB initial capacity
-        let search_targets = vec![input.path.clone()];
-
-        // Execute the search
-        search_paths(&config, &search_targets, true, true, &mut output_buffer)
-            .with_context(|| format!("perg search failed for path '{}'", input.path))?;
-
-        let output = String::from_utf8(output_buffer)
-            .with_context(|| "perg search output was not valid UTF-8".to_string())?;
-
-        let glob_filter = input
-            .glob_pattern
-            .as_ref()
-            .map(|pattern| {
-                Pattern::new(pattern).with_context(|| {
-                    format!("invalid glob pattern '{}' for perg fallback", pattern)
-                })
-            })
-            .transpose()?;
-
-        let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
-        // Pre-allocate with estimate based on output lines
-        let line_count = output.lines().count();
-        let mut matches = Vec::with_capacity(line_count.min(max_results));
-
-        for line in output.lines() {
-            if matches.len() >= max_results {
-                break;
-            }
-
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let (prefix, text) = match line.rsplit_once(':') {
-                Some(result) => result,
-                None => continue,
-            };
-
-            let mut prefix_end = prefix.len();
-            // Pre-allocate numeric_segments - typically 2-3 segments (file:line:column)
-            let mut numeric_segments = Vec::with_capacity(3);
-
-            while let Some(pos) = prefix[..prefix_end].rfind(':') {
-                let segment = &prefix[pos + 1..prefix_end];
-
-                if !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit()) {
-                    numeric_segments.push(segment);
-                    prefix_end = pos;
-                } else {
-                    break;
-                }
-            }
-
-            if prefix_end == 0 {
-                continue;
-            }
-
-            let file = &prefix[..prefix_end];
-
-            // Apply glob filtering
-            if let Some(pattern) = &glob_filter
-                && !pattern.matches(file)
-            {
-                continue;
-            }
-
-            // Check file size if max_file_size is specified
-            if let Some(max_size) = input.max_file_size
-                && let Ok(metadata) = std::fs::metadata(file)
-                && metadata.len() as usize > max_size
-            {
-                continue;
-            }
-
-            // Check if file is hidden and respect include_hidden setting
-            if !input.include_hidden.unwrap_or(false) && is_hidden_path(file) {
-                continue;
-            }
-
-            let line_number = numeric_segments
-                .get(1)
-                .or_else(|| numeric_segments.first())
-                .and_then(|num| num.parse::<u64>().ok())
-                .unwrap_or(0);
-
-            matches.push(json!({
-                "type": "match",
-                "data": {
-                    "path": {"text": file},
-                    "line_number": line_number,
-                    "lines": {"text": format!("{}\n", text)},
-                }
-            }));
-        }
-
-        Ok(Self::finalize_matches(matches, input))
-    }
-
-    #[cfg(docsrs)]
-    fn run_perg_backend(_input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
-        // When building docs.rs, return an empty result since perg functionality is not available
-        Ok((Vec::new(), false))
-    }
-
-    fn is_ripgrep_missing(err: &AnyhowError) -> bool {
-        err.chain().any(|cause| {
-            cause
-                .downcast_ref::<std::io::Error>()
-                .map(|io_err| io_err.kind() == ErrorKind::NotFound)
-                .unwrap_or(false)
-        })
     }
 
     fn spawn_grep_file(
@@ -889,6 +747,55 @@ mod tests {
         let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
         assert!(truncated);
         assert_eq!(kept.len(), 1); // Only first match fits in 20 bytes
+    }
+
+    #[test]
+    fn finalize_matches_counts_only_match_type_entries() {
+        let mut input = GrepSearchInput::with_defaults("pat".into(), ".".into());
+        input.max_results = Some(2);
+
+        // Simulate ripgrep JSON output: begin, context, match, context, end
+        let matches = vec![
+            json!({"type": "begin", "data": {"path": {"text": "Cargo.lock"}}}),
+            json!({"type": "context", "data": {"line_number": 538, "lines": {"text": "ctx1"}}}),
+            json!({"type": "context", "data": {"line_number": 539, "lines": {"text": "ctx2"}}}),
+            json!({"type": "match", "data": {"line_number": 553, "lines": {"text": "match1"}}}),
+            json!({"type": "context", "data": {"line_number": 554, "lines": {"text": "ctx3"}}}),
+            json!({"type": "context", "data": {"line_number": 555, "lines": {"text": "ctx4"}}}),
+            json!({"type": "context", "data": {"line_number": 560, "lines": {"text": "ctx5"}}}),
+            json!({"type": "match", "data": {"line_number": 563, "lines": {"text": "match2"}}}),
+            json!({"type": "context", "data": {"line_number": 564, "lines": {"text": "ctx6"}}}),
+            json!({"type": "end", "data": {"path": {"text": "Cargo.lock"}}}),
+        ];
+
+        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        // Should keep all entries up through the second match's trailing context.
+        // match_count reaches 2 at index 7, then trailing context at index 8 -> cut_index = 9.
+        assert!(!truncated);
+        assert_eq!(kept.len(), 9);
+        assert_eq!(kept[3]["type"], "match");
+        assert_eq!(kept[7]["type"], "match");
+    }
+
+    #[test]
+    fn finalize_matches_truncates_when_more_match_types_than_limit() {
+        let mut input = GrepSearchInput::with_defaults("pat".into(), ".".into());
+        input.max_results = Some(1);
+
+        let matches = vec![
+            json!({"type": "begin", "data": {"path": {"text": "f.txt"}}}),
+            json!({"type": "match", "data": {"line_number": 1, "lines": {"text": "m1"}}}),
+            json!({"type": "context", "data": {"line_number": 2, "lines": {"text": "c1"}}}),
+            json!({"type": "match", "data": {"line_number": 10, "lines": {"text": "m2"}}}),
+            json!({"type": "context", "data": {"line_number": 11, "lines": {"text": "c2"}}}),
+        ];
+
+        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        assert!(truncated);
+        // Keeps: begin + match1 + context after match1 = 3 entries
+        assert_eq!(kept.len(), 3);
+        assert_eq!(kept[1]["type"], "match");
+        assert_eq!(kept[2]["type"], "context");
     }
 
     #[test]

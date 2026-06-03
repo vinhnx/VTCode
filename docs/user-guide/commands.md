@@ -5,8 +5,7 @@ This guide summarizes common actions and how to invoke them with vtcode. The age
 ## grep_file (ripgrep-like)
 
 High-speed code search with glob filters, context lines, and optional literal/regex matching.
-VT Code routes searches through the custom `grep_file` tool. It calls the system `rg` binary when available, and falls back to the embedded [perg](https://crates.io/crates/perg)
-engine so downstream tools receive the same JSON response format. Prefer `grep_file` instead of invoking shell `rg`/`grep` yourself.
+VT Code routes searches through the custom `grep_file` tool backed by the system `rg` (ripgrep) binary. Prefer `grep_file` instead of invoking shell `rg`/`grep` yourself.
 
 -   Input fields:
 

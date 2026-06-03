@@ -1141,7 +1141,6 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "unicode-width",
  "windows-sys 0.59.0",
 ]
 
@@ -3993,19 +3992,6 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
-
-[[package]]
-name = "perg"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "982e5a750de3a27a3df585a494bf68f994466feacadbcf3f9ff989dbaa82f270"
-dependencies = [
- "anyhow",
- "clap",
- "console 0.15.11",
- "regex",
- "walkdir",
-]
 
 [[package]]
 name = "pin-project"
@@ -6877,7 +6863,6 @@ dependencies = [
  "once_cell",
  "openai-harmony",
  "parking_lot",
- "perg",
  "portable-pty",
  "proptest",
  "quick_cache",

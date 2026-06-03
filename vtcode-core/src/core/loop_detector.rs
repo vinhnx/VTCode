@@ -18,8 +18,8 @@ const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, unified_exec
 const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
-const MAX_SIMILAR_READ_TARGET_CALLS: usize = 5;
-const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 5;
+const MAX_SIMILAR_READ_TARGET_CALLS: usize = 4;
+const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 3;
 const LEGACY_GREP_FILE: &str = tools::GREP_FILE;
 const LEGACY_LIST_FILES: &str = tools::LIST_FILES;
 const LEGACY_SEARCH_TOOLS: &str = "search_tools";
@@ -79,8 +79,8 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             }
 
             // Normalize offset aliases to "offset"
-            // line_start=N → offset=N, offset_lines=N → offset=N
-            for alias in ["offset_lines", "line_start", "offset_bytes"] {
+            // line_start=N → offset=N, offset_lines=N → offset=N, start_line=N → offset=N
+            for alias in ["offset_lines", "line_start", "offset_bytes", "start_line"] {
                 if let Some(val) = normalized.remove(alias)
                     && !normalized.contains_key("offset")
                 {
@@ -89,9 +89,13 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             }
 
             // Normalize limit aliases to "limit"
-            // max_lines, chunk_lines, limit_lines, page_size_lines, line_end → limit
-            if let Some(line_end) = normalized.remove("line_end") {
-                // line_start/line_end → offset + limit
+            // max_lines, chunk_lines, limit_lines, page_size_lines, line_end, end_line → limit
+            // For line_end/end_line: compute limit from offset + end_line
+            if let Some(line_end) = normalized
+                .remove("line_end")
+                .or_else(|| normalized.remove("end_line"))
+            {
+                // start_line/end_line or line_start/line_end → offset + limit
                 if !normalized.contains_key("limit") {
                     let start = normalized
                         .get("offset")
@@ -363,31 +367,51 @@ impl LoopDetector {
             return None;
         }
 
+        // Find the current read target from the most recent read_tool call,
+        // not just the last call (which might be a grep with no read_target).
         let current_target = self
             .recent_calls
-            .back()
+            .iter()
+            .rev()
+            .find(|record| record.read_target.is_some())
             .and_then(|record| record.read_target.as_deref())?;
 
+        // Count read_file calls on the same target in recent history, skipping over
+        // other read-only tools (grep, list, search) that don't reset the streak.
+        // Only mutating tools (write, exec, edit, patch) break the streak.
         let mut same_target_streak = 0usize;
         let mut variants = HashSet::new();
         for record in self.recent_calls.iter().rev() {
-            if record.tool_name == tool_name
-                && record.read_target.as_deref() == Some(current_target)
-            {
+            let rec_base = base_tool_name(&record.tool_name);
+            let rec_is_read_tool = rec_base == tools::READ_FILE
+                || (rec_base == tools::UNIFIED_FILE && record.tool_name.ends_with("::read"));
+            let rec_is_mutating = matches!(
+                rec_base,
+                tools::WRITE_FILE
+                    | tools::CREATE_FILE
+                    | tools::EDIT_FILE
+                    | tools::UNIFIED_EXEC
+                    | tools::APPLY_PATCH
+            );
+
+            if rec_is_mutating {
+                break;
+            }
+
+            if rec_is_read_tool && record.read_target.as_deref() == Some(current_target) {
                 same_target_streak += 1;
                 variants.insert(record.args_hash);
-                continue;
             }
-            break;
         }
 
         if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
-            && variants.len() < MAX_SIMILAR_READ_TARGET_VARIANTS
+            && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS
         {
             let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
-                "HARD STOP: Repeated '{}' calls for '{}' with minimal argument variation ({}-call streak, {} variants).",
+                "HARD STOP: Repeated '{}' calls for '{}' with minimal argument variation ({}-call streak, {} variants). \
+                 Use offset/limit parameters to read specific line ranges. If the file is large, use smaller limit values.",
                 tool_name,
                 current_target,
                 same_target_streak,
@@ -948,14 +972,17 @@ mod tests {
     }
 
     #[test]
-    fn test_repetitive_read_target_requires_contiguous_streak() {
+    fn test_repetitive_read_target_grep_calls_do_not_break_streak() {
         let mut detector = LoopDetector::with_max_repeated_calls(100);
         let read_tool = format!("{}::read", tools::UNIFIED_FILE);
 
-        for _ in 0..MAX_SIMILAR_READ_TARGET_CALLS {
+        // Interleave grep calls between read_file calls on the same target.
+        // With the new logic, grep (read-only) does not break the streak.
+        // Use distinct offsets so variants stay above the threshold.
+        for offset in 1..=MAX_SIMILAR_READ_TARGET_CALLS + 1 {
             let _ = detector.record_call(
                 &read_tool,
-                &json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": 1, "limit": 20}),
+                &json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 20}),
             );
             let _ = detector.record_call(
                 LEGACY_GREP_FILE,
@@ -963,7 +990,30 @@ mod tests {
             );
         }
 
+        // Streak reaches MAX_SIMILAR_READ_TARGET_CALLS but variants exceed the threshold,
+        // so no hard stop.
         assert!(!detector.is_hard_limit_exceeded(&read_tool));
+    }
+
+    #[test]
+    fn test_repetitive_read_target_same_params_with_grep_between_triggers_hard_stop() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
+
+        // Same offset repeated, with grep calls between reads.
+        // Grep doesn't break the streak, so the hard stop fires.
+        for _ in 0..MAX_SIMILAR_READ_TARGET_CALLS + 2 {
+            let _ = detector.record_call(
+                &read_tool,
+                &json!({"path": "Cargo.lock", "offset_lines": 1, "limit": 2000}),
+            );
+            let _ = detector.record_call(
+                LEGACY_GREP_FILE,
+                &json!({"pattern": "aws-lc", "path": "Cargo.lock"}),
+            );
+        }
+
+        assert!(detector.is_hard_limit_exceeded(&read_tool));
     }
 
     #[test]
@@ -1029,6 +1079,17 @@ mod tests {
     }
 
     #[test]
+    fn test_start_line_end_line_normalized_to_offset_limit() {
+        let args = json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590});
+        let normalized = normalize_args_for_detection(tools::READ_FILE, &args);
+
+        assert!(normalized.get("start_line").is_none());
+        assert!(normalized.get("end_line").is_none());
+        assert_eq!(normalized.get("offset").and_then(|v| v.as_u64()), Some(550));
+        assert_eq!(normalized.get("limit").and_then(|v| v.as_u64()), Some(41));
+    }
+
+    #[test]
     fn test_navigation_loop_detection() {
         let mut detector = LoopDetector::with_max_repeated_calls(100);
         let list_args = serde_json::json!({"path": "src"});
@@ -1077,5 +1138,58 @@ mod tests {
                 .record_call(LEGACY_LIST_FILES, &list_args)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_checkpoint_324_pattern_detected() {
+        // Simulates the exact failure from turn_324 checkpoint:
+        // Agent reads Cargo.lock with start_line/end_line (ignored), retries with
+        // different values, interleaves grep calls. Should HARD STOP at read #5.
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
+
+        // Call 1: read Cargo.toml (different target)
+        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.toml"}));
+        assert!(r.is_none());
+
+        // Call 2: read Cargo.lock
+        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock"}));
+        assert!(r.is_none());
+
+        // Call 3: read Cargo.lock (streak=2)
+        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock"}));
+        assert!(r.is_none());
+
+        // Call 4: grep Cargo.lock (read-only, does NOT break streak)
+        let r = detector.record_call(
+            LEGACY_GREP_FILE,
+            &json!({"pattern": "aws-lc", "path": "Cargo.lock"}),
+        );
+        assert!(r.is_none());
+
+        // Call 5: read Cargo.lock with start_line (streak=3)
+        let r = detector.record_call(
+            &read_tool,
+            &json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590}),
+        );
+        assert!(r.is_none());
+
+        // Call 6: read Cargo.lock with different start_line (streak=4, variants=3)
+        // HARD STOP fires: streak >= 4 && variants <= 3
+        let r = detector.record_call(
+            &read_tool,
+            &json!({"path": "Cargo.lock", "start_line": 4400, "end_line": 4420}),
+        );
+        assert!(r.is_some(), "HARD STOP should fire at call 6");
+        let msg = r.unwrap();
+        assert!(
+            msg.contains("HARD STOP"),
+            "Expected HARD STOP, got: {}",
+            msg
+        );
+        assert!(msg.contains("Cargo.lock"));
+        assert!(msg.contains("offset/limit"));
+        assert!(detector.is_hard_limit_exceeded(&read_tool));
+        assert!(detector.is_hard_limit_exceeded(&read_tool));
     }
 }

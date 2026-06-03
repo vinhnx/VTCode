@@ -50,8 +50,8 @@ run_test "BashTool blocks dangerous commands" "grep 'dangerous_commands' vtcode-
 # Test 4: Check that allowed commands are listed in BashTool
 run_test "BashTool allows safe commands" "grep 'allowed_commands' vtcode-core/src/tools/bash_tool.rs" "allowed_commands"
 
-# Test 5: Check that GrepFile tool provides perg fallback
-run_test "GrepFile tool perg fallback" "grep 'run_perg_backend' vtcode-core/src/tools/grep_file.rs" "run_perg_backend"
+# Test 5: Check that GrepFile tool uses ripgrep backend
+run_test "GrepFile tool ripgrep backend" "grep 'run_ripgrep_backend' vtcode-core/src/tools/grep_file.rs" "run_ripgrep_backend"
 
 echo -e "\nTesting Policy System Integration"
 echo "===================================="

@@ -165,7 +165,7 @@ pub trait CacheableTool: Tool {
 ### GrepSearchManager (`tools::grep_file`)
 
 - Debounce and cancellation pipeline for responsive searches
-- Ripgrep primary backend with perg fallback when unavailable
+- Ripgrep (`rg`) backend for all grep operations
 - Supports glob filters, hidden file handling, and context lines
 - Enforces workspace boundaries with robust path validation
 

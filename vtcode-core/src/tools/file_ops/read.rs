@@ -152,6 +152,17 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
             obj.entry("limit".to_string()).or_insert(src);
         }
 
+        // Map start_line/end_line to offset/limit when offset is not already set.
+        if let Some(start) = obj.get("start_line").and_then(parse_usize_value) {
+            obj.entry("offset".to_string()).or_insert(json!(start));
+            if let Some(end) = obj.get("end_line").and_then(parse_usize_value)
+                && end >= start
+                && !obj.contains_key("limit")
+            {
+                obj.insert("limit".to_string(), json!(end - start + 1));
+            }
+        }
+
         if obj.get("offset").and_then(parse_usize_value) == Some(0) {
             obj.insert("offset".to_string(), json!(1));
         }
@@ -171,13 +182,20 @@ fn parse_usize_value(value: &Value) -> Option<usize> {
 }
 
 fn has_explicit_limit(args: &Value) -> bool {
-    ["limit", "l", "page_size_lines", "max_lines", "chunk_lines"]
-        .iter()
-        .any(|key| args.get(*key).is_some())
+    [
+        "limit",
+        "l",
+        "page_size_lines",
+        "max_lines",
+        "chunk_lines",
+        "end_line",
+    ]
+    .iter()
+    .any(|key| args.get(*key).is_some())
 }
 
 fn has_explicit_offset(args: &Value) -> bool {
-    ["offset", "o", "offset_lines", "offset_bytes"]
+    ["offset", "o", "offset_lines", "offset_bytes", "start_line"]
         .iter()
         .any(|key| args.get(*key).is_some())
 }
@@ -820,6 +838,41 @@ mod read_tests {
         });
         let built_indent = build_read_handler_args(&args_indent, canonical);
         assert_eq!(built_indent["mode"], json!("indentation"));
+    }
+
+    #[test]
+    fn build_read_handler_args_maps_start_end_to_offset_limit() {
+        let canonical = Path::new("/tmp/example.txt");
+
+        // start_line/end_line -> offset/limit
+        let args = json!({
+            "path": "example.txt",
+            "start_line": 550,
+            "end_line": 590
+        });
+        let built = build_read_handler_args(&args, canonical);
+        assert_eq!(built["offset"], json!(550));
+        assert_eq!(built["limit"], json!(41));
+
+        // start_line only -> offset set, limit unchanged
+        let args_start_only = json!({
+            "path": "example.txt",
+            "start_line": 100
+        });
+        let built_start_only = build_read_handler_args(&args_start_only, canonical);
+        assert_eq!(built_start_only["offset"], json!(100));
+        assert!(built_start_only.get("limit").is_none());
+
+        // explicit offset takes precedence over start_line
+        let args_explicit = json!({
+            "path": "example.txt",
+            "offset": 10,
+            "start_line": 550,
+            "end_line": 590
+        });
+        let built_explicit = build_read_handler_args(&args_explicit, canonical);
+        assert_eq!(built_explicit["offset"], json!(10));
+        assert_eq!(built_explicit["limit"], json!(41));
     }
 
     #[test]

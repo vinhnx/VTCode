@@ -111,7 +111,6 @@ ratatui = { workspace = true, features = [
     "unstable-widget-ref",
 ] }
 
-perg = "0.8.0"
 nucleo-matcher = "0.3"
 vtcode-file-search = { version = "0.121.0", path = "../vtcode-file-search" }
 rig = { package = "rig-core", version = "0.23.1", default-features = false, features = [
