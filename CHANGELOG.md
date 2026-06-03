@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.121.1 - 2026-06-03
+
+### Highlights
+### Other Changes
+#### CI
+
+- Fix x86_64-unknown-linux-gnu aws-lc-sys gcc-9 panic (58a30561) (@vinhnx)
+- Enable Windows builds by default in release workflows (7bce5b8d) (@vinhnx)
+#### Refactors
+
+- Improve line number styling and update reasoning effort to high (7398263f) (@vinhnx)
+- Update README structure and improve formatting for clarity (4c9f5df1) 
+- Streamline README by removing outdated sections and enhancing clarity (303de2d6) 
+- Remove perg fallback and update grep_file tool documentation (703dfda2) 
+- Update tool output handling and improve user guidance for reading content (1eb305ba) 
 ## 0.121.0 - 2026-06-03
 
 ### Highlights
