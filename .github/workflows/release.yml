@@ -1,4 +1,4 @@
-name: Release (Linux Free Tier by Default)
+name: Release
 
 on:
   workflow_dispatch:
@@ -8,21 +8,23 @@ on:
         required: true
         type: string
       build_windows:
-        description: 'Also build Windows x86_64 artifact (disabled by default; higher runner cost)'
+        description: 'Also build Windows x86_64 artifact'
         required: false
         type: boolean
-        default: false
+        default: true
       build_macos:
-        description: 'Also build macOS artifacts (higher runner cost)'
+        description: 'Also build macOS artifacts (uses macos-latest; opt-in to save wall-clock time)'
         required: false
         type: boolean
         default: false
 
 permissions: {}
 
-# Cost-optimized release workflow
-# Default (free-tier friendly): Linux-only on ubuntu runners
-# Optional: Windows/macOS can be enabled per release via workflow inputs
+# This repo is public, so standard ubuntu-latest, windows-latest, and
+# macos-latest runners are all free and do not consume any account quota.
+# See https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions
+# Windows is on by default; macOS remains opt-in because the macOS jobs are
+# the slowest part of the release and we don't ship macOS binaries every cut.
 
 jobs:
   validate-release-input:
@@ -162,8 +164,8 @@ jobs:
           compression-level: 6
 
   build-windows:
-    # Windows builds are intentionally opt-in because they are costlier and still
-    # depend on the cross/Docker release path.
+    # Free on public repos via standard windows-latest; can be disabled per-run
+    # via the build_windows input.
     if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     needs: validate-release-input
