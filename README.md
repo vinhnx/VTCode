@@ -128,6 +128,12 @@ VT Code keeps primary output on stdout and sends logs, metadata, reasoning trace
 
 Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the native MiMo provider and through OpenRouter. It delivers strong performance in agentic capabilities, complex software engineering, and long-horizon tasks with a 1M context window and deep reasoning.
 
+<p align="center">
+  <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
+    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="600" />
+  </a>
+</p>
+
 | Provider | Model ID | Context |
 | --- | --- | --- |
 | [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro) | `xiaomi/mimo-v2.5-pro` | 1M tokens |
