@@ -216,13 +216,19 @@ build_binaries() {
         print_info "Phase 2: Building Linux aarch64 via zigbuild..."
         ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-unknown-linux-gnu || print_warning "Linux aarch64 build failed" )
 
-        if [ "$NO_WINDOWS_CROSS" = false ]; then
-            build_windows=true
-            print_info "Phase 3: Building Windows x86_64 via zigbuild..."
-            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target x86_64-pc-windows-msvc || print_warning "Windows x86_64 build failed" )
-            print_info "Phase 3: Building Windows aarch64 via zigbuild..."
-            ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target aarch64-pc-windows-msvc || print_warning "Windows aarch64 build failed" )
-        fi
+        # Windows builds via zigbuild only if Rust targets are installed
+        local win_targets=("x86_64-pc-windows-msvc" "aarch64-pc-windows-msvc")
+        local installed_targets
+        installed_targets=$(rustup target list --installed 2>/dev/null || true)
+        for wt in "${win_targets[@]}"; do
+            if echo "$installed_targets" | grep -q "$wt"; then
+                build_windows=true
+                print_info "Phase 3: Building $wt via zigbuild..."
+                ( env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo zigbuild --release --target "$wt" || print_warning "Windows $wt build failed" )
+            else
+                print_info "Skipping Windows $wt (target not installed, will use CI)"
+            fi
+        done
     else
         print_warning "Skipping Linux/Windows builds - 'zig' not available"
         print_info "To enable cross builds, install zig: https://ziglang.org/download/"

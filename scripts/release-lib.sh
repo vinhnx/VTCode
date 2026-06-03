@@ -702,7 +702,6 @@ create_and_upload_release() {
         "$binaries_dir"/*.tar.gz
         "$binaries_dir"/*.zip
         "$binaries_dir"/*.sha256
-        "$binaries_dir"/checksums.txt
         "$SCRIPT_DIR/install.sh"
         "$SCRIPT_DIR/install.ps1"
     )
@@ -710,11 +709,21 @@ create_and_upload_release() {
 
     chmod +x "$SCRIPT_DIR/install.sh" "$SCRIPT_DIR/install.ps1" 2>/dev/null || true
 
-    if gh release upload "$released_version" "${release_files[@]}" --clobber; then
+    # Upload files individually so one failure doesn't abort the batch
+    local upload_ok=true
+    for f in "${release_files[@]}" "$binaries_dir/checksums.txt"; do
+        if [[ -f "$f" ]]; then
+            if ! gh release upload "$released_version" "$f" --clobber 2>/dev/null; then
+                print_warning "Failed to upload $(basename "$f")"
+                upload_ok=false
+            fi
+        fi
+    done
+
+    if [[ "$upload_ok" == 'true' ]]; then
         print_success "All binaries, checksums, and install scripts uploaded"
     else
-        print_warning "Failed to upload binaries to GitHub Release"
-        print_info "You can upload manually: gh release upload $released_version ${release_files[*]} --clobber"
+        print_warning "Some assets failed to upload (see above)"
     fi
 
     # Extract SHAs for Homebrew

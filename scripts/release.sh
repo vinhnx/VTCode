@@ -106,11 +106,20 @@ main() {
     ensure_cargo_release
     ensure_gh_auth "$dry_run"
 
-    # Zig available = all targets local (macOS + Linux + Windows via zigbuild)
+    # Detect tooling availability
     local zig_available=false
+    local windows_available=false
     if command -v zig &>/dev/null; then
         zig_available=true
-        print_info "Zig found: building all targets locally via zigbuild"
+        local installed_targets
+        installed_targets=$(rustup target list --installed 2>/dev/null || true)
+        if echo "$installed_targets" | grep -q "x86_64-pc-windows-msvc" && \
+           echo "$installed_targets" | grep -q "aarch64-pc-windows-msvc"; then
+            windows_available=true
+            print_info "Zig found + Windows targets: building all targets locally via zigbuild"
+        else
+            print_info "Zig found: building Linux locally, CI handles Windows"
+        fi
     else
         print_info "Zig not found: building macOS only, CI handles Linux/Windows"
         print_info "  Install Zig: https://ziglang.org/download/"
@@ -134,16 +143,6 @@ main() {
     fi
     print_info "Releasing$( [[ "$dry_run" == 'true' ]] && echo ' (dry-run)' ): $next_version"
 
-    # Full CI / CI-only shortcuts
-    if [[ "$full_ci" == 'true' ]]; then
-        [[ "$dry_run" == 'false' ]] && gh workflow run release.yml --field tag="$next_version"
-        skip_binaries=true
-    fi
-    if [[ "$ci_only" == 'true' ]]; then
-        [[ "$dry_run" == 'false' ]] && gh workflow run build-linux-windows.yml --field tag="$next_version"
-        skip_binaries=true
-    fi
-
     # ── Step 0.5: Docs map ──
     print_info "Step 0.5: Regenerating documentation map..."
     if [[ "$dry_run" == 'false' ]]; then
@@ -156,22 +155,12 @@ main() {
         fi
     fi
 
-    # ── Step 1: Build binaries ──
-    if [[ "$skip_binaries" == 'false' ]]; then
-        local build_flag="--only-build"
-        [[ "$zig_available" == 'false' ]] && build_flag="--only-build-local"
-        [[ "$force_ci" == 'true' ]] && build_flag="--only-build-local"
-        print_info "Step 1: Building binaries ($([[ "$zig_available" == 'true' && "$force_ci" == 'false' ]] && echo 'all targets via zigbuild' || echo 'macOS only, CI for rest'))..."
-        env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= \
-            ./scripts/build-and-upload-binaries.sh -v "$next_version" $build_flag
-    fi
-
-    # ── Step 2: Changelog ──
-    print_info "Step 2: Generating changelog..."
+    # ── Step 1: Changelog (before version bump to capture git range prev_tag..HEAD) ──
+    print_info "Step 1: Generating changelog..."
     update_changelog_from_commits "$next_version" "$dry_run"
 
-    # ── Step 3: Cargo release ──
-    print_info "Step 3: Running cargo release..."
+    # ── Step 2: Cargo release (version bump — must happen BEFORE build for correct version) ──
+    print_info "Step 2: Running cargo release..."
     if [[ "$dry_run" == 'true' ]]; then
         print_info "Dry run - would run cargo release and publish crates"
     else
@@ -188,33 +177,66 @@ main() {
     local released_version
     released_version=$(get_current_version)
 
-    # ── Step 3.5: CI (only if zig not available or forced) ──
-    local CI_RUN_ID=""
-    if [[ "$skip_binaries" == 'false' && "$zig_available" == 'false' ]]; then
-        CI_RUN_ID=$(trigger_and_wait_ci "$released_version" "$dry_run")
-    elif [[ "$skip_binaries" == 'false' && "$force_ci" == 'true' ]]; then
-        CI_RUN_ID=$(trigger_and_wait_ci "$released_version" "$dry_run")
+    # Push version bump and tag to GitHub so CI checks out the correct version
+    print_info "Pushing version bump and tag..."
+    git push origin main --no-verify
+    git push origin "v$released_version" --no-verify
+
+    # Full CI / CI-only shortcuts (triggered AFTER version bump so CI builds correct version)
+    if [[ "$full_ci" == 'true' ]]; then
+        print_info "Triggering full CI build for $released_version..."
+        gh workflow run release.yml --field tag="$released_version"
+        skip_binaries=true
+    fi
+    if [[ "$ci_only" == 'true' ]]; then
+        print_info "Triggering CI for Linux/Windows for $released_version..."
+        gh workflow run build-linux-windows.yml --field tag="$released_version"
+        skip_binaries=true
     fi
 
-    # ── Step 4: GitHub Release + upload ──
+    # ── Step 3: Build binaries (embeds correct version from Cargo.toml) ──
+    if [[ "$skip_binaries" == 'false' ]]; then
+        local build_flag="--only-build"
+        if [[ "$zig_available" == 'false' || "$force_ci" == 'true' ]]; then
+            build_flag="--only-build-local"
+        fi
+        if [[ "$windows_available" == 'false' ]]; then
+            build_flag="$build_flag --no-windows-cross"
+        fi
+        print_info "Step 3: Building binaries ($([[ "$zig_available" == 'true' && "$force_ci" == 'false' ]] && echo 'all targets via zigbuild' || echo 'macOS only, CI for rest'))..."
+        env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= \
+            ./scripts/build-and-upload-binaries.sh -v "$released_version" $build_flag
+    fi
+
+    # ── Step 4: CI (for targets not built locally) ──
+    local CI_RUN_ID=""
+    if [[ "$skip_binaries" == 'false' ]]; then
+        if [[ "$zig_available" == 'false' || "$force_ci" == 'true' || "$windows_available" == 'false' ]]; then
+            CI_RUN_ID=$(trigger_and_wait_ci "$released_version" "$dry_run")
+        fi
+    fi
+
+    # ── Step 5: GitHub Release + upload ──
     local sha_output
     sha_output=$(create_and_upload_release "$released_version" "$dry_run" "$CI_RUN_ID")
     IFS='|' read -r x86_sha arm_sha arm_linux_sha <<< "$sha_output"
 
-    # ── Step 5: Homebrew ──
+    # ── Step 6: Homebrew ──
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 5: Publishing Homebrew formula..."
+        print_info "Step 6: Publishing Homebrew formula..."
         publish_homebrew_tap "$released_version" "${x86_sha:-}" "${arm_sha:-}" "${arm_linux_sha:-}"
     fi
 
-    # ── Step 6: Docs.rs ──
+    # ── Step 7: Docs.rs ──
     [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]] && \
         trigger_docs_rs_rebuild "$released_version" false
 
     print_success "Release $released_version complete"
     print_info "Distribution: crates.io + GitHub Releases + Homebrew"
-    if [[ "$zig_available" == 'true' && "$force_ci" == 'false' ]]; then
+    if [[ "$zig_available" == 'true' && "$force_ci" == 'false' && "$windows_available" == 'true' ]]; then
         print_info "  All platforms built locally via zigbuild — no CI wait"
+    elif [[ -n "$CI_RUN_ID" ]]; then
+        print_info "  CI run #$CI_RUN_ID building remaining targets"
     fi
 }
 

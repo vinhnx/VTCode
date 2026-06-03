@@ -59,6 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -169,6 +170,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -220,6 +222,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -281,6 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -352,6 +356,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0 # Full fetch to get all tags for changelog generation
           persist-credentials: false
 
