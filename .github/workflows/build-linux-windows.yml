@@ -72,6 +72,12 @@ jobs:
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
+          # Force the `cc` crate (used by `aws-lc-sys`) to pick gcc-10 inside
+          # the cross container. The default gcc-9.4 trips the memcmp
+          # compiler-bug check (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95189).
+          # gcc-10 is installed via the pre-build step in `Cross.toml`.
+          CC_x86_64_unknown_linux_gnu: ${{ matrix.target == 'x86_64-unknown-linux-gnu' && 'gcc-10' || '' }}
+          CXX_x86_64_unknown_linux_gnu: ${{ matrix.target == 'x86_64-unknown-linux-gnu' && 'g++-10' || '' }}
 
       - name: Verify Linux TLS linkage
         shell: bash
