@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.120.0 - 2026-06-03
+
+### Highlights
+### Other Changes
+#### Refactors
+
+- Update build workflows for Linux and Windows binaries (792337eb) 
 ## 0.119.0 - 2026-06-03
 
 ### Highlights
