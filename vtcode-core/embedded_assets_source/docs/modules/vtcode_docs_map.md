@@ -684,10 +684,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Module Structure, Usage Examples, Process Group Management, Security Features
   - **User Questions**: "What can you tell me about PTY and Pipe Infrastructure?", "How does Overview work?", "How does Module Structure work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: Project TODO
-  - **User Questions**: "What can you tell me about Project TODO?"
-
 - **File**: `docs/harness/QUALITY_SCORE.md`
   - **Content**: Quality Score
   - **Topics**: Snapshot, Dimensions, Scoring Method, LLM System, Tool System
@@ -732,6 +728,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

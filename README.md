@@ -21,18 +21,18 @@
 - [What is VT Code?](#what-is-vt-code)
 - [Core capabilities](#core-capabilities)
 - [Install](#install)
-    - [macOS and Linux](#macos-and-linux)
-    - [Windows PowerShell](#windows-powershell)
-    - [Package managers](#package-managers)
+  - [macOS and Linux](#macos-and-linux)
+  - [Windows PowerShell](#windows-powershell)
+  - [Package managers](#package-managers)
 - [Quick start](#quick-start)
-- [Model promotions](#model-promotions)
-    - [Xiaomi MiMo V2.5 Series](#xiaomi-mimo-v25-series)
 - [Configuration](#configuration)
-    - [Atlas Cloud](#atlas-cloud)
+- [Providers](#providers)
+  - [Provider spotlight: Xiaomi MiMo V2.5 Series](#provider-spotlight-xiaomi-mimo-v25-series)
+  - [Atlas Cloud](#atlas-cloud)
 - [Extension points](#extension-points)
-    - [Skills](#skills)
-    - [MCP](#mcp)
-    - [Agents and editors](#agents-and-editors)
+  - [Skills](#skills)
+  - [MCP](#mcp)
+  - [Agents and editors](#agents-and-editors)
 - [Safety model](#safety-model)
 - [Protocols and exports](#protocols-and-exports)
 - [Benchmarks](#benchmarks)
@@ -54,14 +54,14 @@ The default workflow is intentionally simple: one reliable agent loop, explicit 
 
 ## Core capabilities
 
-| Area             | What VT Code provides                                                                                                                                                 |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent runtime    | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation                                 |
-| Coding tools     | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution                            |
+| Area             | What VT Code provides                                                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent runtime    | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation                                              |
+| Coding tools     | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution                                         |
 | Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
-| Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                            |
-| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                             |
-| Terminal UX      | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback                                                       |
+| Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                                         |
+| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                                          |
+| Terminal UX      | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback                                                                    |
 
 ## Install
 
@@ -122,29 +122,6 @@ vtcode --continue
 
 VT Code keeps primary output on stdout and sends logs, metadata, reasoning traces, and prompts to stderr. This keeps `ask` and `exec` useful in shell pipelines.
 
-## Model promotions
-
-### Xiaomi MiMo V2.5 Series
-
-Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the native MiMo provider and through OpenRouter. It delivers strong performance in agentic capabilities, complex software engineering, and long-horizon tasks with a 1M context window and deep reasoning.
-
-<p align="center">
-  <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
-    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="600" />
-  </a>
-</p>
-
-| Provider | Model ID | Context |
-| --- | --- | --- |
-| [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro) | `xiaomi/mimo-v2.5-pro` | 1M tokens |
-| OpenRouter | `xiaomi/mimo-v2.5` | 1M tokens |
-| [Xiaomi MiMo](https://platform.xiaomimimo.com/docs/en-US/welcome) | `mimo-v2.5-pro` | 1M tokens |
-| Xiaomi MiMo | `mimo-v2.5` | 1M tokens |
-
-Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access)
-
-Read: [Xiaomi MiMo documentation](https://platform.xiaomimimo.com/docs/en-US/welcome) | [OpenRouter models](https://openrouter.ai/xiaomi/mimo-v2.5-pro).
-
 ## Configuration
 
 Most settings live in `vtcode.toml`. Runtime overrides use `--config key=value`.
@@ -155,9 +132,73 @@ provider = "openai"
 default_model = "gpt-5.4"
 ```
 
+Useful configuration docs:
+
+- [Configuration Precedence](./docs/config/CONFIGURATION_PRECEDENCE.md)
+- [Config Field Reference](./docs/config/CONFIG_FIELD_REFERENCE.md)
+- [Tool Configuration](./docs/config/TOOLS_CONFIG.md)
+- [Lifecycle Hooks](./docs/guides/lifecycle-hooks.md)
+
+## Providers
+
+VT Code supports 20 LLM providers out of the box — from cloud APIs to local inference servers — plus any OpenAI-compatible API through `[[custom_providers]]`.
+
+| Provider       | Provider ID            | Type                  |
+| -------------- | ---------------------- | --------------------- |
+| OpenAI         | `openai`               | Cloud                 |
+| Anthropic      | `anthropic`            | Cloud                 |
+| Gemini         | `gemini`               | Cloud                 |
+| DeepSeek       | `deepseek`             | Cloud                 |
+| GitHub Copilot | `copilot`              | Cloud                 |
+| OpenRouter     | `openrouter`           | Cloud                 |
+| Xiaomi MiMo    | `mimo`                 | Cloud                 |
+| Hugging Face   | `huggingface`          | Cloud                 |
+| Z.AI           | `zai`                  | Cloud                 |
+| Moonshot       | `moonshot`             | Cloud                 |
+| MiniMax        | `minimax`              | Cloud                 |
+| Mistral        | `mistral`              | Cloud                 |
+| Qwen           | `qwen`                 | Cloud                 |
+| StepFun        | `stepfun`              | Cloud                 |
+| Poolside       | `poolside`             | Cloud                 |
+| OpenCode Zen   | `opencode-zen`         | Cloud                 |
+| OpenCode Go    | `opencode-go`          | Cloud                 |
+| Ollama         | `ollama`               | Local                 |
+| LM Studio      | `lmstudio`             | Local                 |
+| llama.cpp      | `llamacpp`             | Local                 |
+| Custom API     | `[[custom_providers]]` | Any OpenAI-compatible |
+
+For detailed setup guides, see [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
+
+### Provider spotlight: Xiaomi MiMo V2.5 Series
+
+> VT Code is happy to be part of the [Xiaomi MiMo Orbit Program](https://platform.xiaomimimo.com/)
+
+<div align="center">
+  <img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 - Invite builders" width="400" />
+</div>
+
+Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the native MiMo provider and through OpenRouter. It delivers strong performance in agentic capabilities, complex software engineering, and long-horizon tasks with a 1M context window and deep reasoning.
+
+<div align="center">
+  <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
+    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="600" />
+  </a>
+</div>
+
+| Provider                                                          | Model ID               | Context   |
+| ----------------------------------------------------------------- | ---------------------- | --------- |
+| [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)          | `xiaomi/mimo-v2.5-pro` | 1M tokens |
+| OpenRouter                                                        | `xiaomi/mimo-v2.5`     | 1M tokens |
+| [Xiaomi MiMo](https://platform.xiaomimimo.com/docs/en-US/welcome) | `mimo-v2.5-pro`        | 1M tokens |
+| Xiaomi MiMo                                                       | `mimo-v2.5`            | 1M tokens |
+
+Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access)
+
+Read: [Xiaomi MiMo documentation](https://platform.xiaomimimo.com/docs/en-US/welcome) | [OpenRouter models](https://openrouter.ai/xiaomi/mimo-v2.5-pro).
+
 ### Atlas Cloud
 
-[Atlas Cloud](https://atlascloud.ai) is a new LLM provider in VT Code. It works through VT Code's `[[custom_providers]]` support, so you can point VT Code at `https://api.atlascloud.ai/v1` without adding a dedicated runtime provider.
+[Atlas Cloud](https://atlascloud.ai) is an LLM provider accessible through VT Code's `[[custom_providers]]` support — no dedicated runtime provider needed.
 
 ```toml
 [agent]
@@ -172,9 +213,9 @@ api_key_env = "ATLASCLOUD_API_KEY"
 model = "deepseek-ai/DeepSeek-V3-0324"
 ```
 
-<p align="center">
+<div align="center">
   <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="400" />
-</p>
+</div>
 
 Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
 
@@ -191,14 +232,6 @@ Recommended validated Atlas chat model pool examples for `default_model` or
 - `zai-org/glm-4.7`
 - `minimaxai/minimax-m2.1`
 - `xai/grok-4-0709`
-
-Useful configuration docs:
-
-- [Provider Guides](./docs/providers/PROVIDER_GUIDES.md)
-- [Configuration Precedence](./docs/config/CONFIGURATION_PRECEDENCE.md)
-- [Config Field Reference](./docs/config/CONFIG_FIELD_REFERENCE.md)
-- [Tool Configuration](./docs/config/TOOLS_CONFIG.md)
-- [Lifecycle Hooks](./docs/guides/lifecycle-hooks.md)
 
 ## Extension points
 
@@ -305,11 +338,11 @@ If you are an AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar),
 
 **Verification workflow:**
 
-| Command | What it checks | Time |
-| --- | --- | --- |
-| `./scripts/check-dev.sh` | Fast gate: `cargo check --locked` + clippy | 10-30 s |
-| `./scripts/check-dev.sh --test` | Fast gate + `cargo test` | 30-90 s |
-| `./scripts/check-dev.sh --workspace` | Full workspace check + all tests | 1-3 min |
+| Command                              | What it checks                             | Time    |
+| ------------------------------------ | ------------------------------------------ | ------- |
+| `./scripts/check-dev.sh`             | Fast gate: `cargo check --locked` + clippy | 10-30 s |
+| `./scripts/check-dev.sh --test`      | Fast gate + `cargo test`                   | 30-90 s |
+| `./scripts/check-dev.sh --workspace` | Full workspace check + all tests           | 1-3 min |
 
 CI sets `RUSTFLAGS="-D warnings"` and uses `--locked`. Match locally.
 
@@ -338,14 +371,14 @@ CI sets `RUSTFLAGS="-D warnings"` and uses `--locked`. Match locally.
 
 **Where to put things:**
 
-| Change type | Where |
-| --- | --- |
-| New tool or tool behavior | `vtcode-tools` or `vtcode-bash-runner` |
-| Agent loop, prompt, or orchestration | `vtcode-core` |
-| LLM provider support | `vtcode-llm` |
-| Config schema or loading | `vtcode-config` |
-| TUI rendering | `vtcode-tui` |
-| Release packaging | `xtask` |
+| Change type                          | Where                                  |
+| ------------------------------------ | -------------------------------------- |
+| New tool or tool behavior            | `vtcode-tools` or `vtcode-bash-runner` |
+| Agent loop, prompt, or orchestration | `vtcode-core`                          |
+| LLM provider support                 | `vtcode-llm`                           |
+| Config schema or loading             | `vtcode-config`                        |
+| TUI rendering                        | `vtcode-tui`                           |
+| Release packaging                    | `xtask`                                |
 
 If you are unsure, open an issue first and describe what you want to change.
 
@@ -405,9 +438,9 @@ VT Code is built in my spare time and shared freely with the community. If it he
 
 You can support ongoing development at [buymeacoffee.com/vinhnx](https://buymeacoffee.com/vinhnx). Stars, issues, feedback, and word of mouth also mean a lot.
 
-<p align="center">
+<div align="center">
   <img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee QR code" />
-</p>
+</div>
 
 ## Star History
 
