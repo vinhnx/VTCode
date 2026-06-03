@@ -136,12 +136,12 @@ Cost Optimization:
   Default mode (recommended):
     • macOS binaries: built locally (no CI cost, faster)
     • Linux/Windows: built on GitHub Actions (free for public repos)
-
+  
   --full-ci mode (all CI, higher cost):
     • All platforms built on GitHub Actions
     • Uses 4 runners: 2x macOS, 1x Ubuntu, 1x Windows
     • Estimated cost: ~20-30 minutes of runner time
-
+  
   --ci-only mode (hybrid):
     • Skip local macOS build
     • Only trigger CI for Linux/Windows
@@ -385,7 +385,7 @@ update_changelog_from_commits() {
     # Find the previous semver tag (handles both v0.82.0 and 0.82.0 formats)
     local previous_version
     previous_version=$(git tag | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^[vV]//' | sort -t. -k1,1rn -k2,2rn -k3,3rn | awk -v ver="$version" '$0 != ver {print; exit}')
-
+    
     if [[ -n "$previous_version" ]]; then
         print_info "Previous version tag: $previous_version"
     else
@@ -487,7 +487,7 @@ update_changelog_from_commits() {
                 # Create new changelog with git-cliff output
                 cp "$temp_changelog" CHANGELOG.md
             fi
-
+            
             rm -f "$temp_changelog"
         else
             print_warning "git-cliff failed, falling back to built-in changelog generator"
@@ -991,7 +991,7 @@ main() {
             print_info "Step 1 (dry-run): Would build binaries for x86_64-apple-darwin and aarch64-apple-darwin"
         else
             print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
-
+            
             local build_args=(-v "$next_version" --only-build-local)
             env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
@@ -1138,10 +1138,10 @@ main() {
 
         # Build macOS binaries locally
          print_info "Building macOS binaries locally..."
-
+         
          # Clear RUSTC_WRAPPER to avoid sccache permission issues
          unset RUSTC_WRAPPER
-
+         
          # x86_64-apple-darwin
          if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
             package_release_archive_with_ghostty \
@@ -1171,7 +1171,7 @@ main() {
 
         # Use the run_id from step 3.5 if CI was successful, otherwise try to find one
         local run_id="${CI_RUN_ID:-}"
-
+        
         if [[ -z "$run_id" ]]; then
             # Try to find a successful run if CI_RUN_ID wasn't set
             run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 1 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -1)
@@ -1258,7 +1258,7 @@ main() {
 
         # Upload all binaries to GitHub Release
         print_info "Uploading all binaries to GitHub Release..."
-
+        
         # Generate consolidated checksums.txt
         (
             cd "$binaries_dir"
@@ -1271,18 +1271,18 @@ main() {
                 print_error "Neither sha256sum nor shasum found"
                 exit 1
             fi
-
+            
             # Clear/create checksums.txt
             rm -f checksums.txt
             touch checksums.txt
-
+            
             for f in *.tar.gz *.zip; do
                 if [ -f "$f" ]; then
                     $shacmd "$f" >> checksums.txt
                 fi
             done
         )
-
+        
         shopt -s nullglob
         release_files=(
             "$binaries_dir"/*.tar.gz
