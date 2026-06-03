@@ -1,4 +1,4 @@
-name: Build Linux Binaries (Windows Optional)
+name: Build Linux and Windows Binaries
 
 on:
   workflow_dispatch:
@@ -8,10 +8,10 @@ on:
         required: true
         type: string
       build_windows:
-        description: "Also build Windows x86_64 binary (higher runner cost)"
+        description: "Also build Windows x86_64 binary"
         required: false
         type: boolean
-        default: false
+        default: true
   workflow_call:
     inputs:
       tag:
@@ -19,16 +19,18 @@ on:
         required: true
         type: string
       build_windows:
-        description: "Also build Windows x86_64 binary (higher runner cost)"
+        description: "Also build Windows x86_64 binary"
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions: {}
 
-# Cost optimization:
-# - Linux builds run on ubuntu-latest using Cross (lower cost)
-# - Windows build is opt-in only
+# This repo is public, so standard ubuntu-latest and windows-latest runners
+# are free and do not consume any account quota. See:
+# https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions
+# - Linux builds run on ubuntu-latest using Cross
+# - Windows build is on by default and can be disabled per-run via input
 # - Minimal artifact retention (7 days)
 # - Efficient caching
 
