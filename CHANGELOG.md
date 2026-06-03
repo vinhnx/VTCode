@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.118.0 - 2026-06-03
+
+### Highlights
+#### Features
+
+- Add Xiaomi MiMo V2.5 and V2.5 Pro models with updated documentation and default settings (608b7fca) 
+### Other Changes
+#### Other
+
+- Update README (f2b4202b) 
 ## 0.117.7 - 2026-06-03
 
 ### Highlights
