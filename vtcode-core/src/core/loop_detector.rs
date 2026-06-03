@@ -285,19 +285,24 @@ impl LoopDetector {
         const NAVIGATION_HARD_STOP_STREAK: usize = 10;
         if self.readonly_streak >= MAX_NAVIGATION_ONLY_STREAK {
             if self.readonly_streak >= NAVIGATION_HARD_STOP_STREAK {
-                // Escalate to hard limit after sustained navigation-only usage
                 let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
                 self.tool_counts.insert(tool_name.to_string(), hard_limit);
                 return Some(format!(
-                    "HARD STOP: {} consecutive exploration calls without taking action (edit/exec). \
-                     Execution halted. Stop reading and provide a concrete answer with the information already collected.",
+                    "HARD STOP: {} consecutive exploration calls without taking action. \
+                     Execution halted. You have enough information from previous tool outputs. \
+                     Synthesize a final answer now using the data already in your conversation history. \
+                     Do NOT call any more tools.",
                     self.readonly_streak
                 ));
             }
 
             let msg = format!(
-                "Navigation Loop Detected: {} consecutive exploration calls without taking action (edit/exec).\n\n\
-                 **Action Bias Required**: Stop reading and start implementing. If you are stuck, perform a ROOT CAUSE analysis or ask for human steering.",
+                "Navigation Loop Detected: {} consecutive exploration calls without action.\n\n\
+                 **Synthesis Required**: You have collected sufficient information from previous tool outputs. \
+                 Review your conversation history and produce a concrete answer or implementation. \
+                 Do NOT re-read files or re-run searches you have already performed. \
+                 If a tool output was truncated, use offset/limit to read the specific omitted range, \
+                 or use `cat` via unified_exec for full content.",
                 self.readonly_streak
             );
             let now = Instant::now();
@@ -411,11 +416,15 @@ impl LoopDetector {
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
                 "HARD STOP: Repeated '{}' calls for '{}' with minimal argument variation ({}-call streak, {} variants). \
-                 Use offset/limit parameters to read specific line ranges. If the file is large, use smaller limit values.",
+                 You are stuck in a read loop. Review the tool outputs already in your conversation history — \
+                 you likely have the information needed. If a read was truncated, use `unified_exec` with \
+                 `cat {}` for full content, or use offset/limit to read the exact omitted range. \
+                 Do NOT re-read the same file with the same parameters.",
                 tool_name,
                 current_target,
                 same_target_streak,
-                variants.len()
+                variants.len(),
+                current_target
             ));
         }
 

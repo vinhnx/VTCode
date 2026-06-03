@@ -188,7 +188,7 @@ Tool: {}
 {}
 --- End Preview ---
 
-To read full content, use: unified_file({{"action":"read","path":"{}","offset":1,"limit":{}}})
+To read full content, use: unified_exec({{"command":"cat {}"}})
 To read specific lines, use: unified_file({{"action":"read","path":"{}","offset":<start>,"limit":<line_count>}})"#,
             self.file_path.display(),
             self.size_bytes,
@@ -198,7 +198,6 @@ To read specific lines, use: unified_file({{"action":"read","path":"{}","offset"
             PREVIEW_TAIL_LINES,
             preview,
             self.file_path.display(),
-            self.line_count,
             self.file_path.display(),
         ))
     }

@@ -69,14 +69,19 @@ pub(super) fn apply_reused_read_only_loop_metadata(
     obj.insert(
         "loop_detected_note".to_string(),
         serde_json::Value::String(
-            "Loop detected on repeated read-only call; reusing recent output. Use unified_search (action='grep') or summarize before another read."
+            "Loop detected on repeated read-only call; reusing recent output. \
+             You likely have the information needed — review your conversation history \
+             and synthesize a response before reading again."
                 .to_string(),
         ),
     );
     obj.insert(
         "next_action".to_string(),
         serde_json::Value::String(
-            "Use unified_search (action='grep') or retry unified_file with a narrower offset/limit before reading again."
+            "Review existing tool outputs in your conversation history. \
+             If a specific range was omitted, use unified_file with offset/limit to read just that range, \
+             or use unified_exec with `cat <path>` for full content. \
+             Do NOT re-read the same file with the same parameters."
                 .to_string(),
         ),
     );

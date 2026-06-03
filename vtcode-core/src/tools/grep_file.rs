@@ -163,6 +163,11 @@ pub struct GrepSearchResult {
     pub query: String,
     pub matches: Vec<Value>,
     pub truncated: bool,
+    /// Total number of "match" type entries found before truncation.
+    /// When `truncated` is true, this tells the agent how many matches exist
+    /// vs how many are returned in `matches`.
+    #[serde(default)]
+    pub total_matches: Option<usize>,
 }
 
 /// State machine for grep_file orchestration.
@@ -212,6 +217,7 @@ impl GrepSearchManager {
             query: cached.query.clone(),
             matches: cached.matches.clone(),
             truncated: cached.truncated,
+            total_matches: cached.total_matches,
         })
     }
 
@@ -323,11 +329,11 @@ impl GrepSearchManager {
         }
     }
 
-    fn execute_with_backends(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
+    fn execute_with_backends(input: &GrepSearchInput) -> Result<(Vec<Value>, bool, usize)> {
         Self::run_ripgrep_backend(input)
     }
 
-    fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
+    fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool, usize)> {
         use std::process::Command;
 
         let mut cmd = Command::new("rg");
@@ -456,13 +462,22 @@ impl GrepSearchManager {
         Ok(Self::finalize_matches(matches, input))
     }
 
-    fn finalize_matches(mut matches: Vec<Value>, input: &GrepSearchInput) -> (Vec<Value>, bool) {
+    fn finalize_matches(
+        mut matches: Vec<Value>,
+        input: &GrepSearchInput,
+    ) -> (Vec<Value>, bool, usize) {
         let mut truncated = false;
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
 
         if max_results == 0 {
-            return (Vec::new(), !matches.is_empty());
+            return (Vec::new(), !matches.is_empty(), 0);
         }
+
+        // Count total "match" type entries before any truncation.
+        let total_match_count = matches
+            .iter()
+            .filter(|e| e.get("type").and_then(Value::as_str) == Some("match"))
+            .count();
 
         // Count only "match" type entries (not "context", "begin", "end") so that
         // context lines don't crowd out actual matches from the result set.
@@ -518,7 +533,7 @@ impl GrepSearchManager {
             matches.truncate(kept_count);
         }
 
-        (matches, truncated)
+        (matches, truncated, total_match_count)
     }
 
     fn spawn_grep_file(
@@ -574,13 +589,18 @@ impl GrepSearchManager {
 
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
             if !is_cancelled
-                && let Ok((matches, truncated)) = search_result
+                && let Ok((matches, truncated, total_match_count)) = search_result
                 && !matches.is_empty()
             {
                 let result = GrepSearchResult {
                     query,
                     matches,
                     truncated,
+                    total_matches: if truncated {
+                        Some(total_match_count)
+                    } else {
+                        None
+                    },
                 };
 
                 // Cache the result if cache is available
@@ -631,7 +651,7 @@ impl GrepSearchManager {
         let input_clone = input.clone();
 
         let timeout = input.timeout.unwrap_or(DEFAULT_SEARCH_TIMEOUT);
-        let (matches, truncated) = tokio::time::timeout(
+        let (matches, truncated, total_match_count) = tokio::time::timeout(
             timeout,
             spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone)),
         )
@@ -643,6 +663,11 @@ impl GrepSearchManager {
             query,
             matches,
             truncated,
+            total_matches: if truncated {
+                Some(total_match_count)
+            } else {
+                None
+            },
         };
 
         // Cache the result if it's worth caching (non-empty, successful)
@@ -737,14 +762,14 @@ mod tests {
 
         let matches = vec![json!({"text": "12345"}), json!({"text": "6789"})];
 
-        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        let (kept, truncated, _total) = GrepSearchManager::finalize_matches(matches, &input);
         assert!(!truncated);
         assert_eq!(kept.len(), 2);
 
         // Test with smaller limit that truncates
         input.max_result_bytes = Some(20);
         let matches = vec![json!({"text": "12345"}), json!({"text": "6789"})];
-        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        let (kept, truncated, _total) = GrepSearchManager::finalize_matches(matches, &input);
         assert!(truncated);
         assert_eq!(kept.len(), 1); // Only first match fits in 20 bytes
     }
@@ -768,13 +793,14 @@ mod tests {
             json!({"type": "end", "data": {"path": {"text": "Cargo.lock"}}}),
         ];
 
-        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        let (kept, truncated, total) = GrepSearchManager::finalize_matches(matches, &input);
         // Should keep all entries up through the second match's trailing context.
         // match_count reaches 2 at index 7, then trailing context at index 8 -> cut_index = 9.
         assert!(!truncated);
         assert_eq!(kept.len(), 9);
         assert_eq!(kept[3]["type"], "match");
         assert_eq!(kept[7]["type"], "match");
+        assert_eq!(total, 2);
     }
 
     #[test]
@@ -790,12 +816,13 @@ mod tests {
             json!({"type": "context", "data": {"line_number": 11, "lines": {"text": "c2"}}}),
         ];
 
-        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        let (kept, truncated, total) = GrepSearchManager::finalize_matches(matches, &input);
         assert!(truncated);
         // Keeps: begin + match1 + context after match1 = 3 entries
         assert_eq!(kept.len(), 3);
         assert_eq!(kept[1]["type"], "match");
         assert_eq!(kept[2]["type"], "context");
+        assert_eq!(total, 2); // 2 match-type entries in the raw input
     }
 
     #[test]

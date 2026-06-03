@@ -155,6 +155,7 @@ mod tests {
             query: "test".to_string(),
             matches: vec![serde_json::json!({"file": "test.rs", "line": 1})],
             truncated: false,
+            total_matches: None,
         };
 
         // Cache miss

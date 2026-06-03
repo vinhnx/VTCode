@@ -24,7 +24,7 @@ const TAB_WIDTH: usize = 4;
 const COMMENT_PREFIXES: &[&str] = &["#", "//", "--"];
 const MIN_BATCH_LIMIT: usize = 200;
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
-const BATCH_CONDENSED_THRESHOLD: usize = 30;
+const BATCH_CONDENSED_THRESHOLD: usize = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ReadFileOutcome {
@@ -946,9 +946,9 @@ fn condense_collected_lines(lines: &mut Vec<String>) {
     if looks_like_diff_lines(lines) {
         return;
     }
-    const CONDENSED_THRESHOLD: usize = 50;
-    const HEAD_LINES: usize = 20;
-    const TAIL_LINES: usize = 10;
+    const CONDENSED_THRESHOLD: usize = 200;
+    const HEAD_LINES: usize = 80;
+    const TAIL_LINES: usize = 40;
 
     // If under threshold, return as-is
     if lines.len() <= CONDENSED_THRESHOLD {
@@ -959,13 +959,17 @@ fn condense_collected_lines(lines: &mut Vec<String>) {
     let head_count = HEAD_LINES.min(lines.len());
     let tail_count = TAIL_LINES.min(lines.len() - head_count);
     let omitted_count = lines.len() - head_count - tail_count;
+    let total_lines = lines.len();
 
     // Take head lines
     let mut condensed: Vec<String> = lines[..head_count].to_vec();
 
-    // Add omission indicator
+    // Add omission indicator with actionable guidance
     condensed.push(format!(
-        "… [+{} lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]",
+        "… [+{} lines omitted ({} total). To read omitted ranges: unified_file offset={} limit={}]",
+        omitted_count,
+        total_lines,
+        head_count + 1,
         omitted_count
     ));
 
@@ -996,7 +1000,10 @@ fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
 
     let mut condensed: Vec<String> = lines[..head_count].to_vec();
     condensed.push(format!(
-        "… [+{} lines omitted; use read_file with offset/limit for full content]",
+        "… [+{} lines omitted ({} total). To read omitted ranges: unified_file offset={} limit={}]",
+        omitted_count,
+        lines.len(),
+        head_count + 1,
         omitted_count
     ));
 
@@ -1320,17 +1327,17 @@ mod tests {
 
     #[test]
     fn condense_for_batch_condenses_large_outputs() {
-        let mut lines: Vec<String> = (1..=100).map(|i| format!("line{i}")).collect();
+        let mut lines: Vec<String> = (1..=200).map(|i| format!("line{i}")).collect();
         let (condensed, omitted) = condense_for_batch(&mut lines);
         assert!(condensed);
         assert!(omitted > 0);
-        assert!(lines.len() < 100);
+        assert!(lines.len() < 200);
         assert!(lines.iter().any(|l| l.contains("omitted")));
     }
 
     #[test]
     fn condense_for_batch_does_not_treat_plus_minus_text_as_diff() {
-        let mut lines: Vec<String> = (1..=60)
+        let mut lines: Vec<String> = (1..=150)
             .map(|i| {
                 if i % 2 == 0 {
                     format!("+ normal status line {i}")
