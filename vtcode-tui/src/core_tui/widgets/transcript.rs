@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::terminal_capabilities;
-use crate::ui::tui::session::{Session, TranscriptLine, spinner_frame_for_phase};
+use crate::ui::tui::session::{Session, TranscriptLine, pulse_spinner_frame_for_phase};
 use vtcode_config::constants::tools;
 
 /// Widget for rendering the transcript area with conversation history
@@ -185,7 +185,7 @@ fn active_file_operation_spinner_frame(session: &Session) -> Option<&'static str
     let tool_name = left.strip_prefix("running tool: ")?;
     let is_active_file_tool = FILE_OPERATION_STATUS_TOOLS.contains(&tool_name);
 
-    is_active_file_tool.then(|| spinner_frame_for_phase(session.shimmer_state.phase()))
+    is_active_file_tool.then(|| pulse_spinner_frame_for_phase(session.shimmer_state.phase()))
 }
 
 fn is_file_operation_indicator_line(line: &Line<'_>) -> bool {
