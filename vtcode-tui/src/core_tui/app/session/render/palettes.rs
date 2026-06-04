@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::constants::ui;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
@@ -93,31 +94,51 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     }
 
     let default_style = default_style(session);
+    let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
-    let unselected_prefix = selection_padding();
+    let blank_gutter = selection_padding();
 
     let selected = rows.iter().position(|row| row.selectable && row.selected);
     let rendered_rows = rows
         .into_iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(idx, row)| {
+            let is_selected = selected == Some(idx);
+            let cursor = if is_selected {
+                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+            } else {
+                blank_gutter.clone()
+            };
+            let cursor_style = if is_selected {
+                highlight_style
+            } else {
+                dim_style
+            };
+            let name_style = if is_selected {
+                highlight_style
+            } else {
+                row.style.add_modifier(Modifier::DIM)
+            };
             let mut spans = vec![
-                Span::styled(unselected_prefix.clone(), default_style),
-                Span::styled(row.text, row.style),
+                Span::styled(cursor, cursor_style),
+                Span::styled(row.text, name_style),
             ];
             if let Some(subtitle) = row.subtitle {
-                spans.push(Span::styled(
-                    format!("  {}", subtitle),
-                    default_style.add_modifier(Modifier::DIM),
-                ));
+                let sub_style = if is_selected {
+                    highlight_style
+                } else {
+                    dim_style
+                };
+                spans.push(Span::styled(format!("  {}", subtitle), sub_style));
             }
 
             (
                 InlineListRow::single(
                     Line::from(spans),
                     if row.selectable {
-                        default_style
+                        dim_style
                     } else {
-                        default_style.add_modifier(Modifier::DIM)
+                        dim_style.add_modifier(Modifier::DIM)
                     },
                 ),
                 1_u16,
@@ -126,7 +147,10 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         .collect::<Vec<_>>();
 
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("Agents".to_owned(), default_style))],
+        header: vec![Line::from(Span::styled(
+            "Agents".to_owned(),
+            highlight_style,
+        ))],
         info: instructions,
         search: Some(SharedSearchField {
             label: "Search agents".to_owned(),
@@ -146,9 +170,9 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         area,
         sections,
         SharedListPanelStyles {
-            base_style: default_style,
+            base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: default_style,
+            text_style: dim_style,
             divider_style: None,
         },
         &mut model,
@@ -224,23 +248,41 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     }
 
     let default_style = default_style(session);
+    let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
-    let unselected_prefix = selection_padding();
+    let blank_gutter = selection_padding();
 
     let selected = rows.iter().position(|row| row.selectable && row.selected);
     let rendered_rows = rows
         .into_iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(idx, row)| {
+            let is_selected = selected == Some(idx);
+            let cursor = if is_selected {
+                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+            } else {
+                blank_gutter.clone()
+            };
+            let cursor_style = if is_selected {
+                highlight_style
+            } else {
+                dim_style
+            };
+            let name_style = if is_selected {
+                highlight_style
+            } else {
+                row.style.add_modifier(Modifier::DIM)
+            };
             (
                 InlineListRow::single(
                     Line::from(vec![
-                        Span::styled(unselected_prefix.clone(), default_style),
-                        Span::styled(row.text, row.style),
+                        Span::styled(cursor, cursor_style),
+                        Span::styled(row.text, name_style),
                     ]),
                     if row.selectable {
-                        default_style
+                        dim_style
                     } else {
-                        default_style.add_modifier(Modifier::DIM)
+                        dim_style.add_modifier(Modifier::DIM)
                     },
                 ),
                 1_u16,
@@ -251,7 +293,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "Files".to_owned(),
-            session.core.section_title_style(),
+            highlight_style,
         ))],
         info: instructions,
         search: Some(SharedSearchField {
@@ -272,9 +314,9 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         area,
         sections,
         SharedListPanelStyles {
-            base_style: default_style,
+            base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: default_style,
+            text_style: dim_style,
             divider_style: Some(session.core.styles.border_style()),
         },
         &mut model,

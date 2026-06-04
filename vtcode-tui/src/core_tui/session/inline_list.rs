@@ -23,7 +23,11 @@ impl InlineListRow {
         self.style = style;
         for line in &mut self.lines {
             for span in &mut line.spans {
-                span.style = span.style.patch(style);
+                // `Style::patch` only adds modifiers, so a pre-existing `DIM`
+                // (used by badge/selectable/detail styles) would survive and
+                // mute the highlight's accent color. Strip it so the selected
+                // row pops with the full accent.
+                span.style = span.style.patch(style).remove_modifier(Modifier::DIM);
             }
         }
     }
@@ -44,7 +48,7 @@ pub(crate) fn row_height(lines: &[Line<'_>]) -> u16 {
 }
 
 pub(crate) fn selection_padding_width() -> usize {
-    ui::MODAL_LIST_HIGHLIGHT_SYMBOL.chars().count().max(1)
+    ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count().max(1)
 }
 
 pub(crate) fn selection_padding() -> String {

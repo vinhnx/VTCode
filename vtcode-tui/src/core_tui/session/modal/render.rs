@@ -192,11 +192,18 @@ impl SharedListWidgetModel for ModalListPanelModel<'_> {
 
         let selection_gutter = selection_padding_width() as u16;
         let content_width = width.saturating_sub(selection_gutter) as usize;
+        let selected_visible = self.list.list_state.selected();
         self.list
             .visible_indices
             .iter()
             .enumerate()
             .map(|(visible_index, &item_index)| {
+                let is_selected = selected_visible == Some(visible_index)
+                    && self
+                        .list
+                        .items
+                        .get(item_index)
+                        .is_some_and(|i| i.selection.is_some());
                 let lines = modal_list_item_lines(
                     self.list,
                     visible_index,
@@ -204,6 +211,7 @@ impl SharedListWidgetModel for ModalListPanelModel<'_> {
                     self.styles,
                     content_width,
                     self.inline_editor,
+                    is_selected,
                 );
                 (
                     InlineListRow {
@@ -393,25 +401,6 @@ pub(crate) fn render_wizard_modal_body(
         .unwrap_or_else(|| vec![Line::default()]);
 
     let mut info_lines = question_lines;
-    if let Some(step) = wizard.steps.get(wizard.current_step)
-        && has_notes
-    {
-        let label_text = step.freeform_label.as_deref().unwrap_or("›");
-        let mut spans = vec![Span::styled(format!("{} ", label_text), styles.header)];
-
-        if step.notes.is_empty() {
-            if let Some(placeholder) = step.freeform_placeholder.as_ref() {
-                spans.push(Span::styled(placeholder.clone(), styles.detail));
-            }
-        } else {
-            spans.push(Span::styled(step.notes.clone(), styles.selectable));
-        }
-
-        if step.notes_active {
-            spans.push(Span::styled("▌", styles.highlight));
-        }
-        info_lines.push(Line::from(spans));
-    }
 
     info_lines.extend(
         instruction_lines
@@ -426,7 +415,7 @@ pub(crate) fn render_wizard_modal_body(
         .len()
         .max(1);
 
-    // Layout: [Header] [Info] [Search?] [Main content list]
+    // Layout: [Header] [Info] [Input?] [Search?] [Divider?] [List]
     let mut constraints = Vec::new();
     if is_multistep {
         constraints.push(Constraint::Length(
@@ -438,6 +427,9 @@ pub(crate) fn render_wizard_modal_body(
     constraints.push(Constraint::Length(
         info_row_count.min(u16::MAX as usize) as u16
     ));
+    if has_notes {
+        constraints.push(Constraint::Length(1));
+    }
     if wizard.search.is_some() {
         constraints.push(Constraint::Length(1));
     }
@@ -480,6 +472,32 @@ pub(crate) fn render_wizard_modal_body(
         &mut outcome,
     );
     idx += 1;
+
+    if has_notes
+        && let Some(step) = wizard.steps.get(wizard.current_step)
+        && idx < chunks.len()
+    {
+        let label_text = step.freeform_label.as_deref().unwrap_or("Custom note");
+        let input_widget = ratatui_cheese::input::Input::new(label_text)
+            .placeholder(
+                step.freeform_placeholder
+                    .as_deref()
+                    .unwrap_or("Type here..."),
+            )
+            .palette(&ratatui_cheese::theme::Palette::dark());
+        let mut input_state = ratatui_cheese::input::InputState::new();
+        input_state.set_value(step.notes.clone());
+        if step.notes_active {
+            input_state.set_focused(true);
+            // Position cursor at end
+            for _ in 0..step.notes.chars().count() {
+                input_state.move_right();
+            }
+        }
+        let input_area = text_alignment_fn(chunks[idx]);
+        frame.render_stateful_widget(&input_widget, input_area, &mut input_state);
+        idx += 1;
+    }
 
     if let Some(search) = wizard.search.as_ref()
         && idx < chunks.len()
@@ -1028,6 +1046,7 @@ pub fn modal_list_item_lines(
     styles: &ModalRenderStyles,
     content_width: usize,
     inline_editor: Option<&ModalInlineEditor>,
+    is_selected: bool,
 ) -> Vec<Line<'static>> {
     let item = match list.items.get(item_index) {
         Some(i) => i,
@@ -1042,15 +1061,32 @@ pub fn modal_list_item_lines(
         } else {
             item.title.clone()
         };
-        return vec![Line::from(Span::styled(divider, styles.divider))];
+        let selection_pad = selection_padding();
+        let mut spans = Vec::new();
+        if !selection_pad.is_empty() {
+            spans.push(Span::raw(selection_pad));
+        }
+        spans.push(Span::styled(divider, styles.divider));
+        return vec![Line::from(spans)];
     }
 
     let indent = "  ".repeat(item.indent as usize);
-    let selection_padding = selection_padding();
+    let gutter_width = selection_padding_width();
+    let blank_gutter = selection_padding();
+    let cursor_indicator = if is_selected {
+        format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+    } else {
+        blank_gutter.clone()
+    };
 
+    let cursor_style = if is_selected {
+        styles.highlight
+    } else {
+        styles.selectable
+    };
     let mut primary_spans = Vec::new();
-    if !selection_padding.is_empty() {
-        primary_spans.push(Span::raw(selection_padding.clone()));
+    if gutter_width > 0 {
+        primary_spans.push(Span::styled(cursor_indicator, cursor_style));
     }
 
     if !indent.is_empty() {
@@ -1066,7 +1102,9 @@ pub fn modal_list_item_lines(
         primary_spans.push(Span::raw(" "));
     }
 
-    let title_style = if item.selection.is_some() {
+    let title_style = if is_selected && item.selection.is_some() {
+        styles.highlight
+    } else if item.selection.is_some() {
         styles.selectable
     } else if item.is_header() {
         styles.header
@@ -1091,8 +1129,8 @@ pub fn modal_list_item_lines(
 
         for wrapped in wrapped_lines {
             let mut secondary_spans = Vec::new();
-            if !selection_padding.is_empty() {
-                secondary_spans.push(Span::raw(selection_padding.clone()));
+            if !blank_gutter.is_empty() {
+                secondary_spans.push(Span::raw(blank_gutter.clone()));
             }
             if !indent.is_empty() {
                 secondary_spans.push(Span::raw(indent.clone()));
@@ -1112,8 +1150,8 @@ pub fn modal_list_item_lines(
         && editor.item_index == item_index
     {
         let mut editor_spans = Vec::new();
-        if !selection_padding.is_empty() {
-            editor_spans.push(Span::raw(selection_padding.clone()));
+        if !blank_gutter.is_empty() {
+            editor_spans.push(Span::raw(blank_gutter));
         }
         if !indent.is_empty() {
             editor_spans.push(Span::raw(indent.clone()));

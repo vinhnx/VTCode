@@ -1,10 +1,14 @@
 use super::*;
+use crate::config::constants::ui;
 use crate::core_tui::ThemeConfigParser;
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows,
     render_shared_list_panel, rows_to_u16,
 };
-use crate::core_tui::session::{inline_list::InlineListRow, list_panel::SharedListWidgetModel};
+use crate::core_tui::session::{
+    inline_list::{InlineListRow, selection_padding},
+    list_panel::SharedListWidgetModel,
+};
 use crate::core_tui::style::ratatui_color_from_ansi;
 use crate::core_tui::types::LocalAgentEntry;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
@@ -16,6 +20,7 @@ struct LocalAgentsPanelModel {
     offset: usize,
     visible_rows: usize,
     base_style: Style,
+    highlight_style: Style,
 }
 
 impl SharedListWidgetModel for LocalAgentsPanelModel {
@@ -34,10 +39,14 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
             )];
         }
 
+        let dim_style = self.base_style.add_modifier(Modifier::DIM);
+        let blank_gutter = selection_padding();
         let max_chars = width.saturating_sub(3) as usize;
         self.entries
             .iter()
-            .map(|entry| {
+            .enumerate()
+            .map(|(idx, entry)| {
+                let is_selected = self.selected == Some(idx);
                 let row_text = truncate_row(
                     format!(
                         "{} · {} · {}",
@@ -47,10 +56,28 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
                     ),
                     max_chars,
                 );
+                let cursor = if is_selected {
+                    format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+                } else {
+                    blank_gutter.clone()
+                };
+                let cursor_style = if is_selected {
+                    self.highlight_style
+                } else {
+                    dim_style
+                };
+                let text_style = if is_selected {
+                    self.highlight_style
+                } else {
+                    dim_style
+                };
                 (
                     InlineListRow::single(
-                        Line::from(Span::styled(row_text, self.base_style)),
-                        self.base_style,
+                        Line::from(vec![
+                            Span::styled(cursor, cursor_style),
+                            Span::styled(row_text, text_style),
+                        ]),
+                        dim_style,
                     ),
                     1_u16,
                 )
@@ -119,6 +146,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     frame.render_widget(Clear, area);
 
     let default_style = default_style(session);
+    let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
     let (selected_index, scroll_offset, entries) = {
         let state = &session.local_agents_state;
@@ -143,9 +171,9 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     let header_rows = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "Local Agents".to_owned(),
-            default_style,
+            dim_style,
         ))],
-        info: vec![Line::from(Span::styled(info_line, default_style))],
+        info: vec![Line::from(Span::styled(info_line, dim_style))],
         search: None,
     };
 
@@ -155,6 +183,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         offset: scroll_offset,
         visible_rows: 0,
         base_style: default_style,
+        highlight_style,
     };
 
     let chunks = Layout::vertical([
@@ -199,9 +228,9 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         list_area,
         SharedListPanelSections::default(),
         SharedListPanelStyles {
-            base_style: default_style,
+            base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: default_style,
+            text_style: dim_style,
             divider_style: None,
         },
         &mut list_model,

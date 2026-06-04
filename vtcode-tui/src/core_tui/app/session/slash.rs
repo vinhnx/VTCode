@@ -55,33 +55,56 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     let rows = slash_rows(session);
     let item_count = rows.len();
     let default_style = session.core.styles.default_style();
+    let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = slash_highlight_style(session);
     let name_style = slash_name_style(session);
     let description_style = slash_description_style(session);
-    let prefix = selection_padding();
-
-    let rendered_rows = rows
-        .into_iter()
-        .map(|row| {
-            (
-                InlineListRow::single(
-                    Line::from(vec![
-                        Span::styled(prefix.clone(), default_style),
-                        Span::styled(format!("/{}", row.name), name_style),
-                        Span::raw(" "),
-                        Span::styled(row.description, description_style),
-                    ]),
-                    default_style,
-                ),
-                1_u16,
-            )
-        })
-        .collect::<Vec<_>>();
+    let blank_gutter = selection_padding();
 
     let selected = session
         .slash_palette
         .selected_index()
         .filter(|index| *index < item_count);
+
+    let rendered_rows = rows
+        .into_iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let is_selected = selected == Some(idx);
+            let cursor = if is_selected {
+                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+            } else {
+                blank_gutter.clone()
+            };
+            let cursor_style = if is_selected {
+                highlight_style
+            } else {
+                dim_style
+            };
+            let row_name_style = if is_selected {
+                highlight_style
+            } else {
+                name_style.add_modifier(Modifier::DIM)
+            };
+            let row_desc_style = if is_selected {
+                highlight_style
+            } else {
+                description_style
+            };
+            (
+                InlineListRow::single(
+                    Line::from(vec![
+                        Span::styled(cursor, cursor_style),
+                        Span::styled(format!("/{}", row.name), row_name_style),
+                        Span::raw(" "),
+                        Span::styled(row.description, row_desc_style),
+                    ]),
+                    dim_style,
+                ),
+                1_u16,
+            )
+        })
+        .collect::<Vec<_>>();
     let offset = session.slash_palette.scroll_offset();
     let search_line = command_prefix(
         session.core.input_manager.content(),
@@ -114,9 +137,9 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         area,
         sections,
         SharedListPanelStyles {
-            base_style: default_style,
+            base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: default_style,
+            text_style: dim_style,
             divider_style: Some(session.core.styles.border_style()),
         },
         &mut model,
@@ -429,13 +452,10 @@ pub(super) fn try_handle_slash_navigation(
                 return false;
             }
 
-            let should_submit_now = should_submit_immediately_from_palette(session);
-
-            if should_submit_now {
-                return false;
-            }
-
-            true
+            // Always let Enter fall through to the normal handler so the
+            // command is submitted in one press, regardless of whether it
+            // is in the "immediate submit" list.
+            false
         }
         _ => return false,
     };
@@ -510,7 +530,7 @@ fn slash_rows(session: &Session) -> Vec<SlashRow> {
 }
 
 fn slash_highlight_style(session: &Session) -> Style {
-    let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
+    let mut style = Style::default().add_modifier(Modifier::BOLD);
     if let Some(primary) = session.core.theme.primary.or(session.core.theme.secondary) {
         style = style.fg(ratatui_color_from_ansi(primary));
     }

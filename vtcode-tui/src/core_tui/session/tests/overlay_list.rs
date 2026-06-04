@@ -207,7 +207,7 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
 }
 
 #[test]
-fn selected_modal_row_uses_full_width_accent_background() {
+fn selected_modal_row_uses_primary_foreground() {
     let theme = InlineTheme {
         foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
         primary: Some(AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56))),
@@ -239,29 +239,13 @@ fn selected_modal_row_uses_full_width_accent_background() {
     let terminal = render_session_to_terminal(&mut session, 30);
 
     let modal_area = session.core.modal_list_area().expect("modal list area");
-    let far_right = terminal
-        .backend()
-        .buffer()
-        .cell((
-            modal_area.x + modal_area.width.saturating_sub(1),
-            modal_area.y,
-        ))
-        .expect("selected row far-right cell");
-    assert_eq!(far_right.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
-
-    let badge_cell = terminal
-        .backend()
-        .buffer()
-        .cell((modal_area.x, modal_area.y))
-        .expect("selected row badge cell");
-    assert_eq!(badge_cell.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
-
     let title_cell = terminal
         .backend()
         .buffer()
-        .cell((modal_area.x + 10, modal_area.y))
+        .cell((modal_area.x + 11, modal_area.y))
         .expect("selected row title cell");
-    assert_eq!(title_cell.style().bg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+    assert_eq!(title_cell.style().fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+    assert!(title_cell.style().add_modifier.contains(Modifier::BOLD));
 }
 
 #[test]
@@ -308,7 +292,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
     let header_cell = terminal
         .backend()
         .buffer()
-        .cell((modal_area.x + 1, modal_area.y))
+        .cell((modal_area.x + 2, modal_area.y))
         .expect("section header cell");
     let title_cell = terminal
         .backend()

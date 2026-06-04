@@ -92,6 +92,7 @@ impl Session {
                     &styles,
                     content_width,
                     None,
+                    false,
                 );
                 let height = usize::from(inline_list::row_height(&lines));
                 if relative_row < consumed_rows + height {
@@ -117,6 +118,7 @@ impl Session {
                 &styles,
                 content_width,
                 None,
+                false,
             );
             let height = usize::from(inline_list::row_height(&lines));
             if relative_row < consumed_rows + height {

@@ -43,11 +43,6 @@ provider = "mimo"
 # Type: `string`
 reasoning_effort = "high"
 
-# UI theme identifier controlling ANSI styling
-# Default: "ciapre"
-# Type: `string`
-theme = "ciapre-blue"
-
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
 [agent.persistent_memory]

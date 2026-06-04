@@ -1,5 +1,6 @@
 use super::*;
-use crate::core_tui::session::inline_list::InlineListRow;
+use crate::config::constants::ui;
+use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel,
     SharedSearchField, fixed_section_rows, render_shared_list_panel, rows_to_u16,
@@ -12,6 +13,7 @@ struct HistoryPickerPanelModel {
     offset: usize,
     visible_rows: usize,
     base_style: Style,
+    highlight_style: Style,
 }
 
 impl SharedListWidgetModel for HistoryPickerPanelModel {
@@ -30,9 +32,14 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
             )];
         }
 
+        let dim_style = self.base_style.add_modifier(Modifier::DIM);
+        let blank_gutter = selection_padding();
+
         self.entries
             .iter()
-            .map(|content| {
+            .enumerate()
+            .map(|(idx, content)| {
+                let is_selected = self.selected == Some(idx);
                 let max_chars = width as usize;
                 let item_len = content.chars().count();
                 let truncated = if item_len > max_chars {
@@ -42,10 +49,28 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
                 } else {
                     content.clone()
                 };
+                let cursor = if is_selected {
+                    format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
+                } else {
+                    blank_gutter.clone()
+                };
+                let cursor_style = if is_selected {
+                    self.highlight_style
+                } else {
+                    dim_style
+                };
+                let text_style = if is_selected {
+                    self.highlight_style
+                } else {
+                    dim_style
+                };
                 (
                     InlineListRow::single(
-                        Line::from(vec![Span::styled(truncated, self.base_style)]),
-                        self.base_style,
+                        Line::from(vec![
+                            Span::styled(cursor, cursor_style),
+                            Span::styled(truncated, text_style),
+                        ]),
+                        dim_style,
                     ),
                     1_u16,
                 )
@@ -131,14 +156,13 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         )
     };
     let default_style = default_style(session);
+    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let highlight_style = modal_list_highlight_style(session);
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled(
-            "History".to_owned(),
-            default_style,
-        ))],
+        header: vec![Line::from(Span::styled("History".to_owned(), dim_style))],
         info: vec![Line::from(Span::styled(
             "Ctrl+R open • Enter accept • Esc cancel".to_owned(),
-            default_style,
+            dim_style,
         ))],
         search: Some(SharedSearchField {
             label: "Search history".to_owned(),
@@ -157,6 +181,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         offset: current_offset,
         visible_rows: 0,
         base_style: default_style,
+        highlight_style,
     };
 
     render_shared_list_panel(
@@ -164,9 +189,9 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         area,
         sections,
         SharedListPanelStyles {
-            base_style: default_style,
-            selected_style: Some(modal_list_highlight_style(session)),
-            text_style: default_style,
+            base_style: dim_style,
+            selected_style: Some(highlight_style),
+            text_style: dim_style,
             divider_style: None,
         },
         &mut panel_model,

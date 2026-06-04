@@ -400,6 +400,7 @@ impl Session {
     }
 
     /// Show a simple modal dialog
+    #[expect(dead_code)]
     pub(crate) fn show_modal(
         &mut self,
         title: String,

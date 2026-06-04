@@ -1,7 +1,5 @@
 use ratatui::prelude::*;
 
-use crate::config::constants::ui;
-
 use super::{Session, agent_palette::AgentPalette, file_palette::FilePalette};
 
 mod history_picker;

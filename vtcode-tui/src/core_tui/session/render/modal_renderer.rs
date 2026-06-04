@@ -370,7 +370,9 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         use ratatui_cheese::help::{Binding, Help, HelpStyles};
         let help = Help::default()
             .show_all(true)
-            .styles(HelpStyles::from_palette(&ratatui_cheese::theme::Palette::dark()))
+            .styles(HelpStyles::from_palette(
+                &ratatui_cheese::theme::Palette::dark(),
+            ))
             .bindings(vec![
                 Binding::new("?", "help"),
                 Binding::new("Enter", "submit"),
@@ -471,7 +473,7 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
         highlight: modal_list_highlight_style(session),
         badge: default_style.add_modifier(Modifier::DIM | Modifier::BOLD),
         header: header_style,
-        selectable: default_style,
+        selectable: default_style.add_modifier(Modifier::DIM),
         detail: default_style.add_modifier(Modifier::DIM),
         search_match: header_style.add_modifier(Modifier::UNDERLINED),
         title: chrome_style,

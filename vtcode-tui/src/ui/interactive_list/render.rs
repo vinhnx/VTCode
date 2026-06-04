@@ -17,12 +17,10 @@ const NUMBER_JUMP_HINT: &str = "Tip: Type number to jump";
 mod styles {
     use ratatui::style::{Color, Modifier, Style};
 
-    pub const ITEM_NUMBER: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+    pub const ITEM_NUMBER: Style = Style::new().fg(Color::DarkGray).add_modifier(Modifier::DIM);
     pub const DESCRIPTION: Style = Style::new().fg(Color::DarkGray);
-    pub const DEFAULT_TEXT: Style = Style::new().fg(Color::White);
-    pub const HIGHLIGHT: Style = Style::new()
-        .fg(Color::Green)
-        .add_modifier(Modifier::BOLD.union(Modifier::REVERSED));
+    pub const DEFAULT_TEXT: Style = Style::new().fg(Color::Gray).add_modifier(Modifier::DIM);
+    pub const HIGHLIGHT: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 }
 
 pub(super) fn draw_selection_ui(
@@ -94,8 +92,7 @@ pub(super) fn draw_selection_ui(
                 )
                 .style(styles::DEFAULT_TEXT)
                 .highlight_style(styles::HIGHLIGHT)
-                .highlight_symbol("> ")
-                .repeat_highlight_symbol(true)
+                .highlight_symbol("→ ")
                 .direction(ListDirection::TopToBottom)
                 .scroll_padding(1);
             frame.render_stateful_widget(list, layout[1], list_state);

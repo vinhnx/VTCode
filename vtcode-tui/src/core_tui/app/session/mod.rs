@@ -510,21 +510,6 @@ impl AppSession {
         self.core.mark_dirty();
     }
 
-    pub(crate) fn show_modal(
-        &mut self,
-        title: String,
-        lines: Vec<String>,
-        secure_prompt: Option<crate::core_tui::app::types::SecurePromptConfig>,
-    ) {
-        self.show_transient(TransientRequest::Modal(
-            crate::core_tui::app::types::ModalOverlayRequest {
-                title,
-                lines,
-                secure_prompt,
-            },
-        ));
-    }
-
     /// Show a help modal using the ratatui-cheese Help widget
     pub(crate) fn show_help_modal(&mut self) {
         self.show_transient(TransientRequest::Modal(
