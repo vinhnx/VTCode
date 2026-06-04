@@ -51,6 +51,7 @@ fn sample_list_modal() -> ModalState {
         restore_input: true,
         restore_cursor: true,
         search: Some(search_state),
+        is_help_modal: false,
     };
 
     if let Some(list) = modal.list.as_mut() {
@@ -644,6 +645,7 @@ fn sample_list_modal_with_count(count: usize) -> ModalState {
         restore_input: true,
         restore_cursor: true,
         search: None,
+        is_help_modal: false,
     }
 }
 
@@ -801,6 +803,7 @@ fn list_modal_space_no_longer_submits_config_action() {
         restore_input: true,
         restore_cursor: true,
         search: None,
+        is_help_modal: false,
     };
 
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
@@ -833,6 +836,7 @@ fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
         restore_input: true,
         restore_cursor: true,
         search: None,
+        is_help_modal: false,
     };
 
     assert!(

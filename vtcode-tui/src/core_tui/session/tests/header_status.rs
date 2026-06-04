@@ -304,12 +304,7 @@ fn question_mark_opens_help_overlay_when_input_is_empty() {
     assert!(result.is_none());
     let modal = session.modal_state().expect("help modal should open");
     assert_eq!(modal.title, "Keyboard Shortcuts");
-    assert!(
-        modal
-            .lines
-            .iter()
-            .any(|line| line.contains("Ctrl+G") && line.contains("Ctrl+Z/Y"))
-    );
+    assert!(modal.is_help_modal, "should be a help modal");
 }
 
 #[test]

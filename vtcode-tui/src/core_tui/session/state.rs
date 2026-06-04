@@ -413,6 +413,18 @@ impl Session {
         }));
     }
 
+    /// Show a help modal using the ratatui-cheese Help widget
+    pub(crate) fn show_help_modal(&mut self) {
+        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
+            title: "Keyboard Shortcuts".to_string(),
+            lines: Vec::new(),
+            secure_prompt: None,
+        }));
+        if let Some(ActiveOverlay::Modal(state)) = self.active_overlay.as_mut() {
+            state.is_help_modal = true;
+        }
+    }
+
     pub(crate) fn show_overlay(&mut self, request: OverlayRequest) {
         if self.has_active_overlay() {
             self.overlay_queue.push_back(request);
@@ -510,6 +522,7 @@ impl Session {
             secure_prompt: request.secure_prompt,
             restore_input: true,
             restore_cursor: true,
+            is_help_modal: false,
         };
         if state.secure_prompt.is_none() {
             self.input_enabled = false;
@@ -540,6 +553,7 @@ impl Session {
             secure_prompt: None,
             restore_input: true,
             restore_cursor: true,
+            is_help_modal: false,
         };
         self.input_enabled = false;
         self.cursor_visible = false;

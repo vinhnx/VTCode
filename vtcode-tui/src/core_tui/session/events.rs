@@ -686,7 +686,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 && !has_command
                 && session.input_manager.content().is_empty()
             {
-                session.show_modal("Keyboard Shortcuts".to_string(), quick_help_lines(), None);
+                session.show_help_modal();
                 return None;
             }
 
@@ -742,23 +742,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         _ => None,
     }
-}
-
-fn quick_help_lines() -> Vec<String> {
-    vec![
-        "Common                  Readline editing          Navigation".to_string(),
-        "!cmd shell mode         Ctrl+A/E line ends       / commands".to_string(),
-        "@path file reference    Ctrl+F/B char move       ? or /help shortcuts".to_string(),
-        "Enter submit/queue      Alt+F/B word move        Shift+Tab mode picker".to_string(),
-        "Ctrl+Enter run/steer    Alt+Left/Right word      Tab accept/queue".to_string(),
-        "Shift+Enter/Ctrl+J new  Ctrl+P/N history         Ctrl+L clear screen".to_string(),
-        "Esc clear/cancel        Ctrl+R/S history search  Ctrl+M model picker".to_string(),
-        "Double Esc rewind       Ctrl+W delete prev word  Ctrl+O copy response".to_string(),
-        "Ctrl+C interrupt/copy   Alt+D delete next word   Alt+P prompt suggest".to_string(),
-        "Ctrl+D exit             Ctrl+U/K delete to edge  Alt+O transcript review".to_string(),
-        "PageUp/PageDown scroll  Ctrl+T/Alt+T transpose   Ctrl+I/Ctrl+/ lists".to_string(),
-        "Alt+S subprocesses      Alt+U/L/C case; Alt+\\  Ctrl+G editor; Ctrl+Z/Y undo".to_string(),
-    ]
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {

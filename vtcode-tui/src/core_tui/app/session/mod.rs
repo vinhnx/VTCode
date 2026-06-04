@@ -525,6 +525,20 @@ impl AppSession {
         ));
     }
 
+    /// Show a help modal using the ratatui-cheese Help widget
+    pub(crate) fn show_help_modal(&mut self) {
+        self.show_transient(TransientRequest::Modal(
+            crate::core_tui::app::types::ModalOverlayRequest {
+                title: "Keyboard Shortcuts".to_string(),
+                lines: Vec::new(),
+                secure_prompt: None,
+            },
+        ));
+        if let Some(state) = self.core.modal_state_mut() {
+            state.is_help_modal = true;
+        }
+    }
+
     fn should_auto_open_local_agents(&self) -> bool {
         if self.has_active_overlay() {
             return false;
