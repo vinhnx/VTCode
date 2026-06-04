@@ -167,6 +167,44 @@ fn timeline_hidden_keeps_navigation_unselected() {
 }
 
 #[test]
+fn info_warning_error_blocks_render_distinct_fieldset_fills() {
+    // (kind, label, unicode fill, ascii-fallback fill)
+    let cases = [
+        (InlineMessageKind::Info, " Info ", '─', '-'),
+        (InlineMessageKind::Warning, " Warning ", '━', '='),
+        (InlineMessageKind::Error, " Error ", '/', '/'),
+    ];
+
+    for (kind, label, unicode_fill, ascii_fill) in cases {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.push_line(kind, vec![make_segment("Theme switched to Ciapre")]);
+
+        let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
+
+        // Top rule carries a center-aligned label flanked by the kind's fill.
+        // The fill glyph follows terminal Unicode capabilities.
+        assert!(
+            rendered.iter().any(|line| {
+                (line.contains(unicode_fill) || line.contains(ascii_fill)) && line.contains(label)
+            }),
+            "{label} block should render a fieldset rule with its fill, got: {rendered:?}"
+        );
+        // Fieldset blocks never draw vertical box sides.
+        assert!(
+            rendered.iter().all(|line| !line.contains('│')),
+            "{label} fieldset must not draw vertical sides, got: {rendered:?}"
+        );
+        // The content itself is preserved.
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line.contains("Theme switched to Ciapre")),
+            "{label} block content should be preserved, got: {rendered:?}"
+        );
+    }
+}
+
+#[test]
 fn active_file_operation_indicator_renders_spinner_frame() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(

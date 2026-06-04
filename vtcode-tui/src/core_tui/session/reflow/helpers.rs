@@ -7,34 +7,35 @@ use crate::config::constants::ui;
 use super::super::message::MessageLine;
 use crate::core_tui::types::InlineMessageKind;
 
-#[derive(Clone, Copy)]
-pub(super) struct BlockChars {
-    pub(super) top_left: &'static str,
-    pub(super) top_right: &'static str,
-    pub(super) bottom_left: &'static str,
-    pub(super) bottom_right: &'static str,
-    pub(super) horizontal: &'static str,
-    pub(super) vertical: &'static str,
-}
-
-pub(super) fn block_chars(border_type: ratatui::widgets::BorderType) -> BlockChars {
-    match border_type {
-        ratatui::widgets::BorderType::Rounded => BlockChars {
-            top_left: ui::INLINE_BLOCK_TOP_LEFT,
-            top_right: ui::INLINE_BLOCK_TOP_RIGHT,
-            bottom_left: ui::INLINE_BLOCK_BOTTOM_LEFT,
-            bottom_right: ui::INLINE_BLOCK_BOTTOM_RIGHT,
-            horizontal: ui::INLINE_BLOCK_HORIZONTAL,
-            vertical: ui::INLINE_BLOCK_BODY_LEFT,
-        },
-        _ => BlockChars {
-            top_left: "+",
-            top_right: "+",
-            bottom_left: "+",
-            bottom_right: "+",
-            horizontal: "-",
-            vertical: "|",
-        },
+/// Rule fill pattern for Fieldset-style info/warning/error blocks.
+///
+/// Mirrors `ratatui_cheese::fieldset::FieldsetFill`, mapping each message kind
+/// to a distinct fill: Error → `Slash`, Info → `Dash`, Warning → `Thick`. The
+/// Unicode glyphs fall back to ASCII on terminals without Unicode support.
+pub(super) fn rule_fill(
+    kind: InlineMessageKind,
+    border_type: ratatui::widgets::BorderType,
+) -> &'static str {
+    let unicode = matches!(border_type, ratatui::widgets::BorderType::Rounded);
+    match kind {
+        // Slash fill (`/`) — already ASCII-safe.
+        InlineMessageKind::Error => "/",
+        // Thick fill (`━`) with an ASCII fallback.
+        InlineMessageKind::Warning => {
+            if unicode {
+                "━"
+            } else {
+                "="
+            }
+        }
+        // Dash fill (`─`) with an ASCII fallback.
+        _ => {
+            if unicode {
+                ui::INLINE_BLOCK_HORIZONTAL
+            } else {
+                "-"
+            }
+        }
     }
 }
 

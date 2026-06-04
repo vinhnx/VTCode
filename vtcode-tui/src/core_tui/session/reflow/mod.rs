@@ -26,7 +26,7 @@ mod formatting;
 mod helpers;
 
 use helpers::{
-    agent_code_continuation_prefix, block_chars, is_info_box_line, is_tool_summary_line,
+    agent_code_continuation_prefix, is_info_box_line, is_tool_summary_line, rule_fill,
     truncate_line_to_width,
 };
 
@@ -291,7 +291,7 @@ impl Session {
         let border_style = self.styles.dimmed_border_style(true);
 
         let border_type = terminal_capabilities::get_border_type();
-        let border = block_chars(border_type);
+        let dash = rule_fill(line.kind, border_type);
         let label = match line.kind {
             InlineMessageKind::Error => "Error",
             InlineMessageKind::Warning => "Warning",
@@ -299,41 +299,43 @@ impl Session {
             _ => "",
         };
 
-        let body_prefix = format!("  {} ", border.vertical);
-        let prefix_width = body_prefix.chars().count();
-        let border_width = border.vertical.chars().count();
-        let content_width = max_width.saturating_sub(prefix_width + border_width);
+        // Render as a ratatui-cheese Fieldset: a center-aligned label on a
+        // horizontal rule, content with no vertical sides, and a closing rule.
+        // The fill pattern is chosen per message kind (Error → Slash, Info →
+        // Dash, Warning → Thick) and respects terminal Unicode capabilities.
+        let rule_indent = "  ";
+        let rule_indent_width = rule_indent.chars().count();
+        let content_indent = "    ";
+        let content_indent_width = content_indent.chars().count();
+        let rule_width = max_width.saturating_sub(rule_indent_width);
+        let content_width = max_width.saturating_sub(content_indent_width);
 
-        if content_width == 0 {
+        if rule_width == 0 || content_width == 0 {
             return into_transcript_lines(grouped_lines, self.workspace_root.as_deref());
         }
 
-        let inner_width = content_width + 1;
-        let top_inner = if label.is_empty() {
-            border.horizontal.repeat(inner_width)
+        // Top rule with a center-aligned label, e.g. `──── Info ─────`.
+        let top = if label.is_empty() {
+            format!("{}{}", rule_indent, dash.repeat(rule_width))
         } else {
             let label_segment = format!(" {} ", label);
             let label_width = label_segment.chars().count();
-            let base_width = label_width + 2;
-            if inner_width <= base_width {
-                border.horizontal.repeat(inner_width)
+            if label_width + 2 >= rule_width {
+                format!("{}{}", rule_indent, dash.repeat(rule_width))
             } else {
-                let mut inner = String::new();
-                inner.push_str(border.horizontal);
-                inner.push_str(&label_segment);
-                inner.push_str(border.horizontal);
-                let remaining = inner_width.saturating_sub(base_width);
-                inner.push_str(&border.horizontal.repeat(remaining));
-                inner
+                let side = rule_width.saturating_sub(label_width);
+                let left = side / 2;
+                let right = side - left;
+                format!(
+                    "{}{}{}{}",
+                    rule_indent,
+                    dash.repeat(left),
+                    label_segment,
+                    dash.repeat(right)
+                )
             }
         };
-        let top = format!("  {}{}{}", border.top_left, top_inner, border.top_right);
-        let bottom = format!(
-            "  {}{}{}",
-            border.bottom_left,
-            border.horizontal.repeat(inner_width),
-            border.bottom_right
-        );
+        let bottom = format!("{}{}", rule_indent, dash.repeat(rule_width));
 
         let mut lines = Vec::new();
         lines.push(Line::styled(top, border_style));
@@ -355,14 +357,8 @@ impl Session {
             return Vec::new();
         }
         for line in &mut wrapped {
-            let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
-            let padding = content_width.saturating_sub(line_width);
-            let mut new_spans = vec![Span::styled(body_prefix.to_owned(), border_style)];
+            let mut new_spans = vec![Span::styled(content_indent.to_owned(), Style::default())];
             new_spans.append(&mut line.spans);
-            if padding > 0 {
-                new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
-            }
-            new_spans.push(Span::styled(border.vertical.to_owned(), border_style));
             line.spans = new_spans;
         }
         lines.extend(wrapped);

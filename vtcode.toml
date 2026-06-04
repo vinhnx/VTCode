@@ -42,6 +42,7 @@ provider = "mimo"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "high"
+theme = "gruvbox-dark-hard"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
