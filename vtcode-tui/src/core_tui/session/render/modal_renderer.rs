@@ -365,6 +365,68 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         session.set_modal_link_targets(Vec::new());
         return;
     }
+
+    if modal.is_help_modal {
+        use ratatui_cheese::help::{Binding, Help, HelpStyles};
+        let help = Help::default()
+            .show_all(true)
+            .styles(HelpStyles::from_palette(&ratatui_cheese::theme::Palette::dark()))
+            .bindings(vec![
+                Binding::new("?", "help"),
+                Binding::new("Enter", "submit"),
+                Binding::new("Ctrl+C", "interrupt"),
+                Binding::new("Esc", "clear/cancel"),
+                Binding::new("Tab", "accept/queue"),
+                Binding::new("Shift+Tab", "mode picker"),
+            ])
+            .binding_groups(vec![
+                vec![
+                    Binding::new("!cmd", "shell mode"),
+                    Binding::new("@path", "file reference"),
+                    Binding::new("Enter", "submit/queue"),
+                    Binding::new("Ctrl+Enter", "run/steer"),
+                    Binding::new("Shift+Enter", "new line"),
+                    Binding::new("Esc", "clear/cancel"),
+                    Binding::new("Double Esc", "rewind"),
+                    Binding::new("Ctrl+C", "interrupt/copy"),
+                    Binding::new("Ctrl+D", "exit"),
+                    Binding::new("PgUp/PgDn", "scroll"),
+                    Binding::new("Alt+S", "subprocesses"),
+                ],
+                vec![
+                    Binding::new("Ctrl+A/E", "line ends"),
+                    Binding::new("Ctrl+F/B", "char move"),
+                    Binding::new("Alt+F/B", "word move"),
+                    Binding::new("Alt+←/→", "word move"),
+                    Binding::new("Ctrl+P/N", "history"),
+                    Binding::new("Ctrl+R/S", "history search"),
+                    Binding::new("Ctrl+W", "delete prev word"),
+                    Binding::new("Alt+D", "delete next word"),
+                    Binding::new("Ctrl+U/K", "delete to edge"),
+                    Binding::new("Ctrl+T", "transpose"),
+                    Binding::new("Alt+U/L/C", "case change"),
+                ],
+                vec![
+                    Binding::new("/", "commands"),
+                    Binding::new("?", "shortcuts"),
+                    Binding::new("Shift+Tab", "mode picker"),
+                    Binding::new("Tab", "accept/queue"),
+                    Binding::new("Ctrl+L", "clear screen"),
+                    Binding::new("Ctrl+M", "model picker"),
+                    Binding::new("Ctrl+O", "copy response"),
+                    Binding::new("Alt+P", "prompt suggest"),
+                    Binding::new("Alt+O", "transcript review"),
+                    Binding::new("Ctrl+I", "lists"),
+                    Binding::new("Ctrl+G", "editor"),
+                    Binding::new("Ctrl+Z/Y", "undo/redo"),
+                ],
+            ]);
+        frame.render_widget(&help, body_area);
+        session.set_modal_list_area(None);
+        session.set_modal_text_areas(Vec::new());
+        session.set_modal_link_targets(Vec::new());
+        return;
+    }
     let mut outcome = render_modal_body(
         frame,
         body_area,

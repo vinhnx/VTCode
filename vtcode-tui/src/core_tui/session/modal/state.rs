@@ -21,6 +21,7 @@ pub struct ModalState {
     #[expect(dead_code)]
     pub restore_cursor: bool,
     pub search: Option<ModalSearchState>,
+    pub is_help_modal: bool,
 }
 
 /// State for a multi-step wizard modal with tabs for navigation
