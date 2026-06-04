@@ -607,39 +607,17 @@ impl AgentRunner {
                         fallback_tool_name,
                         fallback_args,
                     ) {
-                        // Success with fallback
-                        if !self.quiet {
-                            info!(agent = %agent_prefix, tool = %f_name, "Fallback tool executed successfully");
-                        }
-
-                        let optimized_result = reduce_tool_result(&f_name, res);
-                        let tool_result = serde_json::to_string(&optimized_result)?;
-
-                        self.update_last_paths_from_args(&f_name, &f_args, &mut runtime.state);
-
-                        runtime.state.push_tool_result(
-                            call_id.clone(),
-                            &f_name,
-                            tool_result,
-                            is_gemini,
-                        );
-                        complete_tool_invocation(
+                        self.apply_fallback_success(
                             runtime,
                             event_recorder,
+                            agent_prefix,
                             &call_id,
                             &f_name,
                             &f_args,
+                            res,
                             &tool_call_item,
-                            ToolCallStatus::Completed,
-                        );
-                        event_recorder
-                            .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
-                        finish_successful_tool_output(
-                            event_recorder,
-                            &tool_call_item.call_item_id,
-                            &call_id,
-                            &optimized_result,
-                        );
+                            is_gemini,
+                        )?;
                     } else {
                         // Standard failure handling
                         let category = e.category;
@@ -782,7 +760,6 @@ impl AgentRunner {
                     fallback_tool_name,
                     fallback_args,
                 ) {
-                    // Success with fallback
                     guard.mark_completed();
                     record_circuit_transition(
                         self,
@@ -790,36 +767,17 @@ impl AgentRunner {
                         &f_name,
                         circuit_before,
                     );
-                    if !self.quiet {
-                        info!(agent = %agent_prefix, tool = %f_name, "Fallback tool executed successfully");
-                    }
-
-                    let optimized_result = reduce_tool_result(&f_name, res);
-                    let tool_result = serde_json::to_string(&optimized_result)?;
-
-                    self.update_last_paths_from_args(&f_name, &f_args, &mut runtime.state);
-
-                    runtime.state.push_tool_result(
-                        call.tool_call_id.clone(),
-                        &f_name,
-                        tool_result,
-                        is_gemini,
-                    );
-                    complete_tool_invocation(
+                    self.apply_fallback_success(
                         runtime,
                         event_recorder,
+                        agent_prefix,
                         &call.tool_call_id,
                         &f_name,
                         &f_args,
+                        res,
                         &tool_call_item,
-                        ToolCallStatus::Completed,
-                    );
-                    finish_successful_tool_output(
-                        event_recorder,
-                        &tool_call_item.call_item_id,
-                        &call.tool_call_id,
-                        &optimized_result,
-                    );
+                        is_gemini,
+                    )?;
                     Ok(false)
                 } else {
                     // Main failure and fallback failed / not present
@@ -1090,6 +1048,60 @@ impl AgentRunner {
                 break;
             }
         }
+
+        Ok(())
+    }
+
+    /// Apply the side effects of a successful fallback tool invocation:
+    /// reduce the result, push it into the conversation, finalize the
+    /// invocation record, and emit the corresponding event recorder
+    /// notifications. Shared between the parallel and sequential execution
+    /// paths to keep fallback handling behaviorally identical.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_fallback_success(
+        &self,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        call_id: &str,
+        tool_name: &str,
+        tool_args: &serde_json::Value,
+        result: serde_json::Value,
+        tool_call_item: &ToolCallItemRef,
+        is_gemini: bool,
+    ) -> Result<()> {
+        if !self.quiet {
+            info!(
+                agent = %agent_prefix,
+                tool = %tool_name,
+                "Fallback tool executed successfully"
+            );
+        }
+
+        let optimized_result = reduce_tool_result(tool_name, result);
+        let tool_result = serde_json::to_string(&optimized_result)?;
+
+        self.update_last_paths_from_args(tool_name, tool_args, &mut runtime.state);
+
+        runtime
+            .state
+            .push_tool_result(call_id.to_string(), tool_name, tool_result, is_gemini);
+        complete_tool_invocation(
+            runtime,
+            event_recorder,
+            call_id,
+            tool_name,
+            tool_args,
+            tool_call_item,
+            ToolCallStatus::Completed,
+        );
+        event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(call_id));
+        finish_successful_tool_output(
+            event_recorder,
+            &tool_call_item.call_item_id,
+            call_id,
+            &optimized_result,
+        );
 
         Ok(())
     }

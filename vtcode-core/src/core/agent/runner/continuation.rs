@@ -1,7 +1,8 @@
+use super::workspace_detection::infer_default_verify_commands;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::json;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use vtcode_config::core::agent::ContinuationPolicy;
 
 use crate::core::agent::session::AgentSessionState;
@@ -400,22 +401,6 @@ fn collect_verify_commands(checklist: &TrackerChecklist) -> Vec<String> {
         .iter()
         .flat_map(|item| item.verify.iter().cloned())
         .collect()
-}
-
-fn infer_default_verify_commands(workspace_root: &Path) -> Vec<String> {
-    if workspace_root.join("Cargo.toml").exists() {
-        return vec!["cargo check".to_string()];
-    }
-    if workspace_root.join("pytest.ini").exists()
-        || workspace_root.join("pyproject.toml").exists()
-        || workspace_root.join("setup.py").exists()
-    {
-        return vec!["pytest".to_string()];
-    }
-    if workspace_root.join("package.json").exists() {
-        return vec!["npm test".to_string()];
-    }
-    Vec::new()
 }
 
 fn format_command_list(results: &[VerificationResult]) -> String {

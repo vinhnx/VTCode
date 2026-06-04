@@ -6,7 +6,6 @@
 //! falling back to configuration file values.
 
 use anyhow::Result;
-use std::env;
 use std::str::FromStr;
 
 use crate::auth::CustomApiKeyStorage;
@@ -67,45 +66,8 @@ pub fn resolve_api_key_env(provider: &str, configured_env: &str) -> String {
     }
 }
 
-#[cfg(test)]
-mod test_env_overrides {
-    use hashbrown::HashMap;
-    use std::sync::{LazyLock, Mutex};
-
-    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
-
-    pub(super) fn get(key: &str) -> Option<Option<String>> {
-        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
-    }
-
-    pub(super) fn set(key: &str, value: Option<&str>) {
-        if let Ok(mut map) = OVERRIDES.lock() {
-            map.insert(key.to_string(), value.map(ToString::to_string));
-        }
-    }
-
-    pub(super) fn restore(key: &str, previous: Option<Option<String>>) {
-        if let Ok(mut map) = OVERRIDES.lock() {
-            match previous {
-                Some(value) => {
-                    map.insert(key.to_string(), value);
-                }
-                None => {
-                    map.remove(key);
-                }
-            }
-        }
-    }
-}
-
 fn read_env_var(key: &str) -> Option<String> {
-    #[cfg(test)]
-    if let Some(override_value) = test_env_overrides::get(key) {
-        return override_value;
-    }
-
-    env::var(key).ok()
+    crate::env_helpers::read_env_var(key)
 }
 
 /// Load environment variables from .env file
@@ -242,15 +204,15 @@ mod tests {
 
     impl EnvOverrideGuard {
         fn set(key: &'static str, value: Option<&str>) -> Self {
-            let previous = test_env_overrides::get(key);
-            test_env_overrides::set(key, value);
+            let previous = crate::env_helpers::test_env_overrides::get(key);
+            crate::env_helpers::test_env_overrides::set(key, value);
             Self { key, previous }
         }
     }
 
     impl Drop for EnvOverrideGuard {
         fn drop(&mut self) {
-            test_env_overrides::restore(self.key, self.previous.clone());
+            crate::env_helpers::test_env_overrides::restore(self.key, self.previous.clone());
         }
     }
 

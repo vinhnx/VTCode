@@ -1,3 +1,4 @@
+use crate::env_helpers::default_enabled;
 use serde::{Deserialize, Serialize};
 
 /// Unified permission mode for authored policy evaluation.
@@ -165,18 +166,13 @@ impl Default for AutoModeConfig {
 }
 
 #[inline]
-const fn default_enabled() -> bool {
-    true
-}
-
-#[inline]
 const fn default_resolve_commands() -> bool {
-    true
+    default_enabled()
 }
 
 #[inline]
 const fn default_audit_enabled() -> bool {
-    true
+    default_enabled()
 }
 
 const DEFAULT_AUDIT_DIR: &str = "~/.vtcode/audit";

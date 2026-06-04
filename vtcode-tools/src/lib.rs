@@ -26,6 +26,8 @@ pub use adapters::{RegistryBuilder, RegistryEvent};
 pub mod acp_tool;
 pub use acp_tool::{AcpDiscoveryTool, AcpHealthTool, AcpTool};
 
+pub mod compat;
+
 pub use vtcode_collaboration_tool_specs::{
     close_agent_parameters, request_user_input_description, request_user_input_parameters,
     resume_agent_parameters, send_input_parameters, spawn_agent_parameters,

@@ -131,18 +131,16 @@ where
             .unwrap_or_else(|| self.working_dir.clone());
 
         let command = match self.shell_kind {
-            ShellKind::Unix => {
-                let flag = if show_hidden { "-la" } else { "-l" };
-                format!("ls {} {}", flag, format_path(self.shell_kind, &target))
-            }
-            ShellKind::Windows => {
-                let mut parts = vec!["Get-ChildItem".to_string()];
-                if show_hidden {
-                    parts.push("-Force".to_string());
-                }
-                parts.push(format!("-Path {}", format_path(self.shell_kind, &target)));
-                join_command(parts)
-            }
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("ls")
+                .flag(if show_hidden { "la" } else { "l" })
+                .value(format_path(ShellKind::Unix, &target))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Get-ChildItem")
+                .flag_if(show_hidden, "Force")
+                .named("Path", format_path(ShellKind::Windows, &target))
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -158,12 +156,15 @@ where
     }
 
     pub fn pwd(&self) -> Result<String> {
+        let command = match self.shell_kind {
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix).verb("pwd").build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Get-Location")
+                .build(),
+        };
         let invocation = CommandInvocation::new(
             self.shell_kind,
-            match self.shell_kind {
-                ShellKind::Unix => "pwd".to_string(),
-                ShellKind::Windows => "Get-Location".to_string(),
-            },
+            command,
             CommandCategory::PrintDirectory,
             self.working_dir.clone(),
         );
@@ -176,22 +177,18 @@ where
         self.ensure_mutation_target_within_workspace(&target)?;
 
         let command = match self.shell_kind {
-            ShellKind::Unix => {
-                let mut parts = vec!["mkdir".to_string()];
-                if parents {
-                    parts.push("-p".to_string());
-                }
-                parts.push(format_path(self.shell_kind, &target));
-                join_command(parts)
-            }
-            ShellKind::Windows => {
-                let mut parts = vec!["New-Item".to_string(), "-ItemType Directory".to_string()];
-                if parents {
-                    parts.push("-Force".to_string());
-                }
-                parts.push(format!("-Path {}", format_path(self.shell_kind, &target)));
-                join_command(parts)
-            }
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("mkdir")
+                .flag_if(parents, "p")
+                .value(format_path(ShellKind::Unix, &target))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("New-Item")
+                .flag("ItemType")
+                .value("Directory")
+                .flag_if(parents, "Force")
+                .named("Path", format_path(ShellKind::Windows, &target))
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -210,28 +207,18 @@ where
         self.ensure_mutation_target_within_workspace(&target)?;
 
         let command = match self.shell_kind {
-            ShellKind::Unix => {
-                let mut parts = vec!["rm".to_string()];
-                if recursive {
-                    parts.push("-r".to_string());
-                }
-                if force {
-                    parts.push("-f".to_string());
-                }
-                parts.push(format_path(self.shell_kind, &target));
-                join_command(parts)
-            }
-            ShellKind::Windows => {
-                let mut parts = vec!["Remove-Item".to_string()];
-                if recursive {
-                    parts.push("-Recurse".to_string());
-                }
-                if force {
-                    parts.push("-Force".to_string());
-                }
-                parts.push(format!("-Path {}", format_path(self.shell_kind, &target)));
-                join_command(parts)
-            }
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("rm")
+                .flag_if(recursive, "r")
+                .flag_if(force, "f")
+                .value(format_path(ShellKind::Unix, &target))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Remove-Item")
+                .flag_if(recursive, "Recurse")
+                .flag_if(force, "Force")
+                .named("Path", format_path(ShellKind::Windows, &target))
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -251,26 +238,18 @@ where
         self.ensure_mutation_target_within_workspace(&dest_path)?;
 
         let command = match self.shell_kind {
-            ShellKind::Unix => {
-                let mut parts = vec!["cp".to_string()];
-                if recursive {
-                    parts.push("-r".to_string());
-                }
-                parts.push(format_path(self.shell_kind, &source_path));
-                parts.push(format_path(self.shell_kind, &dest_path));
-                join_command(parts)
-            }
-            ShellKind::Windows => {
-                let mut parts = vec![
-                    "Copy-Item".to_string(),
-                    format!("-Path {}", format_path(self.shell_kind, &source_path)),
-                    format!("-Destination {}", format_path(self.shell_kind, &dest_path)),
-                ];
-                if recursive {
-                    parts.push("-Recurse".to_string());
-                }
-                join_command(parts)
-            }
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("cp")
+                .flag_if(recursive, "r")
+                .value(format_path(ShellKind::Unix, &source_path))
+                .value(format_path(ShellKind::Unix, &dest_path))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Copy-Item")
+                .named("Path", format_path(ShellKind::Windows, &source_path))
+                .named("Destination", format_path(ShellKind::Windows, &dest_path))
+                .flag_if(recursive, "Recurse")
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -290,16 +269,16 @@ where
         self.ensure_mutation_target_within_workspace(&dest_path)?;
 
         let command = match self.shell_kind {
-            ShellKind::Unix => format!(
-                "mv {} {}",
-                format_path(self.shell_kind, &source_path),
-                format_path(self.shell_kind, &dest_path)
-            ),
-            ShellKind::Windows => join_command(vec![
-                "Move-Item".to_string(),
-                format!("-Path {}", format_path(self.shell_kind, &source_path)),
-                format!("-Destination {}", format_path(self.shell_kind, &dest_path)),
-            ]),
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("mv")
+                .value(format_path(ShellKind::Unix, &source_path))
+                .value(format_path(ShellKind::Unix, &dest_path))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Move-Item")
+                .named("Path", format_path(ShellKind::Windows, &source_path))
+                .named("Destination", format_path(ShellKind::Windows, &dest_path))
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -320,27 +299,20 @@ where
             .unwrap_or_else(|| self.working_dir.clone());
 
         let command = match self.shell_kind {
-            ShellKind::Unix => {
-                let mut parts = vec!["grep".to_string(), "-n".to_string()];
-                if recursive {
-                    parts.push("-r".to_string());
-                }
-                parts.push(format_pattern(self.shell_kind, pattern));
-                parts.push(format_path(self.shell_kind, &target));
-                join_command(parts)
-            }
-            ShellKind::Windows => {
-                let mut parts = vec![
-                    "Select-String".to_string(),
-                    format!("-Pattern {}", format_pattern(self.shell_kind, pattern)),
-                    format!("-Path {}", format_path(self.shell_kind, &target)),
-                    "-SimpleMatch".to_string(),
-                ];
-                if recursive {
-                    parts.push("-Recurse".to_string());
-                }
-                join_command(parts)
-            }
+            ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
+                .verb("grep")
+                .flag("n")
+                .flag_if(recursive, "r")
+                .value(format_pattern(ShellKind::Unix, pattern))
+                .value(format_path(ShellKind::Unix, &target))
+                .build(),
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
+                .verb("Select-String")
+                .named("Pattern", format_pattern(ShellKind::Windows, pattern))
+                .named("Path", format_path(ShellKind::Windows, &target))
+                .value("-SimpleMatch")
+                .flag_if(recursive, "Recurse")
+                .build(),
         };
 
         let invocation = CommandInvocation::new(
@@ -482,6 +454,68 @@ fn format_pattern(shell: ShellKind, pattern: &str) -> String {
     match shell {
         ShellKind::Unix => escape(pattern.into()).into_owned(),
         ShellKind::Windows => format!("'{}'", pattern.replace('\'', "''")),
+    }
+}
+
+/// Fluent builder for shell-aware command strings.
+///
+/// `ShellKind::Unix` follows POSIX conventions (flags prefixed with `-`,
+/// arguments are positional). `ShellKind::Windows` targets PowerShell,
+/// which uses named switches in the form `-Name value`.
+struct ShellCommand {
+    shell: ShellKind,
+    parts: Vec<String>,
+}
+
+impl ShellCommand {
+    fn new(shell: ShellKind) -> Self {
+        Self {
+            shell,
+            parts: Vec::with_capacity(6),
+        }
+    }
+
+    /// Append the command verb (first token).
+    fn verb(mut self, name: &str) -> Self {
+        self.parts.push(name.to_string());
+        self
+    }
+
+    /// Append a `-Name` flag unconditionally.
+    fn flag(mut self, name: &str) -> Self {
+        self.parts.push(format!("-{}", name));
+        self
+    }
+
+    /// Append a `-Name` flag only if `condition` holds.
+    fn flag_if(mut self, condition: bool, name: &str) -> Self {
+        if condition {
+            self.parts.push(format!("-{}", name));
+        }
+        self
+    }
+
+    /// Append a named parameter with a value. On Unix, the `name` is ignored
+    /// and the value is added as a positional argument. On Windows, the
+    /// pair is rendered as `-Name value`.
+    fn named(mut self, name: &str, value: impl Into<String>) -> Self {
+        let v = value.into();
+        let token = match self.shell {
+            ShellKind::Unix => v,
+            ShellKind::Windows => format!("-{} {}", name, v),
+        };
+        self.parts.push(token);
+        self
+    }
+
+    /// Append a positional value rendered the same way on both shells.
+    fn value(mut self, value: impl Into<String>) -> Self {
+        self.parts.push(value.into());
+        self
+    }
+
+    fn build(self) -> String {
+        join_command(self.parts)
     }
 }
 

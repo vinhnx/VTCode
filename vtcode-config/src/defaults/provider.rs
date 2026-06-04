@@ -16,45 +16,8 @@ static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(Vec::new);
 static CONFIG_DEFAULTS: Lazy<RwLock<Arc<dyn ConfigDefaultsProvider>>> =
     Lazy::new(|| RwLock::new(Arc::new(DefaultConfigDefaults)));
 
-#[cfg(test)]
-mod test_env_overrides {
-    use hashbrown::HashMap;
-    use std::sync::{LazyLock, Mutex};
-
-    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
-
-    pub(super) fn get(key: &str) -> Option<Option<String>> {
-        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
-    }
-
-    pub(super) fn set(key: &str, value: Option<&str>) {
-        if let Ok(mut map) = OVERRIDES.lock() {
-            map.insert(key.to_string(), value.map(ToString::to_string));
-        }
-    }
-
-    pub(super) fn restore(key: &str, previous: Option<Option<String>>) {
-        if let Ok(mut map) = OVERRIDES.lock() {
-            match previous {
-                Some(value) => {
-                    map.insert(key.to_string(), value);
-                }
-                None => {
-                    map.remove(key);
-                }
-            }
-        }
-    }
-}
-
 fn read_env_var(key: &str) -> Option<String> {
-    #[cfg(test)]
-    if let Some(override_value) = test_env_overrides::get(key) {
-        return override_value;
-    }
-
-    std::env::var(key).ok()
+    crate::env_helpers::read_env_var(key)
 }
 
 /// Provides access to filesystem and syntax defaults used by the configuration
@@ -383,12 +346,12 @@ mod tests {
     where
         F: FnOnce(),
     {
-        let previous = super::test_env_overrides::get(key);
-        super::test_env_overrides::set(key, value);
+        let previous = crate::env_helpers::test_env_overrides::get(key);
+        crate::env_helpers::test_env_overrides::set(key, value);
 
         f();
 
-        super::test_env_overrides::restore(key, previous);
+        crate::env_helpers::test_env_overrides::restore(key, previous);
     }
 
     #[test]

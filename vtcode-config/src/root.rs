@@ -464,7 +464,7 @@ fn default_notifications_max_identical_in_window() -> u32 {
 }
 
 fn env_bool_var(name: &str) -> Option<bool> {
-    read_env_var(name).and_then(|v| {
+    crate::env_helpers::read_env_var(name).and_then(|v| {
         let normalized = v.trim().to_ascii_lowercase();
         match normalized.as_str() {
             "1" | "true" | "yes" | "on" => Some(true),
@@ -475,7 +475,7 @@ fn env_bool_var(name: &str) -> Option<bool> {
 }
 
 fn env_u8_var(name: &str) -> Option<u8> {
-    read_env_var(name)
+    crate::env_helpers::read_env_var(name)
         .and_then(|value| value.trim().parse::<u8>().ok())
         .map(clamp_fullscreen_scroll_speed)
 }
@@ -553,54 +553,6 @@ impl Default for UiConfig {
     }
 }
 
-fn read_env_var(name: &str) -> Option<String> {
-    #[cfg(test)]
-    if let Some(override_value) = test_env_overrides::get(name) {
-        return override_value;
-    }
-
-    std::env::var(name).ok()
-}
-
-#[cfg(test)]
-mod test_env_overrides {
-    use std::collections::HashMap;
-    use std::sync::{Mutex, OnceLock};
-
-    static ENV_OVERRIDES: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
-
-    fn overrides() -> &'static Mutex<HashMap<String, Option<String>>> {
-        ENV_OVERRIDES.get_or_init(|| Mutex::new(HashMap::new()))
-    }
-
-    pub(super) fn get(name: &str) -> Option<Option<String>> {
-        overrides()
-            .lock()
-            .expect("env overrides lock poisoned")
-            .get(name)
-            .cloned()
-    }
-
-    pub(super) fn set(name: &str, value: Option<&str>) {
-        overrides()
-            .lock()
-            .expect("env overrides lock poisoned")
-            .insert(name.to_string(), value.map(ToOwned::to_owned));
-    }
-
-    pub(super) fn restore(name: &str, previous: Option<Option<String>>) {
-        let mut guard = overrides().lock().expect("env overrides lock poisoned");
-        match previous {
-            Some(value) => {
-                guard.insert(name.to_string(), value);
-            }
-            None => {
-                guard.remove(name);
-            }
-        }
-    }
-}
-
 /// Chat configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -636,10 +588,10 @@ mod tests {
     where
         F: FnOnce(),
     {
-        let previous = test_env_overrides::get(key);
-        test_env_overrides::set(key, value);
+        let previous = crate::env_helpers::test_env_overrides::get(key);
+        crate::env_helpers::test_env_overrides::set(key, value);
         f();
-        test_env_overrides::restore(key, previous);
+        crate::env_helpers::test_env_overrides::restore(key, previous);
     }
 
     #[test]

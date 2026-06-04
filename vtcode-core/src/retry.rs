@@ -1,5 +1,7 @@
 //! Shared retry policy and classification helpers for VT Code.
 
+use std::future::Future;
+use std::result::Result as StdResult;
 use std::time::Duration;
 
 use crate::config::constants::tools;
@@ -275,6 +277,141 @@ pub enum RetryStep {
     },
 }
 
+/// Lifecycle event emitted by [`run_with_retry`] so callers can attach
+/// logging, metrics, or stats updates without re-implementing the loop.
+///
+/// `category_was_retryable` is provided alongside `GiveUp` and `Backoff`
+/// because call sites frequently need to distinguish "non-retryable
+/// category" from "retryable category, budget exhausted" — the distinction
+/// is otherwise invisible once `step_for_vtcode_error` collapses both
+/// into `GiveUp`.
+#[derive(Debug)]
+pub enum RetryEvent<'a> {
+    /// An attempt is about to start. `attempt` is 0-indexed.
+    AttemptStart { attempt: u32, max_attempts: u32 },
+    /// The operation succeeded on the given attempt.
+    Success { attempt: u32 },
+    /// The policy decided to give up and surface `error` immediately.
+    GiveUp {
+        attempt: u32,
+        error: &'a VtCodeError,
+        decision: &'a RetryDecision,
+        category_was_retryable: bool,
+    },
+    /// The policy decided to back off and retry. The driver will sleep
+    /// for `delay` before invoking the operation again.
+    Backoff {
+        attempt: u32,
+        error: &'a VtCodeError,
+        decision: &'a RetryDecision,
+        delay: Duration,
+        category_was_retryable: bool,
+    },
+    /// All attempts were exhausted. `last_error` is the most recent
+    /// error captured from a `Backoff` step.
+    Exhausted { last_error: Option<&'a VtCodeError> },
+}
+
+/// Drive a retry loop per `policy`, invoking `on_event` for each
+/// lifecycle event. Returns the first successful result, or the final
+/// error if the policy gives up or all attempts are exhausted.
+///
+/// `state` is reborrowed mutably and passed to each callback on every
+/// invocation, so callers can use it to thread a `&mut self` (or any
+/// other mutable context) through the loop without resorting to
+/// `RefCell` or split borrows. The `operation` callback must return a
+/// boxed future so the helper can `await` it without tying its lifetime
+/// to the closure's own borrow of `state`.
+///
+/// The returned future is `Send` so it can be passed to `tokio::spawn`.
+///
+/// `synthesize_exhausted_error` is invoked only in the (degenerate)
+/// case where the loop completes without ever recording a `Backoff`
+/// error. The closure receives the `&RetryPolicy` so it can attach
+/// site-specific context (e.g. `policy.max_attempts`) without having
+/// to capture the policy in its environment — which is exactly the
+/// pattern that conflicts with `&mut state`.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_retry<T, E, S, F, OnEvent, Synthesize>(
+    policy: &RetryPolicy,
+    state: &mut S,
+    mut on_event: OnEvent,
+    mut operation: F,
+    synthesize_exhausted_error: Synthesize,
+) -> crate::error::Result<T>
+where
+    F: for<'a> FnMut(
+        &'a mut S,
+    ) -> std::pin::Pin<Box<dyn Future<Output = StdResult<T, E>> + Send + 'a>>,
+    E: Into<VtCodeError>,
+    OnEvent: FnMut(&mut S, RetryEvent<'_>),
+    Synthesize: FnOnce(&RetryPolicy) -> VtCodeError,
+{
+    use tokio::time::sleep;
+
+    let mut last_error: Option<VtCodeError> = None;
+    for attempt in 0..policy.max_attempts {
+        on_event(
+            state,
+            RetryEvent::AttemptStart {
+                attempt,
+                max_attempts: policy.max_attempts,
+            },
+        );
+        match operation(state).await {
+            Ok(value) => {
+                on_event(state, RetryEvent::Success { attempt });
+                return Ok(value);
+            }
+            Err(err) => {
+                let err: VtCodeError = err.into();
+                let category_was_retryable = err.category.is_retryable();
+                let step = policy.step_for_vtcode_error(err, attempt, None);
+                match step {
+                    RetryStep::GiveUp { decision, error } => {
+                        on_event(
+                            state,
+                            RetryEvent::GiveUp {
+                                attempt,
+                                error: &error,
+                                decision: &decision,
+                                category_was_retryable,
+                            },
+                        );
+                        return Err(error);
+                    }
+                    RetryStep::Backoff {
+                        delay,
+                        decision,
+                        error,
+                    } => {
+                        on_event(
+                            state,
+                            RetryEvent::Backoff {
+                                attempt,
+                                error: &error,
+                                decision: &decision,
+                                delay,
+                                category_was_retryable,
+                            },
+                        );
+                        last_error = Some(error);
+                        sleep(delay).await;
+                    }
+                }
+            }
+        }
+    }
+    let final_error = last_error.unwrap_or_else(|| synthesize_exhausted_error(policy));
+    on_event(
+        state,
+        RetryEvent::Exhausted {
+            last_error: Some(&final_error),
+        },
+    );
+    Err(final_error)
+}
+
 fn llm_metadata(error: &LLMError) -> Option<&LLMErrorMetadata> {
     match error {
         LLMError::Authentication { metadata, .. }
@@ -500,5 +637,75 @@ mod tests {
         let decision = policy.decision_for_vtcode_error(&err, 0, Some(tools::RUN_PTY_CMD));
         assert_eq!(decision.category, ErrorCategory::Timeout);
         assert!(!decision.retryable);
+    }
+
+    #[tokio::test]
+    async fn run_with_retry_returns_first_success() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let policy =
+            RetryPolicy::from_retries(3, Duration::from_millis(0), Duration::from_millis(1), 2.0);
+        let attempts = Arc::new(AtomicU32::new(0));
+        let attempts_for_op = attempts.clone();
+        let result: crate::error::Result<String> = run_with_retry(
+            &policy,
+            &mut (),
+            |_: &mut (), _| {},
+            |_| {
+                let attempts = attempts_for_op.clone();
+                Box::pin(async move {
+                    let n = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                    if n < 2 {
+                        Err(VtCodeError::network(
+                            crate::error::ErrorCode::ConnectionFailed,
+                            "transient",
+                        ))
+                    } else {
+                        Ok("ok".to_string())
+                    }
+                })
+            },
+            |_: &RetryPolicy| {
+                VtCodeError::execution(crate::error::ErrorCode::ToolExecutionFailed, "exhausted")
+            },
+        )
+        .await;
+        assert_eq!(result.unwrap(), "ok");
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn run_with_retry_surfaces_give_up_immediately() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let policy =
+            RetryPolicy::from_retries(5, Duration::from_millis(0), Duration::from_millis(1), 2.0);
+        let attempts = Arc::new(AtomicU32::new(0));
+        let attempts_for_op = attempts.clone();
+        let result: crate::error::Result<String> = run_with_retry(
+            &policy,
+            &mut (),
+            |_: &mut (), _| {},
+            |_| {
+                let attempts = attempts_for_op.clone();
+                Box::pin(async move {
+                    attempts.fetch_add(1, Ordering::SeqCst);
+                    Err::<String, _>(VtCodeError::input(
+                        crate::error::ErrorCode::InvalidArgument,
+                        "bad input",
+                    ))
+                })
+            },
+            |_: &RetryPolicy| {
+                VtCodeError::execution(crate::error::ErrorCode::ToolExecutionFailed, "exhausted")
+            },
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            1,
+            "GiveUp should short-circuit retries"
+        );
     }
 }

@@ -54,6 +54,12 @@ mod shared {
         }
         Ok(())
     }
+
+    /// Wrap an ACP-layer error with a human-readable context prefix.
+    /// Preserves the prior `<context>: <error>` message format.
+    pub fn wrap<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> anyhow::Result<T> {
+        result.map_err(|e| anyhow::anyhow!("{}: {}", context, e))
+    }
 }
 
 /// ACP Inter-Agent Communication Tool
@@ -122,16 +128,20 @@ impl Tool for AcpTool {
         let client = shared::check_client_initialized(&client)?;
 
         match method {
-            "sync" => client
-                .call_sync(remote_agent_id, action.into(), call_args)
-                .await
-                .map_err(|e| anyhow::anyhow!("ACP call failed: {}", e)),
+            "sync" => shared::wrap(
+                client
+                    .call_sync(remote_agent_id, action.into(), call_args)
+                    .await,
+                "ACP call failed",
+            ),
 
             "async" => {
-                let message_id = client
-                    .call_async(remote_agent_id, action.into(), call_args)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("ACP async call failed: {}", e))?;
+                let message_id = shared::wrap(
+                    client
+                        .call_async(remote_agent_id, action.into(), call_args)
+                        .await,
+                    "ACP async call failed",
+                )?;
 
                 Ok(json!({
                     "message_id": message_id,
@@ -193,11 +203,8 @@ impl Tool for AcpDiscoveryTool {
 
         match mode {
             "list_all" => {
-                let agents = client
-                    .registry()
-                    .list_all()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to list agents: {}", e))?;
+                let agents =
+                    shared::wrap(client.registry().list_all().await, "Failed to list agents")?;
 
                 Ok(json!({
                     "agents": agents,
@@ -206,11 +213,10 @@ impl Tool for AcpDiscoveryTool {
             }
 
             "list_online" => {
-                let agents = client
-                    .registry()
-                    .list_online()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to list online agents: {}", e))?;
+                let agents = shared::wrap(
+                    client.registry().list_online().await,
+                    "Failed to list online agents",
+                )?;
 
                 Ok(json!({
                     "agents": agents,
@@ -221,11 +227,10 @@ impl Tool for AcpDiscoveryTool {
             "by_capability" => {
                 let capability = shared::get_required_field(obj, "capability", None)?;
 
-                let agents = client
-                    .registry()
-                    .find_by_capability(capability)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Discovery failed: {}", e))?;
+                let agents = shared::wrap(
+                    client.registry().find_by_capability(capability).await,
+                    "Discovery failed",
+                )?;
 
                 Ok(json!({
                     "capability": capability,
@@ -237,11 +242,8 @@ impl Tool for AcpDiscoveryTool {
             "by_id" => {
                 let agent_id = shared::get_required_field(obj, "agent_id", None)?;
 
-                let agent = client
-                    .registry()
-                    .find(agent_id)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Agent not found: {}", e))?;
+                let agent =
+                    shared::wrap(client.registry().find(agent_id).await, "Agent not found")?;
 
                 Ok(json!(agent))
             }
@@ -286,15 +288,12 @@ impl Tool for AcpHealthTool {
         let client = self.client.read().await;
         let client = shared::check_client_initialized(&client)?;
 
-        let is_online = client
-            .ping(agent_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Health check failed: {}", e))?;
+        let is_online = shared::wrap(client.ping(agent_id).await, "Health check failed")?;
 
         Ok(json!({
             "agent_id": agent_id,
             "online": is_online,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": crate::compat::current_timestamp_rfc3339(),
         }))
     }
 }

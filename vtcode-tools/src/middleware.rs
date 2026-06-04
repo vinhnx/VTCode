@@ -175,14 +175,18 @@ pub struct MetricsMiddleware {
 }
 
 impl MetricsMiddleware {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
+    fn new_inner() -> Self {
+        Self {
             total_calls: Arc::new(AtomicU64::new(0)),
             successful_calls: Arc::new(AtomicU64::new(0)),
             failed_calls: Arc::new(AtomicU64::new(0)),
             total_duration_ms: Arc::new(AtomicU64::new(0)),
             cache_hits: Arc::new(AtomicU64::new(0)),
-        })
+        }
+    }
+
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::new_inner())
     }
 
     pub async fn snapshot(&self) -> MetricsSnapshot {
@@ -223,13 +227,7 @@ impl Middleware for MetricsMiddleware {
 
 impl Default for MetricsMiddleware {
     fn default() -> Self {
-        Self {
-            total_calls: Arc::new(AtomicU64::new(0)),
-            successful_calls: Arc::new(AtomicU64::new(0)),
-            failed_calls: Arc::new(AtomicU64::new(0)),
-            total_duration_ms: Arc::new(AtomicU64::new(0)),
-            cache_hits: Arc::new(AtomicU64::new(0)),
-        }
+        Self::new_inner()
     }
 }
 

@@ -541,18 +541,7 @@ impl AgentRunner {
     }
 
     fn fallback_verify_commands(&self) -> Vec<String> {
-        if self._workspace.join("Cargo.toml").exists() {
-            return vec!["cargo check".to_string()];
-        }
-        if self._workspace.join("package.json").exists() {
-            return vec!["npm test".to_string()];
-        }
-        if self._workspace.join("pyproject.toml").exists()
-            || self._workspace.join("pytest.ini").exists()
-        {
-            return vec!["pytest".to_string()];
-        }
-        Vec::new()
+        super::workspace_detection::infer_default_verify_commands(self._workspace.as_path())
     }
 
     /// Issue a tool-less, single-turn JSON-only request against the active

@@ -1,3 +1,4 @@
+use crate::env_helpers::default_enabled;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -103,24 +104,20 @@ impl Default for IdeContextConfig {
     }
 }
 
-const fn default_enabled() -> bool {
-    true
-}
-
 const fn default_provider_enabled() -> bool {
-    true
+    default_enabled()
 }
 
 const fn default_inject_into_prompt() -> bool {
-    true
+    default_enabled()
 }
 
 const fn default_show_in_tui() -> bool {
-    true
+    default_enabled()
 }
 
 const fn default_include_selection_text() -> bool {
-    true
+    default_enabled()
 }
 
 #[cfg(test)]

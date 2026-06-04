@@ -1,3 +1,4 @@
+use crate::env_helpers::default_true;
 use serde::{Deserialize, Serialize};
 
 /// Gatekeeper mitigation configuration (macOS only)
@@ -70,11 +71,6 @@ impl Default for SecurityConfig {
             gatekeeper: GatekeeperConfig::default(),
         }
     }
-}
-
-#[inline]
-const fn default_true() -> bool {
-    true
 }
 
 fn default_gatekeeper_auto_clear_paths() -> Vec<String> {

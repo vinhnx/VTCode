@@ -4,6 +4,7 @@
 //! Configuration stored in `~/.vtcode/update.toml`.
 
 use crate::defaults::get_config_dir;
+use crate::env_helpers::default_true;
 use anyhow::{Context, Result};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -102,10 +103,6 @@ impl Default for UpdateConfig {
             auto_rollback: false,
         }
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_check_interval() -> u64 {

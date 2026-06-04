@@ -50,7 +50,6 @@ where
     policy_manager: Option<ToolPolicyManager>,
     policy_path: Option<PathBuf>,
     pty_config: PtyConfig,
-    todo_planning_enabled: bool,
 }
 
 #[cfg(feature = "policies")]
@@ -85,12 +84,6 @@ where
     /// Overrides the PTY configuration applied to the registry.
     pub fn with_pty_config(mut self, config: PtyConfig) -> Self {
         self.pty_config = config;
-        self
-    }
-
-    /// Enables or disables planner-related tooling when registering built-ins.
-    pub fn with_todo_planning(mut self, enabled: bool) -> Self {
-        self.todo_planning_enabled = enabled;
         self
     }
 
@@ -140,8 +133,6 @@ where
                 }
             }
         };
-
-        let _todo_planning_enabled = self.todo_planning_enabled;
 
         Ok(ToolRegistry::new_with_custom_policy_and_config(
             workspace_root,

@@ -34,6 +34,7 @@ pub mod context;
 pub mod core;
 pub mod debug;
 pub mod defaults;
+pub mod env_helpers;
 pub mod hooks;
 pub mod ide_context;
 pub mod loader;

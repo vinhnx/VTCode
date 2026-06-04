@@ -5,7 +5,7 @@
 
 use crate::config::models::ModelId;
 use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
-use crate::retry::{RetryPolicy, RetryStep};
+use crate::retry::{RetryEvent, RetryPolicy, RetryStep};
 use std::future::Future;
 use std::result::Result as StdResult;
 use std::time::{Duration, Instant};
@@ -87,30 +87,27 @@ impl RetryManager {
         let start_time = Instant::now();
         let policy = &self.policy;
         let mut last_error: Option<VtCodeError> = None;
+        let mut observer = RetryObserver {
+            stats: &mut self.stats,
+            operation_name,
+            primary_model,
+            max_attempts: policy.max_attempts,
+        };
 
-        // Try with primary model first
+        // Primary model retry loop — structure kept inline because the
+        // orchestrator's `operation: Fn` cannot be passed to
+        // `run_with_retry` (which requires `FnMut` + `Send` futures).
+        // The `RetryObserver` centralises the bookkeeping so the loop
+        // stays DRY at the observability layer.
         for attempt in 0..policy.max_attempts {
-            self.stats.total_attempts += 1;
-
-            info!(
-                attempt = attempt + 1,
-                max_attempts = policy.max_attempts,
-                operation = operation_name,
-                model = ?primary_model,
-                "retry attempt starting"
-            );
+            observer.observe(RetryEvent::AttemptStart {
+                attempt,
+                max_attempts: policy.max_attempts,
+            });
 
             let err = match operation(*primary_model).await {
                 Ok(result) => {
-                    if attempt > 0 {
-                        self.stats.successful_retries += 1;
-                        info!(
-                            attempt = attempt + 1,
-                            operation = operation_name,
-                            model = ?primary_model,
-                            "operation succeeded after retry"
-                        );
-                    }
+                    observer.observe(RetryEvent::Success { attempt });
                     return Ok(result);
                 }
                 Err(err) => {
@@ -122,34 +119,14 @@ impl RetryManager {
             let category_was_retryable = err.category.is_retryable();
             let step = policy.step_for_vtcode_error(err, attempt, None);
 
-            // Emit the shared "attempt failed" warning once for both arms.
-            let (decision_for_log, error_for_log) = match &step {
-                RetryStep::Backoff {
-                    decision, error, ..
-                }
-                | RetryStep::GiveUp { decision, error } => (decision, error),
-            };
-            warn!(
-                attempt = attempt + 1,
-                max_attempts = policy.max_attempts,
-                operation = operation_name,
-                model = ?primary_model,
-                error = %error_for_log,
-                category = ?decision_for_log.category,
-                "operation attempt failed"
-            );
-
             match step {
                 RetryStep::GiveUp { decision, error } => {
-                    if attempt + 1 == policy.max_attempts && category_was_retryable {
-                        self.stats.failed_retries += 1;
-                    }
-                    warn!(
-                        operation = operation_name,
-                        error = %error,
-                        category = ?decision.category,
-                        "non-retryable error"
-                    );
+                    observer.observe(RetryEvent::GiveUp {
+                        attempt,
+                        error: &error,
+                        decision: &decision,
+                        category_was_retryable,
+                    });
                     return Err(error);
                 }
                 RetryStep::Backoff {
@@ -157,20 +134,14 @@ impl RetryManager {
                     decision,
                     error,
                 } => {
+                    observer.observe(RetryEvent::Backoff {
+                        attempt,
+                        error: &error,
+                        decision: &decision,
+                        delay,
+                        category_was_retryable,
+                    });
                     last_error = Some(error);
-                    self.stats.total_backoff_time += delay;
-                    if attempt + 2 == policy.max_attempts {
-                        self.stats.failed_retries += 1;
-                    }
-
-                    info!(
-                        delay_ms = delay.as_millis() as u64,
-                        next_attempt = attempt + 2,
-                        operation = operation_name,
-                        category = ?decision.category,
-                        "backing off before retry"
-                    );
-
                     sleep(delay).await;
                 }
             }
@@ -194,15 +165,16 @@ impl RetryManager {
                 }
                 Err(err) => {
                     let err: VtCodeError = err.into();
-                    last_error = Some(err.with_context(format!(
+                    let fallback_err = err.with_context(format!(
                         "fallback model '{fallback}' failed for operation '{operation_name}'"
-                    )));
+                    ));
                     warn!(
                         operation = operation_name,
                         model = ?fallback,
-                        error = %last_error.as_ref().expect("fallback error should exist"),
+                        error = %fallback_err,
                         "fallback model failed"
                     );
+                    last_error = Some(fallback_err);
                 }
             }
         }
@@ -229,6 +201,94 @@ impl RetryManager {
                 "primary model: {primary_model}, fallback model: {fallback_model:?}"
             ))
         }))
+    }
+}
+
+/// Lightweight observer that updates [`RetryStats`] and emits tracing
+/// events for each retry lifecycle event. Used by
+/// [`RetryManager::execute_with_retry`] so the bookkeeping stays
+/// co-located with the retry decision rather than scattered across
+/// the loop body.
+struct RetryObserver<'a> {
+    stats: &'a mut RetryStats,
+    operation_name: &'a str,
+    primary_model: &'a ModelId,
+    max_attempts: u32,
+}
+
+impl RetryObserver<'_> {
+    fn observe(&mut self, event: RetryEvent<'_>) {
+        match event {
+            RetryEvent::AttemptStart { attempt, .. } => {
+                self.stats.total_attempts += 1;
+                info!(
+                    attempt = attempt + 1,
+                    max_attempts = self.max_attempts,
+                    operation = self.operation_name,
+                    model = ?self.primary_model,
+                    "retry attempt starting"
+                );
+            }
+            RetryEvent::Success { attempt } if attempt > 0 => {
+                self.stats.successful_retries += 1;
+                info!(
+                    attempt = attempt + 1,
+                    operation = self.operation_name,
+                    model = ?self.primary_model,
+                    "operation succeeded after retry"
+                );
+            }
+            RetryEvent::Success { .. } => {}
+            RetryEvent::GiveUp {
+                attempt,
+                error,
+                decision,
+                category_was_retryable,
+            } => {
+                warn!(
+                    attempt = attempt + 1,
+                    max_attempts = self.max_attempts,
+                    operation = self.operation_name,
+                    model = ?self.primary_model,
+                    error = %error,
+                    category = ?decision.category,
+                    retryable = category_was_retryable,
+                    "non-retryable error, giving up"
+                );
+                if attempt + 1 == self.max_attempts && category_was_retryable {
+                    self.stats.failed_retries += 1;
+                }
+            }
+            RetryEvent::Backoff {
+                attempt,
+                error,
+                decision,
+                delay,
+                ..
+            } => {
+                warn!(
+                    attempt = attempt + 1,
+                    max_attempts = self.max_attempts,
+                    operation = self.operation_name,
+                    model = ?self.primary_model,
+                    error = %error,
+                    category = ?decision.category,
+                    "operation attempt failed"
+                );
+                self.stats.total_backoff_time += delay;
+                if attempt + 2 == self.max_attempts {
+                    self.stats.failed_retries += 1;
+                }
+                info!(
+                    delay_ms = delay.as_millis() as u64,
+                    next_attempt = attempt + 2,
+                    operation = self.operation_name,
+                    category = ?decision.category,
+                    "backing off before retry"
+                );
+            }
+            RetryEvent::Exhausted { .. } => {}
+        }
     }
 }
 

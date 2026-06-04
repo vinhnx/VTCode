@@ -1,3 +1,4 @@
+use crate::env_helpers::default_enabled;
 use hashbrown::HashMap;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -734,7 +735,7 @@ fn default_experimental_use_rmcp_client() -> bool {
 }
 
 fn default_provider_enabled() -> bool {
-    true
+    default_enabled()
 }
 
 fn default_provider_max_concurrent() -> usize {

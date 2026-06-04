@@ -1,3 +1,4 @@
+use crate::env_helpers::default_enabled;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -203,9 +204,6 @@ impl ContextFeaturesConfig {
     }
 }
 
-fn default_enabled() -> bool {
-    true
-}
 fn default_max_entries() -> usize {
     12
 }

@@ -1,3 +1,4 @@
+use crate::env_helpers::default_true;
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -60,10 +61,6 @@ impl Default for TelemetryConfig {
             trajectory_max_size_mb: default_trajectory_max_size_mb(),
         }
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_interval() -> u64 {

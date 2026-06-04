@@ -26,9 +26,7 @@ use crate::llm::AnyClient;
 use crate::llm::client::ProviderClientAdapter;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider as uni_provider;
-use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
-use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::ToolRegistry;
 
 use anyhow::{Context, Result, anyhow};
@@ -58,6 +56,7 @@ mod tool_exec;
 mod tool_execution_guard;
 mod types;
 mod validation;
+mod workspace_detection;
 
 #[cfg(test)]
 mod tests;
@@ -314,22 +313,12 @@ impl AgentRunner {
             .collect::<Vec<_>>();
         let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
         prompt_context.load_available_skills();
-        let mut system_prompt = compose_system_instruction_text(
+        let system_prompt = helpers::compose_system_prompt_with_appendix(
             workspace.as_path(),
-            Some(session_config.effective()),
-            Some(&prompt_context),
+            session_config.effective(),
+            &prompt_context,
         )
-        .await;
-        let mut appendix_config = session_config.effective().agent.clone();
-        if !session_config.effective().memories_enabled() {
-            appendix_config.persistent_memory.enabled = false;
-        }
-        if let Some(appendix) =
-            build_instruction_appendix(&appendix_config, workspace.as_path()).await
-        {
-            system_prompt.push_str("\n\n# INSTRUCTIONS\n");
-            system_prompt.push_str(&appendix);
-        }
+        .await?;
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
         let bootstrap_messages = bootstrap.messages.clone();
         let mut bootstrap = bootstrap;

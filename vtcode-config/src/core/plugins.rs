@@ -1,3 +1,4 @@
+use crate::env_helpers::default_enabled;
 use serde::{Deserialize, Serialize};
 
 /// Trust model for third-party plugins.
@@ -54,8 +55,4 @@ impl Default for PluginRuntimeConfig {
             auto_reload: true,
         }
     }
-}
-
-fn default_enabled() -> bool {
-    true
 }

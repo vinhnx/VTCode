@@ -1,3 +1,10 @@
+use std::path::Path;
+
+use crate::config::VTCodeConfig;
+use crate::project_doc::build_instruction_appendix;
+use crate::prompts::PromptContext;
+use crate::prompts::system::compose_system_instruction_text;
+use anyhow::Result;
 use serde_json::Value;
 
 pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
@@ -31,6 +38,33 @@ pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
         .ok()?;
     parsed.as_object()?;
     Some(parsed)
+}
+
+/// Compose the system prompt for a workspace using the configured prompt
+/// context, then optionally append an instruction appendix derived from
+/// `AGENTS.md` and `.vtcode/rules/` files.
+///
+/// The persistent-memory section of the appendix is disabled when
+/// `config.memories_enabled()` returns `false` so the resulting prompt stays
+/// consistent with the configured memory policy.
+pub(super) async fn compose_system_prompt_with_appendix(
+    workspace: &Path,
+    config: &VTCodeConfig,
+    prompt_context: &PromptContext,
+) -> Result<String> {
+    let mut system_prompt =
+        compose_system_instruction_text(workspace, Some(config), Some(prompt_context)).await;
+
+    let mut appendix_config = config.agent.clone();
+    if !config.memories_enabled() {
+        appendix_config.persistent_memory.enabled = false;
+    }
+    if let Some(appendix) = build_instruction_appendix(&appendix_config, workspace).await {
+        system_prompt.push_str("\n\n# INSTRUCTIONS\n");
+        system_prompt.push_str(&appendix);
+    }
+
+    Ok(system_prompt)
 }
 
 #[cfg(test)]

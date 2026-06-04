@@ -30,8 +30,6 @@ use crate::llm::provider::{
     supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
-use crate::project_doc::build_instruction_appendix;
-use crate::prompts::system::compose_system_instruction_text;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections,
     append_runtime_tool_prompt_sections, upsert_harness_limits_section,
@@ -164,9 +162,9 @@ impl AgentRunner {
         &self,
         prompt_tools: Arc<Vec<ToolDefinition>>,
         is_simple_task: bool,
-    ) -> String {
+    ) -> Result<String> {
         if !is_simple_task {
-            return self.system_prompt.clone();
+            return Ok(self.system_prompt.clone());
         }
 
         let mut config = self.config().clone();
@@ -179,24 +177,14 @@ impl AgentRunner {
         );
         prompt_context.load_available_skills();
 
-        let mut prompt = compose_system_instruction_text(
+        let prompt = super::helpers::compose_system_prompt_with_appendix(
             self._workspace.as_path(),
-            Some(&config),
-            Some(&prompt_context),
+            &config,
+            &prompt_context,
         )
-        .await;
-        let mut appendix_config = config.agent.clone();
-        if !config.memories_enabled() {
-            appendix_config.persistent_memory.enabled = false;
-        }
-        if let Some(appendix) =
-            build_instruction_appendix(&appendix_config, self._workspace.as_path()).await
-        {
-            prompt.push_str("\n\n# INSTRUCTIONS\n");
-            prompt.push_str(&appendix);
-        }
+        .await?;
 
-        prompt
+        Ok(prompt)
     }
 
     async fn build_runtime_prompt_bundle(
@@ -210,7 +198,7 @@ impl AgentRunner {
             .unwrap_or_else(|| Arc::new(Vec::new()));
         let mut system_prompt = self
             .compose_task_system_prompt(prompt_tools, is_simple_task)
-            .await;
+            .await?;
 
         let plan_mode = self.tool_registry.is_plan_mode();
         let request_user_input_enabled =

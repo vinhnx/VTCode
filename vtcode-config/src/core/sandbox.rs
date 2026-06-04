@@ -6,6 +6,7 @@
 //! - **Policy**: What can code touch (files, network, devices, syscalls)
 //! - **Lifecycle**: What survives between runs
 
+use crate::env_helpers::default_true;
 use serde::{Deserialize, Serialize};
 
 /// Sandbox configuration
@@ -345,11 +346,6 @@ impl Default for MicroVMSandboxConfig {
 #[inline]
 const fn default_false() -> bool {
     false
-}
-
-#[inline]
-const fn default_true() -> bool {
-    true
 }
 
 #[cfg(test)]

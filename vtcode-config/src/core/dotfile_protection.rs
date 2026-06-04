@@ -3,6 +3,7 @@
 //! Provides comprehensive protection for hidden configuration files (dotfiles)
 //! to prevent automatic or implicit modifications by AI agents or automated tools.
 
+use crate::env_helpers::default_true;
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 
@@ -242,11 +243,6 @@ fn default_blocked_operations() -> Vec<String> {
         "linting".into(),
         "auto_fix".into(),
     ]
-}
-
-#[inline]
-const fn default_true() -> bool {
-    true
 }
 
 #[inline]
