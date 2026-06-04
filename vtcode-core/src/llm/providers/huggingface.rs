@@ -7,7 +7,6 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
     LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -23,9 +22,9 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Value, json};
 
 use super::common::{
-    assistant_interleaved_history_text, is_minimax_m2_model, map_finish_reason_common,
-    normalize_reasoning_detail_objects, override_base_url, parse_response_openai_format,
-    resolve_model,
+    assistant_interleaved_history_text, ensure_model, impl_llm_client, is_minimax_m2_model,
+    map_finish_reason_common, normalize_reasoning_detail_objects, override_base_url,
+    parse_response_openai_format, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -887,10 +886,7 @@ impl LLMProvider for HuggingFaceProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+        let model = ensure_model(&mut request, &self.model);
 
         self.apply_model_defaults(&mut request);
         self.validate_request(&request)?;
@@ -921,10 +917,7 @@ impl LLMProvider for HuggingFaceProvider {
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+        let model = ensure_model(&mut request, &self.model);
 
         self.apply_model_defaults(&mut request);
         self.validate_request(&request)?;
@@ -1144,21 +1137,7 @@ impl HuggingFaceProvider {
     }
 }
 
-#[async_trait]
-impl LLMClient for HuggingFaceProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
-            model: self.model.clone(),
-            ..Default::default()
-        };
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(HuggingFaceProvider);
 
 #[cfg(test)]
 mod tests {

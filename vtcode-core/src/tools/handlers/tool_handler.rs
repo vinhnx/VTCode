@@ -381,6 +381,19 @@ impl ToolCallError {
     }
 }
 
+impl From<super::sandboxing::ToolError> for ToolCallError {
+    fn from(err: super::sandboxing::ToolError) -> Self {
+        match err {
+            super::sandboxing::ToolError::Rejected(msg) => ToolCallError::Rejected(msg),
+            super::sandboxing::ToolError::Codex(e) => ToolCallError::Internal(e),
+            super::sandboxing::ToolError::SandboxDenied(msg) => {
+                ToolCallError::Rejected(format!("Sandbox denied: {}", msg))
+            }
+            super::sandboxing::ToolError::Timeout(ms) => ToolCallError::Timeout(ms),
+        }
+    }
+}
+
 /// Core trait for tool handlers (from Codex)
 ///
 /// This trait provides a modular approach to tool execution, separating

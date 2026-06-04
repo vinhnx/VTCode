@@ -281,9 +281,7 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let mut request = request;
 
-        if request.model.trim().is_empty() {
-            request.model = self.model.to_string();
-        }
+        crate::llm::providers::common::ensure_model(&mut request, &self.model);
 
         if Self::requires_streaming_responses(&request.model) {
             request.stream = true;

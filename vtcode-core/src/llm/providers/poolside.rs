@@ -1,4 +1,3 @@
-use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
@@ -6,17 +5,15 @@ use serde_json::{Map, Value};
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-};
+use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 
 use super::{
     common::{
-        extract_prompt_cache_settings_default, override_base_url, parse_response_openai_format,
-        resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
-        validate_request_common,
+        ensure_model, extract_prompt_cache_settings_default, impl_llm_client, override_base_url,
+        parse_json_response, parse_response_openai_format, resolve_model,
+        serialize_messages_openai_format, serialize_tools_openai_format,
+        spawn_openai_compatible_stream, validate_supported_models,
     },
     error_handling::handle_openai_http_error,
 };
@@ -268,34 +265,20 @@ impl LLMProvider for PoolsideProvider {
         131_072
     }
 
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let mut request = request;
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_poolside_format(&request)?;
         let response = self.send_request(&payload).await?;
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
 
-        let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
-            message: error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("failed to parse response: {}", e),
-            ),
-            metadata: None,
-        })?;
-
+        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
         self.parse_response(response_json, model)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-
+        ensure_model(&mut request, &self.model);
         self.validate_request(&request)?;
         request.stream = true;
         let model = request.model.clone();
@@ -305,54 +288,13 @@ impl LLMProvider for PoolsideProvider {
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "POOLSIDE_API_KEY").await?;
 
-        let bytes_stream = response.bytes_stream();
-        let (event_tx, event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
-        let tx = event_tx.clone();
-
-        let model_clone = model.clone();
-        tokio::spawn(async move {
-            let mut aggregator =
-                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
-
-            let result = crate::llm::providers::shared::process_openai_stream(
-                bytes_stream,
-                PROVIDER_NAME,
-                model_clone,
-                |value| {
-                    crate::llm::providers::shared::handle_openai_compatible_chunk(
-                        &value,
-                        &mut aggregator,
-                        &tx,
-                        None,
-                        crate::llm::providers::shared::OpenAiDeltaOrder::ContentFirst,
-                    );
-                    Ok(())
-                },
-            )
-            .await;
-
-            match result {
-                Ok(_) => {
-                    let response = aggregator.finalize();
-                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(response),
-                    }));
-                }
-                Err(err) => {
-                    let _ = tx.send(Err(err));
-                }
-            }
-        });
-
-        let stream = try_stream! {
-            let mut receiver = event_rx;
-            while let Some(event) = receiver.recv().await {
-                yield event?;
-            }
-        };
-
-        Ok(Box::pin(stream))
+        Ok(spawn_openai_compatible_stream(
+            response,
+            PROVIDER_NAME,
+            model,
+            None,
+            super::shared::OpenAiDeltaOrder::ContentFirst,
+        ))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -363,28 +305,13 @@ impl LLMProvider for PoolsideProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = models::poolside::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        validate_request_common(
+        validate_supported_models(
             request,
             PROVIDER_NAME,
             PROVIDER_KEY,
-            Some(&supported_models),
+            models::poolside::SUPPORTED_MODELS,
         )
     }
 }
 
-#[async_trait]
-impl LLMClient for PoolsideProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = super::common::make_default_request(prompt, &self.model);
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(PoolsideProvider);

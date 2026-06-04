@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::Value as JsonValue;
 
-const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+pub const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Client for interacting with a local LM Studio instance.
 ///

@@ -11,7 +11,8 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    map_finish_reason_common, parse_response_openai_format, serialize_messages_openai_format,
+    ensure_model, map_finish_reason_common, parse_json_response, parse_response_openai_format,
+    serialize_messages_openai_format, validate_supported_models,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -157,10 +158,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+        let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
@@ -185,17 +183,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
 
         let response =
             handle_openai_http_error(response, self.provider_name, self.api_key_env).await?;
-
-        let response_json: Value = response.json().await.map_err(|error| {
-            let formatted_error = error_display::format_llm_error(
-                self.provider_name,
-                &format!("Failed to parse response: {error}"),
-            );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response_json = parse_json_response(response, self.provider_name).await?;
 
         parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
             response_json,
@@ -207,11 +195,7 @@ impl LLMProvider for OpenCodeCompatibleProvider {
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
-
+        let model = ensure_model(&mut request, &self.model);
         self.validate_request(&request)?;
         request.stream = true;
 
@@ -320,17 +304,11 @@ impl LLMProvider for OpenCodeCompatibleProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = self
-            .supported_models
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        super::common::validate_request_common(
+        validate_supported_models(
             request,
             self.provider_name,
             self.provider_key,
-            Some(&supported_models),
+            self.supported_models,
         )
     }
 }

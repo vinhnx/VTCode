@@ -3,13 +3,12 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::client::LLMClient;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
 use async_trait::async_trait;
 use std::env;
 
 use super::anthropic::AnthropicProvider;
-use super::common::resolve_model;
+use super::common::{ensure_model, impl_llm_client, resolve_model};
 
 pub struct MinimaxProvider {
     inner: AnthropicProvider,
@@ -204,16 +203,12 @@ impl LLMProvider for MinimaxProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
+        ensure_model(&mut request, &self.model);
         self.inner.generate(request).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
+        ensure_model(&mut request, &self.model);
         self.inner.stream(request).await
     }
 
@@ -229,21 +224,7 @@ impl LLMProvider for MinimaxProvider {
     }
 }
 
-#[async_trait]
-impl LLMClient for MinimaxProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            model: self.model.clone(),
-            ..Default::default()
-        };
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(MinimaxProvider);
 
 #[cfg(test)]
 mod tests {

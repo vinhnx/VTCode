@@ -144,6 +144,11 @@ pub mod skill_ops {
     pub const INVALID_SKILL_FORMAT: &str = "Invalid skill format";
     pub const SKILL_SAVE_FAILED: &str = "Failed to save skill";
     pub const SKILL_LOAD_FAILED: &str = "Failed to load skill";
+
+    /// Build a formatted "skill not found" error message.
+    pub fn skill_not_found_error(name: &str) -> anyhow::Error {
+        anyhow::anyhow!("Skill '{}' not found", name)
+    }
 }
 
 /// Diagnostic tool error messages

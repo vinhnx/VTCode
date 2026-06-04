@@ -5,7 +5,6 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
     AnthropicConfig, DeepSeekPromptCacheSettings, ModelConfig, PromptCachingConfig,
 };
-use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -17,9 +16,9 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        extract_prompt_cache_settings, map_finish_reason_common, override_base_url,
-        parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-        serialize_tools_openai_format, validate_request_common,
+        ensure_model, extract_prompt_cache_settings, impl_llm_client, map_finish_reason_common,
+        override_base_url, parse_json_response, parse_response_openai_format, resolve_model,
+        serialize_messages_openai_format, serialize_tools_openai_format, validate_supported_models,
     },
     error_handling::handle_openai_http_error,
     extract_reasoning_trace,
@@ -317,34 +316,20 @@ impl LLMProvider for DeepSeekProvider {
             .unwrap_or(false)
     }
 
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let mut request = request;
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_deepseek_format(&request)?;
         let response = self.send_request(&payload).await?;
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 
-        let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
-            message: error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("failed to parse response: {}", e),
-            ),
-            metadata: None,
-        })?;
-
+        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
         self.parse_response(response_json, model)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-
+        ensure_model(&mut request, &self.model);
         self.validate_request(&request)?;
         request.stream = true;
         let model = request.model.clone();
@@ -442,16 +427,11 @@ impl LLMProvider for DeepSeekProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = models::deepseek::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        validate_request_common(
+        validate_supported_models(
             request,
             PROVIDER_NAME,
             PROVIDER_KEY,
-            Some(&supported_models),
+            models::deepseek::SUPPORTED_MODELS,
         )
     }
 
@@ -500,14 +480,4 @@ impl LLMProvider for DeepSeekProvider {
     }
 }
 
-#[async_trait]
-impl LLMClient for DeepSeekProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = super::common::make_default_request(prompt, &self.model);
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(DeepSeekProvider);

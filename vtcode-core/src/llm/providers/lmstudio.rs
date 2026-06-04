@@ -46,7 +46,7 @@ struct LmStudioModel {
     owned_by: Option<String>,
 }
 
-const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+pub use client::LMSTUDIO_CONNECTION_ERROR;
 
 /// Derives the server root URL by stripping the `/v1` suffix from the API base.
 ///

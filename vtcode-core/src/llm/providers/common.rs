@@ -2,8 +2,8 @@
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider::{
-    ContentPart, FinishReason, LLMError, LLMRequest, Message, MessageContent, MessageRole,
-    ToolCall, ToolDefinition,
+    ContentPart, FinishReason, LLMError, LLMRequest, LLMStream, LLMStreamEvent, Message,
+    MessageContent, MessageRole, ToolCall, ToolDefinition,
 };
 use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
@@ -372,6 +372,133 @@ pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| default_model.to_owned())
 }
+
+/// Ensures the request has a non-empty model, falling back to the provider's default.
+/// Mutates the request in place and returns the resolved model string.
+pub fn ensure_model(request: &mut LLMRequest, default_model: &str) -> String {
+    if request.model.trim().is_empty() {
+        request.model = default_model.to_owned();
+    }
+    request.model.clone()
+}
+
+/// Parses a JSON response body from an HTTP response, mapping errors to
+/// `LLMError::Provider` with a formatted message including the provider name.
+pub async fn parse_json_response(
+    response: reqwest::Response,
+    provider_name: &str,
+) -> Result<Value, LLMError> {
+    response.json().await.map_err(|e| LLMError::Provider {
+        message: error_display::format_llm_error(
+            provider_name,
+            &format!("failed to parse response: {}", e),
+        ),
+        metadata: None,
+    })
+}
+
+/// Validates a request against a static list of supported model strings.
+/// Convenience wrapper around `validate_request_common` that converts
+/// `&[&str]` to `Vec<String>` internally.
+pub fn validate_supported_models(
+    request: &LLMRequest,
+    provider_name: &str,
+    provider_key: &str,
+    supported_models: &[&str],
+) -> Result<(), LLMError> {
+    let models: Vec<String> = supported_models.iter().map(|m| m.to_string()).collect();
+    validate_request_common(request, provider_name, provider_key, Some(&models))
+}
+
+/// Spawns an OpenAI-compatible streaming response handler.
+/// Returns an `LLMStream` backed by a tokio task that processes chunks via
+/// `process_openai_stream` with the `handle_openai_compatible_chunk` handler.
+///
+/// Providers with custom chunk handling (e.g., DeepSeek reasoning extraction)
+/// should use the lower-level `process_openai_stream` directly.
+pub fn spawn_openai_compatible_stream(
+    response: reqwest::Response,
+    provider_name: &'static str,
+    model: String,
+    reasoning_field: Option<&'static str>,
+    delta_order: crate::llm::providers::shared::OpenAiDeltaOrder,
+) -> LLMStream {
+    use async_stream::try_stream;
+
+    let bytes_stream = response.bytes_stream();
+    let (event_tx, event_rx) =
+        tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+    let tx = event_tx.clone();
+
+    tokio::spawn(async move {
+        let aggregator_model = model.clone();
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(aggregator_model);
+
+        let result = crate::llm::providers::shared::process_openai_stream(
+            bytes_stream,
+            provider_name,
+            model,
+            |value| {
+                crate::llm::providers::shared::handle_openai_compatible_chunk(
+                    &value,
+                    &mut aggregator,
+                    &tx,
+                    reasoning_field,
+                    delta_order,
+                );
+                Ok(())
+            },
+        )
+        .await;
+
+        match result {
+            Ok(_) => {
+                let response = aggregator.finalize();
+                let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                    response: Box::new(response),
+                }));
+            }
+            Err(err) => {
+                let _ = tx.send(Err(err));
+            }
+        }
+    });
+
+    let stream = try_stream! {
+        let mut receiver = event_rx;
+        while let Some(event) = receiver.recv().await {
+            yield event?;
+        }
+    };
+
+    Box::pin(stream)
+}
+
+/// Implements the `LLMClient` trait for an OpenAI-compatible provider.
+/// All providers share the same pattern: create a default request, delegate to `LLMProvider::generate`.
+macro_rules! impl_llm_client {
+    ($provider:ty) => {
+        #[async_trait::async_trait]
+        impl crate::llm::client::LLMClient for $provider {
+            async fn generate(
+                &mut self,
+                prompt: &str,
+            ) -> Result<crate::llm::provider::LLMResponse, crate::llm::provider::LLMError> {
+                let request = super::common::make_default_request(prompt, &self.model);
+                Ok(
+                    <$provider as crate::llm::provider::LLMProvider>::generate(self, request)
+                        .await?,
+                )
+            }
+
+            fn model_id(&self) -> &str {
+                &self.model
+            }
+        }
+    };
+}
+
+pub(crate) use impl_llm_client;
 
 /// Creates a default LLM request with a single user message.
 /// Used by all providers for their LLMClient implementation.

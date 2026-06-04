@@ -27,10 +27,8 @@ impl OpenAIProvider {
     pub(crate) async fn stream_normalized_request(
         &self,
         mut request: provider::LLMRequest,
-    ) -> Result<LLMNormalizedStream, provider::LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.to_string();
-        }
+    ) -> Result<provider::LLMNormalizedStream, provider::LLMError> {
+        crate::llm::providers::common::ensure_model(&mut request, &self.model);
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
         }
@@ -142,9 +140,7 @@ impl OpenAIProvider {
         &self,
         mut request: provider::LLMRequest,
     ) -> Result<provider::LLMStream, provider::LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.to_string();
-        }
+        crate::llm::providers::common::ensure_model(&mut request, &self.model);
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
         }

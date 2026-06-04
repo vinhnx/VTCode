@@ -9,6 +9,7 @@
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools};
 use crate::skills::manifest::parse_skill_file;
 use crate::skills::types::{SkillContext, SkillManifest, SkillVariety};
+use crate::tools::error_messages::skill_ops;
 use anyhow::Result;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -586,7 +587,7 @@ impl ProgressiveSkillLoader {
             }
         }
 
-        Err(anyhow::anyhow!("Skill '{}' not found", name))
+        Err(skill_ops::skill_not_found_error(name))
     }
 
     /// Load full skill with instructions and resources
@@ -630,7 +631,7 @@ impl ProgressiveSkillLoader {
             }
         }
 
-        Err(anyhow::anyhow!("Skill '{}' not found", name))
+        Err(skill_ops::skill_not_found_error(name))
     }
 }
 

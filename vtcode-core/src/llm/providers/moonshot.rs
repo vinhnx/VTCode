@@ -3,7 +3,6 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -14,7 +13,8 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
+    ensure_model, impl_llm_client, map_finish_reason_common, override_base_url,
+    parse_json_response, parse_response_openai_format, resolve_model,
     serialize_messages_openai_format,
 };
 use super::error_handling::handle_openai_http_error;
@@ -178,9 +178,7 @@ impl LLMProvider for MoonshotProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
+        ensure_model(&mut request, &self.model);
         request.model = request.model.trim().to_string();
         let model = request.model.clone();
 
@@ -207,17 +205,7 @@ impl LLMProvider for MoonshotProvider {
 
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
-
-        let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
 
         parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
             response_json,
@@ -229,9 +217,7 @@ impl LLMProvider for MoonshotProvider {
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
+        ensure_model(&mut request, &self.model);
         request.model = request.model.trim().to_string();
         let model = request.model.clone();
 
@@ -351,18 +337,4 @@ impl LLMProvider for MoonshotProvider {
     }
 }
 
-#[async_trait]
-impl LLMClient for MoonshotProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
-            model: self.model.clone(),
-            ..Default::default()
-        };
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(MoonshotProvider);

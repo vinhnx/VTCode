@@ -3,7 +3,6 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
-use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -16,8 +15,9 @@ use serde_json::{Map, Value};
 use std::borrow::Cow;
 
 use super::common::{
-    map_finish_reason_common, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
+    ensure_model, impl_llm_client, map_finish_reason_common, parse_json_response,
+    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
+    serialize_tools_openai_format, validate_supported_models,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -271,10 +271,7 @@ impl LLMProvider for ZAIProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+        let model = ensure_model(&mut request, &self.model);
 
         let payload = self.convert_to_zai_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
@@ -299,17 +296,7 @@ impl LLMProvider for ZAIProvider {
             })?;
 
         let response = handle_openai_http_error(response, PROVIDER_NAME, "ZAI_API_KEY").await?;
-
-        let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response_json = parse_json_response(response, PROVIDER_NAME).await?;
 
         parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
             response_json,
@@ -321,10 +308,7 @@ impl LLMProvider for ZAIProvider {
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-        let model = request.model.clone();
+        let model = ensure_model(&mut request, &self.model);
 
         self.validate_request(&request)?;
         request.stream = true;
@@ -439,16 +423,11 @@ impl LLMProvider for ZAIProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = models::zai::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        validate_request_common(
+        validate_supported_models(
             request,
             PROVIDER_NAME,
             PROVIDER_KEY,
-            Some(&supported_models),
+            models::zai::SUPPORTED_MODELS,
         )
     }
 }
@@ -478,21 +457,7 @@ fn resolve_zai_base_url(base_url: Option<String>) -> String {
     urls::ZAI_API_BASE.to_string()
 }
 
-#[async_trait]
-impl LLMClient for ZAIProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
-        let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
-            model: self.model.clone(),
-            ..Default::default()
-        };
-        Ok(LLMProvider::generate(self, request).await?)
-    }
-
-    fn model_id(&self) -> &str {
-        &self.model
-    }
-}
+impl_llm_client!(ZAIProvider);
 
 #[cfg(test)]
 mod tests {

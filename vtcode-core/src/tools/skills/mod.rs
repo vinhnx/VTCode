@@ -31,6 +31,7 @@ use tracing::{debug, warn};
 
 #[cfg(test)]
 use crate::tools::CgpRuntimeMode;
+use crate::tools::error_messages::skill_ops;
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
@@ -856,7 +857,7 @@ impl Tool for LoadSkillResourceTool {
                 "content": content
             }))
         } else {
-            Err(anyhow::anyhow!("Skill '{}' not found", skill_name))
+            Err(skill_ops::skill_not_found_error(skill_name))
         }
     }
 }

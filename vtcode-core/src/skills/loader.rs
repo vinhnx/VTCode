@@ -9,6 +9,7 @@ use crate::skills::discovery::{DiscoveryConfig, DiscoveryResult, SkillDiscovery}
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::{install_system_skills, system_cache_root_dir};
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
+use crate::tools::error_messages::skill_ops;
 use anyhow::{Context, Result};
 use dunce::canonicalize as normalize_path;
 use hashbrown::{HashMap, HashSet};
@@ -950,7 +951,7 @@ impl EnhancedSkillLoader {
             }
         }
 
-        Err(anyhow::anyhow!("Skill '{}' not found", name))
+        Err(skill_ops::skill_not_found_error(name))
     }
 
     /// Get all trusted plugin directories
