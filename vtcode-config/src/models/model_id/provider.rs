@@ -133,6 +133,7 @@ impl ModelId {
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
+            | ModelId::OpenRouterNvidiaNemotron3Ultra550bA55b
             | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterZaiGlm51
             | ModelId::OpenRouterMoonshotaiKimiK26
