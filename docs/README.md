@@ -38,7 +38,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 - **Decision Ledger** - Structured, compact record of key decisions injected each turn for consistency
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and context preservation
 - **Conversation Summarization** - Automatic compression when exceeding thresholds with quality assessment
-- **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, OpenRouter integration
+- **Multi-Provider LLM Support** - 21 providers including Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter, Evolink, Qwen, StepFun, Poolside, Ollama, LM Studio
 - **LLM-Native Code Understanding** - Precise semantic analysis across all modern languages
 - **Bash Safety Parsing** - Accurate shell command validation via tree-sitter-bash
 - **Enterprise-Grade Safety** - Comprehensive security controls and path validation

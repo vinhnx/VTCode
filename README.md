@@ -84,7 +84,7 @@ More details: [Installation Guide](./docs/installation/README.md), [Native Insta
 
 ## Providers
 
-VT Code supports 20 LLM providers out of the box — from cloud APIs to local inference servers — plus any OpenAI-compatible API through `[[custom_providers]]`.
+VT Code supports 21 LLM providers out of the box — from cloud APIs to local inference servers — plus any OpenAI-compatible API through `[[custom_providers]]`.
 
 | Provider | Provider ID | Type |
 | --- | --- | --- |
@@ -102,6 +102,7 @@ VT Code supports 20 LLM providers out of the box — from cloud APIs to local in
 | Mistral | `mistral` | Cloud |
 | Qwen | `qwen` | Cloud |
 | StepFun | `stepfun` | Cloud |
+| Evolink | `evolink` | Cloud |
 | Poolside | `poolside` | Cloud |
 | OpenCode Zen | `opencode-zen` | Cloud |
 | OpenCode Go | `opencode-go` | Cloud |

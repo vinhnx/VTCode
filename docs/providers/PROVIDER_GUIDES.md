@@ -105,6 +105,20 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Starter catalog:** `gpt-oss-20b`, `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gemma-4-26b-a4b`, `gemma-4-e4b`, and `step-3.5-flash`
 -   **Features:** Streaming, dynamic `/v1/models` discovery, local no-auth defaults, and OpenAI-compatible request handling
 
+## Evolink Multi-Model Gateway
+
+-   **Provider key:** `evolink`
+-   **Official docs:** [Evolink Docs](https://docs.evolink.ai/llms.txt)
+-   **Base URL:** `https://direct.evolink.ai/v1`
+-   **Auth:** `EVOLINK_API_KEY` environment variable
+-   **Setup:** Set `EVOLINK_API_KEY` from [Evolink dashboard](https://evolink.ai/dashboard/keys), then configure `provider = "evolink"` in `vtcode.toml`
+-   **Models:**
+    -   `evolink/gpt-5.2` (default)
+    -   `evolink/gpt-5.5`
+    -   `evolink/deepseek-v4-pro`
+    -   `evolink/doubao-seed-2.0-pro`
+-   **Features:** OpenAI-compatible gateway exposing many upstream models behind one endpoint. Evolink serves models under bare upstream names (e.g. `gpt-5.2`) that collide with VT Code's first-class providers, so curated model IDs are namespaced as `evolink/<model>`. The provider strips the prefix before sending requests upstream.
+
 ## Anthropic API Compatibility Server
 
 VT Code provides compatibility with the Anthropic Messages API to help connect existing applications to VT Code, including tools like Claude Code.

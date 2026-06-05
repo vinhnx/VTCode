@@ -58,7 +58,7 @@ The AI provider that VT Code should use.
 
 ```toml
 [agent]
-provider = "anthropic"  # available: openai, anthropic, google, together, fireworks, ollama
+provider = "anthropic"  # available: openai, anthropic, google, deepseek, copilot, openrouter, mimo, huggingface, zai, moonshot, minimax, mistral, qwen, stepfun, evolink, poolside, ollama, lmstudio, llamacpp
 default_model = "claude-sonnet-4-6"  # overrides the default model for the selected provider
 ```
 
@@ -730,8 +730,12 @@ Each AI provider requires an API key configuration. These are typically managed 
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_GEMINI_API_KEY=your_google_api_key
-FIREWORKS_API_KEY=your_fireworks_api_key
-TOGETHER_API_KEY=your_together_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+MIMO_API_KEY=your_mimo_api_key
+EVOLINK_API_KEY=your_evolink_api_key
+STEPFUN_API_KEY=your_stepfun_api_key
+QWEN_API_KEY=your_qwen_api_key
 OLLAMA_HOST=http://localhost:11434  # For Ollama
 ```
 
