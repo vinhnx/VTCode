@@ -386,6 +386,11 @@ fn parse_tool_arguments(raw_arguments: &str) -> Result<serde_json::Value, serde_
             {
                 return Ok(parsed);
             }
+            if let Some(repaired) = close_incomplete_json_prefix(trimmed)
+                && let Ok(parsed) = serde_json::from_str(&repaired)
+            {
+                return Ok(parsed);
+            }
             Err(primary_error)
         }
     }
@@ -689,11 +694,33 @@ mod tests {
     }
 
     #[test]
+    fn parsed_arguments_recovers_truncated_json_missing_closing_brace() {
+        let call = ToolCall::function(
+            "call_search".to_string(),
+            "unified_search".to_string(),
+            r#"{"action": "structural", "pattern": "context", "path": ".", "lang": "rust""#.to_string(),
+        );
+
+        let parsed = call
+            .parsed_arguments()
+            .expect("truncated JSON missing closing brace should recover");
+        assert_eq!(
+            parsed,
+            json!({
+                "action": "structural",
+                "pattern": "context",
+                "path": ".",
+                "lang": "rust"
+            })
+        );
+    }
+
+    #[test]
     fn parsed_arguments_rejects_incomplete_json() {
         let call = ToolCall::function(
             "call_read".to_string(),
             "read_file".to_string(),
-            r#"{"path":"src/main.rs""#.to_string(),
+            r#"{"path":"src/main.rs","limit""#.to_string(),
         );
 
         assert!(call.parsed_arguments().is_err());

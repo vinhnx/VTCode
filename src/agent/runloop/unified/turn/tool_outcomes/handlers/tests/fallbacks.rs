@@ -230,13 +230,18 @@ fn reused_read_only_result_uses_canonical_guidance() {
     assert_eq!(
         payload.get("loop_detected_note"),
         Some(&json!(
-            "Loop detected on repeated read-only call; reusing recent output. Use unified_search (action='grep') or summarize before another read."
+            "Loop detected on repeated read-only call; reusing recent output. \
+             You likely have the information needed — review your conversation history \
+             and synthesize a response before reading again."
         ))
     );
     assert_eq!(
         payload.get("next_action"),
         Some(&json!(
-            "Use unified_search (action='grep') or retry unified_file with a narrower offset/limit before reading again."
+            "Review existing tool outputs in your conversation history. \
+             If a specific range was omitted, use unified_file with offset/limit to read just that range, \
+             or use unified_exec with `cat <path>` for full content. \
+             Do NOT re-read the same file with the same parameters."
         ))
     );
     assert!(payload.get("output").is_none());
