@@ -2,6 +2,15 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.0 - 2026-06-05
+
+### Highlights
+#### Features
+
+- Add NVIDIA Nemotron 3 Ultra model and update provider logic (b27b6cbf) 
+- Add NVIDIA Nemotron 3 Ultra model and update related configurations (bff99dc1) 
+- Enhance JSON parsing to recover from truncated input (989d3bba) 
+### Other Changes
 ## 0.122.0 - 2026-06-05
 
 ### Highlights
