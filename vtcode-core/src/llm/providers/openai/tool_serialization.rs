@@ -116,7 +116,7 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
     )
 }
 
-fn sanitize_openai_function_parameters(value: Value, strip_any_of: bool) -> Value {
+pub fn sanitize_openai_function_parameters(value: Value, strip_any_of: bool) -> Value {
     sanitize_openai_schema_node(parse_tool_input_schema(&value), strip_any_of)
 }
 
@@ -392,7 +392,10 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                     let func = tool.function.as_ref()?;
                     let name = &func.name;
                     let description = &func.description;
-                    let parameters = &func.parameters;
+                    let parameters = sanitize_openai_function_parameters(
+                        func.parameters.clone(),
+                        should_strip_any_of_for_builtin_tool(name),
+                    );
                     let mut value = json!({
                         "type": &tool.tool_type,
                         "name": name,
@@ -415,12 +418,16 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                     if is_gpt5_or_newer(model) {
                         json!(tool)
                     } else if let Some(func) = &tool.function {
+                        let parameters = sanitize_openai_function_parameters(
+                            func.parameters.clone(),
+                            should_strip_any_of_for_builtin_tool(&func.name),
+                        );
                         json!({
                             "type": "function",
                             "function": {
                                 "name": func.name,
                                 "description": func.description,
-                                "parameters": func.parameters
+                                "parameters": parameters
                             }
                         })
                     } else {

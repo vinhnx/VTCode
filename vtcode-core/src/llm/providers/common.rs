@@ -9,6 +9,8 @@ use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
 use serde_json::{Value, json};
 
+use super::openai::tool_serialization::sanitize_openai_function_parameters;
+
 /// Collects non-empty history system directives that should be preserved when a
 /// provider accepts a separate top-level system prompt but cannot reliably
 /// consume follow-up `system` chat messages.
@@ -84,12 +86,16 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
                 // For OpenAI-compatible APIs, normalize all tools to function type
                 // Special types like "apply_patch", "shell", "custom" are GPT-5.x specific
                 tool.function.as_ref().map(|func| {
+                    let parameters = sanitize_openai_function_parameters(
+                        func.parameters.clone(),
+                        true,
+                    );
                     serde_json::json!({
                         "type": "function",
                         "function": {
                             "name": func.name,
                             "description": func.description,
-                            "parameters": func.parameters
+                            "parameters": parameters
                         }
                     })
                 })
