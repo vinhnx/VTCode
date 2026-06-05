@@ -2,6 +2,29 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.122.0 - 2026-06-05
+
+### Highlights
+#### Features
+
+- Add Evolink provider (OpenAI-compatible multi-model gateway)  (bdc4c753) (@EvoLinkAI)
+- Update file palette tree defaults and styling (3af4701b) 
+- Add Evolink provider support and update related documentation (e9577426) 
+- Update OpenAI function parameter sanitization and change default model in configuration (8871c397) 
+- Add new Evolink models and update configurations (8aafefb9) 
+### Other Changes
+#### Other
+
+- Update TODO (017be561) (@vinhnx)
+- Add help modal using ratatui-cheese for keyboard shortcuts (87f3630e) (@vinhnx)
+- Update UI highlight symbols and styles across multiple components; change theme to "vitesse-black". (41503473) (@vinhnx)
+- Refactor input handling and styles across various components; unify search field rendering; update theme to ciapre-blue. (33a910d6) 
+#### Refactors
+
+- Extract shared provider boilerplate and consolidate error types (5df85e50) (@vinhnx)
+- Consolidate DRY violations across 4 crates (64ad80b2) (@vinhnx)
+- Implement rule fill for Fieldset-style blocks and update tests (7fe7c4ad) (@vinhnx)
+- Rename spinner frame function and update references (edc0c058) (@vinhnx)
 ## 0.121.1 - 2026-06-03
 
 ### Highlights
