@@ -376,7 +376,8 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::MiMo => 16,
         Provider::Qwen => 17,
         Provider::StepFun => 18,
-        Provider::Poolside => 19,
+        Provider::Evolink => 19,
+        Provider::Poolside => 20,
     }
 }
 

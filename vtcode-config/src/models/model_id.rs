@@ -114,6 +114,16 @@ pub enum ModelId {
     /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling
     StepFun37Flash,
 
+    // Evolink gateway models (namespaced as `evolink/<model>`)
+    /// GPT-5.2 served through the Evolink gateway
+    EvolinkGpt52,
+    /// GPT-5.5 served through the Evolink gateway
+    EvolinkGpt55,
+    /// DeepSeek V4 Pro served through the Evolink gateway
+    EvolinkDeepseekV4Pro,
+    /// Doubao Seed 2.0 Pro served through the Evolink gateway
+    EvolinkDoubaoSeed20Pro,
+
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,
     /// GLM-5.1 - Next-gen Z.ai foundation model with improved reasoning

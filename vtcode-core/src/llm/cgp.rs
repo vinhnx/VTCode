@@ -14,19 +14,19 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
-    AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
-    HuggingFaceProviderConfig, LlamaCppProviderConfig, LmStudioProviderConfig, MiMoProviderConfig,
-    MinimaxProviderConfig, MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig,
-    OpenAIProviderConfig, OpenCodeGoProviderConfig, OpenCodeZenProviderConfig,
-    OpenResponsesProviderConfig, OpenRouterProviderConfig, PoolsideProviderConfig,
-    QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
+    AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, EvolinkProviderConfig,
+    GeminiProviderConfig, HuggingFaceProviderConfig, LlamaCppProviderConfig,
+    LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig, MistralProviderConfig,
+    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig, OpenCodeGoProviderConfig,
+    OpenCodeZenProviderConfig, OpenResponsesProviderConfig, OpenRouterProviderConfig,
+    PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
-    AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider,
-    MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider,
-    OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider,
-    ZAIProvider,
+    AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider,
+    HuggingFaceProvider, LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider,
+    MistralProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider,
+    OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider,
+    StepFunProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -271,6 +271,7 @@ impl_standard_provider_constructor!(
     OpenCodeGoProvider,
     QwenProvider,
     StepFunProvider,
+    EvolinkProvider,
     PoolsideProvider,
 );
 
@@ -354,6 +355,10 @@ crate::delegate_components!(StepFunProviderConfig {
     ProviderMetadataComponent => StepFunProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<StepFunProvider>,
 });
+crate::delegate_components!(EvolinkProviderConfig {
+    ProviderMetadataComponent => EvolinkProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<EvolinkProvider>,
+});
 crate::delegate_components!(PoolsideProviderConfig {
     ProviderMetadataComponent => PoolsideProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<PoolsideProvider>,
@@ -381,6 +386,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<OpenCodeGoProviderConfig>();
     factory.register_cgp_provider::<QwenProviderConfig>();
     factory.register_cgp_provider::<StepFunProviderConfig>();
+    factory.register_cgp_provider::<EvolinkProviderConfig>();
     factory.register_cgp_provider::<PoolsideProviderConfig>();
 }
 

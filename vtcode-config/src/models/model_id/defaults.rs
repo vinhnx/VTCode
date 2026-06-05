@@ -49,6 +49,7 @@ impl ModelId {
             Provider::OpenCodeGo => ModelId::OpenCodeGoMinimaxM27,
             Provider::Qwen => ModelId::Qwen37Max,
             Provider::StepFun => ModelId::StepFun37Flash,
+            Provider::Evolink => ModelId::EvolinkGpt52,
             Provider::Poolside => ModelId::PoolsideLagunaM1,
         }
     }
@@ -75,6 +76,7 @@ impl ModelId {
             Provider::OpenCodeGo => ModelId::OpenCodeGoMinimaxM27,
             Provider::Qwen => ModelId::Qwen36Plus,
             Provider::StepFun => ModelId::StepFun37Flash,
+            Provider::Evolink => ModelId::EvolinkGpt52,
             Provider::Poolside => ModelId::PoolsideLagunaXs2,
         }
     }

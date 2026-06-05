@@ -305,6 +305,7 @@ impl ToolChoice {
         "zai",
         "moonshot",
         "stepfun",
+        "evolink",
         "lmstudio",
         "llamacpp",
     ];

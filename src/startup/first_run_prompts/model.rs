@@ -56,6 +56,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::Mistral => models::mistral::MISTRAL_LARGE_3,
         Provider::Qwen => models::qwen::DEFAULT_MODEL,
         Provider::StepFun => models::stepfun::DEFAULT_MODEL,
+        Provider::Evolink => models::evolink::DEFAULT_MODEL,
         Provider::Poolside => models::poolside::DEFAULT_MODEL,
         Provider::OpenCodeZen => models::opencode_zen::DEFAULT_MODEL,
         Provider::OpenCodeGo => models::opencode_go::DEFAULT_MODEL,
