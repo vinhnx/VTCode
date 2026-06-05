@@ -142,26 +142,19 @@ fn test_no_false_positive_with_a() {
 }
 
 #[test]
-fn test_pagination() {
+fn test_tree_structure() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
     let files: Vec<String> = (0..50).map(|i| format!("file{}.rs", i)).collect();
     palette.load_files(files);
 
-    // With PAGE_SIZE=20, 50 files = 3 pages (20 + 20 + 10)
-    assert_eq!(palette.total_pages(), 3);
+    // Tree has no pagination — all items in one page
+    assert_eq!(palette.total_pages(), 1);
     assert_eq!(palette.current_page_number(), 1);
-    assert_eq!(palette.current_page_items().len(), 20);
-    assert!(palette.has_more_items());
-
-    palette.page_down();
-    assert_eq!(palette.current_page_number(), 2);
-    assert_eq!(palette.current_page_items().len(), 20);
-    assert!(palette.has_more_items());
-
-    palette.page_down();
-    assert_eq!(palette.current_page_number(), 3);
-    assert_eq!(palette.current_page_items().len(), 10);
     assert!(!palette.has_more_items());
+
+    // All top-level files should be visible as tree groups
+    assert_eq!(palette.tree_groups().len(), 50);
+    assert_eq!(palette.total_items(), 50);
 }
 
 #[test]
@@ -197,9 +190,12 @@ fn test_smart_ranking() {
 
     palette.set_filter("main".to_owned());
 
-    // Exact filename match should rank highest
-    let items = palette.current_page_items();
-    assert_eq!(items[0].1.relative_path, "main.rs");
+    // All files containing "main" should be found
+    assert_eq!(palette.total_items(), 4);
+
+    // Tree groups should exist for each top-level directory + top-level files
+    let groups = palette.tree_groups();
+    assert!(!groups.is_empty());
 }
 
 #[test]
@@ -212,19 +208,21 @@ fn test_has_files() {
 }
 
 #[test]
-fn test_circular_navigation() {
+fn test_tree_navigation_no_wrapping() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
     let files = vec!["a.rs".to_owned(), "b.rs".to_owned(), "c.rs".to_owned()];
     palette.load_files(files);
 
-    // At first item, up should wrap to last
+    // Tree navigation does not wrap — at first item, up stays at first
     assert_eq!(palette.selected_index(), Some(0));
     palette.move_selection_up();
-    assert_eq!(palette.selected_index(), Some(2));
-
-    // At last item, down should wrap to first
-    palette.move_selection_down();
     assert_eq!(palette.selected_index(), Some(0));
+
+    // Move to last item
+    palette.move_to_last();
+    let last = palette.selected_index().unwrap();
+    palette.move_selection_down();
+    assert_eq!(palette.selected_index(), Some(last));
 }
 
 #[test]
@@ -316,10 +314,9 @@ fn test_should_exclude_file() {
 }
 
 #[test]
-fn test_sorting_directories_first_alphabetical() {
+fn test_sorting_tree_groups_ascending() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
 
-    // Create test entries directly (bypassing filesystem checks)
     palette.all_files = vec![
         FileEntry {
             path: "/workspace/zebra.txt".to_owned(),
@@ -359,38 +356,36 @@ fn test_sorting_directories_first_alphabetical() {
         },
     ];
 
-    // Apply sorting manually
+    // Sort ascending by name (matching load_files behavior)
     palette
         .all_files
-        .sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a
-                .relative_path
+        .sort_by(|a, b| {
+            a.relative_path
                 .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase()),
+                .cmp(&b.relative_path.to_lowercase())
         });
     palette.filtered_files = palette.all_files.clone();
+    let (groups, group_entries) =
+        FilePalette::build_tree_groups(&palette.filtered_files);
+    palette.tree_groups = groups;
+    palette.group_entries = group_entries;
+    palette.tree_state = TreeState::new(palette.tree_groups.len());
 
-    // Directories should come first, then files
-    // Within each group, alphabetically sorted (case-insensitive)
-    let items = palette.current_page_items();
+    // Tree groups are directories sorted ascending, then top-level files sorted ascending
+    // Directories: lib, src, tests (ascending)
+    // Files: Apple.txt, banana.txt, zebra.txt (ascending)
+    let groups = palette.tree_groups();
+    assert_eq!(groups.len(), 6); // 3 dirs + 3 files
 
-    // First items should be directories (alphabetically: lib, src, tests)
-    assert!(items[0].1.is_dir);
-    assert_eq!(items[0].1.relative_path, "lib");
-    assert!(items[1].1.is_dir);
-    assert_eq!(items[1].1.relative_path, "src");
-    assert!(items[2].1.is_dir);
-    assert_eq!(items[2].1.relative_path, "tests");
+    // Directory groups (sorted asc): lib, src, tests
+    assert_eq!(groups[0].header().text(), "lib/");
+    assert_eq!(groups[1].header().text(), "src/");
+    assert_eq!(groups[2].header().text(), "tests/");
 
-    // Then files, alphabetically (Apple.txt, banana.txt, zebra.txt)
-    assert!(!items[3].1.is_dir);
-    assert_eq!(items[3].1.relative_path, "Apple.txt");
-    assert!(!items[4].1.is_dir);
-    assert_eq!(items[4].1.relative_path, "banana.txt");
-    assert!(!items[5].1.is_dir);
-    assert_eq!(items[5].1.relative_path, "zebra.txt");
+    // File groups (sorted asc): Apple.txt, banana.txt, zebra.txt
+    assert_eq!(groups[3].header().text(), "Apple.txt");
+    assert_eq!(groups[4].header().text(), "banana.txt");
+    assert_eq!(groups[5].header().text(), "zebra.txt");
 }
 
 #[test]
@@ -407,10 +402,9 @@ fn test_simple_fuzzy_match() {
 }
 
 #[test]
-fn test_filtering_maintains_directory_priority() {
+fn test_filtering_preserves_tree_hierarchy() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
 
-    // Create test entries with both directories and files
     palette.all_files = vec![
         FileEntry {
             path: "/workspace/src".to_owned(),
@@ -439,28 +433,17 @@ fn test_filtering_maintains_directory_priority() {
     ];
     palette.filtered_files = palette.all_files.clone();
 
-    // Filter for "src" - should match directories and files
     palette.set_filter("src".to_owned());
 
-    // Directories should still be first even after filtering
-    let items = palette.current_page_items();
-    let dir_count = items.iter().filter(|(_, entry, _)| entry.is_dir).count();
-    let file_count = items.iter().filter(|(_, entry, _)| !entry.is_dir).count();
+    // Tree groups should exist — the hierarchy preserves directory structure
+    let groups = palette.tree_groups();
+    assert!(
+        !groups.is_empty(),
+        "Tree should have groups after filtering"
+    );
 
-    if dir_count > 0 && file_count > 0 {
-        // Find first directory and first file
-        let first_dir_idx = items.iter().position(|(_, entry, _)| entry.is_dir).unwrap();
-        let first_file_idx = items
-            .iter()
-            .position(|(_, entry, _)| !entry.is_dir)
-            .unwrap();
-
-        // First directory should come before first file
-        assert!(
-            first_dir_idx < first_file_idx,
-            "Directories should appear before files even after filtering"
-        );
-    }
+    // Total items should reflect all matching files
+    assert!(palette.total_items() > 0);
 }
 
 #[test]

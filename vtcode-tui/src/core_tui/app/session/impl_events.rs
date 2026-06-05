@@ -369,10 +369,16 @@ impl Session {
 
             let page_items = palette.current_page_items();
             if let Some(local_index) = local_index
-                && let Some((global_index, entry, selected)) = page_items.get(local_index)
+                && let Some((global_index, entry, selected)) =
+                    page_items.get(local_index)
             {
                 if *selected {
-                    apply_path = Some(entry.relative_path.clone());
+                    if palette.selected_is_group() {
+                        palette.toggle_selected();
+                        should_mark_dirty = true;
+                    } else {
+                        apply_path = Some(entry.relative_path.clone());
+                    }
                 } else if palette.select_index(*global_index) {
                     should_mark_dirty = true;
                 }

@@ -1,16 +1,15 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
+use ratatui_cheese::tree::{TreeGroup, TreeItem, TreeState};
 
 use super::{FileEntry, FilePalette};
 
 impl FilePalette {
-    /// SECURITY: Check if a file should be excluded from the file browser
-    /// Always excludes .env files, .git directories, and other sensitive data
     pub(super) fn should_exclude_file(path: &Path) -> bool {
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            // CRITICAL: Exclude sensitive files
             let sensitive_patterns = [
                 ".env",
                 ".env.local",
@@ -21,7 +20,6 @@ impl FilePalette {
                 ".DS_Store",
             ];
 
-            // Exact match or starts with .env.
             if sensitive_patterns
                 .iter()
                 .any(|s| file_name == *s || file_name.starts_with(".env."))
@@ -29,13 +27,11 @@ impl FilePalette {
                 return true;
             }
 
-            // Exclude all hidden files (starting with .)
             if file_name.starts_with('.') {
                 return true;
             }
         }
 
-        // Exclude .git directory anywhere in path
         if path.components().any(|c| c.as_os_str() == ".git") {
             return true;
         }
@@ -46,15 +42,12 @@ impl FilePalette {
     pub fn load_files(&mut self, files: Vec<String>) {
         self.all_files = files
             .into_iter()
-            .filter(|path| {
-                // SECURITY: Filter out sensitive files before loading
-                !Self::should_exclude_file(Path::new(path))
-            })
+            .filter(|path| !Self::should_exclude_file(Path::new(path)))
             .map(|path| {
                 let relative_path = Self::make_relative(&self.workspace_root, &path);
                 let is_dir = Path::new(&path).is_dir();
                 let display_name = if is_dir {
-                    format!("{}/", relative_path) // Add trailing slash for directories
+                    format!("{}/", relative_path)
                 } else {
                     relative_path.clone()
                 };
@@ -67,17 +60,12 @@ impl FilePalette {
             })
             .collect();
 
-        // Sort: directories first, then files, both alphabetically (case-insensitive)
-        self.all_files.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a
-                .relative_path
+        self.all_files.sort_by(|a, b| {
+            a.relative_path
                 .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase()),
+                .cmp(&b.relative_path.to_lowercase())
         });
         self.apply_filter();
-        self.navigator.select_first();
     }
 
     fn make_relative(workspace: &Path, file_path: &str) -> String {
@@ -91,88 +79,184 @@ impl FilePalette {
     pub fn set_filter(&mut self, query: String) {
         self.filter_query.clone_from(&query);
 
-        // Check cache first
         if let Some(cached) = self.filter_cache.get(&query) {
             self.filtered_files.clone_from(cached);
+            self.rebuild_tree();
         } else {
             self.apply_filter();
-            // Cache the result
             if !query.is_empty() && self.filter_cache.len() < 50 {
                 self.filter_cache.insert(query, self.filtered_files.clone());
             }
         }
-
-        self.navigator.set_item_count(self.filtered_files.len());
-        self.navigator.select_first();
     }
 
     pub(super) fn apply_filter(&mut self) {
         if self.filter_query.is_empty() {
-            // Avoid cloning when no filter - just reference all files
             self.filtered_files.clone_from(&self.all_files);
-            self.navigator.set_item_count(self.filtered_files.len());
+            self.rebuild_tree();
             return;
         }
 
         let query_lower = self.filter_query.to_lowercase();
-
-        // Pre-allocate with estimated capacity
-        let mut scored_files: Vec<(usize, FileEntry)> =
+        let mut scored_indices: Vec<(usize, usize)> =
             Vec::with_capacity(self.all_files.len() / 2);
-
-        // Use a reusable buffer for efficiency
         let mut buffer = Vec::new();
 
-        for entry in &self.all_files {
+        for (idx, entry) in self.all_files.iter().enumerate() {
             let path_lower = entry.relative_path.to_lowercase();
 
-            // Try fuzzy match first, fall back to substring
             if let Some(fuzzy_score) =
                 Self::simple_fuzzy_match_with_buffer(&path_lower, &query_lower, &mut buffer)
             {
-                scored_files.push((fuzzy_score, entry.clone()));
+                scored_indices.push((fuzzy_score, idx));
             } else if path_lower.contains(&query_lower) {
                 let score = Self::calculate_match_score(&path_lower, &query_lower);
-                scored_files.push((score, entry.clone()));
+                scored_indices.push((score, idx));
             }
         }
 
-        // Sort by: 1) directories first, 2) score (descending), 3) alphabetically
-        scored_files.sort_unstable_by(|a, b| {
-            // First, prioritize directories
-            match (a.1.is_dir, b.1.is_dir) {
+        scored_indices.sort_unstable_by(|a, b| {
+            let entry_a = &self.all_files[a.1];
+            let entry_b = &self.all_files[b.1];
+            match (entry_a.is_dir, entry_b.is_dir) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
-                // Within same type (both dirs or both files), sort by score then alphabetically
                 _ => b.0.cmp(&a.0).then_with(|| {
-                    a.1.relative_path
+                    entry_a
+                        .relative_path
                         .to_lowercase()
-                        .cmp(&b.1.relative_path.to_lowercase())
+                        .cmp(&entry_b.relative_path.to_lowercase())
                 }),
             }
         });
 
-        self.filtered_files = scored_files.into_iter().map(|(_, entry)| entry).collect();
-        self.navigator.set_item_count(self.filtered_files.len());
+        self.filtered_files = scored_indices
+            .into_iter()
+            .map(|(_, idx)| self.all_files[idx].clone())
+            .collect();
+        self.rebuild_tree();
     }
 
-    /// Simple fuzzy matching using nucleo-matcher
-    /// Returns score if matched, None otherwise
+    fn rebuild_tree(&mut self) {
+        // Save expanded state before rebuilding.
+        let old_expanded: Vec<bool> = (0..self.tree_groups.len())
+            .map(|i| self.tree_state.is_expanded(i))
+            .collect();
+
+        let (groups, group_entries) = Self::build_tree_groups(&self.filtered_files);
+        let num_groups = groups.len();
+        self.tree_groups = groups;
+        self.group_entries = group_entries;
+        self.tree_state = TreeState::new(num_groups);
+
+        // Restore expanded state for groups that still exist.
+        for (i, &was_expanded) in old_expanded.iter().enumerate() {
+            if i < num_groups && was_expanded {
+                self.tree_state.expand(i);
+            }
+        }
+    }
+
+    pub(super) fn build_tree_groups(files: &[FileEntry]) -> (Vec<TreeGroup>, Vec<Vec<FileEntry>>) {
+        let mut top_level_dirs: Vec<&FileEntry> = Vec::new();
+        let mut top_level_files: Vec<&FileEntry> = Vec::new();
+        let mut dir_children: BTreeMap<String, Vec<&FileEntry>> = BTreeMap::new();
+
+        for entry in files {
+            let relative = &entry.relative_path;
+            if let Some(slash_pos) = relative.find('/') {
+                let top_dir = &relative[..slash_pos];
+                dir_children
+                    .entry(top_dir.to_owned())
+                    .or_default()
+                    .push(entry);
+            } else if entry.is_dir {
+                top_level_dirs.push(entry);
+            } else {
+                top_level_files.push(entry);
+            }
+        }
+
+        // Remove standalone dirs that already have children grouped under them.
+        top_level_dirs.retain(|entry| !dir_children.contains_key(entry.relative_path.as_str()));
+
+        let mut groups = Vec::new();
+        let mut group_entries = Vec::new();
+
+        let mut dir_iter: Vec<_> = dir_children.into_iter().collect();
+        dir_iter.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
+        for (dir_name, mut children) in dir_iter {
+            children.sort_by(|a, b| {
+                a.relative_path
+                    .to_lowercase()
+                    .cmp(&b.relative_path.to_lowercase())
+            });
+
+            let prefix = format!("{dir_name}/");
+            let child_items: Vec<TreeItem> = children
+                .iter()
+                .map(|entry| {
+                    let name = entry
+                        .relative_path
+                        .strip_prefix(&prefix)
+                        .unwrap_or(&entry.relative_path)
+                        .to_owned();
+                    TreeItem::new(if entry.is_dir {
+                        format!("{name}/")
+                    } else {
+                        name
+                    })
+                })
+                .collect();
+            let child_entries: Vec<FileEntry> = children.iter().map(|e| (*e).clone()).collect();
+
+            groups.push(
+                TreeGroup::new(TreeItem::new(format!("{dir_name}/")))
+                    .children(child_items),
+            );
+            group_entries.push(child_entries);
+        }
+
+        top_level_dirs.sort_by(|a, b| {
+            a.relative_path
+                .to_lowercase()
+                .cmp(&b.relative_path.to_lowercase())
+        });
+        for entry in top_level_dirs {
+            groups.push(TreeGroup::new(TreeItem::new(format!(
+                "{}/",
+                entry.relative_path
+            ))));
+            group_entries.push(vec![(*entry).clone()]);
+        }
+
+        top_level_files.sort_by(|a, b| {
+            a.relative_path
+                .to_lowercase()
+                .cmp(&b.relative_path.to_lowercase())
+        });
+        for entry in top_level_files {
+            groups.push(TreeGroup::new(TreeItem::new(entry.display_name.clone())));
+            group_entries.push(vec![(*entry).clone()]);
+        }
+
+        (groups, group_entries)
+    }
+
     #[expect(dead_code)]
     pub(super) fn simple_fuzzy_match(path: &str, query: &str) -> Option<usize> {
         let mut buffer = Vec::new();
         Self::simple_fuzzy_match_with_buffer(path, query, &mut buffer)
     }
 
-    /// Simple fuzzy matching using nucleo-matcher with a reusable buffer
-    /// Returns score if matched, None otherwise
     fn simple_fuzzy_match_with_buffer(
         path: &str,
         query: &str,
         buffer: &mut Vec<char>,
     ) -> Option<usize> {
         if query.is_empty() {
-            return Some(1000); // Default score for empty query
+            return Some(1000);
         }
 
         let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
@@ -180,11 +264,9 @@ impl FilePalette {
         let utf32_path = Utf32Str::new(path, buffer);
         let score = pattern.score(utf32_path, &mut matcher)?;
 
-        // Convert nucleo score to our scoring system, with bonuses for filename matches
         let mut adjusted_score = score as usize;
         let query_lower = query.to_lowercase();
 
-        // Bonus for matching in filename (last path segment)
         if let Some(filename) = path.rsplit('/').next()
             && filename.to_lowercase().contains(&query_lower)
         {
@@ -197,51 +279,40 @@ impl FilePalette {
     fn calculate_match_score(path: &str, query: &str) -> usize {
         let mut score: usize = 0;
 
-        // Exact match gets highest priority
         if path == query {
             return 10000;
         }
 
-        // Path starts with query (e.g., "src" matches "src/main.rs")
         if path.starts_with(query) {
             score += 1000;
         }
 
-        // Extract filename for additional scoring
         if let Some(file_name) = path.rsplit('/').next() {
-            // Exact filename match
             if file_name == query {
                 score += 2000;
-            }
-            // Filename contains query
-            else if file_name.contains(query) {
+            } else if file_name.contains(query) {
                 score += 500;
             }
-            // Filename starts with query
             if file_name.starts_with(query) {
                 score += 200;
             }
         }
 
-        // Bonus for query appearing in path segments
         for segment in path.split('/') {
             if segment.contains(query) {
                 score += 50;
             }
         }
 
-        // Penalize longer paths (prefer shorter, more specific matches)
         let depth = path.matches('/').count();
         score = score.saturating_sub(depth * 5);
 
-        // Multiple occurrences bonus
         let matches = path.matches(query).count();
         score += matches * 10;
 
         score
     }
 
-    /// Get the appropriate style for a file entry based on its path and type
     #[expect(dead_code)]
     pub fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
         let path = Path::new(&entry.path);

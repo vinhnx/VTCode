@@ -4,22 +4,15 @@ use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
     StaticRowsListPanelModel, fixed_section_rows, fixed_section_rows_with_divider,
-    render_shared_list_panel, rows_to_u16,
+    render_shared_list_panel, render_shared_search_field, rows_to_u16,
 };
-use ratatui::widgets::{Clear, Paragraph, Wrap};
+use ratatui::widgets::{Clear, Paragraph, StatefulWidget, Wrap};
+use ratatui_cheese::tree::{Mode, Tree, TreeStyles};
 
 #[derive(Clone)]
 struct AgentPaletteRenderRow {
     text: String,
     subtitle: Option<String>,
-    style: Style,
-    selectable: bool,
-    selected: bool,
-}
-
-#[derive(Clone)]
-struct FilePaletteRenderRow {
-    text: String,
     style: Style,
     selectable: bool,
     selected: bool,
@@ -190,18 +183,11 @@ pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLa
     } else {
         1
     };
-    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, palette.has_files(), true);
-    let list_rows = if palette.has_files() {
-        let mut rows = palette.current_page_items().len().max(1);
-        if palette.has_more_items() {
-            rows += 1;
-        }
-        rows.min(ui::INLINE_LIST_MAX_ROWS)
-    } else {
-        1
-    };
+    let has_files = palette.has_files();
+    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_files, true);
+    let tree_rows: u16 = if has_files { 15 } else { 1 };
 
-    Some(ListPanelLayout::new(fixed_rows, rows_to_u16(list_rows)))
+    Some(ListPanelLayout::new(fixed_rows, tree_rows))
 }
 
 pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
@@ -241,86 +227,121 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         return;
     }
 
+    let dim_style = default_style(session).add_modifier(Modifier::DIM);
+    let highlight_style = modal_list_highlight_style(session);
+    let border_style = session.core.styles.border_style();
+
     let instructions = file_palette_instructions(session, palette);
-    let rows = build_file_palette_rows(session, palette);
-    if rows.is_empty() {
+    let filter_query = palette.filter_query().to_owned();
+    let tree_groups = palette.tree_groups().to_vec();
+
+    let header_line = Line::from(Span::styled("Files".to_owned(), dim_style));
+    let show_search = true;
+    let show_divider = true;
+
+    let mut constraints = Vec::new();
+    constraints.push(Constraint::Length(1)); // header
+    constraints.push(Constraint::Length(instructions.len() as u16)); // info
+    if show_search {
+        constraints.push(Constraint::Length(1)); // search
+    }
+    if show_divider {
+        constraints.push(Constraint::Length(1)); // divider
+    }
+    constraints.push(Constraint::Min(1)); // tree
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(area);
+
+    let mut idx = 0;
+
+    // Header
+    frame.render_widget(
+        Paragraph::new(header_line).style(dim_style),
+        layout[idx],
+    );
+    idx += 1;
+
+    // Info instructions
+    frame.render_widget(
+        Paragraph::new(Text::from(instructions)).style(dim_style),
+        layout[idx],
+    );
+    idx += 1;
+
+    // Search field
+    if show_search {
+        let search = SharedSearchField {
+            label: "Search files".to_owned(),
+            placeholder: Some("filename or path".to_owned()),
+            query: filter_query,
+        };
+        render_shared_search_field(
+            frame,
+            layout[idx],
+            &search,
+            dim_style,
+            dim_style,
+            dim_style.add_modifier(Modifier::DIM),
+            highlight_style,
+        );
+        idx += 1;
+    }
+
+    // Divider
+    if show_divider {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                ui::INLINE_BLOCK_HORIZONTAL.repeat(layout[idx].width as usize),
+                border_style,
+            )))
+            .wrap(Wrap { trim: false }),
+            layout[idx],
+        );
+        idx += 1;
+    }
+
+    // Tree
+    let tree_area = layout[idx];
+    if tree_area.height == 0 {
         return;
     }
 
-    let default_style = default_style(session);
+    let tree_styles = file_tree_styles(session);
+    let state = session
+        .file_palette
+        .as_mut()
+        .expect("palette checked above")
+        .tree_state_mut();
+    let tree = Tree::default()
+        .groups(tree_groups)
+        .mode(Mode::None)
+        .styles(tree_styles)
+        .chevron_collapsed("\u{1F5C0}")
+        .chevron_expanded("\u{231E}")
+        .highlight_full_row(true);
+
+    StatefulWidget::render(&tree, tree_area, frame.buffer_mut(), state);
+}
+
+fn file_tree_styles(session: &Session) -> TreeStyles {
+    let default_style = default_style(session).bg(Color::Reset);
     let dim_style = default_style.add_modifier(Modifier::DIM);
-    let highlight_style = modal_list_highlight_style(session);
-    let blank_gutter = selection_padding();
+    let highlight = modal_list_highlight_style(session).bg(Color::Reset);
+    let accent = accent_style(session).bg(Color::Reset);
 
-    let selected = rows.iter().position(|row| row.selectable && row.selected);
-    let rendered_rows = rows
-        .into_iter()
-        .enumerate()
-        .map(|(idx, row)| {
-            let is_selected = selected == Some(idx);
-            let cursor = if is_selected {
-                format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
-            } else {
-                blank_gutter.clone()
-            };
-            let cursor_style = if is_selected {
-                highlight_style
-            } else {
-                dim_style
-            };
-            let name_style = if is_selected {
-                highlight_style
-            } else {
-                row.style.add_modifier(Modifier::DIM)
-            };
-            (
-                InlineListRow::single(
-                    Line::from(vec![
-                        Span::styled(cursor, cursor_style),
-                        Span::styled(row.text, name_style),
-                    ]),
-                    if row.selectable {
-                        dim_style
-                    } else {
-                        dim_style.add_modifier(Modifier::DIM)
-                    },
-                ),
-                1_u16,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled(
-            "Files".to_owned(),
-            highlight_style,
-        ))],
-        info: instructions,
-        search: Some(SharedSearchField {
-            label: "Search files".to_owned(),
-            placeholder: Some("filename or path".to_owned()),
-            query: palette.filter_query().to_owned(),
-        }),
-    };
-    let mut model = StaticRowsListPanelModel {
-        rows: rendered_rows,
-        selected,
-        offset: 0,
-        visible_rows: 0,
-    };
-
-    render_shared_list_panel(
-        frame,
-        area,
-        sections,
-        SharedListPanelStyles {
-            base_style: dim_style,
-            selected_style: Some(highlight_style),
-            text_style: dim_style,
-            divider_style: Some(session.core.styles.border_style()),
-        },
-        &mut model,
-    );
+    TreeStyles {
+        parent: default_style,
+        child: dim_style,
+        selected: highlight,
+        chevron: dim_style,
+        chevron_active: accent,
+        chevron_dim: dim_style.add_modifier(Modifier::DIM),
+        count: dim_style,
+        icon: Style::default(),
+    }
 }
 
 fn build_agent_palette_rows(
@@ -357,51 +378,6 @@ fn build_agent_palette_rows(
         rows.push(AgentPaletteRenderRow {
             text: format!("... ({} more items)", remaining),
             subtitle: None,
-            style: default.add_modifier(Modifier::DIM | Modifier::ITALIC),
-            selectable: false,
-            selected: false,
-        });
-    }
-
-    rows
-}
-
-fn build_file_palette_rows(session: &Session, palette: &FilePalette) -> Vec<FilePaletteRenderRow> {
-    let mut rows = Vec::new();
-    let default = default_style(session);
-
-    for (_global_idx, entry, selected) in palette.current_page_items() {
-        let mut style = default;
-        let prefix = if entry.is_dir {
-            style = style.add_modifier(Modifier::BOLD);
-            "↳  "
-        } else {
-            "  · "
-        };
-
-        rows.push(FilePaletteRenderRow {
-            text: format!("{}{}", prefix, entry.display_name),
-            style,
-            selectable: true,
-            selected,
-        });
-    }
-
-    if rows.is_empty() {
-        rows.push(FilePaletteRenderRow {
-            text: "No matching files".to_owned(),
-            style: default.add_modifier(Modifier::DIM),
-            selectable: false,
-            selected: false,
-        });
-    }
-
-    if palette.has_more_items() {
-        let remaining = palette
-            .total_items()
-            .saturating_sub(palette.current_page_number() * 20);
-        rows.push(FilePaletteRenderRow {
-            text: format!("  ... ({} more items)", remaining),
             style: default.add_modifier(Modifier::DIM | Modifier::ITALIC),
             selectable: false,
             selected: false,
@@ -468,7 +444,7 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
         };
 
         lines.push(Line::from(vec![Span::styled(
-            "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select · Esc Close".to_owned(),
+            "↑↓ Navigate · ← → Expand/Collapse · Enter Select · Esc Close".to_owned(),
             default_style(session),
         )]));
 

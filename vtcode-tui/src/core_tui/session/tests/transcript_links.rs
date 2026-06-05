@@ -1347,14 +1347,39 @@ fn clicking_selected_file_palette_row_inserts_reference() {
     );
     session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
 
-    let _ = rendered_app_session_lines(&mut session, 20);
+    // Tree starts collapsed — expand the group first via Right arrow.
+    let _ = session.process_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    let lines = rendered_app_session_lines(&mut session, 20);
     let panel_area = session.core.bottom_panel_area().expect("panel area");
+
+    // Find the child row (session.rs) in the rendered tree.
+    // child_row is the absolute line index in the rendered output.
+    let child_row = lines
+        .iter()
+        .position(|line| line.contains("session.rs"))
+        .expect("child file should render");
+
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
+
+    // First click selects the child row.
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: panel_area.x,
-            row: panel_area.y + 5,
+            row: child_row as u16,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    // Second click on the selected child inserts the file reference.
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: panel_area.x,
+            row: child_row as u16,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,

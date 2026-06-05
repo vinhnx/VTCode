@@ -42,8 +42,8 @@ fn file_palette_renders_search_field_above_results() {
         .expect("search files field should render");
     let item_index = lines
         .iter()
-        .position(|line| line.contains("src/main.rs"))
-        .expect("file result should render");
+        .position(|line| line.contains("src/"))
+        .expect("file group should render");
 
     assert!(search_index < item_index);
 }

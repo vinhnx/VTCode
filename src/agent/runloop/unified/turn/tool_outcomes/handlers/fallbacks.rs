@@ -58,6 +58,27 @@ pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Optio
                 }),
             ))
         }
+        tool_names::UNIFIED_FILE => {
+            let action = tool_intent::unified_file_action(args).unwrap_or("read");
+            if action.eq_ignore_ascii_case("write") {
+                unified_file_write_fallback(args)
+            } else {
+                let path = trimmed_non_empty_string_field(args, "path")
+                    .or_else(|| trimmed_non_empty_string_field(args, "file_path"))
+                    .or_else(|| trimmed_non_empty_string_field(args, "filepath"))
+                    .or_else(|| trimmed_non_empty_string_field(args, "target_path"))
+                    .or_else(|| trimmed_non_empty_string_field(args, "file"))
+                    .or_else(|| trimmed_non_empty_string_field(args, "p"))
+                    .unwrap_or_else(|| ".".to_string());
+                Some((
+                    tool_names::UNIFIED_SEARCH.to_string(),
+                    json!({
+                        "action": "list",
+                        "path": path
+                    }),
+                ))
+            }
+        }
         _ => Some((
             tool_names::UNIFIED_SEARCH.to_string(),
             json!({
@@ -66,6 +87,51 @@ pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Optio
             }),
         )),
     }
+}
+
+/// Build a `unified_exec` fallback for a `unified_file` write that failed
+/// (e.g. content exceeded the safe write limit or JSON arguments were corrupted).
+///
+/// Uses `cat` with a heredoc to write the file content via shell.
+fn unified_file_write_fallback(args: &Value) -> Option<(String, Value)> {
+    let path = args
+        .get("path")
+        .or_else(|| args.get("file_path"))
+        .or_else(|| args.get("filepath"))
+        .or_else(|| args.get("target_path"))
+        .or_else(|| args.get("file"))
+        .or_else(|| args.get("p"))
+        .and_then(Value::as_str)?;
+
+    let content = args.get("content").and_then(Value::as_str)?;
+
+    let delimiter = unique_heredoc_delimiter(content)?;
+    let escaped_path = path.replace('\'', "'\\''");
+    let command = format!(
+        "cat > '{}' << '{}'\n{}\n{}",
+        escaped_path, delimiter, content, delimiter
+    );
+    Some((
+        tool_names::UNIFIED_EXEC.to_string(),
+        json!({
+            "action": "run",
+            "command": command
+        }),
+    ))
+}
+
+/// Pick a heredoc delimiter that does not appear as a standalone line in `content`.
+/// Returns `None` if all candidates collide (extremely unlikely).
+fn unique_heredoc_delimiter(content: &str) -> Option<&'static str> {
+    const CANDIDATES: &[&str] = &[
+        "__VT_WRITE_EOF__",
+        "__VT_WRITE_EOF_2__",
+        "__VT_WRITE_EOF_3__",
+    ];
+    CANDIDATES
+        .iter()
+        .find(|d| !content.lines().any(|line| line == **d))
+        .copied()
 }
 
 pub(super) fn build_validation_error_content_with_fallback(
@@ -241,5 +307,88 @@ mod tests {
         assert_eq!(tool_name, tool_names::UNIFIED_SEARCH);
         assert_eq!(recovered_args["action"], "grep");
         assert_eq!(recovered_args["pattern"], "todo");
+    }
+
+    #[test]
+    fn recovery_fallback_unified_file_write_returns_unified_exec() {
+        let args = json!({
+            "action": "write",
+            "path": "docs/output.md",
+            "content": "# Large Document\n\nSome content here."
+        });
+
+        let (tool_name, fallback_args) =
+            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+                .expect("unified_file write should have fallback");
+
+        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
+        assert_eq!(fallback_args["action"], "run");
+        let command = fallback_args["command"].as_str().expect("command should be a string");
+        assert!(command.contains("'docs/output.md'"), "command should quote the path");
+        assert!(command.contains("# Large Document"), "command should include the content");
+        assert!(command.contains("__VT_WRITE_EOF__"), "command should use unique delimiter");
+    }
+
+    #[test]
+    fn recovery_fallback_unified_file_write_quotes_path_with_spaces() {
+        let args = json!({
+            "action": "write",
+            "path": "my files/output.md",
+            "content": "data"
+        });
+
+        let (tool_name, fallback_args) =
+            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+                .expect("unified_file write should have fallback");
+
+        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
+        let command = fallback_args["command"].as_str().expect("command");
+        assert!(command.contains("'my files/output.md'"), "path with spaces should be quoted");
+    }
+
+    #[test]
+    fn recovery_fallback_unified_file_write_infers_action_from_content() {
+        let args = json!({
+            "path": "output.txt",
+            "content": "Hello, world!"
+        });
+
+        let (tool_name, fallback_args) =
+            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+                .expect("unified_file with content should have write fallback");
+
+        assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
+        assert_eq!(fallback_args["action"], "run");
+    }
+
+    #[test]
+    fn recovery_fallback_unified_file_read_preserves_path() {
+        let args = json!({
+            "action": "read",
+            "path": "src/main.rs"
+        });
+
+        let (tool_name, fallback_args) =
+            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+                .expect("unified_file read should have fallback");
+
+        assert_eq!(tool_name, tool_names::UNIFIED_SEARCH);
+        assert_eq!(fallback_args["action"], "list");
+        assert_eq!(fallback_args["path"], "src/main.rs");
+    }
+
+    #[test]
+    fn unique_heredoc_delimiter_avoids_content_collision() {
+        let content = "line 1\n__VT_WRITE_EOF__\nline 3";
+        let delimiter = super::unique_heredoc_delimiter(content)
+            .expect("should find a non-colliding delimiter");
+        assert_ne!(delimiter, "__VT_WRITE_EOF__");
+        assert!(!content.lines().any(|l| l == delimiter));
+    }
+
+    #[test]
+    fn unique_heredoc_delimiter_returns_none_when_all_collide() {
+        let content = "__VT_WRITE_EOF__\n__VT_WRITE_EOF_2__\n__VT_WRITE_EOF_3__";
+        assert!(super::unique_heredoc_delimiter(content).is_none());
     }
 }

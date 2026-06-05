@@ -73,8 +73,9 @@ impl FileOpsTool {
         let content_size = input.content.len();
         if content_size > MAX_WRITE_BYTES {
             return Err(anyhow!(
-                "Content exceeds safe write limit ({} bytes). Use search_replace or apply_patch for large edits.",
-                MAX_WRITE_BYTES
+                "Content exceeds safe write limit ({MAX_WRITE_BYTES} bytes, got {content_size} bytes). \
+                 Use unified_exec with a shell heredoc to write large files, e.g. \
+                 unified_exec(action='run', command=\"cat > '<path>' << '__VT_WRITE_EOF__'\\n<content>\\n__VT_WRITE_EOF__\")."
             ));
         }
 

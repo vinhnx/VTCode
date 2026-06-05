@@ -211,23 +211,39 @@ impl AppSession {
                 self.mark_dirty();
                 true
             }
+            KeyCode::Left => {
+                palette.collapse_selected();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Right => {
+                palette.expand_selected();
+                self.mark_dirty();
+                true
+            }
             KeyCode::Tab => {
                 palette.select_best_match();
                 self.mark_dirty();
                 true
             }
             KeyCode::Enter => {
-                let selected_path = palette.get_selected().map(|e| e.relative_path.clone());
-                if let Some(path) = selected_path {
-                    self.insert_file_reference(&path);
-                    self.close_file_palette();
+                if palette.selected_is_group() {
+                    palette.toggle_selected();
                     self.mark_dirty();
-                    true // Selection made: consume event
+                    true
                 } else {
-                    // No selection: close palette and fall through to normal submit
-                    self.close_file_palette();
-                    self.mark_dirty();
-                    false // Let normal Enter handling proceed
+                    let selected_path =
+                        palette.get_selected_entry().map(|e| e.relative_path.clone());
+                    if let Some(path) = selected_path {
+                        self.insert_file_reference(&path);
+                        self.close_file_palette();
+                        self.mark_dirty();
+                        true
+                    } else {
+                        self.close_file_palette();
+                        self.mark_dirty();
+                        false
+                    }
                 }
             }
             KeyCode::Esc => {

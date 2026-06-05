@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use crate::core_tui::session::list_navigator::ListNavigator;
+use ratatui_cheese::tree::{TreeGroup, TreeState};
+
 use crate::ui::FileColorizer;
 
 mod filtering;
@@ -9,12 +10,9 @@ mod references;
 
 pub use references::extract_file_reference;
 
-const PAGE_SIZE: usize = 20;
-
 #[derive(Debug, Clone)]
 pub struct FileEntry {
     pub path: String,
-    #[expect(dead_code)]
     pub display_name: String,
     pub relative_path: String,
     pub is_dir: bool,
@@ -23,11 +21,12 @@ pub struct FileEntry {
 pub struct FilePalette {
     all_files: Vec<FileEntry>,
     filtered_files: Vec<FileEntry>,
-    navigator: ListNavigator,
+    tree_groups: Vec<TreeGroup>,
+    group_entries: Vec<Vec<FileEntry>>,
+    tree_state: TreeState,
     filter_query: String,
     workspace_root: PathBuf,
     filter_cache: hashbrown::HashMap<String, Vec<FileEntry>>,
-    #[expect(dead_code)]
     file_colorizer: FileColorizer,
 }
 
@@ -36,7 +35,9 @@ impl FilePalette {
         Self {
             all_files: Vec::new(),
             filtered_files: Vec::new(),
-            navigator: ListNavigator::new(),
+            tree_groups: Vec::new(),
+            group_entries: Vec::new(),
+            tree_state: TreeState::new(0),
             filter_query: String::new(),
             workspace_root,
             filter_cache: hashbrown::HashMap::new(),
@@ -44,20 +45,30 @@ impl FilePalette {
         }
     }
 
-    /// Reset selection and filter (call when opening file browser)
-    #[expect(dead_code)]
     pub fn reset(&mut self) {
         self.filter_query.clear();
-        self.apply_filter(); // Refresh filtered_files to show all
-        self.navigator.select_first();
+        self.apply_filter();
     }
 
-    /// Clean up resources to free memory (call when closing file browser)
     pub fn cleanup(&mut self) {
         self.filter_cache.clear();
         self.filtered_files.clear();
         self.filtered_files.shrink_to_fit();
-        self.navigator.set_item_count(0);
+        self.tree_groups.clear();
+        self.group_entries.clear();
+        self.tree_state = TreeState::new(0);
+    }
+
+    pub fn tree_groups(&self) -> &[TreeGroup] {
+        &self.tree_groups
+    }
+
+    pub fn tree_state(&self) -> &TreeState {
+        &self.tree_state
+    }
+
+    pub fn tree_state_mut(&mut self) -> &mut TreeState {
+        &mut self.tree_state
     }
 }
 
