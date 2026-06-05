@@ -121,8 +121,22 @@ pub enum ModelId {
     EvolinkGpt55,
     /// DeepSeek V4 Pro served through the Evolink gateway
     EvolinkDeepseekV4Pro,
+    /// DeepSeek V4 Flash served through the Evolink gateway
+    EvolinkDeepseekV4Flash,
     /// Doubao Seed 2.0 Pro served through the Evolink gateway
     EvolinkDoubaoSeed20Pro,
+    /// Gemini 3.1 Pro served through the Evolink gateway (OpenAI SDK format)
+    EvolinkGemini31Pro,
+    /// Gemini 3.5 Flash served through the Evolink gateway (OpenAI SDK format)
+    EvolinkGemini35Flash,
+    /// MiniMax-M3 served through the Evolink gateway (OpenAI Chat Completions format)
+    EvolinkMinimaxM3,
+    /// Claude Sonnet 4.6 served through the Evolink gateway (Anthropic Messages API)
+    EvolinkClaudeSonnet46,
+    /// Claude Opus 4.8 served through the Evolink gateway (Anthropic Messages API)
+    EvolinkClaudeOpus48,
+    /// Claude Haiku 4.5 served through the Evolink gateway (Anthropic Messages API)
+    EvolinkClaudeHaiku45,
 
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,

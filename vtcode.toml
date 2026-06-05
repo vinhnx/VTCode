@@ -22,18 +22,18 @@ enabled = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "EVOLINK_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "evolink/doubao-seed-2.0-pro"
+default_model = "gpt-5.5"
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "evolink"
+provider = "openai"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -41,7 +41,7 @@ provider = "evolink"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "high"
+reasoning_effort = "low"
 theme = "ciapre-blue"
 
 # Persistent Memory

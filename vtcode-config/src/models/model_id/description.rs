@@ -255,8 +255,29 @@ impl ModelId {
             ModelId::EvolinkDeepseekV4Pro => {
                 "DeepSeek V4 Pro reasoning model served through the Evolink gateway (direct.evolink.ai)."
             }
+            ModelId::EvolinkDeepseekV4Flash => {
+                "DeepSeek V4 Flash fast inference model served through the Evolink gateway (direct.evolink.ai)."
+            }
             ModelId::EvolinkDoubaoSeed20Pro => {
                 "Doubao Seed 2.0 Pro served through the Evolink gateway (direct.evolink.ai)."
+            }
+            ModelId::EvolinkGemini31Pro => {
+                "Gemini 3.1 Pro served through the Evolink gateway via OpenAI SDK format (direct.evolink.ai)."
+            }
+            ModelId::EvolinkGemini35Flash => {
+                "Gemini 3.5 Flash served through the Evolink gateway via OpenAI SDK format (direct.evolink.ai)."
+            }
+            ModelId::EvolinkMinimaxM3 => {
+                "MiniMax-M3 frontier multimodal model served through the Evolink gateway (direct.evolink.ai)."
+            }
+            ModelId::EvolinkClaudeSonnet46 => {
+                "Claude Sonnet 4.6 served through the Evolink gateway via Anthropic Messages API."
+            }
+            ModelId::EvolinkClaudeOpus48 => {
+                "Claude Opus 4.8 served through the Evolink gateway via Anthropic Messages API."
+            }
+            ModelId::EvolinkClaudeHaiku45 => {
+                "Claude Haiku 4.5 served through the Evolink gateway via Anthropic Messages API."
             }
             // Qwen models
             ModelId::Qwen37Max => {

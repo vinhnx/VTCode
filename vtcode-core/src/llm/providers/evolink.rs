@@ -10,7 +10,7 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
 
 use super::common::{
@@ -214,6 +214,166 @@ impl EvolinkProvider {
 
         Ok(Value::Object(payload))
     }
+
+    fn is_anthropic_model(model: &str) -> bool {
+        models::evolink::is_anthropic_format(model)
+    }
+
+    fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let mut payload = Map::with_capacity(8);
+        let model = Self::normalize_model(&request.model).to_string();
+        payload.insert("model".to_owned(), Value::String(model));
+
+        // Anthropic uses top-level `system` field, not a system message
+        if let Some(system_prompt) = &request.system_prompt {
+            let trimmed = system_prompt.trim();
+            if !trimmed.is_empty() {
+                payload.insert("system".to_owned(), Value::String(trimmed.to_string()));
+            }
+        }
+
+        // Convert messages to Anthropic format (user/assistant only, no system)
+        let anthropic_messages: Vec<Value> = request
+            .messages
+            .iter()
+            .filter(|msg| msg.role != crate::llm::provider::MessageRole::System)
+            .map(|msg| {
+                let role = match msg.role {
+                    crate::llm::provider::MessageRole::User => "user",
+                    crate::llm::provider::MessageRole::Assistant => "assistant",
+                    _ => "user",
+                };
+                serde_json::json!({
+                    "role": role,
+                    "content": msg.content.as_text()
+                })
+            })
+            .collect();
+        payload.insert("messages".to_owned(), Value::Array(anthropic_messages));
+
+        let max_tokens = request.max_tokens.unwrap_or(8192);
+        payload.insert(
+            "max_tokens".to_owned(),
+            Value::Number(serde_json::Number::from(max_tokens as u64)),
+        );
+
+        if let Some(temperature) = request.temperature {
+            payload.insert(
+                "temperature".to_owned(),
+                Value::Number(Self::float_to_json_number(temperature)?),
+            );
+        }
+
+        if request.stream {
+            payload.insert("stream".to_owned(), Value::Bool(true));
+        }
+
+        Ok(Value::Object(payload))
+    }
+
+    fn parse_anthropic_response(response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
+        let content = response_json
+            .get("content")
+            .and_then(|c| c.as_array())
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter_map(|block| {
+                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                            block.get("text").and_then(|t| t.as_str()).map(String::from)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("")
+            });
+
+        let usage = response_json.get("usage").map(|u| {
+            let prompt_tokens = u.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
+            let completion_tokens = u.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
+            crate::llm::provider::Usage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens + completion_tokens,
+                cached_prompt_tokens: u
+                    .get("cache_read_input_tokens")
+                    .and_then(|t| t.as_u64())
+                    .map(|v| v as u32),
+                cache_creation_tokens: u
+                    .get("cache_creation_input_tokens")
+                    .and_then(|t| t.as_u64())
+                    .map(|v| v as u32),
+                cache_read_tokens: None,
+            }
+        });
+
+        let finish_reason = match response_json
+            .get("stop_reason")
+            .and_then(|r| r.as_str())
+        {
+            Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
+            Some("max_tokens") => FinishReason::Length,
+            Some("tool_use") => FinishReason::ToolCalls,
+            _ => FinishReason::Stop,
+        };
+
+        Ok(LLMResponse {
+            content,
+            tool_calls: None,
+            model,
+            usage,
+            finish_reason,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: response_json
+                .get("id")
+                .and_then(|id| id.as_str())
+                .map(String::from),
+            organization_id: None,
+            compaction: None,
+        })
+    }
+
+    async fn generate_anthropic(
+        &self,
+        mut request: LLMRequest,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
+        request.stream = false;
+        let payload = self.convert_to_anthropic_format(&request)?;
+        let url = format!("{}/messages", self.base_url.trim_end_matches('/'));
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|error| LLMError::Network {
+                message: error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("network error: {error}"),
+                ),
+                metadata: None,
+            })?;
+
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, PRIMARY_API_KEY_ENV).await?;
+
+        let response_json: Value = response.json().await.map_err(|error| LLMError::Provider {
+            message: error_display::format_llm_error(
+                PROVIDER_NAME,
+                &format!("failed to parse Anthropic response: {error}"),
+            ),
+            metadata: None,
+        })?;
+
+        Self::parse_anthropic_response(response_json, model)
+    }
 }
 
 #[async_trait]
@@ -272,6 +432,10 @@ impl LLMProvider for EvolinkProvider {
         }
         let model = Self::normalize_model(&request.model).to_string();
 
+        if Self::is_anthropic_model(&model) {
+            return self.generate_anthropic(request, model).await;
+        }
+
         let payload = self.convert_to_evolink_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
@@ -324,8 +488,27 @@ impl LLMProvider for EvolinkProvider {
         }
 
         self.validate_request(&request)?;
-        request.stream = true;
         let model = Self::normalize_model(&request.model).to_string();
+
+        // Anthropic models: fall back to non-streaming via generate_anthropic
+        if Self::is_anthropic_model(&model) {
+            request.stream = false;
+            let response = self.generate_anthropic(request, model).await?;
+            let (tx, rx) =
+                tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+            let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                response: Box::new(response),
+            }));
+            let stream = async_stream::try_stream! {
+                let mut receiver = rx;
+                while let Some(event) = receiver.recv().await {
+                    yield event?;
+                }
+            };
+            return Ok(Box::pin(stream));
+        }
+
+        request.stream = true;
 
         let payload = self.convert_to_evolink_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));

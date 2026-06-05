@@ -52,7 +52,14 @@ impl ModelId {
             ModelId::EvolinkGpt52
             | ModelId::EvolinkGpt55
             | ModelId::EvolinkDeepseekV4Pro
-            | ModelId::EvolinkDoubaoSeed20Pro => Provider::Evolink,
+            | ModelId::EvolinkDeepseekV4Flash
+            | ModelId::EvolinkDoubaoSeed20Pro
+            | ModelId::EvolinkGemini31Pro
+            | ModelId::EvolinkGemini35Flash
+            | ModelId::EvolinkMinimaxM3
+            | ModelId::EvolinkClaudeSonnet46
+            | ModelId::EvolinkClaudeOpus48
+            | ModelId::EvolinkClaudeHaiku45 => Provider::Evolink,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK26 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54

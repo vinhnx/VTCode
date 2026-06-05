@@ -116,7 +116,14 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   `evolink/gpt-5.2` (default)
     -   `evolink/gpt-5.5`
     -   `evolink/deepseek-v4-pro`
+    -   `evolink/deepseek-v4-flash`
     -   `evolink/doubao-seed-2.0-pro`
+    -   `evolink/gemini-3.1-pro-preview`
+    -   `evolink/gemini-3.5-flash`
+    -   `evolink/MiniMax-M3`
+    -   `evolink/claude-sonnet-4-6`
+    -   `evolink/claude-opus-4-8`
+    -   `evolink/claude-haiku-4-5-20251001`
 -   **Features:** OpenAI-compatible gateway exposing many upstream models behind one endpoint. Evolink serves models under bare upstream names (e.g. `gpt-5.2`) that collide with VT Code's first-class providers, so curated model IDs are namespaced as `evolink/<model>`. The provider strips the prefix before sending requests upstream.
 
 ## Anthropic API Compatibility Server

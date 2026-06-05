@@ -1,8 +1,1 @@
 big plan: extract and unify and build a centralize design-system cratte for all common base components and utilities, and then build the project on top of it. This will allow us to have a consistent design language across all our projects and also make it easier to maintain and update our components in the future.
-
---
-
-https://github.com/shashanktomar/ratatui-cheese
-
---
-

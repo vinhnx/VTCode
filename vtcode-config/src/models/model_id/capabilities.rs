@@ -211,7 +211,14 @@ impl ModelId {
             ModelId::EvolinkGpt52
             | ModelId::EvolinkGpt55
             | ModelId::EvolinkDeepseekV4Pro
-            | ModelId::EvolinkDoubaoSeed20Pro => None,
+            | ModelId::EvolinkDeepseekV4Flash
+            | ModelId::EvolinkDoubaoSeed20Pro
+            | ModelId::EvolinkGemini31Pro
+            | ModelId::EvolinkGemini35Flash
+            | ModelId::EvolinkMinimaxM3
+            | ModelId::EvolinkClaudeSonnet46
+            | ModelId::EvolinkClaudeOpus48
+            | ModelId::EvolinkClaudeHaiku45 => None,
             ModelId::PoolsideLagunaM1 => Some(ModelId::PoolsideLagunaXs2),
             _ => None,
         }
@@ -269,6 +276,7 @@ impl ModelId {
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
+            ModelId::EvolinkDeepseekV4Pro => Some(ModelId::EvolinkDeepseekV4Flash),
             ModelId::HuggingFaceDeepseekV4ProTogether => {
                 Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
             }
@@ -300,6 +308,8 @@ impl ModelId {
             self,
             ModelId::Gemini31FlashLitePreview
                 | ModelId::Gemini35Flash
+                | ModelId::EvolinkGemini35Flash
+                | ModelId::EvolinkDeepseekV4Flash
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::HuggingFaceStep35Flash
@@ -332,6 +342,8 @@ impl ModelId {
                 | ModelId::OpenCodeGoGlm51
                 | ModelId::OpenCodeGoMinimaxM27
                 | ModelId::DeepSeekV4Pro
+                | ModelId::EvolinkDeepseekV4Pro
+                | ModelId::EvolinkGemini31Pro
                 | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
