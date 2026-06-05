@@ -308,6 +308,8 @@ pub enum ModelId {
     OpenRouterStepfunStep35FlashFree,
     /// Nemotron 3 Super (free) - NVIDIA's 120B hybrid MoE model via OpenRouter
     OpenRouterNvidiaNemotron3Super120bA12bFree,
+    /// Nemotron 3 Ultra - NVIDIA's open frontier-reasoning and orchestration model via OpenRouter
+    OpenRouterNvidiaNemotron3Ultra550bA55b,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
     /// GLM-5.1 - Z.AI GLM-5.1 next-gen foundation model via OpenRouter
