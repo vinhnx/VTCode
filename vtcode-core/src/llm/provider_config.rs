@@ -211,6 +211,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    EvolinkProviderConfig,
+    "evolink",
+    "Evolink",
+    crate::config::constants::models::evolink::DEFAULT_MODEL,
+    crate::config::constants::urls::EVOLINK_API_BASE,
+    Some(crate::config::constants::env_vars::EVOLINK_BASE_URL),
+    ()
+);
+define_provider_config!(
     PoolsideProviderConfig,
     "poolside",
     "Poolside",

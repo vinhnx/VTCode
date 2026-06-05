@@ -35,6 +35,7 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "opencode-go",
     "qwen",
     "stepfun",
+    "evolink",
     "poolside",
 ];
 
@@ -341,6 +342,7 @@ mod tests {
                 "anthropic",
                 "copilot",
                 "deepseek",
+                "evolink",
                 "gemini",
                 "huggingface",
                 "llamacpp",

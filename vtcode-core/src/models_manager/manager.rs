@@ -347,6 +347,9 @@ impl ModelsManager {
             Provider::StepFun => {
                 crate::config::constants::models::stepfun::DEFAULT_MODEL.to_string()
             }
+            Provider::Evolink => {
+                crate::config::constants::models::evolink::DEFAULT_MODEL.to_string()
+            }
             Provider::Poolside => {
                 crate::config::constants::models::poolside::DEFAULT_MODEL.to_string()
             }

@@ -3862,6 +3862,109 @@
       }
     }
   },
+  "evolink": {
+    "id": "evolink",
+    "env": [
+      "EVOLINK_API_KEY"
+    ],
+    "api": "https://direct.evolink.ai/v1",
+    "name": "Evolink",
+    "doc": "https://docs.evolink.ai/llms.txt",
+    "default_model": "gpt-5.2",
+    "models": {
+      "gpt-5.2": {
+        "id": "gpt-5.2",
+        "name": "GPT-5.2 (Evolink)",
+        "description": "GPT-5.2 served through the Evolink OpenAI-compatible gateway.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "capabilities": {
+          "thinking": false,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "gpt-5.5": {
+        "id": "gpt-5.5",
+        "name": "GPT-5.5 (Evolink)",
+        "description": "GPT-5.5 flagship model served through the Evolink gateway.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "capabilities": {
+          "thinking": false,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "deepseek-v4-pro": {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro (Evolink)",
+        "description": "DeepSeek V4 Pro reasoning model served through the Evolink gateway.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 163840,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "doubao-seed-2.0-pro": {
+        "id": "doubao-seed-2.0-pro",
+        "name": "Doubao Seed 2.0 Pro (Evolink)",
+        "description": "Doubao Seed 2.0 Pro served through the Evolink gateway.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
+  },
   "stepfun": {
     "id": "stepfun",
     "env": [

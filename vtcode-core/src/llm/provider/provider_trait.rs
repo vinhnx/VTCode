@@ -149,6 +149,7 @@ pub trait LLMProvider: Send + Sync {
             "opencode-go" => BackendKind::OpenCodeGo,
             "qwen" => BackendKind::Qwen,
             "stepfun" => BackendKind::StepFun,
+            "evolink" => BackendKind::Evolink,
             "poolside" => BackendKind::Poolside,
             _ => BackendKind::OpenAI,
         }

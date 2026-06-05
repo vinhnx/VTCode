@@ -22,4 +22,5 @@ pub const OPENCODE_ZEN_API_BASE: &str = "https://opencode.ai/zen/v1";
 pub const OPENCODE_GO_API_BASE: &str = "https://opencode.ai/zen/go/v1";
 pub const QWEN_API_BASE: &str = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 pub const STEPFUN_API_BASE: &str = "https://api.stepfun.ai/v1";
+pub const EVOLINK_API_BASE: &str = "https://direct.evolink.ai/v1";
 pub const POOLSIDE_API_BASE: &str = "https://api.poolsi.de/openai/v1";

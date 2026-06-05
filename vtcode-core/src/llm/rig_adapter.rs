@@ -95,6 +95,9 @@ impl RigProviderCapabilities {
             Provider::StepFun => {
                 // StepFun uses an OpenAI-compatible API; rig has no dedicated client.
             }
+            Provider::Evolink => {
+                // Evolink is an OpenAI-compatible gateway; rig has no dedicated client.
+            }
             Provider::Poolside => {
                 // Poolside uses an OpenAI-compatible API; rig has no dedicated client.
             }
@@ -205,6 +208,16 @@ impl RigProviderCapabilities {
                 })),
             },
             Provider::StepFun => match effort {
+                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
+                    Some(json!({ "reasoning_effort": "low" }))
+                }
+                ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
+                ReasoningEffortLevel::High
+                | ReasoningEffortLevel::XHigh
+                | ReasoningEffortLevel::Max => Some(json!({ "reasoning_effort": "high" })),
+            },
+            Provider::Evolink => match effort {
                 ReasoningEffortLevel::None => None,
                 ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
                     Some(json!({ "reasoning_effort": "low" }))

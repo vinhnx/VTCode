@@ -22,6 +22,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         "ollama" => Some(models::ollama::SUPPORTED_MODELS),
         "qwen" => Some(models::qwen::SUPPORTED_MODELS),
         "stepfun" => Some(models::stepfun::SUPPORTED_MODELS),
+        "evolink" => Some(models::evolink::SUPPORTED_MODELS),
         "poolside" => Some(models::poolside::SUPPORTED_MODELS),
         _ => None,
     }
@@ -49,6 +50,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "ollama" => Some(models::ollama::DEFAULT_MODEL),
         "qwen" => Some(models::qwen::DEFAULT_MODEL),
         "stepfun" => Some(models::stepfun::DEFAULT_MODEL),
+        "evolink" => Some(models::evolink::DEFAULT_MODEL),
         "poolside" => Some(models::poolside::DEFAULT_MODEL),
         _ => None,
     }

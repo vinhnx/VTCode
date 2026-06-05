@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::constants::models::copilot as copilot_models;
+use crate::config::constants::models::evolink as evolink_models;
 use crate::config::constants::models::llamacpp as llamacpp_models;
 use crate::config::constants::models::mimo as mimo_models;
 use crate::config::constants::models::poolside as poolside_models;
@@ -188,6 +189,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // StepFun presets
     presets.extend(stepfun_presets());
 
+    // Evolink presets
+    presets.extend(evolink_presets());
+
     presets
 }
 
@@ -213,6 +217,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::MiMo => mimo_presets(),
         Provider::Qwen => qwen_presets(),
         Provider::StepFun => stepfun_presets(),
+        Provider::Evolink => evolink_presets(),
         Provider::Poolside => poolside_presets(),
     }
 }
@@ -1748,6 +1753,83 @@ fn stepfun_presets() -> Vec<ModelPreset> {
         supported_in_api: true,
         context_window: Some(262_144),
     }]
+}
+
+fn evolink_presets() -> Vec<ModelPreset> {
+    vec![
+        ModelPreset {
+            id: "evolink/gpt-5.2".to_string(),
+            model: evolink_models::GPT_5_2.to_string(),
+            display_name: "GPT-5.2 (Evolink)".to_string(),
+            description: "GPT-5.2 served through the Evolink OpenAI-compatible gateway."
+                .to_string(),
+            provider: Provider::Evolink,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![reasoning_preset(
+                ReasoningEffortLevel::Medium,
+                "Balanced",
+            )],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(400_000),
+        },
+        ModelPreset {
+            id: "evolink/gpt-5.5".to_string(),
+            model: evolink_models::GPT_5_5.to_string(),
+            display_name: "GPT-5.5 (Evolink)".to_string(),
+            description: "GPT-5.5 flagship model served through the Evolink gateway.".to_string(),
+            provider: Provider::Evolink,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![reasoning_preset(
+                ReasoningEffortLevel::Medium,
+                "Balanced",
+            )],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(400_000),
+        },
+        ModelPreset {
+            id: "evolink/deepseek-v4-pro".to_string(),
+            model: evolink_models::DEEPSEEK_V4_PRO.to_string(),
+            display_name: "DeepSeek V4 Pro (Evolink)".to_string(),
+            description: "DeepSeek V4 Pro reasoning model served through the Evolink gateway."
+                .to_string(),
+            provider: Provider::Evolink,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep"),
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(163_840),
+        },
+        ModelPreset {
+            id: "evolink/doubao-seed-2.0-pro".to_string(),
+            model: evolink_models::DOUBAO_SEED_2_0_PRO.to_string(),
+            display_name: "Doubao Seed 2.0 Pro (Evolink)".to_string(),
+            description: "Doubao Seed 2.0 Pro served through the Evolink gateway.".to_string(),
+            provider: Provider::Evolink,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                reasoning_preset(ReasoningEffortLevel::Low, "Fast"),
+                reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"),
+                reasoning_preset(ReasoningEffortLevel::High, "Deep"),
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(262_144),
+        },
+    ]
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {

@@ -110,6 +110,7 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
         "lmstudio" => (config.providers.lmstudio.as_ref(), true),
         "llamacpp" => (config.providers.llamacpp.as_ref(), true),
         "stepfun" => (config.providers.stepfun.as_ref(), false),
+        "evolink" => (config.providers.evolink.as_ref(), false),
         _ => return false,
     };
     provider_config
@@ -202,7 +203,7 @@ async fn handle_config_provider(
 
     match provider {
         "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio"
-        | "llamacpp" | "stepfun" => {
+        | "llamacpp" | "stepfun" | "evolink" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
@@ -240,6 +241,7 @@ fn configure_standard_provider(
         "llamacpp" => get_provider_config!(llamacpp),
         "minimax" => get_provider_config!(anthropic), // Note: maps to anthropic
         "stepfun" => get_provider_config!(stepfun),
+        "evolink" => get_provider_config!(evolink),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -329,6 +331,7 @@ fn get_provider_credentials(
         "lmstudio" => config.providers.lmstudio.as_ref(),
         "llamacpp" => config.providers.llamacpp.as_ref(),
         "stepfun" => config.providers.stepfun.as_ref(),
+        "evolink" => config.providers.evolink.as_ref(),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
