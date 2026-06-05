@@ -242,6 +242,9 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4ProNovita => {
                 "DeepSeek V4 Pro via Novita inference provider on HuggingFace router. High-performance reasoning model with advanced thinking capabilities (1M context, 1.6T params)."
             }
+            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
+                "NVIDIA Nemotron 3 Ultra 550B-A55B-NVFP4 via Together inference provider on HuggingFace router."
+            }
             ModelId::StepFun37Flash => {
                 "StepFun's flagship multimodal reasoning model with 256K context, native image/video input, and tool calling."
             }

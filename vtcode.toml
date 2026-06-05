@@ -19,21 +19,11 @@ enabled = true
 # Agent Defaults
 # Primary model, prompt, and chat behavior.
 [agent]
-# Environment variable that stores the API key for the active provider
-# Default: "OPENAI_API_KEY"
-# Type: `string`
-api_key_env = "OPENAI_API_KEY"
 
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.5"
-
-# AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
-# Possible values: anthropic, gemini, openai, openrouter, zai
-# Default: "openai"
-# Type: `string`
-provider = "openai"
+default_model = "nvidia/nemotron-3-ultra-550b-a55b"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -41,7 +31,7 @@ provider = "openai"
 # Possible values: high, low, max, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "low"
+reasoning_effort = "medium"
 theme = "ciapre-blue"
 
 # Persistent Memory

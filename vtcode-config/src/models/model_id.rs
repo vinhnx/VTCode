@@ -109,6 +109,8 @@ pub enum ModelId {
     HuggingFaceMinimaxM27Novita,
     /// DeepSeek V4 Pro via Novita on Hugging Face router
     HuggingFaceDeepseekV4ProNovita,
+    /// NVIDIA Nemotron 3 Ultra 550B via Together on Hugging Face router
+    HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together,
 
     // StepFun models
     /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling

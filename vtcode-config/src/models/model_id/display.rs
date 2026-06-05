@@ -90,6 +90,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm51Deepinfra => "GLM-5.1 (DeepInfra)",
             ModelId::HuggingFaceMinimaxM27Novita => "MiniMax-M2.7 (Novita)",
             ModelId::HuggingFaceDeepseekV4ProNovita => "DeepSeek V4 Pro (Novita)",
+            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => "NVIDIA-Nemotron-3-Ultra-550B (Together)",
             ModelId::StepFun37Flash => "Step 3.7 Flash",
             ModelId::EvolinkGpt52 => "GPT-5.2 (Evolink)",
             ModelId::EvolinkGpt55 => "GPT-5.5 (Evolink)",

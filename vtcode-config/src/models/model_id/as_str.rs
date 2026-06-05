@@ -105,6 +105,9 @@ impl ModelId {
             ModelId::HuggingFaceGlm51Deepinfra => models::huggingface::ZAI_GLM_5_1_DEEPINFRA,
             ModelId::HuggingFaceMinimaxM27Novita => models::huggingface::MINIMAX_M2_7_NOVITA,
             ModelId::HuggingFaceDeepseekV4ProNovita => models::huggingface::DEEPSEEK_V4_PRO_NOVITA,
+            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => {
+                models::huggingface::NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER
+            }
             ModelId::StepFun37Flash => models::stepfun::STEP_3_7_FLASH,
             // Evolink gateway models (namespaced; the provider strips the `evolink/` prefix)
             ModelId::EvolinkGpt52 => "evolink/gpt-5.2",

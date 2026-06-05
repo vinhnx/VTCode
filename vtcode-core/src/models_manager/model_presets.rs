@@ -2053,6 +2053,31 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(1_000_000),
         },
+        ModelPreset {
+            id: "huggingface/nvidia-nemotron-3-ultra".to_string(),
+            model: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4:together".to_string(),
+            display_name: "NVIDIA-Nemotron-3-Ultra-550B (HF/Together)".to_string(),
+            description:
+                "NVIDIA Nemotron 3 Ultra 550B-A55B-NVFP4 via Together inference provider"
+                    .to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(128_000),
+        },
     ]
 }
 

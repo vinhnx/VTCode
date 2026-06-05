@@ -362,6 +362,7 @@ impl ModelId {
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
+                | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::PoolsideLagunaM1
         )
@@ -423,6 +424,7 @@ impl ModelId {
                 | ModelId::HuggingFaceGlm51Deepinfra
                 | ModelId::HuggingFaceMinimaxM27Novita
                 | ModelId::HuggingFaceDeepseekV4ProNovita
+                | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together
                 | ModelId::OpenRouterMoonshotaiKimiK26
                 | ModelId::PoolsideLagunaM1
         )
@@ -526,6 +528,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4ProTogether => "v4-pro",
             ModelId::HuggingFaceDeepseekV4ProNovita => "v4-pro",
             ModelId::HuggingFaceStep35Flash => "3.5",
+            ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => "nemotron-3-ultra",
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"
             }

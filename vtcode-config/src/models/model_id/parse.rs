@@ -186,6 +186,9 @@ impl FromStr for ModelId {
             s if s == models::huggingface::DEEPSEEK_V4_PRO_NOVITA => {
                 Ok(ModelId::HuggingFaceDeepseekV4ProNovita)
             }
+            s if s == models::huggingface::NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER => {
+                Ok(ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together)
+            }
             s if s == models::stepfun::STEP_3_7_FLASH => Ok(ModelId::StepFun37Flash),
             "evolink/gpt-5.2" => Ok(ModelId::EvolinkGpt52),
             "evolink/gpt-5.5" => Ok(ModelId::EvolinkGpt55),

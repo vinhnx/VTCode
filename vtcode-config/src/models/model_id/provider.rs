@@ -47,7 +47,8 @@ impl ModelId {
             | ModelId::HuggingFaceStep35Flash
             | ModelId::HuggingFaceGlm51Deepinfra
             | ModelId::HuggingFaceMinimaxM27Novita
-            | ModelId::HuggingFaceDeepseekV4ProNovita => Provider::HuggingFace,
+            | ModelId::HuggingFaceDeepseekV4ProNovita
+            | ModelId::HuggingFaceNvidiaNemotron3Ultra550bA55bNvfp4Together => Provider::HuggingFace,
             ModelId::StepFun37Flash => Provider::StepFun,
             ModelId::EvolinkGpt52
             | ModelId::EvolinkGpt55

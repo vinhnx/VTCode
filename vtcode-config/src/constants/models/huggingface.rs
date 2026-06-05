@@ -27,6 +27,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // Additional Novita models
     MINIMAX_M2_7_NOVITA,
     DEEPSEEK_V4_PRO_NOVITA,
+    NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER,
 ];
 
 // Recommended conversational LLMs
@@ -58,6 +59,10 @@ pub const DEEPSEEK_V4_FLASH_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Flash:novita
 pub const DEEPSEEK_V4_PRO_TOGETHER: &str = "deepseek-ai/DeepSeek-V4-Pro:together";
 pub const DEEPSEEK_V4_PRO_NOVITA: &str = "deepseek-ai/DeepSeek-V4-Pro:novita";
 
+// NVIDIA models via HF router
+pub const NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER: &str =
+    "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4:together";
+
 // DeepInfra inference provider models
 pub const ZAI_GLM_5_1_DEEPINFRA: &str = "zai-org/GLM-5.1:deepinfra";
 
@@ -83,4 +88,5 @@ pub const REASONING_MODELS: &[&str] = &[
     DEEPSEEK_V4_PRO_NOVITA,
     DEEPSEEK_V4_FLASH_NOVITA,
     STEP_3_5_FLASH,
+    NVIDIA_NEMOTRON_3_ULTRA_550B_A55B_NVFP4_TOGETHER,
 ];
