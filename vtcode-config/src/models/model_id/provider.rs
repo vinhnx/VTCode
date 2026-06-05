@@ -49,6 +49,10 @@ impl ModelId {
             | ModelId::HuggingFaceMinimaxM27Novita
             | ModelId::HuggingFaceDeepseekV4ProNovita => Provider::HuggingFace,
             ModelId::StepFun37Flash => Provider::StepFun,
+            ModelId::EvolinkGpt52
+            | ModelId::EvolinkGpt55
+            | ModelId::EvolinkDeepseekV4Pro
+            | ModelId::EvolinkDoubaoSeed20Pro => Provider::Evolink,
             ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK26 => Provider::Moonshot,
             ModelId::OpenCodeZenGPT54

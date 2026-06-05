@@ -103,6 +103,8 @@ fn catalog_provider_key(provider: &str) -> &str {
         "huggingface"
     } else if provider.eq_ignore_ascii_case("stepfun") {
         "stepfun"
+    } else if provider.eq_ignore_ascii_case("evolink") {
+        "evolink"
     } else if provider.eq_ignore_ascii_case("poolside") {
         "poolside"
     } else {
@@ -131,6 +133,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::OpenCodeGo => "opencode-go",
         Provider::Qwen => "qwen",
         Provider::StepFun => "stepfun",
+        Provider::Evolink => "evolink",
         Provider::Poolside => "poolside",
     }
 }
@@ -205,6 +208,10 @@ impl ModelId {
             ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
             ModelId::OpenCodeGoMinimaxM27 => Some(ModelId::OpenCodeGoMinimaxM25),
             ModelId::StepFun37Flash => None,
+            ModelId::EvolinkGpt52
+            | ModelId::EvolinkGpt55
+            | ModelId::EvolinkDeepseekV4Pro
+            | ModelId::EvolinkDoubaoSeed20Pro => None,
             ModelId::PoolsideLagunaM1 => Some(ModelId::PoolsideLagunaXs2),
             _ => None,
         }

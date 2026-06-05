@@ -47,6 +47,8 @@ pub enum Provider {
     Qwen,
     /// StepFun models
     StepFun,
+    /// Evolink multi-model gateway
+    Evolink,
     /// Poolside AI models
     Poolside,
 }
@@ -74,6 +76,7 @@ impl Provider {
             Provider::OpenCodeGo => "OPENCODE_GO_API_KEY",
             Provider::Qwen => "QWEN_API_KEY",
             Provider::StepFun => "STEPFUN_API_KEY",
+            Provider::Evolink => "EVOLINK_API_KEY",
             Provider::Poolside => "POOLSIDE_API_KEY",
         }
     }
@@ -100,6 +103,7 @@ impl Provider {
             Provider::OpenCodeGo,
             Provider::Qwen,
             Provider::StepFun,
+            Provider::Evolink,
             Provider::Poolside,
         ]
     }
@@ -126,6 +130,7 @@ impl Provider {
             Provider::OpenCodeGo => "OpenCode Go",
             Provider::Qwen => "Qwen",
             Provider::StepFun => "StepFun",
+            Provider::Evolink => "Evolink",
             Provider::Poolside => "Poolside",
         }
     }
@@ -202,6 +207,7 @@ impl Provider {
             Provider::OpenCodeGo => false,
             Provider::Qwen => models::qwen::REASONING_MODELS.contains(&model),
             Provider::StepFun => models::stepfun::REASONING_MODELS.contains(&model),
+            Provider::Evolink => models::evolink::REASONING_MODELS.contains(&model),
             Provider::Poolside => false,
         }
     }
@@ -243,6 +249,7 @@ impl fmt::Display for Provider {
             Provider::OpenCodeGo => write!(f, "opencode-go"),
             Provider::Qwen => write!(f, "qwen"),
             Provider::StepFun => write!(f, "stepfun"),
+            Provider::Evolink => write!(f, "evolink"),
             Provider::Poolside => write!(f, "poolside"),
         }
     }
@@ -270,6 +277,7 @@ impl AsRef<str> for Provider {
             Provider::OpenCodeGo => "opencode-go",
             Provider::Qwen => "qwen",
             Provider::StepFun => "stepfun",
+            Provider::Evolink => "evolink",
             Provider::Poolside => "poolside",
         }
     }
@@ -299,6 +307,7 @@ impl FromStr for Provider {
             "opencode-go" | "opencodego" => Ok(Provider::OpenCodeGo),
             "qwen" => Ok(Provider::Qwen),
             "stepfun" => Ok(Provider::StepFun),
+            "evolink" => Ok(Provider::Evolink),
             "poolside" => Ok(Provider::Poolside),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }

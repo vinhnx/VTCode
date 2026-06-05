@@ -187,6 +187,10 @@ impl FromStr for ModelId {
                 Ok(ModelId::HuggingFaceDeepseekV4ProNovita)
             }
             s if s == models::stepfun::STEP_3_7_FLASH => Ok(ModelId::StepFun37Flash),
+            "evolink/gpt-5.2" => Ok(ModelId::EvolinkGpt52),
+            "evolink/gpt-5.5" => Ok(ModelId::EvolinkGpt55),
+            "evolink/deepseek-v4-pro" => Ok(ModelId::EvolinkDeepseekV4Pro),
+            "evolink/doubao-seed-2.0-pro" => Ok(ModelId::EvolinkDoubaoSeed20Pro),
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             "moonshotai/kimi-k2.6" => Ok(ModelId::OpenRouterMoonshotaiKimiK26),

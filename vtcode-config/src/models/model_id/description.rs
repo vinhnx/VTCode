@@ -245,6 +245,19 @@ impl ModelId {
             ModelId::StepFun37Flash => {
                 "StepFun's flagship multimodal reasoning model with 256K context, native image/video input, and tool calling."
             }
+            // Evolink gateway models
+            ModelId::EvolinkGpt52 => {
+                "GPT-5.2 served through the Evolink OpenAI-compatible gateway (direct.evolink.ai)."
+            }
+            ModelId::EvolinkGpt55 => {
+                "GPT-5.5 flagship model served through the Evolink OpenAI-compatible gateway (direct.evolink.ai)."
+            }
+            ModelId::EvolinkDeepseekV4Pro => {
+                "DeepSeek V4 Pro reasoning model served through the Evolink gateway (direct.evolink.ai)."
+            }
+            ModelId::EvolinkDoubaoSeed20Pro => {
+                "Doubao Seed 2.0 Pro served through the Evolink gateway (direct.evolink.ai)."
+            }
             // Qwen models
             ModelId::Qwen37Max => {
                 "Alibaba Cloud's flagship reasoning model with 131K context, advanced thinking, and strong tool-use capabilities"

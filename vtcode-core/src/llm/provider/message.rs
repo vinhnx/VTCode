@@ -542,7 +542,7 @@ impl Message {
 
         // Provider-specific validations based on official docs
         match provider {
-            "openai" | "openrouter" | "zai" | "stepfun" => {
+            "openai" | "openrouter" | "zai" | "stepfun" | "evolink" => {
                 if self.role == MessageRole::Tool && self.tool_call_id.is_none() {
                     return Err(format!(
                         "{} requires tool_call_id for tool messages",

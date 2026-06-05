@@ -50,6 +50,8 @@ pub struct ProviderConfigs {
     pub minimax: Option<ProviderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stepfun: Option<ProviderConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evolink: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

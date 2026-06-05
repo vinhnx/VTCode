@@ -21,6 +21,7 @@ pub enum BackendKind {
     OpenCodeGo,
     Qwen,
     StepFun,
+    Evolink,
     Poolside,
 }
 

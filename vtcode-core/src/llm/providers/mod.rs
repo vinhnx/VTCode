@@ -3,6 +3,7 @@ pub mod anthropic_types;
 pub mod base;
 pub mod deepseek;
 pub mod error_handling;
+pub mod evolink;
 pub mod gemini;
 pub mod huggingface;
 pub mod llamacpp;
@@ -44,6 +45,7 @@ pub use reasoning::{
 pub use anthropic::AnthropicProvider;
 pub use copilot::CopilotProvider;
 pub use deepseek::DeepSeekProvider;
+pub use evolink::EvolinkProvider;
 pub use gemini::GeminiProvider;
 pub use huggingface::HuggingFaceProvider;
 pub use llamacpp::LlamaCppProvider;

@@ -106,6 +106,11 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM27Novita => models::huggingface::MINIMAX_M2_7_NOVITA,
             ModelId::HuggingFaceDeepseekV4ProNovita => models::huggingface::DEEPSEEK_V4_PRO_NOVITA,
             ModelId::StepFun37Flash => models::stepfun::STEP_3_7_FLASH,
+            // Evolink gateway models (namespaced; the provider strips the `evolink/` prefix)
+            ModelId::EvolinkGpt52 => "evolink/gpt-5.2",
+            ModelId::EvolinkGpt55 => "evolink/gpt-5.5",
+            ModelId::EvolinkDeepseekV4Pro => "evolink/deepseek-v4-pro",
+            ModelId::EvolinkDoubaoSeed20Pro => "evolink/doubao-seed-2.0-pro",
             // Qwen models
             ModelId::Qwen37Max => models::qwen::QWEN3_7_MAX,
             ModelId::Qwen36Flash => models::qwen::QWEN3_6_FLASH,

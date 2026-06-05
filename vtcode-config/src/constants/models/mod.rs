@@ -1,6 +1,7 @@
 pub mod anthropic;
 pub mod copilot;
 pub mod deepseek;
+pub mod evolink;
 pub mod google;
 pub mod huggingface;
 pub mod llamacpp;
