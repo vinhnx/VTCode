@@ -7,6 +7,7 @@ use crate::ui::tui::types::{
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
+use ratatui_cheese::input::InputState;
 
 #[derive(Clone)]
 pub struct ModalState {
@@ -1087,11 +1088,20 @@ impl WizardModalState {
         {
             match key.code {
                 KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
-                    step.notes.push(ch);
+                    let mut state = InputState::new();
+                    state.set_value(step.notes.clone());
+                    state.end();
+                    state.insert_char(ch);
+                    step.notes = state.value().to_owned();
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
-                    if step.notes.pop().is_some() {
+                    if !step.notes.is_empty() {
+                        let mut state = InputState::new();
+                        state.set_value(step.notes.clone());
+                        state.end();
+                        state.delete_before();
+                        step.notes = state.value().to_owned();
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
@@ -1114,12 +1124,21 @@ impl WizardModalState {
             match key.code {
                 KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
                     step.notes_active = true;
-                    step.notes.push(ch);
+                    let mut state = InputState::new();
+                    state.set_value(step.notes.clone());
+                    state.end();
+                    state.insert_char(ch);
+                    step.notes = state.value().to_owned();
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
-                    if step.notes.pop().is_some() {
+                    if !step.notes.is_empty() {
                         step.notes_active = true;
+                        let mut state = InputState::new();
+                        state.set_value(step.notes.clone());
+                        state.end();
+                        state.delete_before();
+                        step.notes = state.value().to_owned();
                         return ModalListKeyResult::Redraw;
                     }
                 }

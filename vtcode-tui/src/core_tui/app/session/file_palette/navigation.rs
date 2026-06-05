@@ -36,15 +36,13 @@ impl FilePalette {
 
     pub fn get_selected(&self) -> Option<&FileEntry> {
         let (group_idx, child_idx) = self.tree_state.selected();
-        self.group_entries
-            .get(group_idx)
-            .and_then(|entries| {
-                if let Some(ci) = child_idx {
-                    entries.get(ci)
-                } else {
-                    entries.first()
-                }
-            })
+        self.group_entries.get(group_idx).and_then(|entries| {
+            if let Some(ci) = child_idx {
+                entries.get(ci)
+            } else {
+                entries.first()
+            }
+        })
     }
 
     pub fn get_selected_entry(&self) -> Option<&FileEntry> {

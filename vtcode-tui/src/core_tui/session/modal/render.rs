@@ -4,14 +4,14 @@ use crate::ui::tui::session::inline_list::{
     InlineListRow, row_height, selection_padding, selection_padding_width,
 };
 use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
-    render_shared_list_panel, render_shared_search_field,
+    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, render_shared_list_panel,
 };
 use crate::ui::tui::types::{InlineListSelection, SecurePromptConfig};
 use ratatui::{
     prelude::*,
     widgets::{Paragraph, Tabs, Wrap},
 };
+use ratatui_cheese::input::{Input, InputState, InputStyles};
 use unicode_width::UnicodeWidthStr;
 
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
@@ -274,6 +274,7 @@ pub fn render_modal_list(
             selected_style: Some(styles.highlight),
             text_style: styles.detail,
             divider_style: Some(styles.border),
+            input_styles: InputStyles::default(),
         },
         &mut panel_model,
     );
@@ -367,6 +368,7 @@ pub(crate) fn render_wizard_modal_body(
     area: Rect,
     wizard: &mut WizardModalState,
     styles: &ModalRenderStyles,
+    input_styles: &InputStyles,
     workspace_root: Option<&Path>,
     last_mouse_position: Option<(u16, u16)>,
     link_style: Style,
@@ -478,14 +480,14 @@ pub(crate) fn render_wizard_modal_body(
         && idx < chunks.len()
     {
         let label_text = step.freeform_label.as_deref().unwrap_or("Custom note");
-        let input_widget = ratatui_cheese::input::Input::new(label_text)
+        let input_widget = Input::new(label_text)
             .placeholder(
                 step.freeform_placeholder
                     .as_deref()
                     .unwrap_or("Type here..."),
             )
             .palette(&ratatui_cheese::theme::Palette::dark());
-        let mut input_state = ratatui_cheese::input::InputState::new();
+        let mut input_state = InputState::new();
         input_state.set_value(step.notes.clone());
         if step.notes_active {
             input_state.set_focused(true);
@@ -502,7 +504,7 @@ pub(crate) fn render_wizard_modal_body(
     if let Some(search) = wizard.search.as_ref()
         && idx < chunks.len()
     {
-        render_modal_search(frame, text_alignment_fn(chunks[idx]), search, styles);
+        render_modal_search(frame, text_alignment_fn(chunks[idx]), search, input_styles);
         idx += 1;
     }
 
@@ -639,7 +641,7 @@ pub(crate) fn render_modal_body(
     let mut constraints = Vec::new();
     for section in &sections {
         match section {
-            ModalSection::Search => constraints.push(Constraint::Length(1.min(area.height))),
+            ModalSection::Search => constraints.push(Constraint::Length(2.min(area.height))),
             ModalSection::Instructions => {
                 let visible_rows = instruction_row_count as u16;
                 constraints.push(Constraint::Length(visible_rows.min(area.height)));
@@ -677,12 +679,19 @@ pub(crate) fn render_modal_body(
             }
             ModalSection::Prompt => {
                 if let Some(config) = context.secure_prompt {
-                    render_secure_prompt(frame, chunk, config, context.input, context.cursor);
+                    render_secure_prompt(
+                        frame,
+                        chunk,
+                        config,
+                        context.input,
+                        context.cursor,
+                        context.input_styles,
+                    );
                 }
             }
             ModalSection::Search => {
                 if let Some(config) = context.search {
-                    render_modal_search(frame, chunk, config, context.styles);
+                    render_modal_search(frame, chunk, config, context.input_styles);
                 }
             }
             ModalSection::List => {
@@ -889,26 +898,25 @@ fn render_modal_search(
     frame: &mut Frame<'_>,
     area: Rect,
     search: &ModalSearchState,
-    styles: &ModalRenderStyles,
+    input_styles: &InputStyles,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
     }
 
-    let search = SharedSearchField {
-        label: search.label.clone(),
-        placeholder: search.placeholder.clone(),
-        query: search.query.clone(),
-    };
-    render_shared_search_field(
-        frame,
-        area,
-        &search,
-        styles.header,
-        styles.selectable,
-        styles.detail,
-        styles.highlight,
-    );
+    let input_widget = Input::new(search.label.as_str())
+        .placeholder(search.placeholder.as_deref().unwrap_or("Type to filter..."))
+        .prompt(">")
+        .styles(input_styles.clone());
+
+    let mut input_state = InputState::new();
+    input_state.set_value(search.query.clone());
+    input_state.set_focused(true);
+    for _ in 0..search.query.chars().count() {
+        input_state.move_right();
+    }
+
+    frame.render_stateful_widget(&input_widget, area, &mut input_state);
 }
 
 fn render_secure_prompt(
@@ -916,43 +924,29 @@ fn render_secure_prompt(
     area: Rect,
     config: &SecurePromptConfig,
     input: &str,
-    _cursor: usize,
+    cursor: usize,
+    input_styles: &InputStyles,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
     }
 
-    let display_text = if input.is_empty() {
-        config.placeholder.clone().unwrap_or_default()
-    } else if config.mask_input {
-        let grapheme_count = input.chars().count();
-        std::iter::repeat_n('•', grapheme_count).collect()
-    } else {
-        input.to_owned()
-    };
+    let input_widget = Input::new(config.label.as_str())
+        .placeholder(config.placeholder.as_deref().unwrap_or("Enter value..."))
+        .password_mode(config.mask_input)
+        .password_char('\u{2022}')
+        .styles(input_styles.clone());
 
-    // Render label
-    let label_paragraph = Paragraph::new(config.label.clone());
-    let label_area = Rect {
-        x: area.x,
-        y: area.y,
-        width: area.width,
-        height: 1.min(area.height),
-    };
-    frame.render_widget(label_paragraph, label_area);
-
-    // Render input field
-    if area.height > 1 {
-        let input_area = Rect {
-            x: area.x,
-            y: area.y + 1,
-            width: area.width,
-            height: (area.height - 1).max(1),
-        };
-
-        let input_paragraph = Paragraph::new(display_text);
-        frame.render_widget(input_paragraph, input_area);
+    let mut input_state = InputState::new();
+    input_state.set_value(input.to_owned());
+    input_state.set_focused(true);
+    let char_count = input.chars().count();
+    let target = cursor.min(char_count);
+    for _ in 0..target {
+        input_state.move_right();
     }
+
+    frame.render_stateful_widget(&input_widget, area, &mut input_state);
 }
 
 pub(super) fn highlight_segments(
@@ -1250,6 +1244,7 @@ mod tests {
                         search: Some(&search),
                         input: "",
                         cursor: 0,
+                        input_styles: &InputStyles::default(),
                     },
                     None,
                     None,
@@ -1404,12 +1399,10 @@ mod tests {
             query: String::new(),
         });
 
-        let search_line = lines
-            .iter()
-            .find(|line| line.contains("Search models:"))
-            .expect("search line should render");
-        assert!(search_line.contains("[provider, name, id"));
-        assert!(search_line.contains("]"));
+        let has_title = lines.iter().any(|line| line.contains("Search models"));
+        assert!(has_title, "search title should render");
+        let has_placeholder = lines.iter().any(|line| line.contains("provider, name, id"));
+        assert!(has_placeholder, "search placeholder should render");
     }
 
     #[test]
@@ -1422,14 +1415,13 @@ mod tests {
 
         let search_index = lines
             .iter()
-            .position(|line| line.contains("Search models: [openrouter"))
+            .position(|line| line.contains("openrouter"))
             .expect("search query should render");
         let item_index = lines
             .iter()
             .position(|line| line.contains("Alpha"))
             .expect("list item should render");
 
-        assert!(lines[search_index].contains("Esc clears"));
         assert!(search_index < item_index);
     }
 
@@ -1480,6 +1472,7 @@ mod tests {
                         search: None,
                         input: "",
                         cursor: 0,
+                        input_styles: &InputStyles::default(),
                     },
                     None,
                     None,

@@ -6,8 +6,8 @@ use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
-    StaticRowsListPanelModel, fixed_section_rows_with_divider, render_shared_list_panel,
-    rows_to_u16,
+    StaticRowsListPanelModel, fixed_section_rows_with_divider, input_styles_from_theme,
+    render_shared_list_panel, rows_to_u16,
 };
 use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 
@@ -141,6 +141,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             selected_style: Some(highlight_style),
             text_style: dim_style,
             divider_style: Some(session.core.styles.border_style()),
+            input_styles: input_styles_from_theme(&session.core.theme),
         },
         &mut model,
     );

@@ -3,7 +3,8 @@ use crate::config::constants::ui;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel,
-    SharedSearchField, fixed_section_rows, render_shared_list_panel, rows_to_u16,
+    SharedSearchField, fixed_section_rows, input_styles_from_theme, render_shared_list_panel,
+    rows_to_u16,
 };
 use ratatui::widgets::Clear;
 
@@ -193,6 +194,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
             selected_style: Some(highlight_style),
             text_style: dim_style,
             divider_style: None,
+            input_styles: input_styles_from_theme(&session.core.theme),
         },
         &mut panel_model,
     );

@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::constants::ui;
+use crate::core_tui::session::list_panel::input_styles_from_theme;
 use crate::core_tui::session::transcript_links::decorate_detected_link_lines;
 use crate::core_tui::style::ratatui_color_from_ansi;
 use crate::core_tui::types::InlineMessageKind;
@@ -190,7 +191,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
     } else if let Some(modal) = session.modal_state() {
         let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
         if modal.search.is_some() {
-            lines = lines.saturating_add(1);
+            lines = lines.saturating_add(2);
         }
         if modal.secure_prompt.is_some() {
             lines = lines.saturating_add(2);
@@ -275,6 +276,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     }
 
     let styles = modal_render_styles(session);
+    let input_styles = input_styles_from_theme(&session.theme);
     render_modal_background(frame, area, styles.selectable);
     let link_style = session
         .styles
@@ -334,6 +336,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             body_area,
             wizard,
             &styles,
+            &input_styles,
             workspace_root.as_deref(),
             last_mouse_position,
             link_style,
@@ -441,6 +444,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             search: modal.search.as_ref(),
             input: &input,
             cursor,
+            input_styles: &input_styles,
         },
         workspace_root.as_deref(),
         last_mouse_position,

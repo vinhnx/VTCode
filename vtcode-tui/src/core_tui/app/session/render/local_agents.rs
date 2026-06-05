@@ -3,7 +3,7 @@ use crate::config::constants::ui;
 use crate::core_tui::ThemeConfigParser;
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows,
-    render_shared_list_panel, rows_to_u16,
+    input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
 use crate::core_tui::session::{
     inline_list::{InlineListRow, selection_padding},
@@ -232,6 +232,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
             selected_style: Some(highlight_style),
             text_style: dim_style,
             divider_style: None,
+            input_styles: input_styles_from_theme(&session.core.theme),
         },
         &mut list_model,
     );

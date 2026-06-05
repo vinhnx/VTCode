@@ -181,7 +181,7 @@ fn slash_panel_renders_search_field_above_results() {
     let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
-        .position(|line| line.contains("Search commands: [re"))
+        .position(|line| line.contains("Search commands"))
         .expect("search commands field should render");
     let item_index = lines
         .iter()

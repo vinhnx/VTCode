@@ -323,10 +323,21 @@ mod tests {
 
         assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
         assert_eq!(fallback_args["action"], "run");
-        let command = fallback_args["command"].as_str().expect("command should be a string");
-        assert!(command.contains("'docs/output.md'"), "command should quote the path");
-        assert!(command.contains("# Large Document"), "command should include the content");
-        assert!(command.contains("__VT_WRITE_EOF__"), "command should use unique delimiter");
+        let command = fallback_args["command"]
+            .as_str()
+            .expect("command should be a string");
+        assert!(
+            command.contains("'docs/output.md'"),
+            "command should quote the path"
+        );
+        assert!(
+            command.contains("# Large Document"),
+            "command should include the content"
+        );
+        assert!(
+            command.contains("__VT_WRITE_EOF__"),
+            "command should use unique delimiter"
+        );
     }
 
     #[test]
@@ -343,7 +354,10 @@ mod tests {
 
         assert_eq!(tool_name, tool_names::UNIFIED_EXEC);
         let command = fallback_args["command"].as_str().expect("command");
-        assert!(command.contains("'my files/output.md'"), "path with spaces should be quoted");
+        assert!(
+            command.contains("'my files/output.md'"),
+            "path with spaces should be quoted"
+        );
     }
 
     #[test]

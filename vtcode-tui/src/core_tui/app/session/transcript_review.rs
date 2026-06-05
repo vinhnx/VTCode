@@ -2,10 +2,12 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph},
 };
+use ratatui_cheese::input::{Input, InputState};
 
 use super::Session;
 use crate::config::constants::ui;
 use crate::core_tui::session::TranscriptLine;
+use crate::core_tui::session::list_panel::input_styles_from_theme;
 
 #[derive(Clone, Debug, Default)]
 struct TranscriptReviewSearchState {
@@ -452,7 +454,7 @@ pub(crate) fn render_transcript_review(
 
     let show_search = state.search_active();
     let chunks = if show_search {
-        Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).split(inner)
+        Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).split(inner)
     } else {
         Layout::vertical([Constraint::Min(1)]).split(inner)
     };
@@ -464,15 +466,21 @@ pub(crate) fn render_transcript_review(
     );
 
     if show_search && chunks.len() > 1 {
-        let search = Paragraph::new(Line::from(vec![
-            Span::styled("/", session.core.header_secondary_style()),
-            Span::raw(state.search_query().to_string()),
-        ]))
-        .block(Block::default().borders(Borders::TOP).title(Span::styled(
-            "Search",
-            session.core.header_secondary_style(),
-        )));
-        frame.render_widget(search, chunks[1]);
+        let input_styles = input_styles_from_theme(&session.core.theme);
+        let input_widget = Input::new("Search")
+            .placeholder("type to search...")
+            .prompt("/")
+            .styles(input_styles);
+
+        let mut input_state = InputState::new();
+        let query = state.search_query().to_string();
+        input_state.set_value(query.clone());
+        input_state.set_focused(true);
+        for _ in 0..query.chars().count() {
+            input_state.move_right();
+        }
+
+        frame.render_stateful_widget(&input_widget, chunks[1], &mut input_state);
     }
 }
 

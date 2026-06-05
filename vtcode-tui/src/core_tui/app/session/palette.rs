@@ -232,8 +232,9 @@ impl AppSession {
                     self.mark_dirty();
                     true
                 } else {
-                    let selected_path =
-                        palette.get_selected_entry().map(|e| e.relative_path.clone());
+                    let selected_path = palette
+                        .get_selected_entry()
+                        .map(|e| e.relative_path.clone());
                     if let Some(path) = selected_path {
                         self.insert_file_reference(&path);
                         self.close_file_palette();

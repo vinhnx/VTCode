@@ -4,7 +4,7 @@ use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
     StaticRowsListPanelModel, fixed_section_rows, fixed_section_rows_with_divider,
-    render_shared_list_panel, render_shared_search_field, rows_to_u16,
+    input_styles_from_theme, render_shared_list_panel, render_shared_search_field, rows_to_u16,
 };
 use ratatui::widgets::{Clear, Paragraph, StatefulWidget, Wrap};
 use ratatui_cheese::tree::{Mode, Tree, TreeStyles};
@@ -167,6 +167,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             selected_style: Some(highlight_style),
             text_style: dim_style,
             divider_style: None,
+            input_styles: input_styles_from_theme(&session.core.theme),
         },
         &mut model,
     );
@@ -228,7 +229,6 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     }
 
     let dim_style = default_style(session).add_modifier(Modifier::DIM);
-    let highlight_style = modal_list_highlight_style(session);
     let border_style = session.core.styles.border_style();
 
     let instructions = file_palette_instructions(session, palette);
@@ -243,7 +243,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     constraints.push(Constraint::Length(1)); // header
     constraints.push(Constraint::Length(instructions.len() as u16)); // info
     if show_search {
-        constraints.push(Constraint::Length(1)); // search
+        constraints.push(Constraint::Length(2)); // search
     }
     if show_divider {
         constraints.push(Constraint::Length(1)); // divider
@@ -258,10 +258,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     let mut idx = 0;
 
     // Header
-    frame.render_widget(
-        Paragraph::new(header_line).style(dim_style),
-        layout[idx],
-    );
+    frame.render_widget(Paragraph::new(header_line).style(dim_style), layout[idx]);
     idx += 1;
 
     // Info instructions
@@ -278,15 +275,8 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
             placeholder: Some("filename or path".to_owned()),
             query: filter_query,
         };
-        render_shared_search_field(
-            frame,
-            layout[idx],
-            &search,
-            dim_style,
-            dim_style,
-            dim_style.add_modifier(Modifier::DIM),
-            highlight_style,
-        );
+        let input_styles = input_styles_from_theme(&session.core.theme);
+        render_shared_search_field(frame, layout[idx], &search, &input_styles);
         idx += 1;
     }
 

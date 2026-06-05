@@ -1320,7 +1320,7 @@ fn clicking_selected_slash_row_applies_command() {
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: panel_area.x,
-            row: panel_area.y + 4,
+            row: panel_area.y + 5,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,
@@ -1416,7 +1416,7 @@ fn clicking_selected_history_row_accepts_entry() {
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: panel_area.x,
-            row: panel_area.y + 3,
+            row: panel_area.y + 4,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,

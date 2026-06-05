@@ -1,5 +1,6 @@
 use crate::ui::tui::types::SecurePromptConfig;
 use ratatui::prelude::*;
+use ratatui_cheese::input::InputStyles;
 
 use super::state::{ModalListState, ModalSearchState};
 
@@ -29,6 +30,7 @@ pub struct ModalBodyContext<'a, 'b> {
     pub search: Option<&'a ModalSearchState>,
     pub input: &'a str,
     pub cursor: usize,
+    pub input_styles: &'a InputStyles,
 }
 
 #[derive(Clone, Copy)]

@@ -357,16 +357,13 @@ fn test_sorting_tree_groups_ascending() {
     ];
 
     // Sort ascending by name (matching load_files behavior)
-    palette
-        .all_files
-        .sort_by(|a, b| {
-            a.relative_path
-                .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase())
-        });
+    palette.all_files.sort_by(|a, b| {
+        a.relative_path
+            .to_lowercase()
+            .cmp(&b.relative_path.to_lowercase())
+    });
     palette.filtered_files = palette.all_files.clone();
-    let (groups, group_entries) =
-        FilePalette::build_tree_groups(&palette.filtered_files);
+    let (groups, group_entries) = FilePalette::build_tree_groups(&palette.filtered_files);
     palette.tree_groups = groups;
     palette.group_entries = group_entries;
     palette.tree_state = TreeState::new(palette.tree_groups.len());

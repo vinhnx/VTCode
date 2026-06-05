@@ -2,8 +2,12 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph, Wrap},
 };
+use ratatui_cheese::input::{Input, InputState, InputStyles};
+use ratatui_cheese::theme::Palette;
 
 use super::inline_list::{InlineListRenderOptions, InlineListRow, render_inline_list_with_options};
+use crate::core_tui::style::ratatui_color_from_ansi;
+use crate::ui::tui::types::InlineTheme;
 
 pub(crate) trait SharedListWidgetModel {
     fn rows(&self, width: u16) -> Vec<(InlineListRow, u16)>;
@@ -79,7 +83,7 @@ pub(crate) fn fixed_section_rows_with_divider(
 ) -> u16 {
     rows_to_u16(header_rows)
         .saturating_add(rows_to_u16(info_rows))
-        .saturating_add(if has_search { 1 } else { 0 })
+        .saturating_add(if has_search { 2 } else { 0 })
         .saturating_add(if has_divider { 1 } else { 0 })
 }
 
@@ -138,71 +142,71 @@ pub(crate) struct SharedListPanelSections {
     pub search: Option<SharedSearchField>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct SharedListPanelStyles {
     pub base_style: Style,
     pub selected_style: Option<Style>,
     pub text_style: Style,
     pub divider_style: Option<Style>,
+    pub input_styles: InputStyles,
 }
 
-pub(crate) fn shared_search_field_line(
-    search: &SharedSearchField,
-    label_style: Style,
-    value_style: Style,
-    hint_style: Style,
-    cursor_style: Style,
-) -> Line<'static> {
-    let mut spans = vec![
-        Span::styled(format!("{}: ", search.label), label_style),
-        Span::styled("[".to_owned(), hint_style),
-    ];
-
-    if search.query.is_empty() {
-        if let Some(placeholder) = &search.placeholder {
-            spans.push(Span::styled(
-                placeholder.clone(),
-                hint_style.add_modifier(Modifier::ITALIC),
-            ));
-        }
-    } else {
-        spans.push(Span::styled(search.query.clone(), value_style));
-    }
-
-    spans.push(Span::styled("▌".to_owned(), cursor_style));
-    spans.push(Span::styled("]".to_owned(), hint_style));
-
-    if !search.query.is_empty() {
-        spans.push(Span::styled(" • Esc clears".to_owned(), hint_style));
-    }
-
-    Line::from(spans)
+/// Build `InputStyles` from the app's `InlineTheme`.
+pub(crate) fn input_styles_from_theme(theme: &InlineTheme) -> InputStyles {
+    let palette = Palette {
+        foreground: theme
+            .foreground
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::White),
+        muted: theme
+            .secondary
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::Gray),
+        faint: Color::DarkGray,
+        primary: theme
+            .primary
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::Cyan),
+        secondary: theme
+            .secondary
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::Gray),
+        surface: Color::Black,
+        border: Color::DarkGray,
+        highlight: theme
+            .primary
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::Cyan),
+        on_highlight: Color::Black,
+        error: Color::Red,
+        success: Color::Green,
+    };
+    InputStyles::from_palette(&palette)
 }
 
 pub(crate) fn render_shared_search_field(
     frame: &mut Frame<'_>,
     area: Rect,
     search: &SharedSearchField,
-    label_style: Style,
-    value_style: Style,
-    hint_style: Style,
-    cursor_style: Style,
+    input_styles: &InputStyles,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
     }
 
-    frame.render_widget(
-        Paragraph::new(shared_search_field_line(
-            search,
-            label_style,
-            value_style,
-            hint_style,
-            cursor_style,
-        ))
-        .wrap(Wrap { trim: false }),
-        area,
-    );
+    let input_widget = Input::new(search.label.as_str())
+        .prompt(">")
+        .placeholder(search.placeholder.as_deref().unwrap_or("Type to filter..."))
+        .styles(input_styles.clone());
+
+    let mut input_state = InputState::new();
+    input_state.set_value(search.query.clone());
+    input_state.set_focused(true);
+    for _ in 0..search.query.chars().count() {
+        input_state.move_right();
+    }
+
+    frame.render_stateful_widget(&input_widget, area, &mut input_state);
 }
 
 pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
@@ -230,7 +234,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     }
 
     if sections.search.is_some() {
-        constraints.push(Constraint::Length(1));
+        constraints.push(Constraint::Length(2));
     }
     let show_divider = styles.divider_style.is_some()
         && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
@@ -267,15 +271,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if let Some(search) = sections.search.as_ref()
         && idx < chunks.len()
     {
-        render_shared_search_field(
-            frame,
-            chunks[idx],
-            search,
-            styles.text_style,
-            styles.base_style,
-            styles.text_style.add_modifier(Modifier::DIM),
-            styles.selected_style.unwrap_or(styles.base_style),
-        );
+        render_shared_search_field(frame, chunks[idx], search, &styles.input_styles);
         idx += 1;
     }
 
@@ -365,6 +361,7 @@ mod tests {
                         selected_style: Some(Style::default()),
                         text_style: Style::default(),
                         divider_style: Some(Style::default()),
+                        input_styles: InputStyles::default(),
                     },
                     &mut model,
                 );
@@ -373,7 +370,7 @@ mod tests {
 
         let buffer = terminal.backend().buffer();
         let divider_row = (0..buffer.area.width)
-            .filter_map(|x| buffer.cell((x, 3)).map(|cell| cell.symbol().to_string()))
+            .filter_map(|x| buffer.cell((x, 4)).map(|cell| cell.symbol().to_string()))
             .collect::<String>()
             .trim_end()
             .to_string();

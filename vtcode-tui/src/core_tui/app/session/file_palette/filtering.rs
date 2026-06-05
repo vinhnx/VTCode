@@ -98,8 +98,7 @@ impl FilePalette {
         }
 
         let query_lower = self.filter_query.to_lowercase();
-        let mut scored_indices: Vec<(usize, usize)> =
-            Vec::with_capacity(self.all_files.len() / 2);
+        let mut scored_indices: Vec<(usize, usize)> = Vec::with_capacity(self.all_files.len() / 2);
         let mut buffer = Vec::new();
 
         for (idx, entry) in self.all_files.iter().enumerate() {
@@ -211,10 +210,8 @@ impl FilePalette {
                 .collect();
             let child_entries: Vec<FileEntry> = children.iter().map(|e| (*e).clone()).collect();
 
-            groups.push(
-                TreeGroup::new(TreeItem::new(format!("{dir_name}/")))
-                    .children(child_items),
-            );
+            groups
+                .push(TreeGroup::new(TreeItem::new(format!("{dir_name}/"))).children(child_items));
             group_entries.push(child_entries);
         }
 

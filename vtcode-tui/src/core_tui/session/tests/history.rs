@@ -116,7 +116,7 @@ fn history_picker_renders_search_field_above_results() {
     let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
-        .position(|line| line.contains("Search history: [gi"))
+        .position(|line| line.contains("Search history"))
         .expect("search history field should render");
     let item_index = lines
         .iter()
