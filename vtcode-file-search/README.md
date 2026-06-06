@@ -295,14 +295,15 @@ cargo build -p vtcode-file-search --release
 
 ## Integration with VT Code
 
-This crate will be integrated into VT Code for:
+This crate is integrated into VT Code (`vtcode-core`) for:
 
 1. **File Browser** – Fuzzy filename search
 2. **Grep Tool** – Efficient file discovery (no ripgrep subprocess)
 3. **Code Intelligence** – Workspace-wide symbol search
-4. **Zed Extension** – File picker integration
-5. **VS Code Extension** – Similar integration
-6. **MCP Server** – Expose as MCP resource/tool
+
+## API reference
+
+See [docs.rs/vtcode-file-search](https://docs.rs/vtcode-file-search).
 
 ## Contributing
 

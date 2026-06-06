@@ -51,6 +51,10 @@ let server = vtcode_auth::start_auth_code_callback_server(OAuthProvider::OpenRou
 - `openrouter_oauth` — OpenRouter OAuth token management
 - `pkce` — PKCE challenge generation
 
+## API reference
+
+See [docs.rs/vtcode-auth](https://docs.rs/vtcode-auth).
+
 ## Related docs
 
 - [Architecture overview](../docs/ARCHITECTURE.md)

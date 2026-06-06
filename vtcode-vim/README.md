@@ -63,3 +63,7 @@ assert!(outcome.handled);
 | `HandleKeyOutcome` | Result struct with `handled` and `clear_selection` flags |
 | `VimMode` | `Normal` or `Insert` |
 | `VimState` | Tracks current mode, pending operator, and repeat state |
+
+## API reference
+
+See [docs.rs/vtcode-vim](https://docs.rs/vtcode-vim).

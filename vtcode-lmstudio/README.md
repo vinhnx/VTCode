@@ -169,6 +169,10 @@ This integration follows the architectural pattern established in [OpenAI's Code
 - **Async-first**: All I/O operations are async
 - **Provider-agnostic**: Works with any OpenAI-compatible API endpoint
 
+## API reference
+
+See [docs.rs/vtcode-lmstudio](https://docs.rs/vtcode-lmstudio).
+
 ## References
 
 - [LM Studio Official](https://lmstudio.ai)

@@ -55,3 +55,7 @@ fn main() -> anyhow::Result<()> {
 ### `TerminalSetupAvailability`
 
 `NativeSupport`, `Offered`, `GuidanceOnly`
+
+## API reference
+
+See [docs.rs/vtcode-terminal-detection](https://docs.rs/vtcode-terminal-detection).

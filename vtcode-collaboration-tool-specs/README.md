@@ -27,6 +27,10 @@ assert_eq!(schema["type"], "object");
 | `request_user_input_parameters()` | Schema for the HITL tool that prompts the user with 1–3 questions. |
 | `request_user_input_description()` | Static description string for the HITL tool. |
 
+## API reference
+
+See [docs.rs/vtcode-collaboration-tool-specs](https://docs.rs/vtcode-collaboration-tool-specs).
+
 ## Dependencies
 
 - `serde_json`

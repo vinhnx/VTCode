@@ -45,6 +45,10 @@ fn main() {
 - **RLIMIT_CORE**: Sets core file size limit to 0
 - **LD_* removal**: Strips dynamic linker variables
 
+## API reference
+
+See [docs.rs/vtcode-process-hardening](https://docs.rs/vtcode-process-hardening).
+
 ## Notes
 
 - This crate calls `unsafe` libc functions but validates all return codes and exits cleanly on failure

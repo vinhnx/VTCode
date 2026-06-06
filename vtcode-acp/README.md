@@ -13,6 +13,10 @@ It contains:
 - `AcpClient` for the deprecated V1 client API
 - `StandardAcpAdapter` and `ZedAcpAdapter` for launching VT Code over ACP
 
+## API reference
+
+See [docs.rs/vtcode-acp](https://docs.rs/vtcode-acp).
+
 ## Related docs
 
 - [ACP integration guide](../docs/acp/ACP_INTEGRATION.md)

@@ -39,17 +39,12 @@ let cache: LruCache<String, String> = LruCache::new(128);
 | `bash` | yes | PTY-based command execution (`PtyManager`) |
 | `search` | yes | Grep/file search (`GrepSearchManager`) |
 | `net` | yes | Network-related tool support |
-| `planner` | yes | Plan/task tracking tools |
 | `policies` | — | `ToolPolicyManager`, `RegistryBuilder`, `RegistryEvent` |
 | `examples` | — | Helpers used by headless integration examples |
 
-## API Reference
+## API reference
 
-See the module-level rustdoc:
-
-```sh
-cargo doc -p vtcode-tools --open
-```
+See [docs.rs/vtcode-tools](https://docs.rs/vtcode-tools).
 
 ## Related docs
 

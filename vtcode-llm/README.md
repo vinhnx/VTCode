@@ -69,6 +69,10 @@ let request = LLMRequest {
 
 Feature-gated, provider-specific exports (one module per backend).
 
+## API reference
+
+See [docs.rs/vtcode-llm](https://docs.rs/vtcode-llm).
+
 ## Related docs
 
 - [LLM environment guide](../docs/modules/vtcode_llm_environment.md)

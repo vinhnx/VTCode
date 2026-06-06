@@ -26,6 +26,10 @@ println!("scrollback: {}", output.scrollback);
 - **`GhosttyRenderOutput`** — Rendered result containing `screen_contents` and `scrollback`.
 - **`render_terminal_snapshot(request, vt_stream: &[u8]) -> Result<GhosttyRenderOutput>`** — Feed raw VT byte stream through the Ghostty terminal emulator and return the rendered text.
 
+## API reference
+
+See [docs.rs/vtcode-ghostty-vt-sys](https://docs.rs/vtcode-ghostty-vt-sys).
+
 ## Dependencies
 
 - `anyhow` — error handling

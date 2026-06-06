@@ -52,6 +52,10 @@ Each returns a `serde_json::Value` representing a JSON Schema object:
 | `mcp_tool` | `ParsedMcpTool`, `parse_mcp_tool` |
 | `responses_api` | `FreeformTool`, `FreeformToolFormat`, `ResponsesApiTool` |
 
+## API reference
+
+See [docs.rs/vtcode-utility-tool-specs](https://docs.rs/vtcode-utility-tool-specs).
+
 ## Dependencies
 
 `rmcp`, `serde`, `serde_json`
