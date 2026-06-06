@@ -17,23 +17,222 @@
 
 ## Quick start
 
-Just launch VT Code in a project:
+Launch VT Code in any project directory to start an interactive session:
 
 ```bash
 vtcode
 ```
 
-Common commands:
+### Common commands
 
 ```bash
-vtcode ask "write a Rust factorial function" > factorial.rs
+# Ask a quick question (no tools, prints reply to stdout)
+vtcode ask "explain the difference between Rc and Arc in Rust"
 
-vtcode exec "summarize the current git diff"
+# Run a headless task with full tool access (file edits, search, terminal)
+vtcode exec "refactor src/main.rs to use clap for CLI parsing"
 
+# Review uncommitted changes before committing
+vtcode review
+
+# Review a specific commit range
+vtcode review --target HEAD~3..HEAD
+
+# Continue the most recent session
 vtcode --resume
 
+# List available models and their status
+vtcode models list
+
+# Switch the default provider and model
+vtcode models set-provider openai
+vtcode models set-model gpt-5
+
+# Update vtcode to the latest release
 vtcode update
 ```
+
+### Real-world workflows
+
+```bash
+# Generate and save a code snippet
+vtcode ask "write a Rust function that reads a file and counts word frequencies" > word_count.rs
+
+# Summarize what changed on the current branch
+vtcode exec "summarize all changes between main and HEAD, grouped by file"
+
+# Security-focused review of staged changes
+vtcode review --style security
+
+# Run a task from stdin (useful in pipelines)
+cat error.log | vtcode exec "analyze this log and suggest fixes"
+
+# Explore workspace structure
+vtcode analyze
+
+# Manage agent skills
+vtcode skills list
+```
+
+## Interactive TUI
+
+Launch `vtcode` with no arguments to enter the interactive terminal UI. Type `/` inside a session to see all available slash commands.
+
+### Session modes
+
+```text
+/mode edit     # agent can read and write files (default)
+/mode auto     # autonomous mode, minimal confirmations
+/mode plan     # read-only research mode, no file changes
+/mode          # cycle through modes
+```
+
+### Working with models
+
+```text
+/model                        # open interactive model picker
+/effort high                  # set reasoning effort (low, medium, high)
+```
+
+### Session management
+
+```text
+/resume                       # pick a previous session to continue
+/fork                         # branch the current conversation
+/history                      # browse past sessions
+/clear                        # clear the screen
+/clear new                    # start a fresh conversation
+/compact                      # compress context to free tokens
+/compact --reasoning-effort high --verbosity concise
+/rewind                       # undo recent turns
+/copy                         # copy the last assistant reply to clipboard
+/share                        # export session as JSON, Markdown, or HTML
+```
+
+### Code review and analysis inside TUI
+
+```text
+/review                       # review uncommitted changes
+/review --last-diff           # review the last commit
+/review --style security      # security-focused review
+/analyze                      # full workspace analysis
+/analyze security             # security scan only
+```
+
+### Workspace setup
+
+```text
+/init                         # guided setup: vtcode.toml, AGENTS.md, indexing
+/config                       # browse current settings
+/config memory                # inspect memory and loaded rules
+/config model                 # view or change model config
+```
+
+### MCP and integrations
+
+```text
+/mcp                          # show MCP connection status
+/mcp list                     # list configured MCP providers
+/mcp tools                    # show tools exposed by active providers
+/mcp refresh                  # reindex MCP tools without restarting
+/mcp repair                   # restart MCP connections
+```
+
+### Skills and agents
+
+```text
+/skills list                  # list available agent skills
+/skills load <name>           # load a skill into the session
+/agents list                  # list configured subagents
+/agents create                # create a new agent definition
+```
+
+### Automation
+
+```text
+/loop 5m check the deployment # repeat a prompt every 5 minutes
+/schedule                     # open the task scheduler UI
+/schedule list                # browse scheduled tasks
+```
+
+### Theming and terminal
+
+```text
+/theme                        # open the theme picker
+/theme ciapre                # switch to a specific theme
+/doctor                       # run diagnostics
+/help                         # list all slash commands
+/help review                  # show help for a specific command
+```
+
+## Autonomous agent
+
+VT Code can run as an autonomous agent that plans, executes, and verifies work without waiting for human approval on each step.
+
+### Interactive auto mode
+
+Inside the TUI, switch to auto mode to let the agent proceed through tool calls with minimal interruptions:
+
+```text
+/mode auto      # autonomous mode, minimal confirmations
+/mode edit      # switch back to interactive edit mode
+```
+
+### Full-auto CLI mode
+
+For headless or CI workflows, `--full-auto` skips all permission prompts and executes against a configurable tool allow-list:
+
+```bash
+vtcode exec --full-auto "migrate the test suite from jest to vitest"
+```
+
+Full-auto requires explicit opt-in via `vtcode.toml`:
+
+```toml
+[automation.full_auto]
+enabled = true
+require_profile_ack = true
+profile_path = "automation/full_auto_profile.toml"
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+    "run_pty_cmd",
+]
+```
+
+Tools not in the allow-list are rejected automatically. Setting `allowed_tools = ["*"]` permits every tool, but is only safe in isolated workspaces.
+
+### Orchestrated harness
+
+For longer autonomous builds, enable the plan-build-evaluate harness. The agent writes working artifacts under `.vtcode/tasks/` (spec, contract, tracker, evaluation) so that multi-round revision is explicit and resumable:
+
+```toml
+[agent.harness]
+orchestration_mode = "plan_build_evaluate"
+max_revision_rounds = 2
+```
+
+```bash
+vtcode exec --full-auto "implement the payment service with tests and docs"
+```
+
+### Subagents and background workers
+
+VT Code delegates bounded work to child agent threads with isolated context and tool restrictions. Built-in agents include `explorer` (read-only search), `plan` (read-only planning), and `worker` (bounded implementation). Background subagents can run as managed child processes for long-running or parallel tasks.
+
+### Scheduled automation
+
+Durable scheduled tasks run on cron or interval schedules without an active session:
+
+```bash
+vtcode schedule                          # manage tasks interactively
+vtcode schedule create --cron "0 9 * * 1" --prompt "review open PRs"
+```
+
+Inside the TUI, `/loop` repeats a prompt on an interval within the current session, and `/schedule` opens the task manager.
+
+> Read the full guide: [Full-Auto Mode](./docs/guides/full_auto_mode.md)
 
 ## Features
 
