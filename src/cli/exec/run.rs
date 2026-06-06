@@ -10,7 +10,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
-use vtcode_core::git_info::get_head_commit_hash;
+use vtcode_core::git_info::get_head_commit_hash_async;
 use vtcode_core::llm::provider::{FinishReason, LLMResponse};
 use vtcode_core::review::ReviewTarget;
 use vtcode_core::utils::file_utils::write_file_with_context;
@@ -281,7 +281,8 @@ async fn handle_codex_exec_command_impl(
                 .iter()
                 .map(SessionMessage::from)
                 .collect(),
-            review_target: native_review_target(&options.command, run_config.workspace.as_path())?,
+            review_target: native_review_target(&options.command, run_config.workspace.as_path())
+                .await?,
         },
     )
     .await?;
@@ -359,7 +360,7 @@ fn external_thread_id_from_bootstrap(
         })
 }
 
-fn native_review_target(
+async fn native_review_target(
     command: &ExecCommandKind,
     workspace: &Path,
 ) -> Result<Option<CodexReviewTarget>> {
@@ -373,7 +374,8 @@ fn native_review_target(
 
     Ok(match &spec.target {
         ReviewTarget::CurrentDiff => Some(CodexReviewTarget::UncommittedChanges),
-        ReviewTarget::LastDiff => get_head_commit_hash(workspace)?
+        ReviewTarget::LastDiff => get_head_commit_hash_async(workspace.to_path_buf())
+            .await?
             .map(|sha| CodexReviewTarget::Commit { sha, title: None }),
         ReviewTarget::Custom(target) => Some(CodexReviewTarget::Custom {
             instructions: target.clone(),
@@ -432,8 +434,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn native_review_target_uses_uncommitted_changes_when_style_is_absent() {
+    #[tokio::test]
+    async fn native_review_target_uses_uncommitted_changes_when_style_is_absent() {
         let command = super::ExecCommandKind::Review {
             spec: ReviewSpec {
                 target: ReviewTarget::CurrentDiff,
@@ -442,13 +444,14 @@ mod tests {
         };
 
         let target = native_review_target(&command, Path::new("/tmp"))
+            .await
             .expect("target resolution should succeed");
 
         assert_eq!(target, Some(super::CodexReviewTarget::UncommittedChanges));
     }
 
-    #[test]
-    fn native_review_target_preserves_style_by_falling_back_to_prompt_review() {
+    #[tokio::test]
+    async fn native_review_target_preserves_style_by_falling_back_to_prompt_review() {
         let command = super::ExecCommandKind::Review {
             spec: ReviewSpec {
                 target: ReviewTarget::CurrentDiff,
@@ -457,13 +460,14 @@ mod tests {
         };
 
         let target = native_review_target(&command, Path::new("/tmp"))
+            .await
             .expect("target resolution should succeed");
 
         assert!(target.is_none());
     }
 
-    #[test]
-    fn native_review_target_maps_custom_review_targets() {
+    #[tokio::test]
+    async fn native_review_target_maps_custom_review_targets() {
         let command = super::ExecCommandKind::Review {
             spec: ReviewSpec {
                 target: ReviewTarget::Custom("review auth handling".to_string()),
@@ -472,6 +476,7 @@ mod tests {
         };
 
         let target = native_review_target(&command, Path::new("/tmp"))
+            .await
             .expect("target resolution should succeed");
 
         assert_eq!(

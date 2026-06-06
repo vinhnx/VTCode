@@ -18,7 +18,7 @@ use super::command_utils::{
     is_shell_program,
 };
 use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
-use super::raw_vt_buffer::RawVtBuffer;
+
 use super::screen_backend::PtyScreenState;
 use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
@@ -595,8 +595,6 @@ if output.len() > max_tokens * 4 {
             size,
             self.config.scrollback_lines,
             self.config.emulation_backend,
-        )));
-        let raw_vt_buffer = Arc::new(Mutex::new(RawVtBuffer::new(
             self.config.max_scrollback_bytes,
         )));
         let scrollback = Arc::new(Mutex::new(PtyScrollback::new(
@@ -611,7 +609,6 @@ if output.len() > max_tokens * 4 {
             "Created PTY session"
         );
         let screen_state_clone = Arc::clone(&screen_state);
-        let raw_vt_buffer_clone = Arc::clone(&raw_vt_buffer);
         let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
         // Start unicode monitoring for this session
@@ -644,11 +641,6 @@ Ok(bytes_read) => {
     let likely_unicode = chunk.iter().any(|&b| b >= 0x80);
     if likely_unicode {
         unicode_detection_hits += 1;
-    }
-
-    {
-        let mut raw_vt_buffer = raw_vt_buffer_clone.lock();
-        raw_vt_buffer.push(chunk);
     }
 
     {
@@ -718,7 +710,6 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
             child_pid,
             writer: Mutex::new(Some(writer)),
             screen_state,
-            raw_vt_buffer,
             scrollback,
             reader_thread: Mutex::new(Some(reader_thread)),
             metadata: metadata.clone(),

@@ -134,6 +134,7 @@ vtcode-indexer = { path = "../vtcode-indexer", version = "0.123.0" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.123.0" }
 vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.0" }
 vtcode-ghostty-vt-sys = { path = "../vtcode-ghostty-vt-sys", version = "0.123.0" }
+vtcode-ghostty-core = { path = "../vtcode-ghostty-core", version = "0.123.0" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

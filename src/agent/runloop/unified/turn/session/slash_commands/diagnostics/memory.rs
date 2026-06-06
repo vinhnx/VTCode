@@ -65,8 +65,12 @@ pub(super) async fn run_memory_modal(
             .unwrap_or_else(|| ctx.config.workspace.clone());
         let match_paths = ctx.context_manager.instruction_context_paths_snapshot();
         let appendix = load_instruction_appendix(&agent_config, &active_dir, &match_paths).await;
+        let cfg = agent_config.persistent_memory.clone();
+        let ws = ctx.config.workspace.clone();
         let memory_status =
-            persistent_memory_status(&agent_config.persistent_memory, &ctx.config.workspace)?;
+            tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+                .await
+                .context("Persistent memory status task panicked")??;
         let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
 
         show_memory_actions_modal(ctx, config_mode, &memory_status, &agents, &matched_rules);
@@ -106,8 +110,11 @@ pub(super) async fn render_memory_status_lines(
         .unwrap_or_else(|| ctx.config.workspace.clone());
     let match_paths = ctx.context_manager.instruction_context_paths_snapshot();
     let appendix = load_instruction_appendix(&agent_config, &active_dir, &match_paths).await;
-    let memory_status =
-        persistent_memory_status(&agent_config.persistent_memory, &ctx.config.workspace)?;
+    let cfg = agent_config.persistent_memory.clone();
+    let ws = ctx.config.workspace.clone();
+    let memory_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
     let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
     let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
@@ -151,8 +158,11 @@ pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>
         .as_ref()
         .map(|cfg| cfg.agent.clone())
         .unwrap_or_default();
-    let memory_status =
-        persistent_memory_status(&agent_config.persistent_memory, &ctx.config.workspace)?;
+    let cfg = agent_config.persistent_memory.clone();
+    let ws = ctx.config.workspace.clone();
+    let memory_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
     let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
     ctx.renderer.line(MessageStyle::Info, "Memory Settings")?;

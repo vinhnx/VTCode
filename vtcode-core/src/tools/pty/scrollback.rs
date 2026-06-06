@@ -289,6 +289,7 @@ impl PtyScrollback {
         validation_context.complete(processed_bytes);
     }
 
+    #[allow(dead_code)]
     pub(super) fn snapshot(&self) -> String {
         let mut output = String::with_capacity(self.current_bytes.min(self.max_bytes));
         for line in &self.lines {

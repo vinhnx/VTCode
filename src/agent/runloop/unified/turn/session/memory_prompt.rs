@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::persistent_memory::{
     MemoryOpCandidate, MemoryOpKind, MemoryOpPlan, cleanup_persistent_memory,
@@ -365,7 +365,11 @@ async fn maybe_cleanup_before_memory_mutation(
         .as_ref()
         .map(|cfg| cfg.agent.persistent_memory.clone())
         .unwrap_or_default();
-    let status = persistent_memory_status(&memory_config, &ctx.config.workspace)?;
+    let cfg = memory_config.clone();
+    let ws = ctx.config.workspace.clone();
+    let status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
     if !status.cleanup_status.needed {
         *state.dismissed_memory_cleanup_fingerprint = None;
         return Ok(true);

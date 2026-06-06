@@ -11,7 +11,7 @@ use vtcode_core::command_safety::parse_bash_lc_commands;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::{PermissionsConfig, loader::VTCodeConfig};
-use vtcode_core::git_info::get_git_remote_urls;
+use vtcode_core::git_info::get_git_remote_urls_async;
 use vtcode_core::llm::{LightweightFeature, provider as uni, resolve_lightweight_route};
 use vtcode_core::permissions::{PermissionRequest, build_permission_request};
 use vtcode_core::tools::command_args;
@@ -77,7 +77,8 @@ pub(crate) async fn review_tool_call(
         tool_name,
         "Respond with exactly ALLOW or BLOCK.",
         None,
-    );
+    )
+    .await;
     let stage_one_models = selected_models(
         agent_config,
         vt_cfg,
@@ -115,7 +116,8 @@ pub(crate) async fn review_tool_call(
         tool_name,
         "Return strict JSON: {\"decision\":\"allow|block\",\"reason\":\"...\",\"matched_rule\":\"...\",\"matched_exception\":\"...\"}",
         script_context.as_deref(),
-    );
+    )
+    .await;
     let stage_two = raw_completion(
         provider,
         &stage_one_models.primary_model,
@@ -205,7 +207,7 @@ pub(crate) async fn probe_tool_output(
     }))
 }
 
-fn review_prompt(
+async fn review_prompt(
     permissions: &PermissionsConfig,
     workspace_root: &Path,
     transcript: &[String],
@@ -214,7 +216,7 @@ fn review_prompt(
     response_format: &str,
     script_context: Option<&str>,
 ) -> String {
-    let environment = render_environment(permissions, workspace_root);
+    let environment = render_environment(permissions, workspace_root).await;
     let block_rules = numbered_lines(&permissions.auto_mode.block_rules);
     let allow_exceptions = numbered_lines(&permissions.auto_mode.allow_exceptions);
     let transcript = if transcript.is_empty() {
@@ -239,7 +241,7 @@ fn review_prompt(
     prompt
 }
 
-fn render_environment(permissions: &PermissionsConfig, workspace_root: &Path) -> String {
+async fn render_environment(permissions: &PermissionsConfig, workspace_root: &Path) -> String {
     let mut trusted_paths = BTreeSet::new();
     trusted_paths.insert(workspace_root.display().to_string());
     trusted_paths.extend(
@@ -284,7 +286,7 @@ fn render_environment(permissions: &PermissionsConfig, workspace_root: &Path) ->
             .filter(|value| !value.is_empty()),
     );
 
-    if let Ok(remotes) = get_git_remote_urls(workspace_root) {
+    if let Ok(remotes) = get_git_remote_urls_async(workspace_root.to_path_buf()).await {
         for remote in remotes.values() {
             if let Some((host, org)) = extract_git_host_and_org(remote) {
                 trusted_domains.insert(host.clone());

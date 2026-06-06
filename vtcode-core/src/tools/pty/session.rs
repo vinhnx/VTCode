@@ -10,7 +10,6 @@ use tracing::warn;
 
 use crate::tools::types::VTCodePtySession;
 
-use super::raw_vt_buffer::RawVtBuffer;
 use super::screen_backend::PtyScreenState;
 use super::scrollback::PtyScrollback;
 
@@ -161,7 +160,6 @@ pub(super) struct PtySessionHandle {
     pub(super) child_pid: Option<u32>,
     pub(super) writer: Mutex<Option<Box<dyn Write + Send>>>,
     pub(super) screen_state: Arc<Mutex<PtyScreenState>>,
-    pub(super) raw_vt_buffer: Arc<Mutex<RawVtBuffer>>,
     pub(super) scrollback: Arc<Mutex<PtyScrollback>>,
     pub(super) reader_thread: Mutex<Option<JoinHandle<()>>>,
     pub(super) metadata: VTCodePtySession,
@@ -294,20 +292,10 @@ impl PtySessionHandle {
             crate::tools::types::VTCodeSessionLifecycleState::Running
         });
 
-        let raw_vt_stream = {
-            let raw_vt_buffer = self.raw_vt_buffer.lock();
-            raw_vt_buffer.snapshot()
-        };
-        let fallback_scrollback = {
-            let scrollback = self.scrollback.lock();
-            scrollback.snapshot()
-        };
-
-        let prepared_snapshot = {
+        let snapshot = {
             let screen_state = self.screen_state.lock();
             screen_state.prepare_snapshot()
         };
-        let snapshot = prepared_snapshot.render(size, &raw_vt_stream, &fallback_scrollback);
 
         metadata.screen_contents = Some(snapshot.screen_contents);
         if !snapshot.scrollback.is_empty() {

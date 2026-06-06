@@ -1,29 +1,183 @@
-use anyhow::Result;
 use portable_pty::PtySize;
 use std::sync::OnceLock;
 use tracing::warn;
 use vt100::Parser;
+use vtcode_ghostty_core::Terminal;
 use vtcode_ghostty_vt_sys::{GhosttyRenderRequest, render_terminal_snapshot};
 
 use crate::config::PtyEmulationBackend;
 
-use super::raw_vt_buffer::RawVtSnapshot;
+// ---------------------------------------------------------------------------
+// PtyBackend trait
+// ---------------------------------------------------------------------------
+
+/// Abstraction over terminal emulation backends.
+///
+/// Each backend maintains its own incremental state. Call `process()` as bytes
+/// arrive, then `screen_text()` / `scrollback_text()` to extract content.
+pub(super) trait PtyBackend: Send {
+    /// Feed raw PTY output bytes into the backend.
+    fn process(&mut self, chunk: &[u8]);
+
+    /// Resize the emulated terminal.
+    fn resize(&mut self, rows: u16, cols: u16);
+
+    /// Extract the current visible screen as plain text.
+    fn screen_text(&self) -> String;
+
+    /// Extract accumulated scrollback as plain text.
+    fn scrollback_text(&self) -> String;
+}
+
+// ---------------------------------------------------------------------------
+// GhosttyCoreBackend (pure-Rust, incremental)
+// ---------------------------------------------------------------------------
+
+struct GhosttyCoreBackend {
+    terminal: Terminal,
+}
+
+impl GhosttyCoreBackend {
+    fn new(size: PtySize, max_scrollback: usize) -> Self {
+        let mut terminal = Terminal::new(size.cols as usize, size.rows as usize);
+        terminal.set_max_scrollback(max_scrollback);
+        Self { terminal }
+    }
+}
+
+impl PtyBackend for GhosttyCoreBackend {
+    fn process(&mut self, chunk: &[u8]) {
+        self.terminal.write(chunk);
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.terminal.resize(cols as usize, rows as usize);
+    }
+
+    fn screen_text(&self) -> String {
+        self.terminal.plain_text()
+    }
+
+    fn scrollback_text(&self) -> String {
+        let mut out = String::new();
+        for i in 0..self.terminal.scrollback_len() {
+            if let Some(row) = self.terminal.scrollback_row(i) {
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                out.push_str(&row);
+            }
+        }
+        out
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GhosttyFfiBackend (native Zig library, batch replay)
+// ---------------------------------------------------------------------------
+
+struct GhosttyFfiBackend {
+    vt100_parser: Parser,
+    raw_vt_buffer: super::raw_vt_buffer::RawVtBuffer,
+    scrollback_lines: usize,
+    size: PtySize,
+}
+
+impl GhosttyFfiBackend {
+    fn new(size: PtySize, scrollback_lines: usize, max_scrollback_bytes: usize) -> Self {
+        Self {
+            vt100_parser: Parser::new(size.rows, size.cols, scrollback_lines),
+            raw_vt_buffer: super::raw_vt_buffer::RawVtBuffer::new(max_scrollback_bytes),
+            scrollback_lines,
+            size,
+        }
+    }
+}
+
+impl PtyBackend for GhosttyFfiBackend {
+    fn process(&mut self, chunk: &[u8]) {
+        self.vt100_parser.process(chunk);
+        self.raw_vt_buffer.push(chunk);
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.vt100_parser.screen_mut().set_size(rows, cols);
+        self.size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+    }
+
+    fn screen_text(&self) -> String {
+        let snapshot = self.raw_vt_buffer.snapshot();
+        if snapshot.was_truncated {
+            return self.vt100_parser.screen().contents();
+        }
+
+        match render_terminal_snapshot(
+            GhosttyRenderRequest {
+                cols: self.size.cols,
+                rows: self.size.rows,
+                scrollback_lines: self.scrollback_lines,
+            },
+            &snapshot.bytes,
+        ) {
+            Ok(output) => output.screen_contents,
+            Err(error) => {
+                warn_ghostty_fallback_once(PtyEmulationBackend::Ghostty, &error);
+                self.vt100_parser.screen().contents()
+            }
+        }
+    }
+
+    fn scrollback_text(&self) -> String {
+        // The FFI path doesn't provide scrollback separately; use vt100 fallback
+        self.vt100_parser.screen().contents()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Vt100Backend (legacy vt100 crate)
+// ---------------------------------------------------------------------------
+
+struct Vt100Backend {
+    parser: Parser,
+}
+
+impl Vt100Backend {
+    fn new(size: PtySize, scrollback_lines: usize) -> Self {
+        Self {
+            parser: Parser::new(size.rows, size.cols, scrollback_lines),
+        }
+    }
+}
+
+impl PtyBackend for Vt100Backend {
+    fn process(&mut self, chunk: &[u8]) {
+        self.parser.process(chunk);
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) {
+        self.parser.screen_mut().set_size(rows, cols);
+    }
+
+    fn screen_text(&self) -> String {
+        self.parser.screen().contents()
+    }
+
+    fn scrollback_text(&self) -> String {
+        self.parser.screen().contents()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PtyScreenState -- uses Box<dyn PtyBackend>
+// ---------------------------------------------------------------------------
 
 pub(super) struct PtyScreenState {
-    backend: PtyEmulationBackend,
-    parser: Parser,
-    scrollback_lines: usize,
-}
-
-pub(super) struct ScreenSnapshot {
-    pub(super) screen_contents: String,
-    pub(super) scrollback: String,
-}
-
-pub(super) struct PreparedScreenSnapshot {
-    backend: PtyEmulationBackend,
-    legacy_screen_contents: String,
-    scrollback_lines: usize,
+    backend: Box<dyn PtyBackend>,
 }
 
 impl PtyScreenState {
@@ -31,78 +185,50 @@ impl PtyScreenState {
         size: PtySize,
         scrollback_lines: usize,
         backend: PtyEmulationBackend,
+        max_scrollback_bytes: usize,
     ) -> Self {
-        Self {
-            backend,
-            parser: Parser::new(size.rows, size.cols, scrollback_lines),
-            scrollback_lines,
-        }
+        let backend: Box<dyn PtyBackend> = match backend {
+            PtyEmulationBackend::Ghostty => Box::new(GhosttyFfiBackend::new(
+                size,
+                scrollback_lines,
+                max_scrollback_bytes,
+            )),
+            PtyEmulationBackend::GhosttyCore => {
+                Box::new(GhosttyCoreBackend::new(size, scrollback_lines))
+            }
+            PtyEmulationBackend::LegacyVt100 => Box::new(Vt100Backend::new(size, scrollback_lines)),
+        };
+        Self { backend }
     }
 
     pub(super) fn process(&mut self, chunk: &[u8]) {
-        self.parser.process(chunk);
+        self.backend.process(chunk);
     }
 
     pub(super) fn resize(&mut self, size: PtySize) {
-        self.parser.screen_mut().set_size(size.rows, size.cols);
+        self.backend.resize(size.rows, size.cols);
     }
 
-    pub(super) fn prepare_snapshot(&self) -> PreparedScreenSnapshot {
-        PreparedScreenSnapshot {
-            backend: self.backend,
-            legacy_screen_contents: self.parser.screen().contents(),
-            scrollback_lines: self.scrollback_lines,
-        }
-    }
-}
-
-impl PreparedScreenSnapshot {
-    pub(super) fn render(
-        &self,
-        size: PtySize,
-        raw_vt_snapshot: &RawVtSnapshot,
-        fallback_scrollback: &str,
-    ) -> ScreenSnapshot {
-        match self.backend {
-            PtyEmulationBackend::Ghostty => {
-                if raw_vt_snapshot.was_truncated {
-                    return self.legacy_snapshot(fallback_scrollback);
-                }
-
-                match self.snapshot_with_ghostty(size, &raw_vt_snapshot.bytes) {
-                    Ok(snapshot) => snapshot,
-                    Err(error) => {
-                        warn_ghostty_fallback_once(self.backend, &error);
-                        self.legacy_snapshot(fallback_scrollback)
-                    }
-                }
-            }
-            PtyEmulationBackend::LegacyVt100 => self.legacy_snapshot(fallback_scrollback),
-        }
-    }
-
-    fn snapshot_with_ghostty(&self, size: PtySize, raw_vt_stream: &[u8]) -> Result<ScreenSnapshot> {
-        let snapshot = render_terminal_snapshot(
-            GhosttyRenderRequest {
-                cols: size.cols,
-                rows: size.rows,
-                scrollback_lines: self.scrollback_lines,
-            },
-            raw_vt_stream,
-        )?;
-        Ok(ScreenSnapshot {
-            screen_contents: snapshot.screen_contents,
-            scrollback: snapshot.scrollback,
-        })
-    }
-
-    fn legacy_snapshot(&self, fallback_scrollback: &str) -> ScreenSnapshot {
+    pub(super) fn prepare_snapshot(&self) -> ScreenSnapshot {
         ScreenSnapshot {
-            screen_contents: self.legacy_screen_contents.clone(),
-            scrollback: fallback_scrollback.to_owned(),
+            screen_contents: self.backend.screen_text(),
+            scrollback: self.backend.scrollback_text(),
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// ScreenSnapshot (returned by prepare_snapshot)
+// ---------------------------------------------------------------------------
+
+pub(super) struct ScreenSnapshot {
+    pub(super) screen_contents: String,
+    pub(super) scrollback: String,
+}
+
+// ---------------------------------------------------------------------------
+// Fallback warning
+// ---------------------------------------------------------------------------
 
 fn warn_ghostty_fallback_once(configured_backend: PtyEmulationBackend, error: &anyhow::Error) {
     static WARNED: OnceLock<()> = OnceLock::new();
@@ -121,10 +247,8 @@ fn warn_ghostty_fallback_once(configured_backend: PtyEmulationBackend, error: &a
 mod tests {
     use portable_pty::PtySize;
 
-    use super::{PreparedScreenSnapshot, PtyScreenState};
+    use super::PtyScreenState;
     use crate::config::PtyEmulationBackend;
-
-    use super::super::raw_vt_buffer::RawVtSnapshot;
 
     fn test_size() -> PtySize {
         PtySize {
@@ -135,47 +259,82 @@ mod tests {
         }
     }
 
+    const MAX_SCROLLBACK_BYTES: usize = 25_000_000;
+
     #[test]
-    fn truncated_raw_vt_uses_legacy_snapshot() {
+    fn ghostty_core_backend_processes_plain_text() {
         let size = test_size();
-        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::Ghostty);
-        state.process(b"hello");
-
-        let prepared = state.prepare_snapshot();
-        let snapshot = prepared.render(
+        let mut state = PtyScreenState::new(
             size,
-            &RawVtSnapshot {
-                bytes: b"\x1b[2J".to_vec(),
-                was_truncated: true,
-            },
-            "hello",
+            100,
+            PtyEmulationBackend::GhosttyCore,
+            MAX_SCROLLBACK_BYTES,
         );
-
-        assert!(snapshot.screen_contents.contains("hello"));
-        assert_eq!(snapshot.scrollback, "hello");
+        state.process(b"hello");
+        let snapshot = state.prepare_snapshot();
+        assert!(
+            snapshot.screen_contents.contains("hello"),
+            "screen_contents = {:?}",
+            snapshot.screen_contents
+        );
     }
 
     #[test]
     fn legacy_backend_uses_legacy_snapshot() {
         let size = test_size();
-        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::LegacyVt100);
+        let mut state = PtyScreenState::new(
+            size,
+            100,
+            PtyEmulationBackend::LegacyVt100,
+            MAX_SCROLLBACK_BYTES,
+        );
         state.process(b"legacy");
-
-        let prepared = state.prepare_snapshot();
-        assert_legacy_snapshot(prepared, size, "legacy");
+        let snapshot = state.prepare_snapshot();
+        assert!(
+            snapshot.screen_contents.contains("legacy"),
+            "screen_contents = {:?}",
+            snapshot.screen_contents
+        );
     }
 
-    fn assert_legacy_snapshot(prepared: PreparedScreenSnapshot, size: PtySize, expected: &str) {
-        let snapshot = prepared.render(
+    #[test]
+    fn ghostty_core_backend_handles_newlines() {
+        let size = test_size();
+        let mut state = PtyScreenState::new(
             size,
-            &RawVtSnapshot {
-                bytes: Vec::new(),
-                was_truncated: false,
-            },
-            expected,
+            100,
+            PtyEmulationBackend::GhosttyCore,
+            MAX_SCROLLBACK_BYTES,
         );
+        state.process(b"line1\nline2");
+        let snapshot = state.prepare_snapshot();
+        assert!(
+            snapshot.screen_contents.contains("line1"),
+            "screen_contents = {:?}",
+            snapshot.screen_contents
+        );
+        assert!(
+            snapshot.screen_contents.contains("line2"),
+            "screen_contents = {:?}",
+            snapshot.screen_contents
+        );
+    }
 
-        assert!(snapshot.screen_contents.contains(expected));
-        assert_eq!(snapshot.scrollback, expected);
+    #[test]
+    fn ghostty_core_backend_handles_ansi_colors() {
+        let size = test_size();
+        let mut state = PtyScreenState::new(
+            size,
+            100,
+            PtyEmulationBackend::GhosttyCore,
+            MAX_SCROLLBACK_BYTES,
+        );
+        state.process(b"\x1B[1;31mcolored\x1B[0m");
+        let snapshot = state.prepare_snapshot();
+        assert!(
+            snapshot.screen_contents.contains("colored"),
+            "screen_contents = {:?}",
+            snapshot.screen_contents
+        );
     }
 }

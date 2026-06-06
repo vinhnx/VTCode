@@ -121,7 +121,11 @@ async fn prepare_root(workspace_root: &Path, config: &PersistentMemoryConfig) ->
     scaffold_persistent_memory(config, workspace_root)
         .await
         .context("Failed to scaffold persistent memory layout")?;
-    resolve_persistent_memory_dir(config, workspace_root)?
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
+        .await
+        .context("Persistent memory directory resolution task panicked")??
         .ok_or_else(|| anyhow!("Persistent memory directory could not be resolved"))
 }
 

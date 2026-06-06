@@ -163,6 +163,24 @@ pub fn is_git_repo(cwd: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Async variant of [`get_git_remote_urls`]. Runs the git subprocess on the
+/// blocking thread pool.
+pub async fn get_git_remote_urls_async(
+    cwd: std::path::PathBuf,
+) -> Result<BTreeMap<String, String>> {
+    tokio::task::spawn_blocking(move || get_git_remote_urls(&cwd))
+        .await
+        .context("Git remote URLs task panicked")?
+}
+
+/// Async variant of [`get_head_commit_hash`]. Runs the git subprocess on the
+/// blocking thread pool.
+pub async fn get_head_commit_hash_async(cwd: std::path::PathBuf) -> Result<Option<String>> {
+    tokio::task::spawn_blocking(move || get_head_commit_hash(&cwd))
+        .await
+        .context("Git HEAD hash task panicked")?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

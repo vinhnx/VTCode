@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::persistent_memory::{PersistentMemoryStatus, persistent_memory_status};
@@ -24,19 +24,23 @@ pub(super) fn persistent_memory_guide_lines(memory_status: &PersistentMemoryStat
     lines
 }
 
-pub(super) fn load_persistent_memory_status(
+pub(super) async fn load_persistent_memory_status(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<Option<PersistentMemoryStatus>> {
     let Some(vt_cfg) = vt_cfg else {
         return Ok(None);
     };
-    let memory_config = &vt_cfg.agent.persistent_memory;
+    let memory_config = vt_cfg.agent.persistent_memory.clone();
     if !vt_cfg.persistent_memory_enabled() {
         return Ok(None);
     }
 
-    persistent_memory_status(memory_config, &config.workspace).map(Some)
+    let ws = config.workspace.clone();
+    let status = tokio::task::spawn_blocking(move || persistent_memory_status(&memory_config, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
+    Ok(Some(status))
 }
 
 pub(super) fn persistent_memory_header_badge(

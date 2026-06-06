@@ -542,6 +542,10 @@ pub fn dedup_latest_facts(history: &[Message], limit: usize) -> Vec<GroundedFact
     facts.into_iter().skip(keep_from).collect()
 }
 
+/// Resolves the persistent memory directory for a project.
+///
+/// **Blocking**: This function may perform filesystem I/O (directory migration).
+/// Callers in async contexts must wrap this in `tokio::task::spawn_blocking`.
 pub fn resolve_persistent_memory_dir(
     config: &PersistentMemoryConfig,
     workspace_root: &Path,
@@ -555,6 +559,11 @@ pub fn resolve_persistent_memory_dir(
     Ok(Some(directory))
 }
 
+/// Returns the current persistent memory status.
+///
+/// **Blocking**: This function performs filesystem I/O (directory migration,
+/// file existence checks, reading topic files). Callers in async contexts
+/// must wrap this in `tokio::task::spawn_blocking`.
 pub fn persistent_memory_status(
     config: &PersistentMemoryConfig,
     workspace_root: &Path,
@@ -596,7 +605,13 @@ pub async fn read_persistent_memory_excerpt(
         return Ok(None);
     }
 
-    let status = persistent_memory_status(config, workspace_root)?;
+    let config_clone = config.clone();
+    let workspace_root = workspace_root.to_path_buf();
+    let status = tokio::task::spawn_blocking(move || {
+        persistent_memory_status(&config_clone, &workspace_root)
+    })
+    .await
+    .context("Persistent memory status task panicked")??;
     if !status.summary_file.exists() {
         return Ok(None);
     }
@@ -639,9 +654,15 @@ pub async fn finalize_persistent_memory(
     if !config.enabled || !config.auto_write {
         return Ok(None);
     }
-    if persistent_memory_status(&config, runtime_config.workspace.as_path())?
-        .cleanup_status
-        .needed
+    let cfg_status = config.clone();
+    let ws_status = runtime_config.workspace.clone();
+    if tokio::task::spawn_blocking(move || {
+        persistent_memory_status(&cfg_status, ws_status.as_path())
+    })
+    .await
+    .context("Persistent memory status task panicked")??
+    .cleanup_status
+    .needed
     {
         return Ok(None);
     }
@@ -667,7 +688,11 @@ pub async fn rebuild_persistent_memory_summary(
     if !config.enabled {
         return Ok(None);
     }
-    if persistent_memory_status(&config, runtime_config.workspace.as_path())?
+    let cfg_rb = config.clone();
+    let ws_rb = runtime_config.workspace.clone();
+    if tokio::task::spawn_blocking(move || persistent_memory_status(&cfg_rb, ws_rb.as_path()))
+        .await
+        .context("Persistent memory status task panicked")??
         .cleanup_status
         .needed
     {
@@ -690,7 +715,11 @@ pub async fn rebuild_generated_memory_files(
     config: &PersistentMemoryConfig,
     workspace_root: &Path,
 ) -> Result<()> {
-    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
+        .await
+        .context("Persistent memory directory resolution task panicked")??
         .expect("persistent memory directory should resolve");
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
@@ -704,11 +733,20 @@ pub async fn scaffold_persistent_memory(
     config: &PersistentMemoryConfig,
     workspace_root: &Path,
 ) -> Result<Option<PersistentMemoryStatus>> {
-    let status = persistent_memory_status(config, workspace_root)?;
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    let status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+        .await
+        .context("Persistent memory status task panicked")??;
     let files = PersistentMemoryFiles::new(status.directory.clone());
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
-    Ok(Some(persistent_memory_status(config, workspace_root)?))
+    let cfg2 = config.clone();
+    let ws2 = workspace_root.to_path_buf();
+    let final_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg2, &ws2))
+        .await
+        .context("Persistent memory status task panicked")??;
+    Ok(Some(final_status))
 }
 
 /// Write classified facts to all memory files (topic files, index, summary).
@@ -786,8 +824,14 @@ pub async fn cleanup_persistent_memory(
         return Ok(None);
     }
 
-    let directory = resolve_persistent_memory_dir(&config, runtime_config.workspace.as_path())?
-        .expect("persistent memory directory should resolve when enabled");
+    let cfg_dir = config.clone();
+    let ws_dir = runtime_config.workspace.clone();
+    let directory = tokio::task::spawn_blocking(move || {
+        resolve_persistent_memory_dir(&cfg_dir, ws_dir.as_path())
+    })
+    .await
+    .context("Persistent memory directory resolution task panicked")??
+    .expect("persistent memory directory should resolve when enabled");
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
     ensure_memory_layout(&files, &mut created_files).await?;
@@ -847,7 +891,11 @@ pub async fn list_persistent_memory_candidates(
         return Ok(None);
     }
 
-    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
+        .await
+        .context("Persistent memory directory resolution task panicked")??
         .expect("persistent memory directory should resolve when enabled");
     if !directory.exists() {
         return Ok(Some(Vec::new()));
@@ -868,7 +916,11 @@ pub async fn find_persistent_memory_matches(
     let Some(normalized_query) = normalize_memory_query(query) else {
         return Ok(Some(Vec::new()));
     };
-    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
+        .await
+        .context("Persistent memory directory resolution task panicked")??
         .expect("persistent memory directory should resolve when enabled");
     if !directory.exists() {
         return Ok(Some(Vec::new()));
@@ -963,8 +1015,14 @@ pub async fn forget_planned_persistent_memory_matches(
     }
 
     let selected = selected_memory_candidates(candidates, &plan.selected_ids)?;
-    let directory = resolve_persistent_memory_dir(&config, runtime_config.workspace.as_path())?
-        .expect("persistent memory directory should resolve when enabled");
+    let cfg_dir = config.clone();
+    let ws_dir = runtime_config.workspace.clone();
+    let directory = tokio::task::spawn_blocking(move || {
+        resolve_persistent_memory_dir(&cfg_dir, ws_dir.as_path())
+    })
+    .await
+    .context("Persistent memory directory resolution task panicked")??
+    .expect("persistent memory directory should resolve when enabled");
     let files = PersistentMemoryFiles::new(directory);
     if !files.directory.exists() {
         return Ok(Some(PersistentMemoryForgetReport {
@@ -1041,7 +1099,11 @@ async fn persist_memory_internal(
     write_rollout: bool,
     force_rebuild: bool,
 ) -> Result<Option<PersistentMemoryWriteReport>> {
-    let directory = resolve_persistent_memory_dir(config, workspace_root)?
+    let cfg = config.clone();
+    let ws = workspace_root.to_path_buf();
+    let directory = tokio::task::spawn_blocking(move || resolve_persistent_memory_dir(&cfg, &ws))
+        .await
+        .context("Persistent memory directory resolution task panicked")??
         .expect("persistent memory directory should resolve when enabled");
     let files = PersistentMemoryFiles::new(directory);
     let mut created_files = Vec::new();
