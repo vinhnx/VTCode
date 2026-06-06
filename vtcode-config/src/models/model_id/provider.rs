@@ -92,9 +92,11 @@ impl ModelId {
             | ModelId::OllamaMinimaxM3Cloud
             | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3SuperCloud
+            | ModelId::OllamaNemotron3UltraCloud
             | ModelId::OllamaKimiK26Cloud
             | ModelId::OllamaGlm5Cloud
             | ModelId::OllamaGlm51Cloud
+            | ModelId::OllamaGemma4
             | ModelId::OllamaLagunaXs2 => Provider::Ollama,
             ModelId::LlamaCppQwen3627b
             | ModelId::LlamaCppQwen3635bA3b

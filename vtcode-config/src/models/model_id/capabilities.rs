@@ -354,6 +354,7 @@ impl ModelId {
                 | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaGlm51Cloud
                 | ModelId::OllamaNemotron3SuperCloud
+                | ModelId::OllamaNemotron3UltraCloud
                 | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::OllamaMinimaxM3Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
@@ -501,8 +502,9 @@ impl ModelId {
             ModelId::OllamaGlm51Cloud => "glm-5.1",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaKimiK26Cloud => "kimi-k2.6",
-            ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
+            ModelId::OllamaNemotron3SuperCloud | ModelId::OllamaNemotron3UltraCloud => "nemotron-3",
             ModelId::OllamaLagunaXs2 => "laguna-xs.2",
+            ModelId::OllamaGemma4 => "gemma-4",
             ModelId::LlamaCppQwen3627b => "3.6",
             ModelId::LlamaCppQwen3635bA3b => "3.6",
             ModelId::LlamaCppGemma426bA4b => "4",

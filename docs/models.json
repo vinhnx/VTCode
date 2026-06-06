@@ -3578,6 +3578,38 @@
           ]
         },
         "context": 131072
+      },
+      "nemotron-3-ultra:cloud": {
+        "id": "nemotron-3-ultra:cloud",
+        "name": "Nemotron 3 Ultra (cloud)",
+        "description": "NVIDIA Nemotron 3 Ultra (550B) is built for high-throughput reasoning and long-running agent workflows with 256K context via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144
+      },
+      "gemma4": {
+        "id": "gemma4",
+        "name": "Gemma 4",
+        "description": "Google Gemma 4 model designed for frontier-level reasoning, agentic workflows, coding, and multimodal understanding (128K context).",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
       }
     }
   },

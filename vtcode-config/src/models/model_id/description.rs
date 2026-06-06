@@ -139,6 +139,12 @@ impl ModelId {
             ModelId::OllamaNemotron3SuperCloud => {
                 "NVIDIA Nemotron\u{2122} is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
             }
+            ModelId::OllamaNemotron3UltraCloud => {
+                "NVIDIA Nemotron 3 Ultra (550B) is built for high-throughput reasoning and long-running agent workflows with 256K context via Ollama Cloud."
+            }
+            ModelId::OllamaGemma4 => {
+                "Google Gemma 4 model designed for frontier-level reasoning, agentic workflows, coding, and multimodal understanding (128K context)."
+            }
             ModelId::OllamaLagunaXs2 => {
                 "Poolside's 33B MoE model with 3B activated parameters, optimized for agentic coding with sliding window attention and native reasoning support (128K context)"
             }

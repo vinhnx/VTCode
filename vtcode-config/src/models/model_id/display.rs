@@ -68,6 +68,8 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaKimiK26Cloud => "Kimi-K2.6 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",
+            ModelId::OllamaNemotron3UltraCloud => "Nemotron-3-Ultra (cloud)",
+            ModelId::OllamaGemma4 => "Gemma 4",
             ModelId::OllamaLagunaXs2 => "Laguna XS.2 (local)",
             ModelId::LlamaCppQwen3627b => "Qwen 3.6 27B (llama.cpp)",
             ModelId::LlamaCppQwen3635bA3b => "Qwen 3.6 35B A3B (llama.cpp)",

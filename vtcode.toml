@@ -23,7 +23,7 @@ enabled = true
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "nvidia/nemotron-3-ultra-550b-a55b"
+default_model = "mimo-v2.5-pro"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh, max)
 # Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability. `max` is
@@ -33,6 +33,8 @@ default_model = "nvidia/nemotron-3-ultra-550b-a55b"
 # Type: `string`
 reasoning_effort = "medium"
 theme = "ciapre-blue"
+api_key_env = "MIMO_API_KEY"
+provider = "mimo"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.

@@ -129,6 +129,10 @@ impl FromStr for ModelId {
             s if s == models::ollama::NEMOTRON_3_SUPER_CLOUD => {
                 Ok(ModelId::OllamaNemotron3SuperCloud)
             }
+            s if s == models::ollama::NEMOTRON_3_ULTRA_CLOUD => {
+                Ok(ModelId::OllamaNemotron3UltraCloud)
+            }
+            s if s == models::ollama::GEMMA_4 => Ok(ModelId::OllamaGemma4),
             s if s == models::ollama::LAGUNA_XS_2 => Ok(ModelId::OllamaLagunaXs2),
             s if s == models::llamacpp::QWEN36_27B => Ok(ModelId::LlamaCppQwen3627b),
             s if s == models::llamacpp::QWEN36_35B_A3B => Ok(ModelId::LlamaCppQwen3635bA3b),

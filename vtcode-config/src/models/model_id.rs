@@ -222,6 +222,10 @@ pub enum ModelId {
     OllamaKimiK26Cloud,
     /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
     OllamaNemotron3SuperCloud,
+    /// Nemotron 3 Ultra Cloud - NVIDIA Nemotron 3 Ultra 550B via Ollama Cloud
+    OllamaNemotron3UltraCloud,
+    /// Gemma 4 - Google Gemma 4 model served via Ollama
+    OllamaGemma4,
     /// Laguna XS.2 - Poolside's 33B MoE model (3B activated) for agentic coding via Ollama
     OllamaLagunaXs2,
 

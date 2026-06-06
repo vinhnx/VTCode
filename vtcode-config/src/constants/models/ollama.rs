@@ -20,6 +20,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M25_CLOUD,
     KIMI_K2_6_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
+    NEMOTRON_3_ULTRA_CLOUD,
+    GEMMA_4,
     LAGUNA_XS_2,
 ];
 
@@ -41,6 +43,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MINIMAX_M3_CLOUD,
     MINIMAX_M25_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
+    NEMOTRON_3_ULTRA_CLOUD,
     LAGUNA_XS_2,
 ];
 
@@ -55,6 +58,7 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     MINIMAX_M25_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     NEMOTRON_3_SUPER_CLOUD,
+    NEMOTRON_3_ULTRA_CLOUD,
 ];
 
 pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
@@ -75,4 +79,6 @@ pub const MINIMAX_M3_CLOUD: &str = "minimax-m3:cloud";
 pub const MINIMAX_M25_CLOUD: &str = "minimax-m2.5:cloud";
 pub const KIMI_K2_6_CLOUD: &str = "kimi-k2.6:cloud";
 pub const NEMOTRON_3_SUPER_CLOUD: &str = "nemotron-3-super:cloud";
+pub const NEMOTRON_3_ULTRA_CLOUD: &str = "nemotron-3-ultra:cloud";
+pub const GEMMA_4: &str = "gemma4";
 pub const LAGUNA_XS_2: &str = "laguna-xs.2";

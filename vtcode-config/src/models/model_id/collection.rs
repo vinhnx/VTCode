@@ -84,6 +84,8 @@ impl ModelId {
             ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaKimiK26Cloud,
             ModelId::OllamaNemotron3SuperCloud,
+            ModelId::OllamaNemotron3UltraCloud,
+            ModelId::OllamaGemma4,
             ModelId::OllamaLagunaXs2,
             // llama.cpp models
             ModelId::LlamaCppQwen3627b,
