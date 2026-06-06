@@ -19,7 +19,8 @@ Options:
                      VT_RELEASE_DRY_RUN environment variable is set to `1`.
   --start-from CRATE Resume publishing from the provided crate name. Valid
                      crates: vtcode-commons, vtcode-auth, vtcode-exec-events,
-                     vtcode-markdown-store, vtcode-ghostty-vt-sys, vtcode-vim,
+                     vtcode-markdown-store, vtcode-ghostty-vt-sys,
+                     vtcode-ghostty-core, vtcode-vim,
                      vtcode-config, vtcode-theme, vtcode-file-search,
                      vtcode-indexer, vtcode-bash-runner,
                      vtcode-terminal-detection, vtcode-tui,
@@ -102,6 +103,7 @@ CRATES=(
     vtcode-exec-events
     vtcode-markdown-store
     vtcode-ghostty-vt-sys
+    vtcode-ghostty-core
     vtcode-vim
     vtcode-config
     vtcode-theme
