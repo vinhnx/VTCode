@@ -247,7 +247,6 @@ pub(super) async fn render_help(
             MessageStyle::Info,
             "  Up/Down arrows – Navigate command history",
         )?;
-        renderer.line(MessageStyle::Info, "  Esc+Esc – Open the rewind picker")?;
         renderer.line(
             MessageStyle::Info,
             "  Enter – Submit now (or queue if a turn is active)",

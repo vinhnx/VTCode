@@ -4,8 +4,6 @@
 /// and command history navigation.  Text editing and cursor positioning are
 /// delegated to [`ratatui_textarea::TextArea`], which provides undo/redo,
 /// proper UTF-8 handling, and a battle-tested editing model.
-use std::time::Instant;
-
 use ratatui_textarea::{CursorMove, DataCursor, TextArea};
 
 use super::super::types::ContentPart;
@@ -77,8 +75,6 @@ pub struct InputManager {
     history_index: Option<usize>,
     /// Unsaved draft when navigating history
     history_draft: Option<InputHistoryEntry>,
-    /// Time of last Escape key press for double-tap detection
-    last_escape_time: Option<Instant>,
 }
 
 #[expect(dead_code)]
@@ -94,7 +90,6 @@ impl InputManager {
             history: Vec::new(),
             history_index: None,
             history_draft: None,
-            last_escape_time: None,
         }
     }
 
@@ -662,17 +657,6 @@ impl InputManager {
         self.history_draft = None;
     }
 
-    pub fn check_escape_double_tap(&mut self) -> bool {
-        let now = Instant::now();
-        let is_double_tap = if let Some(last_time) = self.last_escape_time {
-            now.duration_since(last_time).as_millis() < 300
-        } else {
-            false
-        };
-        self.last_escape_time = Some(now);
-        is_double_tap
-    }
-
     pub fn history(&self) -> &[InputHistoryEntry] {
         &self.history
     }
@@ -835,12 +819,6 @@ mod tests {
                 .map(|entry| entry.content.clone()),
             Some("current".to_owned())
         );
-    }
-
-    #[test]
-    fn escape_double_tap_detection() {
-        let mut manager = InputManager::new();
-        assert!(!manager.check_escape_double_tap());
     }
 
     #[test]

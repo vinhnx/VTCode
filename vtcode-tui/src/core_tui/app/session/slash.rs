@@ -458,6 +458,11 @@ pub(super) fn try_handle_slash_navigation(
             // is in the "immediate submit" list.
             false
         }
+        KeyCode::Esc => {
+            clear_slash_suggestions(session);
+            session.mark_dirty();
+            true
+        }
         _ => return false,
     };
 

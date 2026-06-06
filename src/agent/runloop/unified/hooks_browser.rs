@@ -7,7 +7,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 const HOOKS_TITLE: &str = "Lifecycle Hooks";
-const HOOKS_HINT: &str = "Enter open • Esc back • Double Esc close";
+const HOOKS_HINT: &str = "Enter open • Esc back";
 const HOOKS_SEARCH_LABEL: &str = "Search hooks";
 const HOOKS_SEARCH_PLACEHOLDER: &str = "event, matcher, or command";
 const ACTION_BACK: &str = "hooks:back";

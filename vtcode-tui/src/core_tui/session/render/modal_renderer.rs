@@ -392,7 +392,6 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                     Binding::new("Ctrl+Enter", "run/steer"),
                     Binding::new("Shift+Enter", "new line"),
                     Binding::new("Esc", "clear/cancel"),
-                    Binding::new("Double Esc", "rewind"),
                     Binding::new("Ctrl+C", "interrupt/copy"),
                     Binding::new("Ctrl+D", "exit"),
                     Binding::new("PgUp/PgDn", "scroll"),

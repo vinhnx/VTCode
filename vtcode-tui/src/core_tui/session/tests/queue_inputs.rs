@@ -188,7 +188,7 @@ fn tab_queues_submission() {
 }
 
 #[test]
-fn busy_escape_interrupts_then_exits() {
+fn busy_escape_interrupts() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running command: test".to_string()),
@@ -199,7 +199,7 @@ fn busy_escape_interrupts_then_exits() {
     assert!(matches!(first, Some(InlineEvent::Interrupt)));
 
     let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(matches!(second, Some(InlineEvent::Exit)));
+    assert!(matches!(second, Some(InlineEvent::Interrupt)));
 }
 
 #[test]
@@ -230,16 +230,6 @@ fn busy_resume_command_emits_resume_event() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(event, Some(app_types::InlineEvent::Resume)));
-}
-
-#[test]
-fn double_escape_submits_rewind_when_idle() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-
-    let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-
-    assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "/rewind"));
 }
 
 #[test]

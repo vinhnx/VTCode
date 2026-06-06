@@ -203,12 +203,6 @@ pub struct BehaviorConfig {
     /// History size limit
     pub history_size: usize,
 
-    /// Whether to enable double-tap escape to clear input
-    pub double_tap_escape_clears: bool,
-
-    /// Delay in milliseconds for double-tap detection
-    pub double_tap_delay_ms: u64,
-
     /// Whether to show queued inputs
     pub show_queued_inputs: bool,
 }
@@ -219,8 +213,6 @@ impl Default for BehaviorConfig {
             max_input_lines: 10,
             enable_history: true,
             history_size: 100,
-            double_tap_escape_clears: true,
-            double_tap_delay_ms: 300,
             show_queued_inputs: true,
         }
     }

@@ -459,32 +459,18 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             if session.has_active_overlay() {
                 session.close_overlay();
                 None
+            } else if session.is_running_activity() || session.active_pty_session_count() > 0 {
+                session.mark_dirty();
+                Some(InlineEvent::Interrupt)
+            } else if !session.input_manager.content().is_empty() {
+                // Escape with content: clear input
+                command::clear_input(session);
+                session.mark_dirty();
+                None
             } else {
-                let is_double_escape = session.input_manager.check_escape_double_tap();
-                let active_pty_count = session.active_pty_session_count();
-                let has_running_activity = session.is_running_activity();
-
-                if has_running_activity || active_pty_count > 0 {
-                    session.mark_dirty();
-                    if is_double_escape {
-                        Some(InlineEvent::Exit)
-                    } else {
-                        Some(InlineEvent::Interrupt)
-                    }
-                } else if is_double_escape && !has_running_activity {
-                    // Double-escape while idle rewinds to the latest checkpoint.
-                    session.mark_dirty();
-                    Some(InlineEvent::Submit("/rewind".to_string()))
-                } else if !session.input_manager.content().is_empty() {
-                    // Single escape with content: clear input
-                    command::clear_input(session);
-                    session.mark_dirty();
-                    None
-                } else {
-                    // Single escape with no content: cancel
-                    session.mark_dirty();
-                    Some(InlineEvent::Cancel)
-                }
+                // Escape with no content: cancel
+                session.mark_dirty();
+                Some(InlineEvent::Cancel)
             }
         }
         KeyCode::Enter => {
