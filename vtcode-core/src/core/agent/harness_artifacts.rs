@@ -97,15 +97,7 @@ fn read_markdown_summary(path: &Path, label: &str) -> Option<String> {
 }
 
 fn truncate_summary(text: &str) -> String {
-    if text.chars().count() <= SUMMARY_PREVIEW_CHARS {
-        return text.to_string();
-    }
-
-    let truncated = text
-        .chars()
-        .take(SUMMARY_PREVIEW_CHARS.saturating_sub(3))
-        .collect::<String>();
-    format!("{truncated}...")
+    vtcode_commons::formatting::truncate_within(text, SUMMARY_PREVIEW_CHARS, "...")
 }
 
 #[cfg(test)]

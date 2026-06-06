@@ -698,7 +698,8 @@ mod tests {
         let call = ToolCall::function(
             "call_search".to_string(),
             "unified_search".to_string(),
-            r#"{"action": "structural", "pattern": "context", "path": ".", "lang": "rust""#.to_string(),
+            r#"{"action": "structural", "pattern": "context", "path": ".", "lang": "rust""#
+                .to_string(),
         );
 
         let parsed = call

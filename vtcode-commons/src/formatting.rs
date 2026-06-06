@@ -46,6 +46,144 @@ pub fn truncate_text(text: &str, max_len: usize, ellipsis: &str) -> String {
     truncated
 }
 
+/// Truncate text to `max_len` chars, reserving room for `ellipsis` so the
+/// returned string never exceeds `max_len` chars.
+///
+/// This differs from [`truncate_text`], which appends the ellipsis *after*
+/// taking `max_len` chars (yielding up to `max_len + ellipsis.len()` chars).
+/// Use this when the total rendered width must stay within a hard budget.
+///
+/// ```
+/// # use vtcode_commons::formatting::truncate_within;
+/// assert_eq!(truncate_within("hello world", 8, "..."), "hello...");
+/// assert_eq!(truncate_within("hi", 8, "..."), "hi");
+/// assert_eq!(truncate_within("hello", 3, "…"), "he…");
+/// ```
+pub fn truncate_within(text: &str, max_len: usize, ellipsis: &str) -> String {
+    if text.chars().count() <= max_len {
+        return text.to_string();
+    }
+    let keep = max_len.saturating_sub(ellipsis.chars().count());
+    let mut truncated = text.chars().take(keep).collect::<String>();
+    truncated.push_str(ellipsis);
+    truncated
+}
+
+/// Truncate `value` to `max_chars` chars by keeping a head and a tail joined by
+/// `marker`, preserving context from both ends of the text.
+///
+/// Returns `(text, was_truncated)`. When the budget is too small to fit the
+/// marker plus meaningful context, falls back to a head-only prefix with a
+/// ` [truncated]` suffix.
+///
+/// ```
+/// # use vtcode_commons::formatting::head_tail_truncate;
+/// let (out, truncated) = head_tail_truncate("short", 64, " ... ");
+/// assert_eq!(out, "short");
+/// assert!(!truncated);
+/// ```
+pub fn head_tail_truncate(value: &str, max_chars: usize, marker: &str) -> (String, bool) {
+    let total_chars = value.chars().count();
+    if total_chars <= max_chars {
+        return (value.to_string(), false);
+    }
+
+    let marker_chars = marker.chars().count();
+    if max_chars <= marker_chars + 16 {
+        let mut truncated = value.chars().take(max_chars).collect::<String>();
+        truncated.push_str(" [truncated]");
+        return (truncated, true);
+    }
+
+    let available = max_chars.saturating_sub(marker_chars);
+    let head_chars = (available * 2) / 3;
+    let tail_chars = available.saturating_sub(head_chars);
+    let head = value.chars().take(head_chars).collect::<String>();
+    let tail = value
+        .chars()
+        .skip(total_chars.saturating_sub(tail_chars))
+        .collect::<String>();
+    let mut truncated = String::with_capacity(max_chars + 20);
+    truncated.push_str(&head);
+    truncated.push_str(marker);
+    truncated.push_str(&tail);
+    (truncated, true)
+}
+
+/// Word-wrap `text` into lines, allowing `first_width` chars on the first line
+/// and `continuation_width` chars on subsequent lines. Wrapping prefers
+/// whitespace boundaries and is UTF-8 safe (widths count chars, not bytes).
+///
+/// Returns an empty vec for blank input. Words longer than the width are split
+/// at the width boundary rather than overflowing.
+///
+/// ```
+/// # use vtcode_commons::formatting::wrap_text_words;
+/// let lines = wrap_text_words("the quick brown fox", 9, 9);
+/// assert_eq!(lines, vec!["the quick", "brown fox"]);
+/// assert!(wrap_text_words("   ", 5, 5).is_empty());
+/// ```
+pub fn wrap_text_words(text: &str, first_width: usize, continuation_width: usize) -> Vec<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut remaining = trimmed;
+    let mut width = first_width.max(1);
+
+    while remaining.chars().count() > width {
+        let split = split_at_word_boundary(remaining, width);
+        let (head, tail) = remaining.split_at(split);
+        let head = head.trim();
+        if head.is_empty() {
+            break;
+        }
+        result.push(head.to_string());
+        remaining = tail.trim_start();
+        if remaining.is_empty() {
+            break;
+        }
+        width = continuation_width.max(1);
+    }
+
+    if !remaining.is_empty() {
+        result.push(remaining.to_string());
+    }
+    result
+}
+
+fn split_at_word_boundary(input: &str, width: usize) -> usize {
+    let mut last_space: Option<usize> = None;
+    for (seen, (idx, ch)) in input.char_indices().enumerate() {
+        if seen > width {
+            break;
+        }
+        if ch.is_whitespace() {
+            last_space = Some(idx);
+        }
+    }
+    match last_space {
+        Some(pos) => pos,
+        None => byte_index_for_char_count(input, width),
+    }
+}
+
+fn byte_index_for_char_count(input: &str, chars: usize) -> usize {
+    if chars == 0 {
+        return 0;
+    }
+    let mut seen = 0usize;
+    for (idx, ch) in input.char_indices() {
+        seen += 1;
+        if seen == chars {
+            return idx + ch.len_utf8();
+        }
+    }
+    input.len()
+}
+
 /// Truncate a string so that the retained prefix is at most `max_bytes` bytes,
 /// rounded down to the nearest UTF-8 char boundary.  Returns the truncated
 /// prefix with `suffix` appended, or the original string when it already fits.
@@ -122,6 +260,71 @@ mod tests {
     #[test]
     fn truncate_byte_budget_zero() {
         assert_eq!(truncate_byte_budget("abc", 0, "..."), "...");
+    }
+
+    #[test]
+    fn wrap_text_words_basic_and_continuation_width() {
+        assert_eq!(
+            wrap_text_words("the quick brown fox", 9, 9),
+            vec!["the quick", "brown fox"]
+        );
+        // First line wider than continuation lines.
+        assert_eq!(
+            wrap_text_words("alpha beta gamma delta", 11, 5),
+            vec!["alpha beta", "gamma", "delta"]
+        );
+    }
+
+    #[test]
+    fn wrap_text_words_blank_and_unicode() {
+        assert!(wrap_text_words("   ", 5, 5).is_empty());
+        // Must not panic on multi-byte chars and counts chars, not bytes.
+        let wrapped = wrap_text_words("あいう えお かきく", 3, 3);
+        assert_eq!(wrapped, vec!["あいう", "えお", "かきく"]);
+    }
+
+    #[test]
+    fn truncate_within_reserves_ellipsis_budget() {
+        // Matches former runner::orchestration::truncate_chars behavior.
+        assert_eq!(truncate_within("hello world", 8, "..."), "hello...");
+        assert_eq!(truncate_within("hi", 8, "..."), "hi");
+        // Single-char ellipsis reserves exactly one char (former snapshots /
+        // session_archive behavior).
+        assert_eq!(truncate_within("abcdef", 4, "…"), "abc…");
+    }
+
+    #[test]
+    fn truncate_within_counts_chars() {
+        let jp = "あいうえお"; // 5 chars
+        assert_eq!(truncate_within(jp, 5, "…"), jp);
+        assert_eq!(truncate_within(jp, 3, "…"), "あい…");
+    }
+
+    #[test]
+    fn head_tail_truncate_keeps_both_ends() {
+        let value = "0123456789".repeat(10); // 100 chars
+        let (out, truncated) = head_tail_truncate(&value, 40, " ... [truncated] ... ");
+        assert!(truncated);
+        assert!(out.chars().count() <= 40);
+        assert!(out.starts_with("012"));
+        assert!(out.contains("[truncated]"));
+        assert!(out.ends_with('9'));
+    }
+
+    #[test]
+    fn head_tail_truncate_passes_through_when_short() {
+        let (out, truncated) = head_tail_truncate("short", 64, " ... ");
+        assert_eq!(out, "short");
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn head_tail_truncate_small_budget_falls_back_to_prefix() {
+        let marker = " ... [truncated] ... ";
+        // max_chars <= marker_chars + 16 triggers the prefix fallback.
+        let (out, truncated) = head_tail_truncate("abcdefghij", 5, marker);
+        assert!(truncated);
+        assert_eq!(out, "abcde [truncated]");
     }
 
     #[test]

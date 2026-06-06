@@ -1815,8 +1815,9 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/deepseek-v4-flash".to_string(),
             model: evolink_models::DEEPSEEK_V4_FLASH.to_string(),
             display_name: "DeepSeek V4 Flash (Evolink)".to_string(),
-            description: "DeepSeek V4 Flash fast inference model served through the Evolink gateway."
-                .to_string(),
+            description:
+                "DeepSeek V4 Flash fast inference model served through the Evolink gateway."
+                    .to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -1852,9 +1853,8 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/gemini-3.1-pro-preview".to_string(),
             model: evolink_models::GEMINI_3_1_PRO.to_string(),
             display_name: "Gemini 3.1 Pro (Evolink)".to_string(),
-            description:
-                "Gemini 3.1 Pro served through the Evolink gateway via OpenAI SDK format."
-                    .to_string(),
+            description: "Gemini 3.1 Pro served through the Evolink gateway via OpenAI SDK format."
+                .to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![reasoning_preset(
@@ -1890,9 +1890,8 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/MiniMax-M3".to_string(),
             model: evolink_models::MINIMAX_M3.to_string(),
             display_name: "MiniMax-M3 (Evolink)".to_string(),
-            description:
-                "MiniMax-M3 frontier multimodal model served through the Evolink gateway."
-                    .to_string(),
+            description: "MiniMax-M3 frontier multimodal model served through the Evolink gateway."
+                .to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![reasoning_preset(
@@ -1945,8 +1944,9 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/claude-haiku-4-5-20251001".to_string(),
             model: evolink_models::CLAUDE_HAIKU_4_5.to_string(),
             display_name: "Claude Haiku 4.5 (Evolink)".to_string(),
-            description: "Claude Haiku 4.5 fast model served through Evolink via Anthropic Messages API."
-                .to_string(),
+            description:
+                "Claude Haiku 4.5 fast model served through Evolink via Anthropic Messages API."
+                    .to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Low,
             supported_reasoning_efforts: vec![
