@@ -20,7 +20,7 @@
 Set a provider key and launch VT Code in a project:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-..."
 vtcode
 ```
 
@@ -118,14 +118,14 @@ For detailed setup guides, see [Provider Guides](./docs/providers/PROVIDER_GUIDE
 > VT Code is happy to be part of the [Xiaomi MiMo Orbit Program](https://platform.xiaomimimo.com/)
 
 <div align="center">
-  <img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 - Invite builders" width="400" />
+  <a href="https://platform.xiaomimimo.com"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 - Invite builders" width="300" /></a>
 </div>
 
 Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the native MiMo provider and through OpenRouter. It delivers strong performance in agentic capabilities, complex software engineering, and long-horizon tasks with a 1M context window and deep reasoning.
 
 <div align="center">
   <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
-    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="600" />
+    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="300"/>
   </a>
 </div>
 
@@ -158,7 +158,7 @@ model = "deepseek-ai/DeepSeek-V3-0324"
 ```
 
 <div align="center">
-  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="400" />
+  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="300" />
 </div>
 
 Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
