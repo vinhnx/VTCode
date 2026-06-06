@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, SystemTime};
 
-use dunce::canonicalize as normalize_path;
 use serde::Deserialize;
 use tokio::fs;
 use tracing::warn;
@@ -101,7 +100,7 @@ impl CachedSystemPromptLayers {
 }
 
 fn normalize_cache_path(path: &Path) -> PathBuf {
-    normalize_path(path).unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn system_prompt_layers_cache()

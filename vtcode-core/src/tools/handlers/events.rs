@@ -7,6 +7,7 @@
 //! - Patch-specific events for apply_patch
 
 use crate::config::constants::tools;
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -107,7 +108,7 @@ pub enum ToolEmitter {
         process_id: Option<String>,
     },
     /// Generic tool execution
-    Generic { tool_name: String },
+    Generic { tool_name: CompactStr },
 }
 
 impl ToolEmitter {
@@ -155,7 +156,7 @@ impl ToolEmitter {
     }
 
     /// Create emitter for generic tools
-    pub fn generic(tool_name: impl Into<String>) -> Self {
+    pub fn generic(tool_name: impl Into<CompactStr>) -> Self {
         Self::Generic {
             tool_name: tool_name.into(),
         }
@@ -214,7 +215,7 @@ impl ToolEmitter {
             (Self::Shell { .. } | Self::UnifiedExec { .. }, ToolEventStage::Begin) => {
                 let event = ToolEvent::Begin(ToolEventBegin {
                     call_id: ctx.call_id.to_string(),
-                    tool_name: self.tool_name(),
+                    tool_name: self.tool_name().into(),
                     turn_id: ctx.turn.turn_id.clone(),
                 });
                 ctx.session.send_event(event).await;
@@ -247,7 +248,7 @@ impl ToolEmitter {
             (Self::Generic { tool_name }, ToolEventStage::Begin) => {
                 let event = ToolEvent::Begin(ToolEventBegin {
                     call_id: ctx.call_id.to_string(),
-                    tool_name: tool_name.clone(),
+                    tool_name: tool_name.to_string(),
                     turn_id: ctx.turn.turn_id.clone(),
                 });
                 ctx.session.send_event(event).await;
@@ -354,11 +355,11 @@ impl ToolEmitter {
     }
 
     /// Get tool name for this emitter
-    fn tool_name(&self) -> String {
+    fn tool_name(&self) -> CompactStr {
         match self {
-            Self::Shell { .. } => tools::SHELL.to_string(),
-            Self::ApplyPatch { .. } => tools::APPLY_PATCH.to_string(),
-            Self::UnifiedExec { .. } => tools::UNIFIED_EXEC.to_string(),
+            Self::Shell { .. } => CompactStr::from(tools::SHELL),
+            Self::ApplyPatch { .. } => CompactStr::from(tools::APPLY_PATCH),
+            Self::UnifiedExec { .. } => CompactStr::from(tools::UNIFIED_EXEC),
             Self::Generic { tool_name } => tool_name.clone(),
         }
     }

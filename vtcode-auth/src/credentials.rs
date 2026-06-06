@@ -110,27 +110,36 @@ impl AuthCredentialsStoreMode {
 ///
 /// This creates a test entry, verifies it can be written and read, then deletes it.
 /// This is more reliable than just checking if Entry creation succeeds.
+///
+/// The result is cached after the first call so that repeated checks (e.g. from
+/// `Auto` mode resolution) do not trigger additional OS keyring popups.
 pub(crate) fn is_keyring_functional() -> bool {
-    // Create a test entry with a unique name to avoid conflicts
-    let test_user = format!("test_{}", std::process::id());
-    let entry = match keyring_entry("vtcode", &test_user) {
-        Ok(e) => e,
-        Err(_) => return false,
-    };
+    use std::sync::OnceLock;
 
-    // Try to write a test value
-    if entry.set_password("test").is_err() {
-        return false;
-    }
+    static FUNCTIONAL: OnceLock<bool> = OnceLock::new();
 
-    // Try to read it back
-    let functional = entry.get_password().is_ok();
+    *FUNCTIONAL.get_or_init(|| {
+        // Create a test entry with a unique name to avoid conflicts
+        let test_user = format!("test_{}", std::process::id());
+        let entry = match keyring_entry("vtcode", &test_user) {
+            Ok(e) => e,
+            Err(_) => return false,
+        };
 
-    // Clean up - ignore errors during cleanup (called unconditionally so a
-    // stale entry does not persist when get_password fails after set succeeds).
-    let _ = entry.delete_credential();
+        // Try to write a test value
+        if entry.set_password("test").is_err() {
+            return false;
+        }
 
-    functional
+        // Try to read it back
+        let functional = entry.get_password().is_ok();
+
+        // Clean up - ignore errors during cleanup (called unconditionally so a
+        // stale entry does not persist when get_password fails after set succeeds).
+        let _ = entry.delete_credential();
+
+        functional
+    })
 }
 
 fn ensure_native_keyring_store() -> keyring_core::Result<()> {
@@ -172,12 +181,28 @@ fn ensure_native_keyring_store() -> keyring_core::Result<()> {
 /// Returns `true` when access to the OS keyring should be skipped.
 ///
 /// The native keyring (e.g. macOS Keychain) prompts the user for authorization
-/// the first time each distinct binary touches it. Test binaries are recompiled
-/// with a new code signature on every build, so they would prompt on every run.
-/// To avoid this, keyring access is disabled during tests and whenever the
-/// `VTCODE_DISABLE_KEYRING` or `CI` environment variables are set. Callers fall
-/// back to encrypted-file storage in that case.
+/// the first time each distinct binary touches it. Debug and test binaries are
+/// recompiled with a new code signature on every build, so they would prompt on
+/// every run. To avoid this, keyring access is disabled in debug builds, during
+/// tests, and whenever the `VTCODE_DISABLE_KEYRING` or `CI` environment
+/// variables are set. Callers fall back to encrypted-file storage in that case.
 pub(crate) fn keyring_disabled() -> bool {
+    // Debug builds change their code signature on every compile, which triggers
+    // macOS Keychain authorization popups on each run.  Skip the keyring unless
+    // the user explicitly opts in via VTCODE_DISABLE_KEYRING=0.
+    if cfg!(debug_assertions) {
+        if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
+            // Explicit opt-in: the user wants keyring even in debug builds.
+            if matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "" | "0" | "false" | "no" | "off"
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     if cfg!(test) {
         return true;
     }

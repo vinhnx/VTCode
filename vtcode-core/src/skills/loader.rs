@@ -11,7 +11,6 @@ use crate::skills::system::{install_system_skills, system_cache_root_dir};
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
 use crate::tools::error_messages::skill_ops;
 use anyhow::{Context, Result};
-use dunce::canonicalize as normalize_path;
 use hashbrown::{HashMap, HashSet};
 use serde::Deserialize;
 use std::collections::VecDeque;
@@ -81,7 +80,7 @@ impl CachedLightweightSkillOutcome {
 }
 
 fn normalize_cache_path(path: &Path) -> PathBuf {
-    normalize_path(path).unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn lightweight_skill_metadata_cache()
@@ -270,7 +269,7 @@ fn filter_disabled_skills(outcome: &mut SkillLoadOutcome, home_dir: Option<&Path
     }
 
     outcome.skills.retain(|skill| {
-        let canonical = normalize_path(&skill.path).unwrap_or_else(|_| skill.path.clone());
+        let canonical = dunce::canonicalize(&skill.path).unwrap_or_else(|_| skill.path.clone());
         !disabled.paths.contains(&canonical) && !disabled.names.contains(&skill.name)
     });
 }
@@ -298,7 +297,7 @@ fn disabled_skill_selectors(home_dir: Option<&Path>) -> DisabledSkillSelectors {
         if let Some(path) = entry.path {
             selectors
                 .paths
-                .insert(normalize_path(&path).unwrap_or(path));
+                .insert(dunce::canonicalize(&path).unwrap_or(path));
         }
         if let Some(name) = entry.name.map(|name| name.trim().to_string())
             && !name.is_empty()
@@ -409,7 +408,7 @@ fn find_git_root(path: &Path) -> Option<PathBuf> {
 }
 
 fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) {
-    let Ok(root_path) = normalize_path(&root.path) else {
+    let Ok(root_path) = dunce::canonicalize(&root.path) else {
         return;
     };
 
@@ -495,7 +494,7 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
 /// Lightweight metadata discovery that parses only SKILL.md frontmatter.
 /// This preserves routing-critical fields without loading full instructions.
 fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) {
-    let Ok(root_path) = normalize_path(&root.path) else {
+    let Ok(root_path) = dunce::canonicalize(&root.path) else {
         return;
     };
 

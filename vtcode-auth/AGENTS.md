@@ -17,4 +17,4 @@
 
 - `clear_openai_chatgpt_session_with_mode()` and `clear_oauth_token_with_mode()` accept storage mode — use the `_with_mode` variants for explicit control.
 - MCP OAuth is separate from provider OAuth — `mcp_oauth::McpOAuthService` handles it.
-- `credentials::keyring_entry` short-circuits when `keyring_disabled()` is true (`cfg!(test)`, `VTCODE_DISABLE_KEYRING`, or `CI`), so tests/CI fall back to file storage and never trigger macOS Keychain prompts. Check scripts export `VTCODE_DISABLE_KEYRING=1` via `scripts/common.sh`.
+- `credentials::keyring_entry` short-circuits when `keyring_disabled()` is true (`cfg!(debug_assertions)`, `cfg!(test)`, `VTCODE_DISABLE_KEYRING`, or `CI`), so debug builds, tests, and CI fall back to file storage and never trigger macOS Keychain prompts. Debug-keyring can be re-enabled with `VTCODE_DISABLE_KEYRING=0`. `is_keyring_functional()` caches its result to avoid repeated Keychain round trips.

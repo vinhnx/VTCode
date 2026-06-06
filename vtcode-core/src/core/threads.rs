@@ -12,44 +12,32 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
+use vtcode_commons::string_newtype;
 
 const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 512;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ThreadId(String);
-
-impl ThreadId {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+string_newtype! {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    /// Unique identifier for a thread in the runtime.
+    pub struct ThreadId
 }
 
-impl std::fmt::Display for ThreadId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
+string_newtype! {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    /// Unique identifier for a submission within a thread turn.
+    pub struct SubmissionId
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SubmissionId(String);
 
 impl SubmissionId {
-    pub fn new() -> Self {
+    /// Generate a new submission identifier with a `sub-` prefix.
+    pub fn generate() -> Self {
         Self(format!("sub-{}", Uuid::new_v4()))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
     }
 }
 
 impl Default for SubmissionId {
     fn default() -> Self {
-        Self::new()
+        Self::generate()
     }
 }
 
@@ -278,7 +266,7 @@ impl ThreadRuntimeHandle {
         }
 
         session.turn_in_flight = true;
-        Ok(SubmissionId::new())
+        Ok(SubmissionId::generate())
     }
 
     pub fn finish_turn(&self) {

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -430,13 +431,13 @@ pub(super) fn update_previous_response_chain_after_success(
     }
 }
 
-fn prepare_responses_request_history(
+fn prepare_responses_request_history<'a>(
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     provider_name: &str,
     provider_supports_responses_compaction: bool,
     active_model: &str,
-    messages: Vec<uni::Message>,
-) -> (Vec<uni::Message>, Option<String>) {
+    messages: &'a [uni::Message],
+) -> (Cow<'a, [uni::Message]>, Option<String>) {
     let prepared = prepare_responses_continuation_request(
         provider_name,
         provider_supports_responses_compaction,
@@ -559,8 +560,9 @@ pub(super) async fn build_turn_request(
         &turn_snapshot.provider_name,
         turn_snapshot.capabilities.responses_compaction,
         active_model,
-        continuation_messages.clone(),
+        &continuation_messages,
     );
+    let request_messages = request_messages.into_owned();
     let request_messages = prepend_request_context_message(
         request_messages,
         ctx.context_manager.request_editor_context_message(),

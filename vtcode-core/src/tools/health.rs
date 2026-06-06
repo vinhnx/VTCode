@@ -1,3 +1,4 @@
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 use smallvec::SmallVec;
@@ -28,7 +29,7 @@ pub struct ToolStats {
 
 /// Tracks health and performance of tools with sliding window.
 pub struct ToolHealthTracker {
-    stats: Arc<RwLock<HashMap<String, ToolStats>>>,
+    stats: Arc<RwLock<HashMap<CompactStr, ToolStats>>>,
     failure_threshold: u64,
     window_size: usize,
 }
@@ -57,7 +58,7 @@ impl ToolHealthTracker {
         let tool_stats = if let Some(stats) = stats_map.get_mut(tool_name) {
             stats
         } else {
-            stats_map.entry(tool_name.to_string()).or_default()
+            stats_map.entry(CompactStr::from(tool_name)).or_default()
         };
 
         let latency_ms = latency.as_secs_f64() * 1000.0;
@@ -160,7 +161,7 @@ impl ToolHealthTracker {
         Some((avg, p95))
     }
     /// Get snapshot of all tool stats
-    pub fn get_all_tool_stats(&self) -> Vec<(String, ToolStats)> {
+    pub fn get_all_tool_stats(&self) -> Vec<(CompactStr, ToolStats)> {
         self.stats
             .read()
             .iter()

@@ -343,7 +343,7 @@ async fn handle_show_memory_intent(
         SlashCommandControl::SubmitPrompt(prompt) => Ok(Some(InteractionOutcome::Continue {
             input: prompt,
             prompt_message_index: None,
-            turn_id: SessionId::new().into_inner(),
+            turn_id: SessionId::generate().into_inner(),
         })),
         SlashCommandControl::ReplaceInput(content) => {
             ctx.handle.set_input(content);

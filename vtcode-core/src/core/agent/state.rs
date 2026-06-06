@@ -1,77 +1,16 @@
 use crate::llm::provider::Message;
 use hashbrown::{HashMap, HashSet};
-use std::borrow::Borrow;
-use std::fmt;
-use std::ops::Deref;
 use std::time::Duration;
+use vtcode_commons::string_newtype;
 
 // ============================================================================
 // Context Manager: Call/Output Pairing Invariants (OpenAI Codex pattern)
 // ============================================================================
 
-/// Unique identifier for a tool call.
-///
-/// Follows the **newtype pattern** (Ch 3) with proper encapsulation:
-/// inner field is private, access goes through `as_str()`, `Deref`, or `Borrow`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ToolCallId(String);
-
-impl ToolCallId {
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-}
-
-impl Deref for ToolCallId {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
-    }
-}
-
-impl Borrow<str> for ToolCallId {
-    fn borrow(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl AsRef<str> for ToolCallId {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl fmt::Display for ToolCallId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl From<String> for ToolCallId {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for ToolCallId {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
-}
-
-impl From<ToolCallId> for String {
-    fn from(value: ToolCallId) -> Self {
-        value.0
-    }
+string_newtype! {
+    /// Unique identifier for a tool call.
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct ToolCallId
 }
 
 /// Status of a tool execution

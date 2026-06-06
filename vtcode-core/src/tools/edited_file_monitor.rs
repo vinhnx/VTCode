@@ -318,7 +318,7 @@ impl EditedFileMonitor {
             return;
         }
 
-        let audit_dir = expand_tilde_path(&permissions.audit_directory);
+        let audit_dir = vtcode_commons::paths::expand_tilde(&permissions.audit_directory);
         match FileConflictAuditLog::new(audit_dir) {
             Ok(log) => *audit_log = Some(log),
             Err(err) => {
@@ -815,10 +815,6 @@ fn workspace_relative_display(workspace_root: &Path, path: &Path) -> String {
         return relative.to_string_lossy().to_string();
     }
     path.to_string_lossy().to_string()
-}
-
-fn expand_tilde_path(path: &str) -> PathBuf {
-    vtcode_commons::paths::expand_tilde(path)
 }
 
 pub fn conflict_override_snapshot(args: &Value) -> Option<FileSnapshot> {

@@ -94,7 +94,7 @@ pub(crate) async fn execute_direct_tool_call(
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
-    let direct_turn_id = SessionId::new();
+    let direct_turn_id = SessionId::generate();
     let direct_turn_id_str = direct_turn_id.as_str().to_string();
     let mut harness_state = HarnessTurnState::new(
         TurnRunId(direct_turn_id_str.clone()),

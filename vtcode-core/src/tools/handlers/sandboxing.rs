@@ -378,8 +378,8 @@ pub enum SandboxType {
     LinuxSandbox,
 }
 
-impl SandboxType {
-    fn from_canonical(value: CanonicalSandboxType) -> Self {
+impl From<CanonicalSandboxType> for SandboxType {
+    fn from(value: CanonicalSandboxType) -> Self {
         match value {
             CanonicalSandboxType::None => Self::None,
             CanonicalSandboxType::MacosSeatbelt => Self::Seatbelt,
@@ -452,7 +452,7 @@ impl ExecEnv {
             cwd: env.cwd,
             env: env.env,
             timeout_ms: env.expiration.timeout_ms(),
-            sandbox: SandboxType::from_canonical(env.sandbox_type),
+            sandbox: SandboxType::from(env.sandbox_type),
         }
     }
 }

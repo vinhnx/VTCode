@@ -289,7 +289,7 @@ fn sensitive_paths_from_runtime_config(
             .iter()
             .filter_map(|path| {
                 let path = path.trim();
-                (!path.is_empty()).then(|| expand_tilde_path(path))
+                (!path.is_empty()).then(|| vtcode_commons::paths::expand_tilde(path))
             })
             .collect::<Vec<_>>();
         sensitive_paths.retain(|entry| {
@@ -782,7 +782,7 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
     }
 
     let candidate = if trimmed.starts_with("~/") || trimmed == "~" {
-        Some(expand_tilde_path(trimmed))
+        Some(vtcode_commons::paths::expand_tilde(trimmed))
     } else if trimmed.starts_with('/') {
         Some(PathBuf::from(trimmed))
     } else if trimmed.starts_with("./") || trimmed.starts_with("../") {
@@ -803,10 +803,6 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
     }?;
 
     Some(candidate)
-}
-
-fn expand_tilde_path(path: &str) -> PathBuf {
-    vtcode_commons::paths::expand_tilde(path)
 }
 
 #[cfg(target_os = "linux")]

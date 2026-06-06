@@ -354,7 +354,7 @@ impl AgentSessionState {
                 }],
             });
         }
-        let serialized = serde_json::to_string(result).unwrap_or_default();
+        let serialized = serde_json::to_string(result).expect("Value serialization is infallible");
         self.messages
             .push(Message::tool_response(call_id, serialized));
         self.executed_commands.push(tool_name.to_owned());
@@ -384,7 +384,8 @@ impl AgentSessionState {
                 }],
             });
         }
-        let serialized = serde_json::to_string(error_payload).unwrap_or_default();
+        let serialized =
+            serde_json::to_string(error_payload).expect("Value serialization is infallible");
         self.messages
             .push(Message::tool_response(call_id, serialized));
     }

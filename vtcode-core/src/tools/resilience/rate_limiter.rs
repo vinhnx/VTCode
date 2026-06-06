@@ -141,6 +141,7 @@ impl RateLimiterInner {
 /// Public alias for benchmark compatibility
 pub type RateLimiter = PerToolRateLimiter;
 
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 /// Global rate limiter instance used by all tools.
 ///
@@ -156,7 +157,7 @@ pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> =
 /// Each tool gets its own token bucket, allowing different rate limits per tool.
 pub struct PerToolRateLimiter {
     /// Per-tool token buckets. Key is tool name.
-    buckets: HashMap<String, RateLimiterInner>,
+    buckets: HashMap<CompactStr, RateLimiterInner>,
     /// Default config for new tool buckets.
     default_config: RateLimiterConfig,
 }
@@ -193,7 +194,7 @@ impl PerToolRateLimiter {
     pub fn try_acquire_for_scaled(&mut self, tool_name: &str, multiplier: f64) -> Result<()> {
         let bucket = self
             .buckets
-            .entry(tool_name.to_owned())
+            .entry(CompactStr::from(tool_name))
             .or_insert_with(|| RateLimiterInner::new_with_config(self.default_config));
         bucket.try_acquire_scaled(multiplier)
     }

@@ -67,7 +67,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use vtcode_commons::serde_helpers::json_to_string_pretty;
 
-use crate::cache::{CacheKey, UnifiedCache};
+use crate::cache::{CacheKey, UnifiedCache, estimate_json_size};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::tool_handler::{
     ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
@@ -492,11 +492,49 @@ pub trait HasExecutionCaches: Send + Sync {
     fn dual_cache(&self) -> &UnifiedCache<ToolExecutionCacheKey, SplitToolResult>;
 }
 
+/// Recursively hash a `serde_json::Value` tree without allocating a temporary
+/// String.  Type-discriminant bytes prevent cross-type collisions (e.g. the
+/// string `"true"` vs the boolean `true`).
+fn hash_json_value<H: Hasher>(hasher: &mut H, value: &Value) {
+    match value {
+        Value::Null => hasher.write_u8(0x00),
+        Value::Bool(b) => {
+            hasher.write_u8(0x01);
+            hasher.write_u8(u8::from(*b));
+        }
+        Value::Number(n) => {
+            hasher.write_u8(0x02);
+            let s = n.to_string();
+            hasher.write(s.as_bytes());
+        }
+        Value::String(s) => {
+            hasher.write_u8(0x03);
+            hasher.write(s.as_bytes());
+        }
+        Value::Array(arr) => {
+            hasher.write_u8(0x04);
+            hasher.write_usize(arr.len());
+            for item in arr {
+                hash_json_value(hasher, item);
+            }
+        }
+        Value::Object(map) => {
+            hasher.write_u8(0x05);
+            hasher.write_usize(map.len());
+            // serde_json::Map iterates in insertion order, matching JSON
+            // serialization order, so the hash is deterministic.
+            for (k, v) in map {
+                hasher.write(k.as_bytes());
+                hash_json_value(hasher, v);
+            }
+        }
+    }
+}
+
 fn build_execution_cache_key(tool_name: &str, args: &Value) -> ToolExecutionCacheKey {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     hasher.write(tool_name.as_bytes());
-    let encoded_args = serde_json::to_string(args).unwrap_or_else(|_| args.to_string());
-    hasher.write(encoded_args.as_bytes());
+    hash_json_value(&mut hasher, args);
 
     let mut cache_key = String::with_capacity(tool_name.len() + 22);
     cache_key.push_str(tool_name);
@@ -517,9 +555,7 @@ impl<Ctx: HasExecutionCaches> CacheProvider<Ctx> for CachedResults {
 
     fn put_json(ctx: &Ctx, tool_name: &str, args: &Value, result: &Value) {
         let key = build_execution_cache_key(tool_name, args);
-        let size = serde_json::to_string(result)
-            .map(|json| json.len() as u64)
-            .unwrap_or_default();
+        let size = estimate_json_size(result);
         ctx.json_cache().insert(key, result.clone(), size);
     }
 

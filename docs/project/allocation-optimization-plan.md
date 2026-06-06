@@ -268,7 +268,7 @@ After all changes:
 
 ---
 
-## Fallback for Change 4 (if borrow split is too complex)
+## Fallback for Change 1 (if borrow split is too complex)
 
 If splitting the `&mut AgentSessionState` borrow proves too invasive, a simpler
 fallback:

@@ -10,6 +10,8 @@ use std::fmt;
 use std::time::Instant;
 use uuid::Uuid;
 
+use crate::types::CompactStr;
+
 #[cfg(test)]
 use crate::config::constants::tools;
 
@@ -85,11 +87,11 @@ pub struct ToolInvocation {
     /// Unique identifier for this invocation
     pub id: ToolInvocationId,
     /// Name of the tool being invoked
-    pub tool_name: String,
+    pub tool_name: CompactStr,
     /// Arguments passed to the tool
     pub args: Value,
     /// Session identifier for grouping related invocations
-    pub session_id: String,
+    pub session_id: CompactStr,
     /// Attempt number (1-based, incremented on retry)
     pub attempt: u32,
     /// Parent invocation ID for nested child calls
@@ -100,7 +102,11 @@ pub struct ToolInvocation {
 
 impl ToolInvocation {
     /// Create a new tool invocation with generated ID.
-    pub fn new(tool_name: impl Into<String>, args: Value, session_id: impl Into<String>) -> Self {
+    pub fn new(
+        tool_name: impl Into<CompactStr>,
+        args: Value,
+        session_id: impl Into<CompactStr>,
+    ) -> Self {
         Self {
             id: ToolInvocationId::new(),
             tool_name: tool_name.into(),
@@ -126,7 +132,7 @@ impl ToolInvocation {
     }
 
     /// Create a child invocation for nested calls.
-    pub fn child(&self, tool_name: impl Into<String>, args: Value) -> Self {
+    pub fn child(&self, tool_name: impl Into<CompactStr>, args: Value) -> Self {
         Self {
             id: ToolInvocationId::new(),
             tool_name: tool_name.into(),
@@ -160,9 +166,9 @@ impl ToolInvocation {
 /// Builder for ergonomic ToolInvocation construction.
 #[derive(Debug, Clone)]
 pub struct InvocationBuilder {
-    tool_name: String,
+    tool_name: CompactStr,
     args: Value,
-    session_id: String,
+    session_id: CompactStr,
     attempt: u32,
     parent_id: Option<ToolInvocationId>,
     id: Option<ToolInvocationId>,
@@ -170,11 +176,11 @@ pub struct InvocationBuilder {
 
 impl InvocationBuilder {
     /// Start building a new invocation.
-    pub fn new(tool_name: impl Into<String>) -> Self {
+    pub fn new(tool_name: impl Into<CompactStr>) -> Self {
         Self {
             tool_name: tool_name.into(),
             args: Value::Null,
-            session_id: String::new(),
+            session_id: CompactStr::default(),
             attempt: 1,
             parent_id: None,
             id: None,
@@ -188,7 +194,7 @@ impl InvocationBuilder {
     }
 
     /// Set the session ID.
-    pub fn session_id(mut self, session_id: impl Into<String>) -> Self {
+    pub fn session_id(mut self, session_id: impl Into<CompactStr>) -> Self {
         self.session_id = session_id.into();
         self
     }

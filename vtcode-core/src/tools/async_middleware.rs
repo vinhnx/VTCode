@@ -4,6 +4,7 @@
 //! Suitable for tokio-based systems handling LLM operations.
 
 use crate::tools::improvements_errors::ObservabilityContext;
+use crate::types::CompactStr;
 use serde_json::{Map, Value};
 use std::future::Future;
 use std::pin::Pin;
@@ -32,7 +33,7 @@ pub trait AsyncMiddleware: Send + Sync {
 /// Tool request
 #[derive(Clone, Debug)]
 pub struct ToolRequest {
-    pub tool_name: String,
+    pub tool_name: CompactStr,
     pub arguments: String,
     pub context: String,
 }
@@ -515,7 +516,7 @@ mod tests {
         let middleware = AsyncLoggingMiddleware::new(obs);
 
         let request = ToolRequest {
-            tool_name: "test_tool".to_string(),
+            tool_name: "test_tool".into(),
             arguments: "arg1".to_string(),
             context: "ctx".to_string(),
         };
@@ -533,7 +534,7 @@ mod tests {
         let cache = AsyncCachingMiddleware::new(10, 60, obs);
 
         let request = ToolRequest {
-            tool_name: "cached_tool".to_string(),
+            tool_name: "cached_tool".into(),
             arguments: "arg1".to_string(),
             context: "ctx".to_string(),
         };
@@ -576,7 +577,7 @@ mod tests {
         let result = middleware
             .execute(
                 ToolRequest {
-                    tool_name: "auth_tool".to_string(),
+                    tool_name: "auth_tool".into(),
                     arguments: "{}".to_string(),
                     context: "{}".to_string(),
                 },
@@ -622,7 +623,7 @@ mod tests {
         let result = middleware
             .execute(
                 ToolRequest {
-                    tool_name: "rate_limited_tool".to_string(),
+                    tool_name: "rate_limited_tool".into(),
                     arguments: "{}".to_string(),
                     context: "{}".to_string(),
                 },

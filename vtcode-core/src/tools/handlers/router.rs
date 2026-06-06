@@ -10,6 +10,7 @@
 //! `crate::tools::registry`; keep name normalization here compatibility-scoped.
 
 use crate::config::constants::tools;
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 use std::sync::Arc;
 
@@ -40,7 +41,7 @@ struct DispatchEntry {
 
 /// Dispatch registry holding handler mappings.
 pub struct DispatchRegistry {
-    handlers: HashMap<String, DispatchEntry>,
+    handlers: HashMap<CompactStr, DispatchEntry>,
 }
 
 fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
@@ -75,33 +76,34 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
 
 fn suggest_similar_tool_names(
     requested_tool_name: &str,
-    handlers: &HashMap<String, DispatchEntry>,
+    handlers: &HashMap<CompactStr, DispatchEntry>,
 ) -> Vec<String> {
     let requested_lower = requested_tool_name.to_ascii_lowercase();
     let normalized = normalize_router_tool_name(requested_tool_name).unwrap_or_default();
 
-    let mut available: Vec<String> = handlers.keys().cloned().collect();
+    let mut available: Vec<CompactStr> = handlers.keys().cloned().collect();
     available.sort_unstable();
 
     available
         .into_iter()
         .filter(|candidate| {
-            candidate.contains(&requested_lower)
-                || requested_lower.contains(candidate)
-                || (!normalized.is_empty()
-                    && (candidate.contains(&normalized) || normalized.contains(candidate)))
+            let c: &str = candidate;
+            c.contains(&requested_lower)
+                || requested_lower.contains(c)
+                || (!normalized.is_empty() && (c.contains(&*normalized) || normalized.contains(c)))
         })
         .take(3)
+        .map(|c| c.to_string())
         .collect()
 }
 
 impl DispatchRegistry {
     pub fn new(handlers: HashMap<String, Arc<dyn ToolHandler>>) -> Self {
-        let handlers = handlers
+        let handlers: HashMap<CompactStr, DispatchEntry> = handlers
             .into_iter()
             .map(|(name, handler)| {
                 (
-                    name.clone(),
+                    CompactStr::from(name.clone()),
                     DispatchEntry {
                         canonical_name: name,
                         handler,
@@ -166,7 +168,7 @@ impl DispatchRegistry {
 
 /// Builder for constructing a dispatch registry with specs.
 pub struct DispatchRegistryBuilder {
-    handlers: HashMap<String, DispatchEntry>,
+    handlers: HashMap<CompactStr, DispatchEntry>,
     specs: Vec<ConfiguredToolSpec>,
 }
 
@@ -220,7 +222,7 @@ impl DispatchRegistryBuilder {
         let name = name.into();
         let canonical_name = canonical_name.into();
         let previous = self.handlers.insert(
-            name,
+            CompactStr::from(&*name),
             DispatchEntry {
                 canonical_name: canonical_name.clone(),
                 handler: Arc::new(RouteAliasHandler {
@@ -505,7 +507,7 @@ mod tests {
     fn test_suggest_similar_tool_names_uses_normalized_form() {
         let mut handlers = HashMap::new();
         handlers.insert(
-            "unified_exec".to_string(),
+            CompactStr::from("unified_exec"),
             DispatchEntry {
                 canonical_name: "unified_exec".to_string(),
                 handler: Arc::new(MockHandler) as Arc<dyn ToolHandler>,
@@ -513,6 +515,6 @@ mod tests {
         );
 
         let suggestions = suggest_similar_tool_names("Exec code", &handlers);
-        assert_eq!(suggestions, vec!["unified_exec".to_string()]);
+        assert_eq!(suggestions, vec!["unified_exec"]);
     }
 }
