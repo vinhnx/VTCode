@@ -16,6 +16,11 @@ NC='\033[0m'
 export CARGO_HTTP_TIMEOUT=${CARGO_HTTP_TIMEOUT:-300}
 export CARGO_NET_RETRY=${CARGO_NET_RETRY:-5}
 
+# Disable OS keyring access during checks/tests so test binaries do not trigger
+# repeated macOS Keychain authorization prompts. Credential code falls back to
+# encrypted-file storage. Override by exporting VTCODE_DISABLE_KEYRING=0 first.
+export VTCODE_DISABLE_KEYRING=${VTCODE_DISABLE_KEYRING:-1}
+
 # Logging functions
 print_info() {
     printf '%b\n' "${BLUE}INFO:${NC} $1"

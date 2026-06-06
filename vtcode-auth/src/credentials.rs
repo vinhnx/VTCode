@@ -169,10 +169,40 @@ fn ensure_native_keyring_store() -> keyring_core::Result<()> {
     Ok(())
 }
 
+/// Returns `true` when access to the OS keyring should be skipped.
+///
+/// The native keyring (e.g. macOS Keychain) prompts the user for authorization
+/// the first time each distinct binary touches it. Test binaries are recompiled
+/// with a new code signature on every build, so they would prompt on every run.
+/// To avoid this, keyring access is disabled during tests and whenever the
+/// `VTCODE_DISABLE_KEYRING` or `CI` environment variables are set. Callers fall
+/// back to encrypted-file storage in that case.
+pub(crate) fn keyring_disabled() -> bool {
+    if cfg!(test) {
+        return true;
+    }
+
+    if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
+        return !matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "" | "0" | "false" | "no" | "off"
+        );
+    }
+
+    std::env::var_os("CI").is_some()
+}
+
 pub(crate) fn keyring_entry(
     service: &str,
     user: &str,
 ) -> keyring_core::Result<keyring_core::Entry> {
+    if keyring_disabled() {
+        return Err(keyring_core::Error::NotSupportedByStore(
+            "VT Code keyring access is disabled (test run or VTCODE_DISABLE_KEYRING/CI set)"
+                .to_string(),
+        ));
+    }
+
     if keyring_core::get_default_store().is_none() {
         ensure_native_keyring_store()?;
     }
