@@ -27,8 +27,12 @@ Common commands:
 
 ```bash
 vtcode ask "write a Rust factorial function" > factorial.rs
+
 vtcode exec "summarize the current git diff"
+
 vtcode --resume
+
+vtcode update
 ```
 
 ## Features
