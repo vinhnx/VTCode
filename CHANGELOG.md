@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.3 - 2026-06-06
+
+### Highlights
+#### Bug Fixes
+
+- Add vtcode-macros to publish order before vtcode-core (55f2e4df) (@vinhnx)
+- Make crate publishing non-fatal in release.sh and add dependency validation to publish script (12ef4e7b) (@vinhnx)
+- Remove double escape functionality and update related hints (4884c153) 
+- Suppress deprecation warnings for anstyle utilities (27aa88f9) 
+### Other Changes
+#### Other
+
+- Refactor file operations and enhance error handling (e09bf2b5) 
+- Add unified style bridging between anstyle and ratatui (47e14082) 
 ## 0.123.2 - 2026-06-06
 
 ### Highlights
