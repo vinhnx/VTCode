@@ -6,6 +6,8 @@ use std::fmt::Write as _;
 
 use thiserror::Error;
 
+use crate::types::CompactStr;
+
 /// Unified tool error type
 #[derive(Error, Debug)]
 pub enum ToolError {
@@ -30,7 +32,7 @@ pub enum ToolError {
 #[error("{message}")]
 pub struct ToolErrorContext {
     /// Tool name that failed
-    pub tool_name: String,
+    pub tool_name: CompactStr,
     /// Error message
     pub message: String,
     /// File path associated with error, if any
@@ -48,7 +50,7 @@ pub struct ToolErrorContext {
 }
 
 impl ToolErrorContext {
-    pub fn new(tool_name: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(tool_name: impl Into<CompactStr>, message: impl Into<String>) -> Self {
         Self {
             tool_name: tool_name.into(),
             message: message.into(),

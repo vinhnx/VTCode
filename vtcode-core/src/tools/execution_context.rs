@@ -3,6 +3,7 @@
 //! Tracks the context of tool executions within a session to detect patterns,
 //! prevent redundancy, and suggest better alternatives.
 
+use crate::types::CompactStr;
 use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,7 +16,7 @@ use hashbrown::HashMap;
 /// A record of a single tool execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionRecord {
-    pub tool_name: String,
+    pub tool_name: CompactStr,
     pub args: Value,
     pub result: EnhancedToolResult,
     pub timestamp: u64,
@@ -25,13 +26,13 @@ pub struct ToolExecutionRecord {
 impl ToolExecutionRecord {
     #[inline]
     pub fn new(
-        tool_name: String,
+        tool_name: impl Into<CompactStr>,
         args: Value,
         result: EnhancedToolResult,
         execution_time_ms: u64,
     ) -> Self {
         Self {
-            tool_name,
+            tool_name: tool_name.into(),
             args,
             result,
             timestamp: current_timestamp(),
@@ -45,22 +46,25 @@ impl ToolExecutionRecord {
 #[serde(tag = "type")]
 pub enum ToolPattern {
     /// Same tool/pattern searched with multiple tools
-    RedundantSearch { tools: Vec<String>, pattern: String },
+    RedundantSearch {
+        tools: Vec<CompactStr>,
+        pattern: String,
+    },
 
     /// Results build on each other sequentially
     SequentialRefinement {
-        tools: Vec<String>,
+        tools: Vec<CompactStr>,
         refinement_steps: usize,
     },
 
     /// Multiple tools converged on same finding
     ConvergentDiagnosis {
-        tools: Vec<String>,
+        tools: Vec<CompactStr>,
         common_finding: String,
     },
 
     /// Tool produced low quality despite multiple attempts
-    LowQualityLoop { tool: String, attempts: usize },
+    LowQualityLoop { tool: CompactStr, attempts: usize },
 }
 
 /// Context for cross-tool awareness
@@ -122,7 +126,7 @@ impl ToolExecutionContext {
     }
 
     /// Get recent tool names (up to N)
-    pub fn recent_tools(&self, n: usize) -> Vec<String> {
+    pub fn recent_tools(&self, n: usize) -> Vec<CompactStr> {
         self.execution_history
             .iter()
             .rev()
@@ -132,7 +136,7 @@ impl ToolExecutionContext {
     }
 
     /// Get tools that produced good results recently
-    pub fn high_performing_tools(&self, n: usize) -> Vec<String> {
+    pub fn high_performing_tools(&self, n: usize) -> Vec<CompactStr> {
         let mut tools: Vec<_> = self
             .execution_history
             .iter()
@@ -148,7 +152,7 @@ impl ToolExecutionContext {
     }
 
     /// Suggest a fallback tool based on prior effectiveness
-    pub fn suggest_fallback(&self, failed_tool: &str) -> Option<String> {
+    pub fn suggest_fallback(&self, failed_tool: &str) -> Option<CompactStr> {
         // Find most effective tool that hasn't been tried recently
         let recent = self.recent_tools(3);
 
@@ -200,7 +204,7 @@ impl ToolExecutionContext {
         }
 
         if same_pattern_tools.len() > 2 {
-            let mut tools: Vec<String> = same_pattern_tools.into_iter().cloned().collect();
+            let mut tools: Vec<CompactStr> = same_pattern_tools.into_iter().cloned().collect();
             tools.sort();
             tools.dedup();
             self.patterns.push(ToolPattern::RedundantSearch {

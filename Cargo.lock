@@ -1129,6 +1129,7 @@ dependencies = [
  "itoa",
  "rustversion",
  "ryu",
+ "serde",
  "static_assertions",
 ]
 
@@ -7077,6 +7078,7 @@ dependencies = [
  "anstyle-query",
  "anyhow",
  "base64",
+ "compact_str",
  "dirs",
  "futures",
  "glob",
@@ -7151,6 +7153,7 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice-clap",
+ "compact_str",
  "criterion",
  "crossterm",
  "dialoguer",
@@ -7254,6 +7257,7 @@ name = "vtcode-exec-events"
 version = "0.123.0"
 dependencies = [
  "chrono",
+ "compact_str",
  "hashbrown 0.17.1",
  "log",
  "schemars 1.2.1",

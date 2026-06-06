@@ -6,7 +6,8 @@ use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
 };
 use crate::core::agent::harness_kernel::{
-    PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall, reduce_tool_result,
+    FallbackRecommendation, PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
+    reduce_tool_result,
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
@@ -441,6 +442,7 @@ impl AgentRunner {
             );
             return Ok(RunnerCallAdmission::Rejected);
         }
+        let args_for_error = args.clone();
         let prepared = match self.admit_tool_call(&requested_name, args, &mut runtime.state) {
             Ok(prepared) => prepared,
             Err(err) => {
@@ -450,7 +452,7 @@ impl AgentRunner {
                     agent_prefix,
                     &requested_name,
                     call.id.as_str(),
-                    None,
+                    Some(&args_for_error),
                     &err,
                     is_gemini,
                     "Tool admission failed",
@@ -499,10 +501,18 @@ impl AgentRunner {
     ) -> Result<bool> {
         use futures::future::join_all;
 
-        let prepared_map: std::collections::HashMap<String, PreparedRunnerToolCall> =
+        // Extract fallback recommendations before consuming the Vec.  Only
+        // entries that actually carry a fallback are stored, keeping the map
+        // small (most tool calls have no fallback).
+        let fallback_map: std::collections::HashMap<String, FallbackRecommendation> =
             prepared_calls
-                .into_iter()
-                .map(|c| (c.tool_call_id.clone(), c))
+                .iter()
+                .filter_map(|c| {
+                    c.prepared
+                        .fallback_recommendation
+                        .as_ref()
+                        .map(|fb| (c.tool_call_id.clone(), fb.clone()))
+                })
                 .collect();
 
         let max_parallel = self.config().agent.harness.max_parallel_tool_calls;
@@ -513,19 +523,24 @@ impl AgentRunner {
 
         info!(
             agent = %self.agent_type,
-            count = prepared_map.len(),
+            count = prepared_calls.len(),
             max_parallel,
             "Executing parallel tool calls"
         );
 
-        let mut futures = Vec::with_capacity(prepared_map.len());
-        for (call_id, call) in prepared_map.iter() {
-            let name = call.prepared.canonical_name.clone();
-            let args = call.prepared.effective_args.clone();
+        let mut futures = Vec::with_capacity(prepared_calls.len());
+        // Consume the Vec directly to avoid building an intermediate HashMap
+        // and the associated key clones.  Fallback data was extracted above.
+        for call in prepared_calls {
+            let PreparedRunnerToolCall {
+                tool_call_id,
+                prepared,
+            } = call;
+            let name = prepared.canonical_name.clone();
+            let args = prepared.effective_args.clone();
             let tool_call_item =
-                resolve_tool_call_item(runtime, event_recorder, &name, &args, call_id);
+                resolve_tool_call_item(runtime, event_recorder, &name, &args, &tool_call_id);
             let runner = self;
-            let prepared = &call.prepared;
             let circuit_before = snapshot_circuit_diagnostics(runner, &name);
             let sem = semaphore.clone();
             futures.push(async move {
@@ -541,10 +556,10 @@ impl AgentRunner {
                     None
                 };
                 runner.throttle_repeated_tool(&name).await;
-                let result = runner.execute_prepared_tool_internal(prepared).await;
+                let result = runner.execute_prepared_tool_internal(&prepared).await;
                 (
                     name,
-                    call_id.clone(),
+                    tool_call_id,
                     args,
                     tool_call_item,
                     result,
@@ -598,8 +613,7 @@ impl AgentRunner {
                     let mut fallback_tool_name = None;
                     let mut fallback_args = None;
 
-                    if let Some(prepared_call) = prepared_map.get(&call_id)
-                        && let Some(fallback) = &prepared_call.prepared.fallback_recommendation
+                    if let Some(fallback) = fallback_map.get(&call_id)
                         && let Some((res, f_name, f_args)) = self
                             .try_execute_fallback(fallback, runtime, agent_prefix, &name)
                             .await

@@ -116,10 +116,10 @@ fn prepare_responses_request_messages<'a>(
         messages,
         continuation,
     );
-    if prepared.clear_stale_chain {
-        if let Some(key) = key {
-            previous_chains.remove(&key);
-        }
+    if prepared.clear_stale_chain
+        && let Some(key) = key
+    {
+        previous_chains.remove(&key);
     }
 
     (prepared.messages, prepared.previous_response_id)

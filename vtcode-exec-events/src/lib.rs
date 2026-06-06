@@ -26,7 +26,7 @@ pub const EVENT_SCHEMA_VERSION: &str = "0.4.0";
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct VersionedThreadEvent {
     /// Semantic version describing the schema of the nested event payload.
-    pub schema_version: String,
+    pub schema_version: compact_str::CompactString,
     /// Concrete event emitted by the agent runtime.
     pub event: ThreadEvent,
 }
@@ -36,7 +36,7 @@ impl VersionedThreadEvent {
     /// [`EVENT_SCHEMA_VERSION`].
     pub fn new(event: ThreadEvent) -> Self {
         Self {
-            schema_version: EVENT_SCHEMA_VERSION.to_string(),
+            schema_version: compact_str::CompactString::const_new(EVENT_SCHEMA_VERSION),
             event,
         }
     }

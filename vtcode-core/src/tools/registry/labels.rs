@@ -1,50 +1,52 @@
+use std::borrow::Cow;
+
 use serde_json::Value;
 
 use crate::config::constants::tools as tool_names;
 use crate::tools::mcp::legacy_mcp_tool_name;
 use crate::tools::tool_intent;
 
-pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
+pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
     let actual_tool_name = normalize_tool_name(tool_name);
 
     match actual_tool_name {
-        name if name == tool_names::EXEC_COMMAND => "Run command".to_string(),
-        name if name == tool_names::WRITE_STDIN => "Send command input".to_string(),
-        name if name == tool_names::RUN_PTY_CMD => "Run command".to_string(),
-        name if name == tool_names::EXECUTE_CODE => "Run code".to_string(),
-        name if name == tool_names::GET_ERRORS => "List errors".to_string(),
-        name if name == tool_names::MCP_SEARCH_TOOLS => "Search MCP tools".to_string(),
-        name if name == tool_names::MCP_GET_TOOL_DETAILS => "Inspect MCP tool".to_string(),
-        name if name == tool_names::MCP_LIST_SERVERS => "List MCP servers".to_string(),
-        name if name == tool_names::MCP_CONNECT_SERVER => "Connect MCP server".to_string(),
-        name if name == tool_names::MCP_DISCONNECT_SERVER => "Disconnect MCP server".to_string(),
-        name if name == tool_names::LIST_SKILLS => "List skills".to_string(),
-        name if name == tool_names::LOAD_SKILL => "Load skill".to_string(),
-        name if name == tool_names::LOAD_SKILL_RESOURCE => "Load skill resource".to_string(),
-        name if name == tool_names::READ_FILE => "Read file".to_string(),
-        name if name == tool_names::WRITE_FILE => "Write file".to_string(),
-        name if name == tool_names::EDIT_FILE => "Edit file".to_string(),
-        name if name == tool_names::CREATE_FILE => "Create file".to_string(),
-        name if name == tool_names::DELETE_FILE => "Delete file".to_string(),
-        name if name == tool_names::APPLY_PATCH => "Apply patch".to_string(),
-        name if name == tool_names::SEARCH_REPLACE => "Search/replace".to_string(),
-        name if name == tool_names::CREATE_PTY_SESSION => "Create command session".to_string(),
-        name if name == tool_names::READ_PTY_SESSION => "Read command session".to_string(),
-        name if name == tool_names::LIST_PTY_SESSIONS => "List command sessions".to_string(),
-        name if name == tool_names::SEND_PTY_INPUT => "Send command input".to_string(),
-        name if name == tool_names::CLOSE_PTY_SESSION => "Close command session".to_string(),
-        name if name == tool_names::RESIZE_PTY_SESSION => "Resize command session".to_string(),
+        name if name == tool_names::EXEC_COMMAND => Cow::Borrowed("Run command"),
+        name if name == tool_names::WRITE_STDIN => Cow::Borrowed("Send command input"),
+        name if name == tool_names::RUN_PTY_CMD => Cow::Borrowed("Run command"),
+        name if name == tool_names::EXECUTE_CODE => Cow::Borrowed("Run code"),
+        name if name == tool_names::GET_ERRORS => Cow::Borrowed("List errors"),
+        name if name == tool_names::MCP_SEARCH_TOOLS => Cow::Borrowed("Search MCP tools"),
+        name if name == tool_names::MCP_GET_TOOL_DETAILS => Cow::Borrowed("Inspect MCP tool"),
+        name if name == tool_names::MCP_LIST_SERVERS => Cow::Borrowed("List MCP servers"),
+        name if name == tool_names::MCP_CONNECT_SERVER => Cow::Borrowed("Connect MCP server"),
+        name if name == tool_names::MCP_DISCONNECT_SERVER => Cow::Borrowed("Disconnect MCP server"),
+        name if name == tool_names::LIST_SKILLS => Cow::Borrowed("List skills"),
+        name if name == tool_names::LOAD_SKILL => Cow::Borrowed("Load skill"),
+        name if name == tool_names::LOAD_SKILL_RESOURCE => Cow::Borrowed("Load skill resource"),
+        name if name == tool_names::READ_FILE => Cow::Borrowed("Read file"),
+        name if name == tool_names::WRITE_FILE => Cow::Borrowed("Write file"),
+        name if name == tool_names::EDIT_FILE => Cow::Borrowed("Edit file"),
+        name if name == tool_names::CREATE_FILE => Cow::Borrowed("Create file"),
+        name if name == tool_names::DELETE_FILE => Cow::Borrowed("Delete file"),
+        name if name == tool_names::APPLY_PATCH => Cow::Borrowed("Apply patch"),
+        name if name == tool_names::SEARCH_REPLACE => Cow::Borrowed("Search/replace"),
+        name if name == tool_names::CREATE_PTY_SESSION => Cow::Borrowed("Create command session"),
+        name if name == tool_names::READ_PTY_SESSION => Cow::Borrowed("Read command session"),
+        name if name == tool_names::LIST_PTY_SESSIONS => Cow::Borrowed("List command sessions"),
+        name if name == tool_names::SEND_PTY_INPUT => Cow::Borrowed("Send command input"),
+        name if name == tool_names::CLOSE_PTY_SESSION => Cow::Borrowed("Close command session"),
+        name if name == tool_names::RESIZE_PTY_SESSION => Cow::Borrowed("Resize command session"),
         name if name == tool_names::UNIFIED_EXEC => {
             match tool_intent::unified_exec_action(args).unwrap_or("run") {
-                "run" => "Run command".to_string(),
-                "write" => "Send command input".to_string(),
-                "poll" => "Read command session".to_string(),
-                "continue" => "Continue command session".to_string(),
-                "inspect" => "Inspect command output".to_string(),
-                "list" => "List command sessions".to_string(),
-                "close" => "Close command session".to_string(),
-                "code" => "Run code".to_string(),
-                _ => "Exec action".to_string(),
+                "run" => Cow::Borrowed("Run command"),
+                "write" => Cow::Borrowed("Send command input"),
+                "poll" => Cow::Borrowed("Read command session"),
+                "continue" => Cow::Borrowed("Continue command session"),
+                "inspect" => Cow::Borrowed("Inspect command output"),
+                "list" => Cow::Borrowed("List command sessions"),
+                "close" => Cow::Borrowed("Close command session"),
+                "code" => Cow::Borrowed("Run code"),
+                _ => Cow::Borrowed("Exec action"),
             }
         }
         name if name == tool_names::UNIFIED_SEARCH => {
@@ -55,35 +57,35 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
                 .unwrap_or("query");
 
             match tool_intent::unified_search_action(&normalized).unwrap_or("grep") {
-                "grep" => "Search text".to_string(),
-                "list" => "List files".to_string(),
+                "grep" => Cow::Borrowed("Search text"),
+                "list" => Cow::Borrowed("List files"),
                 "structural" => match workflow {
-                    "scan" => "Structural scan".to_string(),
-                    "test" => "Structural test".to_string(),
-                    _ => "Structural search".to_string(),
+                    "scan" => Cow::Borrowed("Structural scan"),
+                    "test" => Cow::Borrowed("Structural test"),
+                    _ => Cow::Borrowed("Structural search"),
                 },
-                "tools" => "List tools".to_string(),
-                "errors" => "List errors".to_string(),
-                "agent" => "Show agent info".to_string(),
-                "web" => "Fetch".to_string(),
-                "skill" => "Load skill".to_string(),
-                _ => "Search".to_string(),
+                "tools" => Cow::Borrowed("List tools"),
+                "errors" => Cow::Borrowed("List errors"),
+                "agent" => Cow::Borrowed("Show agent info"),
+                "web" => Cow::Borrowed("Fetch"),
+                "skill" => Cow::Borrowed("Load skill"),
+                _ => Cow::Borrowed("Search"),
             }
         }
         name if name == tool_names::UNIFIED_FILE => {
             match tool_intent::unified_file_action(args).unwrap_or("read") {
-                "read" => "Read file".to_string(),
-                "write" => "Write file".to_string(),
-                "edit" => "Edit file".to_string(),
-                "patch" | tool_names::APPLY_PATCH => "Apply patch".to_string(),
-                "delete" => "Delete file".to_string(),
-                "move" => "Move file".to_string(),
-                "copy" => "Copy file".to_string(),
-                _ => "File operation".to_string(),
+                "read" => Cow::Borrowed("Read file"),
+                "write" => Cow::Borrowed("Write file"),
+                "edit" => Cow::Borrowed("Edit file"),
+                "patch" | tool_names::APPLY_PATCH => Cow::Borrowed("Apply patch"),
+                "delete" => Cow::Borrowed("Delete file"),
+                "move" => Cow::Borrowed("Move file"),
+                "copy" => Cow::Borrowed("Copy file"),
+                _ => Cow::Borrowed("File operation"),
             }
         }
-        "fetch" => "Fetch".to_string(),
-        _ => humanize_tool_name(actual_tool_name),
+        "fetch" => Cow::Borrowed("Fetch"),
+        _ => Cow::Owned(humanize_tool_name(actual_tool_name)),
     }
 }
 

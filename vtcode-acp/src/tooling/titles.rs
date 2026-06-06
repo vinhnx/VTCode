@@ -59,7 +59,7 @@ pub(super) fn render_title(
                 .map(|mode| format!("Switch to {mode} mode"))
                 .unwrap_or_else(|| tool.default_title().to_string()),
         },
-        ToolDescriptor::Local => tool_action_label(function_name, args),
+        ToolDescriptor::Local => tool_action_label(function_name, args).to_string(),
     }
 }
 

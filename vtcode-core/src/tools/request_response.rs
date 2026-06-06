@@ -2,11 +2,13 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::types::CompactStr;
+
 /// Canonical tool call request used across tool execution layers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCallRequest {
     pub id: String,
-    pub tool_name: String,
+    pub tool_name: CompactStr,
     pub args: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,

@@ -201,8 +201,22 @@ pub trait ModeTool: Tool {
 /// Trait for caching tool results
 #[async_trait]
 pub trait CacheableTool: Tool {
-    /// Generate cache key for given arguments
-    fn cache_key(&self, args: &Value) -> String;
+    /// Generate cache key for given arguments.
+    ///
+    /// Default implementation combines the tool name with a hash of the
+    /// serialized arguments. The key is stable within a single process
+    /// run but may differ across restarts (uses `DefaultHasher`). Override
+    /// for tools that need a custom key strategy.
+    fn cache_key(&self, args: &Value) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        // Hash the canonical string representation of the JSON args.
+        let args_str = serde_json::to_string(args).unwrap_or_default();
+        args_str.hash(&mut hasher);
+        format!("{}:{:016x}", self.name(), hasher.finish())
+    }
 
     /// Check if result should be cached
     fn should_cache(&self, _args: &Value) -> bool {

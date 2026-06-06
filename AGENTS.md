@@ -8,6 +8,7 @@
 - Keep changes surgical. Preserve existing APIs unless the task requires a change.
 - `vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract — do not invent parallel types.
 - Harness config is split across `agent.harness`, `automation.full_auto`, `context.dynamic` — do not add a new top-level harness subsystem.
+- Prefer `compact_str::CompactString` (aliased as `CompactStr` in `vtcode_core::types`) over `String` for small string fields (tool names, status labels, HashMap keys, event IDs). Use `Cow<'static, str>` for functions returning mostly static strings. See `rules/mem-compact-string.md` for details.
 
 ## Workspace
 

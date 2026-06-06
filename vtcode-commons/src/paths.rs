@@ -374,6 +374,95 @@ impl PathScope {
     }
 }
 
+// ============================================================================
+// Extension Traits (Pattern 3: Extension Traits)
+// ============================================================================
+
+/// Extension trait that adds path normalization and safety methods to `Path`.
+///
+/// Delegates to the existing free functions in this module, providing a more
+/// ergonomic call-site syntax:
+///
+/// ```rust
+/// use vtcode_commons::paths::PathExt;
+/// use std::path::Path;
+///
+/// let normalized = Path::new("/tmp/project/src/../src/lib.rs").normalize();
+/// ```
+pub trait PathExt {
+    /// Normalize a path by resolving `.` and `..` components lexically.
+    fn normalize(&self) -> PathBuf;
+
+    /// Canonicalize with fallback to the original path if canonicalization fails.
+    fn canonicalize_or_self(&self) -> PathBuf;
+
+    /// Extract the filename from a path as a `String`, with fallback to the
+    /// full path when no filename component exists.
+    ///
+    /// Unlike [`Path::file_name`] which returns `Option<&OsStr>`, this method
+    /// always returns a `String` and falls back gracefully.
+    fn file_name_str(&self) -> String;
+}
+
+impl PathExt for Path {
+    fn normalize(&self) -> PathBuf {
+        normalize_path(self)
+    }
+
+    fn canonicalize_or_self(&self) -> PathBuf {
+        canonicalize_workspace(self)
+    }
+
+    fn file_name_str(&self) -> String {
+        self.file_name()
+            .and_then(|name| name.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.to_string_lossy().into_owned())
+    }
+}
+
+/// Extension trait that adds path-related methods to `str`.
+///
+/// Provides ergonomic access to tilde expansion and path safety checks:
+///
+/// ```rust
+/// use vtcode_commons::paths::StrPathExt;
+///
+/// let expanded = "~/projects/vtcode".expand_tilde();
+/// assert!(StrPathExt::is_safe_path("src/main.rs"));
+/// ```
+pub trait StrPathExt {
+    /// Expand a leading `~` or `~/` to the user's home directory.
+    fn expand_tilde(&self) -> PathBuf;
+
+    /// Check if this path string is a safe relative path (no traversal, no absolute).
+    fn is_safe_path(&self) -> bool;
+
+    /// Validate that this path is safe to use (no traversal, no dangerous characters).
+    fn validate_safety(&self) -> Result<()>;
+
+    /// Extract the filename from this path string.
+    fn file_name_str(&self) -> String;
+}
+
+impl StrPathExt for str {
+    fn expand_tilde(&self) -> PathBuf {
+        expand_tilde(self)
+    }
+
+    fn is_safe_path(&self) -> bool {
+        is_safe_relative_path(self)
+    }
+
+    fn validate_safety(&self) -> Result<()> {
+        validate_path_safety(self)
+    }
+
+    fn file_name_str(&self) -> String {
+        file_name_from_path(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

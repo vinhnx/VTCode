@@ -189,6 +189,18 @@ impl<T> Constrained<T> {
     }
 }
 
+// Deref is for ergonomic read-only access to the inner value.
+// The private field + `get()` pattern remains for intentional
+// construction barriers; Deref enables transparent use in contexts
+// that expect &T (e.g., matching on policy enums).
+impl<T> std::ops::Deref for Constrained<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
 impl<T: Copy> Constrained<T> {
     pub fn value(&self) -> T {
         self.value

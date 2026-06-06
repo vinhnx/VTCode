@@ -1,3 +1,4 @@
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -123,7 +124,7 @@ pub struct CircuitBreakerSnapshot {
 #[derive(Clone)]
 pub struct CircuitBreaker {
     /// Per-tool state tracking with RwLock for better read concurrency
-    tool_states: Arc<RwLock<HashMap<String, ToolCircuitState>>>,
+    tool_states: Arc<RwLock<HashMap<CompactStr, ToolCircuitState>>>,
     config: CircuitBreakerConfig,
     metrics: Option<Arc<MetricsCollector>>,
 }
@@ -197,7 +198,7 @@ impl CircuitBreaker {
         }
 
         let mut states = self.tool_states.write();
-        let state = states.entry(tool_name.to_string()).or_default();
+        let state = states.entry(CompactStr::from(tool_name)).or_default();
 
         match state.status {
             CircuitState::Closed | CircuitState::HalfOpen => true,
@@ -246,7 +247,7 @@ impl CircuitBreaker {
     /// - Open -> Closed (forced recovery, e.g., manual reset)
     pub fn record_success_for_tool(&self, tool_name: &str) {
         let mut states = self.tool_states.write();
-        let state = states.entry(tool_name.to_string()).or_default();
+        let state = states.entry(CompactStr::from(tool_name)).or_default();
 
         match state.status {
             CircuitState::HalfOpen => {
@@ -283,7 +284,7 @@ impl CircuitBreaker {
         }
 
         let mut states = self.tool_states.write();
-        let state = states.entry(tool_name.to_string()).or_default();
+        let state = states.entry(CompactStr::from(tool_name)).or_default();
         state.last_failure_time = Some(Instant::now());
         state.last_error_category = Some(category);
 
@@ -402,7 +403,7 @@ impl CircuitBreaker {
             .map(|(name, state)| {
                 let is_open = matches!(state.status, CircuitState::Open);
                 ToolCircuitDiagnostics {
-                    tool_name: name.clone(),
+                    tool_name: name.to_string(),
                     status: state.status,
                     failure_count: state.failure_count,
                     current_backoff: state.current_backoff,

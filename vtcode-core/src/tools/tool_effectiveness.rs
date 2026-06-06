@@ -3,6 +3,7 @@
 //! Tracks which tools are effective for given contexts and helps the agent
 //! select the best tool based on prior success rates and result quality.
 
+use crate::types::CompactStr;
 use crate::utils::current_timestamp;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use crate::tools::result_metadata::ResultMetadata;
 /// Tracks effectiveness of a tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolEffectiveness {
-    pub tool_name: String,
+    pub tool_name: CompactStr,
 
     /// Success rate (0.0-1.0)
     pub success_rate: f32,
@@ -49,9 +50,9 @@ pub enum ToolFailureMode {
 }
 
 impl ToolEffectiveness {
-    pub fn new(tool_name: String) -> Self {
+    pub fn new(tool_name: impl Into<CompactStr>) -> Self {
         Self {
-            tool_name,
+            tool_name: tool_name.into(),
             success_rate: 0.0,
             avg_result_quality: 0.0,
             usage_count: 0,
@@ -144,7 +145,7 @@ pub struct ToolSelectionContext {
     pub prior_result_qualities: Vec<f32>,
 
     /// Current effectiveness snapshot
-    pub tool_effectiveness: HashMap<String, ToolEffectiveness>,
+    pub tool_effectiveness: HashMap<CompactStr, ToolEffectiveness>,
 }
 
 /// Trait for selecting which tool to use
@@ -209,7 +210,7 @@ fn score_tool(tool_name: &str, context: &ToolSelectionContext) -> f32 {
 
 /// Tracker for tool effectiveness across a session
 pub struct ToolEffectivenessTracker {
-    effectiveness: HashMap<String, ToolEffectiveness>,
+    effectiveness: HashMap<CompactStr, ToolEffectiveness>,
 }
 
 impl ToolEffectivenessTracker {
@@ -222,8 +223,8 @@ impl ToolEffectivenessTracker {
     /// Get or create effectiveness tracker for tool
     fn get_or_create(&mut self, tool_name: &str) -> &mut ToolEffectiveness {
         self.effectiveness
-            .entry(tool_name.to_owned())
-            .or_insert_with(|| ToolEffectiveness::new(tool_name.to_owned()))
+            .entry(CompactStr::from(tool_name))
+            .or_insert_with(|| ToolEffectiveness::new(tool_name))
     }
 
     /// Record successful tool execution
@@ -250,7 +251,7 @@ impl ToolEffectivenessTracker {
     }
 
     /// Get effectiveness snapshot
-    pub fn snapshot(&self) -> HashMap<String, ToolEffectiveness> {
+    pub fn snapshot(&self) -> HashMap<CompactStr, ToolEffectiveness> {
         self.effectiveness.clone()
     }
 
@@ -260,7 +261,7 @@ impl ToolEffectivenessTracker {
     }
 
     /// Get tools sorted by effectiveness
-    pub fn sorted_by_effectiveness(&self) -> Vec<(String, f32)> {
+    pub fn sorted_by_effectiveness(&self) -> Vec<(CompactStr, f32)> {
         let mut tools: Vec<_> = self
             .effectiveness
             .iter()
@@ -310,13 +311,13 @@ mod tests {
         let selector = AdaptiveToolSelector;
         let mut effectiveness = HashMap::new();
 
-        let mut grep_eff = ToolEffectiveness::new("grep".to_owned());
+        let mut grep_eff = ToolEffectiveness::new("grep");
         grep_eff.record_success(0.9, 100.0);
-        effectiveness.insert("grep".to_owned(), grep_eff);
+        effectiveness.insert(CompactStr::from("grep"), grep_eff);
 
-        let mut find_eff = ToolEffectiveness::new("find".to_owned());
+        let mut find_eff = ToolEffectiveness::new("find");
         find_eff.record_failure(ToolFailureMode::Timeout, 5000.0);
-        effectiveness.insert("find".to_owned(), find_eff);
+        effectiveness.insert(CompactStr::from("find"), find_eff);
 
         let context = ToolSelectionContext {
             task_description: "find error patterns".to_owned(),

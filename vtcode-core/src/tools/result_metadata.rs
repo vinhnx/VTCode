@@ -6,6 +6,7 @@
 
 use crate::config::constants::tools;
 use crate::tools::tool_intent;
+use crate::types::CompactStr;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -176,7 +177,7 @@ pub struct EnhancedToolResult {
     pub timestamp: u64,
 
     /// Tool name that produced this
-    pub tool_name: String,
+    pub tool_name: CompactStr,
 
     /// Whether this was from cache
     #[serde(default)]
@@ -184,7 +185,7 @@ pub struct EnhancedToolResult {
 }
 
 impl EnhancedToolResult {
-    pub fn new(value: Value, metadata: ResultMetadata, tool_name: String) -> Self {
+    pub fn new(value: Value, metadata: ResultMetadata, tool_name: impl Into<CompactStr>) -> Self {
         Self {
             value,
             metadata,
@@ -192,12 +193,16 @@ impl EnhancedToolResult {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
-            tool_name,
+            tool_name: tool_name.into(),
             from_cache: false,
         }
     }
 
-    pub fn from_cache(value: Value, metadata: ResultMetadata, tool_name: String) -> Self {
+    pub fn from_cache(
+        value: Value,
+        metadata: ResultMetadata,
+        tool_name: impl Into<CompactStr>,
+    ) -> Self {
         Self {
             value,
             metadata,
@@ -205,7 +210,7 @@ impl EnhancedToolResult {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
-            tool_name,
+            tool_name: tool_name.into(),
             from_cache: true,
         }
     }
@@ -407,22 +412,22 @@ impl ResultScorer for ShellScorer {
 
 /// Registry for result scorers
 pub struct ScorerRegistry {
-    scorers: HashMap<String, Box<dyn ResultScorer>>,
+    scorers: HashMap<CompactStr, Box<dyn ResultScorer>>,
 }
 
 impl ScorerRegistry {
     pub fn new() -> Self {
-        let mut scorers: HashMap<String, Box<dyn ResultScorer>> = HashMap::new();
+        let mut scorers: HashMap<CompactStr, Box<dyn ResultScorer>> = HashMap::new();
         scorers.insert(
-            tools::UNIFIED_SEARCH.to_string(),
+            CompactStr::from(tools::UNIFIED_SEARCH),
             Box::new(GrepScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
-            "find".to_string(),
+            CompactStr::from("find"),
             Box::new(FindScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
-            tools::UNIFIED_EXEC.to_string(),
+            CompactStr::from(tools::UNIFIED_EXEC),
             Box::new(ShellScorer) as Box<dyn ResultScorer>,
         );
 
@@ -431,7 +436,8 @@ impl ScorerRegistry {
 
     /// Register a custom scorer
     pub fn register(&mut self, scorer: Box<dyn ResultScorer>) {
-        self.scorers.insert(scorer.tool_name().to_string(), scorer);
+        self.scorers
+            .insert(CompactStr::from(scorer.tool_name()), scorer);
     }
 
     /// Score a tool result

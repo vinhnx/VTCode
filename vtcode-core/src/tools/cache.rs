@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 use parking_lot::RwLock;
 
+use crate::cache::estimate_json_size;
 use vtcode_config::FileReadCacheConfig;
 
 /// Global file cache instance
@@ -81,10 +82,11 @@ impl FileCache {
     }
 
     /// Calculate byte size of a JSON value for cache tracking.
-    /// Uses JSON serialization length as approximation.
+    /// Walks the Value tree without allocating, unlike the previous
+    /// implementation that serialized to a temporary String.
     #[inline]
     fn estimate_value_size(value: &Value) -> usize {
-        serde_json::to_string(value).map_or(0, |s| s.len())
+        estimate_json_size(value) as usize
     }
 
     /// Cache file content

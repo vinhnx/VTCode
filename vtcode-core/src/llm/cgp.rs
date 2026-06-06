@@ -493,6 +493,7 @@ mod tests {
                 "anthropic",
                 "copilot",
                 "deepseek",
+                "evolink",
                 "gemini",
                 "huggingface",
                 "llamacpp",
