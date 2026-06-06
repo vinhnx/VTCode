@@ -2,15 +2,12 @@ use portable_pty::PtySize;
 
 use crate::config::PtyConfig;
 
-use super::raw_vt_buffer::RawVtBuffer;
 use super::screen_backend::PtyScreenState;
 use super::scrollback::PtyScrollback;
 
 /// In-memory PTY preview renderer for inline live previews.
 pub struct PtyPreviewRenderer {
-    size: PtySize,
     screen_state: PtyScreenState,
-    raw_vt_buffer: RawVtBuffer,
     scrollback: PtyScrollback,
 }
 
@@ -25,13 +22,12 @@ impl PtyPreviewRenderer {
         };
 
         Self {
-            size,
             screen_state: PtyScreenState::new(
                 size,
                 config.scrollback_lines,
                 config.emulation_backend,
+                config.max_scrollback_bytes,
             ),
-            raw_vt_buffer: RawVtBuffer::new(config.max_scrollback_bytes),
             scrollback: PtyScrollback::new(config.scrollback_lines, config.max_scrollback_bytes),
         }
     }
@@ -44,7 +40,6 @@ impl PtyPreviewRenderer {
         let normalized = normalize_preview_chunk(chunk);
         let bytes = normalized.as_bytes();
         self.screen_state.process(bytes);
-        self.raw_vt_buffer.push(bytes);
 
         let mut utf8 = bytes.to_vec();
         self.scrollback.push_utf8(&mut utf8, false);
@@ -52,13 +47,7 @@ impl PtyPreviewRenderer {
 
     #[must_use]
     pub fn snapshot_text(&self) -> String {
-        let raw_vt_stream = self.raw_vt_buffer.snapshot();
-        let fallback_scrollback = self.scrollback.snapshot();
-        let snapshot = self.screen_state.prepare_snapshot().render(
-            self.size,
-            &raw_vt_stream,
-            &fallback_scrollback,
-        );
+        let snapshot = self.screen_state.prepare_snapshot();
 
         let visible = if snapshot.screen_contents.trim().is_empty() {
             snapshot.scrollback

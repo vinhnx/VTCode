@@ -589,49 +589,60 @@ pub async fn read_instruction_bundle(
     }
 
     let allowed_import_roots = allowed_import_roots(options.project_root, options.home_dir)?;
-    let mut remaining = max_bytes;
-    let mut segments = Vec::with_capacity(sources.len());
-    let mut truncated = false;
-    let mut bytes_read = 0usize;
-    let mut seen_imports = HashSet::new();
+    let import_max_depth = options.import_max_depth.max(1);
 
-    for source in sources {
-        if remaining == 0 {
-            truncated = true;
-            break;
-        }
+    // expand_instruction_contents performs blocking filesystem I/O (read_to_string,
+    // canonicalize) for each instruction file and its recursive imports. Offload
+    // the entire expansion loop to the blocking thread pool.
+    let (segments, truncated, bytes_read) = tokio::task::spawn_blocking(move || {
+        let mut remaining = max_bytes;
+        let mut segments = Vec::with_capacity(sources.len());
+        let mut truncated = false;
+        let mut bytes_read = 0usize;
+        let mut seen_imports = HashSet::new();
 
-        let contents = match expand_instruction_contents(
-            &source.path,
-            &source.kind,
-            &allowed_import_roots,
-            options.import_max_depth.max(1),
-            &mut seen_imports,
-            0,
-            &mut Vec::new(),
-        )? {
-            Some(contents) => contents,
-            None => continue,
-        };
+        for source in sources {
+            if remaining == 0 {
+                truncated = true;
+                break;
+            }
 
-        if contents.len() > remaining {
-            truncated = true;
-        }
+            let contents = match expand_instruction_contents(
+                &source.path,
+                &source.kind,
+                &allowed_import_roots,
+                import_max_depth,
+                &mut seen_imports,
+                0,
+                &mut Vec::new(),
+            )? {
+                Some(contents) => contents,
+                None => continue,
+            };
 
-        let slice_len = contents.len().min(remaining);
-        let visible = String::from_utf8_lossy(&contents.as_bytes()[..slice_len]).to_string();
-        if visible.trim().is_empty() {
+            if contents.len() > remaining {
+                truncated = true;
+            }
+
+            let slice_len = contents.len().min(remaining);
+            let visible = String::from_utf8_lossy(&contents.as_bytes()[..slice_len]).to_string();
+            if visible.trim().is_empty() {
+                remaining = remaining.saturating_sub(slice_len);
+                continue;
+            }
+
+            bytes_read += slice_len;
             remaining = remaining.saturating_sub(slice_len);
-            continue;
+            segments.push(InstructionSegment {
+                source,
+                contents: visible,
+            });
         }
 
-        bytes_read += slice_len;
-        remaining = remaining.saturating_sub(slice_len);
-        segments.push(InstructionSegment {
-            source,
-            contents: visible,
-        });
-    }
+        Ok::<_, anyhow::Error>((segments, truncated, bytes_read))
+    })
+    .await
+    .context("Instruction expansion task panicked")??;
 
     if segments.is_empty() {
         Ok(None)
@@ -716,60 +727,79 @@ async fn discover_rule_sources(
     match_context: &MatchContext,
     excludes: &ExclusionMatcher,
 ) -> Result<(Vec<InstructionSource>, Vec<InstructionSource>)> {
+    // WalkDir performs blocking filesystem I/O (readdir, stat, canonicalize).
+    // Offload the traversal to the blocking thread pool so the async runtime
+    // stays responsive while we discover rule files on disk.
+    let discovered = {
+        let excludes = excludes.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut paths = Vec::new();
+            let mut seen = HashSet::new();
+
+            for root in &rule_roots {
+                if !root.exists() {
+                    continue;
+                }
+
+                for entry in WalkDir::new(root)
+                    .follow_links(true)
+                    .sort_by_file_name()
+                    .into_iter()
+                    .filter_map(std::result::Result::ok)
+                {
+                    if !entry.file_type().is_file() {
+                        continue;
+                    }
+
+                    if entry.path().extension().and_then(|value| value.to_str()) != Some("md") {
+                        continue;
+                    }
+
+                    if entry
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|name| name.eq_ignore_ascii_case("README.md"))
+                    {
+                        continue;
+                    }
+
+                    let path = canonicalize_with_context(entry.path(), "instruction rule")?;
+                    if excludes.matches(&path) || !seen.insert(path.clone()) {
+                        continue;
+                    }
+
+                    paths.push(path);
+                }
+            }
+
+            Ok::<_, anyhow::Error>(paths)
+        })
+        .await
+        .context("Rule discovery task panicked")??
+    };
+
+    // Process discovered paths asynchronously: read frontmatter and match patterns.
     let mut unconditional = Vec::new();
     let mut matched = Vec::new();
-    let mut seen = HashSet::new();
 
-    for root in rule_roots {
-        if !root.exists() {
-            continue;
-        }
+    for path in discovered {
+        let descriptor = read_rule_descriptor(&path).await?;
+        let is_matched = if descriptor.patterns.is_empty() {
+            false
+        } else {
+            match_context.matches_any(&descriptor.patterns)
+        };
+        let source = InstructionSource {
+            path,
+            scope: scope.clone(),
+            kind: InstructionSourceKind::Rule,
+            matched: is_matched,
+        };
 
-        for entry in WalkDir::new(&root)
-            .follow_links(true)
-            .sort_by_file_name()
-            .into_iter()
-            .filter_map(std::result::Result::ok)
-        {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-
-            if entry.path().extension().and_then(|value| value.to_str()) != Some("md") {
-                continue;
-            }
-
-            if entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| name.eq_ignore_ascii_case("README.md"))
-            {
-                continue;
-            }
-
-            let path = canonicalize_with_context(entry.path(), "instruction rule")?;
-            if excludes.matches(&path) || !seen.insert(path.clone()) {
-                continue;
-            }
-
-            let descriptor = read_rule_descriptor(&path).await?;
-            let is_matched = if descriptor.patterns.is_empty() {
-                false
-            } else {
-                match_context.matches_any(&descriptor.patterns)
-            };
-            let source = InstructionSource {
-                path,
-                scope: scope.clone(),
-                kind: InstructionSourceKind::Rule,
-                matched: is_matched,
-            };
-
-            if descriptor.patterns.is_empty() {
-                unconditional.push(source);
-            } else if is_matched {
-                matched.push((descriptor.specificity, source));
-            }
+        if descriptor.patterns.is_empty() {
+            unconditional.push(source);
+        } else if is_matched {
+            matched.push((descriptor.specificity, source));
         }
     }
 

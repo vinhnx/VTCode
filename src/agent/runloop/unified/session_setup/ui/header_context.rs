@@ -41,7 +41,7 @@ pub(super) async fn initialize_header_context(
         full_auto,
     } = init;
 
-    let persistent_memory_status = load_persistent_memory_status(config, vt_cfg);
+    let persistent_memory_status = load_persistent_memory_status(config, vt_cfg).await;
     if let Err(err) = persistent_memory_status.as_ref() {
         warn!(
             workspace = %config.workspace.display(),

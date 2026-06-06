@@ -715,6 +715,7 @@ impl Default for PtyConfig {
 pub enum PtyEmulationBackend {
     #[default]
     Ghostty,
+    GhosttyCore,
     LegacyVt100,
 }
 
@@ -723,6 +724,7 @@ impl PtyEmulationBackend {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Ghostty => "ghostty",
+            Self::GhosttyCore => "ghostty_core",
             Self::LegacyVt100 => "legacy_vt100",
         }
     }

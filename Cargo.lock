@@ -7239,6 +7239,7 @@ dependencies = [
  "vtcode-config",
  "vtcode-exec-events",
  "vtcode-file-search",
+ "vtcode-ghostty-core",
  "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
  "vtcode-macros",
@@ -7286,6 +7287,13 @@ dependencies = [
  "tokio",
  "tracing",
  "vtcode-commons",
+]
+
+[[package]]
+name = "vtcode-ghostty-core"
+version = "0.123.0"
+dependencies = [
+ "unicode-width",
 ]
 
 [[package]]

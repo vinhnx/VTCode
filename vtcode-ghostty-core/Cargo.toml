@@ -1,0 +1,15 @@
+[package]
+name = "vtcode-ghostty-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Pure-Rust VT terminal emulator core for VT Code, inspired by Ghostty"
+
+[dependencies]
+unicode-width = { workspace = true }
+
+[lints]
+workspace = true

@@ -120,6 +120,7 @@ members = [
     "vtcode-utility-tool-specs",
     "vtcode-terminal-detection",
     "vtcode-ghostty-vt-sys",
+    "vtcode-ghostty-core",
     "vtcode-theme",
     "vtcode-tui",
     "vtcode-vim",
@@ -155,6 +156,7 @@ vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-file-search = { path = "vtcode-file-search" }
 vtcode-ghostty-vt-sys = { path = "vtcode-ghostty-vt-sys" }
+vtcode-ghostty-core = { path = "vtcode-ghostty-core" }
 
 [workspace.lints]
 # Rust compiler lints
