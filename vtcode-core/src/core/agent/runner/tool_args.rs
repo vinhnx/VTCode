@@ -50,14 +50,14 @@ impl AgentRunner {
     pub(super) fn normalize_tool_args(
         &self,
         name: &str,
-        args: &Value,
+        args: Value,
         session_state: &mut AgentSessionState,
     ) -> Value {
-        let Some(obj) = args.as_object() else {
-            return args.clone();
+        let mut normalized = match args {
+            Value::Object(map) => map,
+            other => return other,
         };
 
-        let mut normalized = obj.clone();
         let workspace_path = self._workspace.to_string_lossy().into_owned();
         let fallback_dir = session_state
             .last_dir_path

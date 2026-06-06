@@ -38,13 +38,18 @@ pub(crate) fn render_table(
         .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
     let mut col_widths: Vec<usize> = vec![0; max_cols];
 
-    for (col_width, width) in col_widths.iter_mut().zip(table.headers.iter().map(MarkdownLine::width))
+    for (col_width, width) in col_widths
+        .iter_mut()
+        .zip(table.headers.iter().map(MarkdownLine::width))
     {
         *col_width = max(*col_width, width);
     }
 
     for row in &table.rows {
-        for (col_width, width) in col_widths.iter_mut().zip(row.iter().map(MarkdownLine::width)) {
+        for (col_width, width) in col_widths
+            .iter_mut()
+            .zip(row.iter().map(MarkdownLine::width))
+        {
             *col_width = max(*col_width, width);
         }
     }
@@ -214,11 +219,12 @@ fn wrap_markdown_line(line: &MarkdownLine, max_width: usize) -> Vec<MarkdownLine
     let mut current = MarkdownLine::default();
     let mut current_width = 0usize;
 
-    let flush = |current: &mut MarkdownLine, rows: &mut Vec<MarkdownLine>, current_width: &mut usize| {
-        trim_trailing_whitespace(current);
-        rows.push(std::mem::take(current));
-        *current_width = 0;
-    };
+    let flush =
+        |current: &mut MarkdownLine, rows: &mut Vec<MarkdownLine>, current_width: &mut usize| {
+            trim_trailing_whitespace(current);
+            rows.push(std::mem::take(current));
+            *current_width = 0;
+        };
 
     for seg in &line.segments {
         let style = seg.style;
@@ -388,8 +394,16 @@ mod tests {
         let line = ml("hello world foo bar");
         let wrapped = wrap_markdown_line(&line, 12);
         assert_eq!(wrapped.len(), 2);
-        let t0: String = wrapped[0].segments.iter().map(|s| s.text.as_str()).collect();
-        let t1: String = wrapped[1].segments.iter().map(|s| s.text.as_str()).collect();
+        let t0: String = wrapped[0]
+            .segments
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
+        let t1: String = wrapped[1]
+            .segments
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
         assert_eq!(t0, "hello world");
         assert_eq!(t1, "foo bar");
     }
@@ -399,8 +413,16 @@ mod tests {
         let line = ml("abcdefghij");
         let wrapped = wrap_markdown_line(&line, 5);
         assert_eq!(wrapped.len(), 2);
-        let t0: String = wrapped[0].segments.iter().map(|s| s.text.as_str()).collect();
-        let t1: String = wrapped[1].segments.iter().map(|s| s.text.as_str()).collect();
+        let t0: String = wrapped[0]
+            .segments
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
+        let t1: String = wrapped[1]
+            .segments
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect();
         assert_eq!(t0, "abcde");
         assert_eq!(t1, "fghij");
     }
@@ -428,16 +450,17 @@ mod tests {
     fn test_render_table_wrapped_rows_are_aligned() {
         let table = TableBuffer {
             headers: vec![ml("H1"), ml("H2")],
-            rows: vec![vec![
-                ml("ab"),
-                ml("this is a long value that wraps"),
-            ]],
+            rows: vec![vec![ml("ab"), ml("this is a long value that wraps")]],
             current_row: vec![],
             in_head: false,
         };
         let lines = render_table(&table, Style::default(), Some(25));
         // Header + separator + multiple data lines
-        assert!(lines.len() >= 4, "Expected wrapped rows, got {}", lines.len());
+        assert!(
+            lines.len() >= 4,
+            "Expected wrapped rows, got {}",
+            lines.len()
+        );
         // Each line should be within max_width
         for line in &lines {
             let text: String = line.segments.iter().map(|s| s.text.as_str()).collect();

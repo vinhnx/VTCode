@@ -315,11 +315,8 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
 
     let mut state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
     state.last_dir_path = Some(temp.path().display().to_string());
-    let normalized = runner.normalize_tool_args(
-        tools::UNIFIED_SEARCH,
-        &json!({"action": "list"}),
-        &mut state,
-    );
+    let normalized =
+        runner.normalize_tool_args(tools::UNIFIED_SEARCH, json!({"action": "list"}), &mut state);
 
     assert_eq!(normalized["tool_name"], tools::UNIFIED_SEARCH);
     assert_eq!(normalized["path"], json!(temp.path().display().to_string()));

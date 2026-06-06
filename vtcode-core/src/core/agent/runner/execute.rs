@@ -26,7 +26,8 @@ use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
 use crate::llm::provider::{
-    FinishReason, Message, ToolCall, ToolDefinition, prepare_responses_continuation_request,
+    FinishReason, Message, ResponsesContinuationState, ToolCall, ToolDefinition,
+    prepare_responses_continuation_request, responses_continuation_key,
     supports_responses_chaining,
 };
 use crate::llm::providers::gemini::wire::Part;
@@ -100,21 +101,25 @@ fn summarize_verification_output(result: &serde_json::Value) -> String {
         .unwrap_or_default()
 }
 
-fn prepare_responses_request_messages(
-    session_state: &mut AgentSessionState,
+fn prepare_responses_request_messages<'a>(
+    previous_chains: &mut hashbrown::HashMap<(String, String), ResponsesContinuationState>,
     provider_name: &str,
     provider_supports_responses_compaction: bool,
     model: &str,
-    messages: Vec<Message>,
-) -> (Vec<Message>, Option<String>) {
+    messages: &'a [Message],
+) -> (std::borrow::Cow<'a, [Message]>, Option<String>) {
+    let key = responses_continuation_key(provider_name, model);
+    let continuation = key.as_ref().and_then(|k| previous_chains.get(k));
     let prepared = prepare_responses_continuation_request(
         provider_name,
         provider_supports_responses_compaction,
         messages,
-        session_state.previous_response_chain_for(provider_name, model),
+        continuation,
     );
     if prepared.clear_stale_chain {
-        session_state.clear_previous_response_chain_for(provider_name, model);
+        if let Some(key) = key {
+            previous_chains.remove(&key);
+        }
     }
 
     (prepared.messages, prepared.previous_response_id)
@@ -657,18 +662,17 @@ impl AgentRunner {
                     Some(0.7)
                 };
 
-                let current_messages = runtime.state.messages.clone();
                 let (request_messages, previous_response_id) = prepare_responses_request_messages(
-                    &mut runtime.state,
+                    &mut runtime.state.previous_response_chains,
                     &provider_name,
                     self.provider_client
                         .supports_responses_compaction(&turn_model),
                     &turn_model,
-                    current_messages,
+                    &runtime.state.messages,
                 );
 
                 let request = build_harness_request_plan(HarnessRequestPlanInput {
-                    messages: request_messages,
+                    messages: request_messages.into_owned(),
                     system_prompt: prompt_bundle.system_instruction.as_ref().clone(),
                     tools: prompt_bundle.request_tools.clone(),
                     model: turn_model.clone(),
@@ -703,7 +707,11 @@ impl AgentRunner {
                 // properties) before paying for an API round-trip.
                 self.validate_llm_request(&request)?;
                 let previous_response_chain_present = request.previous_response_id.is_some();
-                let sent_messages = request.messages.clone();
+                // Extract messages before the request is moved into run_turn_once,
+                // so we can pass them to set_previous_response_chain afterward
+                // without cloning.
+                let mut request = request;
+                let sent_messages = std::mem::take(&mut request.messages);
                 // Compute timeout before the call to avoid simultaneous mutable/immutable
                 // borrows of `self` (provider_client vs config).
                 let streaming_timeout = self
@@ -727,7 +735,7 @@ impl AgentRunner {
                         &provider_name,
                         &turn_model,
                         response.request_id.as_deref(),
-                        &sent_messages,
+                        sent_messages,
                     );
                 }
                 match estimate_session_cost_usd(
@@ -1286,20 +1294,20 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), &prior_messages);
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), prior_messages);
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
-            &mut state,
+            &mut state.previous_response_chains,
             "openai",
             false,
             "gpt-5.4",
-            current_messages,
+            &current_messages,
         );
 
         assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
         assert_eq!(
-            request_messages,
-            vec![Message::user("continue".to_string())]
+            request_messages.as_ref(),
+            [Message::user("continue".to_string())].as_slice()
         );
     }
 
@@ -1315,19 +1323,19 @@ mod tests {
             "gemini",
             "gemini-2.5-pro",
             Some("resp_123"),
-            &prior_messages,
+            prior_messages,
         );
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
-            &mut state,
+            &mut state.previous_response_chains,
             "gemini",
             false,
             "gemini-2.5-pro",
-            current_messages.clone(),
+            &current_messages,
         );
 
         assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
-        assert_eq!(request_messages, current_messages);
+        assert_eq!(request_messages.as_ref(), current_messages.as_slice());
     }
 
     #[test]
@@ -1338,20 +1346,20 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), &prior_messages);
+        state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), prior_messages);
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
-            &mut state,
+            &mut state.previous_response_chains,
             "mycorp",
             true,
             "gpt-5.4",
-            current_messages,
+            &current_messages,
         );
 
         assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
         assert_eq!(
-            request_messages,
-            vec![Message::user("continue".to_string())]
+            request_messages.as_ref(),
+            [Message::user("continue".to_string())].as_slice()
         );
     }
 }

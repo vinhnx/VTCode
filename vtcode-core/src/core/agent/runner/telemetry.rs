@@ -133,7 +133,7 @@ impl AgentRunner {
             failure_ctx.session_state.push_tool_error(
                 call_id.to_string(),
                 tool_name,
-                error.to_json_value().to_string(),
+                &error.to_json_value(),
                 failure_ctx.is_gemini,
             );
         } else {

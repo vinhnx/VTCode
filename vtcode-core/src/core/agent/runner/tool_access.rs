@@ -74,7 +74,7 @@ impl AgentRunner {
     pub(super) fn admit_tool_call(
         &self,
         tool_name: &str,
-        args: &Value,
+        args: Value,
         session_state: &mut AgentSessionState,
     ) -> Result<PreparedToolCall> {
         let normalized_args = self.normalize_tool_args(tool_name, args, session_state);

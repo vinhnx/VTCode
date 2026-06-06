@@ -166,9 +166,12 @@ fn reject_invalid_args(
         tool_call_id,
         &detail,
     );
-    runtime
-        .state
-        .push_tool_error(tool_call_id.to_string(), tool_name, detail, is_gemini);
+    runtime.state.push_tool_error(
+        tool_call_id.to_string(),
+        tool_name,
+        &serde_json::Value::String(detail),
+        is_gemini,
+    );
 }
 
 /// Reject a tool call that policy or feature gating disallows.
@@ -193,7 +196,7 @@ fn reject_denied_tool(
     runtime.state.push_tool_error(
         tool_call_id.to_string(),
         tool_name,
-        detail.clone(),
+        &serde_json::Value::String(detail.clone()),
         is_gemini,
     );
     reject_tool_call(
@@ -358,7 +361,11 @@ impl AgentRunner {
             "Main tool execution failed; attempting fallback recommendation"
         );
 
-        match self.admit_tool_call(&fallback.tool_name, &fallback.args, &mut runtime.state) {
+        match self.admit_tool_call(
+            &fallback.tool_name,
+            fallback.args.clone(),
+            &mut runtime.state,
+        ) {
             Ok(fallback_prepared) => {
                 match self
                     .execute_prepared_tool_internal(&fallback_prepared)
@@ -434,7 +441,7 @@ impl AgentRunner {
             );
             return Ok(RunnerCallAdmission::Rejected);
         }
-        let prepared = match self.admit_tool_call(&requested_name, &args, &mut runtime.state) {
+        let prepared = match self.admit_tool_call(&requested_name, args, &mut runtime.state) {
             Ok(prepared) => prepared,
             Err(err) => {
                 reject_invalid_args(
@@ -443,7 +450,7 @@ impl AgentRunner {
                     agent_prefix,
                     &requested_name,
                     call.id.as_str(),
-                    Some(&args),
+                    None,
                     &err,
                     is_gemini,
                     "Tool admission failed",
@@ -494,8 +501,8 @@ impl AgentRunner {
 
         let prepared_map: std::collections::HashMap<String, PreparedRunnerToolCall> =
             prepared_calls
-                .iter()
-                .map(|c| (c.tool_call_id.clone(), c.clone()))
+                .into_iter()
+                .map(|c| (c.tool_call_id.clone(), c))
                 .collect();
 
         let max_parallel = self.config().agent.harness.max_parallel_tool_calls;
@@ -506,19 +513,19 @@ impl AgentRunner {
 
         info!(
             agent = %self.agent_type,
-            count = prepared_calls.len(),
+            count = prepared_map.len(),
             max_parallel,
             "Executing parallel tool calls"
         );
 
-        let mut futures = Vec::with_capacity(prepared_calls.len());
-        for call in prepared_calls {
+        let mut futures = Vec::with_capacity(prepared_map.len());
+        for (call_id, call) in prepared_map.iter() {
             let name = call.prepared.canonical_name.clone();
             let args = call.prepared.effective_args.clone();
             let tool_call_item =
-                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.tool_call_id);
+                resolve_tool_call_item(runtime, event_recorder, &name, &args, call_id);
             let runner = self;
-            let prepared = call.prepared.clone();
+            let prepared = &call.prepared;
             let circuit_before = snapshot_circuit_diagnostics(runner, &name);
             let sem = semaphore.clone();
             futures.push(async move {
@@ -534,10 +541,10 @@ impl AgentRunner {
                     None
                 };
                 runner.throttle_repeated_tool(&name).await;
-                let result = runner.execute_prepared_tool_internal(&prepared).await;
+                let result = runner.execute_prepared_tool_internal(prepared).await;
                 (
                     name,
-                    call.tool_call_id,
+                    call_id.clone(),
                     args,
                     tool_call_item,
                     result,
@@ -557,13 +564,15 @@ impl AgentRunner {
                     }
 
                     let optimized_result = reduce_tool_result(&name, result);
-                    let tool_result = serde_json::to_string(&optimized_result)?;
 
                     self.update_last_paths_from_args(&name, &args, &mut runtime.state);
 
-                    runtime
-                        .state
-                        .push_tool_result(call_id.clone(), &name, tool_result, is_gemini);
+                    runtime.state.push_tool_result(
+                        call_id.clone(),
+                        &name,
+                        &optimized_result,
+                        is_gemini,
+                    );
                     complete_tool_invocation(
                         runtime,
                         event_recorder,
@@ -635,7 +644,7 @@ impl AgentRunner {
                         runtime.state.push_tool_error(
                             call_id.clone(),
                             &name,
-                            e.to_json_value().to_string(),
+                            &e.to_json_value(),
                             is_gemini,
                         );
                         complete_tool_invocation(
@@ -709,14 +718,13 @@ impl AgentRunner {
                 }
 
                 let optimized_result = reduce_tool_result(&name, result);
-                let tool_result = serde_json::to_string(&optimized_result)?;
 
                 self.update_last_paths_from_args(&name, &args, &mut runtime.state);
 
                 runtime.state.push_tool_result(
                     call.tool_call_id.clone(),
                     &name,
-                    tool_result,
+                    &optimized_result,
                     is_gemini,
                 );
                 complete_tool_invocation(
@@ -1079,13 +1087,15 @@ impl AgentRunner {
         }
 
         let optimized_result = reduce_tool_result(tool_name, result);
-        let tool_result = serde_json::to_string(&optimized_result)?;
 
         self.update_last_paths_from_args(tool_name, tool_args, &mut runtime.state);
 
-        runtime
-            .state
-            .push_tool_result(call_id.to_string(), tool_name, tool_result, is_gemini);
+        runtime.state.push_tool_result(
+            call_id.to_string(),
+            tool_name,
+            &optimized_result,
+            is_gemini,
+        );
         complete_tool_invocation(
             runtime,
             event_recorder,

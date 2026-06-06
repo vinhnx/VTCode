@@ -221,7 +221,7 @@ impl AgentSessionState {
         provider: &str,
         model: &str,
         response_id: Option<&str>,
-        messages: &[Message],
+        messages: Vec<Message>,
     ) {
         let Some(key) = responses_continuation_key(provider, model) else {
             return;
@@ -235,7 +235,7 @@ impl AgentSessionState {
             key,
             ResponsesContinuationState {
                 response_id: response_id.to_string(),
-                messages: messages.to_vec(),
+                messages,
             },
         );
     }
@@ -330,59 +330,63 @@ impl AgentSessionState {
     }
 
     /// Push a successful tool result to both conversation (for Gemini) and messages.
+    ///
+    /// Accepts a `&Value` to avoid redundant serialize/deserialize cycles for
+    /// Gemini providers — the value is used directly in `FunctionResponse`
+    /// instead of being serialized to a string and then re-parsed.
     pub fn push_tool_result(
         &mut self,
         call_id: String,
         tool_name: &str,
-        serialized_result: String,
+        result: &serde_json::Value,
         is_gemini: bool,
     ) {
         if is_gemini {
-            let response_value = serde_json::from_str(&serialized_result)
-                .unwrap_or_else(|_| serde_json::json!({ "result": serialized_result }));
-
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
                     function_response: FunctionResponse {
                         name: tool_name.to_string(),
-                        response: response_value,
+                        response: result.clone(),
                         id: Some(call_id.clone()),
                     },
                     thought_signature: None,
                 }],
             });
         }
+        let serialized = serde_json::to_string(result).unwrap_or_default();
         self.messages
-            .push(Message::tool_response(call_id, serialized_result));
+            .push(Message::tool_response(call_id, serialized));
         self.executed_commands.push(tool_name.to_owned());
     }
 
     /// Push a tool error to both conversation (for Gemini) and messages.
+    ///
+    /// Accepts a `&Value` to avoid redundant serialize/deserialize cycles for
+    /// Gemini providers.
     pub fn push_tool_error(
         &mut self,
         call_id: String,
         tool_name: &str,
-        error_payload: String,
+        error_payload: &serde_json::Value,
         is_gemini: bool,
     ) {
         if is_gemini {
-            let response_value = serde_json::from_str(&error_payload)
-                .unwrap_or_else(|_| serde_json::json!({ "error": error_payload }));
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
                     function_response: FunctionResponse {
                         name: tool_name.to_string(),
-                        response: response_value,
+                        response: error_payload.clone(),
                         id: Some(call_id.clone()),
                     },
                     thought_signature: None,
                 }],
             });
         }
+        let serialized = serde_json::to_string(error_payload).unwrap_or_default();
         self.messages
-            .push(Message::tool_response(call_id, error_payload));
+            .push(Message::tool_response(call_id, serialized));
     }
 }
 
@@ -398,8 +402,18 @@ mod tests {
         let messages_52 = vec![Message::user("hello".to_string())];
         let messages_54 = vec![Message::user("continue".to_string())];
 
-        state.set_previous_response_chain("openai", "gpt-5.2", Some("resp_123"), &messages_52);
-        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_456"), &messages_54);
+        state.set_previous_response_chain(
+            "openai",
+            "gpt-5.2",
+            Some("resp_123"),
+            messages_52.clone(),
+        );
+        state.set_previous_response_chain(
+            "openai",
+            "gpt-5.4",
+            Some("resp_456"),
+            messages_54.clone(),
+        );
 
         assert_eq!(
             state.previous_response_id_for("openai", "gpt-5.2"),
@@ -454,10 +468,9 @@ mod tests {
                 "message": "missing file",
                 "category": "ResourceNotFound"
             }
-        })
-        .to_string();
+        });
 
-        state.push_tool_error("call_1".to_string(), "read_file", payload.clone(), true);
+        state.push_tool_error("call_1".to_string(), "read_file", &payload, true);
 
         match &state.conversation[0].parts[0] {
             Part::FunctionResponse {
@@ -470,9 +483,10 @@ mod tests {
             }
             other => panic!("expected function response, got {other:?}"),
         }
+        let expected_serialized = serde_json::to_string(&payload).unwrap();
         assert_eq!(
             state.messages[0],
-            Message::tool_response("call_1".to_string(), payload)
+            Message::tool_response("call_1".to_string(), expected_serialized)
         );
     }
 }

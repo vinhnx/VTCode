@@ -359,9 +359,10 @@ mod tests {
 
     #[test]
     fn context_strips_trailing_at_at() {
-        let operations =
-            parse("*** Begin Patch\n*** Update File: README.md\n@@ section @@\n+line\n*** End Patch")
-                .unwrap();
+        let operations = parse(
+            "*** Begin Patch\n*** Update File: README.md\n@@ section @@\n+line\n*** End Patch",
+        )
+        .unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 assert_eq!(
@@ -390,8 +391,7 @@ mod tests {
     #[test]
     fn empty_context_marker() {
         let operations =
-            parse("*** Begin Patch\n*** Update File: README.md\n@@\n+line\n*** End Patch")
-                .unwrap();
+            parse("*** Begin Patch\n*** Update File: README.md\n@@\n+line\n*** End Patch").unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 assert_eq!(chunks[0].change_context, None);
