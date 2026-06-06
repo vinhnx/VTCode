@@ -236,14 +236,14 @@ Inside the TUI, `/loop` repeats a prompt on an interval within the current sessi
 
 ## Features
 
-| Area | What VT Code provides |
-| --- | --- |
-| Agent runtime | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation |
-| Coding tools | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution |
-| Model providers | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
-| Extensibility | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations |
-| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export |
-| Terminal UX | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback |
+| Area             | What VT Code provides                                                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent runtime    | Interactive TUI, slash commands, streaming responses, non-interactive `ask` and `exec`, resume and continue, dynamic context curation                                              |
+| Coding tools     | Safe file operations, patching, ripgrep search, fuzzy file discovery, syntax-aware code intelligence, project indexing, terminal execution                                         |
+| Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
+| Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                                         |
+| Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                                          |
+| Terminal UX      | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback                                                                    |
 
 ## Installation
 
@@ -288,31 +288,6 @@ More details: [Installation Guide](./docs/installation/README.md), [Native Insta
 
 VT Code supports 21 LLM providers out of the box — from cloud APIs to local inference servers — plus any OpenAI-compatible API through `[[custom_providers]]`.
 
-| Provider | Provider ID | Type |
-| --- | --- | --- |
-| OpenAI | `openai` | Cloud |
-| Anthropic | `anthropic` | Cloud |
-| Gemini | `gemini` | Cloud |
-| DeepSeek | `deepseek` | Cloud |
-| GitHub Copilot | `copilot` | Cloud |
-| OpenRouter | `openrouter` | Cloud |
-| Xiaomi MiMo | `mimo` | Cloud |
-| Hugging Face | `huggingface` | Cloud |
-| Z.AI | `zai` | Cloud |
-| Moonshot | `moonshot` | Cloud |
-| MiniMax | `minimax` | Cloud |
-| Mistral | `mistral` | Cloud |
-| Qwen | `qwen` | Cloud |
-| StepFun | `stepfun` | Cloud |
-| Evolink | `evolink` | Cloud |
-| Poolside | `poolside` | Cloud |
-| OpenCode Zen | `opencode-zen` | Cloud |
-| OpenCode Go | `opencode-go` | Cloud |
-| Ollama | `ollama` | Local |
-| LM Studio | `lmstudio` | Local |
-| llama.cpp | `llamacpp` | Local |
-| Custom API | `[[custom_providers]]` | Any OpenAI-compatible |
-
 For detailed setup guides, see [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
 ### Provider spotlight: Xiaomi MiMo V2.5 Series
@@ -331,12 +306,12 @@ Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the nati
   </a>
 </div>
 
-| Provider | Model ID | Context |
-| --- | --- | --- |
-| [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro) | `xiaomi/mimo-v2.5-pro` | 1M tokens |
-| OpenRouter | `xiaomi/mimo-v2.5` | 1M tokens |
-| [Xiaomi MiMo](https://platform.xiaomimimo.com/docs/en-US/welcome) | `mimo-v2.5-pro` | 1M tokens |
-| Xiaomi MiMo | `mimo-v2.5` | 1M tokens |
+| Provider                                                          | Model ID               | Context   |
+| ----------------------------------------------------------------- | ---------------------- | --------- |
+| [OpenRouter](https://openrouter.ai/xiaomi/mimo-v2.5-pro)          | `xiaomi/mimo-v2.5-pro` | 1M tokens |
+| OpenRouter                                                        | `xiaomi/mimo-v2.5`     | 1M tokens |
+| [Xiaomi MiMo](https://platform.xiaomimimo.com/docs/en-US/welcome) | `mimo-v2.5-pro`        | 1M tokens |
+| Xiaomi MiMo                                                       | `mimo-v2.5`            | 1M tokens |
 
 Pricing: [Pay-as-you-go](https://platform.xiaomimimo.com/docs/en-US/price/pay-as-you-go) · [Subscription](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/subscription) · [Quick Access](https://platform.xiaomimimo.com/docs/en-US/price/tokenplan/quick-access)
 
@@ -365,20 +340,6 @@ model = "deepseek-ai/DeepSeek-V3-0324"
 
 Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
 
-Recommended validated Atlas chat model pool examples for `default_model` or
-`vtcode ask --model <model-id>` include:
-
-- `deepseek-ai/DeepSeek-V3-0324`
-- `deepseek-ai/deepseek-r1-0528`
-- `moonshotai/Kimi-K2-Instruct`
-- `Qwen/Qwen3-Coder`
-- `google/gemini-2.5-flash`
-- `openai/gpt-5.2-chat`
-- `anthropic/claude-opus-4.5-20251101`
-- `zai-org/glm-4.7`
-- `minimaxai/minimax-m2.1`
-- `xai/grok-4-0709`
-
 ## Configuration
 
 VT Code reads configuration from `vtcode.toml` in your project root. The default agent uses the MiMo provider with `mimo-v2.5-pro` as the default model.
@@ -386,7 +347,7 @@ VT Code reads configuration from `vtcode.toml` in your project root. The default
 ```toml
 [agent]
 provider = "openai"
-default_model = "gpt-5.4"
+default_model = "gpt5.5"
 ```
 
 Useful configuration docs:
@@ -432,37 +393,23 @@ Read: [Zed ACP Guide](./docs/guides/zed-acp.md), [VS Code Guide](./docs/guides/v
 
 VT Code runs a read-restricted shell. Every command passes through a sandbox that can block dangerous operations, log activity, and enforce policy.
 
-| Layer | Behavior |
-| --- | --- |
-| Shell sandbox | Restricts commands to a safe subset; dangerous patterns are blocked |
-| Tool guardrails | File operations are scoped to the project directory |
-| Subprocess isolation | Background agents run in bounded, supervised subprocesses |
-| Audit logging | All tool calls are logged for review |
+| Layer                | Behavior                                                            |
+| -------------------- | ------------------------------------------------------------------- |
+| Shell sandbox        | Restricts commands to a safe subset; dangerous patterns are blocked |
+| Tool guardrails      | File operations are scoped to the project directory                 |
+| Subprocess isolation | Background agents run in bounded, supervised subprocesses           |
+| Audit logging        | All tool calls are logged for review                                |
 
 Read: [Safety Architecture](./docs/safety/SAFETY_ARCHITECTURE.md), [Security Hardening](./docs/safety/SECURITY_HARDENING.md), [Threat Model](./docs/safety/THREAT_MODEL.md).
 
 ## Protocols and exports
 
-| Protocol | Purpose | Docs |
-| --- | --- | --- |
-| Open Responses | OpenAI-compatible response format | [Open Responses](./docs/protocols/OPEN_RESPONSES.md) |
-| ATIF | Standardized session trajectory export | [ATIF Trajectory Format](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md) |
-| A2A | Agent discovery, task lifecycle, streaming, JSON-RPC | [A2A Protocol](./docs/a2a/a2a-protocol.md) |
-| Anthropic Messages API | Compatibility server for Anthropic-style clients | [Provider Guides](./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server) |
-
-## Benchmarks
-
-VT Code has a pending submission to [vercel/next-evals-oss](https://github.com/vercel/next-evals-oss/pull/83), the benchmark behind the [Next.js AI Agent Evaluations leaderboard](https://nextjs.org/evals).
-
-| Agent | Model | Status | Success Rate | Passed | Avg Duration |
-| --- | --- | --- | --- | --- | --- |
-| VT Code | MiMo V2.5 Pro | Pending | -- | -- | -- |
-| Claude Code | Claude Sonnet 4 | Published | 72.7% | 24/33 | 173s |
-| Codex CLI | o3 | Published | 66.7% | 22/33 | 234s |
-| Copilot | Claude Sonnet 4 | Published | 63.6% | 21/33 | 244s |
-| Gemini CLI | Gemini 3 Flash | Published | 51.5% | 17/33 | 173s |
-| OpenAI Codex | o3 | Published | 48.5% | 16/33 | 221s |
-| Aider | Gemini 3 Pro | Published | 45.5% | 15/33 | 228s |
+| Protocol               | Purpose                                              | Docs                                                                                      |
+| ---------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Open Responses         | OpenAI-compatible response format                    | [Open Responses](./docs/protocols/OPEN_RESPONSES.md)                                      |
+| ATIF                   | Standardized session trajectory export               | [ATIF Trajectory Format](./docs/protocols/ATIF_TRAJECTORY_FORMAT.md)                      |
+| A2A                    | Agent discovery, task lifecycle, streaming, JSON-RPC | [A2A Protocol](./docs/a2a/a2a-protocol.md)                                                |
+| Anthropic Messages API | Compatibility server for Anthropic-style clients     | [Provider Guides](./docs/providers/PROVIDER_GUIDES.md#anthropic-api-compatibility-server) |
 
 ## Development
 
