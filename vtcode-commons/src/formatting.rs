@@ -335,7 +335,7 @@ mod tests {
         let (out, truncated) = head_tail_truncate("abcdefghij", 5, marker);
         assert!(truncated);
         assert_eq!(out, "abcde");
-        
+
         // When max_chars allows room for suffix, include it in the fallback branch.
         // Use max_chars=17 which is <= 21+16=37 (triggers fallback).
         let long_text = "abcdefghijklmnopqrstuvwxyz";
