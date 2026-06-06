@@ -835,14 +835,7 @@ fn truncate_chars(text: &str, limit: usize) -> String {
     if limit == 0 {
         return String::new();
     }
-    if text.chars().count() <= limit {
-        return text.to_string();
-    }
-    let truncated = text
-        .chars()
-        .take(limit.saturating_sub(3))
-        .collect::<String>();
-    format!("{truncated}...")
+    vtcode_commons::formatting::truncate_within(text, limit, "...")
 }
 
 fn format_string_list(items: &[String]) -> String {

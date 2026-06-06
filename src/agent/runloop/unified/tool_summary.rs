@@ -3,6 +3,7 @@ use hashbrown::HashSet;
 use anstyle::Color;
 use anyhow::Result;
 use serde_json::Value;
+use vtcode_commons::formatting::wrap_text_words;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::labels::tool_action_label;
@@ -376,63 +377,6 @@ fn run_summary_is_placeholder(summary: &str) -> bool {
     )
 }
 
-fn wrap_text_words(text: &str, first_width: usize, continuation_width: usize) -> Vec<String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return Vec::new();
-    }
-
-    let mut result = Vec::new();
-    let mut remaining = trimmed;
-    let mut width = first_width.max(1);
-    while char_count(remaining) > width {
-        let split = split_at_word_boundary(remaining, width);
-        let (head, tail) = remaining.split_at(split);
-        let head = head.trim();
-        if head.is_empty() {
-            break;
-        }
-        result.push(head.to_string());
-        remaining = tail.trim_start();
-        if remaining.is_empty() {
-            break;
-        }
-        width = continuation_width.max(1);
-    }
-    if !remaining.is_empty() {
-        result.push(remaining.to_string());
-    }
-    result
-}
-
-fn split_at_word_boundary(input: &str, width: usize) -> usize {
-    let capped = byte_index_for_char_count(input, width);
-    let candidate = &input[..capped];
-    if let Some(boundary) = candidate.rfind(char::is_whitespace) {
-        boundary
-    } else {
-        capped
-    }
-}
-
-fn byte_index_for_char_count(input: &str, chars: usize) -> usize {
-    if chars == 0 {
-        return 0;
-    }
-    let mut seen = 0usize;
-    for (idx, ch) in input.char_indices() {
-        seen += 1;
-        if seen == chars {
-            return idx + ch.len_utf8();
-        }
-    }
-    input.len()
-}
-
-fn char_count(input: &str) -> usize {
-    input.chars().count()
-}
-
 pub(crate) fn stream_label_from_output(
     output: &Value,
     command_success: bool,
@@ -743,11 +687,10 @@ pub(crate) fn humanize_tool_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use vtcode_commons::formatting::wrap_text_words;
     use vtcode_core::config::constants::tools as tool_names;
 
-    use super::{
-        build_tool_summary, describe_tool_action, run_summary_is_placeholder, wrap_text_words,
-    };
+    use super::{build_tool_summary, describe_tool_action, run_summary_is_placeholder};
 
     #[test]
     fn build_tool_summary_formats_run_command_as_ran() {

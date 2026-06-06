@@ -1763,16 +1763,7 @@ fn remove_session_files(entries: Vec<SessionFileEntry>) {
 }
 
 fn truncate_preview(input: &str, max_chars: usize) -> String {
-    if input.chars().count() <= max_chars {
-        return input.to_owned();
-    }
-
-    let mut truncated = String::new();
-    for ch in input.chars().take(max_chars.saturating_sub(1)) {
-        truncated.push(ch);
-    }
-    truncated.push('…');
-    truncated
+    vtcode_commons::formatting::truncate_within(input, max_chars, "…")
 }
 
 fn compact_snapshot_to_max_bytes(

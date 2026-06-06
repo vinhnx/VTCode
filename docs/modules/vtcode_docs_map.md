@@ -544,6 +544,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Most Common Sequences, VT Code Usage Examples, Regex Patterns, Testing Helpers, Common Mistakes
   - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does Most Common Sequences work?", "How does VT Code Usage Examples work?"
 
+- **File**: `docs/audits/agent-harness-duplication-report.md`
+  - **Content**: Agent / Harness Duplication & Optimization Report
+  - **Topics**: Architectural root cause, Findings, Revised status after line-by-line verification, Open questions for maintainers (behavior-changing — not auto-applied), Changelog
+  - **User Questions**: "What can you tell me about Agent / Harness Duplication & Optimization Report?", "How does Architectural root cause work?", "How does Findings work?"
+
 - **File**: `docs/harness/AGENT_LEGIBILITY_GUIDE.md`
   - **Content**: Agent Legibility Guide
   - **Topics**: Core Rules, Examples, Why It Matters, Active Monitoring, Grounding & Uncertainty
