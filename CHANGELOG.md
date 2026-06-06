@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.2 - 2026-06-06
+
+### Highlights
+#### Bug Fixes
+
+- Add vtcode-ghostty-core to publish order before vtcode-core (eeb15246) 
+### Other Changes
 ## 0.123.1 - 2026-06-06
 
 ### Highlights
