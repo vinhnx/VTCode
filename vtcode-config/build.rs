@@ -8,6 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod build_codegen;
+
 const EMBEDDED_OPENROUTER_MODELS: &str = include_str!("build_data/openrouter_models.json");
 
 fn main() {
@@ -39,22 +41,10 @@ fn generate_placeholder_artifacts() {
 
     // Write empty files to prevent "file not found" errors during docs.rs build
     if let Err(error) = fs::write(
-        out_dir.join("openrouter_model_variants.rs"),
-        "// Placeholder for docs.rs build\n",
-    ) {
-        eprintln!("warning: failed to write placeholder variants: {error}");
-    }
-    if let Err(error) = fs::write(
         out_dir.join("openrouter_constants.rs"),
         "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n",
     ) {
         eprintln!("warning: failed to write placeholder constants: {error}");
-    }
-    if let Err(error) = fs::write(
-        out_dir.join("openrouter_aliases.rs"),
-        "// Placeholder for docs.rs build\n",
-    ) {
-        eprintln!("warning: failed to write placeholder aliases: {error}");
     }
     if let Err(error) = fs::write(
         out_dir.join("openrouter_metadata.rs"),
@@ -88,9 +78,7 @@ fn generate_artifacts() -> Result<()> {
         }
     }
 
-    write_variants(&out_dir, &entries)?;
     write_constants(&out_dir, &provider, &entries)?;
-    write_aliases(&out_dir, &entries)?;
     write_metadata(&out_dir, &entries)?;
     write_model_capabilities(&out_dir, &capability_entries)?;
 
@@ -153,14 +141,11 @@ struct VtcodeSpec {
     efficient: bool,
     top_tier: bool,
     generation: String,
-    #[serde(default)]
-    doc_comment: Option<String>,
 }
 
 struct EntryData {
     variant: String,
     const_name: String,
-    alias_name: String,
     id: String,
     vendor: String,
     display: String,
@@ -168,7 +153,6 @@ struct EntryData {
     efficient: bool,
     top_tier: bool,
     generation: String,
-    doc_comment: String,
     reasoning: bool,
     tool_call: bool,
 }
@@ -269,26 +253,9 @@ impl Provider {
                 );
             }
 
-            let doc_comment =
-                vtcode
-                    .doc_comment
-                    .as_deref()
-                    .unwrap_or(if vtcode.description.is_empty() {
-                        vtcode.display.as_str()
-                    } else {
-                        ""
-                    });
-
-            let computed_comment = if doc_comment.is_empty() {
-                format!("{} - {}", vtcode.display, vtcode.description)
-            } else {
-                doc_comment.to_string()
-            };
-
             entries.push(EntryData {
                 variant: vtcode.variant.clone(),
                 const_name: const_name.clone(),
-                alias_name: format!("OPENROUTER_{const_name}"),
                 id: spec.id.clone(),
                 vendor: vtcode.vendor.to_lowercase(),
                 display: vtcode.display.clone(),
@@ -296,7 +263,6 @@ impl Provider {
                 efficient: vtcode.efficient,
                 top_tier: vtcode.top_tier,
                 generation: vtcode.generation.clone(),
-                doc_comment: computed_comment,
                 reasoning: spec.reasoning,
                 tool_call: spec.tool_call,
             });
@@ -354,508 +320,22 @@ fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEn
     Ok(entries)
 }
 
-fn write_variants(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
-    let mut content = String::new();
-    for entry in entries {
-        content.push_str("    /// ");
-        content.push_str(&sanitize_doc_comment(&entry.doc_comment));
-        content.push('\n');
-        content.push_str("    ");
-        content.push_str(&entry.variant);
-        content.push_str(",\n");
-    }
-    fs::write(out_dir.join("openrouter_model_variants.rs"), content)
-        .context("Failed to write generated OpenRouter model variants")
-}
-
 fn write_constants(out_dir: &Path, provider: &Provider, entries: &[EntryData]) -> Result<()> {
-    let mut constants = String::new();
-    for entry in entries {
-        constants.push_str("    pub const ");
-        constants.push_str(&entry.const_name);
-        constants.push(':');
-        constants.push_str(" &str = \"");
-        constants.push_str(&entry.id);
-        constants.push_str("\";\n");
-    }
-    constants.push('\n');
-
-    let default_id = provider
-        .default_model
-        .as_ref()
-        .context("openrouter.default_model is missing in docs/models.json")?;
-    let default_const = entries
-        .iter()
-        .find(|entry| &entry.id == default_id)
-        .with_context(|| {
-            format!("Default OpenRouter model '{default_id}' is not declared in vtcode metadata")
-        })?;
-    constants.push_str("    pub const DEFAULT_MODEL: &str = ");
-    constants.push_str(&default_const.const_name);
-    constants.push_str(";\n\n");
-
-    constants.push_str("    pub const SUPPORTED_MODELS: &[&str] = &[\n");
-    for entry in entries {
-        constants.push_str("        ");
-        constants.push_str(&entry.const_name);
-        constants.push_str(",\n");
-    }
-    constants.push_str("    ];\n\n");
-
-    constants.push_str("    pub const REASONING_MODELS: &[&str] = &[\n");
-    for entry in entries.iter().filter(|entry| entry.reasoning) {
-        constants.push_str("        ");
-        constants.push_str(&entry.const_name);
-        constants.push_str(",\n");
-    }
-    constants.push_str("    ];\n\n");
-
-    constants.push_str("    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[\n");
-    for entry in entries.iter().filter(|entry| !entry.tool_call) {
-        constants.push_str("        ");
-        constants.push_str(&entry.const_name);
-        constants.push_str(",\n");
-    }
-    constants.push_str("    ];\n\n");
-
-    let mut vendor_map: IndexMap<String, Vec<&EntryData>> = IndexMap::new();
-    for entry in entries {
-        vendor_map
-            .entry(entry.vendor.clone())
-            .or_default()
-            .push(entry);
-    }
-
-    constants.push_str("    pub mod vendor {\n");
-    for (vendor, vendor_entries) in vendor_map.iter() {
-        let module_name = to_module_name(vendor);
-        constants.push_str("        pub mod ");
-        constants.push_str(&module_name);
-        constants.push_str(" {\n");
-        constants.push_str("            pub const MODELS: &[&str] = &[\n");
-        for entry in vendor_entries {
-            constants.push_str("                super::super::");
-            constants.push_str(&entry.const_name);
-            constants.push_str(",\n");
-        }
-        constants.push_str("            ];\n");
-        constants.push_str("        }\n\n");
-    }
-    constants.push_str("    }\n");
-
-    fs::write(out_dir.join("openrouter_constants.rs"), constants)
+    let content = build_codegen::generate_openrouter_constants(entries, provider)?;
+    fs::write(out_dir.join("openrouter_constants.rs"), content)
         .context("Failed to write generated OpenRouter constants")
 }
 
-fn write_aliases(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
-    let mut aliases = String::new();
-    for entry in entries {
-        aliases.push_str("    pub const ");
-        aliases.push_str(&entry.alias_name);
-        aliases.push_str(": &str = openrouter::");
-        aliases.push_str(&entry.const_name);
-        aliases.push_str(";\n");
-    }
-    fs::write(out_dir.join("openrouter_aliases.rs"), aliases)
-        .context("Failed to write generated OpenRouter aliases")
-}
-
 fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
-    let mut metadata = String::new();
-    metadata.push_str("#[derive(Clone, Copy)]\n");
-    metadata.push_str("pub struct Entry {\n");
-    metadata.push_str("    pub variant: super::ModelId,\n");
-    metadata.push_str("    pub id: &'static str,\n");
-    metadata.push_str("    pub vendor: &'static str,\n");
-    metadata.push_str("    pub display: &'static str,\n");
-    metadata.push_str("    pub description: &'static str,\n");
-    metadata.push_str("    pub efficient: bool,\n");
-    metadata.push_str("    pub top_tier: bool,\n");
-    metadata.push_str("    pub generation: &'static str,\n");
-    metadata.push_str("    pub reasoning: bool,\n");
-    metadata.push_str("    pub tool_call: bool,\n");
-    metadata.push_str("}\n\n");
-
-    metadata.push_str("#[allow(dead_code)]\npub const ENTRIES: &[Entry] = &[\n");
-    for entry in entries {
-        metadata.push_str("    Entry {\n");
-        metadata.push_str("        variant: super::ModelId::");
-        metadata.push_str(&entry.variant);
-        metadata.push_str(",\n");
-        metadata.push_str("        id: crate::constants::models::openrouter::");
-        metadata.push_str(&entry.const_name);
-        metadata.push_str(",\n");
-        metadata.push_str("        vendor: \"");
-        metadata.push_str(&entry.vendor);
-        metadata.push_str("\",\n");
-        metadata.push_str("        display: \"");
-        metadata.push_str(&escape_rust_string(&entry.display));
-        metadata.push_str("\",\n");
-        metadata.push_str("        description: \"");
-        metadata.push_str(&escape_rust_string(&entry.description));
-        metadata.push_str("\",\n");
-        metadata.push_str("        efficient: ");
-        metadata.push_str(if entry.efficient { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        top_tier: ");
-        metadata.push_str(if entry.top_tier { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        generation: \"");
-        metadata.push_str(&escape_rust_string(&entry.generation));
-        metadata.push_str("\",\n");
-        metadata.push_str("        reasoning: ");
-        metadata.push_str(if entry.reasoning { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        tool_call: ");
-        metadata.push_str(if entry.tool_call { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("    },\n");
-    }
-    metadata.push_str(
-        "];
-
-#[derive(Clone, Copy)]
-pub struct VendorModels {
-    pub vendor: &'static str,
-    pub models: &'static [super::ModelId],
-}
-
-pub const VENDOR_MODELS: &[VendorModels] = &[
-",
-    );
-
-    let mut vendor_map: IndexMap<String, Vec<&EntryData>> = IndexMap::new();
-    for entry in entries {
-        vendor_map
-            .entry(entry.vendor.clone())
-            .or_default()
-            .push(entry);
-    }
-
-    for (vendor, vendor_entries) in vendor_map.iter() {
-        metadata.push_str("    VendorModels {\n");
-        metadata.push_str("        vendor: \"");
-        metadata.push_str(vendor);
-        metadata.push_str("\",\n");
-        metadata.push_str("        models: &[\n");
-        for entry in vendor_entries {
-            metadata.push_str("            super::ModelId::");
-            metadata.push_str(&entry.variant);
-            metadata.push_str(",\n");
-        }
-        metadata.push_str("        ],\n    },\n");
-    }
-    metadata.push_str(
-        "];
-
-pub fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMetadata> {
-    match model {
-",
-    );
-    for entry in entries {
-        metadata.push_str("        super::ModelId::");
-        metadata.push_str(&entry.variant);
-        metadata.push_str(" => Some(super::OpenRouterMetadata {\n");
-        metadata.push_str("            id: crate::constants::models::openrouter::");
-        metadata.push_str(&entry.const_name);
-        metadata.push_str(",\n");
-        metadata.push_str("            vendor: \"");
-        metadata.push_str(&entry.vendor);
-        metadata.push_str("\",\n");
-        metadata.push_str("            display: \"");
-        metadata.push_str(&escape_rust_string(&entry.display));
-        metadata.push_str("\",\n");
-        metadata.push_str("            description: \"");
-        metadata.push_str(&escape_rust_string(&entry.description));
-        metadata.push_str("\",\n");
-        metadata.push_str("            efficient: ");
-        metadata.push_str(if entry.efficient { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("            top_tier: ");
-        metadata.push_str(if entry.top_tier { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("            generation: \"");
-        metadata.push_str(&escape_rust_string(&entry.generation));
-        metadata.push_str("\",\n");
-        metadata.push_str("            reasoning: ");
-        metadata.push_str(if entry.reasoning { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("            tool_call: ");
-        metadata.push_str(if entry.tool_call { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        }),\n");
-    }
-    metadata.push_str(
-        "        _ => None,
-    }
-}
-
-pub fn parse_model(value: &str) -> Option<super::ModelId> {
-    match value {
-",
-    );
-    for entry in entries {
-        metadata.push_str("        crate::constants::models::openrouter::");
-        metadata.push_str(&entry.const_name);
-        metadata.push_str(" => Some(super::ModelId::");
-        metadata.push_str(&entry.variant);
-        metadata.push_str("),\n");
-    }
-    metadata.push_str(
-        "        _ => None,
-    }
-}
-
-pub fn vendor_groups() -> &'static [VendorModels] {
-    VENDOR_MODELS
-}
-",
-    );
-
-    fs::write(out_dir.join("openrouter_metadata.rs"), metadata)
+    let content = build_codegen::generate_openrouter_metadata(entries);
+    fs::write(out_dir.join("openrouter_metadata.rs"), content)
         .context("Failed to write generated OpenRouter metadata")
 }
 
 fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Result<()> {
-    let mut metadata = String::new();
-    metadata.push_str("#[derive(Clone, Copy)]\n");
-    metadata.push_str("pub struct Pricing {\n");
-    metadata.push_str("    pub input: Option<f64>,\n");
-    metadata.push_str("    pub output: Option<f64>,\n");
-    metadata.push_str("    pub cache_read: Option<f64>,\n");
-    metadata.push_str("    pub cache_write: Option<f64>,\n");
-    metadata.push_str("}\n\n");
-
-    metadata.push_str("#[derive(Clone, Copy)]\n");
-    metadata.push_str("pub struct Entry {\n");
-    metadata.push_str("    pub provider: &'static str,\n");
-    metadata.push_str("    pub id: &'static str,\n");
-    metadata.push_str("    pub display_name: &'static str,\n");
-    metadata.push_str("    pub description: &'static str,\n");
-    metadata.push_str("    pub context_window: usize,\n");
-    metadata.push_str("    pub max_output_tokens: Option<usize>,\n");
-    metadata.push_str("    pub reasoning: bool,\n");
-    metadata.push_str("    pub tool_call: bool,\n");
-    metadata.push_str("    pub vision: bool,\n");
-    metadata.push_str("    pub input_modalities: &'static [&'static str],\n");
-    metadata.push_str("    pub caching: bool,\n");
-    metadata.push_str("    pub structured_output: bool,\n");
-    metadata.push_str("    pub pricing: Pricing,\n");
-    metadata.push_str("}\n\n");
-
-    metadata.push_str("#[allow(dead_code)]\npub const ENTRIES: &[Entry] = &[\n");
-    for entry in entries {
-        metadata.push_str("    Entry {\n");
-        metadata.push_str("        provider: \"");
-        metadata.push_str(&escape_rust_string(&entry.provider));
-        metadata.push_str("\",\n");
-        metadata.push_str("        id: \"");
-        metadata.push_str(&escape_rust_string(&entry.id));
-        metadata.push_str("\",\n");
-        metadata.push_str("        display_name: \"");
-        metadata.push_str(&escape_rust_string(&entry.display_name));
-        metadata.push_str("\",\n");
-        metadata.push_str("        description: \"");
-        metadata.push_str(&escape_rust_string(&entry.description));
-        metadata.push_str("\",\n");
-        metadata.push_str("        context_window: ");
-        metadata.push_str(&entry.context_window.to_string());
-        metadata.push_str(",\n");
-        metadata.push_str("        max_output_tokens: ");
-        match entry.max_output_tokens {
-            Some(value) => metadata.push_str(&format!("Some({value})")),
-            None => metadata.push_str("None"),
-        }
-        metadata.push_str(",\n");
-        metadata.push_str("        reasoning: ");
-        metadata.push_str(if entry.reasoning { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        tool_call: ");
-        metadata.push_str(if entry.tool_call { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        vision: ");
-        metadata.push_str(if entry.vision { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        input_modalities: &[\n");
-        for modality in &entry.input_modalities {
-            metadata.push_str("            \"");
-            metadata.push_str(&escape_rust_string(modality));
-            metadata.push_str("\",\n");
-        }
-        metadata.push_str("        ],\n");
-        metadata.push_str("        caching: ");
-        metadata.push_str(if entry.caching { "true" } else { "false" });
-        metadata.push_str(",\n");
-        metadata.push_str("        structured_output: ");
-        metadata.push_str(if entry.structured_output {
-            "true"
-        } else {
-            "false"
-        });
-        metadata.push_str(",\n");
-        metadata.push_str("        pricing: Pricing {\n");
-        metadata.push_str("            input: ");
-        write_optional_f64(&mut metadata, entry.pricing.input);
-        metadata.push_str(",\n");
-        metadata.push_str("            output: ");
-        write_optional_f64(&mut metadata, entry.pricing.output);
-        metadata.push_str(",\n");
-        metadata.push_str("            cache_read: ");
-        write_optional_f64(&mut metadata, entry.pricing.cache_read);
-        metadata.push_str(",\n");
-        metadata.push_str("            cache_write: ");
-        write_optional_f64(&mut metadata, entry.pricing.cache_write);
-        metadata.push_str(",\n");
-        metadata.push_str("        },\n");
-        metadata.push_str("    },\n");
-    }
-    let mut provider_map: IndexMap<&str, Vec<&CapabilityEntry>> = IndexMap::new();
-    for entry in entries {
-        provider_map.entry(&entry.provider).or_default().push(entry);
-    }
-
-    metadata.push_str("];\n\npub const PROVIDERS: &[&str] = &[\n");
-    for provider in provider_map.keys() {
-        metadata.push_str("    \"");
-        metadata.push_str(provider);
-        metadata.push_str("\",\n");
-    }
-    metadata.push_str("];\n\n");
-
-    if provider_map.is_empty() {
-        metadata.push_str(
-            "pub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> {\n    None\n}\n\n",
-        );
-        metadata.push_str(
-            "pub fn models_for_provider(_provider: &str) -> Option<&'static [&'static str]> {\n    None\n}\n",
-        );
-    } else {
-        metadata.push_str(
-            "pub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    match provider {\n",
-        );
-        for (provider, provider_entries) in &provider_map {
-            metadata.push_str("        \"");
-            metadata.push_str(provider);
-            metadata.push_str("\" => match id {\n");
-            for entry in provider_entries {
-                metadata.push_str("            \"");
-                metadata.push_str(&escape_rust_string(&entry.id));
-                metadata.push_str("\" => Some(Entry {\n");
-                metadata.push_str("                provider: \"");
-                metadata.push_str(provider);
-                metadata.push_str("\",\n");
-                metadata.push_str("                id: \"");
-                metadata.push_str(&escape_rust_string(&entry.id));
-                metadata.push_str("\",\n");
-                metadata.push_str("                display_name: \"");
-                metadata.push_str(&escape_rust_string(&entry.display_name));
-                metadata.push_str("\",\n");
-                metadata.push_str("                description: \"");
-                metadata.push_str(&escape_rust_string(&entry.description));
-                metadata.push_str("\",\n");
-                metadata.push_str("                context_window: ");
-                metadata.push_str(&entry.context_window.to_string());
-                metadata.push_str(",\n");
-                metadata.push_str("                max_output_tokens: ");
-                match entry.max_output_tokens {
-                    Some(value) => metadata.push_str(&format!("Some({value})")),
-                    None => metadata.push_str("None"),
-                }
-                metadata.push_str(",\n");
-                metadata.push_str("                reasoning: ");
-                metadata.push_str(if entry.reasoning { "true" } else { "false" });
-                metadata.push_str(",\n");
-                metadata.push_str("                tool_call: ");
-                metadata.push_str(if entry.tool_call { "true" } else { "false" });
-                metadata.push_str(",\n");
-                metadata.push_str("                vision: ");
-                metadata.push_str(if entry.vision { "true" } else { "false" });
-                metadata.push_str(",\n");
-                metadata.push_str("                input_modalities: &[\n");
-                for modality in &entry.input_modalities {
-                    metadata.push_str("                    \"");
-                    metadata.push_str(&escape_rust_string(modality));
-                    metadata.push_str("\",\n");
-                }
-                metadata.push_str("                ],\n");
-                metadata.push_str("                caching: ");
-                metadata.push_str(if entry.caching { "true" } else { "false" });
-                metadata.push_str(",\n");
-                metadata.push_str("                structured_output: ");
-                metadata.push_str(if entry.structured_output {
-                    "true"
-                } else {
-                    "false"
-                });
-                metadata.push_str(",\n");
-                metadata.push_str("                pricing: Pricing {\n");
-                metadata.push_str("                    input: ");
-                write_optional_f64(&mut metadata, entry.pricing.input);
-                metadata.push_str(",\n");
-                metadata.push_str("                    output: ");
-                write_optional_f64(&mut metadata, entry.pricing.output);
-                metadata.push_str(",\n");
-                metadata.push_str("                    cache_read: ");
-                write_optional_f64(&mut metadata, entry.pricing.cache_read);
-                metadata.push_str(",\n");
-                metadata.push_str("                    cache_write: ");
-                write_optional_f64(&mut metadata, entry.pricing.cache_write);
-                metadata.push_str(",\n");
-                metadata.push_str("                },\n");
-                metadata.push_str("            }),\n");
-            }
-            metadata.push_str("            _ => None,\n");
-            metadata.push_str("        },\n");
-        }
-        metadata.push_str("        _ => None,\n    }\n}\n\n");
-
-        metadata.push_str("pub fn models_for_provider(provider: &str) -> Option<&'static [&'static str]> {\n    match provider {\n");
-        for (provider, provider_entries) in &provider_map {
-            metadata.push_str("        \"");
-            metadata.push_str(provider);
-            metadata.push_str("\" => Some(&[\n");
-            for entry in provider_entries {
-                metadata.push_str("            \"");
-                metadata.push_str(&escape_rust_string(&entry.id));
-                metadata.push_str("\",\n");
-            }
-            metadata.push_str("        ]),\n");
-        }
-        metadata.push_str("        _ => None,\n    }\n}\n");
-    }
-
-    fs::write(out_dir.join("model_capabilities.rs"), metadata)
+    let content = build_codegen::generate_model_capabilities(entries);
+    fs::write(out_dir.join("model_capabilities.rs"), content)
         .context("Failed to write generated model capability metadata")
-}
-
-fn sanitize_doc_comment(input: &str) -> String {
-    input.replace('\n', " ")
-}
-
-fn escape_rust_string(input: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '\\' => output.push_str("\\\\"),
-            '"' => output.push_str("\\\""),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            other => output.push(other),
-        }
-    }
-    output
-}
-
-fn write_optional_f64(output: &mut String, value: Option<f64>) {
-    match value {
-        Some(value) => {
-            output.push_str("Some(");
-            output.push_str(&format!("{value:?}"));
-            output.push(')');
-        }
-        None => output.push_str("None"),
-    }
 }
 
 fn to_module_name(vendor: &str) -> String {

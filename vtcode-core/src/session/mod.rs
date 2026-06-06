@@ -2,16 +2,14 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use vtcode_commons::string_newtype;
+use vtcode_macros::StringNewtype;
 
 use crate::llm::provider::Message;
 use crate::utils::file_utils::{read_json_file_sync, write_json_file_sync};
 
-string_newtype! {
-    /// Session identifier for conversation persistence.
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-    pub struct SessionId
-}
+/// Session identifier for conversation persistence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, StringNewtype)]
+pub struct SessionId(String);
 
 impl SessionId {
     /// Generate a new random session identifier.

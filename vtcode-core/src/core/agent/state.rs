@@ -1,17 +1,15 @@
 use crate::llm::provider::Message;
 use hashbrown::{HashMap, HashSet};
 use std::time::Duration;
-use vtcode_commons::string_newtype;
+use vtcode_macros::StringNewtype;
 
 // ============================================================================
 // Context Manager: Call/Output Pairing Invariants (OpenAI Codex pattern)
 // ============================================================================
 
-string_newtype! {
-    /// Unique identifier for a tool call.
-    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub struct ToolCallId
-}
+/// Unique identifier for a tool call.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, StringNewtype)]
+pub struct ToolCallId(String);
 
 /// Status of a tool execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

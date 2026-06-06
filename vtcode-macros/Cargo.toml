@@ -1,0 +1,14 @@
+[package]
+name = "vtcode-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Procedural macros for VT Code"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"] }
+proc-macro2 = { workspace = true }

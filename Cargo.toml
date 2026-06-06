@@ -98,6 +98,9 @@ uuid = "1.23.2"
 ignore = "0.4"
 ring = "0.17"
 pretty_assertions = "1.4"
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
 
 [workspace.package]
 version = "0.123.0"
@@ -131,6 +134,7 @@ members = [
     "vtcode-exec-events",
     "vtcode-file-search",
     "vtcode-process-hardening",
+    "vtcode-macros",
     "xtask",
 ]
 default-members = [".", "vtcode-core", "vtcode-tui"]

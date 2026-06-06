@@ -7115,6 +7115,8 @@ dependencies = [
  "indexmap 2.14.0",
  "notify 8.2.0",
  "once_cell",
+ "proc-macro2",
+ "quote",
  "regex",
  "schemars 1.2.1",
  "semver",
@@ -7239,6 +7241,7 @@ dependencies = [
  "vtcode-file-search",
  "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
+ "vtcode-macros",
  "vtcode-markdown-store",
  "vtcode-terminal-detection",
  "vtcode-theme",
@@ -7331,6 +7334,15 @@ dependencies = [
  "vtcode-config",
  "which",
  "wiremock",
+]
+
+[[package]]
+name = "vtcode-macros"
+version = "0.123.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

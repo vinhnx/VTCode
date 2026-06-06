@@ -233,75 +233,39 @@ impl Default for FileColors {
 }
 
 // Default value functions
-fn default_cli_success() -> String {
-    "green".into()
-}
-fn default_cli_error() -> String {
-    "red".into()
-}
-fn default_cli_warning() -> String {
-    "red".into()
-}
-fn default_cli_info() -> String {
-    "cyan".into()
-}
-fn default_cli_prompt() -> String {
-    "bold cyan".into()
+macro_rules! serde_default_string {
+    ($name:ident, $value:expr) => {
+        fn $name() -> String {
+            $value.into()
+        }
+    };
 }
 
-fn default_diff_new() -> String {
-    "green".into()
-}
-fn default_diff_old() -> String {
-    "red".into()
-}
-fn default_diff_context() -> String {
-    "dim".into()
-}
-fn default_diff_header() -> String {
-    "bold cyan".into()
-}
-fn default_diff_meta() -> String {
-    "cyan".into()
-}
-fn default_diff_frag() -> String {
-    "cyan".into()
-}
+serde_default_string!(default_cli_success, "green");
+serde_default_string!(default_cli_error, "red");
+serde_default_string!(default_cli_warning, "red");
+serde_default_string!(default_cli_info, "cyan");
+serde_default_string!(default_cli_prompt, "bold cyan");
 
-fn default_status_added() -> String {
-    "green".into()
-}
-fn default_status_modified() -> String {
-    "cyan".into()
-}
-fn default_status_deleted() -> String {
-    "red bold".into()
-}
-fn default_status_untracked() -> String {
-    "cyan".into()
-}
-fn default_status_current() -> String {
-    "cyan bold".into()
-}
-fn default_status_local() -> String {
-    "cyan".into()
-}
-fn default_status_remote() -> String {
-    "cyan".into()
-}
+serde_default_string!(default_diff_new, "green");
+serde_default_string!(default_diff_old, "red");
+serde_default_string!(default_diff_context, "dim");
+serde_default_string!(default_diff_header, "bold cyan");
+serde_default_string!(default_diff_meta, "cyan");
+serde_default_string!(default_diff_frag, "cyan");
 
-fn default_file_directory() -> String {
-    "bold cyan".into()
-}
-fn default_file_symlink() -> String {
-    "cyan".into()
-}
-fn default_file_executable() -> String {
-    "bold green".into()
-}
-fn default_file_regular() -> String {
-    String::new()
-}
+serde_default_string!(default_status_added, "green");
+serde_default_string!(default_status_modified, "cyan");
+serde_default_string!(default_status_deleted, "red bold");
+serde_default_string!(default_status_untracked, "cyan");
+serde_default_string!(default_status_current, "cyan bold");
+serde_default_string!(default_status_local, "cyan");
+serde_default_string!(default_status_remote, "cyan");
+
+serde_default_string!(default_file_directory, "bold cyan");
+serde_default_string!(default_file_symlink, "cyan");
+serde_default_string!(default_file_executable, "bold green");
+serde_default_string!(default_file_regular, "");
 
 impl ThemeConfig {
     /// Convert CLI colors to anstyle::Style

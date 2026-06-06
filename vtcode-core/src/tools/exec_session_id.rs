@@ -1,10 +1,10 @@
 use serde::Deserialize;
 use serde::Serialize;
-use vtcode_commons::string_newtype;
+use vtcode_macros::StringNewtype;
 
-string_newtype! {
-    /// Logical identifier for a VTCode exec session.
-    #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-    #[serde(transparent)]
-    pub struct ExecSessionId
-}
+/// Logical identifier for a VTCode exec session.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, StringNewtype,
+)]
+#[serde(transparent)]
+pub struct ExecSessionId(String);

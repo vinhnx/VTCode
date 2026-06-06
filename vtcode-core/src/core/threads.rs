@@ -12,21 +12,17 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
-use vtcode_commons::string_newtype;
+use vtcode_macros::StringNewtype;
 
 const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 512;
 
-string_newtype! {
-    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    /// Unique identifier for a thread in the runtime.
-    pub struct ThreadId
-}
+/// Unique identifier for a thread in the runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StringNewtype)]
+pub struct ThreadId(String);
 
-string_newtype! {
-    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    /// Unique identifier for a submission within a thread turn.
-    pub struct SubmissionId
-}
+/// Unique identifier for a submission within a thread turn.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StringNewtype)]
+pub struct SubmissionId(String);
 
 impl SubmissionId {
     /// Generate a new submission identifier with a `sub-` prefix.
