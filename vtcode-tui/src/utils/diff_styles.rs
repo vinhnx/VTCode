@@ -16,30 +16,11 @@ use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 
 // ── Conversion helpers ─────────────────────────────────────────────────────
 
-/// Convert anstyle Color to ratatui Color
+/// Convert anstyle Color to ratatui Color.
+///
+/// Delegates to `vtcode_design::color::anstyle_to_ratatui_color`.
 fn ratatui_color_from_anstyle(color: anstyle::Color) -> RatatuiColor {
-    match color {
-        anstyle::Color::Ansi(c) => match c {
-            anstyle::AnsiColor::Black => RatatuiColor::Black,
-            anstyle::AnsiColor::Red => RatatuiColor::Red,
-            anstyle::AnsiColor::Green => RatatuiColor::Green,
-            anstyle::AnsiColor::Yellow => RatatuiColor::Yellow,
-            anstyle::AnsiColor::Blue => RatatuiColor::Blue,
-            anstyle::AnsiColor::Magenta => RatatuiColor::Magenta,
-            anstyle::AnsiColor::Cyan => RatatuiColor::Cyan,
-            anstyle::AnsiColor::White => RatatuiColor::White,
-            anstyle::AnsiColor::BrightBlack => RatatuiColor::DarkGray,
-            anstyle::AnsiColor::BrightRed => RatatuiColor::LightRed,
-            anstyle::AnsiColor::BrightGreen => RatatuiColor::LightGreen,
-            anstyle::AnsiColor::BrightYellow => RatatuiColor::LightYellow,
-            anstyle::AnsiColor::BrightBlue => RatatuiColor::LightBlue,
-            anstyle::AnsiColor::BrightMagenta => RatatuiColor::LightMagenta,
-            anstyle::AnsiColor::BrightCyan => RatatuiColor::LightCyan,
-            anstyle::AnsiColor::BrightWhite => RatatuiColor::White,
-        },
-        anstyle::Color::Ansi256(c) => RatatuiColor::Indexed(c.0),
-        anstyle::Color::Rgb(c) => RatatuiColor::Rgb(c.0, c.1, c.2),
-    }
+    vtcode_design::color::anstyle_to_ratatui_color(color)
 }
 
 // ── TUI-specific diff line styling ─────────────────────────────────────────

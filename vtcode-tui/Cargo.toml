@@ -58,6 +58,7 @@ tui-widget-list = "0.15"
 unicode-segmentation = "1.13"
 unicode-width = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.123.2" }
+vtcode-design = { path = "../vtcode-design", version = "0.123.2" }
 vtcode-config = { path = "../vtcode-config", version = "0.123.2" }
 vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.2" }
 vtcode-theme = { path = "../vtcode-theme", version = "0.123.2" }

@@ -1,0 +1,25 @@
+[package]
+name = "vtcode-design"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Centralized design system for VT Code: unified color conversion, style bridging, design constants, layout, and base widget primitives"
+license.workspace = true
+readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-design"
+keywords = ["design-system", "tui", "ratatui", "theme", "vtcode"]
+categories = ["development-tools", "command-line-interface"]
+
+[dependencies]
+anstyle = { workspace = true }
+ratatui = { workspace = true }
+unicode-width = { workspace = true }
+vtcode-commons = { path = "../vtcode-commons", version = "0.123.2" }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

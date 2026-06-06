@@ -1,4 +1,4 @@
-use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle};
+use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
@@ -25,59 +25,24 @@ pub fn measure_text_width(text: &str) -> u16 {
     UnicodeWidthStr::width(text) as u16
 }
 
+/// Convert anstyle Color to ratatui Color.
+///
+/// Delegates to `vtcode_design::color::anstyle_to_ratatui_color` which
+/// provides the correct mapping (fixing the Magenta bug).
 pub fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
-    match color {
-        AnsiColorEnum::Ansi(base) => match base {
-            AnsiColor::Black => Color::Black,
-            AnsiColor::Red => Color::Red,
-            AnsiColor::Green => Color::Green,
-            AnsiColor::Yellow => Color::Yellow,
-            AnsiColor::Blue => Color::Blue,
-            AnsiColor::Magenta => Color::DarkGray,
-            AnsiColor::Cyan => Color::Cyan,
-            AnsiColor::White => Color::White,
-            AnsiColor::BrightBlack => Color::DarkGray,
-            AnsiColor::BrightRed => Color::Red,
-            AnsiColor::BrightGreen => Color::Green,
-            AnsiColor::BrightYellow => Color::Yellow,
-            AnsiColor::BrightBlue => Color::Blue,
-            AnsiColor::BrightMagenta => Color::DarkGray,
-            AnsiColor::BrightCyan => Color::Cyan,
-            AnsiColor::BrightWhite => Color::Gray,
-        },
-        AnsiColorEnum::Ansi256(value) => Color::Indexed(value.index()),
-        AnsiColorEnum::Rgb(RgbColor(red, green, blue)) => Color::Rgb(red, green, blue),
-    }
+    vtcode_design::color::anstyle_to_ratatui_color(color)
 }
 
 pub fn ratatui_style_from_inline(
     style: &InlineTextStyle,
     fallback: Option<AnsiColorEnum>,
 ) -> Style {
-    let mut resolved = Style::default();
-
-    if let Some(color) = style.color.or(fallback) {
-        resolved = resolved.fg(ratatui_color_from_ansi(color));
-    }
-
-    if let Some(color) = style.bg_color {
-        resolved = resolved.bg(ratatui_color_from_ansi(color));
-    }
-
-    if style.effects.contains(Effects::BOLD) {
-        resolved = resolved.add_modifier(Modifier::BOLD);
-    }
-    if style.effects.contains(Effects::ITALIC) {
-        resolved = resolved.add_modifier(Modifier::ITALIC);
-    }
-    if style.effects.contains(Effects::UNDERLINE) {
-        resolved = resolved.add_modifier(Modifier::UNDERLINED);
-    }
-    if style.effects.contains(Effects::DIMMED) {
-        resolved = resolved.add_modifier(Modifier::DIM);
-    }
-
-    resolved
+    vtcode_design::style::inline_text_style_to_ratatui(
+        style.color,
+        style.bg_color,
+        style.effects,
+        fallback,
+    )
 }
 
 /// PTY output style helper: keep configured color, suppress bold, enforce dimmed output.
@@ -92,6 +57,5 @@ pub fn ratatui_pty_style_from_inline(
 
 /// Convert an `anstyle::Style` directly to a `ratatui::style::Style`.
 pub fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
-    let inline = convert_style(style);
-    ratatui_style_from_inline(&inline, None)
+    vtcode_design::style::anstyle_to_ratatui_style(style)
 }

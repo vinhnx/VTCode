@@ -117,6 +117,7 @@ members = [
     "vtcode-acp",
     "vtcode-collaboration-tool-specs",
     "vtcode-core",
+    "vtcode-design",
     "vtcode-utility-tool-specs",
     "vtcode-terminal-detection",
     "vtcode-ghostty-vt-sys",
@@ -157,6 +158,7 @@ vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-file-search = { path = "vtcode-file-search" }
 vtcode-ghostty-vt-sys = { path = "vtcode-ghostty-vt-sys" }
 vtcode-ghostty-core = { path = "vtcode-ghostty-core" }
+vtcode-design = { path = "vtcode-design" }
 
 [workspace.lints]
 # Rust compiler lints
@@ -236,6 +238,7 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 [dependencies]
 vtcode-acp = { path = "vtcode-acp", version = "0.123.2" }
 vtcode-commons = { path = "vtcode-commons", version = "0.123.2" }
+vtcode-design = { path = "vtcode-design", version = "0.123.2" }
 vtcode-config = { path = "vtcode-config", version = "0.123.2" }
 vtcode-auth = { path = "vtcode-auth", version = "0.123.2" }
 vtcode-core = { path = "vtcode-core", version = "0.123.2", default-features = false }

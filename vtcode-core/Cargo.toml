@@ -121,6 +121,7 @@ vt100 = "0.16.2"
 portable-pty = "0.9.0"
 ansi-to-tui = "8.0.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.123.2" }
+vtcode-design = { path = "../vtcode-design", version = "0.123.2" }
 vtcode-macros = { path = "../vtcode-macros", version = "0.123.2" }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.123.2" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.123.2" }

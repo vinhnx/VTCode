@@ -1,10 +1,20 @@
-//! Utilities for working with anstyle types and bridging to ratatui
+//! Utilities for working with anstyle types and bridging to ratatui.
+//!
+//! **Deprecated**: Use `vtcode_design::color` and `vtcode_design::style` instead.
+//! This module is retained for backward compatibility but will be removed in a
+//! future version.
 
 use anstyle::{AnsiColor, Color as AnsiColorType, Effects, Style as AnsiStyle};
 use ratatui::crossterm::style::Attribute;
 use ratatui::style::{Color, Modifier, Style};
 
-/// Convert anstyle Color to ratatui Color directly
+/// Convert anstyle Color to ratatui Color directly.
+///
+/// **Deprecated**: Use `vtcode_design::color::anstyle_to_ratatui_color` instead.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::color::anstyle_to_ratatui_color instead"
+)]
 pub fn ansi_color_to_ratatui_color(color: &AnsiColorType) -> Color {
     match color {
         AnsiColorType::Ansi(ansi_color) => match ansi_color {
@@ -13,24 +23,30 @@ pub fn ansi_color_to_ratatui_color(color: &AnsiColorType) -> Color {
             AnsiColor::Green => Color::Green,
             AnsiColor::Yellow => Color::Yellow,
             AnsiColor::Blue => Color::Blue,
-            AnsiColor::Magenta => Color::DarkGray,
+            AnsiColor::Magenta => Color::Magenta,
             AnsiColor::Cyan => Color::Cyan,
             AnsiColor::White => Color::White,
             AnsiColor::BrightBlack => Color::DarkGray,
-            AnsiColor::BrightRed => Color::Red,
-            AnsiColor::BrightGreen => Color::Green,
-            AnsiColor::BrightYellow => Color::Yellow,
-            AnsiColor::BrightBlue => Color::Blue,
-            AnsiColor::BrightMagenta => Color::DarkGray,
-            AnsiColor::BrightCyan => Color::Cyan,
-            AnsiColor::BrightWhite => Color::Gray,
+            AnsiColor::BrightRed => Color::LightRed,
+            AnsiColor::BrightGreen => Color::LightGreen,
+            AnsiColor::BrightYellow => Color::LightYellow,
+            AnsiColor::BrightBlue => Color::LightBlue,
+            AnsiColor::BrightMagenta => Color::LightMagenta,
+            AnsiColor::BrightCyan => Color::LightCyan,
+            AnsiColor::BrightWhite => Color::White,
         },
         AnsiColorType::Rgb(rgb_color) => Color::Rgb(rgb_color.r(), rgb_color.g(), rgb_color.b()),
-        _ => Color::Reset,
+        AnsiColorType::Ansi256(c) => Color::Indexed(c.0),
     }
 }
 
-/// Convert an anstyle Style to a ratatui Style using anstyle-crossterm as a bridge
+/// Convert an anstyle Style to a ratatui Style using anstyle-crossterm as a bridge.
+///
+/// **Deprecated**: Use `vtcode_design::style::anstyle_to_ratatui_style` instead.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::anstyle_to_ratatui_style instead"
+)]
 pub fn anstyle_to_ratatui(anstyle: AnsiStyle) -> Style {
     let crossterm_style = anstyle_crossterm::to_crossterm(anstyle);
     let mut style = Style::default();
@@ -87,8 +103,8 @@ fn crossterm_color_to_ratatui(color: &ratatui::crossterm::style::Color) -> Color
         CColor::DarkYellow => Color::Indexed(58),
         CColor::Blue => Color::Blue,
         CColor::DarkBlue => Color::Indexed(17),
-        CColor::Magenta => Color::DarkGray,
-        CColor::DarkMagenta => Color::DarkGray,
+        CColor::Magenta => Color::Magenta,
+        CColor::DarkMagenta => Color::Indexed(53),
         CColor::Cyan => Color::Cyan,
         CColor::DarkCyan => Color::Indexed(23),
         CColor::White => Color::White,
@@ -98,7 +114,11 @@ fn crossterm_color_to_ratatui(color: &ratatui::crossterm::style::Color) -> Color
     }
 }
 
-/// Convert anstyle Effects to ratatui Modifiers
+/// Convert anstyle Effects to ratatui Modifiers.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::effects_to_modifiers instead"
+)]
 pub fn ansi_effects_to_ratatui_modifiers(effects: Effects) -> Modifier {
     let mut modifier = Modifier::empty();
 
@@ -127,7 +147,13 @@ pub fn ansi_effects_to_ratatui_modifiers(effects: Effects) -> Modifier {
     modifier
 }
 
-/// Convert an style directly to a ratatui Style using manual mapping
+/// Convert an style directly to a ratatui Style using manual mapping.
+///
+/// **Deprecated**: Use `vtcode_design::style::anstyle_to_ratatui_style` instead.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::anstyle_to_ratatui_style instead"
+)]
 pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style {
     let mut ratatui_style = Style::default();
 
@@ -145,7 +171,8 @@ pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style {
     ratatui_style
 }
 
-/// A convenience function that combines color, background, and effects into a single ratatui Style
+/// A convenience function that combines color, background, and effects into a single ratatui Style.
+#[deprecated(since = "0.123.2", note = "Use vtcode_design::style builders instead")]
 pub fn build_ratatui_style(
     fg_color: Option<AnsiColorType>,
     bg_color: Option<AnsiColorType>,
@@ -167,37 +194,53 @@ pub fn build_ratatui_style(
     style
 }
 
-/// Create a ratatui Style with a foreground color from anstyle
+/// Create a ratatui Style with a foreground color from anstyle.
+#[deprecated(since = "0.123.2", note = "Use vtcode_design::style::fg_style instead")]
 pub fn fg_color(color: anstyle::Color) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().fg_color(Some(color)))
 }
 
-/// Create a ratatui Style with a background color from anstyle
+/// Create a ratatui Style with a background color from anstyle.
+#[deprecated(since = "0.123.2", note = "Use vtcode_design::style::bg_style instead")]
 pub fn bg_color(color: anstyle::Color) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().bg_color(Some(color)))
 }
 
-/// Create a ratatui Style with foreground and background colors
+/// Create a ratatui Style with foreground and background colors.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::fg_bg_style instead"
+)]
 pub fn fg_bg_colors(fg: anstyle::Color, bg: anstyle::Color) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().fg_color(Some(fg)).bg_color(Some(bg)))
 }
 
-/// Create a ratatui Style with effects/modifiers
+/// Create a ratatui Style with effects/modifiers.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::with_effects instead"
+)]
 pub fn with_effects(effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().effects(effects))
 }
 
-/// Create a ratatui Style with foreground color and effects
+/// Create a ratatui Style with foreground color and effects.
+#[deprecated(
+    since = "0.123.2",
+    note = "Use vtcode_design::style::colored_with_effects instead"
+)]
 pub fn colored_with_effects(color: anstyle::Color, effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().fg_color(Some(color)).effects(effects))
 }
 
-/// Create a ratatui Style with background color and effects
+/// Create a ratatui Style with background color and effects.
+#[deprecated(since = "0.123.2", note = "Use vtcode_design::style builders instead")]
 pub fn bg_colored_with_effects(color: anstyle::Color, effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().bg_color(Some(color)).effects(effects))
 }
 
-/// Create a complete ratatui Style from anstyle colors and effects
+/// Create a complete ratatui Style from anstyle colors and effects.
+#[deprecated(since = "0.123.2", note = "Use vtcode_design::style builders instead")]
 pub fn full_style(
     fg: Option<anstyle::Color>,
     bg: Option<anstyle::Color>,

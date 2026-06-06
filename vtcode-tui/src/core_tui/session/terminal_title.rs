@@ -307,13 +307,13 @@ fn is_stripped_terminal_title_char(ch: char) -> bool {
 }
 
 fn truncate_title(title: &str) -> String {
-    const ELLIPSIS: &str = "...";
+    const ELLIPSIS: &str = vtcode_design::constants::ELLIPSIS_ASCII;
     let char_count = title.chars().count();
     if char_count <= MAX_TITLE_LENGTH {
         return title.to_string();
     }
 
-    let keep = MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.len());
+    let keep = MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.chars().count());
     let truncated = title.chars().take(keep).collect::<String>();
     format!("{truncated}{ELLIPSIS}")
 }

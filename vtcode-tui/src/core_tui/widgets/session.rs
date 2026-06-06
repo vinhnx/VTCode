@@ -5,7 +5,8 @@ use ratatui::{
 };
 
 use super::{
-    FooterWidget, HeaderWidget, LayoutMode, Panel, SidebarWidget, TranscriptWidget, footer_hints,
+    FooterWidget, HeaderWidget, LayoutMode, SidebarWidget, TranscriptWidget, footer_hints,
+    panel::new_panel,
 };
 use crate::ui::tui::session::Session;
 
@@ -295,7 +296,7 @@ impl<'a> SessionWidget<'a> {
     fn render_logs(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
         use ratatui::widgets::{Paragraph, Wrap};
 
-        let inner = Panel::new(&self.session.styles)
+        let inner = new_panel(&self.session.styles)
             .title("Logs")
             .active(false)
             .mode(mode)
@@ -321,11 +322,11 @@ impl<'a> SessionWidget<'a> {
                     .iter()
                     .take(5)
                     .map(|input| {
-                        let preview: String = input.chars().take(50).collect();
-                        if input.len() > 50 {
-                            format!("{}...", preview)
+                        if input.chars().count() > 50 {
+                            let preview: String = input.chars().take(50).collect();
+                            format!("{preview}{}", vtcode_design::constants::ELLIPSIS)
                         } else {
-                            preview
+                            input.clone()
                         }
                     })
                     .collect();

@@ -2,7 +2,7 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 /// Ellipsis character used to indicate truncated text.
-const ELLIPSIS: char = '…';
+use vtcode_design::constants::ELLIPSIS_CHAR as ELLIPSIS;
 
 /// Truncate a styled line to `max_width` and append an ellipsis on overflow.
 ///
@@ -28,8 +28,8 @@ pub(crate) fn truncate_line_with_ellipsis_if_overflow(
         return line;
     }
 
-    // Reserve space for ellipsis (1 character width)
-    let available_width = max_width.saturating_sub(ELLIPSIS.len_utf8());
+    // Reserve space for ellipsis (1 display column)
+    let available_width = max_width.saturating_sub(1);
     if available_width == 0 {
         // Edge case: not enough room for even the ellipsis
         return Line::from(Span::raw(ELLIPSIS.to_string()));

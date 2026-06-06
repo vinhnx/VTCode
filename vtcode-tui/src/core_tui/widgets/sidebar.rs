@@ -7,12 +7,12 @@ use ratatui::{
 use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
 use super::layout_mode::LayoutMode;
-use super::panel::{Panel, PanelStyles};
+use super::panel::{PanelStyles, new_panel};
 use crate::core_tui::types::LocalAgentEntry;
 use crate::ui::tui::session::styling::SessionStyles;
 
-/// Ellipsis character used to indicate truncated text (consistent with line_truncation module).
-const ELLIPSIS: &str = "…";
+/// Ellipsis character used to indicate truncated text.
+use vtcode_design::constants::ELLIPSIS;
 
 #[derive(Clone)]
 struct SidebarListItem {
@@ -136,7 +136,7 @@ impl<'a> SidebarWidget<'a> {
 
     fn render_queue_section(&self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_section == Some(SidebarSection::Queue);
-        let inner = Panel::new(self.styles)
+        let inner = new_panel(self.styles)
             .title("Queue")
             .active(is_active)
             .mode(self.mode)
@@ -172,7 +172,7 @@ impl<'a> SidebarWidget<'a> {
 
     fn render_local_agents_section(&self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_section == Some(SidebarSection::LocalAgents);
-        let inner = Panel::new(self.styles)
+        let inner = new_panel(self.styles)
             .title("Local Agents")
             .active(is_active)
             .mode(self.mode)
@@ -220,7 +220,7 @@ impl<'a> SidebarWidget<'a> {
 
     fn render_context_section(&self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_section == Some(SidebarSection::Context);
-        let inner = Panel::new(self.styles)
+        let inner = new_panel(self.styles)
             .title("Context")
             .active(is_active)
             .mode(self.mode)
@@ -239,7 +239,7 @@ impl<'a> SidebarWidget<'a> {
 
     fn render_tools_section(&self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_section == Some(SidebarSection::Tools);
-        let inner = Panel::new(self.styles)
+        let inner = new_panel(self.styles)
             .title("Recent Tools")
             .active(is_active)
             .mode(self.mode)
@@ -324,20 +324,32 @@ impl Widget for SidebarWidget<'_> {
     }
 }
 
-/// Truncate a string to fit within a given width
+/// Truncate a string to fit within a given display-column width.
 fn truncate_string(s: &str, max_width: usize) -> String {
-    if s.len() <= max_width {
+    use unicode_width::UnicodeWidthStr;
+
+    let display_width = UnicodeWidthStr::width(s);
+    if display_width <= max_width {
         s.to_string()
-    } else if max_width <= ELLIPSIS.len() {
-        s.chars().take(max_width).collect()
+    } else if max_width == 0 {
+        String::new()
+    } else if max_width == 1 {
+        ELLIPSIS.to_string()
     } else {
-        let target = max_width.saturating_sub(ELLIPSIS.len());
-        let end = s
-            .char_indices()
-            .map(|(i, _)| i)
-            .rfind(|&i| i <= target)
-            .unwrap_or(0);
-        format!("{}{}", &s[..end], ELLIPSIS)
+        // Reserve 1 display column for the ellipsis character.
+        let ellipsis_width = 1usize;
+        let target_width = max_width.saturating_sub(ellipsis_width);
+        let mut used = 0usize;
+        let mut byte_end = 0usize;
+        for ch in s.chars() {
+            let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            if used + cw > target_width {
+                break;
+            }
+            used += cw;
+            byte_end += ch.len_utf8();
+        }
+        format!("{}{}", &s[..byte_end], ELLIPSIS)
     }
 }
 

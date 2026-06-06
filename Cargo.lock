@@ -6980,6 +6980,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-design",
  "vtcode-process-hardening",
  "vtcode-terminal-detection",
  "vtcode-tui",
@@ -7237,6 +7238,7 @@ dependencies = [
  "vtcode-collaboration-tool-specs",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-design",
  "vtcode-exec-events",
  "vtcode-file-search",
  "vtcode-ghostty-core",
@@ -7254,6 +7256,16 @@ dependencies = [
  "wiremock",
  "xattr",
  "zip",
+]
+
+[[package]]
+name = "vtcode-design"
+version = "0.123.2"
+dependencies = [
+ "anstyle",
+ "ratatui",
+ "unicode-width",
+ "vtcode-commons",
 ]
 
 [[package]]
@@ -7458,6 +7470,7 @@ dependencies = [
  "unicode-width",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-design",
  "vtcode-terminal-detection",
  "vtcode-theme",
  "vtcode-vim",
