@@ -113,28 +113,28 @@ ratatui = { workspace = true, features = [
 ] }
 
 nucleo-matcher = "0.3"
-vtcode-file-search = { version = "0.123.1", path = "../vtcode-file-search" }
+vtcode-file-search = { version = "0.123.2", path = "../vtcode-file-search" }
 rig = { package = "rig-core", version = "0.23.1", default-features = false, features = [
     "reqwest-rustls",
 ] }
 vt100 = "0.16.2"
 portable-pty = "0.9.0"
 ansi-to-tui = "8.0.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.123.1" }
-vtcode-macros = { path = "../vtcode-macros", version = "0.123.1" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.123.1" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.123.1" }
-vtcode-config = { path = "../vtcode-config", version = "0.123.1" }
-vtcode-theme = { path = "../vtcode-theme", version = "0.123.1" }
-vtcode-tui = { path = "../vtcode-tui", version = "0.123.1" }
-vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.123.1" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.123.1" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.123.1" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.123.1" }
-vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.123.1" }
-vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.1" }
-vtcode-ghostty-vt-sys = { path = "../vtcode-ghostty-vt-sys", version = "0.123.1" }
-vtcode-ghostty-core = { path = "../vtcode-ghostty-core", version = "0.123.1" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.123.2" }
+vtcode-macros = { path = "../vtcode-macros", version = "0.123.2" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.123.2" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.123.2" }
+vtcode-config = { path = "../vtcode-config", version = "0.123.2" }
+vtcode-theme = { path = "../vtcode-theme", version = "0.123.2" }
+vtcode-tui = { path = "../vtcode-tui", version = "0.123.2" }
+vtcode-collaboration-tool-specs = { path = "../vtcode-collaboration-tool-specs", version = "0.123.2" }
+vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.123.2" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.123.2" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.123.2" }
+vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.123.2" }
+vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.2" }
+vtcode-ghostty-vt-sys = { path = "../vtcode-ghostty-vt-sys", version = "0.123.2" }
+vtcode-ghostty-core = { path = "../vtcode-ghostty-core", version = "0.123.2" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

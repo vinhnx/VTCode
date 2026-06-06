@@ -1105,7 +1105,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6926,7 +6926,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -6989,7 +6989,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -7014,7 +7014,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-auth"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
@@ -7044,7 +7044,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7064,14 +7064,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-collaboration-tool-specs"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "vtcode-commons"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anstyle",
  "anstyle-crossterm",
@@ -7104,7 +7104,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-config"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7136,7 +7136,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -7258,7 +7258,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "chrono",
  "compact_str",
@@ -7273,7 +7273,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-file-search"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -7291,14 +7291,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-ghostty-core"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "unicode-width",
 ]
 
 [[package]]
 name = "vtcode-ghostty-vt-sys"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "libloading",
@@ -7307,7 +7307,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "hashbrown 0.17.1",
@@ -7320,7 +7320,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7332,7 +7332,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-lmstudio"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "reqwest 0.12.28",
  "serde_json",
@@ -7346,7 +7346,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-macros"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7355,7 +7355,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "fs2",
@@ -7369,7 +7369,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-process-hardening"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "libc",
  "pretty_assertions",
@@ -7377,7 +7377,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-terminal-detection"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "dirs",
@@ -7385,7 +7385,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-theme"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -7399,7 +7399,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -7418,7 +7418,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tui"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "anstyle",
  "anstyle-git",
@@ -7465,7 +7465,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-utility-tool-specs"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "rmcp",
  "serde",
@@ -7474,7 +7474,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-vim"
-version = "0.123.1"
+version = "0.123.2"
 dependencies = [
  "criterion",
  "crossterm",
@@ -7838,7 +7838,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8538,7 +8538,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "clap",
  "clap_complete",
