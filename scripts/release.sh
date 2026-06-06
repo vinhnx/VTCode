@@ -1022,7 +1022,10 @@ main() {
 
     if [[ "$skip_crates" == 'false' ]]; then
         print_distribution "Publishing crates in dependency order..."
-        ./scripts/publish_extracted_crates.sh --skip-tests --skip-tags --skip-follow-up
+        if ! ./scripts/publish_extracted_crates.sh --skip-tests --skip-tags --skip-follow-up; then
+            print_error "Crate publishing failed. Remaining release steps (GitHub Release, binaries, Homebrew) will continue."
+            print_info "You can resume crate publishing with: ./scripts/publish_extracted_crates.sh --start-from <crate> --skip-tests --skip-tags --skip-follow-up"
+        fi
     fi
 
     # Confirm version after cargo-release

@@ -120,6 +120,43 @@ CRATES=(
     vtcode
 )
 
+# Validate that all workspace path dependencies of crates in the publish list
+# are also in the publish list. This catches missing crates early.
+validate_publish_order() {
+    local errors=0
+    # Build a set of crates in the publish list for fast lookup
+    local crate_set=""
+    for crate in "${CRATES[@]}"; do
+        crate_set="${crate_set} ${crate}"
+    done
+
+    for crate in "${CRATES[@]}"; do
+        local cargo_toml="${crate}/Cargo.toml"
+        if [[ ! -f "$cargo_toml" ]]; then
+            continue
+        fi
+        # Extract workspace path dependencies
+        local deps
+        deps=$(grep -E 'path\s*=' "$cargo_toml" | grep -oE 'path\s*=\s*"\.\./([^"]+)"' | sed 's|path\s*=\s*"\.\./||;s|"||g' | sort -u || true)
+        for dep in $deps; do
+            if [[ -n "$dep" && "$crate_set" != *" $dep "* ]]; then
+                # Check if it's actually a workspace member
+                if [[ -d "$dep" && -f "$dep/Cargo.toml" ]]; then
+                    echo "ERROR: ${crate} depends on workspace member '${dep}' which is not in the CRATES publish list" >&2
+                    errors=$((errors + 1))
+                fi
+            fi
+        done
+    done
+
+    if [[ $errors -gt 0 ]]; then
+        echo "Found $errors missing dependency(ies) in the publish list. Aborting." >&2
+        exit 1
+    fi
+}
+
+validate_publish_order
+
 if [[ -n "$START_FROM" ]]; then
     found=0
     filtered=()
