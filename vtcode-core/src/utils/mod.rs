@@ -138,6 +138,7 @@ pub mod unicode_monitor;
 pub mod validation;
 pub mod vtcodegitignore;
 
+#[allow(deprecated)]
 pub use anstyle_utils::*;
 pub use cached_style_parser::CachedStyleParser;
 pub use color_utils::*;

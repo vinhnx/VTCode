@@ -4,6 +4,10 @@
 //! This module is retained for backward compatibility but will be removed in a
 //! future version.
 
+// Suppress deprecation warnings for internal self-references between deprecated
+// functions within this module. External callers still receive deprecation warnings.
+#![allow(deprecated)]
+
 use anstyle::{AnsiColor, Color as AnsiColorType, Effects, Style as AnsiStyle};
 use ratatui::crossterm::style::Attribute;
 use ratatui::style::{Color, Modifier, Style};
