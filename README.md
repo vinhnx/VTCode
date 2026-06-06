@@ -17,10 +17,9 @@
 
 ## Quick start
 
-Set a provider key and launch VT Code in a project:
+Just launch VT Code in a project:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-..."
 vtcode
 ```
 
