@@ -1,6 +1,8 @@
 use super::MarkdownLine;
 use anstyle::Style;
 use std::cmp::max;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Default)]
 pub(crate) struct TableBuffer {
@@ -49,14 +51,15 @@ pub(crate) fn render_table(
     let border_style = base_style.dimmed();
 
     if !table.headers.is_empty() {
-        lines.push(render_table_row(
+        for table_line in render_table_rows(
             &table.headers,
-            &header_widths,
             &col_widths,
             border_style,
             base_style,
             true,
-        ));
+        ) {
+            lines.push(table_line);
+        }
 
         let mut sep = MarkdownLine::default();
         for (i, width) in col_widths.iter().enumerate() {
@@ -68,15 +71,16 @@ pub(crate) fn render_table(
         lines.push(sep);
     }
 
-    for (row, widths) in table.rows.iter().zip(row_widths.iter()) {
-        lines.push(render_table_row(
+    for (row, _widths) in table.rows.iter().zip(row_widths.iter()) {
+        for table_line in render_table_rows(
             row,
-            widths,
             &col_widths,
             border_style,
             base_style,
             false,
-        ));
+        ) {
+            lines.push(table_line);
+        }
     }
 
     lines
@@ -132,34 +136,159 @@ fn scale_columns_to_fit(col_widths: &mut [usize], max_width: usize) {
     }
 }
 
-fn render_table_row(
+fn render_table_rows(
     cells: &[MarkdownLine],
-    cell_widths: &[usize],
     col_widths: &[usize],
     border_style: Style,
     base_style: Style,
     bold: bool,
-) -> MarkdownLine {
-    let mut line = MarkdownLine::default();
-    for (i, width) in col_widths.iter().enumerate() {
-        if let Some(c) = cells.get(i) {
-            for seg in &c.segments {
-                let style = if bold { seg.style.bold() } else { seg.style };
-                line.push_segment(style, &seg.text);
-            }
-            let cell_width = cell_widths.get(i).copied().unwrap_or(0);
-            let padding = width.saturating_sub(cell_width);
-            if padding > 0 {
-                line.push_segment(base_style, &" ".repeat(padding));
-            }
+) -> Vec<MarkdownLine> {
+    let num_cols = col_widths.len();
+    if num_cols == 0 {
+        return vec![MarkdownLine::default()];
+    }
+
+    let mut wrapped_cells: Vec<Vec<MarkdownLine>> = Vec::with_capacity(num_cols);
+    for (i, &width) in col_widths.iter().enumerate() {
+        if let Some(cell) = cells.get(i) {
+            let wrapped = wrap_markdown_line(cell, width);
+            wrapped_cells.push(if wrapped.is_empty() {
+                vec![MarkdownLine::default()]
+            } else {
+                wrapped
+            });
         } else {
-            line.push_segment(base_style, &" ".repeat(*width));
-        }
-        if i < col_widths.len() - 1 {
-            line.push_segment(border_style, " │ ");
+            wrapped_cells.push(vec![MarkdownLine::default()]);
         }
     }
-    line
+
+    let max_lines = wrapped_cells.iter().map(|c| c.len()).max().unwrap_or(1);
+    let mut rows = Vec::with_capacity(max_lines);
+
+    for line_idx in 0..max_lines {
+        let mut line = MarkdownLine::default();
+        for (col_idx, &width) in col_widths.iter().enumerate() {
+            if let Some(cell_line) = wrapped_cells[col_idx].get(line_idx) {
+                let cell_text_width = cell_line.width();
+                for seg in &cell_line.segments {
+                    let style = if bold { seg.style.bold() } else { seg.style };
+                    line.push_segment(style, &seg.text);
+                }
+                let padding = width.saturating_sub(cell_text_width);
+                if padding > 0 {
+                    line.push_segment(base_style, &" ".repeat(padding));
+                }
+            } else {
+                line.push_segment(base_style, &" ".repeat(width));
+            }
+            if col_idx < num_cols - 1 {
+                line.push_segment(border_style, " │ ");
+            }
+        }
+        rows.push(line);
+    }
+
+    rows
+}
+
+fn trim_trailing_whitespace(line: &mut MarkdownLine) {
+    while let Some(last) = line.segments.last_mut() {
+        let trimmed = last.text.trim_end_matches(char::is_whitespace);
+        if trimmed.len() == last.text.len() {
+            break;
+        }
+        if trimmed.is_empty() {
+            line.segments.pop();
+        } else {
+            last.text.truncate(trimmed.len());
+            break;
+        }
+    }
+}
+
+fn wrap_markdown_line(line: &MarkdownLine, max_width: usize) -> Vec<MarkdownLine> {
+    if max_width == 0 {
+        return vec![MarkdownLine::default()];
+    }
+    if line.width() <= max_width {
+        return vec![line.clone()];
+    }
+
+    let mut rows: Vec<MarkdownLine> = Vec::new();
+    let mut current = MarkdownLine::default();
+    let mut current_width = 0usize;
+
+    let flush = |current: &mut MarkdownLine, rows: &mut Vec<MarkdownLine>, current_width: &mut usize| {
+        trim_trailing_whitespace(current);
+        rows.push(std::mem::take(current));
+        *current_width = 0;
+    };
+
+    for seg in &line.segments {
+        let style = seg.style;
+        for token in seg.text.split_word_bounds() {
+            if token.is_empty() {
+                continue;
+            }
+
+            let token_width = UnicodeWidthStr::width(token);
+            if token_width == 0 {
+                current.push_segment(style, token);
+                continue;
+            }
+
+            let is_whitespace = token.chars().all(char::is_whitespace);
+            let has_content = current_width > 0;
+
+            if is_whitespace && !rows.is_empty() && !has_content {
+                continue;
+            }
+
+            if current_width + token_width <= max_width {
+                current.push_segment(style, token);
+                current_width += token_width;
+                continue;
+            }
+
+            if is_whitespace {
+                if has_content {
+                    flush(&mut current, &mut rows, &mut current_width);
+                }
+                continue;
+            }
+
+            if token_width <= max_width {
+                if has_content {
+                    flush(&mut current, &mut rows, &mut current_width);
+                }
+                current.push_segment(style, token);
+                current_width += token_width;
+                continue;
+            }
+
+            for grapheme in UnicodeSegmentation::graphemes(token, true) {
+                if grapheme.is_empty() {
+                    continue;
+                }
+                let gw = UnicodeWidthStr::width(grapheme);
+                if gw == 0 {
+                    current.push_segment(style, grapheme);
+                    continue;
+                }
+                if current_width + gw > max_width && current_width > 0 {
+                    flush(&mut current, &mut rows, &mut current_width);
+                }
+                current.push_segment(style, grapheme);
+                current_width += gw;
+            }
+        }
+    }
+
+    if current_width > 0 || rows.is_empty() {
+        rows.push(current);
+    }
+
+    rows
 }
 
 #[cfg(test)]
@@ -248,6 +377,75 @@ mod tests {
                 "Line exceeds 40 chars: {:?}",
                 text
             );
+        }
+    }
+
+    #[test]
+    fn test_wrap_markdown_line_no_wrap_when_fits() {
+        let line = ml("short text");
+        let wrapped = wrap_markdown_line(&line, 20);
+        assert_eq!(wrapped.len(), 1);
+    }
+
+    #[test]
+    fn test_wrap_markdown_line_wraps_at_word_boundary() {
+        let line = ml("hello world foo bar");
+        let wrapped = wrap_markdown_line(&line, 12);
+        assert_eq!(wrapped.len(), 2);
+        let t0: String = wrapped[0].segments.iter().map(|s| s.text.as_str()).collect();
+        let t1: String = wrapped[1].segments.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(t0, "hello world");
+        assert_eq!(t1, "foo bar");
+    }
+
+    #[test]
+    fn test_wrap_markdown_line_grapheme_fallback() {
+        let line = ml("abcdefghij");
+        let wrapped = wrap_markdown_line(&line, 5);
+        assert_eq!(wrapped.len(), 2);
+        let t0: String = wrapped[0].segments.iter().map(|s| s.text.as_str()).collect();
+        let t1: String = wrapped[1].segments.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(t0, "abcde");
+        assert_eq!(t1, "fghij");
+    }
+
+    #[test]
+    fn test_render_table_wraps_long_cells() {
+        let table = TableBuffer {
+            headers: vec![ml("A"), ml("B")],
+            rows: vec![vec![ml("short"), ml("this is a long cell value")]],
+            current_row: vec![],
+            in_head: false,
+        };
+        let lines = render_table(&table, Style::default(), Some(30));
+        for line in &lines {
+            let text: String = line.segments.iter().map(|s| s.text.as_str()).collect();
+            assert!(
+                text.chars().count() <= 30,
+                "Line exceeds 30 chars: {:?}",
+                text
+            );
+        }
+    }
+
+    #[test]
+    fn test_render_table_wrapped_rows_are_aligned() {
+        let table = TableBuffer {
+            headers: vec![ml("H1"), ml("H2")],
+            rows: vec![vec![
+                ml("ab"),
+                ml("this is a long value that wraps"),
+            ]],
+            current_row: vec![],
+            in_head: false,
+        };
+        let lines = render_table(&table, Style::default(), Some(25));
+        // Header + separator + multiple data lines
+        assert!(lines.len() >= 4, "Expected wrapped rows, got {}", lines.len());
+        // Each line should be within max_width
+        for line in &lines {
+            let text: String = line.segments.iter().map(|s| s.text.as_str()).collect();
+            assert!(text.chars().count() <= 25, "Line too wide: {:?}", text);
         }
     }
 }
