@@ -20,7 +20,7 @@ Options:
   --start-from CRATE Resume publishing from the provided crate name. Valid
                      crates: vtcode-commons, vtcode-auth, vtcode-exec-events,
                      vtcode-markdown-store, vtcode-ghostty-vt-sys,
-                     vtcode-ghostty-core, vtcode-vim,
+                     vtcode-ghostty-core, vtcode-macros, vtcode-vim,
                      vtcode-config, vtcode-theme, vtcode-file-search,
                      vtcode-indexer, vtcode-bash-runner,
                      vtcode-terminal-detection, vtcode-tui,
@@ -104,6 +104,7 @@ CRATES=(
     vtcode-markdown-store
     vtcode-ghostty-vt-sys
     vtcode-ghostty-core
+    vtcode-macros
     vtcode-vim
     vtcode-config
     vtcode-theme
