@@ -199,6 +199,55 @@ fn test_smart_ranking() {
 }
 
 #[test]
+fn test_exact_match_ranked_first() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    let files = vec![
+        "src/domain/main_handler.rs".to_owned(),
+        "src/utils/helpers.rs".to_owned(),
+        "tests/main_test.rs".to_owned(),
+        "main.rs".to_owned(),
+        "src/main.rs".to_owned(),
+    ];
+    palette.load_files(files);
+
+    // Exact filename match "main.rs" should rank above partial matches
+    palette.set_filter("main.rs".to_owned());
+    let filtered = &palette.filtered_files;
+    assert_eq!(filtered[0].relative_path, "main.rs");
+    assert_eq!(filtered[1].relative_path, "src/main.rs");
+
+    // Exact full-path match should rank first
+    palette.set_filter("src/main.rs".to_owned());
+    let filtered = &palette.filtered_files;
+    assert_eq!(filtered[0].relative_path, "src/main.rs");
+
+    // Filename prefix match should rank above substring matches
+    palette.set_filter("main".to_owned());
+    let filtered = &palette.filtered_files;
+    assert_eq!(filtered[0].relative_path, "main.rs");
+
+    // Top-level files should rank above nested files with same name
+    palette.set_filter("main".to_owned());
+    let filtered = &palette.filtered_files;
+    let top_level_positions: Vec<usize> = filtered
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| !e.relative_path.contains('/'))
+        .map(|(i, _)| i)
+        .collect();
+    let nested_positions: Vec<usize> = filtered
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.relative_path.contains('/'))
+        .map(|(i, _)| i)
+        .collect();
+    assert!(
+        top_level_positions.iter().max().unwrap_or(&0)
+            < nested_positions.iter().min().unwrap_or(&usize::MAX)
+    );
+}
+
+#[test]
 fn test_has_files() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
     assert!(!palette.has_files());
@@ -213,6 +262,7 @@ fn test_tree_navigation_no_wrapping() {
     let files = vec!["a.rs".to_owned(), "b.rs".to_owned(), "c.rs".to_owned()];
     palette.load_files(files);
 
+    // 3 top-level files, each as its own TreeGroup (no children)
     // Tree navigation does not wrap — at first item, up stays at first
     assert_eq!(palette.selected_index(), Some(0));
     palette.move_selection_up();

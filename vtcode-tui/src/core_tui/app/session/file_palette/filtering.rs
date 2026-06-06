@@ -107,9 +107,25 @@ impl FilePalette {
             if let Some(fuzzy_score) =
                 Self::simple_fuzzy_match_with_buffer(&path_lower, &query_lower, &mut buffer)
             {
-                scored_indices.push((fuzzy_score, idx));
+                let mut score = fuzzy_score;
+                if !path_lower.contains('/') {
+                    score += 1000;
+                }
+                if path_lower == query_lower {
+                    score += 10000;
+                } else if let Some(file_name) = path_lower.rsplit('/').next() {
+                    if file_name == query_lower {
+                        score += 5000;
+                    } else if file_name.starts_with(&query_lower) {
+                        score += 2000;
+                    }
+                }
+                scored_indices.push((score, idx));
             } else if path_lower.contains(&query_lower) {
-                let score = Self::calculate_match_score(&path_lower, &query_lower);
+                let mut score = Self::calculate_match_score(&path_lower, &query_lower);
+                if !path_lower.contains('/') {
+                    score += 1000;
+                }
                 scored_indices.push((score, idx));
             }
         }
@@ -176,7 +192,6 @@ impl FilePalette {
             }
         }
 
-        // Remove standalone dirs that already have children grouped under them.
         top_level_dirs.retain(|entry| !dir_children.contains_key(entry.relative_path.as_str()));
 
         let mut groups = Vec::new();

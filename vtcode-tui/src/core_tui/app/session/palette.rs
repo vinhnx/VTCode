@@ -227,13 +227,13 @@ impl AppSession {
                 true
             }
             KeyCode::Enter => {
-                if palette.selected_is_group() {
+                if palette.selected_is_expandable_group() {
                     palette.toggle_selected();
                     self.mark_dirty();
                     true
                 } else {
                     let selected_path = palette
-                        .get_selected_entry()
+                        .get_selected()
                         .map(|e| e.relative_path.clone());
                     if let Some(path) = selected_path {
                         self.insert_file_reference(&path);

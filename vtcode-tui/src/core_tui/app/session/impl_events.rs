@@ -372,7 +372,7 @@ impl Session {
                 && let Some((global_index, entry, selected)) = page_items.get(local_index)
             {
                 if *selected {
-                    if palette.selected_is_group() {
+                    if palette.selected_is_expandable_group() {
                         palette.toggle_selected();
                         should_mark_dirty = true;
                     } else {

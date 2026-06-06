@@ -45,19 +45,14 @@ impl FilePalette {
         })
     }
 
-    pub fn get_selected_entry(&self) -> Option<&FileEntry> {
+    pub fn selected_is_expandable_group(&self) -> bool {
         let (group_idx, child_idx) = self.tree_state.selected();
-        if let Some(ci) = child_idx {
-            self.group_entries
-                .get(group_idx)
-                .and_then(|entries| entries.get(ci))
-        } else {
-            None
+        if child_idx.is_some() {
+            return false;
         }
-    }
-
-    pub fn selected_is_group(&self) -> bool {
-        self.tree_state.selected().1.is_none()
+        self.group_entries
+            .get(group_idx)
+            .is_some_and(|entries| entries.len() > 1 || entries.first().is_some_and(|e| e.is_dir))
     }
 
     pub fn selected_index(&self) -> Option<usize> {

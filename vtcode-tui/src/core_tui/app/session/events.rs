@@ -548,9 +548,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if session.file_palette_visible() {
                 if let Some(palette) = session.file_palette.as_ref()
+                    && !palette.selected_is_expandable_group()
                     && let Some(entry) = palette.get_selected()
                 {
-                    let file_path = entry.path.clone();
+                    let file_path = entry.relative_path.clone();
                     session.insert_file_reference(&file_path);
                     session.close_file_palette();
                     session.mark_dirty();
