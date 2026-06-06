@@ -2,6 +2,39 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.1 - 2026-06-06
+
+### Highlights
+#### Bug Fixes
+
+- Resolve double escape functionality issue and improve response handling (da06eb28) 
+- Skip OS keyring during tests/CI to avoid Keychain prompts (a60f1721) 
+- Ensure deterministic hashing by sorting JSON object keys (38fe3afb) 
+#### Documentation
+
+- Enhance README with detailed command usage and workflows (62b2a576) 
+- Add sponsorship section with links and current sponsors (46b40322) 
+- Update feature and provider tables for clarity and consistency (1bc46f46) 
+- Add allocation optimization plan to eliminate redundant heap allocations (acc0a4ba) 
+#### Features
+
+- Add support for Nemotron 3 Ultra and Gemma 4 models with updated configurations (16e6026d) 
+### Other Changes
+#### Other
+
+- Audit and refactor  (9a26456c) (@vinhnx)
+- Update API key and image sizes in README.md (b7c60aa6) (@vinhnx)
+- Simplify quick start instructions for VT Code (3dff646f) (@vinhnx)
+- Add vtcode update command to README (974cfd25) (@vinhnx)
+- Enhance images in README with rounded corners; update TODO and configuration settings (87a81d8d) 
+- Refactor tool name handling to use CompactStr for improved memory efficiency (8c1c7a30) 
+- Add openrouter code generation and macros for string newtypes (b875258a) 
+- Implement core terminal functionality with screen management, input processing, and device reporting (ae290963) 
+#### Refactors
+
+- Improve file selection logic and scoring in file palette (8bd71623) 
+- Improve table rendering and wrapping logic (c67f9d26) 
+- Optimize table rendering logic and add space padding function (b56f3551) 
 ## 0.123.0 - 2026-06-05
 
 ### Highlights
