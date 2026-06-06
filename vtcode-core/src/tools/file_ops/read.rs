@@ -204,17 +204,7 @@ fn is_full_text_read(args: &Value, is_spool_output: bool) -> bool {
     !is_spool_output && !has_explicit_offset(args) && !has_explicit_limit(args)
 }
 
-fn restore_exact_text_content(content: &str, size_bytes: u64) -> Option<String> {
-    let content_size = content.len() as u64;
-    match size_bytes.checked_sub(content_size) {
-        Some(0) => Some(content.to_string()),
-        Some(1) => Some(format!("{content}\n")),
-        Some(2) if content.contains("\r\n") || !content.contains('\n') => {
-            Some(format!("{content}\r\n"))
-        }
-        _ => None,
-    }
-}
+use super::restore_exact_text_content;
 
 fn response_size_bytes(response: &Value) -> Option<u64> {
     response

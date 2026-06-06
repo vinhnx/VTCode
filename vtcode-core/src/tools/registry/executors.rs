@@ -95,20 +95,12 @@ fn annotate_exec_run_response(response: &mut Value, is_git_diff: bool) {
 }
 
 fn acquire_executor_rate_limit(bucket: &str, multiplier: f64) -> Result<()> {
-    #[cfg(test)]
-    {
-        let _ = (bucket, multiplier);
-        Ok(())
-    }
-    #[cfg(not(test))]
-    {
-        let mut guard = crate::tools::rate_limiter::PER_TOOL_RATE_LIMITER
-            .lock()
-            .map_err(|err| anyhow!("per-tool rate limiter poisoned: {}", err))?;
-        guard
-            .try_acquire_for_scaled(bucket, multiplier)
-            .map_err(|_| anyhow!("tool rate limit exceeded for {}", bucket))
-    }
+    let mut guard = crate::tools::rate_limiter::PER_TOOL_RATE_LIMITER
+        .lock()
+        .map_err(|err| anyhow!("per-tool rate limiter poisoned: {}", err))?;
+    guard
+        .try_acquire_for_scaled(bucket, multiplier)
+        .map_err(|_| anyhow!("tool rate limit exceeded for {}", bucket))
 }
 
 fn parse_action<T>(action_str: &str) -> Result<T>
@@ -117,6 +109,25 @@ where
 {
     serde_json::from_value(json!(action_str))
         .with_context(|| format!("Invalid action: {}", action_str))
+}
+
+/// Generate an executor that delegates to a cloned tool instance from the inventory.
+macro_rules! delegate_to_tool {
+    ($name:ident, $tool_accessor:ident, $method:ident) => {
+        pub(super) fn $name(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+            let tool = self.inventory.$tool_accessor().clone();
+            Box::pin(async move { tool.$method(args).await })
+        }
+    };
+}
+
+/// Generate an executor that delegates to an async method on `self`.
+macro_rules! delegate_to_self {
+    ($name:ident, $method:ident) => {
+        pub(super) fn $name(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+            Box::pin(async move { self.$method(args).await })
+        }
+    };
 }
 
 impl ToolRegistry {
@@ -756,24 +767,25 @@ impl ToolRegistry {
     // SPECIALIZED EXECUTORS (Hidden from LLM, used by unified tools)
     // ============================================================
 
-    pub(super) fn read_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.file_ops_tool().clone();
-        Box::pin(async move { tool.read_file(args).await })
-    }
+    // File operation executors -- delegate to the file_ops_tool from inventory
+    delegate_to_tool!(read_file_executor, file_ops_tool, read_file);
+    delegate_to_tool!(write_file_executor, file_ops_tool, write_file);
 
-    pub(super) fn list_files_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.list_files(args).await })
-    }
+    // Self-delegating executors -- forward to async methods on ToolRegistry
+    delegate_to_self!(list_files_executor, list_files);
+    delegate_to_self!(edit_file_executor, edit_file);
+    delegate_to_self!(get_errors_executor, execute_get_errors);
+    delegate_to_self!(mcp_search_tools_executor, execute_mcp_search_tools);
+    delegate_to_self!(mcp_get_tool_details_executor, execute_mcp_get_tool_details);
+    delegate_to_self!(mcp_list_servers_executor, execute_mcp_list_servers);
+    delegate_to_self!(mcp_connect_server_executor, execute_mcp_connect_server);
+    delegate_to_self!(
+        mcp_disconnect_server_executor,
+        execute_mcp_disconnect_server
+    );
+    delegate_to_self!(apply_patch_executor, execute_apply_patch);
 
-    pub(super) fn write_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.file_ops_tool().clone();
-        Box::pin(async move { tool.write_file(args).await })
-    }
-
-    pub(super) fn edit_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.edit_file(args).await })
-    }
-
+    // PTY executors -- distinct signatures, kept explicit
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         self.dispatch_unified_exec_run_alias(args, true)
     }
@@ -796,40 +808,6 @@ impl ToolRegistry {
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         self.dispatch_unified_exec_action_alias(args, "close")
-    }
-
-    pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_get_errors(args).await })
-    }
-
-    pub(super) fn mcp_search_tools_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_mcp_search_tools(args).await })
-    }
-
-    pub(super) fn mcp_get_tool_details_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_mcp_get_tool_details(args).await })
-    }
-
-    pub(super) fn mcp_list_servers_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_mcp_list_servers(args).await })
-    }
-
-    pub(super) fn mcp_connect_server_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_mcp_connect_server(args).await })
-    }
-
-    pub(super) fn mcp_disconnect_server_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_mcp_disconnect_server(args).await })
-    }
-
-    pub(super) fn apply_patch_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_apply_patch(args).await })
     }
 
     // ============================================================

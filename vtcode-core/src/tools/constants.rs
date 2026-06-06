@@ -93,3 +93,9 @@ pub const OVERFLOW_INDICATOR_SUFFIX: &str = "more items]";
 pub const MAX_FILE_SIZE_FOR_PROCESSING: usize = 100 * 1024 * 1024; // 100MB
 pub const MAX_CONTEXT_LINES: usize = 20;
 pub const MAX_OUTPUT_TOKENS: usize = 4000;
+
+/// Reusable empty JSON object schema `{"type": "object"}` for tool parameter definitions.
+/// Used by tools that accept no parameters or only optional parameters.
+pub fn empty_object_schema() -> serde_json::Value {
+    serde_json::json!({"type": "object"})
+}

@@ -62,7 +62,7 @@ impl ToolStats {
 }
 
 use crate::tools::circuit_breaker::CircuitBreaker;
-use crate::tools::validation::paths::validate_non_root_listing_path;
+use crate::tools::validation::paths::{validate_non_root_listing_path, validate_path_safety};
 use crate::utils::path::{normalize_path, resolve_workspace_path};
 
 /// Autonomous tool executor with safety checks.
@@ -70,6 +70,17 @@ use crate::utils::path::{normalize_path, resolve_workspace_path};
 /// In the unified interactive VT Code runloop, higher-level turn code owns
 /// user-visible loop recovery. The loop detector here remains a generic
 /// safeguard for legacy and non-unified autonomous execution paths.
+///
+/// # Rate Limiting
+///
+/// This executor maintains its own sliding-window rate limiter (`rate_history`)
+/// for **policy decisions** (auto-execute vs require confirmation). It does NOT
+/// consume tokens -- it only checks whether the tool has been called too
+/// frequently in the recent window.
+///
+/// The separate `PER_TOOL_RATE_LIMITER` (token-bucket) in `rate_limiter.rs`
+/// handles **execution blocking** at the executor level. The `SafetyGateway`
+/// rate limiter is disabled by the runloop in favor of these two systems.
 pub struct AutonomousExecutor {
     verification_tools: HashSet<String>,
     loop_detector: Arc<RwLock<LoopDetector>>,
@@ -328,11 +339,17 @@ impl AutonomousExecutor {
         Ok(())
     }
 
-    /// Validate file path is within workspace boundaries
+    /// Validate file path is within workspace boundaries.
+    ///
+    /// First checks for sensitive system paths via `validate_path_safety`,
+    /// then enforces workspace boundary constraints.
     fn validate_file_path(&self, path: Option<&Value>) -> Result<()> {
         let path_str = path
             .and_then(|v| v.as_str())
             .context("Missing or invalid 'path' argument")?;
+
+        // Check for sensitive system paths (e.g., /var/db/shadow, /etc/shadow)
+        validate_path_safety(path_str)?;
 
         let path_obj = Path::new(path_str);
 

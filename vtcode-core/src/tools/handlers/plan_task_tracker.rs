@@ -5,6 +5,7 @@
 
 use super::plan_mode::{PlanModeState, sync_tracker_into_plan_file};
 use crate::config::constants::tools;
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::handlers::task_tracking::{
     TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
     append_notes_section, append_task_step_metadata, is_bulk_sync_update, metadata_from_input,
@@ -872,9 +873,7 @@ impl PlanTaskTrackerTool {
 #[async_trait]
 impl Tool for PlanTaskTrackerTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: PlanTaskTrackerArgs = serde_json::from_value(args).context(
-            "Invalid plan_task_tracker arguments. Required: {\"action\": \"create|update|list|add\", ...}",
-        )?;
+        let args: PlanTaskTrackerArgs = deserialize_tool_args(&args, "plan_task_tracker")?;
 
         match args.action.as_str() {
             "create" => self.handle_create(&args).await,

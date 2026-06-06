@@ -10,6 +10,7 @@ use tokio::process::Command;
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::editing::patch::resolve_ast_grep_binary_path;
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::tree_sitter_runtime::parse_source;
 use crate::utils::path::{canonicalize_allow_missing, normalize_path, resolve_workspace_path};
 
@@ -179,8 +180,7 @@ impl StructuralSearchRequest {
     fn from_args(args: &Value) -> Result<Self> {
         reject_forbidden_args(args)?;
 
-        let mut request: Self =
-            serde_json::from_value(args.clone()).context("invalid structural search args")?;
+        let mut request: Self = deserialize_tool_args(args, "structural_search")?;
         request.normalize();
         request.validate()?;
 

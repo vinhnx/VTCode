@@ -210,10 +210,13 @@ impl UnifiedToolError {
     }
 }
 
-/// Classify an anyhow::Error into a UnifiedErrorKind.
+/// Classify an `anyhow::Error` into a `UnifiedErrorKind`.
 ///
-/// Delegates to the shared `ErrorCategory` classifier for consistency,
-/// then converts the result to the `UnifiedErrorKind` type.
+/// This is the crate-level error classifier. The registry-level equivalent is
+/// `registry::error::classify_error` which produces `ToolErrorType`. Both delegate
+/// to `vtcode_commons::classify_anyhow_error` and convert to their respective types.
+/// `UnifiedErrorKind` is used by the crate-level error envelope (`UnifiedToolError`);
+/// `ToolErrorType` is used by the registry execution facade for retry semantics.
 #[cold]
 pub fn classify_error(err: &anyhow::Error) -> UnifiedErrorKind {
     let category = vtcode_commons::classify_anyhow_error(err);

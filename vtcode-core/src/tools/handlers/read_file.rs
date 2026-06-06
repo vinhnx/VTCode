@@ -14,6 +14,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Semaphore;
 use vtcode_commons::diff_paths::looks_like_diff_content;
 
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::traits::Tool;
 use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 
@@ -517,14 +518,12 @@ impl Tool for ReadFileHandler {
     async fn execute(&self, args: Value) -> Result<Value> {
         // Try batch mode first (has "reads" field)
         if args.get("reads").is_some() {
-            let batch_args: BatchReadArgs =
-                serde_json::from_value(args).context("failed to parse batch read arguments")?;
+            let batch_args: BatchReadArgs = deserialize_tool_args(&args, "read_file")?;
             return self.handle_batch(batch_args).await;
         }
 
         // Legacy single-file mode
-        let args: ReadFileArgs =
-            serde_json::from_value(args).context("failed to parse read_file arguments")?;
+        let args: ReadFileArgs = deserialize_tool_args(&args, "read_file")?;
 
         let file_path = args.file_path.clone();
         let content = self.handle_detailed(args).await?.content;

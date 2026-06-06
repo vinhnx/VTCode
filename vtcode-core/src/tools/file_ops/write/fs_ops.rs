@@ -1,5 +1,5 @@
 use super::FileOpsTool;
-use crate::tools::error_helpers::{with_file_context, with_path_context};
+use crate::tools::error_helpers::{deserialize_tool_args, with_file_context, with_path_context};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{CopyInput, CreateInput, DeleteInput, MoveInput};
 use crate::utils::file_utils::ensure_dir_exists;
@@ -8,14 +8,47 @@ use serde_json::{Value, json};
 use tracing::info;
 
 impl FileOpsTool {
+    /// Shared validation for move and copy operations.
+    ///
+    /// Validates source and destination paths, checks exclusion rules,
+    /// verifies source existence, and ensures the destination parent directory exists.
+    async fn validate_move_copy_args(
+        &self,
+        path: &str,
+        destination: &str,
+        operation: &str,
+    ) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
+        let from_path = self.normalize_and_validate_user_path(path).await?;
+        let to_path = self.normalize_and_validate_user_path(destination).await?;
+
+        if self.should_exclude(&from_path).await {
+            return Err(anyhow!(
+                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be {}.",
+                path,
+                operation
+            ));
+        }
+        if self.should_exclude(&to_path).await {
+            return Err(anyhow!(
+                "Error: Destination '{}' is excluded by .vtcodegitignore.",
+                destination
+            ));
+        }
+
+        if !tokio::fs::try_exists(&from_path).await? {
+            return Err(anyhow!("Source path '{}' does not exist", path));
+        }
+
+        if let Some(parent) = to_path.parent() {
+            ensure_dir_exists(parent).await?;
+        }
+
+        Ok((from_path, to_path))
+    }
+
     /// Execute basic directory listing
     pub async fn create_file(&self, args: Value) -> Result<Value> {
-        let input: CreateInput = serde_json::from_value(args.clone()).map_err(|error| {
-            anyhow!(
-                "Error: Invalid 'create_file' arguments. Provide an object like {{\"path\": \"src/lib.rs\", \"content\": \"fn main() {{}}\\n\"}} with optional \"encoding\". Deserialization failed: {}",
-                error
-            )
-        })?;
+        let input: CreateInput = deserialize_tool_args(&args, "create_file")?;
 
         let CreateInput {
             path,
@@ -64,9 +97,7 @@ impl FileOpsTool {
 
     /// Delete a file or directory (with recursive flag).
     pub async fn delete_file(&self, args: Value) -> Result<Value> {
-        let input: DeleteInput = serde_json::from_value(args).context(
-            "Error: Invalid 'delete_file' arguments. Expected JSON object with: path (required, string). Optional: recursive (bool), force (bool). Example: {\"path\": \"src/lib.rs\"}",
-        )?;
+        let input: DeleteInput = deserialize_tool_args(&args, "delete_file")?;
 
         let DeleteInput {
             path,
@@ -158,9 +189,7 @@ impl FileOpsTool {
 
     /// Move a file or directory.
     pub async fn move_file(&self, args: Value) -> Result<Value> {
-        let input: MoveInput = serde_json::from_value(args).context(
-            "Error: Invalid 'move_file' arguments. Expected JSON object with: path (required, string), destination (required, string).",
-        )?;
+        let input: MoveInput = deserialize_tool_args(&args, "move_file")?;
 
         let MoveInput {
             path,
@@ -168,36 +197,15 @@ impl FileOpsTool {
             force,
         } = input;
 
-        let from_path = self.normalize_and_validate_user_path(&path).await?;
-        let to_path = self.normalize_and_validate_user_path(&destination).await?;
-
-        if self.should_exclude(&from_path).await {
-            return Err(anyhow!(
-                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be moved.",
-                path
-            ));
-        }
-        if self.should_exclude(&to_path).await {
-            return Err(anyhow!(
-                "Error: Destination '{}' is excluded by .vtcodegitignore.",
-                destination
-            ));
-        }
-
-        if !tokio::fs::try_exists(&from_path).await? {
-            return Err(anyhow!("Source path '{}' does not exist", path));
-        }
+        let (from_path, to_path) = self
+            .validate_move_copy_args(&path, &destination, "moved")
+            .await?;
 
         if tokio::fs::try_exists(&to_path).await? && !force {
             return Err(anyhow!(
                 "Destination path '{}' already exists. Use force=true to overwrite.",
                 destination
             ));
-        }
-
-        // Ensure destination parent directory exists
-        if let Some(parent) = to_path.parent() {
-            ensure_dir_exists(parent).await?;
         }
 
         tokio::fs::rename(&from_path, &to_path)
@@ -215,9 +223,7 @@ impl FileOpsTool {
 
     /// Copy a file or directory.
     pub async fn copy_file(&self, args: Value) -> Result<Value> {
-        let input: CopyInput = serde_json::from_value(args).context(
-            "Error: Invalid 'copy_file' arguments. Expected JSON object with: path (required, string), destination (required, string). Optional: recursive (bool).",
-        )?;
+        let input: CopyInput = deserialize_tool_args(&args, "copy_file")?;
 
         let CopyInput {
             path,
@@ -225,30 +231,9 @@ impl FileOpsTool {
             recursive,
         } = input;
 
-        let from_path = self.normalize_and_validate_user_path(&path).await?;
-        let to_path = self.normalize_and_validate_user_path(&destination).await?;
-
-        if self.should_exclude(&from_path).await {
-            return Err(anyhow!(
-                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be copied.",
-                path
-            ));
-        }
-        if self.should_exclude(&to_path).await {
-            return Err(anyhow!(
-                "Error: Destination '{}' is excluded by .vtcodegitignore.",
-                destination
-            ));
-        }
-
-        if !tokio::fs::try_exists(&from_path).await? {
-            return Err(anyhow!("Source path '{}' does not exist", path));
-        }
-
-        // Ensure destination parent directory exists
-        if let Some(parent) = to_path.parent() {
-            ensure_dir_exists(parent).await?;
-        }
+        let (from_path, to_path) = self
+            .validate_move_copy_args(&path, &destination, "copied")
+            .await?;
 
         let metadata = tokio::fs::metadata(&from_path).await?;
         if metadata.is_dir() {

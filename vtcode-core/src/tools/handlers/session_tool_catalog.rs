@@ -714,6 +714,7 @@ pub(crate) use vtcode_utility_tool_specs::{
 mod tests {
     use super::*;
     use crate::config::VTCodeConfig;
+    use crate::tools::constants::empty_object_schema;
     use crate::tools::registry::ToolRegistration;
     use crate::tools::request_user_input::RequestUserInputTool;
     use crate::tools::tool_intent::{ToolBehavior, ToolMutationModel};
@@ -732,7 +733,7 @@ mod tests {
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
@@ -750,7 +751,7 @@ mod tests {
     fn schema_entries_hide_request_user_input_when_disabled() {
         let registration = registration(tools::REQUEST_USER_INPUT)
             .with_description("Ask the user")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         let names = catalog.public_tool_names(SessionToolsConfig {
@@ -771,7 +772,7 @@ mod tests {
     fn plan_task_tracker_stays_visible_outside_plan_mode() {
         let registration = registration(tools::PLAN_TASK_TRACKER)
             .with_description("Track plan tasks")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         let names = catalog.public_tool_names(SessionToolsConfig {
@@ -792,7 +793,7 @@ mod tests {
     fn memory_tool_is_hidden_unless_anthropic_native_memory_is_enabled() {
         let registration = registration(tools::MEMORY)
             .with_description("Native memory")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
 
         let hidden = catalog.public_tool_names(SessionToolsConfig::full_public(
@@ -819,7 +820,7 @@ mod tests {
     fn memory_tool_uses_anthropic_native_definition_when_visible() {
         let registration = registration(tools::MEMORY)
             .with_description("Native memory")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
 
         let definitions = catalog.model_tools(
@@ -934,7 +935,7 @@ mod tests {
     fn parallel_support_comes_from_behavior_metadata() {
         let registration = registration("parallel_catalog_tool")
             .with_description("parallel-safe test tool")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_behavior(ToolBehavior::function(
                 ToolMutationModel::ReadOnly,
                 true,
@@ -996,7 +997,7 @@ mod tests {
     fn anthropic_policy_injects_tool_search_and_defers_non_core_tools() {
         let unified_search = registration(tools::UNIFIED_SEARCH)
             .with_description("Search")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
         let apply_patch = registration(tools::APPLY_PATCH)
             .with_llm_visibility(false)
             .with_description("Apply patch")
@@ -1010,7 +1011,7 @@ mod tests {
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
         let mut registrations = vec![unified_search, apply_patch, mcp_tool];
@@ -1023,7 +1024,7 @@ mod tests {
                     .with_catalog_source(ToolCatalogSource::Mcp)
                     .with_llm_visibility(false)
                     .with_description(format!("resolve docs {index}"))
-                    .with_parameter_schema(json!({"type":"object"}))
+                    .with_parameter_schema(empty_object_schema())
                     .with_aliases([alias]),
             );
         }
@@ -1071,12 +1072,12 @@ mod tests {
     fn openai_policy_injects_tool_search_for_large_catalogs() {
         let unified_search = registration(tools::UNIFIED_SEARCH)
             .with_description("Search")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
         let mcp_tool = registration("mcp::context7::search")
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
         let mut registrations = vec![unified_search, mcp_tool];
@@ -1089,7 +1090,7 @@ mod tests {
                     .with_catalog_source(ToolCatalogSource::Mcp)
                     .with_llm_visibility(false)
                     .with_description(format!("resolve docs {index}"))
-                    .with_parameter_schema(json!({"type":"object"}))
+                    .with_parameter_schema(empty_object_schema())
                     .with_aliases([alias]),
             );
         }
@@ -1134,13 +1135,13 @@ mod tests {
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
         let second_mcp_tool = registration("mcp::context7::resolve")
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("resolve docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__resolve"]);
 
         let catalog =
@@ -1181,11 +1182,11 @@ mod tests {
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
         let dynamic_tool = registration("dynamic_skill_tool")
             .with_description("dynamic skill tool")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![mcp_tool, dynamic_tool]);
         let definitions = catalog.model_tools(
@@ -1218,12 +1219,12 @@ mod tests {
     fn unsupported_providers_keep_catalog_eager() {
         let unified_search = registration(tools::UNIFIED_SEARCH)
             .with_description("Search")
-            .with_parameter_schema(json!({"type":"object"}));
+            .with_parameter_schema(empty_object_schema());
         let mcp_tool = registration("mcp::context7::search")
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
             .with_description("search docs")
-            .with_parameter_schema(json!({"type":"object"}))
+            .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
         let catalog =

@@ -89,6 +89,33 @@ pub fn shell_string_might_be_dangerous(command: &str) -> bool {
     !fallback_tokens.is_empty() && command_might_be_dangerous(&fallback_tokens)
 }
 
+/// Validates that a command is safe to execute.
+///
+/// Combines the centralized dangerous-command detector with injection pattern
+/// detection and additional dangerous-pattern checks (wget, curl, rmdir, etc.).
+/// This is the single entry point for command safety validation.
+pub fn validate_command_safety(command: &str) -> anyhow::Result<()> {
+    use anyhow::bail;
+
+    if command.len() < 3 {
+        return Ok(());
+    }
+
+    let segments = shell_parser::split_shell_segments(command)?;
+
+    if shell_string_might_be_dangerous(command) {
+        bail!("Potential dangerous command detected");
+    }
+
+    for segment in segments {
+        if let Some(pattern) = shell_parser::additional_dangerous_pattern(&segment) {
+            bail!("Potential dangerous command: {pattern}");
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

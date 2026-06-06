@@ -14,6 +14,7 @@ use crate::utils::path::resolve_workspace_path;
 
 use crate::config::constants::tools;
 use crate::tools::edited_file_monitor::{FILE_CONFLICT_OVERRIDE_ARG, conflict_override_snapshot};
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::traits::Tool;
 use crate::tools::types::EditInput;
@@ -223,8 +224,7 @@ impl ToolRegistry {
     }
 
     pub async fn edit_file(&self, args: Value) -> Result<Value> {
-        let input: EditInput =
-            serde_json::from_value(args.clone()).context("invalid edit_file args")?;
+        let input: EditInput = deserialize_tool_args(&args, "edit_file")?;
         let override_snapshot = conflict_override_snapshot(&args);
 
         let (effective_old_str, stripped_old) = strip_line_prefixes(&input.old_str);

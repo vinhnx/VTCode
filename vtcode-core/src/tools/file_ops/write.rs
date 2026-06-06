@@ -6,6 +6,7 @@ use crate::config::constants::diff;
 use crate::config::constants::tools;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::edited_file_monitor::conflict_override_snapshot;
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::traits::FileTool;
 use crate::tools::types::WriteInput;
 use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context};
@@ -57,8 +58,7 @@ impl FileOpsTool {
         args: Value,
         acquire_mutation: bool,
     ) -> Result<Value> {
-        let input: WriteInput = serde_json::from_value(args.clone())
-            .context("Error: Invalid 'write_file' arguments. Expected JSON object with: path (required, string), content (required, string). Optional: mode (string, one of: overwrite, append, skip_if_exists). Example: {\"path\": \"README.md\", \"content\": \"Hello\", \"mode\": \"overwrite\"}")?;
+        let input: WriteInput = deserialize_tool_args(&args, "write_file")?;
         let override_snapshot = conflict_override_snapshot(&args);
 
         let file_path = self.normalize_and_validate_user_path(&input.path).await?;

@@ -391,3 +391,149 @@ mod tests {
         prewarm_bash_parser().expect("bash parser should initialize");
     }
 }
+
+// === Injection detection (moved from tools::validation::commands) ===
+
+use anyhow::{Result, bail};
+
+/// Quote state for shell segment splitting.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum QuoteState {
+    None,
+    Single,
+    Double,
+}
+
+/// Split a shell command into segments on unquoted `|` and `&` boundaries,
+/// while detecting injection patterns (`;`, backticks, `$()`, newlines).
+pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
+    let mut segments = Vec::new();
+    let mut state = QuoteState::None;
+    let mut escaped = false;
+    let mut segment_start = 0usize;
+    let mut chars = command.char_indices().peekable();
+
+    while let Some((idx, ch)) = chars.next() {
+        match state {
+            QuoteState::Single => {
+                if ch == '\'' {
+                    state = QuoteState::None;
+                }
+            }
+            QuoteState::Double => {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => state = QuoteState::None,
+                    '`' => bail!("Command injection pattern detected"),
+                    '$' if matches!(chars.peek(), Some((_, '('))) => {
+                        bail!("Command injection pattern detected");
+                    }
+                    _ => {}
+                }
+            }
+            QuoteState::None => {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+
+                match ch {
+                    '\\' => escaped = true,
+                    '\'' => state = QuoteState::Single,
+                    '"' => state = QuoteState::Double,
+                    '`' => bail!("Command injection pattern detected"),
+                    '$' if matches!(chars.peek(), Some((_, '('))) => {
+                        bail!("Command injection pattern detected");
+                    }
+                    ';' => bail!("Unquoted command chaining detected"),
+                    '\n' => bail!("Command injection pattern detected"),
+                    '|' | '&' => {
+                        push_segment(command, segment_start, idx, &mut segments);
+                        segment_start = idx + ch.len_utf8();
+                        if let Some((next_idx, next_ch)) = chars.peek().copied()
+                            && next_ch == ch
+                        {
+                            chars.next();
+                            segment_start = next_idx + next_ch.len_utf8();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    push_segment(command, segment_start, command.len(), &mut segments);
+    Ok(segments)
+}
+
+fn push_segment(command: &str, start: usize, end: usize, segments: &mut Vec<String>) {
+    let segment = command[start..end].trim();
+    if !segment.is_empty() {
+        segments.push(segment.to_string());
+    }
+}
+
+/// Check for additional dangerous patterns not covered by the central dangerous-command detector.
+pub(crate) fn additional_dangerous_pattern(segment: &str) -> Option<&'static str> {
+    let segment_lower = segment.to_ascii_lowercase();
+    if segment_lower.starts_with(":(){:|:&};:") {
+        return Some(":(){:|:&};:");
+    }
+
+    let tokens = shell_words::split(segment).unwrap_or_else(|_| {
+        segment
+            .split_whitespace()
+            .map(ToString::to_string)
+            .collect()
+    });
+    let first = tokens.first()?;
+    let command_name = base_command_name(strip_wrapping_quotes(first)).to_ascii_lowercase();
+
+    match command_name.as_str() {
+        "rmdir" => Some("rmdir"),
+        "wget" => Some("wget"),
+        "curl" => Some("curl"),
+        "chmod"
+            if tokens
+                .iter()
+                .skip(1)
+                .any(|arg| strip_wrapping_quotes(arg).starts_with("777")) =>
+        {
+            Some("chmod 777")
+        }
+        "chown"
+            if tokens.iter().skip(1).any(|arg| {
+                let arg = strip_wrapping_quotes(arg).to_ascii_lowercase();
+                arg == "root" || arg.starts_with("root:")
+            }) =>
+        {
+            Some("chown root")
+        }
+        _ => None,
+    }
+}
+
+fn strip_wrapping_quotes(token: &str) -> &str {
+    token
+        .strip_prefix('\'')
+        .and_then(|token| token.strip_suffix('\''))
+        .or_else(|| {
+            token
+                .strip_prefix('"')
+                .and_then(|token| token.strip_suffix('"'))
+        })
+        .unwrap_or(token)
+}
+
+fn base_command_name(command: &str) -> &str {
+    std::path::Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command)
+}

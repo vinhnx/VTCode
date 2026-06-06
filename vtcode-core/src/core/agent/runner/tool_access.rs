@@ -2,23 +2,12 @@ use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
+use crate::tools::file_ops::restore_exact_text_content;
 use crate::tools::registry::{ExecutionPolicySnapshot, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
 use anyhow::Result;
 use serde_json::Value;
 use tracing::info;
-
-fn restore_exact_text_content(content: &str, size_bytes: u64) -> Option<String> {
-    let content_size = content.len() as u64;
-    match size_bytes.checked_sub(content_size) {
-        Some(0) => Some(content.to_string()),
-        Some(1) => Some(format!("{content}\n")),
-        Some(2) if content.contains("\r\n") || !content.contains('\n') => {
-            Some(format!("{content}\r\n"))
-        }
-        _ => None,
-    }
-}
 
 fn restore_exact_file_read_output(mut output: Value) -> Value {
     let Some(obj) = output.as_object_mut() else {

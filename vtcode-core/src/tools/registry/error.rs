@@ -405,8 +405,10 @@ impl std::error::Error for ToolExecutionError {}
 
 /// Classify an `anyhow::Error` into a `ToolErrorType`.
 ///
-/// Delegates to the shared `ErrorCategory` classifier and converts the result
-/// to preserve backward compatibility with existing callers.
+/// This is the registry-level error classifier used by the execution facade for
+/// retry semantics. The crate-level equivalent is `unified_error::classify_error`
+/// which produces `UnifiedErrorKind`. Both delegate to the same underlying
+/// `vtcode_commons::classify_anyhow_error` and convert to their respective types.
 pub fn classify_error(error: &Error) -> ToolErrorType {
     let category = vtcode_commons::classify_anyhow_error(error);
     ToolErrorType::from(category)

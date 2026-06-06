@@ -133,7 +133,13 @@ impl IncrementalSystemPrompt {
         new_content
     }
 
-    /// Actually build the prompt content (this is where the logic goes)
+    /// Build the full system prompt content.
+    ///
+    /// Assembly order:
+    /// 1. Base system prompt (from `vtcode_core::prompts::system`)
+    /// 2. Instruction appendix (from AGENTS.md / project docs)
+    /// 3. Runtime mode sections (plan mode, auto mode, request_user_input)
+    /// 4. Auto-mode notice (if auto_mode && !plan_mode)
     async fn build_prompt_content(
         &self,
         base_system_prompt: &str,

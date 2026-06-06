@@ -8,6 +8,7 @@ use crate::config::loader::VTCodeConfig;
 use crate::persistent_memory::{
     rebuild_generated_memory_files, resolve_persistent_memory_dir, scaffold_persistent_memory,
 };
+use crate::tools::error_helpers::deserialize_tool_args;
 
 const MEMORIES_ROOT: &str = "/memories";
 
@@ -96,8 +97,7 @@ pub async fn execute(
     config: &PersistentMemoryConfig,
     args: Value,
 ) -> Result<Value> {
-    let request: NativeMemoryRequest =
-        serde_json::from_value(args).context("Invalid memory tool arguments")?;
+    let request: NativeMemoryRequest = deserialize_tool_args(&args, "memory")?;
     let root = prepare_root(workspace_root, config).await?;
     let output = execute_request(&root, workspace_root, config, request).await?;
     Ok(Value::String(output))

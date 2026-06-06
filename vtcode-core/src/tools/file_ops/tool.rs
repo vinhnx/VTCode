@@ -2,13 +2,14 @@
 
 use crate::config::constants::tools;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
+use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use crate::tools::types::{ListInput, PathArgs};
 use crate::tools::validation::paths::validate_non_root_listing_path;
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -95,9 +96,7 @@ impl FileOpsTool {
 #[async_trait]
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let mut input: ListInput = serde_json::from_value(args.clone()).context(
-            "Error: Invalid 'list_files' arguments. Expected JSON object with: path (required, string). Optional: mode (string), max_items (number), page (number), per_page (number), include_hidden (bool), response_format (string). Example: {\"path\": \"src\", \"page\": 1, \"per_page\": 50, \"response_format\": \"concise\"}",
-        )?;
+        let mut input: ListInput = deserialize_tool_args(&args, "list_files")?;
 
         // Standard path extraction from args (handles aliases)
         let path_args: PathArgs = serde_json::from_value(args).unwrap_or(PathArgs {

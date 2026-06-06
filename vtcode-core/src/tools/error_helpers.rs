@@ -63,3 +63,15 @@ pub fn require_int_field(args: &serde_json::Value, field: &str, tool_name: &str)
 pub fn require_field<T>(value: Option<T>, field: &str, tool_name: &str) -> Result<T> {
     value.ok_or_else(|| anyhow::anyhow!("{field} is required for {tool_name}"))
 }
+
+/// Deserialize JSON tool arguments into a typed struct with a consistent error message.
+///
+/// Replaces the repeated pattern of `serde_json::from_value(args).context("Error: Invalid 'X' arguments...")`
+/// scattered across tool implementations.
+pub fn deserialize_tool_args<T: serde::de::DeserializeOwned>(
+    args: &serde_json::Value,
+    tool_name: &str,
+) -> Result<T> {
+    serde_json::from_value(args.clone())
+        .map_err(|e| anyhow::anyhow!("Error: Invalid '{}' arguments: {}", tool_name, e))
+}
