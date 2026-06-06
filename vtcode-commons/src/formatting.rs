@@ -74,7 +74,7 @@ pub fn truncate_within(text: &str, max_len: usize, ellipsis: &str) -> String {
 ///
 /// Returns `(text, was_truncated)`. When the budget is too small to fit the
 /// marker plus meaningful context, falls back to a head-only prefix with a
-/// ` [truncated]` suffix.
+/// ` [truncated]` suffix, respecting the `max_chars` budget.
 ///
 /// ```
 /// # use vtcode_commons::formatting::head_tail_truncate;
@@ -83,6 +83,8 @@ pub fn truncate_within(text: &str, max_len: usize, ellipsis: &str) -> String {
 /// assert!(!truncated);
 /// ```
 pub fn head_tail_truncate(value: &str, max_chars: usize, marker: &str) -> (String, bool) {
+    const SUFFIX: &str = " [truncated]";
+
     let total_chars = value.chars().count();
     if total_chars <= max_chars {
         return (value.to_string(), false);
@@ -90,8 +92,15 @@ pub fn head_tail_truncate(value: &str, max_chars: usize, marker: &str) -> (Strin
 
     let marker_chars = marker.chars().count();
     if max_chars <= marker_chars + 16 {
-        let mut truncated = value.chars().take(max_chars).collect::<String>();
-        truncated.push_str(" [truncated]");
+        let suffix_len = SUFFIX.chars().count();
+        let truncated = if max_chars > suffix_len {
+            let available = max_chars - suffix_len;
+            let mut result = value.chars().take(available).collect::<String>();
+            result.push_str(SUFFIX);
+            result
+        } else {
+            value.chars().take(max_chars).collect::<String>()
+        };
         return (truncated, true);
     }
 
@@ -322,9 +331,18 @@ mod tests {
     fn head_tail_truncate_small_budget_falls_back_to_prefix() {
         let marker = " ... [truncated] ... ";
         // max_chars <= marker_chars + 16 triggers the prefix fallback.
+        // When max_chars (5) <= suffix_len (12), return just the prefix without suffix.
         let (out, truncated) = head_tail_truncate("abcdefghij", 5, marker);
         assert!(truncated);
-        assert_eq!(out, "abcde [truncated]");
+        assert_eq!(out, "abcde");
+        
+        // When max_chars allows room for suffix, include it in the fallback branch.
+        // Use max_chars=17 which is <= 21+16=37 (triggers fallback).
+        let long_text = "abcdefghijklmnopqrstuvwxyz";
+        let (out2, truncated2) = head_tail_truncate(long_text, 17, marker);
+        assert!(truncated2);
+        assert_eq!(out2, "abcde [truncated]");
+        assert_eq!(out2.chars().count(), 17);
     }
 
     #[test]
