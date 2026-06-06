@@ -245,14 +245,7 @@ impl SnapshotManager {
 
     fn truncate_description(description: &str) -> String {
         let first_line = description.lines().next().unwrap_or("").trim();
-        if first_line.chars().count() <= MAX_DESCRIPTION_LEN {
-            return first_line.to_string();
-        }
-        first_line
-            .chars()
-            .take(MAX_DESCRIPTION_LEN.saturating_sub(1))
-            .chain(std::iter::once('…'))
-            .collect()
+        vtcode_commons::formatting::truncate_within(first_line, MAX_DESCRIPTION_LEN, "…")
     }
 
     fn derive_prompt_metadata(conversation: &[SessionMessage]) -> (Option<String>, Option<usize>) {

@@ -174,11 +174,16 @@ fn build_denial_reason_from_output(output: Option<&str>) -> String {
 /// Truncate output for display
 fn truncate_output(output: &str) -> &str {
     const MAX_LEN: usize = 500;
-    if output.len() > MAX_LEN {
-        &output[..MAX_LEN]
-    } else {
-        output
+    if output.len() <= MAX_LEN {
+        return output;
     }
+    // Round down to the nearest UTF-8 char boundary so non-ASCII output
+    // (e.g. command stderr) never panics on a mid-codepoint byte slice.
+    let mut end = MAX_LEN;
+    while !output.is_char_boundary(end) {
+        end -= 1;
+    }
+    &output[..end]
 }
 
 #[cfg(test)]
@@ -376,6 +381,12 @@ mod tests {
 
         let long = "a".repeat(1000);
         assert_eq!(truncate_output(&long).len(), 500);
+
+        // Multi-byte chars must not panic and must stay within the byte budget.
+        let multibyte = "あ".repeat(1000); // 3 bytes each
+        let truncated = truncate_output(&multibyte);
+        assert!(truncated.len() <= 500);
+        assert!(multibyte.starts_with(truncated));
     }
 
     #[tokio::test]

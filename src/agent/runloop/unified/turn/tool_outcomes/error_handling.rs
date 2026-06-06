@@ -31,32 +31,8 @@ pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
 }
 
 pub(super) fn truncate_text_for_model(value: &str, max_chars: usize) -> (String, bool) {
-    let total_chars = value.chars().count();
-    if total_chars <= max_chars {
-        return (value.to_string(), false);
-    }
-
     const MARKER: &str = " ... [truncated] ... ";
-    let marker_chars = MARKER.chars().count();
-    if max_chars <= marker_chars + 16 {
-        let mut truncated = value.chars().take(max_chars).collect::<String>();
-        truncated.push_str(" [truncated]");
-        return (truncated, true);
-    }
-
-    let available = max_chars.saturating_sub(marker_chars);
-    let head_chars = (available * 2) / 3;
-    let tail_chars = available.saturating_sub(head_chars);
-    let head = value.chars().take(head_chars).collect::<String>();
-    let tail = value
-        .chars()
-        .skip(total_chars.saturating_sub(tail_chars))
-        .collect::<String>();
-    let mut truncated = String::with_capacity(max_chars + 20);
-    truncated.push_str(&head);
-    truncated.push_str(MARKER);
-    truncated.push_str(&tail);
-    (truncated, true)
+    vtcode_commons::formatting::head_tail_truncate(value, max_chars, MARKER)
 }
 
 fn compact_json_preview(serialized: &str, max_chars: usize) -> String {

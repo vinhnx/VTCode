@@ -271,7 +271,10 @@ impl EvolinkProvider {
         Ok(Value::Object(payload))
     }
 
-    fn parse_anthropic_response(response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
+    fn parse_anthropic_response(
+        response_json: Value,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
         let content = response_json
             .get("content")
             .and_then(|c| c.as_array())
@@ -291,7 +294,8 @@ impl EvolinkProvider {
 
         let usage = response_json.get("usage").map(|u| {
             let prompt_tokens = u.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
-            let completion_tokens = u.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
+            let completion_tokens =
+                u.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
             crate::llm::provider::Usage {
                 prompt_tokens,
                 completion_tokens,
@@ -308,10 +312,7 @@ impl EvolinkProvider {
             }
         });
 
-        let finish_reason = match response_json
-            .get("stop_reason")
-            .and_then(|r| r.as_str())
-        {
+        let finish_reason = match response_json.get("stop_reason").and_then(|r| r.as_str()) {
             Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
             Some("max_tokens") => FinishReason::Length,
             Some("tool_use") => FinishReason::ToolCalls,
