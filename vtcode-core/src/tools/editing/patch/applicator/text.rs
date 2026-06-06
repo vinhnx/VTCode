@@ -242,7 +242,10 @@ fn render_patched_content(
     line_ending: LineEnding,
 ) -> String {
     let ending = line_ending.as_str();
-    let mut rendered = String::new();
+    let estimated_capacity = original_lines.iter().map(|l| l.len()).sum::<usize>()
+        + original_lines.len().saturating_sub(1) * ending.len()
+        + ending.len();
+    let mut rendered = String::with_capacity(estimated_capacity);
     let mut current_idx = 0usize;
     let mut first = true;
 
@@ -291,6 +294,7 @@ pub(super) async fn write_patched_content(
     let mut current_idx = 0;
     let ending = line_ending.as_str();
     let mut first = true;
+    let mut last_line_was_empty = false;
 
     for (start_idx, old_len, new_segment) in replacements {
         // Write lines before the replacement
@@ -300,6 +304,7 @@ pub(super) async fn write_patched_content(
             }
             writer.write_all(line.as_bytes()).await?;
             first = false;
+            last_line_was_empty = line.is_empty();
         }
         // Write the replacement lines
         for line in new_segment {
@@ -308,6 +313,7 @@ pub(super) async fn write_patched_content(
             }
             writer.write_all(line.as_bytes()).await?;
             first = false;
+            last_line_was_empty = line.is_empty();
         }
         current_idx = start_idx + old_len;
     }
@@ -319,9 +325,13 @@ pub(super) async fn write_patched_content(
         }
         writer.write_all(line.as_bytes()).await?;
         first = false;
+        last_line_was_empty = line.is_empty();
     }
 
-    if ensure_trailing_newline {
+    // Only add a trailing ending if the content does not already end with one.
+    // When the last written line is empty, the separator written before it
+    // already produces a trailing ending, mirroring render_patched_content.
+    if ensure_trailing_newline && !last_line_was_empty {
         writer.write_all(ending.as_bytes()).await?;
     }
 

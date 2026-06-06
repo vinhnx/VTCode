@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="520" />
+  <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="520" style="border-radius: 10px" />
 
   <p><strong>A Rust terminal coding agent with safe workspace tools, multi-provider LLM support, and open protocol integrations.</strong></p>
 
@@ -12,7 +12,7 @@
     <a href="https://deepwiki.com/vinhnx/VTCode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
   </p>
 
-  <img src="./resources/gif/vtcode.gif" alt="VT Code demo" />
+  <img src="./resources/gif/vtcode.gif" alt="VT Code demo" style="border-radius: 10px" />
 </div>
 
 ## Quick start
@@ -320,14 +320,14 @@ For detailed setup guides, see [Provider Guides](./docs/providers/PROVIDER_GUIDE
 > VT Code is happy to be part of the [Xiaomi MiMo Orbit Program](https://platform.xiaomimimo.com/)
 
 <div align="center">
-  <a href="https://platform.xiaomimimo.com"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 - Invite builders" width="300" /></a>
+  <a href="https://platform.xiaomimimo.com"><img src="./resources/screenshots/xiaomi_mi_promo.png" alt="Xiaomi MiMo V2.5 - Invite builders" width="300" style="border-radius: 10px" /></a>
 </div>
 
 Xiaomi's MiMo V2.5 Pro is the default model in VT Code — available as the native MiMo provider and through OpenRouter. It delivers strong performance in agentic capabilities, complex software engineering, and long-horizon tasks with a 1M context window and deep reasoning.
 
 <div align="center">
   <a href="https://openrouter.ai/xiaomi/mimo-v2.5-pro">
-    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="300"/>
+    <img src="./resources/screenshots/xiaomi-mimo.png" alt="Xiaomi MiMo V2.5 Pro on OpenRouter" width="300" style="border-radius: 10px" />
   </a>
 </div>
 
@@ -360,7 +360,7 @@ model = "deepseek-ai/DeepSeek-V3-0324"
 ```
 
 <div align="center">
-  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="300" />
+  <img src="./resources/screenshots/atlascloud-provider.png" alt="Atlas Cloud provider configuration" width="300" style="border-radius: 10px" />
 </div>
 
 Other custom OpenAI-compatible providers use the same `[[custom_providers]]` pattern.
@@ -518,17 +518,17 @@ VT Code is built in my spare time and shared freely with the community. If it he
 <a href="https://opencollective.com/vinhnx"><img src="https://img.shields.io/badge/Open%20Collective-3385FF?style=flat-square&logo=opencollective&logoColor=white" alt="Open Collective" /></a>
 
 <div align="center">
-  <img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee QR code" />
+  <img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee QR code" style="border-radius: 10px" />
 </div>
 
 ### Current sponsors
 
 Thank you to the sponsors who support ongoing development:
 
-<a href="https://github.com/dnhn"><img src="https://avatars.githubusercontent.com/u/2561973?s=60" width="40" height="40" alt="@dnhn" title="@dnhn" /></a>&nbsp;
-<a href="https://github.com/codemod"><img src="https://avatars.githubusercontent.com/u/78830094?s=60" width="40" height="40" alt="@codemod" title="@codemod" /></a>&nbsp;
-<a href="https://github.com/coderabbitai"><img src="https://avatars.githubusercontent.com/u/132028505?s=60" width="40" height="40" alt="@coderabbitai" title="@coderabbitai" /></a>&nbsp;
-<a href="https://github.com/KhaiRyth"><img src="https://avatars.githubusercontent.com/u/273723951?s=60" width="40" height="40" alt="@KhaiRyth" title="@KhaiRyth" /></a>
+<a href="https://github.com/dnhn"><img src="https://avatars.githubusercontent.com/u/2561973?s=60" width="40" height="40" alt="@dnhn" title="@dnhn" style="border-radius: 10px" /></a>&nbsp;
+<a href="https://github.com/codemod"><img src="https://avatars.githubusercontent.com/u/78830094?s=60" width="40" height="40" alt="@codemod" title="@codemod" style="border-radius: 10px" /></a>&nbsp;
+<a href="https://github.com/coderabbitai"><img src="https://avatars.githubusercontent.com/u/132028505?s=60" width="40" height="40" alt="@coderabbitai" title="@coderabbitai" style="border-radius: 10px" /></a>&nbsp;
+<a href="https://github.com/KhaiRyth"><img src="https://avatars.githubusercontent.com/u/273723951?s=60" width="40" height="40" alt="@KhaiRyth" title="@KhaiRyth" style="border-radius: 10px" /></a>
 
 ## Star History
 

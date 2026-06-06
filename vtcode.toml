@@ -32,9 +32,9 @@ default_model = "mimo-v2.5-pro"
 # Default: "none"
 # Type: `string`
 reasoning_effort = "medium"
-theme = "ciapre-blue"
 api_key_env = "MIMO_API_KEY"
 provider = "mimo"
+theme = "mono"
 
 # Persistent Memory
 # Per-repository memory summary, rollout staging, and learned durable notes.
@@ -224,7 +224,7 @@ spawn_background_subprocess = "allow"
 
 task_tracker = "allow"
 
-unified_exec = "allow"
+unified_exec = "deny"
 
 unified_file = "allow"
 

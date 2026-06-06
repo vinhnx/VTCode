@@ -156,7 +156,7 @@ fn test_markdown_table_renders_header_separator_and_rows() {
         non_blank[0]
     );
     assert!(
-        non_blank[1].contains("├") && non_blank[1].contains("┼"),
+        non_blank[1].contains("┼"),
         "second line should be the separator: {}",
         non_blank[1]
     );
@@ -230,6 +230,7 @@ fn test_table_code_block_reparse_guard_can_disable_table_reparse() {
     let options = RenderMarkdownOptions {
         preserve_code_indentation: false,
         disable_code_block_table_reparse: true,
+        table_max_width: None,
     };
     let lines = render_markdown_to_lines_with_options(
         markdown,

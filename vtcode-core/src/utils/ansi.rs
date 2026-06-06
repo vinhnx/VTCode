@@ -201,6 +201,14 @@ impl AnsiRenderer {
         };
     }
 
+    /// Set the maximum width for markdown tables. When set, tables wider than
+    /// this will have their columns proportionally scaled and cell text wrapped.
+    pub fn set_table_max_width(&mut self, max_width: Option<usize>) {
+        if let Some(sink) = &mut self.sink {
+            sink.table_max_width = max_width;
+        }
+    }
+
     fn should_render_style(&self, style: MessageStyle) -> bool {
         self.reasoning_visible || !matches!(style, MessageStyle::Reasoning)
     }
@@ -602,6 +610,10 @@ impl AnsiRenderer {
         };
 
         if let Some(sink) = &mut self.sink {
+            // Read terminal width fresh so tables adapt to resizes.
+            if let Ok((w, _)) = crossterm::terminal::size() {
+                sink.table_max_width = Some(w as usize);
+            }
             let last_empty = sink.write_markdown(
                 text,
                 indent,
@@ -625,6 +637,7 @@ impl AnsiRenderer {
             RenderMarkdownOptions {
                 preserve_code_indentation,
                 disable_code_block_table_reparse: false,
+                table_max_width: None,
             },
         );
         if lines.is_empty() {
@@ -664,6 +677,10 @@ impl AnsiRenderer {
         let base_style = style.style();
         let indent = style.indent();
         if let Some(sink) = &mut self.sink {
+            // Read terminal width fresh so tables adapt to resizes.
+            if let Ok((w, _)) = crossterm::terminal::size() {
+                sink.table_max_width = Some(w as usize);
+            }
             let (prepared, plain_lines, last_empty) =
                 sink.prepare_markdown_lines(text, indent, base_style, true, true);
             let line_count = prepared.len();
@@ -892,6 +909,7 @@ struct LargeJsonPayload<'a> {
 struct InlineSink {
     handle: InlineHandle,
     highlight_config: SyntaxHighlightingConfig,
+    table_max_width: Option<usize>,
 }
 
 impl InlineSink {
@@ -1067,6 +1085,7 @@ impl InlineSink {
             RenderMarkdownOptions {
                 preserve_code_indentation,
                 disable_code_block_table_reparse: false,
+                table_max_width: self.table_max_width,
             },
         );
         if preserve_blank_lines {
@@ -1209,6 +1228,7 @@ impl InlineSink {
         Self {
             handle,
             highlight_config,
+            table_max_width: None,
         }
     }
 

@@ -251,7 +251,10 @@ fn parse_update_chunk(
     let (change_context, offset) = if first == EMPTY_CONTEXT_MARKER {
         (None, 1)
     } else if let Some(context) = first.strip_prefix(CONTEXT_MARKER_PREFIX) {
-        (Some(context.trim().to_owned()), 1)
+        let context = context.trim();
+        // Strip trailing "@@" delimiter if present (common in unified-diff-style anchors).
+        let context = context.strip_suffix("@@").unwrap_or(context).trim();
+        (Some(context.to_owned()), 1)
     } else if allow_missing_context {
         (None, 0)
     } else {
@@ -347,5 +350,72 @@ fn invalid_hunk(line: usize, message: &str) -> PatchError {
     PatchError::InvalidHunk {
         line,
         message: message.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn context_strips_trailing_at_at() {
+        let operations =
+            parse("*** Begin Patch\n*** Update File: README.md\n@@ section @@\n+line\n*** End Patch")
+                .unwrap();
+        match &operations[0] {
+            PatchOperation::UpdateFile { chunks, .. } => {
+                assert_eq!(
+                    chunks[0].change_context.as_deref(),
+                    Some("section"),
+                    "trailing @@ should be stripped from context"
+                );
+            }
+            other => panic!("expected UpdateFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_without_trailing_at_at() {
+        let operations =
+            parse("*** Begin Patch\n*** Update File: README.md\n@@ section\n+line\n*** End Patch")
+                .unwrap();
+        match &operations[0] {
+            PatchOperation::UpdateFile { chunks, .. } => {
+                assert_eq!(chunks[0].change_context.as_deref(), Some("section"));
+            }
+            other => panic!("expected UpdateFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_context_marker() {
+        let operations =
+            parse("*** Begin Patch\n*** Update File: README.md\n@@\n+line\n*** End Patch")
+                .unwrap();
+        match &operations[0] {
+            PatchOperation::UpdateFile { chunks, .. } => {
+                assert_eq!(chunks[0].change_context, None);
+            }
+            other => panic!("expected UpdateFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_with_multiple_trailing_at_at() {
+        let operations = parse(
+            "*** Begin Patch\n*** Update File: f.txt\n@@ foo @@ bar @@\n+line\n*** End Patch",
+        )
+        .unwrap();
+        match &operations[0] {
+            PatchOperation::UpdateFile { chunks, .. } => {
+                // Only the final "@@" should be stripped
+                assert_eq!(
+                    chunks[0].change_context.as_deref(),
+                    Some("foo @@ bar"),
+                    "only trailing @@ should be stripped"
+                );
+            }
+            other => panic!("expected UpdateFile, got {other:?}"),
+        }
     }
 }

@@ -71,6 +71,7 @@ pub(crate) struct MarkdownContext<'a> {
     pub(crate) code_block: &'a mut Option<CodeBlockState>,
     pub(crate) active_table: &'a mut Option<TableBuffer>,
     pub(crate) link_state: &'a mut Option<LinkState>,
+    pub(crate) table_max_width: Option<usize>,
 }
 
 impl MarkdownContext<'_> {
@@ -320,7 +321,7 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
                 if !table.current_row.is_empty() {
                     table.rows.push(std::mem::take(&mut table.current_row));
                 }
-                let rendered = render_table(&table, ctx.base_style);
+                let rendered = render_table(&table, ctx.base_style, ctx.table_max_width);
                 ctx.lines.extend(rendered);
             }
             push_blank_line(ctx.lines);

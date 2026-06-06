@@ -264,6 +264,9 @@ pub(crate) async fn initialize_session_ui(
     let supports_reasoning =
         model_supports_reasoning(&*session_state.provider_client, &config.model);
     renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
+    if let Ok((width, _)) = crossterm::terminal::size() {
+        renderer.set_table_max_width(Some(width as usize));
+    }
     if let Some(cfg) = vt_cfg {
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);

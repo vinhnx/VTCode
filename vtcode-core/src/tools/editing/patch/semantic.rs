@@ -211,7 +211,15 @@ pub(crate) async fn resolve_semantic_match(
             anchor: anchor.to_string(),
             reason: "anchor resolved to structural candidates, but removal/context lines were not found safely inside them".to_string(),
         }),
-        1 => Ok(resolved.into_values().next().expect("single semantic match must exist")),
+        1 => resolved
+            .into_values()
+            .next()
+            .ok_or_else(|| PatchError::SemanticResolutionFailed {
+                path: display_path.to_string(),
+                anchor: anchor.to_string(),
+                reason: "internal error: single semantic match vanished during resolution"
+                    .to_string(),
+            }),
         candidate_count => Err(PatchError::SemanticAmbiguous {
             path: display_path.to_string(),
             anchor: anchor.to_string(),

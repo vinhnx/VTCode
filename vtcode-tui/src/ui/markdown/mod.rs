@@ -106,6 +106,9 @@ impl MarkdownLine {
 pub struct RenderMarkdownOptions {
     pub preserve_code_indentation: bool,
     pub disable_code_block_table_reparse: bool,
+    /// Maximum width for tables. When set, tables wider than this will have
+    /// their column widths proportionally scaled down and cell text wrapped.
+    pub table_max_width: Option<usize>,
 }
 
 /// Render markdown text to styled lines that can be written to the terminal renderer.
@@ -178,6 +181,7 @@ pub fn render_markdown_to_lines_with_options(
             code_block: &mut code_block,
             active_table: &mut active_table,
             link_state: &mut link_state,
+            table_max_width: render_options.table_max_width,
         };
 
         match event {
