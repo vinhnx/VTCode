@@ -521,11 +521,12 @@ fn hash_json_value<H: Hasher>(hasher: &mut H, value: &Value) {
         Value::Object(map) => {
             hasher.write_u8(0x05);
             hasher.write_usize(map.len());
-            // serde_json::Map iterates in insertion order, matching JSON
-            // serialization order, so the hash is deterministic.
-            for (k, v) in map {
+            // Sort keys for deterministic hashing regardless of insertion order.
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            for k in keys {
                 hasher.write(k.as_bytes());
-                hash_json_value(hasher, v);
+                hash_json_value(hasher, map.get(k).unwrap());
             }
         }
     }
