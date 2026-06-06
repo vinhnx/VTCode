@@ -510,11 +510,25 @@ Contributions are welcome -- typos, docs, bugs, code, ideas. Start with [open is
 
 VT Code is built in my spare time and shared freely with the community. If it helps you ship code, learn, experiment with agents, or save a few hours, a small donation helps me keep improving it.
 
-You can support ongoing development at [buymeacoffee.com/vinhnx](https://buymeacoffee.com/vinhnx). Stars, issues, feedback, and word of mouth also mean a lot.
+### Sponsor
+
+<a href="https://github.com/sponsors/vinhnx"><img src="https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?style=flat-square&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors" /></a>&nbsp;
+<a href="https://buymeacoffee.com/vinhnx"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>&nbsp;
+<a href="https://www.patreon.com/vinhnx"><img src="https://img.shields.io/badge/Patreon-FF424D?style=flat-square&logo=patreon&logoColor=white" alt="Patreon" /></a>&nbsp;
+<a href="https://opencollective.com/vinhnx"><img src="https://img.shields.io/badge/Open%20Collective-3385FF?style=flat-square&logo=opencollective&logoColor=white" alt="Open Collective" /></a>
 
 <div align="center">
   <img src="./resources/screenshots/qr_donate.png" alt="Buy Me a Coffee QR code" />
 </div>
+
+### Current sponsors
+
+Thank you to the sponsors who support ongoing development:
+
+<a href="https://github.com/dnhn"><img src="https://avatars.githubusercontent.com/u/2561973?s=60" width="40" height="40" alt="@dnhn" title="@dnhn" /></a>&nbsp;
+<a href="https://github.com/codemod"><img src="https://avatars.githubusercontent.com/u/78830094?s=60" width="40" height="40" alt="@codemod" title="@codemod" /></a>&nbsp;
+<a href="https://github.com/coderabbitai"><img src="https://avatars.githubusercontent.com/u/132028505?s=60" width="40" height="40" alt="@coderabbitai" title="@coderabbitai" /></a>&nbsp;
+<a href="https://github.com/KhaiRyth"><img src="https://avatars.githubusercontent.com/u/273723951?s=60" width="40" height="40" alt="@KhaiRyth" title="@KhaiRyth" /></a>
 
 ## Star History
 
