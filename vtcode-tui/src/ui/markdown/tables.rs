@@ -4,6 +4,16 @@ use std::cmp::max;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+/// Pre-allocated space bytes for column padding. 512 covers any reasonable terminal width.
+const SPACES: [u8; 512] = [b' '; 512];
+
+/// Returns a `&str` of `n` space characters without allocating.
+/// Falls back to the full buffer if `n` exceeds 512 (unlikely in practice).
+fn space_pad(n: usize) -> &'static str {
+    let len = n.min(SPACES.len());
+    std::str::from_utf8(&SPACES[..len]).expect("SPACES contains only ASCII bytes")
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct TableBuffer {
     pub(crate) headers: Vec<MarkdownLine>,
@@ -27,20 +37,15 @@ pub(crate) fn render_table(
         .len()
         .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
     let mut col_widths: Vec<usize> = vec![0; max_cols];
-    let header_widths: Vec<usize> = table.headers.iter().map(MarkdownLine::width).collect();
-    let row_widths: Vec<Vec<usize>> = table
-        .rows
-        .iter()
-        .map(|row| row.iter().map(MarkdownLine::width).collect())
-        .collect();
 
-    for (col_width, width) in col_widths.iter_mut().zip(header_widths.iter()) {
-        *col_width = max(*col_width, *width);
+    for (col_width, width) in col_widths.iter_mut().zip(table.headers.iter().map(MarkdownLine::width))
+    {
+        *col_width = max(*col_width, width);
     }
 
-    for widths in &row_widths {
-        for (col_width, width) in col_widths.iter_mut().zip(widths.iter()) {
-            *col_width = max(*col_width, *width);
+    for row in &table.rows {
+        for (col_width, width) in col_widths.iter_mut().zip(row.iter().map(MarkdownLine::width)) {
+            *col_width = max(*col_width, width);
         }
     }
 
@@ -51,15 +56,13 @@ pub(crate) fn render_table(
     let border_style = base_style.dimmed();
 
     if !table.headers.is_empty() {
-        for table_line in render_table_rows(
+        lines.extend(render_table_rows(
             &table.headers,
             &col_widths,
             border_style,
             base_style,
             true,
-        ) {
-            lines.push(table_line);
-        }
+        ));
 
         let mut sep = MarkdownLine::default();
         for (i, width) in col_widths.iter().enumerate() {
@@ -71,16 +74,14 @@ pub(crate) fn render_table(
         lines.push(sep);
     }
 
-    for (row, _widths) in table.rows.iter().zip(row_widths.iter()) {
-        for table_line in render_table_rows(
+    for row in &table.rows {
+        lines.extend(render_table_rows(
             row,
             &col_widths,
             border_style,
             base_style,
             false,
-        ) {
-            lines.push(table_line);
-        }
+        ));
     }
 
     lines
@@ -151,12 +152,7 @@ fn render_table_rows(
     let mut wrapped_cells: Vec<Vec<MarkdownLine>> = Vec::with_capacity(num_cols);
     for (i, &width) in col_widths.iter().enumerate() {
         if let Some(cell) = cells.get(i) {
-            let wrapped = wrap_markdown_line(cell, width);
-            wrapped_cells.push(if wrapped.is_empty() {
-                vec![MarkdownLine::default()]
-            } else {
-                wrapped
-            });
+            wrapped_cells.push(wrap_markdown_line(cell, width));
         } else {
             wrapped_cells.push(vec![MarkdownLine::default()]);
         }
@@ -176,10 +172,10 @@ fn render_table_rows(
                 }
                 let padding = width.saturating_sub(cell_text_width);
                 if padding > 0 {
-                    line.push_segment(base_style, &" ".repeat(padding));
+                    line.push_segment(base_style, space_pad(padding));
                 }
             } else {
-                line.push_segment(base_style, &" ".repeat(width));
+                line.push_segment(base_style, space_pad(width));
             }
             if col_idx < num_cols - 1 {
                 line.push_segment(border_style, " │ ");
