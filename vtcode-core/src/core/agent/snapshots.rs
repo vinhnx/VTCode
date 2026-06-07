@@ -8,13 +8,13 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 
-use crate::core::SECONDS_PER_DAY;
 use crate::utils::error_messages::ERR_CREATE_CHECKPOINT_DIR;
 use crate::utils::file_utils::{ensure_dir_exists, ensure_dir_exists_sync, write_json_file};
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::session_archive::SessionMessage;
 
 const MAX_DESCRIPTION_LEN: usize = 160;
+use crate::core::SECONDS_PER_DAY;
 pub const DEFAULT_CHECKPOINTS_ENABLED: bool = true;
 pub const DEFAULT_MAX_SNAPSHOTS: usize = 50;
 pub const DEFAULT_MAX_AGE_DAYS: u64 = 30;

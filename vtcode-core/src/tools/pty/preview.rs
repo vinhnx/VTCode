@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn vt100_backend_renders_snapshot() {
+    fn ghostty_core_renders_snapshot() {
         let mut preview = PtyPreviewRenderer::from_config(&PtyConfig::default());
         preview.push_str("ghostty core\n");
 

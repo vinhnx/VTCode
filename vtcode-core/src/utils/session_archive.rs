@@ -21,8 +21,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use crate::core::SECONDS_PER_DAY;
-
 const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
 pub const SESSION_DIR_ENV: &str = "VT_SESSION_DIR";
@@ -33,6 +31,7 @@ const DEFAULT_SESSION_MAX_FILES: usize = 100;
 const DEFAULT_SESSION_MAX_AGE_DAYS: u64 = 14;
 const DEFAULT_SESSION_MAX_SIZE_MB: u64 = 100;
 const BYTES_PER_MB: u64 = 1024 * 1024;
+use crate::core::SECONDS_PER_DAY;
 
 #[derive(Debug, Clone, Copy)]
 struct SessionHistorySettings {

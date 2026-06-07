@@ -276,21 +276,6 @@ pub use async_middleware::{
     AsyncCachingMiddleware, AsyncLoggingMiddleware, AsyncMiddleware, AsyncMiddlewareChain,
     AsyncRetryMiddleware, ToolRequest as MiddlewareToolRequest, ToolResult,
 };
-pub use improvement_algorithms::{
-    MLScoreComponents, PatternState, TimeDecayedScore, detect_pattern, jaro_winkler_similarity,
-};
-pub use improvements_config::{
-    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,
-    SimilarityConfig, TimeDecayConfig,
-};
-pub use improvements_errors::{
-    ErrorKind, ErrorSeverity, EventType, ImprovementError, ImprovementEvent, ImprovementResult,
-    ObservabilityContext, ObservabilitySink,
-};
-pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
-pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
-
-// Codex-compatible handler architecture exports
 pub use handlers::{
     // Apply patch handler
     ApplyPatchHandler,
@@ -364,4 +349,16 @@ pub use handlers::{
     intercept_apply_patch,
     new_shared_tracker,
 };
+pub use improvement_algorithms::{
+    MLScoreComponents, PatternState, TimeDecayedScore, detect_pattern, jaro_winkler_similarity,
+};
+pub use improvements_config::{
+    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,
+    SimilarityConfig, TimeDecayConfig,
+};
+pub use improvements_errors::{
+    ErrorKind, ErrorSeverity, EventType, ImprovementError, ImprovementEvent, ImprovementResult,
+    ObservabilityContext, ObservabilitySink,
+};
+pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
 pub use vtcode_utility_tool_specs::parse_tool_input_schema;

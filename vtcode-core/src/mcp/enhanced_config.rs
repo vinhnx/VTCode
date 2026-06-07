@@ -5,6 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
+// Import canonical types from vtcode-config instead of defining locally
+pub use vtcode_config::mcp::{McpRateLimitConfig, McpValidationConfig};
+
 use tracing::{debug, warn};
 
 /// Enhanced security configuration for MCP
@@ -39,78 +42,9 @@ impl Default for EnhancedMcpSecurityConfig {
     }
 }
 
-/// Rate limiting configuration for MCP
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct McpRateLimitConfig {
-    /// Maximum requests per minute per client
-    #[serde(default = "default_requests_per_minute")]
-    pub requests_per_minute: u32,
-
-    /// Maximum concurrent requests per client
-    #[serde(default = "default_concurrent_requests")]
-    pub concurrent_requests: u32,
-}
-
-impl Default for McpRateLimitConfig {
-    fn default() -> Self {
-        Self {
-            requests_per_minute: default_requests_per_minute(),
-            concurrent_requests: default_concurrent_requests(),
-        }
-    }
-}
-
-/// Validation configuration for MCP
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct McpValidationConfig {
-    /// Enable JSON schema validation for tool arguments
-    #[serde(default = "default_schema_validation_enabled")]
-    pub schema_validation_enabled: bool,
-
-    /// Enable path traversal protection
-    #[serde(default = "default_path_traversal_protection_enabled")]
-    pub path_traversal_protection: bool,
-
-    /// Maximum argument size in bytes
-    #[serde(default = "default_max_argument_size")]
-    pub max_argument_size: u32,
-}
-
-impl Default for McpValidationConfig {
-    fn default() -> Self {
-        Self {
-            schema_validation_enabled: default_schema_validation_enabled(),
-            path_traversal_protection: default_path_traversal_protection_enabled(),
-            max_argument_size: default_max_argument_size(),
-        }
-    }
-}
-
 // Default functions
 fn default_auth_enabled() -> bool {
     false
-}
-
-fn default_requests_per_minute() -> u32 {
-    100
-}
-
-fn default_concurrent_requests() -> u32 {
-    10
-}
-
-fn default_schema_validation_enabled() -> bool {
-    true
-}
-
-fn default_path_traversal_protection_enabled() -> bool {
-    true
-}
-
-fn default_max_argument_size() -> u32 {
-    1024 * 1024 // 1MB
 }
 
 /// Enhanced MCP client configuration with validation

@@ -32,6 +32,7 @@ Cargo workspace, ~26 crates. `default-members` = root, `vtcode-core`, `vtcode-tu
 | `vtcode-process-hardening` | OS sandboxing (Seatbelt, Landlock) |
 | `vtcode-exec-events` | `ThreadEvent` contract and ATIF export |
 | `vtcode-commons` | Shared utilities |
+| `vtcode-ghostty-core` | Ghostty VT terminal emulator core and runtime bindings |
 | `vtcode-macros` | Procedural macros |
 | `vtcode-markdown-store` | Markdown storage and rendering |
 | `vtcode-terminal-detection` | Terminal detection primitives |
@@ -65,6 +66,7 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-exec-events` | [vtcode-exec-events/AGENTS.md](vtcode-exec-events/AGENTS.md) |
 | `vtcode-commons` | [vtcode-commons/AGENTS.md](vtcode-commons/AGENTS.md) |
 | `vtcode-process-hardening` | [vtcode-process-hardening/AGENTS.md](vtcode-process-hardening/AGENTS.md) |
+| `vtcode-ghostty-core` | [vtcode-ghostty-core/AGENTS.md](vtcode-ghostty-core/AGENTS.md) |
 | `vtcode-macros` | [vtcode-macros/AGENTS.md](vtcode-macros/AGENTS.md) |
 | `vtcode-markdown-store` | [vtcode-markdown-store/AGENTS.md](vtcode-markdown-store/AGENTS.md) |
 | `vtcode-terminal-detection` | [vtcode-terminal-detection/AGENTS.md](vtcode-terminal-detection/AGENTS.md) |
@@ -94,63 +96,96 @@ Read these files at session start when context is needed. Write to them when you
 
 ## Skills & Subagents
 
-### Development Workflow Skills
+Skills are invoked via the Skill tool (slash commands). Subagents are spawned via the Agent tool. Some names (e.g. `coder`, `verifier`) exist as both a skill and an agent -- the skill is the entry point that orchestrates the agent.
+
+### Built-in Skills (Claude Code product)
+
+These ship with Claude Code and are not project-specific:
 
 | Skill | Use when |
 |---|---|
-| `architect` | Starting a new feature with BDD-TDD workflow (creates spec, Gherkin scenarios, TDD prompts) |
-| `coder` | Implementing features with orchestrated task breakdown and quality gates |
-| `run-prompt` | Executing saved prompts from `./prompts/` (auto-detects TDD/direct/research) |
+| `code-review` | Reviewing diffs for correctness bugs and reuse/simplification cleanups |
+| `simplify` | Reviewing changed code for reuse, simplification, efficiency |
+| `verify` | Confirming a change works by running the app and observing behavior |
+| `security-review` | Security-focused code review |
+| `review` | Reviewing a pull request |
+| `run` | Launching and driving the app to see a change working |
+| `init` | Initializing a new CLAUDE.md with codebase docs |
+| `claude-api` | Claude API / Anthropic SDK reference |
+| `update-config` | Configuring Claude Code harness settings (hooks, permissions, env vars) |
+| `loop` | Running a prompt on a recurring interval |
+| `keybindings-help` | Customizing keyboard shortcuts |
+| `fewer-permission-prompts` | Adding allowlists to reduce permission prompts |
+
+### Custom Skills (user/global -- private, not in public repo)
+
+These are user-specific and **not checked into this repo**. Document them here for reference only.
+
+| Skill | Source | Use when |
+|---|---|---|
+| `rust-skills` | `~/.agents/skills/` | 179 Rust coding rules across 14 categories |
+| `deep-research` | User-level (private) | Multi-source, fact-checked research on any topic |
+| `eval-skill` | `~/.claude/skills/` | Running test cases to validate skill quality |
+| `skill-creator` | Plugin (`claude-plugins-official`) | Creating new skills or modifying existing ones |
+| `pr-code-review` | Plugin + agent wrapper | PR review entry point (spawns `pr-code-review` agent in `.claude/agents/`) |
+
+### Project Slash Commands (`.claude/commands/`)
+
+These are project-level commands that appear as skills. They live in this repo's `.claude/commands/` directory.
+
+| Skill | Use when |
+|---|---|
+| `architect` | BDD-TDD workflow (creates spec, Gherkin scenarios, TDD prompts) |
+| `coder` | Orchestrated task breakdown and quality gates |
+| `run-prompt` | Executing saved prompts from `./prompts/` |
 | `debugger` | Forensic root cause analysis (read-only investigation mode) |
 | `refactor` | Improving code quality without changing functionality |
 | `fix-failing-tests` | Running tests and auto-fixing failures |
-| `verifier` | Investigating source code to verify claims or answer questions |
+| `verifier` | Investigating source code to verify claims |
 | `init-explorer` | Gathering project context before other agents run |
-
-### Code Quality Skills
-
-| Skill | Use when |
-|---|---|
-| `rust-skills` | Writing, reviewing, or refactoring Rust code (179 rules across 14 categories) |
-| `pr-code-review` | PR review with bug triage, correctness review, and automated fix loops |
 
 ### Project Management Skills
 
-| Skill | Use when |
+These reference docs or workflows in this repo (not slash-command skills):
+
+| Topic | Use when |
 |---|---|
 | `adding-llm-providers` | Adding new LLM provider integrations |
 | `adding-workspace-crate` | Adding new crates to the workspace |
 | `audit-module-agents` | Checking if per-module AGENTS.md files need updating |
-| `deep-research` | Multi-source, fact-checked research on any topic |
-| `eval-skill` | Running test cases to validate skill quality |
-| `skill-creator` | Creating new skills or modifying existing ones |
-| `update-config` | Configuring Claude Code harness settings |
 
 ### Subagents (`.claude/agents/`)
 
-Specialized agents for orchestrated workflows:
+Specialized agents spawned via the Agent tool for orchestrated workflows:
 
 | Agent | Role |
 |---|---|
-| `init-explorer` | Initializer - explores codebase and sets up context |
+| `acceptance-qa` | User Acceptance Testing -- validates final implementation against requirements |
+| `analyst` | RCA synthesis specialist |
 | `architect` | Greenfield spec designer |
-| `bdd-agent` | BDD specialist - generates Gherkin scenarios |
-| `scope-manager` | Complexity gatekeeper for BDD features |
-| `gherkin-to-test` | Converts Gherkin to TDD prompts |
+| `bdd-agent` | BDD specialist -- generates Gherkin scenarios |
+| `bdd-test-runner` | Test infrastructure validator (Dockerfile.test, Makefile, `make test`) |
 | `codebase-analyst` | Finds reuse opportunities |
-| `refactor-decision-engine` | Decides if refactoring is needed |
-| `test-creator` | TDD specialist - writes tests first |
 | `coder` | Implementation specialist |
 | `coding-standards-checker` | Code quality verifier |
-| `tester` | Functionality verification |
-| `bdd-test-runner` | Test infrastructure validator |
-| `refactorer` | Code refactoring specialist |
-| `fix-failing-tests` | Fix failing tests specialist |
-| `verifier` | Code investigation specialist |
-| `stuck` | Human escalation agent |
 | `debugger` | CRASH-RCA orchestrator |
+| `fix-failing-tests` | Fix failing tests specialist |
 | `forensic` | Investigation specialist for CRASH sessions |
-| `analyst` | RCA synthesis specialist |
+| `gherkin-to-test` | Converts Gherkin to TDD prompts |
+| `init-explorer` | Initializer -- explores codebase and sets up context |
+| `pr-code-review` | PR review with bug triage and automated fix loops |
+| `refactor-decision-engine` | Decides if refactoring is needed |
+| `refactorer` | Code refactoring specialist |
+| `requirements-qa` | Validates BDD features against original requirements |
+| `rust-engineer` | Rust systems specialist (memory safety, zero-cost abstractions) |
+| `scope-manager` | Complexity gatekeeper for BDD features |
+| `strict-coder` | Implementation specialist following architectural constraints |
+| `stuck` | Human escalation agent |
+| `test-creator` | TDD specialist -- writes tests first |
+| `tester` | Functionality verification |
+| `tester-backend` | Backend testing specialist |
+| `tester-frontend` | Frontend visual testing specialist |
+| `verifier` | Code investigation specialist |
 
 ### Workflow Chains
 
