@@ -9,37 +9,6 @@ implement double escape to rewind, reference.
 1. show rewind history, reference. '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.02 AM.png'
 2. when user select a history. show 4 options. implement actual logic you see from the screenshot. reference. ''/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-06-07 at 9.15.35 AM.png'
 
-===
-
-1. fix vtcode's command ! shell mode doesn't work.
-
-```
-!cargo check
- •   cargo check completed with an error.
-     Failure details are shown above.
-     Suggested next steps:
-     • Run tests with cargo nextest run.
-     • Check lint warnings with cargo clippy --workspace
-       --all-targets -- -D warnings.
-```
-
-```
-─────────────────────────────────────────────────────────
-!cargo fmt
- •   cargo fmt completed with an error.
-     Failure details are shown above.
-     Suggested next steps:
-     • Verify the build with cargo check.
-     • Run tests with cargo nextest run.
-     • Check lint warnings with cargo clippy --workspace
-       --all-targets -- -D warnings.
-  ──────────────────────── Info ─────────────────────────
-    Shell mode (!): executing command directly.
-  ───────────────────────────────────────────────────────
-```
-
-3. the error is not shown. "Failure details are shown above."?
-
 ---
 
 add this to vtcode's system prompt and design with the idea:
