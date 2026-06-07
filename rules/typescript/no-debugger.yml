@@ -1,0 +1,16 @@
+id: no-debugger
+language: typescript
+severity: error
+message: Remove `debugger` statement before committing.
+note: |
+  `debugger` statements pause execution in environments with a debugger
+  attached. They should never ship to production. Remove them or replace
+  with proper breakpoint configuration in your IDE.
+rule:
+  kind: debugger_statement
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"

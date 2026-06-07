@@ -1,0 +1,17 @@
+id: use-logical-assignment
+language: typescript
+severity: hint
+message: Use the logical assignment operator `||=` instead of the verbose form.
+note: |
+  ES2021 logical assignment operators (`||=`, `&&=`, `??=`) are more concise
+  and clearly express intent. `$A = $A || $B` can be rewritten as
+  `$A ||= $B`. This rule only fires on direct self-assignment with `||`.
+rule:
+  pattern: $A = $A || $B
+fix: $A ||= $B
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"

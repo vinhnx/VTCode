@@ -1,0 +1,23 @@
+id: prefer-optional-chaining
+language: typescript
+severity: hint
+message: Use optional chaining (`?.`) instead of a manual null/undefined guard.
+note: |
+  `a && a.b` or `a != null && a.b` can be replaced with `a?.b`. Optional
+  chaining is shorter, clearer, and handles both null and undefined in a
+  single operator. This rule only fires when the guard and the access
+  reference the same root identifier.
+rule:
+  any:
+    - pattern: $A && $A.$PROP
+    - pattern: $A != null && $A.$PROP
+    - pattern: $A !== null && $A !== undefined && $A.$PROP
+fix: $A?.$PROP
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

@@ -1,0 +1,21 @@
+id: no-await-in-promise-all
+valid:
+  - code: |
+      const results = await Promise.all([fetchA(), fetchB(), fetchC()]);
+  - code: |
+      const [a, b] = await Promise.all([
+        getUser(id),
+        getProfile(id),
+      ]);
+  - code: |
+      // await outside Promise.all is fine
+      const value = await someAsync();
+      await Promise.all([a, b]);
+invalid:
+  - code: |
+      const results = await Promise.all([await fetchA(), await fetchB()]);
+  - code: |
+      const results = await Promise.all([
+        await getUser(id),
+        await getProfile(id),
+      ]);

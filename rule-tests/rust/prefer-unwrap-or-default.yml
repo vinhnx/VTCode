@@ -1,0 +1,13 @@
+id: prefer-unwrap-or-default
+valid:
+  - code: |
+      let x = maybe_val.unwrap_or(42);
+  - code: |
+      let x = maybe_val.unwrap_or_default();
+  - code: |
+      let x = maybe_val.unwrap_or(String::from("hello"));
+invalid:
+  - code: |
+      let x = maybe_val.unwrap_or(String::default());
+  - code: |
+      let x = maybe_val.unwrap_or(Vec::default());

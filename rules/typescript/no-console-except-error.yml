@@ -1,0 +1,33 @@
+id: no-console-except-error
+language: typescript
+severity: warning
+message: Remove console output; use a structured logger instead.
+note: |
+  `console.log`, `console.debug`, and `console.warn` are not configurable
+  and cannot be routed to log aggregators. `console.error` is acceptable
+  inside `catch` blocks for fallback diagnostics. Use a structured logging
+  library (pino, winston, tslog) for production code.
+rule:
+  any:
+    - pattern: console.error($$$)
+      not:
+        inside:
+          kind: catch_clause
+          stopBy: end
+    - pattern: console.$METHOD($$$)
+      constraints:
+        METHOD:
+          regex: ^(log|debug|warn|info|trace)$
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"
+  - "!**/*.test.*"
+  - "!**/*.spec.*"
+  - "!**/__tests__/**"
+  - "!**/test/**"
+  - "!tests/**"

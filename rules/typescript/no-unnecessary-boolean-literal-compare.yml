@@ -1,0 +1,21 @@
+id: no-unnecessary-boolean-literal-compare
+language: typescript
+severity: warning
+message: Remove unnecessary comparison to boolean literal.
+note: |
+  Comparing a boolean expression to `true` or `false` is redundant.
+  `if (x === true)` should be `if (x)`, and `if (x === false)` should
+  be `if (!x)`. The exception is when `x` might be `null | undefined`
+  and the strict check is intentional -- TypeScript's type system
+  usually prevents this case.
+rule:
+  any:
+    - pattern: $X === true
+    - pattern: $X == true
+    - pattern: $X !== false
+    - pattern: $X != false
+fix: $X
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "!node_modules/**"

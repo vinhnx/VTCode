@@ -1,0 +1,36 @@
+id: prefer-nullish-coalescing
+language: typescript
+severity: hint
+message: Use `??` instead of `||` when the intent is to coalesce null/undefined.
+note: |
+  `||` treats falsy values (0, "", false, null, undefined) as fallback
+  triggers. `??` only falls through on null and undefined, which is
+  usually the intended behavior. This rule flags `||` when the left-hand
+  side is a simple identifier or member expression (to reduce false
+  positives on boolean logic).
+rule:
+  pattern: $A || $B
+  any:
+    - inside:
+        kind: variable_declarator
+        stopBy: end
+    - inside:
+        kind: assignment_expression
+        stopBy: end
+    - inside:
+        kind: return_statement
+        stopBy: end
+    - inside:
+        kind: ternary_expression
+        stopBy: end
+constraints:
+  A:
+    any:
+      - kind: identifier
+      - kind: member_expression
+      - kind: call_expression
+      - kind: subscript_expression
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "!node_modules/**"

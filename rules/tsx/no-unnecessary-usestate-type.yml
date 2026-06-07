@@ -1,0 +1,31 @@
+id: no-unnecessary-usestate-type
+language: tsx
+severity: hint
+message: Remove the redundant type parameter from `useState` -- TypeScript infers it.
+note: |
+  When the initial value passed to `useState` is a primitive literal
+  (string, number, boolean), TypeScript can infer the generic type
+  parameter. Writing `useState<string>('hello')` adds no safety and
+  clutters the code. Remove the type argument: `useState('hello')`.
+  Keep the type parameter when the initial value is `null`, `undefined`,
+  an empty array, or a union type where inference would widen.
+rule:
+  any:
+    - pattern: useState<number>($INIT)
+    - pattern: useState<string>($INIT)
+    - pattern: useState<boolean>($INIT)
+constraints:
+  INIT:
+    any:
+      - kind: number
+      - kind: string
+      - kind: true
+      - kind: false
+fix: useState($INIT)
+files:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "**/*.ts"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

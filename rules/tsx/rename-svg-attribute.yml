@@ -1,0 +1,23 @@
+id: rename-svg-attribute
+language: tsx
+severity: warning
+message: Use camelCase SVG attribute names in JSX (e.g. `strokeLinecap`).
+note: |
+  HTML SVG attributes use hyphenated names (`stroke-linecap`, `fill-opacity`),
+  but JSX requires camelCase equivalents (`strokeLinecap`, `fillOpacity`).
+  Passing hyphenated names in JSX produces React warnings and may not
+  apply the attribute correctly. This rule detects hyphenated property
+  identifiers inside JSX attributes and suggests the camelCase form.
+rule:
+  all:
+    - kind: property_identifier
+      regex: "^[a-z]+-[a-z]"
+    - inside:
+        kind: jsx_attribute
+        stopBy: end
+files:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

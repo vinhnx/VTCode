@@ -1,0 +1,23 @@
+id: no-array-delete
+language: typescript
+severity: error
+message: Use `.splice()` instead of `delete` on array elements.
+note: |
+  `delete arr[i]` removes the value but leaves a sparse hole at that index.
+  The array length does not change and `.forEach()`, `.map()`, and most
+  iteration methods skip the hole silently, which produces unexpected
+  results. Use `arr.splice(i, 1)` to remove the element and shift
+  subsequent indices down, or `.filter()` to remove by condition.
+rule:
+  pattern: "delete $ARR[$INDEX]"
+constraints:
+  ARR:
+    regex: "^[a-zA-Z_$]"
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"
