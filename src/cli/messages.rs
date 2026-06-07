@@ -21,6 +21,7 @@ pub fn warn(msg: &str) -> String {
 }
 
 /// Cyan info prefix.
+#[allow(dead_code)]
 pub fn info(msg: &str) -> String {
     format!("{}", style(format!("Info: {msg}")).cyan())
 }
@@ -36,6 +37,7 @@ pub fn hint(msg: &str) -> String {
 }
 
 /// Render a vtcode.toml configuration snippet the user should add.
+#[allow(dead_code)]
 pub fn config_hint(section: &str, snippet: &str) -> String {
     format!(
         "Add the following to {}:\n\n  [{}]\n  {}",

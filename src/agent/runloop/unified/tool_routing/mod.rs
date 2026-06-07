@@ -383,6 +383,17 @@ async fn approve_tool_permission(
     ToolPermissionFlow::Approved { updated_args }
 }
 
+/// Lightweight approval helper for paths that don't need cache updates.
+/// Centralizes `mark_tool_preapproved` + `Approved` return to prevent
+/// the bug where a path returns `Approved` without preapproving.
+async fn approve_tool_permission_no_cache(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+) -> ToolPermissionFlow {
+    tool_registry.mark_tool_preapproved(tool_name).await;
+    ToolPermissionFlow::Approved { updated_args: None }
+}
+
 fn map_permission_decision(
     behavior: PermissionDecisionBehavior,
     scope: PermissionDecisionScope,
@@ -489,8 +500,7 @@ async fn reuse_saved_approval(
             cache_key
         );
         drop(permission_cache);
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        return Some(ToolPermissionFlow::Approved { updated_args: None });
+        return Some(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     None
@@ -1117,8 +1127,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         requires_rule_prompt,
         requires_sandbox_prompt,
     ) {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        return Ok(ToolPermissionFlow::Approved { updated_args: None });
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     if permission_mode == PermissionMode::DontAsk {
@@ -1130,13 +1139,11 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         && !requires_sandbox_prompt
         && !auto_mode_classifier_review
     {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        return Ok(ToolPermissionFlow::Approved { updated_args: None });
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     if skip_confirmations {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        return Ok(ToolPermissionFlow::Approved { updated_args: None });
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     let mut requires_auto_fallback_prompt = false;
@@ -1171,8 +1178,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         || requires_auto_fallback_prompt
         || (policy_decision == ToolPermissionDecision::Prompt && !auto_mode_classifier_review);
     if !should_prompt {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        return Ok(ToolPermissionFlow::Approved { updated_args: None });
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
     if approval_policy_rejects_prompt(
