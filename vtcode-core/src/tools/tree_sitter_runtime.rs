@@ -64,15 +64,20 @@ fn with_parser<T>(
 
 fn build_parser(language: AstGrepLanguage) -> Result<tree_sitter::Parser, String> {
     let mut parser = tree_sitter::Parser::new();
-    let grammar = grammar_for(language);
+    let grammar = grammar_for(language).ok_or_else(|| {
+        format!(
+            "no local tree-sitter parser for {}; structural queries delegate to the ast-grep binary",
+            language.display_name()
+        )
+    })?;
     parser
         .set_language(&grammar)
         .map_err(|err| format!("failed to load {} grammar: {err}", language.display_name()))?;
     Ok(parser)
 }
 
-fn grammar_for(language: AstGrepLanguage) -> tree_sitter::Language {
-    match language {
+fn grammar_for(language: AstGrepLanguage) -> Option<tree_sitter::Language> {
+    Some(match language {
         AstGrepLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
         AstGrepLanguage::Python => tree_sitter_python::LANGUAGE.into(),
         AstGrepLanguage::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
@@ -80,7 +85,8 @@ fn grammar_for(language: AstGrepLanguage) -> tree_sitter::Language {
         AstGrepLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
         AstGrepLanguage::Go => tree_sitter_go::LANGUAGE.into(),
         AstGrepLanguage::Java => tree_sitter_java::LANGUAGE.into(),
-    }
+        AstGrepLanguage::Markdown => return None,
+    })
 }
 
 #[cfg(test)]

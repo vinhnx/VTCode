@@ -6,7 +6,7 @@ use vtcode_core::config::mcp::{
 use vtcode_core::mcp::McpClient;
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires running MCP server"]
 async fn context7_list_tools_smoke() {
     let provider = McpProviderConfig {
         name: "context7".to_string(),

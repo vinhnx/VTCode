@@ -1,4 +1,4 @@
-#![allow(clippy::collapsible_if, clippy::result_large_err)]
+#![allow(clippy::collapsible_if)]
 
 use self::wire::function_calling::FunctionCall as GeminiFunctionCall;
 use self::wire::{

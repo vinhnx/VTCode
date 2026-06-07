@@ -315,7 +315,7 @@ mod memory_integration {
 
     /// Benchmark: Compare cache performance before/after optimization
     #[test]
-    #[ignore]
+    #[ignore = "benchmark: run with cargo test -- --ignored"]
     fn bench_cache_optimization_impact() {
         use std::time::Instant;
 

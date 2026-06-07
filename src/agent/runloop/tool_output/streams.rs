@@ -1,4 +1,3 @@
-#![allow(clippy::too_many_arguments)]
 //! Tool output rendering with token-aware truncation
 //!
 //! This module handles formatting and displaying tool output to the user.
@@ -128,6 +127,7 @@ fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_preview_line(
     renderer: &mut AnsiRenderer,
     display_line: &str,
@@ -348,6 +348,7 @@ async fn render_run_command_preview(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render_diff_content_block(
     renderer: &mut AnsiRenderer,
     diff_content: &str,
@@ -445,6 +446,7 @@ pub(crate) fn render_diff_content_block(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(

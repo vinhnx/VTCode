@@ -11,11 +11,10 @@ categories = ["development-tools"]
 keywords = ["vtcode", "tools", "registry", "modular", "ai-tools"]
 
 [features]
-default = ["bash", "search", "net"]
+default = ["bash", "search"]
 
 bash = []
 search = []
-net = []
 policies = []
 examples = []
 

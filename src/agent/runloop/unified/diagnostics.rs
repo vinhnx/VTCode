@@ -38,6 +38,7 @@ enum DoctorCheckOutcome {
     Fail(String),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_doctor_diagnostics(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,

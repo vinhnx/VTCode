@@ -1,4 +1,3 @@
-#![allow(clippy::result_large_err)]
 //! Universal LLM provider abstraction with API-specific role handling
 //!
 //! This module provides a unified interface for different LLM providers (OpenAI, Anthropic, Gemini)

@@ -138,7 +138,7 @@ mod memory_profiling {
 
     /// Benchmark cache operations for performance regression testing
     #[test]
-    #[ignore]
+    #[ignore = "benchmark: run with cargo test -- --ignored"]
     fn bench_cache_operations() {
         let cache: UnifiedCache<MemTestKey, String> =
             UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);

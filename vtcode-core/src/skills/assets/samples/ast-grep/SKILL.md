@@ -36,10 +36,10 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Built-In Languages
 
-- ast-grep ships many built-in languages. Common aliases include `bash`, `c`, `cc` / `cpp`, `cs`, `css`, `ex`, `go` / `golang`, `html`, `java`, `js` / `javascript` / `jsx`, `json`, `kt`, `lua`, `php`, `py` / `python`, `rb`, `rs` / `rust`, `swift`, `ts` / `typescript`, `tsx`, and `yml`.
+- ast-grep ships many built-in languages. Common aliases include `bash`, `c`, `cc` / `cpp`, `cs`, `css`, `ex`, `go` / `golang`, `html`, `java`, `js` / `javascript` / `jsx`, `json`, `kt`, `lua`, `md` / `markdown`, `php`, `py` / `python`, `rb`, `rs` / `rust`, `swift`, `ts` / `typescript`, `tsx`, and `yml`.
 - `--lang <alias>` and YAML `language: <alias>` use those built-in aliases. File-system scans infer language from built-in extensions unless the project overrides them.
-- In VT Code, public structural `lang` is passed through to ast-grep. VT Code also normalizes and infers a local subset it can pre-parse itself: Rust, Python, JavaScript, TypeScript, TSX, Go, and Java.
-- That local subset includes common ast-grep aliases and extensions such as `golang`, `jsx`, `cjs`, `mjs`, `cts`, `mts`, `py3`, and `pyi`.
+- In VT Code, public structural `lang` is passed through to ast-grep. VT Code also normalizes and infers a local subset it can pre-parse itself: Rust, Python, JavaScript, TypeScript, TSX, Go, Java, and Markdown.
+- That local subset includes common ast-grep aliases and extensions such as `golang`, `jsx`, `cjs`, `mjs`, `cts`, `mts`, `py3`, `pyi`, and `mdx`.
 - Use `languageGlobs` when the repository needs a different extension mapping than ast-grep’s built-in defaults.
 
 ## How Ast-Grep Works
@@ -190,6 +190,15 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Yoda-condition rewrite: clearly style-driven and repository-policy-sensitive. Treat it as optional rewrite material only where the project explicitly prefers constant-on-the-left comparisons.
 - Adapt C catalog rules to the repository’s parser choice, macro usage, pointer conventions, coding style, and safety policy before using them directly.
 
+## Markdown Catalog Highlights
+
+- Markdown became a first-class language in ast-grep 0.43. Query with `--lang md` or `lang: markdown` in YAML rules.
+- Queryable node kinds include `atx_heading` for ATX-style headings, `fenced_code_block` for fenced code blocks, and `list_item` for list items.
+- Combine node kinds with compound selectors for broader sweeps, for example `atx_heading, fenced_code_block` matches both headings and code blocks.
+- Markdown parsing is powered by `tree-sitter-md` and still has known parsing bugs and edge cases. Use it for inspection, indexing, outline extraction, and lightweight automation rather than critical rewrites.
+- VT Code infers `lang=md` from `.md` and `.mdx` file paths and globs, so structural queries over Markdown files do not always require an explicit `lang` argument.
+- Adapt Markdown catalog rules to the repository’s documentation conventions, heading hierarchy, and content structure before using them directly.
+
 ## JavaScript API Highlights
 
 - Use `@ast-grep/napi` only when rule YAML or VT Code’s public structural tool is not enough. The programmatic API is the right escalation path for computed replacements, ordered-match logic, cross-node inspection, or edit orchestration that would be awkward in pure rule syntax.
@@ -226,6 +235,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Use atomic fields such as `pattern`, `kind`, `regex`, `nthChild`, and `range` for direct node checks.
 - Use relational fields such as `inside`, `has`, `follows`, and `precedes` when the match depends on surrounding nodes.
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
+- `kind` values support ESQuery-style pseudo-selectors (`:has()`, `:not()`, `:is()`, `:nth-child()`) for matching nodes by descendant structure, exclusion, alternatives, or sibling position without writing separate relational rules.
 - Rule object fields are effectively unordered and conjunctive; if matching becomes order-sensitive, rewrite the logic with an explicit `all` sequence instead of assuming YAML key order matters.
 - `language` controls how patterns parse. Syntax that is valid in one language can fail in another.
 
@@ -235,7 +245,8 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `pattern`, `kind`, and `regex` are the common atomic fields. `pattern` can also be an object with `context`, `selector`, and optional `strictness`.
 - Pattern objects are for invalid, incomplete, or ambiguous snippets. `context` is required; `selector` picks the real target node inside that context; `strictness` tunes how literally the pattern matches.
 - Use pattern objects when the bare snippet would parse as the wrong node kind, such as JavaScript class fields or Go/C call expressions inside ambiguous fragments.
-- `kind` is usually a plain node kind name, but ast-grep also supports a limited ESQuery-style syntax for some `kind` selectors.
+- `kind` is usually a plain node kind name, but ast-grep 0.42+ supports ESQuery-style pseudo-selectors in `kind` strings. Use `:has(selector)` or `:has(> selector)` to match nodes containing descendants (or direct children) matching a selector, `:not(selector)` to exclude nodes, `:is(selector, ...)` for or-logic in compound selectors, and `:nth-child(An+B)` or `:nth-child(An+B of selector)` for positional matching. These pseudo-selectors also work in `selector` values on the CLI and in VT Code's public structural surface.
+- ast-grep 0.43+ further expands `kind` with compound selector operators: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either). This syntax works in YAML rule `kind` fields and the CLI `--kind` / `-k` flag. It is ESQuery-style, not full ESQuery: class selectors, attribute selectors, and wildcard selectors are not supported.
 - Separate `kind` and `pattern` checks do not change how the pattern is parsed. If parse shape is the problem, switch to one pattern object with `context` and `selector`.
 - `regex` matches the whole node text. Reach for `nthChild` when position among named siblings matters and `range` when the match must be limited to a known source span.
 - Regex syntax follows Rust `regex`, not PCRE. Do not assume look-around or backreferences are available, and usually pair `regex` with `kind` or `pattern` so the expensive text check only runs on the right node shapes.
@@ -286,6 +297,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `ignores` runs before `files`. Both are relative to the `sgconfig.yml` directory, and the glob should not start with `./`.
 - Rule-level `ignores` is different from CLI `--no-ignore`: the CLI flag changes global ignore-file behavior, while YAML `ignores` only filters files for that rule.
 - JSON output only includes rule `metadata` when the ast-grep run enabled metadata output, for example via `--include-metadata`.
+- Parameterized utility rules (experimental, ast-grep 0.42+) let global utility files declare `arguments` so callers pass rule objects into a reusable template via `matches`. Arguments are mandatory, are full rule objects (not strings), and meta-variables captured inside the utility stay private unless explicitly exported by the argument rules. This feature is experimental and its API may change.
 - Keep config authoring on the ast-grep skill path. VT Code’s public structural tool runs read-only query/scan/test workflows; it does not expose rule-YAML authoring fields directly.
 
 ## Transformation Objects
@@ -340,6 +352,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Tree-Sitter gives ast-grep a concrete syntax tree, not a stripped-down abstract syntax tree. That CST detail is why punctuation and modifiers can still matter even when matching stays syntax-aware.
 - Named nodes carry a `kind`; unnamed nodes are punctuation or literal tokens. Meta variables match named nodes by default, and `$$VAR` is the opt-in when unnamed nodes matter.
 - `kind` belongs to the node itself. `field` belongs to the parent-child relationship, so use relational `has` or `inside` with `field` when role matters more than raw node kind.
+- Pseudo-selectors extend `kind` matching with CSS/ESQuery-style combinators. They are string-level refinements on node kind names, not separate rule fields, so they compose naturally with pattern and relational rules.
 - A node is significant to ast-grep when it is named or has a `field`. Trivial nodes can still matter for exact matching, so do not assume every important token has its own named node.
 
 ## Match Algorithm

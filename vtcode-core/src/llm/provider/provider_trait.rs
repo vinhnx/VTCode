@@ -312,6 +312,5 @@ pub trait LLMProvider: Send + Sync {
     }
 
     /// Validate request for this provider
-    #[expect(clippy::result_large_err)]
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;
 }

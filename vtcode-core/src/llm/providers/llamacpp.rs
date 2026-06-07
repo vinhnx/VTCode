@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use super::common::resolve_model;
 use super::ollama::base_url_to_host_root;
 use super::openai::OpenAIProvider;

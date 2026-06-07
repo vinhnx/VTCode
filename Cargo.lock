@@ -176,16 +176,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
-name = "anstyle-crossterm"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "139c92e21e2ea956fa7d487882e6e8d773399e41f7531c694310e887c917e74f"
-dependencies = [
- "anstyle",
- "crossterm",
-]
-
-[[package]]
 name = "anstyle-git"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7064,7 +7054,6 @@ name = "vtcode-commons"
 version = "0.123.5"
 dependencies = [
  "anstyle",
- "anstyle-crossterm",
  "anstyle-query",
  "anyhow",
  "base64",

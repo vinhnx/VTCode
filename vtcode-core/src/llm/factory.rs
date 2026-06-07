@@ -87,7 +87,6 @@ impl LLMFactory {
     }
 
     /// Create provider instance
-    #[expect(clippy::result_large_err)]
     pub fn create_provider(
         &self,
         provider_name: &str,
@@ -166,7 +165,6 @@ pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
 }
 
 /// Create provider from model name and API key
-#[expect(clippy::result_large_err)]
 pub fn create_provider_for_model(
     model: &str,
     api_key: String,
@@ -211,7 +209,6 @@ pub fn create_provider_for_model(
 }
 
 /// Create provider with full configuration
-#[expect(clippy::result_large_err)]
 pub fn create_provider_with_config(
     provider_name: &str,
     config: ProviderConfig,

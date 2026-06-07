@@ -265,7 +265,7 @@ fn test_message_creation() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires provider configuration"]
 fn test_provider_supported_models() {
     // Test that providers report correct supported models
     let gemini = GeminiProvider::new("test_key".to_string());
@@ -325,7 +325,7 @@ fn test_provider_names() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires provider configuration"]
 fn test_request_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
     let openai = OpenAIProvider::new("test_key".to_string());

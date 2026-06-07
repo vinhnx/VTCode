@@ -15,11 +15,10 @@
 //! - **Command Sanitization**: Safe command execution
 //! - **Input Validation**: User input sanitization
 //!
-//! ### ANSI and Colors (`ansi`, `colors`, `ratatui_styles`)
+//! ### ANSI and Colors (`ansi`, `colors`)
 //! - **Terminal Colors**: ANSI color codes and styling
 //! - **Color Management**: Theme support and color schemes
 //! - **Cross-platform**: Works on different terminal types
-//! - **TUI Integration**: Convert anstyle to ratatui styles seamlessly via anstyle-crossterm
 //!
 //! ### Git Integration (`vtcodegitignore`)
 //! - **Gitignore Management**: Automatic `.vtcodegitignore` creation
@@ -100,12 +99,10 @@ pub mod ansi;
 pub mod ansi_capabilities;
 pub mod ansi_codes;
 pub mod ansi_parser;
-pub mod anstyle_utils;
 pub mod async_line_writer;
 pub mod async_utils;
 pub mod at_pattern;
 pub mod cached_style_parser;
-pub mod color_utils;
 pub mod colors;
 pub mod common;
 pub mod diff;
@@ -123,7 +120,6 @@ pub mod image_processing;
 pub mod message_style;
 pub mod migration;
 pub mod path;
-pub mod ratatui_styles;
 pub mod safety;
 pub mod serde_helpers;
 pub mod session_archive;
@@ -138,9 +134,6 @@ pub mod unicode_monitor;
 pub mod validation;
 pub mod vtcodegitignore;
 
-#[allow(deprecated)]
-pub use anstyle_utils::*;
 pub use cached_style_parser::CachedStyleParser;
-pub use color_utils::*;
 pub use common::{ProjectOverview, build_project_overview, current_timestamp, merge_env_patterns};
 pub use style_helpers::*;

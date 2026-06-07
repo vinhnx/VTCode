@@ -34,12 +34,7 @@ impl ReasoningBuffer {
 }
 
 pub fn clean_reasoning_text(text: &str) -> String {
-    let lines: Vec<&str> = text
-        .lines()
-        .map(|line| line.trim_end())
-        .filter(|line| !line.trim().is_empty())
-        .collect();
-    lines.join("\n")
+    vtcode_commons::formatting::clean_reasoning_text(text)
 }
 
 const PRIMARY_TEXT_KEYS: &[&str] = &[

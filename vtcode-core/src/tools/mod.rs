@@ -196,8 +196,6 @@ pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
 mod install_support;
-#[expect(deprecated)]
-pub mod middleware; // Deprecated - prefer async_middleware
 pub mod optimized_registry;
 pub mod output_spooler;
 pub mod pattern_engine;
@@ -290,16 +288,6 @@ pub use improvements_errors::{
     ObservabilityContext, ObservabilitySink,
 };
 pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
-#[expect(deprecated)]
-#[deprecated(
-    since = "0.1.0",
-    note = "Use async_middleware types instead: AsyncMiddleware, AsyncMiddlewareChain, etc."
-)]
-pub use middleware::{
-    CachingMiddleware, ExecutionMetadata, LoggingMiddleware, Middleware, MiddlewareChain,
-    MiddlewareError, MiddlewareResult, RequestMetadata, RetryMiddleware, ToolRequest,
-    ValidationMiddleware,
-};
 pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
 
 // Codex-compatible handler architecture exports

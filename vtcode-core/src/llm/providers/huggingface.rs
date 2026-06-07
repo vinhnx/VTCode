@@ -1,8 +1,4 @@
-#![allow(
-    clippy::result_large_err,
-    clippy::bind_instead_of_map,
-    clippy::collapsible_if
-)]
+#![allow(clippy::bind_instead_of_map, clippy::collapsible_if)]
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};

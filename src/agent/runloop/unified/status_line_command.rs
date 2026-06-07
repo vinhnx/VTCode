@@ -12,6 +12,7 @@ use vtcode_core::utils::ansi_parser::strip_ansi;
 use crate::agent::runloop::git::GitStatusSummary;
 use crate::agent::runloop::unified::session_setup::preferred_display_language_for_workspace;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn run_status_line_command(
     command: &str,
     workspace: &Path,

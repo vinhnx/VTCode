@@ -50,7 +50,7 @@ async fn list_files_pagination_and_default_response_format() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "requires Anthropic API"]
 async fn grep_file_default_concise_and_cap() {
     // Skip if ripgrep is not available
     if std::process::Command::new("rg")

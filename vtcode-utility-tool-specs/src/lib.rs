@@ -270,7 +270,7 @@ pub fn unified_search_parameters() -> Value {
             "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
             "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`. On `scan`, this maps to `--filter` over rule ids from config."},
             "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"`. Set it whenever the code language is known; required for debug_query."},
-            "selector": {"type": "string", "description": "Ast-grep selector for structural `workflow=\"query\"` when the real match is a subnode inside the parseable pattern."},
+            "selector": {"type": "string", "description": "Ast-grep selector for structural `workflow=\"query\"` when the real match is a subnode inside the parseable pattern. Supports ESQuery-style pseudo-selectors: `:has(selector)`, `:not(selector)`, `:is(selector, ...)`, `:nth-child(An+B)`, and `:nth-child(An+B of selector)`. In YAML rules and `--kind` mode, `kind` also accepts compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either)."},
             "strictness": {
                 "type": "string",
                 "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],

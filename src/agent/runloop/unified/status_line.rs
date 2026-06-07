@@ -463,6 +463,7 @@ pub(crate) fn update_thread_context(
 }
 
 /// Refresh account balance from the provider and update the status line.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn refresh_balance_info(
     provider_client: &dyn LLMProvider,
     handle: &InlineHandle,

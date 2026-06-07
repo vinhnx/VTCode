@@ -49,6 +49,9 @@ pub mod threads;
 pub mod timeout_detector;
 pub mod trajectory;
 
+/// Number of seconds in one day (24 * 60 * 60).
+pub(crate) const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
 // Re-export main types
 pub use context_optimizer::ContextOptimizer;
 pub use memory_pool::{MemoryPool, global_pool};

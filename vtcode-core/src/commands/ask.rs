@@ -20,7 +20,7 @@ pub async fn handle_ask_command(
     validate_agent_safe_text("prompt", &prompt_text)?;
 
     if config.verbose {
-        eprintln!("Sending prompt to {}: {}", config.model, prompt_text);
+        tracing::debug!(model = %config.model, prompt = %prompt_text, "Sending prompt");
     }
 
     let request = LLMRequest {

@@ -9,8 +9,6 @@
 //! - Validation (validation)
 //! - Header management (headers)
 
-#![allow(clippy::result_large_err)]
-
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{

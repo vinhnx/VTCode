@@ -188,7 +188,7 @@ impl Default for AgentConfig {
             theme: "default".to_string(),
             reasoning_effort: ReasoningEffortLevel::Medium,
             system_prompt_mode: SystemPromptMode::Default,
-            tool_documentation_mode: ToolDocumentationMode::Full,
+            tool_documentation_mode: ToolDocumentationMode::Progressive,
             verbosity: VerbosityLevel::Medium,
             todo_planning_mode: false,
             checkpointing: AgentCheckpointingConfig::default(),

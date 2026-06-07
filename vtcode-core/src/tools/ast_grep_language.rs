@@ -9,6 +9,7 @@ pub(crate) enum AstGrepLanguage {
     Tsx,
     Go,
     Java,
+    Markdown,
 }
 
 impl AstGrepLanguage {
@@ -21,6 +22,7 @@ impl AstGrepLanguage {
             "tsx" => Some(Self::Tsx),
             "go" | "golang" => Some(Self::Go),
             "java" => Some(Self::Java),
+            "md" | "markdown" => Some(Self::Markdown),
             _ => None,
         }
     }
@@ -34,6 +36,7 @@ impl AstGrepLanguage {
             "tsx" => Some(Self::Tsx),
             "go" => Some(Self::Go),
             "java" => Some(Self::Java),
+            "md" | "mdx" => Some(Self::Markdown),
             _ => None,
         }
     }
@@ -84,6 +87,7 @@ impl AstGrepLanguage {
             Self::Tsx => "tsx",
             Self::Go => "go",
             Self::Java => "java",
+            Self::Markdown => "md",
         }
     }
 
@@ -95,7 +99,14 @@ impl AstGrepLanguage {
             Self::TypeScript | Self::Tsx => "TypeScript",
             Self::Go => "Go",
             Self::Java => "Java",
+            Self::Markdown => "Markdown",
         }
+    }
+
+    /// Returns `true` when a local tree-sitter parser is available for preflight.
+    /// Languages without a local parser delegate directly to the ast-grep binary.
+    pub(crate) fn has_local_parser(self) -> bool {
+        !matches!(self, Self::Markdown)
     }
 
     pub(crate) fn from_workspace_language(value: &str) -> Option<Self> {
@@ -106,6 +117,7 @@ impl AstGrepLanguage {
             "typescript" => Some(Self::TypeScript),
             "go" => Some(Self::Go),
             "java" => Some(Self::Java),
+            "markdown" | "md" => Some(Self::Markdown),
             _ => None,
         }
     }
@@ -167,6 +179,14 @@ mod tests {
             AstGrepLanguage::from_user_value("java"),
             Some(AstGrepLanguage::Java)
         );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("md"),
+            Some(AstGrepLanguage::Markdown)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("markdown"),
+            Some(AstGrepLanguage::Markdown)
+        );
     }
 
     #[test]
@@ -214,6 +234,14 @@ mod tests {
         assert_eq!(
             AstGrepLanguage::from_path(Path::new("src/Main.java")),
             Some(AstGrepLanguage::Java)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("docs/README.md")),
+            Some(AstGrepLanguage::Markdown)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("docs/guide.mdx")),
+            Some(AstGrepLanguage::Markdown)
         );
     }
 
@@ -269,6 +297,16 @@ mod tests {
             Some(AstGrepLanguage::TypeScript)
         );
         assert_eq!(AstGrepLanguage::from_workspace_language("Swift"), None);
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("Markdown"),
+            Some(AstGrepLanguage::Markdown)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("md"),
+            Some(AstGrepLanguage::Markdown)
+        );
         assert_eq!(AstGrepLanguage::Tsx.display_name(), "TypeScript");
+        assert_eq!(AstGrepLanguage::Markdown.display_name(), "Markdown");
+        assert_eq!(AstGrepLanguage::Markdown.as_str(), "md");
     }
 }
