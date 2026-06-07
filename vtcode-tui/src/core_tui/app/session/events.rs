@@ -636,11 +636,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if !session.is_running_activity()
-                && let Some(name) = maybe_cycle_session_agent(session, &key)
-            {
+            if can_cycle_session_agent(session, &key) {
                 session.mark_dirty();
-                return Some(InlineEvent::SelectSessionAgent { name });
+                return Some(InlineEvent::CycleSessionAgent);
             }
 
             let Some(submitted) = take_submitted_input(session) else {
@@ -795,6 +793,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if session.accept_inline_prompt_suggestion() {
                     session.update_input_triggers();
                     return None;
+                }
+                if can_cycle_session_agent(session, &key) {
+                    session.mark_dirty();
+                    return Some(InlineEvent::CycleSessionAgent);
                 }
                 let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
@@ -1158,40 +1160,13 @@ fn handle_transcript_review_key(
     }
 }
 
-fn maybe_cycle_session_agent(session: &Session, key: &KeyEvent) -> Option<Option<String>> {
-    if key.modifiers != KeyModifiers::NONE
-        || !session.core.input_manager.content().is_empty()
-        || !session.core.queued_inputs.is_empty()
-        || session.visible_transient_surface().is_some()
-        || session.has_active_overlay()
-    {
-        return None;
-    }
-
-    let agent_names = session
-        .agent_palette
-        .as_ref()?
-        .agent_names()
-        .filter(|name| !name.trim().is_empty())
-        .collect::<Vec<_>>();
-    if agent_names.is_empty() {
-        return None;
-    }
-
-    let active = session
-        .core
-        .header_context
-        .session_agent
-        .as_deref()
-        .map(str::trim)
-        .filter(|name| !name.is_empty());
-    let next = match active.and_then(|active| agent_names.iter().position(|name| *name == active)) {
-        Some(index) if index + 1 < agent_names.len() => Some(agent_names[index + 1].to_owned()),
-        Some(_) => None,
-        None => Some(agent_names[0].to_owned()),
-    };
-
-    Some(next)
+fn can_cycle_session_agent(session: &Session, key: &KeyEvent) -> bool {
+    key.modifiers == KeyModifiers::NONE
+        && !session.is_running_activity()
+        && session.core.input_manager.content().is_empty()
+        && session.core.queued_inputs.is_empty()
+        && session.visible_transient_surface().is_none()
+        && !session.has_active_overlay()
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {

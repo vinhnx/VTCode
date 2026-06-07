@@ -166,6 +166,10 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::RequestInlinePromptSuggestion(draft)
             }
+            InlineEvent::CycleSessionAgent => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::CycleSessionAgent
+            }
             InlineEvent::SelectSessionAgent { name } => {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::SelectSessionAgent { name }

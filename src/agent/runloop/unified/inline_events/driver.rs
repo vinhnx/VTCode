@@ -209,6 +209,7 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Exit(reason) => Some(InlineLoopAction::Exit(reason)),
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
+            InlineLoopAction::CycleSessionAgent => None,
             InlineLoopAction::SelectSessionAgent { .. } => None,
             InlineLoopAction::RequestInlinePromptSuggestion(_) => None,
             InlineLoopAction::OpenTranscriptReviewInEditor(_) => None,

@@ -161,10 +161,6 @@ impl AgentPalette {
         !self.all_agents.is_empty()
     }
 
-    pub fn agent_names(&self) -> impl Iterator<Item = &str> {
-        self.all_agents.iter().map(|entry| entry.name.as_str())
-    }
-
     pub fn filter_query(&self) -> &str {
         &self.filter_query
     }

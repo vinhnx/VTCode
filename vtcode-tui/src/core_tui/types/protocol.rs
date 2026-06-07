@@ -138,6 +138,7 @@ pub enum InlineEvent {
     },
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
+    CycleSessionAgent,
     SelectSessionAgent {
         name: Option<String>,
     },

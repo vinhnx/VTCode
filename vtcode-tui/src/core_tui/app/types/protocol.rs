@@ -144,6 +144,7 @@ pub enum InlineEvent {
     OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
+    CycleSessionAgent,
     SelectSessionAgent {
         name: Option<String>,
     },
@@ -187,6 +188,7 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             crate::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 Self::RequestInlinePromptSuggestion(draft)
             }
+            crate::core_tui::types::InlineEvent::CycleSessionAgent => Self::CycleSessionAgent,
             crate::core_tui::types::InlineEvent::SelectSessionAgent { name } => {
                 Self::SelectSessionAgent { name }
             }

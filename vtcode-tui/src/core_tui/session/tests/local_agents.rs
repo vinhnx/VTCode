@@ -189,16 +189,34 @@ fn alt_s_remains_subprocesses_entrypoint() {
 #[test]
 fn tab_cycles_session_agent_when_composer_is_empty() {
     let mut session = app_session_with_input("", 0);
-    load_session_agent_palette(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::SelectSessionAgent {
-            name: Some(value)
-        }) if value == "alpha"
+        Some(app_types::InlineEvent::CycleSessionAgent)
     ));
+}
+
+#[test]
+fn tab_character_cycles_session_agent_when_composer_is_empty() {
+    let mut session = app_session_with_input("", 0);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('\t'), KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::CycleSessionAgent)
+    ));
+}
+
+#[test]
+fn core_tab_cycles_session_agent_when_composer_is_empty() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(event, Some(InlineEvent::CycleSessionAgent)));
 }
 
 #[test]
@@ -230,7 +248,6 @@ fn tab_queues_draft_while_running_instead_of_switching_session_agent() {
 #[test]
 fn tab_cycles_session_agent_back_to_default_after_last_agent() {
     let mut session = app_session_with_input("", 0);
-    load_session_agent_palette(&mut session);
     session.handle_command(app_types::InlineCommand::SetSessionAgent {
         name: Some("beta".to_string()),
     });
@@ -239,7 +256,7 @@ fn tab_cycles_session_agent_back_to_default_after_last_agent() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::SelectSessionAgent { name: None })
+        Some(app_types::InlineEvent::CycleSessionAgent)
     ));
 }
 

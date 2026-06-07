@@ -729,6 +729,10 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
+        InlineLoopAction::CycleSessionAgent => {
+            handle_cycle_session_agent(ctx).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
         InlineLoopAction::SelectSessionAgent { name } => {
             handle_select_session_agent(ctx, name).await?;
             InlineLoopActionResolution::ContinueLoop
@@ -813,6 +817,24 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
+async fn handle_cycle_session_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let Some(controller) = ctx.tool_registry.subagent_controller() else {
+        ctx.renderer
+            .line(MessageStyle::Error, "No session agents are available.")?;
+        return Ok(());
+    };
+
+    let specs = controller.effective_specs().await;
+    match next_session_agent_name(ctx.active_session_agent.active(), &specs) {
+        Some(name) => handle_select_session_agent(ctx, name).await,
+        None => {
+            ctx.renderer
+                .line(MessageStyle::Error, "No session agents are available.")?;
+            Ok(())
+        }
+    }
+}
+
 async fn handle_select_session_agent(
     ctx: &mut InteractionLoopContext<'_>,
     name: Option<String>,
@@ -859,6 +881,33 @@ fn set_session_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<
     ctx.handle.set_session_agent(name);
 }
 
+fn next_session_agent_name(
+    active: Option<&vtcode_core::session_agent::ActiveSessionAgent>,
+    specs: &[vtcode_config::SubagentSpec],
+) -> Option<Option<String>> {
+    let mut names = specs
+        .iter()
+        .map(|spec| spec.name.trim())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    names.sort_by_key(|name| name.to_ascii_lowercase());
+    names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+
+    if names.is_empty() {
+        return None;
+    }
+
+    let active_name = active.map(|agent| agent.identity.name.as_str());
+    Some(
+        match active_name.and_then(|active| names.iter().position(|name| name == active)) {
+            Some(index) if index + 1 < names.len() => Some(names[index + 1].clone()),
+            Some(_) => None,
+            None => Some(names[0].clone()),
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -870,6 +919,63 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
+    use vtcode_config::{SubagentSource, SubagentSpec};
+
+    #[test]
+    fn next_session_agent_name_starts_with_first_sorted_agent() {
+        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
+
+        assert_eq!(
+            next_session_agent_name(None, &specs),
+            Some(Some("alpha".to_string()))
+        );
+    }
+
+    #[test]
+    fn next_session_agent_name_cycles_to_next_sorted_agent() {
+        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
+        let active = vtcode_core::session_agent::ActiveSessionAgent::from_spec(&specs[1]);
+
+        assert_eq!(
+            next_session_agent_name(Some(&active), &specs),
+            Some(Some("beta".to_string()))
+        );
+    }
+
+    #[test]
+    fn next_session_agent_name_cycles_last_agent_to_base() {
+        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
+        let active = vtcode_core::session_agent::ActiveSessionAgent::from_spec(&specs[0]);
+
+        assert_eq!(next_session_agent_name(Some(&active), &specs), Some(None));
+    }
+
+    fn test_subagent_spec(name: &str) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: String::new(),
+            prompt: String::new(),
+            tools: None,
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permission_mode: None,
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::ProjectVtcode,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
 
     #[test]
     fn extract_recent_follow_up_hint_reads_latest_recoverable_tool_payload() {
