@@ -21,7 +21,9 @@ use vtcode_core::prompts::{
     append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
-use vtcode_core::session_agent::ActiveSessionAgent;
+use vtcode_core::session_agent::{
+    ActiveSessionAgent, apply_session_agent_tool_overlay, clamp_session_permission_mode,
+};
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
@@ -232,13 +234,18 @@ async fn build_prompt_output(
             false,
         )
     } else {
-        ctx.tool_catalog
+        let base_snapshot = ctx
+            .tool_catalog
             .filtered_snapshot_with_stats(
                 ctx.tools,
                 input.turn.plan_mode,
                 input.turn.request_user_input_enabled,
             )
-            .await
+            .await;
+        apply_session_agent_overlay_to_tool_snapshot(
+            base_snapshot,
+            input.turn.active_session_agent.as_ref(),
+        )
     };
 
     append_runtime_tool_prompt_sections(
@@ -255,6 +262,21 @@ async fn build_prompt_output(
         system_prompt,
         tool_snapshot,
     })
+}
+
+fn apply_session_agent_overlay_to_tool_snapshot(
+    snapshot: SessionToolCatalogSnapshot,
+    active_session_agent: Option<&ActiveSessionAgent>,
+) -> SessionToolCatalogSnapshot {
+    let filtered = apply_session_agent_tool_overlay(snapshot.snapshot, active_session_agent);
+    SessionToolCatalogSnapshot::new(
+        snapshot.version,
+        snapshot.epoch,
+        snapshot.plan_mode,
+        snapshot.request_user_input_enabled,
+        filtered,
+        snapshot.cache_hit,
+    )
 }
 
 fn validate_prompt_output_alignment(
@@ -554,6 +576,8 @@ async fn render_session_agent_runtime_context(
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
 ) -> String {
     let permissions = ctx.permissions_state.read().await;
+    let effective_permission_mode =
+        clamp_session_permission_mode(permissions.default_mode, agent.permission_mode);
     let mut lines = Vec::new();
     lines.push("## Active Session Agent Runtime State".to_string());
     lines.push(format!("- Active agent: {}", agent.display_name));
@@ -583,12 +607,16 @@ async fn render_session_agent_runtime_context(
         turn_snapshot.plan_mode,
         turn_snapshot.auto_mode,
         turn_snapshot.full_auto,
-        permission_mode_label(permissions.default_mode)
+        permission_mode_label(effective_permission_mode)
     ));
     if let Some(mode) = agent.permission_mode {
         lines.push(format!(
             "- Session-agent permission overlay: {}",
             permission_mode_label(mode)
+        ));
+        lines.push(format!(
+            "- Effective permission mode: {}",
+            permission_mode_label(effective_permission_mode)
         ));
     }
     lines.push(format!(
@@ -837,6 +865,30 @@ mod tests {
             file_path: None,
             warnings: Vec::new(),
         }
+    }
+
+    fn named_tool(name: &str) -> ToolDefinition {
+        ToolDefinition::function(
+            name.to_string(),
+            format!("{name} tool"),
+            json!({
+                "type": "object",
+                "properties": {
+                    "input": { "type": "string" }
+                }
+            }),
+        )
+    }
+
+    fn request_tool_names(request: &uni::LLMRequest) -> Vec<String> {
+        request
+            .tools
+            .as_deref()
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+            .iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect()
     }
 
     #[tokio::test]
@@ -1201,6 +1253,106 @@ mod tests {
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
         assert!(runtime_context.contains("- Session-agent permission overlay: plan"));
         assert!(runtime_context.contains("Plan carefully before editing."));
+        assert_eq!(
+            built.continuation_messages,
+            vec![uni::Message::user("hello".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn active_session_agent_tool_allow_list_intersects_baseline_tools() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(named_tool("unified_search"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_file"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_exec"))
+            .await;
+        let mut spec = test_session_agent_spec("planner", "Use limited tools.");
+        spec.tools = Some(vec![
+            "unified_search".to_string(),
+            "missing_tool".to_string(),
+        ]);
+        spec.disallowed_tools = Vec::new();
+        backing.select_session_agent_from_specs(&[spec], "planner");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        assert_eq!(request_tool_names(&built.request), vec!["unified_search"]);
+        assert!(built.has_tools);
+    }
+
+    #[tokio::test]
+    async fn active_session_agent_deny_list_applies_after_allow_list() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(named_tool("unified_search"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_file"))
+            .await;
+        let mut spec = test_session_agent_spec("planner", "Use deterministic tools.");
+        spec.tools = Some(vec![
+            "unified_search".to_string(),
+            "unified_file".to_string(),
+        ]);
+        spec.disallowed_tools = vec!["unified_search".to_string()];
+        backing.select_session_agent_from_specs(&[spec], "planner");
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        assert_eq!(request_tool_names(&built.request), vec!["unified_file"]);
+        assert!(
+            built.request.messages[1]
+                .content
+                .as_text()
+                .contains("- Effective request tools: unified_file")
+        );
+    }
+
+    #[tokio::test]
+    async fn absent_session_agent_tool_fields_fall_back_to_baseline_tools() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(named_tool("unified_search"))
+            .await;
+        backing
+            .add_tool_definition(named_tool("unified_file"))
+            .await;
+
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history
+                .push(uni::Message::user("hello".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("request should build")
+        };
+
+        assert_eq!(
+            request_tool_names(&built.request),
+            vec!["unified_search", "unified_file"]
+        );
         assert_eq!(
             built.continuation_messages,
             vec![uni::Message::user("hello".to_string())]

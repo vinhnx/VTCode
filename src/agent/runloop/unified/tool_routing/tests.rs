@@ -372,6 +372,7 @@ async fn skip_confirmations_does_not_bypass_cached_tool_denial() {
             decision_ledger: None,
             tool_permission_cache: Some(&permission_cache),
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: true,
@@ -424,6 +425,7 @@ async fn tool_policy_deny_overrides_cached_session_approval() {
             decision_ledger: None,
             tool_permission_cache: Some(&permission_cache),
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -470,6 +472,7 @@ async fn dont_ask_mode_denies_non_allowed_requests() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -517,6 +520,7 @@ async fn dont_ask_mode_allows_explicitly_allowed_tools() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -532,6 +536,89 @@ async fn dont_ask_mode_allows_explicitly_allowed_tools() {
     .expect("permission flow");
 
     assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
+}
+
+#[tokio::test]
+async fn permission_mode_overlay_narrows_but_does_not_broaden() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let mut session = create_headless_session();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let accept_edits_permissions = PermissionsConfig {
+        default_mode: PermissionMode::AcceptEdits,
+        ..PermissionsConfig::default()
+    };
+
+    let narrowed = ensure_tool_permission(
+        ToolPermissionsContext {
+            tool_registry: &registry,
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            default_placeholder: None,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            hooks: None,
+            justification: None,
+            approval_recorder: None,
+            decision_ledger: None,
+            tool_permission_cache: None,
+            permissions_state: None,
+            permission_mode_overlay: Some(PermissionMode::DontAsk),
+            hitl_notification_bell: false,
+            approval_policy: AskForApproval::OnRequest,
+            skip_confirmations: false,
+            permissions_config: Some(&accept_edits_permissions),
+            auto_mode_runtime: None,
+            active_thread_label: None,
+            session_stats: None,
+        },
+        tools::UNIFIED_FILE,
+        Some(&json!({"action": "write", "path": "notes.md", "content": "hello"})),
+    )
+    .await
+    .expect("narrowed permission flow");
+
+    assert_eq!(narrowed, ToolPermissionFlow::Denied);
+
+    let dont_ask_permissions = PermissionsConfig {
+        default_mode: PermissionMode::DontAsk,
+        ..PermissionsConfig::default()
+    };
+    let broadened = ensure_tool_permission(
+        ToolPermissionsContext {
+            tool_registry: &registry,
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            default_placeholder: None,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            hooks: None,
+            justification: None,
+            approval_recorder: None,
+            decision_ledger: None,
+            tool_permission_cache: None,
+            permissions_state: None,
+            permission_mode_overlay: Some(PermissionMode::BypassPermissions),
+            hitl_notification_bell: false,
+            approval_policy: AskForApproval::OnRequest,
+            skip_confirmations: false,
+            permissions_config: Some(&dont_ask_permissions),
+            auto_mode_runtime: None,
+            active_thread_label: None,
+            session_stats: None,
+        },
+        tools::READ_FILE,
+        Some(&json!({"path": "README.md"})),
+    )
+    .await
+    .expect("clamped permission flow");
+
+    assert_eq!(broadened, ToolPermissionFlow::Denied);
 }
 
 #[tokio::test]
@@ -563,6 +650,7 @@ async fn accept_edits_mode_auto_allows_builtin_file_mutations() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -614,6 +702,7 @@ async fn accept_edits_mode_keeps_protected_write_prompts() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -665,6 +754,7 @@ async fn bypass_permissions_keeps_protected_write_prompts() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -717,6 +807,7 @@ async fn ask_rules_override_bypass_permissions_mode() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -769,6 +860,7 @@ async fn disallowed_tools_override_bypass_permissions_mode() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -858,6 +950,7 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -931,6 +1024,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -977,6 +1071,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
+            permission_mode_overlay: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,

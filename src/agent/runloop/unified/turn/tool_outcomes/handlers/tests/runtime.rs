@@ -119,6 +119,32 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
 }
 
 #[tokio::test]
+async fn active_session_agent_policy_blocks_hallucinated_denied_tool_call() {
+    let mut backing = TestContextBacking::new(2).await;
+    let mut spec = test_session_agent_spec("reader");
+    spec.tools = Some(vec![tool_names::READ_FILE.to_string()]);
+    spec.disallowed_tools = vec![tool_names::READ_FILE.to_string()];
+    backing.select_session_agent_from_specs(&[spec], "reader");
+
+    let valid_file = backing.sample_file.clone();
+    let args = json!({"path": valid_file.to_string_lossy()});
+    let mut ctx = backing.turn_processing_context();
+
+    let result = validate_tool_call(&mut ctx, "denied_read", tool_names::READ_FILE, &args)
+        .await
+        .expect("validation should complete");
+
+    assert!(matches!(result, ValidationResult::Blocked));
+    assert!(ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("active session agent policy")
+    }));
+    assert_eq!(ctx.harness_state.tool_calls, 0);
+}
+
+#[tokio::test]
 async fn repeated_shell_guard_activates_recovery_without_breaking_turn() {
     let mut backing = TestContextBacking::new(4).await;
     let mut ctx = backing.turn_processing_context();

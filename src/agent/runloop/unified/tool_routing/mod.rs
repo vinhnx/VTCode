@@ -28,6 +28,7 @@ use vtcode_core::hooks::{
 use vtcode_core::permissions::{
     PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
 };
+use vtcode_core::session_agent::clamp_session_permission_mode;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
@@ -172,6 +173,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub permissions_state: Option<&'a Arc<RwLock<PermissionsConfig>>>,
+    pub permission_mode_overlay: Option<PermissionMode>,
     pub hitl_notification_bell: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
@@ -969,6 +971,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         permissions_state,
+        permission_mode_overlay,
         hitl_notification_bell,
         approval_policy,
         skip_confirmations,
@@ -1026,11 +1029,13 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
 
     let current_dir =
         std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
-    let permissions_snapshot = if let Some(state) = permissions_state {
+    let mut permissions_snapshot = if let Some(state) = permissions_state {
         state.read().await.clone()
     } else {
         permissions_config.cloned().unwrap_or_default()
     };
+    permissions_snapshot.default_mode =
+        clamp_session_permission_mode(permissions_snapshot.default_mode, permission_mode_overlay);
     let permission_mode = current_permission_mode(&permissions_snapshot);
     let effective_permissions =
         effective_permissions_config(&permissions_snapshot, permission_mode);

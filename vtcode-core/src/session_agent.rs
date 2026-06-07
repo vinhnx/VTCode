@@ -1,8 +1,11 @@
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use vtcode_config::{DiscoveredSubagents, PermissionMode, SubagentSource, SubagentSpec};
+
+use crate::llm::provider::ToolDefinition;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveSessionAgentSpecIdentity {
@@ -111,6 +114,78 @@ pub fn resolve_session_agent(
         .ok_or_else(|| SessionAgentResolutionError::UnknownAgent {
             requested: requested.to_string(),
         })
+}
+
+#[must_use]
+pub fn clamp_session_permission_mode(
+    base: PermissionMode,
+    overlay: Option<PermissionMode>,
+) -> PermissionMode {
+    let Some(overlay) = overlay else {
+        return base;
+    };
+
+    if permission_rank(overlay) <= permission_rank(base) {
+        overlay
+    } else {
+        base
+    }
+}
+
+#[must_use]
+pub fn session_agent_allows_tool(agent: Option<&ActiveSessionAgent>, tool_name: &str) -> bool {
+    let Some(agent) = agent else {
+        return true;
+    };
+
+    let tool_name = normalise_tool_name(tool_name);
+    let allow_list_allows = agent.tools.as_ref().is_none_or(|tools| {
+        tools
+            .iter()
+            .any(|allowed| normalise_tool_name(allowed) == tool_name)
+    });
+    if !allow_list_allows {
+        return false;
+    }
+
+    !agent
+        .disallowed_tools
+        .iter()
+        .any(|denied| normalise_tool_name(denied) == tool_name)
+}
+
+#[must_use]
+pub fn apply_session_agent_tool_overlay(
+    tools: Option<Arc<Vec<ToolDefinition>>>,
+    agent: Option<&ActiveSessionAgent>,
+) -> Option<Arc<Vec<ToolDefinition>>> {
+    let tools = tools?;
+    let Some(agent) = agent else {
+        return Some(tools);
+    };
+
+    let filtered = tools
+        .iter()
+        .filter(|tool| session_agent_allows_tool(Some(agent), tool.function_name()))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    (!filtered.is_empty()).then(|| Arc::new(filtered))
+}
+
+fn permission_rank(mode: PermissionMode) -> u8 {
+    match mode {
+        PermissionMode::DontAsk => 0,
+        PermissionMode::Plan => 1,
+        PermissionMode::Default => 2,
+        PermissionMode::AcceptEdits => 3,
+        PermissionMode::Auto => 4,
+        PermissionMode::BypassPermissions => 5,
+    }
+}
+
+fn normalise_tool_name(tool_name: &str) -> String {
+    tool_name.trim().to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -234,6 +309,56 @@ mod tests {
         assert_eq!(active.identity.source, SubagentSource::Cli);
         assert_eq!(active.instructions, "cli default instructions");
         assert_eq!(active.model.as_deref(), Some("gpt-cli"));
+    }
+
+    #[test]
+    fn tool_overlay_allows_baseline_without_active_agent() {
+        assert!(session_agent_allows_tool(None, "unified_search"));
+    }
+
+    #[test]
+    fn tool_overlay_intersects_allow_list_then_applies_deny_list() {
+        let mut spec = test_spec("worker");
+        spec.tools = Some(vec![
+            "unified_search".to_string(),
+            "unified_file".to_string(),
+        ]);
+        spec.disallowed_tools = vec!["UNIFIED_SEARCH".to_string()];
+        let active = ActiveSessionAgent::from_spec(&spec);
+
+        assert!(!session_agent_allows_tool(Some(&active), "unified_exec"));
+        assert!(!session_agent_allows_tool(Some(&active), "unified_search"));
+        assert!(session_agent_allows_tool(Some(&active), "unified_file"));
+    }
+
+    #[test]
+    fn empty_present_tool_allow_list_exposes_no_tools() {
+        let mut spec = test_spec("worker");
+        spec.tools = Some(Vec::new());
+        spec.disallowed_tools = Vec::new();
+        let active = ActiveSessionAgent::from_spec(&spec);
+
+        assert!(!session_agent_allows_tool(Some(&active), "unified_search"));
+    }
+
+    #[test]
+    fn permission_overlay_clamps_without_broadening() {
+        assert_eq!(
+            clamp_session_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
+            PermissionMode::Plan
+        );
+        assert_eq!(
+            clamp_session_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
+            PermissionMode::Default
+        );
+        assert_eq!(
+            clamp_session_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
+            PermissionMode::Plan
+        );
+        assert_eq!(
+            clamp_session_permission_mode(PermissionMode::Plan, None),
+            PermissionMode::Plan
+        );
     }
 
     fn test_spec(name: &str) -> SubagentSpec {
