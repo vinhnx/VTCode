@@ -1,6 +1,8 @@
 use super::{
-    StructuralSearchRequest, StructuralWorkflow, build_query_result, execute_structural_search,
-    format_ast_grep_failure, normalize_match, preflight_parseable_pattern,
+    AstGrepByteOffset, AstGrepMatch, AstGrepMetaVar, AstGrepMetaVariables, AstGrepPoint,
+    AstGrepRange, AstGrepScanFinding, StructuralSearchRequest, StructuralWorkflow,
+    build_query_result, execute_structural_search, format_ast_grep_failure, normalize_match,
+    normalize_scan_finding, parse_compact_matches, preflight_parseable_pattern,
     sanitize_pattern_for_tree_sitter,
 };
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
@@ -36,21 +38,23 @@ fn write_fake_sg(script_body: &str) -> (TempDir, PathBuf) {
 
 #[test]
 fn normalize_match_emits_vtcode_shape() {
-    let match_value = normalize_match(super::AstGrepMatch {
+    let match_value = normalize_match(AstGrepMatch {
         file: "src/lib.rs".to_string(),
         text: "fn alpha() {}".to_string(),
         lines: Some("12: fn alpha() {}".to_string()),
         language: Some("Rust".to_string()),
-        range: super::AstGrepRange {
-            start: super::AstGrepPoint {
+        range: AstGrepRange {
+            start: AstGrepPoint {
                 line: 12,
                 column: 0,
             },
-            end: super::AstGrepPoint {
+            end: AstGrepPoint {
                 line: 12,
                 column: 13,
             },
+            byte_offset: None,
         },
+        meta_variables: None,
     });
 
     assert_eq!(match_value["file"], "src/lib.rs");
@@ -68,53 +72,59 @@ fn build_query_result_truncates_matches() {
         &request(),
         "src",
         vec![
-            super::AstGrepMatch {
+            AstGrepMatch {
                 file: "src/lib.rs".to_string(),
                 text: "fn alpha() {}".to_string(),
                 lines: None,
                 language: Some("Rust".to_string()),
-                range: super::AstGrepRange {
-                    start: super::AstGrepPoint {
+                range: AstGrepRange {
+                    start: AstGrepPoint {
                         line: 10,
                         column: 0,
                     },
-                    end: super::AstGrepPoint {
+                    end: AstGrepPoint {
                         line: 10,
                         column: 13,
                     },
+                    byte_offset: None,
                 },
+                meta_variables: None,
             },
-            super::AstGrepMatch {
+            AstGrepMatch {
                 file: "src/lib.rs".to_string(),
                 text: "fn beta() {}".to_string(),
                 lines: None,
                 language: Some("Rust".to_string()),
-                range: super::AstGrepRange {
-                    start: super::AstGrepPoint {
+                range: AstGrepRange {
+                    start: AstGrepPoint {
                         line: 20,
                         column: 0,
                     },
-                    end: super::AstGrepPoint {
+                    end: AstGrepPoint {
                         line: 20,
                         column: 12,
                     },
+                    byte_offset: None,
                 },
+                meta_variables: None,
             },
-            super::AstGrepMatch {
+            AstGrepMatch {
                 file: "src/lib.rs".to_string(),
                 text: "fn gamma() {}".to_string(),
                 lines: None,
                 language: Some("Rust".to_string()),
-                range: super::AstGrepRange {
-                    start: super::AstGrepPoint {
+                range: AstGrepRange {
+                    start: AstGrepPoint {
                         line: 30,
                         column: 0,
                     },
-                    end: super::AstGrepPoint {
+                    end: AstGrepPoint {
                         line: 30,
                         column: 13,
                     },
+                    byte_offset: None,
                 },
+                meta_variables: None,
             },
         ],
     );
@@ -1057,4 +1067,296 @@ async fn structural_test_returns_stdout_stderr_and_summary() {
     assert!(args.lines().any(|line| line == "--filter"));
     assert!(args.lines().any(|line| line == "rust/no-iterator-for-each"));
     assert!(args.lines().any(|line| line == "--skip-snapshot-tests"));
+}
+
+#[test]
+fn normalize_match_emits_byte_offset() {
+    let match_value = normalize_match(AstGrepMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn alpha() {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint {
+                line: 12,
+                column: 0,
+            },
+            end: AstGrepPoint {
+                line: 12,
+                column: 13,
+            },
+            byte_offset: Some(AstGrepByteOffset {
+                start: 200,
+                end: 213,
+            }),
+        },
+        meta_variables: None,
+    });
+
+    assert_eq!(match_value["range"]["byteOffset"]["start"], 200);
+    assert_eq!(match_value["range"]["byteOffset"]["end"], 213);
+}
+
+#[test]
+fn normalize_match_omits_byte_offset_when_absent() {
+    let match_value = normalize_match(AstGrepMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn alpha() {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint {
+                line: 12,
+                column: 0,
+            },
+            end: AstGrepPoint {
+                line: 12,
+                column: 13,
+            },
+            byte_offset: None,
+        },
+        meta_variables: None,
+    });
+
+    assert!(match_value["range"].get("byteOffset").is_none());
+}
+
+#[test]
+fn normalize_match_emits_meta_variables() {
+    let mut single = std::collections::BTreeMap::new();
+    single.insert(
+        "NAME".to_string(),
+        AstGrepMetaVar {
+            text: "alpha".to_string(),
+            range: AstGrepRange {
+                start: AstGrepPoint {
+                    line: 12,
+                    column: 3,
+                },
+                end: AstGrepPoint {
+                    line: 12,
+                    column: 8,
+                },
+                byte_offset: None,
+            },
+        },
+    );
+    let mut multi = std::collections::BTreeMap::new();
+    multi.insert(
+        "ARGS".to_string(),
+        vec![AstGrepMetaVar {
+            text: "a".to_string(),
+            range: AstGrepRange {
+                start: AstGrepPoint {
+                    line: 12,
+                    column: 9,
+                },
+                end: AstGrepPoint {
+                    line: 12,
+                    column: 10,
+                },
+                byte_offset: None,
+            },
+        }],
+    );
+    let mut transformed = std::collections::BTreeMap::new();
+    transformed.insert("UPPER".to_string(), "ALPHA".to_string());
+
+    let match_value = normalize_match(AstGrepMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn alpha(a) {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint {
+                line: 12,
+                column: 0,
+            },
+            end: AstGrepPoint {
+                line: 12,
+                column: 14,
+            },
+            byte_offset: None,
+        },
+        meta_variables: Some(AstGrepMetaVariables {
+            single,
+            multi,
+            transformed,
+        }),
+    });
+
+    assert_eq!(
+        match_value["metaVariables"]["single"]["NAME"]["text"],
+        "alpha"
+    );
+    assert_eq!(
+        match_value["metaVariables"]["single"]["NAME"]["range"]["start"]["line"],
+        12
+    );
+    assert_eq!(
+        match_value["metaVariables"]["multi"]["ARGS"][0]["text"],
+        "a"
+    );
+    assert_eq!(
+        match_value["metaVariables"]["transformed"]["UPPER"],
+        "ALPHA"
+    );
+}
+
+#[test]
+fn normalize_match_omits_meta_variables_when_absent() {
+    let match_value = normalize_match(AstGrepMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn alpha() {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint {
+                line: 12,
+                column: 0,
+            },
+            end: AstGrepPoint {
+                line: 12,
+                column: 13,
+            },
+            byte_offset: None,
+        },
+        meta_variables: None,
+    });
+
+    assert!(match_value.get("metaVariables").is_none());
+}
+
+#[test]
+fn normalize_scan_finding_extracts_url_from_metadata() {
+    let finding = AstGrepScanFinding {
+        file: "src/lib.rs".to_string(),
+        text: "danger();".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 3, column: 2 },
+            end: AstGrepPoint {
+                line: 3,
+                column: 10,
+            },
+            byte_offset: None,
+        },
+        rule_id: Some("deny-danger".to_string()),
+        severity: Some("error".to_string()),
+        message: Some("Do not call danger.".to_string()),
+        note: None,
+        metadata: Some(serde_json::json!({"docs": "https://example.com/rule"})),
+    };
+
+    let value = normalize_scan_finding(&finding);
+    assert_eq!(value["url"], "https://example.com/rule");
+    assert_eq!(value["metadata"]["docs"], "https://example.com/rule");
+}
+
+#[test]
+fn normalize_scan_finding_prefers_url_over_docs() {
+    let finding = AstGrepScanFinding {
+        file: "src/lib.rs".to_string(),
+        text: "danger();".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 3, column: 2 },
+            end: AstGrepPoint {
+                line: 3,
+                column: 10,
+            },
+            byte_offset: None,
+        },
+        rule_id: Some("deny-danger".to_string()),
+        severity: Some("error".to_string()),
+        message: Some("Do not call danger.".to_string()),
+        note: None,
+        metadata: Some(serde_json::json!({
+            "url": "https://example.com/primary",
+            "docs": "https://example.com/secondary"
+        })),
+    };
+
+    let value = normalize_scan_finding(&finding);
+    assert_eq!(value["url"], "https://example.com/primary");
+}
+
+#[test]
+fn normalize_scan_finding_omits_url_when_metadata_empty() {
+    let finding = AstGrepScanFinding {
+        file: "src/lib.rs".to_string(),
+        text: "danger();".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 3, column: 2 },
+            end: AstGrepPoint {
+                line: 3,
+                column: 10,
+            },
+            byte_offset: None,
+        },
+        rule_id: Some("deny-danger".to_string()),
+        severity: Some("error".to_string()),
+        message: Some("Do not call danger.".to_string()),
+        note: None,
+        metadata: Some(serde_json::json!({"category": "security"})),
+    };
+
+    let value = normalize_scan_finding(&finding);
+    assert!(value.get("url").is_none());
+    assert_eq!(value["metadata"]["category"], "security");
+}
+
+#[test]
+fn deserialize_compact_match_with_meta_variables() {
+    let json_input = r#"[{
+        "file": "src/lib.rs",
+        "text": "fn alpha() {}",
+        "lines": "12: fn alpha() {}",
+        "language": "Rust",
+        "range": {
+            "byteOffset": { "start": 200, "end": 213 },
+            "start": { "line": 12, "column": 0 },
+            "end": { "line": 12, "column": 13 }
+        },
+        "metaVariables": {
+            "single": {
+                "NAME": { "text": "alpha", "range": { "start": { "line": 12, "column": 3 }, "end": { "line": 12, "column": 8 } } }
+            },
+            "multi": {},
+            "transformed": {}
+        }
+    }]"#;
+
+    let matches = parse_compact_matches(json_input.as_bytes()).expect("should parse");
+    assert_eq!(matches.len(), 1);
+    let m = &matches[0];
+    assert_eq!(m.range.byte_offset.as_ref().unwrap().start, 200);
+    assert_eq!(
+        m.meta_variables.as_ref().unwrap().single["NAME"].text,
+        "alpha"
+    );
+}
+
+#[test]
+fn deserialize_compact_match_without_optional_fields() {
+    let json_input = r#"[{
+        "file": "src/lib.rs",
+        "text": "fn alpha() {}",
+        "range": {
+            "start": { "line": 12, "column": 0 },
+            "end": { "line": 12, "column": 13 }
+        }
+    }]"#;
+
+    let matches = parse_compact_matches(json_input.as_bytes()).expect("should parse");
+    assert_eq!(matches.len(), 1);
+    let m = &matches[0];
+    assert!(m.range.byte_offset.is_none());
+    assert!(m.meta_variables.is_none());
+    assert!(m.lines.is_none());
+    assert!(m.language.is_none());
 }
