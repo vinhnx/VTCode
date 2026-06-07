@@ -1072,7 +1072,7 @@ target/, build/, dist/, node_modules/, vendor/
 
     #[cfg(feature = "bootstrap")]
     fn default_ast_grep_config_template() -> &'static str {
-        "ruleDirs:\n  - rules\ntestConfigs:\n  - testDir: rule-tests\n    snapshotDir: __snapshots__\n"
+        "ruleDirs:\n  - rules\nutilDirs:\n  - utils\ntestConfigs:\n  - testDir: rule-tests\n    snapshotDir: __snapshots__\n"
     }
 
     #[cfg(feature = "bootstrap")]

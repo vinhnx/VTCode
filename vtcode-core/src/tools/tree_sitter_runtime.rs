@@ -109,7 +109,10 @@ fn grammar_for(language: AstGrepLanguage) -> Option<tree_sitter::Language> {
         | AstGrepLanguage::Hcl
         | AstGrepLanguage::Dart
         | AstGrepLanguage::Zig
-        | AstGrepLanguage::Protobuf => return None,
+        | AstGrepLanguage::Protobuf
+        | AstGrepLanguage::Haskell
+        | AstGrepLanguage::Nix
+        | AstGrepLanguage::Solidity => return None,
     })
 }
 

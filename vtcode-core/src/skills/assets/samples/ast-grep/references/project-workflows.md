@@ -4,6 +4,7 @@ Use the public structural tool first for read-only project checks:
 
 - `workflow="scan"` maps to `sg scan <path> --config <config_path> --json=stream --include-metadata --color=never`
 - `workflow="test"` maps to `sg test --config <config_path>`
+- `workflow="rewrite"` maps to `sg run --pattern=... --rewrite=... --json=compact --color=never` (dry-run preview, no files modified)
 - Default config path is workspace `sgconfig.yml`
 - `filter` narrows rules in `scan` and test cases in `test`
 - `globs`, `context_lines`, and `max_results` apply to `scan`
@@ -294,29 +295,126 @@ Use the public structural tool first for read-only project checks:
 
 - Problematic `defer` statements:
   - good Go-specific correctness scan for deferred calls whose nested arguments run immediately instead of at function exit
-  - treat matches as review candidates and prefer closure-based rewrites only after checking local test and style conventions
+  - Go evaluates `defer` arguments at the defer statement, not at function exit, so `defer require.NoError(t, failpoint.Disable(...))` disables the failpoint immediately
+  - uses `context` plus `selector: defer_statement` to match deferred calls with nested function arguments:
+
+```yaml
+id: problematic-defer-call
+language: go
+rule:
+  pattern:
+    context: ‘{ defer $A.$B(t, failpoint.$M($$$)) }’
+    selector: defer_statement
+```
+
+  - treat matches as review candidates and prefer closure-based rewrites: `defer func() { ... }()`
+  - contextual patterns require the CLI skill path; the public structural surface does not support the `context` field
+
 - Function-name pattern scans:
   - good example of combining `kind`, `has`, and `regex` to find declarations such as `Test.*`
+  - a plain `Test$_` meta-variable pattern is not valid syntax; use a YAML rule with `regex` instead:
+
+```yaml
+id: test-functions
+language: go
+rule:
+  kind: function_declaration
+  has:
+    field: name
+    regex: Test.*
+```
+
   - useful for test discovery, migration targeting, or repository audits where meta-variable patterns are too limited
+
 - Contextual function-call matching:
-  - good example of using `context` plus `selector: call_expression` to avoid Go parser ambiguity between calls and type conversions
-  - use this pattern whenever a plain call-expression pattern under-matches or parses unexpectedly
+  - tree-sitter-go parses `fmt.Println($A)` as a type conversion, not a call expression
+  - use `context` plus `selector: call_expression` to disambiguate:
+
+```yaml
+id: match-function-call
+language: go
+rule:
+  pattern:
+    context: ‘func t() { fmt.Println($A) }’
+    selector: call_expression
+```
+
+  - contextual patterns require the CLI skill path; the public structural surface’s `selector` field works with simple string patterns but does not support `context`
+
 - Package-import scans:
   - useful for dependency auditing, banned-import enforcement, or migration prep
-  - adapt the import regex to the repository’s real package policy instead of copying the sample package name
+  - adapt the import regex to the repository’s real package policy instead of copying the sample package name:
+
+```yaml
+id: match-package-import
+language: go
+rule:
+  kind: import_spec
+  has:
+    regex: github.com/golang-jwt/jwt
+```
+
 - JSON tag `-,` detection:
   - high-signal security scan for Go struct tags that look omitted but still allow unmarshaling through the `-` key
+  - a tag like `json:"-,"` is intended to omit the field, but the `-,` form still allows unmarshaling with `{"-": true}`:
+
+```yaml
+id: unmarshal-tag-is-dash
+severity: error
+message: Struct field can be decoded with the `-` key because the JSON tag
+  starts with a `-` but is followed by a comma.
+rule:
+  pattern: ‘`$TAG`’
+  inside:
+    kind: field_declaration
+constraints:
+  TAG:
+    regex: json:"-,.+
+```
+
   - treat these matches as actionable security review items rather than optional style cleanup
+  - the fix is using just `json:"-"` without the trailing comma
+
 - When adapting Go catalog rules in VT Code, preserve repository-specific Go version support, test conventions, package structure, security policy, and existing linter coverage instead of importing the example verbatim.
 
 ### Cpp Catalog Examples
 
 - Format-string vulnerability rewrite:
   - good security-focused rewrite example for `fprintf` or `sprintf` calls that pass attacker-controlled or variable text as the format argument
-  - keep it reviewable because some repositories should migrate to safer APIs or broader hardening patterns instead of applying only a local `"%s"` rewrite
+  - uses `constraints` with regex on `$PRINTF` to match only `sprintf`/`fprintf`, and `not` kind on `$VAR` to exclude string literals and concatenated strings
+  - the fix inserts `"%s"` as the format string argument
+  - keep it reviewable because some repositories should migrate to safer APIs (e.g. `snprintf`) or broader hardening patterns instead of applying only a local `"%s"` rewrite
+  - example YAML:
+
+```yaml
+id: fix-format-string
+language: cpp
+rule:
+  pattern: $PRINTF($S, $VAR)
+  constraints:
+    PRINTF:
+      regex: ^sprintf|fprintf$
+    VAR:
+      not: { kind: string_literal }
+      not: { kind: concatenated_string }
+fix: $PRINTF($S, "%s", $VAR)
+```
+
 - Struct inheritance matching:
   - good example of why C++ AST-based patterns often need the full syntactic shape instead of a shortened surface snippet
-  - use the full `struct ... : ... { ... }` pattern or switch to a YAML rule when a smaller pattern parses as `ERROR`
+  - a bare `struct $SOMETHING: $INHERITS` produces an `ERROR` node because tree-sitter-cpp requires the body block
+  - use the full `struct ... : ... { ... }` pattern to get a valid `struct_specifier` node
+  - example YAML:
+
+```yaml
+id: find-struct-inheritance
+language: cpp
+rule:
+  pattern: struct $NAME : $BASE { $$$BODY; }
+```
+
+- C++ has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing
+  - use `debug_query` to inspect parse output when matching is surprising
 - Reusing Cpp rules with C:
   - only do this when the repository intentionally parses `.c` as Cpp via `languageGlobs`
   - preserve repository-specific parser expectations in mixed-language trees because C and C++ syntax compatibility is not free
@@ -326,13 +424,60 @@ Use the public structural tool first for read-only project checks:
 
 - Match function-call patterns:
   - good example of using `context` plus `selector: call_expression` to work around tree-sitter-c fragment ambiguity
+  - tree-sitter-c parses `test($A)` as `macro_type_specifier`, but `test($A);` as `expression_statement -> call_expression`
   - prefer this form whenever a plain `foo($A)` pattern parses incorrectly as a macro-related node instead of a call
+  - contextual patterns are pattern objects (`context` + `selector` inside `pattern`), which require the CLI skill path via `unified_exec`; the public structural surface's `selector` field works with simple string patterns but does not support the `context` field
+  - example YAML:
+
+```yaml
+id: match-function-call
+language: c
+rule:
+  pattern:
+    context: $M($$$);
+    selector: call_expression
+```
+
 - Method-style to function-call rewrites:
   - useful migration example for C codebases that simulate methods on structs
+  - uses `transform` with `replace` to derive a conditional comma from `$$$ARGS`
   - keep it on the CLI skill path because rewriting `$R.$METHOD(...)` to `$METHOD(&$R, ...)` changes the call shape and should be reviewed with local pointer and API conventions in mind
+  - example YAML:
+
+```yaml
+id: method_receiver
+language: c
+rule:
+  pattern: $R.$METHOD($$$ARGS)
+transform:
+  MAYBE_COMMA:
+    replace:
+      source: $$$ARGS
+      replace: '^.+'
+      by: ', '
+fix:
+  $METHOD(&$R$MAYBE_COMMA$$$ARGS)
+```
+
 - Yoda-condition rewrite:
   - clearly style-oriented example for `if` comparisons with numeric literals
+  - uses `constraints` to restrict `$B` to `number_literal` and `inside` to scope within `if_statement`
   - only use it when the repository explicitly prefers that comparison style, not as a default cleanup
+  - example YAML:
+
+```yaml
+id: may-the-force-be-with-you
+language: c
+rule:
+  pattern: $A == $B
+  inside:
+    kind: parenthesized_expression
+    inside: {kind: if_statement}
+constraints:
+  B: { kind: number_literal }
+fix: $B == $A
+```
+
 - Parsing C as Cpp:
   - acceptable when the repository intentionally uses `languageGlobs` to share rule definitions
   - preserve parser expectations carefully in mixed C/C++ trees because upstream parse behavior differs
@@ -465,6 +610,83 @@ Use the public structural tool first for read-only project checks:
 - Move from a simple `pattern` to a full rule object when the task needs positional constraints, semantic roles, reusable sub-rules, or several structural conditions on the same node.
   - Rule-object fields are effectively an unordered `all`, so use them to flatten independent checks.
   - When capture or evaluation order matters, keep an explicit `all` list instead of relying on rule-object field order.
+
+## ESQuery-Style Kind Selectors
+
+ast-grep supports ESQuery-style selectors in the `kind` field. This syntax works in YAML rule `kind` fields, the CLI `--kind` / `-k` flag, and VT Code's public structural `kind` parameter. The selector is written in the `kind` field and ast-grep parses it internally.
+
+### Relationship Selectors
+
+- **Child selector (`>`)**: matches a direct child node. `kind: call_expression > identifier` is equivalent to `kind: identifier` with `inside: { kind: call_expression }`.
+- **Descendant selector (space)**: matches a descendant node. `kind: call_expression identifier` is equivalent to `kind: identifier` with `inside: { kind: call_expression, stopBy: end }`.
+- **Adjacent sibling selector (`+`)**: matches the next sibling node. `kind: decorator + method_definition` is equivalent to `kind: method_definition` with `follows: { kind: decorator }`.
+- **Following sibling selector (`~`)**: matches any following sibling node. `kind: decorator ~ method_definition` is equivalent to `kind: method_definition` with `follows: { kind: decorator, stopBy: end }`.
+
+### Comma Selector
+
+- Comma-separated selectors are converted to `any`. `kind: identifier, number` is equivalent to `any: [{ kind: identifier }, { kind: number }]`.
+
+### Pseudo-classes
+
+- **`:has(selector)`**: matches a node if it has a descendant matching the inner selector. `kind: function_declaration:has(return_statement)` matches function declarations that contain a return statement. Use `>` inside `:has` to match a direct child: `kind: expression_statement:has(> call_expression)`.
+- **`:not(selector)`**: negates the inner selector. `kind: identifier:not(number)` matches identifiers that are not numbers.
+- **`:is(selector, ...)`**: accepts comma-separated selectors and is converted to `any`. `kind: :is(identifier, number)` matches either identifiers or numbers. Can be combined with relationship selectors: `kind: call_expression > :is(identifier, number)`.
+- **`:nth-child(An+B)`**: maps to ast-grep's `nthChild` rule. `kind: array > number:nth-child(2n+1)` matches odd-numbered number elements in arrays.
+- **`:nth-child(An+B of selector)`**: supports `of` syntax for filtering. `kind: array > :nth-child(1 of number)` matches the first number element in an array.
+- **`:nth-last-child(position)`**: equivalent to `nthChild` with `reverse: true`. `kind: array > number:nth-last-child(1)` matches the last number element in an array.
+
+### Compound Selectors
+
+Compound selectors are combined with `all`. `kind: function_declaration:has(return_statement):not(generator_function)` is equivalent to `all: [{ kind: function_declaration }, { has: { kind: return_statement, stopBy: end } }, { not: { kind: generator_function } }]`.
+
+### Examples
+
+```yaml
+# Match identifiers that are direct children of call expressions
+kind: call_expression > identifier
+
+# Match any identifier or number node
+kind: identifier, number
+
+# Match function declarations containing return statements
+kind: function_declaration:has(return_statement)
+
+# Match identifiers that are not numbers
+kind: identifier:not(number)
+
+# Match either identifiers or numbers
+kind: :is(identifier, number)
+
+# Match the first number element in an array
+kind: array > :nth-child(1 of number)
+
+# Match odd-indexed elements
+kind: array > number:nth-child(2n+1)
+
+# Combine with pattern: match fn declarations that have return statements
+pattern: "fn $NAME() {}"
+kind: function_item:has(return_statement)
+
+# C++: match class definitions that have virtual methods
+kind: class_specifier:has(virtual_function_specifier)
+
+# C++: match template function declarations
+kind: template_declaration > function_definition
+
+# C++: match delete expressions (potential memory management issues)
+kind: delete_expression
+
+# Python: match function definitions with decorators
+kind: decorated_definition > function_definition
+```
+
+### Current Limitations
+
+- Class selectors like `.body` are tokenized but rejected as unsupported.
+- Supported pseudo-classes are only `:has`, `:not`, `:is`, `:nth-child`, and `:nth-last-child`.
+- `:has(...)`, `:not(...)`, and `of ...` parse a single complex selector, not a comma selector list.
+- `:is(...)` is the one pseudo-class that accepts comma-separated selector lists.
+- Identifiers can include letters, digits, `_` and `-`, but cannot start with a digit.
 
 ## Config Cheat Sheet
 
@@ -681,6 +903,8 @@ fix: "bar($MAYBE_COMMA$newArg)"
   - the outer rule cannot read captures local to a rewriter
 - Rewriter-local `transform` variables and `utils` stay local the same way.
 - A rewriter can still call other rewriters from the same list inside its own `transform` section, enabling multi-pass rewrite pipelines.
+- For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns each match with its proposed `replacement` and `replacementOffsets`. The surface remains read-only; no files are modified.
+- For advanced rewrite operations using `rewriters`, `transform.rewrite`, `joinBy`, or `FixConfig` with `expandStart`/`expandEnd`, use the CLI skill path via `unified_exec`.
 
 ## Pattern Syntax
 
@@ -810,9 +1034,8 @@ fix: "bar($MAYBE_COMMA$newArg)"
 - This is the declarative way to do one-to-many rewrites such as splitting a barrel import into separate import lines, converting `dict(a=1, b=2)` to `{'a': 1, 'b': 2}`, or transforming heterogeneous lists where each element type needs a different rewrite rule.
 - `transform.rewrite` has three important behavioral properties: (1) it rewrites descendants of the captured source metavariable, not the source itself; (2) overlapping rewriter matches are prevented so each sub-node is rewritten at most once; (3) higher-level AST matches are preferred before nested ones, and for one node only the first matching rewriter in declaration order is applied.
 - Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
-- In VT Code, keep this on the bundled ast-grep skill path.
-  - public structural tool stays read-only
-  - rewrite/apply flows still belong to CLI-driven skill work
+- For simple pattern-to-pattern rewrites, use `workflow="rewrite"` on the public structural surface to preview replacements without applying them. Each result includes the original `text`, proposed `replacement`, `replacementOffsets`, and `metaVariables`.
+- For advanced `transform.rewrite`, `rewriters`, `joinBy`, and `FixConfig` operations, use the CLI skill path via `unified_exec`.
 
 ## Rewrite Essentials
 

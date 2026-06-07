@@ -32,6 +32,9 @@ pub(crate) enum AstGrepLanguage {
     Dart,
     Zig,
     Protobuf,
+    Haskell,
+    Nix,
+    Solidity,
 }
 
 impl AstGrepLanguage {
@@ -67,6 +70,9 @@ impl AstGrepLanguage {
             "dart" => Some(Self::Dart),
             "zig" => Some(Self::Zig),
             "protobuf" | "proto" => Some(Self::Protobuf),
+            "hs" | "haskell" => Some(Self::Haskell),
+            "nix" => Some(Self::Nix),
+            "solidity" | "sol" => Some(Self::Solidity),
             _ => None,
         }
     }
@@ -74,7 +80,7 @@ impl AstGrepLanguage {
     pub(crate) fn from_extension(extension: &str) -> Option<Self> {
         match extension.trim().to_ascii_lowercase().as_str() {
             "rs" => Some(Self::Rust),
-            "py" | "py3" | "pyi" => Some(Self::Python),
+            "py" | "py3" | "pyi" | "bzl" => Some(Self::Python),
             "js" | "jsx" | "cjs" | "mjs" => Some(Self::JavaScript),
             "ts" | "cts" | "mts" => Some(Self::TypeScript),
             "tsx" => Some(Self::Tsx),
@@ -82,20 +88,20 @@ impl AstGrepLanguage {
             "java" => Some(Self::Java),
             "md" | "mdx" => Some(Self::Markdown),
             "c" | "h" => Some(Self::C),
-            "cpp" | "cc" | "cxx" | "hpp" | "hxx" | "hh" => Some(Self::Cpp),
+            "cpp" | "cc" | "cxx" | "hpp" | "hxx" | "hh" | "cu" | "ino" => Some(Self::Cpp),
             "cs" => Some(Self::Csharp),
             "css" => Some(Self::Css),
-            "html" | "htm" => Some(Self::Html),
+            "html" | "htm" | "xhtml" => Some(Self::Html),
             "json" | "jsonc" => Some(Self::Json),
             "yml" | "yaml" => Some(Self::Yaml),
-            "rb" | "erb" => Some(Self::Ruby),
+            "rb" | "erb" | "rbw" | "gemspec" => Some(Self::Ruby),
             "php" => Some(Self::Php),
-            "kt" | "kts" => Some(Self::Kotlin),
+            "kt" | "kts" | "ktm" => Some(Self::Kotlin),
             "swift" => Some(Self::Swift),
             "lua" => Some(Self::Lua),
-            "sh" | "bash" | "zsh" => Some(Self::Bash),
+            "sh" | "bash" | "zsh" | "bats" | "ksh" => Some(Self::Bash),
             "sql" => Some(Self::Sql),
-            "scala" | "sc" => Some(Self::Scala),
+            "scala" | "sc" | "sbt" => Some(Self::Scala),
             "ex" | "exs" => Some(Self::Elixir),
             "dockerfile" => Some(Self::Dockerfile),
             "toml" => Some(Self::Toml),
@@ -103,17 +109,29 @@ impl AstGrepLanguage {
             "dart" => Some(Self::Dart),
             "zig" => Some(Self::Zig),
             "proto" => Some(Self::Protobuf),
+            "hs" => Some(Self::Haskell),
+            "nix" => Some(Self::Nix),
+            "sol" => Some(Self::Solidity),
             _ => None,
         }
     }
 
     pub(crate) fn from_path(path: &Path) -> Option<Self> {
+        // Handle compound extensions that Path::extension() cannot resolve.
+        let file_name = path.file_name()?.to_str()?;
+        let lower = file_name.to_ascii_lowercase();
+        if lower.ends_with(".sh.in") {
+            return Some(Self::Bash);
+        }
+        if lower.ends_with(".c++") {
+            return Some(Self::Cpp);
+        }
+
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
             return Self::from_extension(extension);
         }
         // Handle extensionless files by matching the file name directly.
-        let file_name = path.file_name()?.to_str()?;
-        match file_name.to_ascii_lowercase().as_str() {
+        match lower.as_str() {
             "dockerfile" => Some(Self::Dockerfile),
             _ => None,
         }
@@ -183,6 +201,9 @@ impl AstGrepLanguage {
             Self::Dart => "dart",
             Self::Zig => "zig",
             Self::Protobuf => "proto",
+            Self::Haskell => "haskell",
+            Self::Nix => "nix",
+            Self::Solidity => "solidity",
         }
     }
 
@@ -217,6 +238,9 @@ impl AstGrepLanguage {
             Self::Dart => "Dart",
             Self::Zig => "Zig",
             Self::Protobuf => "Protobuf",
+            Self::Haskell => "Haskell",
+            Self::Nix => "Nix",
+            Self::Solidity => "Solidity",
         }
     }
 
@@ -267,6 +291,9 @@ impl AstGrepLanguage {
             "dart" => Some(Self::Dart),
             "zig" => Some(Self::Zig),
             "protobuf" | "proto" => Some(Self::Protobuf),
+            "haskell" | "hs" => Some(Self::Haskell),
+            "nix" => Some(Self::Nix),
+            "solidity" | "sol" => Some(Self::Solidity),
             _ => None,
         }
     }
@@ -961,6 +988,152 @@ mod tests {
         assert_eq!(
             AstGrepLanguage::from_workspace_language("proto"),
             Some(AstGrepLanguage::Protobuf)
+        );
+    }
+
+    #[test]
+    fn normalizes_haskell_nix_solidity_aliases() {
+        assert_eq!(
+            AstGrepLanguage::from_user_value("hs"),
+            Some(AstGrepLanguage::Haskell)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("haskell"),
+            Some(AstGrepLanguage::Haskell)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("nix"),
+            Some(AstGrepLanguage::Nix)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("solidity"),
+            Some(AstGrepLanguage::Solidity)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_user_value("sol"),
+            Some(AstGrepLanguage::Solidity)
+        );
+    }
+
+    #[test]
+    fn infers_haskell_nix_solidity_from_file_paths() {
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("src/Main.hs")),
+            Some(AstGrepLanguage::Haskell)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("default.nix")),
+            Some(AstGrepLanguage::Nix)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("contracts/Token.sol")),
+            Some(AstGrepLanguage::Solidity)
+        );
+    }
+
+    #[test]
+    fn haskell_nix_solidity_display_names_and_str_values() {
+        assert_eq!(AstGrepLanguage::Haskell.display_name(), "Haskell");
+        assert_eq!(AstGrepLanguage::Haskell.as_str(), "haskell");
+        assert_eq!(AstGrepLanguage::Nix.display_name(), "Nix");
+        assert_eq!(AstGrepLanguage::Nix.as_str(), "nix");
+        assert_eq!(AstGrepLanguage::Solidity.display_name(), "Solidity");
+        assert_eq!(AstGrepLanguage::Solidity.as_str(), "solidity");
+    }
+
+    #[test]
+    fn haskell_nix_solidity_have_no_local_parser() {
+        assert!(!AstGrepLanguage::Haskell.has_local_parser());
+        assert!(!AstGrepLanguage::Nix.has_local_parser());
+        assert!(!AstGrepLanguage::Solidity.has_local_parser());
+    }
+
+    #[test]
+    fn maps_haskell_nix_solidity_workspace_names() {
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("Haskell"),
+            Some(AstGrepLanguage::Haskell)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("hs"),
+            Some(AstGrepLanguage::Haskell)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("Nix"),
+            Some(AstGrepLanguage::Nix)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("Solidity"),
+            Some(AstGrepLanguage::Solidity)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_workspace_language("sol"),
+            Some(AstGrepLanguage::Solidity)
+        );
+    }
+
+    #[test]
+    fn infers_newly_added_extensions_for_existing_languages() {
+        // Python - bzl
+        assert_eq!(
+            AstGrepLanguage::from_extension("bzl"),
+            Some(AstGrepLanguage::Python)
+        );
+        // Cpp - cu, ino
+        assert_eq!(
+            AstGrepLanguage::from_extension("cu"),
+            Some(AstGrepLanguage::Cpp)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_extension("ino"),
+            Some(AstGrepLanguage::Cpp)
+        );
+        // Html - xhtml
+        assert_eq!(
+            AstGrepLanguage::from_extension("xhtml"),
+            Some(AstGrepLanguage::Html)
+        );
+        // Ruby - rbw, gemspec
+        assert_eq!(
+            AstGrepLanguage::from_extension("rbw"),
+            Some(AstGrepLanguage::Ruby)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_extension("gemspec"),
+            Some(AstGrepLanguage::Ruby)
+        );
+        // Kotlin - ktm
+        assert_eq!(
+            AstGrepLanguage::from_extension("ktm"),
+            Some(AstGrepLanguage::Kotlin)
+        );
+        // Bash - bats, ksh
+        assert_eq!(
+            AstGrepLanguage::from_extension("bats"),
+            Some(AstGrepLanguage::Bash)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_extension("ksh"),
+            Some(AstGrepLanguage::Bash)
+        );
+        // Scala - sbt
+        assert_eq!(
+            AstGrepLanguage::from_extension("sbt"),
+            Some(AstGrepLanguage::Scala)
+        );
+    }
+
+    #[test]
+    fn infers_compound_extensions_from_paths() {
+        // sh.in -> Bash
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("scripts/config.sh.in")),
+            Some(AstGrepLanguage::Bash)
+        );
+        // c++ -> Cpp
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("src/main.c++")),
+            Some(AstGrepLanguage::Cpp)
         );
     }
 }

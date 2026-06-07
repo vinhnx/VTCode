@@ -1,10 +1,11 @@
 use super::{
     AstGrepByteOffset, AstGrepLabel, AstGrepMatch, AstGrepMetaVar, AstGrepMetaVariables,
-    AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, StructuralSearchRequest,
-    StructuralWorkflow, build_query_result, execute_structural_search, extract_custom_languages,
-    extract_language_globs, extract_language_injections, format_ast_grep_failure, normalize_match,
-    normalize_rewrite_match, normalize_scan_finding, parse_compact_matches,
-    preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
+    AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, FixConfig, FixExpandRule,
+    StructuralSearchRequest, StructuralWorkflow, build_fixconfig_rule_yaml, build_query_result,
+    execute_structural_search, extract_custom_languages, extract_language_globs,
+    extract_language_injections, format_ast_grep_failure, normalize_match, normalize_rewrite_match,
+    normalize_scan_finding, parse_compact_matches, preflight_parseable_pattern,
+    sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
 };
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -203,6 +204,188 @@ fn structural_request_accepts_esquery_compound_kind() {
     .expect("ESQuery compound kind should be valid");
 
     assert_eq!(request.kind(), Some("call_expression > identifier"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_descendant_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "function_declaration identifier",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery descendant kind should be valid");
+
+    assert_eq!(request.kind(), Some("function_declaration identifier"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_adjacent_sibling_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "decorator + method_definition",
+        "lang": "typescript"
+    }))
+    .expect("ESQuery adjacent sibling kind should be valid");
+
+    assert_eq!(request.kind(), Some("decorator + method_definition"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_following_sibling_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "decorator ~ method_definition",
+        "lang": "typescript"
+    }))
+    .expect("ESQuery following sibling kind should be valid");
+
+    assert_eq!(request.kind(), Some("decorator ~ method_definition"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_comma_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "identifier, number",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery comma kind should be valid");
+
+    assert_eq!(request.kind(), Some("identifier, number"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_has_pseudo_class() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "function_declaration:has(return_statement)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :has pseudo-class should be valid");
+
+    assert_eq!(
+        request.kind(),
+        Some("function_declaration:has(return_statement)")
+    );
+}
+
+#[test]
+fn structural_request_accepts_esquery_has_with_direct_child() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "expression_statement:has(> call_expression)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :has with direct child should be valid");
+
+    assert_eq!(
+        request.kind(),
+        Some("expression_statement:has(> call_expression)")
+    );
+}
+
+#[test]
+fn structural_request_accepts_esquery_not_pseudo_class() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "identifier:not(number)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :not pseudo-class should be valid");
+
+    assert_eq!(request.kind(), Some("identifier:not(number)"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_is_pseudo_class() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": ":is(identifier, number)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :is pseudo-class should be valid");
+
+    assert_eq!(request.kind(), Some(":is(identifier, number)"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_nth_child_pseudo_class() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "array > number:nth-child(2n+1)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :nth-child pseudo-class should be valid");
+
+    assert_eq!(request.kind(), Some("array > number:nth-child(2n+1)"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_nth_child_with_of_syntax() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "array > :nth-child(1 of number)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :nth-child with of syntax should be valid");
+
+    assert_eq!(request.kind(), Some("array > :nth-child(1 of number)"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_nth_last_child_pseudo_class() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "array > number:nth-last-child(1)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :nth-last-child pseudo-class should be valid");
+
+    assert_eq!(request.kind(), Some("array > number:nth-last-child(1)"));
+}
+
+#[test]
+fn structural_request_accepts_esquery_compound_pseudo_classes() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "function_declaration:has(return_statement):not(generator_function)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery compound pseudo-classes should be valid");
+
+    assert_eq!(
+        request.kind(),
+        Some("function_declaration:has(return_statement):not(generator_function)")
+    );
+}
+
+#[test]
+fn structural_request_accepts_esquery_is_with_relationship() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "call_expression > :is(identifier, number)",
+        "lang": "javascript"
+    }))
+    .expect("ESQuery :is with relationship should be valid");
+
+    assert_eq!(
+        request.kind(),
+        Some("call_expression > :is(identifier, number)")
+    );
+}
+
+#[test]
+fn structural_request_accepts_esquery_kind_with_pattern() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fn $NAME() {}",
+        "kind": "function_item:has(return_statement)",
+        "lang": "rust"
+    }))
+    .expect("ESQuery kind combined with pattern should be valid");
+
+    assert_eq!(request.kind(), Some("function_item:has(return_statement)"));
+    assert_eq!(request.pattern(), Some("fn $NAME() {}"));
 }
 
 #[test]
@@ -848,6 +1031,55 @@ async fn structural_search_passes_selector_and_strictness_flags() {
 
 #[tokio::test]
 #[serial]
+async fn structural_search_passes_selector_for_c_function_call_pattern() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "pattern": "$M($$$);",
+            "lang": "c",
+            "selector": "call_expression",
+            "path": "."
+        }),
+    )
+    .await
+    .expect("C selector search should run");
+
+    assert_eq!(result["matches"], json!([]));
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "--lang"),
+        "--lang flag missing: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "c"),
+        "lang value missing: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--selector"),
+        "--selector flag missing: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "call_expression"),
+        "selector value missing: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--pattern=$M($$$);"),
+        "pattern flag missing: {args}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn structural_search_passes_kind_flag() {
     let temp = TempDir::new().expect("workspace tempdir");
     let args_path = temp.path().join("sg_args.txt");
@@ -950,6 +1182,43 @@ async fn structural_search_passes_esquery_compound_kind() {
     assert!(
         args.lines()
             .any(|line| line == "call_expression > identifier")
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_search_passes_esquery_pseudo_selectors() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "kind": "function_declaration:has(return_statement):not(generator_function)",
+            "lang": "javascript",
+            "path": "."
+        }),
+    )
+    .await
+    .expect("ESQuery pseudo-selectors should run");
+
+    assert_eq!(
+        result["kind"],
+        json!("function_declaration:has(return_statement):not(generator_function)")
+    );
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(args.lines().any(|line| line == "--kind"));
+    assert!(
+        args.lines().any(
+            |line| line == "function_declaration:has(return_statement):not(generator_function)"
+        )
     );
 }
 
@@ -2291,6 +2560,8 @@ async fn structural_inspect_reports_empty_injection_config_when_missing() {
             .expect("object")
             .is_empty()
     );
+    assert!(result["test_configs"].as_array().expect("array").is_empty());
+    assert!(result["util_dirs"].as_array().expect("array").is_empty());
 }
 
 #[tokio::test]
@@ -2303,6 +2574,12 @@ async fn structural_inspect_reports_all_config_sections_together() {
 ruleDirs:
   - rules
   - custom-rules
+utilDirs:
+  - utils
+  - shared
+testConfigs:
+  - testDir: rule-tests
+    snapshotDir: __snapshots__
 customLanguages:
   graphql:
     libraryPath: graphql.so
@@ -2334,6 +2611,16 @@ languageInjections:
     assert_eq!(rules[0], "rules");
     assert_eq!(rules[1], "custom-rules");
 
+    let util_dirs = result["util_dirs"].as_array().expect("util_dirs");
+    assert_eq!(util_dirs.len(), 2);
+    assert_eq!(util_dirs[0], "utils");
+    assert_eq!(util_dirs[1], "shared");
+
+    let test_configs = result["test_configs"].as_array().expect("test_configs");
+    assert_eq!(test_configs.len(), 1);
+    assert_eq!(test_configs[0]["testDir"], "rule-tests");
+    assert_eq!(test_configs[0]["snapshotDir"], "__snapshots__");
+
     let custom = &result["custom_languages"];
     assert_eq!(custom["graphql"]["libraryPath"], "graphql.so");
 
@@ -2344,4 +2631,814 @@ languageInjections:
     assert_eq!(injections.len(), 1);
     assert_eq!(injections[0]["hostLanguage"], "js");
     assert_eq!(injections[0]["injected"], "graphql");
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_inspect_reports_test_configs() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(
+        temp.path().join("sgconfig.yml"),
+        "\
+ruleDirs:
+  - rules
+testConfigs:
+  - testDir: tests
+    snapshotDir: __snapshots__
+  - testDir: more-tests
+",
+    )
+    .expect("write config");
+
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "inspect"
+        }),
+    )
+    .await
+    .expect("inspect should succeed");
+
+    let configs = result["test_configs"].as_array().expect("test_configs");
+    assert_eq!(configs.len(), 2);
+    assert_eq!(configs[0]["testDir"], "tests");
+    assert_eq!(configs[0]["snapshotDir"], "__snapshots__");
+    assert_eq!(configs[1]["testDir"], "more-tests");
+    // snapshotDir should be absent when not specified
+    assert!(configs[1].get("snapshotDir").is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_inspect_reports_util_dirs() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(
+        temp.path().join("sgconfig.yml"),
+        "ruleDirs:\n  - rules\nutilDirs:\n  - utils\n  - shared-rules\n",
+    )
+    .expect("write config");
+
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "inspect"
+        }),
+    )
+    .await
+    .expect("inspect should succeed");
+
+    let dirs = result["util_dirs"].as_array().expect("util_dirs");
+    assert_eq!(dirs.len(), 2);
+    assert_eq!(dirs[0], "utils");
+    assert_eq!(dirs[1], "shared-rules");
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_inspect_reports_util_dirs_inline() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    fs::write(
+        temp.path().join("sgconfig.yml"),
+        "ruleDirs: [rules]\nutilDirs: [utils]\n",
+    )
+    .expect("write config");
+
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "inspect"
+        }),
+    )
+    .await
+    .expect("inspect should succeed");
+
+    let dirs = result["util_dirs"].as_array().expect("util_dirs");
+    assert_eq!(dirs.len(), 1);
+    assert_eq!(dirs[0], "utils");
+}
+
+// --------------- rewrite workflow tests ---------------
+
+#[test]
+fn structural_request_rejects_config_path_for_rewrite() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "rewrite": "fn renamed() {}",
+        "config_path": "sgconfig.yml"
+    }))
+    .expect_err("config_path should be rejected for rewrite workflow");
+
+    assert!(err.to_string().contains("does not accept `config_path`"));
+}
+
+#[test]
+fn structural_request_rejects_filter_for_rewrite() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "rewrite": "fn renamed() {}",
+        "filter": "some-rule"
+    }))
+    .expect_err("filter should be rejected for rewrite workflow");
+
+    assert!(err.to_string().contains("does not accept `filter`"));
+}
+
+#[test]
+fn normalize_rewrite_match_emits_replacement() {
+    let entry = AstGrepRewriteMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn old() {}".to_string(),
+        lines: Some("5: fn old() {}".to_string()),
+        language: Some("Rust".to_string()),
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 5, column: 0 },
+            end: AstGrepPoint {
+                line: 5,
+                column: 11,
+            },
+            byte_offset: None,
+        },
+        meta_variables: None,
+        replacement: Some("fn renamed() {}".to_string()),
+        replacement_offsets: Some(AstGrepByteOffset { start: 0, end: 11 }),
+    };
+
+    let value = normalize_rewrite_match(entry);
+
+    assert_eq!(value["file"], "src/lib.rs");
+    assert_eq!(value["line_number"], 5);
+    assert_eq!(value["text"], "fn old() {}");
+    assert_eq!(value["lines"], "5: fn old() {}");
+    assert_eq!(value["language"], "Rust");
+    assert_eq!(value["replacement"], "fn renamed() {}");
+    assert_eq!(value["replacementOffsets"]["start"], 0);
+    assert_eq!(value["replacementOffsets"]["end"], 11);
+}
+
+#[test]
+fn normalize_rewrite_match_omits_replacement_when_absent() {
+    let entry = AstGrepRewriteMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn old() {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 3, column: 0 },
+            end: AstGrepPoint {
+                line: 3,
+                column: 11,
+            },
+            byte_offset: None,
+        },
+        meta_variables: None,
+        replacement: None,
+        replacement_offsets: None,
+    };
+
+    let value = normalize_rewrite_match(entry);
+
+    assert_eq!(value["file"], "src/lib.rs");
+    assert_eq!(value["line_number"], 3);
+    assert_eq!(value["text"], "fn old() {}");
+    assert!(value.get("replacement").is_none());
+    assert!(value.get("replacementOffsets").is_none());
+    assert!(value.get("language").is_none());
+    // lines falls back to text when absent
+    assert_eq!(value["lines"], "fn old() {}");
+}
+
+#[test]
+fn normalize_rewrite_match_emits_meta_variables() {
+    let mut single = std::collections::BTreeMap::new();
+    single.insert(
+        "NAME".to_string(),
+        AstGrepMetaVar {
+            text: "old".to_string(),
+            range: AstGrepRange {
+                start: AstGrepPoint { line: 5, column: 3 },
+                end: AstGrepPoint { line: 5, column: 6 },
+                byte_offset: None,
+            },
+        },
+    );
+    let mut multi = std::collections::BTreeMap::new();
+    multi.insert(
+        "ARGS".to_string(),
+        vec![AstGrepMetaVar {
+            text: "x".to_string(),
+            range: AstGrepRange {
+                start: AstGrepPoint { line: 5, column: 7 },
+                end: AstGrepPoint { line: 5, column: 8 },
+                byte_offset: None,
+            },
+        }],
+    );
+    let mut transformed = std::collections::BTreeMap::new();
+    transformed.insert("UPPER".to_string(), "OLD".to_string());
+
+    let entry = AstGrepRewriteMatch {
+        file: "src/lib.rs".to_string(),
+        text: "fn old(x) {}".to_string(),
+        lines: None,
+        language: None,
+        range: AstGrepRange {
+            start: AstGrepPoint { line: 5, column: 0 },
+            end: AstGrepPoint {
+                line: 5,
+                column: 12,
+            },
+            byte_offset: None,
+        },
+        meta_variables: Some(AstGrepMetaVariables {
+            single: single.clone(),
+            multi: multi.clone(),
+            transformed: transformed.clone(),
+        }),
+        replacement: Some("fn renamed(x) {}".to_string()),
+        replacement_offsets: None,
+    };
+
+    let value = normalize_rewrite_match(entry);
+
+    assert_eq!(value["metaVariables"]["single"]["NAME"]["text"], "old");
+    assert_eq!(
+        value["metaVariables"]["single"]["NAME"]["range"]["start"]["line"],
+        5
+    );
+    assert_eq!(value["metaVariables"]["multi"]["ARGS"][0]["text"], "x");
+    assert_eq!(value["metaVariables"]["transformed"]["UPPER"], "OLD");
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_rewrite_passes_rewrite_flag_to_ast_grep() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.rs"), "fn alpha() {}\n").expect("write rust file");
+
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "fn $NAME() {}",
+            "rewrite": "fn renamed() {}",
+            "lang": "rust",
+            "path": "src"
+        }),
+    )
+    .await
+    .expect("rewrite should succeed");
+
+    assert_eq!(result["workflow"], "rewrite");
+    assert_eq!(result["rewrites"], json!([]));
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(
+        args.lines().any(|line| line == "run"),
+        "subcommand should be run"
+    );
+    assert!(
+        args.lines().any(|line| line == "--pattern=fn $NAME() {}"),
+        "pattern flag should be passed"
+    );
+    assert!(
+        args.lines().any(|line| line == "--rewrite=fn renamed() {}"),
+        "rewrite flag should be passed"
+    );
+    assert!(args.lines().any(|line| line == "--json=compact"));
+    assert!(args.lines().any(|line| line == "--color=never"));
+    assert!(args.lines().any(|line| line == "--lang"));
+    assert!(args.lines().any(|line| line == "rust"));
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_rewrite_normalizes_replacement_fields() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.rs"), "fn alpha() {}\n").expect("write rust file");
+
+    let replacement_json = r#"{"text":"fn alpha() {}","range":{"start":{"line":5,"column":0},"end":{"line":5,"column":14}},"file":"src/lib.rs","lines":"5: fn alpha() {}","language":"Rust","replacement":"fn renamed() {}","replacementOffsets":{"start":0,"end":14}}"#;
+    let script = format!("#!/bin/sh\nprintf '[{}]\n'\n", replacement_json);
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "fn $NAME() {}",
+            "rewrite": "fn renamed() {}",
+            "lang": "rust",
+            "path": "src"
+        }),
+    )
+    .await
+    .expect("rewrite should succeed");
+
+    let rewrites = result["rewrites"].as_array().expect("rewrites");
+    assert_eq!(rewrites.len(), 1);
+    assert_eq!(rewrites[0]["file"], "src/lib.rs");
+    assert_eq!(rewrites[0]["line_number"], 5);
+    assert_eq!(rewrites[0]["text"], "fn alpha() {}");
+    assert_eq!(rewrites[0]["replacement"], "fn renamed() {}");
+    assert_eq!(rewrites[0]["replacementOffsets"]["start"], 0);
+    assert_eq!(rewrites[0]["replacementOffsets"]["end"], 14);
+    assert_eq!(rewrites[0]["language"], "Rust");
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_rewrite_treats_exit_code_one_as_no_rewrites() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.rs"), "fn beta() {}\n").expect("write rust file");
+
+    let script = "#!/bin/sh\nexit 1\n";
+    let (_script_dir, script_path) = write_fake_sg(script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "fn $NAME() {}",
+            "rewrite": "fn renamed() {}",
+            "lang": "rust",
+            "path": "src"
+        }),
+    )
+    .await
+    .expect("exit code 1 should be treated as no rewrites");
+
+    assert_eq!(result["workflow"], "rewrite");
+    assert_eq!(result["rewrites"], json!([]));
+    assert_eq!(result["truncated"], false);
+}
+
+#[tokio::test]
+#[serial]
+async fn structural_rewrite_passes_selector_and_strictness() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.rs"), "fn alpha() {}\n").expect("write rust file");
+
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "fn $NAME() {}",
+            "rewrite": "fn renamed() {}",
+            "lang": "rust",
+            "path": "src",
+            "selector": "function_item",
+            "strictness": "smart"
+        }),
+    )
+    .await
+    .expect("rewrite with selector/strictness should succeed");
+
+    assert_eq!(result["workflow"], "rewrite");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    assert!(args.lines().any(|line| line == "--selector"));
+    assert!(args.lines().any(|line| line == "function_item"));
+    assert!(args.lines().any(|line| line == "--strictness"));
+    assert!(args.lines().any(|line| line == "smart"));
+}
+
+// --------------- FixConfig rewrite tests ---------------
+
+#[test]
+fn fixconfig_request_requires_rewrite_or_fix_config() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "lang": "rust"
+    }))
+    .expect_err("should reject when neither rewrite nor fix_config is present");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("requires a non-empty `rewrite`") || msg.contains("requires"),
+        "unexpected error: {msg}"
+    );
+}
+
+#[test]
+fn fixconfig_request_accepts_template_only() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "console.log($$$ARGS)",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "logger.log($$$ARGS)"
+        }
+    }))
+    .expect("fix_config with template-only should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert_eq!(fc.template, "logger.log($$$ARGS)");
+    assert!(fc.expand_start.is_none());
+    assert!(fc.expand_end.is_none());
+    assert!(!fc.has_expansion());
+}
+
+#[test]
+fn fixconfig_request_accepts_expand_end() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "$KEY: $VAL",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "",
+            "expand_end": {
+                "regex": ","
+            }
+        }
+    }))
+    .expect("fix_config with expand_end should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert_eq!(fc.template, "");
+    assert!(fc.expand_start.is_none());
+    let expand_end = fc.expand_end.as_ref().expect("expand_end present");
+    assert_eq!(expand_end.regex.as_deref(), Some(","));
+    assert!(expand_end.kind.is_none());
+    assert!(expand_end.pattern.is_none());
+    assert!(fc.has_expansion());
+}
+
+#[test]
+fn fixconfig_request_accepts_expand_start_and_end() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "$ITEM",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "",
+            "expand_start": {
+                "regex": ",",
+                "stop_by": "line"
+            },
+            "expand_end": {
+                "regex": ","
+            }
+        }
+    }))
+    .expect("fix_config with both expand_start and expand_end should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert!(fc.has_expansion());
+    let es = fc.expand_start.as_ref().expect("expand_start present");
+    assert_eq!(es.regex.as_deref(), Some(","));
+    assert_eq!(es.stop_by.as_ref().unwrap(), &json!("line"));
+}
+
+#[test]
+fn fixconfig_accepts_empty_template_for_delete() {
+    // Empty template is valid for "delete" operations (replace matched
+    // node with nothing). Whitespace-only templates are also accepted
+    // as they could be intentional formatting.
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "lang": "rust",
+        "fix_config": {
+            "template": ""
+        }
+    }))
+    .expect("empty template should be accepted for delete operations");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert_eq!(fc.template, "");
+}
+
+#[test]
+fn fixconfig_rejects_empty_expand_rule() {
+    let err = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "$KEY: $VAL",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "",
+            "expand_end": {}
+        }
+    }))
+    .expect_err("empty expand rule should be rejected");
+
+    assert!(err.to_string().contains("expand_end"));
+}
+
+#[test]
+fn fixconfig_accepts_expand_rule_with_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "foo($ARG)",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "bar($ARG)",
+            "expand_start": { "kind": "(" },
+            "expand_end": { "kind": ")" }
+        }
+    }))
+    .expect("expand rules with kind should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert_eq!(fc.expand_start.as_ref().unwrap().kind.as_deref(), Some("("));
+    assert_eq!(fc.expand_end.as_ref().unwrap().kind.as_deref(), Some(")"));
+}
+
+#[test]
+fn fixconfig_accepts_expand_rule_with_pattern() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "foo($ARG)",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "bar($ARG)",
+            "expand_end": { "pattern": "," }
+        }
+    }))
+    .expect("expand rules with pattern should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    assert_eq!(
+        fc.expand_end.as_ref().unwrap().pattern.as_deref(),
+        Some(",")
+    );
+}
+
+#[test]
+fn fixconfig_effective_rewrite_template_prefers_rewrite_string() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "lang": "rust",
+        "rewrite": "fn renamed() {}",
+        "fix_config": {
+            "template": "from_fix_config"
+        }
+    }))
+    .expect("both rewrite and fix_config should be accepted");
+
+    // rewrite string takes precedence
+    assert_eq!(
+        request.effective_rewrite_template(),
+        Some("fn renamed() {}")
+    );
+}
+
+#[test]
+fn fixconfig_effective_rewrite_template_uses_template_when_no_rewrite() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "fn $NAME() {}",
+        "lang": "rust",
+        "fix_config": {
+            "template": "from_template"
+        }
+    }))
+    .expect("fix_config without rewrite string should be accepted");
+
+    assert_eq!(request.effective_rewrite_template(), Some("from_template"));
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_generates_correct_structure() {
+    let fix_config = FixConfig {
+        template: "".to_string(),
+        expand_start: None,
+        expand_end: Some(FixExpandRule {
+            regex: Some(",".to_string()),
+            kind: None,
+            pattern: None,
+            stop_by: None,
+        }),
+    };
+
+    let yaml = build_fixconfig_rule_yaml("$KEY: $VAL", "javascript", &fix_config, None);
+
+    assert!(yaml.contains("id: fixconfig-rewrite"), "yaml: {yaml}");
+    assert!(yaml.contains("language: javascript"), "yaml: {yaml}");
+    assert!(yaml.contains("severity: info"), "yaml: {yaml}");
+    assert!(yaml.contains("pattern: $KEY: $VAL"), "yaml: {yaml}");
+    assert!(yaml.contains("template: ''"), "yaml: {yaml}");
+    assert!(yaml.contains("expandEnd:"), "yaml: {yaml}");
+    assert!(yaml.contains("regex: ','"), "yaml: {yaml}");
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_includes_selector() {
+    let fix_config = FixConfig {
+        template: "bar($ARG)".to_string(),
+        expand_start: Some(FixExpandRule {
+            regex: None,
+            kind: Some("(".to_string()),
+            pattern: None,
+            stop_by: None,
+        }),
+        expand_end: Some(FixExpandRule {
+            regex: None,
+            kind: Some(")".to_string()),
+            pattern: None,
+            stop_by: None,
+        }),
+    };
+
+    let yaml = build_fixconfig_rule_yaml(
+        "foo($ARG)",
+        "javascript",
+        &fix_config,
+        Some("call_expression"),
+    );
+
+    assert!(yaml.contains("pattern: foo($ARG)"), "yaml: {yaml}");
+    assert!(yaml.contains("selector: call_expression"), "yaml: {yaml}");
+    assert!(yaml.contains("expandStart:"), "yaml: {yaml}");
+    assert!(yaml.contains("expandEnd:"), "yaml: {yaml}");
+    // `(` and `)` are not special YAML characters, so they are not quoted.
+    assert!(yaml.contains("kind: ("), "yaml: {yaml}");
+    assert!(yaml.contains("kind: )"), "yaml: {yaml}");
+}
+
+#[test]
+fn fixexpand_rule_to_yaml_value_serializes_fields() {
+    let rule = FixExpandRule {
+        regex: Some(",".to_string()),
+        kind: None,
+        pattern: None,
+        stop_by: Some(json!("line")),
+    };
+
+    let value = rule.to_yaml_value();
+    assert_eq!(value["regex"], ",");
+    assert_eq!(value["stopBy"], "line");
+    assert!(value.get("kind").is_none());
+    assert!(value.get("pattern").is_none());
+}
+
+#[test]
+fn yaml_escape_scalar_handles_special_characters() {
+    // Simple value, no quoting needed
+    assert_eq!(yaml_escape_scalar("hello"), "hello");
+
+    // Empty value
+    assert_eq!(yaml_escape_scalar(""), "''");
+
+    // Value with colon needs quoting
+    let escaped = yaml_escape_scalar("key: value");
+    assert!(escaped.starts_with('\''), "should be quoted: {escaped}");
+
+    // Value with hash needs quoting
+    let escaped = yaml_escape_scalar("foo # bar");
+    assert!(escaped.starts_with('\''), "should be quoted: {escaped}");
+
+    // Value with single quote escapes by doubling
+    let escaped = yaml_escape_scalar("it's");
+    assert!(escaped.contains("''"), "should escape quote: {escaped}");
+}
+
+#[tokio::test]
+#[serial]
+async fn fixconfig_rewrite_with_expansion_uses_sg_scan() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.js"), "const x = { a: 1, b: 2 }\n").expect("write js file");
+
+    let args_path = temp.path().join("sg_args.txt");
+    // Scan uses newline-delimited JSON. Empty results are represented by
+    // exit code 1 with empty stdout (same as the query rewrite path).
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nexit 1\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "$KEY: $VAL",
+            "lang": "javascript",
+            "path": "src",
+            "fix_config": {
+                "template": "",
+                "expand_end": {
+                    "regex": ","
+                }
+            }
+        }),
+    )
+    .await
+    .expect("fixconfig rewrite should succeed");
+
+    assert_eq!(result["workflow"], "rewrite");
+    assert_eq!(result["rewrites"], json!([]));
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    // FixConfig with expansion should use scan, not run
+    assert!(
+        args.lines().any(|line| line == "scan"),
+        "subcommand should be scan for fixconfig with expansion, got: {args}"
+    );
+    assert!(
+        args.lines().any(|line| line == "--json=stream"),
+        "should use stream output for scan"
+    );
+    assert!(
+        args.lines().any(|line| line == "--config"),
+        "should pass --config for scan"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn fixconfig_rewrite_without_expansion_uses_sg_run_rewrite() {
+    let temp = TempDir::new().expect("workspace tempdir");
+    let src_dir = temp.path().join("src");
+    fs::create_dir_all(&src_dir).expect("create src dir");
+    fs::write(src_dir.join("lib.js"), "console.log('hi')\n").expect("write js file");
+
+    let args_path = temp.path().join("sg_args.txt");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+        args_path.display()
+    );
+    let (_script_dir, script_path) = write_fake_sg(&script);
+
+    let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+    let result = execute_structural_search(
+        temp.path(),
+        json!({
+            "action": "structural",
+            "workflow": "rewrite",
+            "pattern": "console.log($$$ARGS)",
+            "lang": "javascript",
+            "path": "src",
+            "fix_config": {
+                "template": "logger.log($$$ARGS)"
+            }
+        }),
+    )
+    .await
+    .expect("fixconfig template-only rewrite should succeed");
+
+    assert_eq!(result["workflow"], "rewrite");
+
+    let args = fs::read_to_string(args_path).expect("read sg args");
+    // Template-only FixConfig (no expansion) should use run --rewrite
+    assert!(
+        args.lines().any(|line| line == "run"),
+        "subcommand should be run for template-only fixconfig, got: {args}"
+    );
+    assert!(
+        args.lines()
+            .any(|line| line == "--rewrite=logger.log($$$ARGS)"),
+        "should pass --rewrite with template"
+    );
 }

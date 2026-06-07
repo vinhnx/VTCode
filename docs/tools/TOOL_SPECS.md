@@ -61,7 +61,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
 ### `structural`
 
 - Required: `action="structural"`
-- Optional common fields: `workflow` (`"query" | "scan" | "test"`, default `"query"`), `path` (default `"."` for query/scan; public structural takes one root per call even though raw `ast-grep run` accepts multiple paths), `config_path` (default workspace `sgconfig.yml` for scan/test), `filter`, `globs`, `context_lines`, `max_results`
+- Optional common fields: `workflow` (`"query" | "scan" | "test" | "inspect" | "rewrite"`, default `"query"`), `path` (default `"."` for query/scan; public structural takes one root per call even though raw `ast-grep run` accepts multiple paths), `config_path` (default workspace `sgconfig.yml` for scan/test), `filter`, `globs`, `context_lines`, `max_results`
 - `workflow="query"`:
   - Required: at least one of `pattern` or `kind`
   - Optional: `lang`, `selector`, `strictness`, `debug_query`
@@ -84,16 +84,33 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - `workflow="test"`:
   - Optional: `config_path`, `filter`, `skip_snapshot_tests`
   - Result shape: `passed`, `stdout`, `stderr`, `summary`, and `backend: "ast-grep"`
+- `workflow="rewrite"`:
+  - Required: `pattern` and either `rewrite` (string) or `fix_config` (object)
+  - Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`
+  - Internal mapping: dry-run `ast-grep run --pattern=... --rewrite=... --json=compact --color=never`, plus optional `--lang`, `--selector`, `--strictness`, repeated `--globs`, and `--context`
+  - This is a preview-only workflow; no files are modified on disk
+  - `lang`, `selector`, and `strictness` behave the same as `workflow="query"`
+  - `config_path`, `filter`, and `skip_snapshot_tests` are rejected (scan/test-only fields)
+  - `fix_config` is an advanced alternative to the simple `rewrite` string. It accepts `template` (replacement text), `expand_start` (optional rule to widen the replacement range backwards), and `expand_end` (optional rule to widen the replacement range forwards). Each expand rule supports `regex`, `kind`, or `pattern`, plus optional `stop_by`. When `fix_config` includes expansion, the tool generates a temporary YAML rule and runs `sg scan` internally instead of `sg run --rewrite`. Use `fix_config` when replacing only the matched node is not enough, especially for deleting list items or key-value pairs that also need a surrounding comma removed.
+  - ast-grep `run` exit code `1` is normalized to an empty `rewrites` array instead of surfacing as a VT Code error
+  - Result shape: top-level `rewrites` array with `file`, `line_number`, `text`/`lines`, `language`, `range`, `replacement`, `replacementOffsets`, and optional `metaVariables`, plus `truncated`, `backend: "ast-grep"`, and `workflow: "rewrite"`
+- `workflow="inspect"`:
+  - Optional: `config_path`, `path`
+  - Does not require the ast-grep binary; reads `sgconfig.yml` directly
+  - Returns: `config_exists`, `rule_dir_hints`, `test_configs`, `util_dirs`, `language_injections`, `custom_languages`, `language_globs`, and `discovered_configs` (when the default config is missing but found in a parent directory)
+  - Use when: you need to inspect the project's ast-grep configuration without running any rules
 - Constraints:
-  - Read-only only; rewrite/apply flags are rejected
-  - `lang`, `kind`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"`
+  - Read-only only; `workflow="rewrite"` is a dry-run preview that does not modify files; raw `--interactive`, `--update-all`, and other apply-mode flags are rejected
+  - `lang`, `kind`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"` and `workflow="rewrite"`
   - `lang` is required when `debug_query` is set
   - `skip_snapshot_tests` is only valid for `workflow="test"`
+  - `fix_config` is only valid for `workflow="rewrite"`
+  - `workflow="inspect"` does not require the ast-grep binary and rejects `pattern`, `kind`, `lang`, `selector`, `strictness`, `debug_query`, `filter`, `skip_snapshot_tests`, `globs`, `context_lines`, and `max_results`
   - Default `config_path` is workspace `sgconfig.yml`; raw ast-grep also supports upward discovery of `sgconfig.yml`, but VT Code’s public structural surface pins scan/test to an explicit config path for determinism
   - Requires a local `sg` / `ast-grep` binary; if missing, VT Code returns an actionable error, points to the bundled `ast-grep` skill, and recommends `vtcode dependencies install search-tools` or `vtcode dependencies install ast-grep`
   - VT Code-managed installs live in `~/.vtcode/bin`
   - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
-  - Raw ast-grep CLI flags such as `--stdin`, `--json`, `--color`, `--heading`, `--threads`, `--inspect`, `--follow`, `--no-ignore`, `--before`, `--after`, `--interactive`, `--update-all`, `--rewrite`, `--rule`, `--inline-rules`, `--format`, `--report-style`, `--error`, `--warning`, `--info`, `--hint`, and `--off` are not part of the public structural surface and should go through the bundled `ast-grep` skill plus `unified_exec` when needed
+  - Raw ast-grep CLI flags such as `--stdin`, `--json`, `--color`, `--heading`, `--threads`, `--inspect`, `--follow`, `--no-ignore`, `--before`, `--after`, `--interactive`, `--update-all`, `--rule`, `--inline-rules`, `--format`, `--report-style`, `--error`, `--warning`, `--info`, `--hint`, and `--off` are not part of the public structural surface and should go through the bundled `ast-grep` skill plus `unified_exec` when needed. The `rewrite` field is accepted only for `workflow="rewrite"` (dry-run preview); passing `rewrite` with other workflows is silently ignored.
   - Test-only ast-grep flags such as `--test-dir`, `--snapshot-dir`, `--include-off`, interactive snapshot review, and snapshot update flows are also CLI-only and not part of the public structural surface
   - `ast-grep new`, `ast-grep lsp`, `ast-grep completions`, and top-level help/command-discovery flows are CLI-only and should go through the bundled `ast-grep` skill plus `unified_exec`
   - Syntax-aware only; do not treat this surface as scope, type, or data-flow analysis
@@ -105,7 +122,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
   - Public project support stops at read-only `sg scan` and `sg test`
   - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `rewrite`, `joinBy`, `rewriters`, custom parser compilation, or non-trivial `sgconfig.yml` authoring/debugging
-- Use when: you need syntax-aware search, read-only project rule scans, or read-only ast-grep rule tests
+- Use when: you need syntax-aware search, read-only project rule scans, read-only ast-grep rule tests, ast-grep config inspection, or dry-run rewrite previews
 - Avoid when: plain text grep is simpler, the search target is not syntax-sensitive, or the task depends on semantic/static-analysis facts
 
 ### `tools`
@@ -137,6 +154,8 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `structural` for syntax-sensitive search, read-only project scans, and read-only ast-grep rule tests.
 - Prefer public `structural` `strictness` on `workflow="query"` when the task is just tuning read-only matching between `cst`, `smart`, `ast`, `relaxed`, and `signature`.
 - Prefer `workflow="scan"` for public `sg scan` equivalents and `workflow="test"` for public `sg test` equivalents.
+- Prefer `workflow="inspect"` when the task needs to introspect the project's ast-grep configuration (rule directories, test configs, language injections, custom languages, language globs) without running any rules.
+- Prefer `workflow="rewrite"` with `fix_config` when the rewrite needs range expansion beyond the matched node, such as removing surrounding commas from list items or key-value pairs.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes rule authoring, `sg new`, rewrite/apply work, interactive ast-grep work, or `sgconfig.yml` authoring/debugging.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task is a quick-start or install flow, including `ast-grep --help`, shell quoting for metavariables, or optional-chaining style first rewrites.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task asks for ast-grep catalog examples, existing rewrite examples, or help adapting catalog rules to this repository.

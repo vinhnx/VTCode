@@ -21,8 +21,8 @@ const MAX_ALLOWED_GLOBS: usize = 64;
 const MAX_ALLOWED_CONTEXT_LINES: usize = 20;
 const MAX_AUXILIARY_OUTPUT_CHARS: usize = 64_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; pseudo-selectors `:has()`, `:not()`, `:is()`, and `:nth-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, or `FixConfig` with `expandStart`/`expandEnd`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
-const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `workflow='inspect'` to see the project's current `languageInjections`, `customLanguages`, and `languageGlobs` configuration.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
+const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `testConfigs` with `testDir` (required) and optional `snapshotDir` to configure ast-grep test discovery. Use `utilDirs` to declare directories for global utility rules shared across multiple rule files. Use `workflow='inspect'` to see the project's current `testConfigs`, `utilDirs`, `languageInjections`, `customLanguages`, and `languageGlobs` configuration.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
     "interactive",
@@ -150,6 +150,96 @@ impl GlobInput {
     }
 }
 
+/// A rule object used in `expandStart` / `expandEnd` of a `FixConfig`.
+/// Supports the common rule forms: `regex`, `kind`, `pattern`, plus the
+/// optional `stopBy` field unique to expand rules.
+#[derive(Debug, Clone, Deserialize)]
+struct FixExpandRule {
+    #[serde(default)]
+    regex: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    pattern: Option<String>,
+    /// Controls where the expansion stops. Defaults to `"end"` (expand to
+    /// the end of the enclosing node). Set to `"line"` to stop at end of
+    /// line, or a rule object to stop at a specific sibling.
+    #[serde(default)]
+    stop_by: Option<Value>,
+}
+
+impl FixExpandRule {
+    fn is_empty(&self) -> bool {
+        self.regex.is_none() && self.kind.is_none() && self.pattern.is_none()
+    }
+
+    fn validate(&self, label: &str) -> Result<()> {
+        if self.is_empty() {
+            bail!("`{label}` must specify at least one of `regex`, `kind`, or `pattern`");
+        }
+        Ok(())
+    }
+
+    /// Serialize this expand rule to a YAML-compatible JSON value for rule
+    /// file generation.
+    fn to_yaml_value(&self) -> Value {
+        let mut obj = Map::new();
+        if let Some(regex) = &self.regex {
+            obj.insert("regex".to_string(), Value::String(regex.clone()));
+        }
+        if let Some(kind) = &self.kind {
+            obj.insert("kind".to_string(), Value::String(kind.clone()));
+        }
+        if let Some(pattern) = &self.pattern {
+            obj.insert("pattern".to_string(), Value::String(pattern.clone()));
+        }
+        if let Some(stop_by) = &self.stop_by {
+            obj.insert("stopBy".to_string(), stop_by.clone());
+        }
+        Value::Object(obj)
+    }
+}
+
+/// Advanced fix configuration that allows expanding the replacement range
+/// beyond the matched AST node. This maps to ast-grep's `FixConfig` YAML
+/// rule feature.
+///
+/// Use `FixConfig` when replacing only the matched node is not enough,
+/// especially for deleting list items or key-value pairs that also need
+/// a surrounding comma removed.
+#[derive(Debug, Clone, Deserialize)]
+struct FixConfig {
+    /// The replacement template string. Meta variables from the matched
+    /// pattern can be referenced here (e.g. `$VAR`, `$$$ARGS`).
+    template: String,
+    /// Optional rule to expand the fix range start backwards. The range
+    /// start moves left until the rule is no longer met.
+    #[serde(default)]
+    expand_start: Option<FixExpandRule>,
+    /// Optional rule to expand the fix range end forwards. The range end
+    /// moves right until the rule is no longer met.
+    #[serde(default)]
+    expand_end: Option<FixExpandRule>,
+}
+
+impl FixConfig {
+    fn validate(&self) -> Result<()> {
+        // Template can be empty for "delete" operations (replace matched
+        // node with nothing). Validation ensures the field is present.
+        if let Some(expand_start) = &self.expand_start {
+            expand_start.validate("fix_config.expand_start")?;
+        }
+        if let Some(expand_end) = &self.expand_end {
+            expand_end.validate("fix_config.expand_end")?;
+        }
+        Ok(())
+    }
+
+    fn has_expansion(&self) -> bool {
+        self.expand_start.is_some() || self.expand_end.is_some()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct StructuralSearchRequest {
     #[serde(default)]
@@ -182,6 +272,12 @@ struct StructuralSearchRequest {
     skip_snapshot_tests: Option<bool>,
     #[serde(default)]
     rewrite: Option<String>,
+    /// Advanced fix configuration for the rewrite workflow. When present,
+    /// the tool generates a temporary YAML rule with `fix` as a `FixConfig`
+    /// object (template + expandStart/expandEnd) and runs `sg scan` instead
+    /// of `sg run --rewrite`.
+    #[serde(default, rename = "fix_config")]
+    fix_config: Option<FixConfig>,
 }
 
 impl StructuralSearchRequest {
@@ -338,8 +434,22 @@ impl StructuralSearchRequest {
         if self.pattern().is_none() {
             bail!("action='structural' workflow='rewrite' requires a non-empty `pattern`");
         }
-        if self.rewrite_text().is_none() {
-            bail!("action='structural' workflow='rewrite' requires a non-empty `rewrite`");
+
+        let has_string_rewrite = self.rewrite_text().is_some();
+        let has_fix_config = self.fix_config.is_some();
+
+        if !has_string_rewrite && !has_fix_config {
+            bail!(
+                "action='structural' workflow='rewrite' requires a non-empty `rewrite` string \
+                 or a `fix_config` object with `template` and optional `expand_start`/`expand_end`"
+            );
+        }
+
+        if has_fix_config {
+            self.fix_config
+                .as_ref()
+                .expect("fix_config validated present")
+                .validate()?;
         }
 
         self.reject_present("config_path", self.config_path.as_deref())?;
@@ -413,6 +523,18 @@ impl StructuralSearchRequest {
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
+    }
+
+    /// Returns the effective rewrite template: the simple `rewrite` string,
+    /// or the `fix_config.template` when a FixConfig is present.
+    fn effective_rewrite_template(&self) -> Option<&str> {
+        if let Some(rewrite) = self.rewrite_text() {
+            return Some(rewrite);
+        }
+        self.fix_config
+            .as_ref()
+            .map(|fc| fc.template.trim())
+            .filter(|t| !t.is_empty())
     }
 
     fn normalized_globs(&self) -> Vec<String> {
@@ -796,6 +918,16 @@ async fn execute_structural_rewrite(
         ));
     }
 
+    // When FixConfig with expansion is present, use the YAML rule path
+    // because `sg run --rewrite` only supports string fixes.
+    if let Some(fix_config) = &request.fix_config {
+        if fix_config.has_expansion() {
+            return execute_fixconfig_rewrite(workspace_root, request, ast_grep, &search_path)
+                .await;
+        }
+    }
+
+    // Simple string rewrite via `sg run --rewrite`.
     let command_path = search_path.command_arg.clone();
     let mut command = ast_grep_command(ast_grep, workspace_root, "run");
     command
@@ -805,7 +937,9 @@ async fn execute_structural_rewrite(
         ))
         .arg(format!(
             "--rewrite={}",
-            request.rewrite_text().expect("rewrite text validated")
+            request
+                .effective_rewrite_template()
+                .expect("rewrite template validated")
         ))
         .arg("--json=compact")
         .arg("--color=never");
@@ -854,6 +988,313 @@ async fn execute_structural_rewrite(
         &search_path.display_path,
         rewrites,
     ))
+}
+
+/// Execute a FixConfig rewrite by generating a temporary YAML rule with
+/// `fix` as a `FixConfig` object (template + expandStart/expandEnd) and
+/// running `sg scan` against it.
+///
+/// This is necessary because `sg run --rewrite` only supports simple
+/// string fixes. FixConfig with expandStart/expandEnd requires the YAML
+/// rule file path.
+async fn execute_fixconfig_rewrite(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+    search_path: &ResolvedSearchPath,
+) -> Result<Value> {
+    let fix_config = request
+        .fix_config
+        .as_ref()
+        .expect("fix_config validated present");
+    let pattern = request.pattern().expect("rewrite pattern validated");
+    let lang = request
+        .lang
+        .as_deref()
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or("javascript");
+
+    // Build the YAML rule content.
+    let rule_yaml =
+        build_fixconfig_rule_yaml(pattern, lang, fix_config, request.selector.as_deref());
+
+    // Create a temporary directory with the rule file and sgconfig.yml.
+    let temp_dir = tempfile::tempdir().with_context(|| {
+        "failed to create temporary directory for FixConfig rewrite rule".to_string()
+    })?;
+    let rules_dir = temp_dir.path().join("rules");
+    afs::create_dir_all(&rules_dir).await.with_context(|| {
+        format!(
+            "failed to create rules directory at {}",
+            rules_dir.display()
+        )
+    })?;
+
+    let rule_path = rules_dir.join("fixconfig-rewrite.yml");
+    afs::write(&rule_path, &rule_yaml)
+        .await
+        .with_context(|| format!("failed to write FixConfig rule to {}", rule_path.display()))?;
+
+    let sgconfig_path = temp_dir.path().join("sgconfig.yml");
+    let sgconfig_content = format!("ruleDirs:\n  - {}\n", rules_dir.display());
+    afs::write(&sgconfig_path, &sgconfig_content)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to write sgconfig.yml to {}",
+                sgconfig_path.display()
+            )
+        })?;
+
+    // Run `sg scan` with the temporary config.
+    let mut command = ast_grep_command(ast_grep, workspace_root, "scan");
+    command
+        .arg("--config")
+        .arg(&sgconfig_path)
+        .arg("--json=stream")
+        .arg("--include-metadata")
+        .arg("--color=never");
+
+    let globs = request.normalized_globs();
+    apply_context_and_globs(&mut command, request.context_lines, &globs);
+    command.arg(&search_path.command_arg);
+
+    let output = run_ast_grep_command(
+        &mut command,
+        "failed to run ast-grep FixConfig rewrite scan",
+    )
+    .await?;
+
+    let findings_with_error_exit = output.status.code() == Some(1);
+    if !output.status.success() && !findings_with_error_exit {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep FixConfig rewrite scan failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let findings =
+        if findings_with_error_exit && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            Vec::new()
+        } else {
+            parse_stream_findings(&output.stdout)?
+        };
+
+    // Convert scan findings to rewrite-style output.
+    Ok(build_fixconfig_rewrite_result(
+        request,
+        &search_path.display_path,
+        findings,
+    ))
+}
+
+/// Build a YAML rule string for a FixConfig rewrite.
+///
+/// The rule has:
+/// - `id`: a descriptive identifier
+/// - `language`: the target language
+/// - `severity: info` (rewrite, not a lint warning)
+/// - `rule.pattern` or `rule.pattern` + `rule.selector`
+/// - `fix`: a FixConfig object with `template` and optional
+///   `expandStart`/`expandEnd`
+fn build_fixconfig_rule_yaml(
+    pattern: &str,
+    lang: &str,
+    fix_config: &FixConfig,
+    selector: Option<&str>,
+) -> String {
+    let mut yaml = String::new();
+    yaml.push_str("id: fixconfig-rewrite\n");
+    yaml.push_str(&format!("language: {lang}\n"));
+    yaml.push_str("severity: info\n");
+    yaml.push_str("rule:\n");
+
+    if let Some(selector) = selector.filter(|s| !s.trim().is_empty()) {
+        yaml.push_str(&format!("  pattern: {pattern}\n"));
+        yaml.push_str(&format!("  selector: {selector}\n"));
+    } else {
+        yaml.push_str(&format!("  pattern: {pattern}\n"));
+    }
+
+    yaml.push_str("fix:\n");
+    yaml.push_str(&format!(
+        "  template: {}\n",
+        yaml_escape_scalar(&fix_config.template)
+    ));
+
+    if let Some(expand_start) = &fix_config.expand_start {
+        yaml.push_str("  expandStart:\n");
+        append_expand_rule_yaml(&mut yaml, expand_start);
+    }
+
+    if let Some(expand_end) = &fix_config.expand_end {
+        yaml.push_str("  expandEnd:\n");
+        append_expand_rule_yaml(&mut yaml, expand_end);
+    }
+
+    yaml
+}
+
+/// Append expand rule fields to the YAML string, indented at the correct level.
+fn append_expand_rule_yaml(yaml: &mut String, rule: &FixExpandRule) {
+    if let Some(regex) = &rule.regex {
+        yaml.push_str(&format!("    regex: {}\n", yaml_escape_scalar(regex)));
+    }
+    if let Some(kind) = &rule.kind {
+        yaml.push_str(&format!("    kind: {}\n", yaml_escape_scalar(kind)));
+    }
+    if let Some(pattern) = &rule.pattern {
+        yaml.push_str(&format!("    pattern: {}\n", yaml_escape_scalar(pattern)));
+    }
+    if let Some(stop_by) = &rule.stop_by {
+        match stop_by {
+            Value::String(s) => {
+                yaml.push_str(&format!("    stopBy: {}\n", yaml_escape_scalar(s)));
+            }
+            Value::Object(_) => {
+                // For object stopBy, render as inline JSON-ish YAML.
+                // This handles cases like `stopBy: { kind: "," }` or
+                // `stopBy: { regex: "," }`.
+                yaml.push_str("    stopBy:\n");
+                if let Some(obj) = stop_by.as_object() {
+                    for (key, val) in obj {
+                        match val {
+                            Value::String(s) => {
+                                yaml.push_str(&format!(
+                                    "      {}: {}\n",
+                                    key,
+                                    yaml_escape_scalar(s)
+                                ));
+                            }
+                            Value::Number(n) => {
+                                yaml.push_str(&format!("      {}: {}\n", key, n));
+                            }
+                            Value::Bool(b) => {
+                                yaml.push_str(&format!("      {}: {}\n", key, b));
+                            }
+                            _ => {
+                                yaml.push_str(&format!("      {}: {}\n", key, val));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                yaml.push_str(&format!("    stopBy: {}\n", stop_by));
+            }
+        }
+    }
+}
+
+/// Escape a string value for YAML output. Wraps in single quotes if the
+/// value contains special YAML characters, and escapes internal single
+/// quotes by doubling them.
+fn yaml_escape_scalar(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+
+    let needs_quoting = value.contains(':')
+        || value.contains('#')
+        || value.contains('{')
+        || value.contains('}')
+        || value.contains('[')
+        || value.contains(']')
+        || value.contains(',')
+        || value.contains('&')
+        || value.contains('*')
+        || value.contains('?')
+        || value.contains('|')
+        || value.contains('-')
+        || value.contains('>')
+        || value.contains('!')
+        || value.contains('%')
+        || value.contains('@')
+        || value.contains('`')
+        || value.contains('"')
+        || value.contains('\'')
+        || value.starts_with(' ')
+        || value.ends_with(' ')
+        || value == "true"
+        || value == "false"
+        || value == "null"
+        || value == "yes"
+        || value == "no"
+        || value.parse::<f64>().is_ok();
+
+    if needs_quoting {
+        let escaped = value.replace('\'', "''");
+        format!("'{escaped}'")
+    } else {
+        value.to_string()
+    }
+}
+
+/// Build rewrite-style result from scan findings. Converts scan findings
+/// into the same shape as rewrite results so callers get a consistent
+/// response format regardless of the internal path taken.
+fn build_fixconfig_rewrite_result(
+    request: &StructuralSearchRequest,
+    display_path: &str,
+    findings: Vec<AstGrepScanFinding>,
+) -> Value {
+    let max_results = request.effective_max_results();
+    let truncated = findings.len() > max_results;
+    let template = request
+        .effective_rewrite_template()
+        .unwrap_or_default()
+        .to_string();
+
+    let normalized_rewrites: Vec<Value> = findings
+        .into_iter()
+        .take(max_results)
+        .map(|finding| {
+            let mut rewrite_object = Map::new();
+            rewrite_object.insert("file".to_string(), Value::String(finding.file));
+            rewrite_object.insert("line_number".to_string(), json!(finding.range.start.line));
+            rewrite_object.insert("text".to_string(), Value::String(finding.text.clone()));
+            rewrite_object.insert(
+                "lines".to_string(),
+                Value::String(finding.lines.unwrap_or(finding.text)),
+            );
+            if let Some(language) = finding.language {
+                rewrite_object.insert("language".to_string(), Value::String(language));
+            }
+            rewrite_object.insert("range".to_string(), build_range_value(&finding.range));
+            // The replacement is the FixConfig template. The actual expanded
+            // replacement would require applying the rule in-process, which
+            // ast-grep handles externally. We include the template as the
+            // intended replacement and note the expansion config.
+            rewrite_object.insert("replacement".to_string(), Value::String(template.clone()));
+            if let Some(message) = finding.message {
+                rewrite_object.insert("message".to_string(), Value::String(message));
+            }
+            Value::Object(rewrite_object)
+        })
+        .collect();
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "workflow": "rewrite",
+        "path": display_path,
+        "rewrites": normalized_rewrites,
+        "truncated": truncated,
+        "fix_config": {
+            "template": request.fix_config.as_ref().map(|fc| fc.template.clone()),
+            "expand_start": request.fix_config.as_ref().and_then(|fc| fc.expand_start.as_ref().map(|es| es.to_yaml_value())),
+            "expand_end": request.fix_config.as_ref().and_then(|fc| fc.expand_end.as_ref().map(|ee| ee.to_yaml_value())),
+        },
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(template) = request.effective_rewrite_template() {
+        result["rewrite"] = json!(template);
+    }
+    result
 }
 
 fn build_rewrite_fragment_result(
@@ -984,6 +1425,18 @@ async fn execute_structural_inspect(
         Value::Object(Map::new())
     };
 
+    let test_configs = if config_exists {
+        extract_test_configs(&resolved_full).await
+    } else {
+        Vec::new()
+    };
+
+    let util_dirs = if config_exists {
+        extract_util_dirs(&resolved_full).await
+    } else {
+        Vec::new()
+    };
+
     let discovered = if !config_exists {
         let is_default = requested_config == DEFAULT_AST_GREP_CONFIG_PATH;
         if is_default {
@@ -1013,6 +1466,8 @@ async fn execute_structural_inspect(
         "config_path": config_path.display_path,
         "config_exists": config_exists,
         "rule_dir_hints": rule_dir_hints,
+        "test_configs": test_configs,
+        "util_dirs": util_dirs,
         "language_injections": language_injections,
         "custom_languages": custom_languages,
         "language_globs": language_globs,
@@ -1593,7 +2048,7 @@ fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
         message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
     }
     message.push_str(
-        " Retry `unified_search` with a refined structural pattern before switching tools. For simple rewrites, use `workflow='rewrite'` on the public structural surface. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or advanced rewrite-oriented ast-grep tasks with `transform`, `rewriters`, or `FixConfig`, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
+        " Retry `unified_search` with a refined structural pattern before switching tools. For simple rewrites, use `workflow='rewrite'` on the public structural surface. For FixConfig rewrites with range expansion, use `workflow='rewrite'` with `fix_config` on the public surface. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or advanced rewrite-oriented ast-grep tasks with `transform` or `rewriters`, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
     );
     if !detail.contains(AST_GREP_INSTALL_COMMAND) {
         message.push(' ');
@@ -1615,6 +2070,29 @@ fn looks_like_language_support_issue(detail: &str) -> bool {
             || detail.contains("not supported"))
 }
 
+/// Returns true when a Go pattern looks like a bare function call that
+/// tree-sitter-go would parse as a type conversion (e.g. `fmt.Println($A)`
+/// or `json.Unmarshal($$$)`). These patterns need `context` + `selector`
+/// to disambiguate.
+fn looks_like_go_call_pattern(pattern: &str) -> bool {
+    // Match patterns like `pkg.Func($$$)`, `Func($$$)`, or
+    // `expr.Method($$$)` where the pattern starts with an identifier
+    // chain followed by parenthesized arguments.
+    let trimmed = pattern.trim();
+    let Some(paren) = trimmed.find('(') else {
+        return false;
+    };
+    if paren == 0 || !trimmed.ends_with(')') {
+        return false;
+    }
+    let callee = &trimmed[..paren];
+    // Callee must look like an identifier chain: `Func`, `pkg.Func`,
+    // `pkg.Sub.Method`, etc.
+    callee.split('.').all(|part| {
+        !part.is_empty() && (part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+    })
+}
+
 fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLanguage) -> String {
     let trimmed = request.pattern().expect("query pattern validated");
     let mut message = format!(
@@ -1629,6 +2107,12 @@ fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLan
     {
         message.push_str(
             " For Result return-type queries, anchor it in a full signature like `fn $NAME($$ARGS) -> Result<$T> { $$BODY }`.",
+        );
+    } else if language == AstGrepLanguage::Go && looks_like_go_call_pattern(trimmed) {
+        message.push_str(
+            " In Go, tree-sitter parses bare call-like fragments (e.g. `fmt.Println($A)`) as type conversions, not call expressions. \
+             Wrap the call in surrounding parseable code like `func t() { fmt.Println($A) }` and use `selector: call_expression` to match only function calls. \
+             Note: contextual patterns with `context` + `selector` require the CLI skill path via `unified_exec`.",
         );
     } else {
         message.push_str(
@@ -1871,6 +2355,125 @@ async fn extract_rule_dirs(config_path: &Path) -> Vec<String> {
             } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
                 // Hit a new key, stop collecting
                 in_rule_dirs = false;
+            }
+        }
+    }
+
+    dirs
+}
+
+/// Best-effort extraction of `testConfigs` entries from a sgconfig.yml file.
+/// Returns a list of objects with `testDir` (required) and `snapshotDir` (optional).
+async fn extract_test_configs(config_path: &Path) -> Vec<Value> {
+    let Ok(content) = afs::read_to_string(config_path).await else {
+        return Vec::new();
+    };
+
+    let mut configs = Vec::new();
+    let mut in_test_configs = false;
+    let mut current_item: Option<Map<String, Value>> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("testConfigs:") {
+            in_test_configs = true;
+            if trimmed.contains('[') {
+                break; // Inline array of objects is too complex for line-by-line parsing
+            }
+            continue;
+        }
+
+        if !in_test_configs {
+            continue;
+        }
+
+        // List item start: "- "
+        if trimmed.starts_with("- ") {
+            // Flush previous item
+            if let Some(item) = current_item.take() {
+                configs.push(Value::Object(item));
+            }
+            current_item = Some(Map::new());
+            // Check for inline key-value: "- testDir: tests"
+            let after_dash = trimmed.strip_prefix("- ").unwrap_or(trimmed).trim();
+            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) {
+                if let Some(ref mut item) = current_item {
+                    item.insert(key, value);
+                }
+            }
+            continue;
+        }
+
+        // A new top-level key (not a list item) ends the section
+        if !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
+            if let Some(item) = current_item.take() {
+                configs.push(Value::Object(item));
+            }
+            in_test_configs = false;
+            continue;
+        }
+
+        // Key-value inside a list item (indented deeper than "- ")
+        if let Some(ref mut item) = current_item {
+            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+                item.insert(key, value);
+            }
+        }
+    }
+
+    // Flush last item
+    if let Some(item) = current_item {
+        configs.push(Value::Object(item));
+    }
+
+    configs
+}
+
+/// Best-effort extraction of `utilDirs` entries from a sgconfig.yml file.
+/// Returns relative directory paths found under the `utilDirs:` key.
+async fn extract_util_dirs(config_path: &Path) -> Vec<String> {
+    let Ok(content) = afs::read_to_string(config_path).await else {
+        return Vec::new();
+    };
+
+    let mut dirs = Vec::new();
+    let mut in_util_dirs = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("utilDirs:") {
+            in_util_dirs = true;
+            // Handle inline array: utilDirs: [utils, shared]
+            if let Some(bracket_content) = trimmed.strip_prefix("utilDirs:").map(str::trim) {
+                if bracket_content.starts_with('[') {
+                    let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
+                    for item in inner.split(',') {
+                        let item = item.trim().trim_matches('"').trim_matches('\'');
+                        if !item.is_empty() {
+                            dirs.push(item.to_string());
+                        }
+                    }
+                    in_util_dirs = false;
+                }
+            }
+            continue;
+        }
+
+        if in_util_dirs {
+            if trimmed.starts_with('-') {
+                let item = trimmed
+                    .strip_prefix('-')
+                    .unwrap_or(trimmed)
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'');
+                if !item.is_empty() {
+                    dirs.push(item.to_string());
+                }
+            } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                // Hit a new key, stop collecting
+                in_util_dirs = false;
             }
         }
     }

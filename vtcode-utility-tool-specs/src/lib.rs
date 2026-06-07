@@ -261,16 +261,16 @@ pub fn unified_search_parameters() -> Value {
             },
             "workflow": {
                 "type": "string",
-                "enum": ["query", "scan", "test"],
-                "description": "Structural workflow. `query` is the default parseable-pattern search and maps to read-only ast-grep `run`; `scan` maps to read-only ast-grep `scan` from config, and `test` runs ast-grep rule tests.",
+                "enum": ["query", "scan", "test", "rewrite"],
+                "description": "Structural workflow. `query` is the default parseable-pattern search and maps to read-only ast-grep `run`; `scan` maps to read-only ast-grep `scan` from config; `test` runs ast-grep rule tests; `rewrite` previews pattern-to-pattern replacements without applying them, supporting both simple string fixes via `rewrite` and advanced FixConfig rewrites via `fix_config` with `expand_start`/`expand_end` for range expansion (e.g. removing surrounding commas from list items).",
                 "default": "query"
             },
-            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language using ast-grep pattern syntax, not a raw code fragment; `$VAR` matches one named node, `$$$ARGS` matches zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture. If a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature. At least one of `pattern` or `kind` is required for `workflow=\"query\"`."},
-            "kind": {"type": "string", "description": "Ast-grep tree-sitter node kind for structural `workflow=\"query\"`. Matches nodes by their AST kind name directly, e.g. `function_item`, `call_expression`, `if_statement`. Supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either). Also supports pseudo-selectors: `:has(selector)`, `:not(selector)`, `:is(selector, ...)`, `:nth-child(An+B)`. Can be used alone or combined with `pattern`; when both are present, `kind` filters the pattern matches by node kind. At least one of `pattern` or `kind` is required for `workflow=\"query\"`."},
+            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural` `workflow=\"query\"`, valid parseable code for the selected language using ast-grep pattern syntax, not a raw code fragment; `$VAR` matches one named node, `$$$ARGS` matches zero or more nodes, `$$VAR` includes unnamed nodes, and `$_` suppresses capture. If a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature. At least one of `pattern` or `kind` is required for `workflow=\"query\"`. For `structural` `workflow=\"rewrite\"`, the pattern to match for replacement; required."},
+            "kind": {"type": "string", "description": "Ast-grep tree-sitter node kind for structural `workflow=\"query\"`. Matches nodes by their AST kind name directly, e.g. `function_item`, `call_expression`, `if_statement`. Supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either). Also supports pseudo-selectors: `:has(selector)` or `:has(> selector)` for descendants/direct children, `:not(selector)` for exclusion, `:is(selector, ...)` for alternatives, `:nth-child(An+B)` or `:nth-child(An+B of selector)` for positional matching, and `:nth-last-child(position)` for reverse positional matching. Can be used alone or combined with `pattern`; when both are present, `kind` filters the pattern matches by node kind. At least one of `pattern` or `kind` is required for `workflow=\"query\"`."},
             "path": {"type": "string", "description": "Directory or file path to search in. Used by `grep`, `list`, and structural `workflow=\"query\"|\"scan\"`. Public structural calls take one root per request even though raw ast-grep `run` can accept multiple paths.", "default": "."},
             "config_path": {"type": "string", "description": "Ast-grep config path for structural `workflow=\"scan\"` or `workflow=\"test\"`. Defaults to workspace `sgconfig.yml`."},
             "filter": {"type": "string", "description": "Ast-grep rule or test filter for structural `workflow=\"scan\"` or `workflow=\"test\"`. On `scan`, this maps to `--filter` over rule ids from config."},
-            "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"`. Set it whenever the code language is known; required for debug_query."},
+            "lang": {"type": "string", "description": "Language for structural `workflow=\"query\"` or `workflow=\"rewrite\"`. Set it whenever the code language is known; required for debug_query and recommended for rewrite."},
             "selector": {"type": "string", "description": "Ast-grep selector for structural `workflow=\"query\"` when the real match is a subnode inside the parseable pattern. Supports ESQuery-style pseudo-selectors: `:has(selector)`, `:not(selector)`, `:is(selector, ...)`, `:nth-child(An+B)`, and `:nth-child(An+B of selector)`. In YAML rules and `--kind` mode, `kind` also accepts compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either)."},
             "strictness": {
                 "type": "string",
@@ -290,6 +290,35 @@ pub fn unified_search_parameters() -> Value {
                 ]
             },
             "skip_snapshot_tests": {"type": "boolean", "description": "Skip ast-grep snapshot tests for structural `workflow=\"test\"`.", "default": false},
+            "rewrite": {"type": "string", "description": "Replacement string for structural `workflow=\"rewrite\"`. Meta variables from `pattern` can be referenced (e.g. `$VAR`, `$$$ARGS`). For simple pattern-to-pattern rewrites. Either `rewrite` or `fix_config` is required for `workflow=\"rewrite\"`."},
+            "fix_config": {
+                "type": "object",
+                "description": "Advanced fix configuration for structural `workflow=\"rewrite\"`. Use when replacing only the matched node is not enough, especially for deleting list items or key-value pairs that also need a surrounding comma removed. Either `rewrite` or `fix_config` is required for `workflow=\"rewrite\"`.",
+                "properties": {
+                    "template": {"type": "string", "description": "Replacement template string. Meta variables from `pattern` can be referenced."},
+                    "expand_start": {
+                        "type": "object",
+                        "description": "Rule to expand the fix range start backwards until the rule is no longer met. At least one of `regex`, `kind`, or `pattern` is required.",
+                        "properties": {
+                            "regex": {"type": "string", "description": "Regex pattern to match for expansion."},
+                            "kind": {"type": "string", "description": "Tree-sitter node kind to match for expansion."},
+                            "pattern": {"type": "string", "description": "Ast-grep pattern to match for expansion."},
+                            "stop_by": {"description": "Controls where expansion stops. String value like `\"line\"` or `\"end\"`, or a rule object."}
+                        }
+                    },
+                    "expand_end": {
+                        "type": "object",
+                        "description": "Rule to expand the fix range end forwards until the rule is no longer met. At least one of `regex`, `kind`, or `pattern` is required.",
+                        "properties": {
+                            "regex": {"type": "string", "description": "Regex pattern to match for expansion."},
+                            "kind": {"type": "string", "description": "Tree-sitter node kind to match for expansion."},
+                            "pattern": {"type": "string", "description": "Ast-grep pattern to match for expansion."},
+                            "stop_by": {"description": "Controls where expansion stops. String value like `\"line\"` or `\"end\"`, or a rule object."}
+                        }
+                    }
+                },
+                "required": ["template"]
+            },
             "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
             "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
             "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
