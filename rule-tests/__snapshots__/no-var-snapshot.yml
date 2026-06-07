@@ -1,0 +1,15 @@
+id: no-var
+snapshots:
+  'var name: String = "hello"':
+    labels:
+    - source: 'var name: String = "hello"'
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    var name: String = "hello"
+  : labels:
+    - source: 'var name: String = "hello"'
+      style: primary
+      start: 0
+      end: 26

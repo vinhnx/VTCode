@@ -1,0 +1,22 @@
+id: no-unnecessary-pass
+language: python
+severity: hint
+message: Remove `pass` when the block has other statements.
+note: |
+  `pass` is only needed as a placeholder when a block would otherwise be
+  empty. When the block already contains other statements, `pass` is
+  dead code and should be removed. This rule uses `context` and `selector`
+  to identify `pass` statements within non-empty function bodies.
+rule:
+  pattern:
+    context: |
+      def $FN():
+          $$$STMTS
+          pass
+    selector: pass_statement
+  has:
+    kind: expression_statement
+    stopBy: end
+files:
+  - "**/*.py"
+  - "!tests/**"

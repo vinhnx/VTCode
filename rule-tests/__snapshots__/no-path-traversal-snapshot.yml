@@ -1,0 +1,41 @@
+id: no-path-traversal
+snapshots:
+  File.join(Rails.root, params[:file]):
+    labels:
+    - source: File.join(Rails.root, params[:file])
+      style: primary
+      start: 0
+      end: 36
+  ? |
+    File.join(Rails.root, params[:file])
+  : labels:
+    - source: File.join(Rails.root, params[:file])
+      style: primary
+      start: 0
+      end: 36
+  Rails.root.join("data", user_input):
+    labels:
+    - source: Rails.root.join("data", user_input)
+      style: primary
+      start: 0
+      end: 35
+  ? |
+    Rails.root.join("data", user_input)
+  : labels:
+    - source: Rails.root.join("data", user_input)
+      style: primary
+      start: 0
+      end: 35
+  send_file params[:path]:
+    labels:
+    - source: send_file params[:path]
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    send_file params[:path]
+  : labels:
+    - source: send_file params[:path]
+      style: primary
+      start: 0
+      end: 23

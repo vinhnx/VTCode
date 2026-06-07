@@ -1,15 +1,15 @@
 id: no-unnecessary-boolean-literal-compare
 valid:
-  - code: |
+  - |
       if (isValid) { proceed(); }
-  - code: |
+  - |
       if (!isReady) { wait(); }
-  - code: |
+  - |
       const x = a === b;
 invalid:
-  - code: |
+  - |
       if (isValid === true) { proceed(); }
-  - code: |
+  - |
       if (isValid == true) { proceed(); }
-  - code: |
+  - |
       if (isValid !== false) { proceed(); }

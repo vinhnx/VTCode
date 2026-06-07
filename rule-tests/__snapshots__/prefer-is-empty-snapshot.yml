@@ -1,0 +1,66 @@
+id: prefer-is-empty
+snapshots:
+  if (items.count() == 0) return:
+    fixed: if (items.isEmpty()) return
+    labels:
+    - source: items.count() == 0
+      style: primary
+      start: 4
+      end: 22
+  ? |
+    if (items.count() == 0) return
+  : fixed: |
+      if (items.isEmpty()) return
+    labels:
+    - source: items.count() == 0
+      style: primary
+      start: 4
+      end: 22
+  if (list.size <= 0) return:
+    fixed: if (list.isEmpty()) return
+    labels:
+    - source: list.size <= 0
+      style: primary
+      start: 4
+      end: 18
+  ? |
+    if (list.size <= 0) return
+  : fixed: |
+      if (list.isEmpty()) return
+    labels:
+    - source: list.size <= 0
+      style: primary
+      start: 4
+      end: 18
+  if (list.size == 0) return:
+    fixed: if (list.isEmpty()) return
+    labels:
+    - source: list.size == 0
+      style: primary
+      start: 4
+      end: 18
+  ? |
+    if (list.size == 0) return
+  : fixed: |
+      if (list.isEmpty()) return
+    labels:
+    - source: list.size == 0
+      style: primary
+      start: 4
+      end: 18
+  if (str.length == 0) return:
+    fixed: if (str.isEmpty()) return
+    labels:
+    - source: str.length == 0
+      style: primary
+      start: 4
+      end: 19
+  ? |
+    if (str.length == 0) return
+  : fixed: |
+      if (str.isEmpty()) return
+    labels:
+    - source: str.length == 0
+      style: primary
+      start: 4
+      end: 19

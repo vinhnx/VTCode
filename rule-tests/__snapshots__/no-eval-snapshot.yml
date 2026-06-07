@@ -1,0 +1,26 @@
+id: no-eval
+snapshots:
+  ? |
+    const fn = new Function("return " + code);
+  : labels:
+    - source: '"return " + code'
+      message: this argument is executed as code
+      style: primary
+      start: 24
+      end: 40
+  ? |
+    const result = eval(userInput);
+  : labels:
+    - source: userInput
+      message: this argument is executed as code
+      style: primary
+      start: 20
+      end: 29
+  ? |
+    eval("console.log('hello')");
+  : labels:
+    - source: '"console.log(''hello'')"'
+      message: this argument is executed as code
+      style: primary
+      start: 5
+      end: 27

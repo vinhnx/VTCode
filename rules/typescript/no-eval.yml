@@ -1,0 +1,27 @@
+id: no-eval
+language: typescript
+severity: error
+message: Avoid `eval()` and `new Function()`; they execute arbitrary code.
+note: |
+  `eval(string)` and `new Function(string)` execute arbitrary JavaScript.
+  This is a code injection vector when the string contains user input.
+  Use structured alternatives: `JSON.parse` for data, `parseInt`/`parseFloat`
+  for numbers, or explicit mapping for dynamic dispatch.
+labels:
+  ARGS:
+    style: primary
+    message: this argument is executed as code
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: new Function($$$ARGS)
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"
+  - "!**/*.test.*"
+  - "!**/*.spec.*"

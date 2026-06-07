@@ -1,13 +1,13 @@
 id: no-unnecessary-list
 valid:
-  - code: |
+  - |
       result = [x for x in items]
-  - code: |
+  - |
       result = list(items)
-  - code: |
+  - |
       result = list(range(10))
 invalid:
-  - code: |
+  - |
       result = list([x for x in items])
-  - code: |
+  - |
       result = list([x * 2 for x in items if x > 0])

@@ -1,0 +1,72 @@
+id: no-await-in-promise-all
+snapshots:
+  ? |-
+    const results = await Promise.all([
+      await getUser(id),
+      await getProfile(id),
+    ]);
+  : fixed: |-
+      const results = await Promise.all([
+        getUser(id),
+        await getProfile(id),
+      ]);
+    labels:
+    - source: await getUser(id)
+      style: primary
+      start: 38
+      end: 55
+    - source: |-
+        Promise.all([
+          await getUser(id),
+          await getProfile(id),
+        ])
+      style: secondary
+      start: 22
+      end: 83
+  ? |
+    const results = await Promise.all([
+      await getUser(id),
+      await getProfile(id),
+    ]);
+  : fixed: |
+      const results = await Promise.all([
+        getUser(id),
+        await getProfile(id),
+      ]);
+    labels:
+    - source: await getUser(id)
+      style: primary
+      start: 38
+      end: 55
+    - source: |-
+        Promise.all([
+          await getUser(id),
+          await getProfile(id),
+        ])
+      style: secondary
+      start: 22
+      end: 83
+  const results = await Promise.all([await fetchA(), await fetchB()]);:
+    fixed: const results = await Promise.all([fetchA(), await fetchB()]);
+    labels:
+    - source: await fetchA()
+      style: primary
+      start: 35
+      end: 49
+    - source: Promise.all([await fetchA(), await fetchB()])
+      style: secondary
+      start: 22
+      end: 67
+  ? |
+    const results = await Promise.all([await fetchA(), await fetchB()]);
+  : fixed: |
+      const results = await Promise.all([fetchA(), await fetchB()]);
+    labels:
+    - source: await fetchA()
+      style: primary
+      start: 35
+      end: 49
+    - source: Promise.all([await fetchA(), await fetchB()])
+      style: secondary
+      start: 22
+      end: 67

@@ -1,0 +1,40 @@
+id: prefer-generator-in-any-all
+language: python
+severity: hint
+message: Use generator expressions instead of list comprehensions inside `any()` and `all()`.
+note: |
+  This rule uses rewriters to transform each list comprehension argument
+  inside `any()` or `all()` calls into a generator expression. The
+  rewriter strips the enclosing brackets from each matched list comprehension.
+  Generator expressions avoid allocating an intermediate list when the
+  consuming function only needs to iterate once.
+rewriters:
+  - id: strip-brackets
+    rule:
+      all:
+        - kind: list_comprehension
+        - pattern: $LC
+    transform:
+      INNER:
+        substring:
+          source: $LC
+          startChar: 1
+          endChar: -1
+    fix: $INNER
+rule:
+  pattern: $FUNC($$$ARGS)
+constraints:
+  FUNC:
+    regex: ^(any|all)$
+transform:
+  NEW_ARGS:
+    rewrite:
+      rewriters: [strip-brackets]
+      source: $$$ARGS
+      joinBy: ", "
+fix: $FUNC($NEW_ARGS)
+files:
+  - "**/*.py"
+  - "!tests/**"
+  - "!**/test_*.py"
+  - "!**/*_test.py"

@@ -1,14 +1,14 @@
 id: prefer-dict-get
 valid:
-  - code: |
+  - |
       value = d.get(key, "default")
-  - code: |
+  - |
       value = d[key]
-  - code: |
+  - |
       if key in d:
           do_something(d[key])
 invalid:
-  - code: |
+  - |
       value = d[key] if key in d else "default"
-  - code: |
+  - |
       result = data[name] if name in data else None

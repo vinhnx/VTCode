@@ -1,0 +1,18 @@
+id: optional-to-union
+snapshots:
+  'x: Optional[int]':
+    fixed: 'x: int | None'
+    labels:
+    - source: Optional[int]
+      style: primary
+      start: 3
+      end: 16
+  ? |
+    x: Optional[int]
+  : fixed: |
+      x: int | None
+    labels:
+    - source: Optional[int]
+      style: primary
+      start: 3
+      end: 16

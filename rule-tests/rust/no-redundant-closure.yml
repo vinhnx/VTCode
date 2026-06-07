@@ -1,15 +1,15 @@
 id: no-redundant-closure
 valid:
-  - code: |
+  - |
       items.iter().map(|x| x * 2).collect()
-  - code: |
+  - |
       items.iter().map(|x| foo(x, 1)).collect()
-  - code: |
+  - |
       items.iter().for_each(|x| println!("{}", x))
-  - code: |
+  - |
       items.iter().filter(|x| x.is_some()).collect()
 invalid:
-  - code: |
+  - |
       items.iter().map(|x| foo(x)).collect()
-  - code: |
+  - |
       items.iter().for_each(|x| bar(x))

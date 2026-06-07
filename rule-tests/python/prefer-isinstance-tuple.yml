@@ -1,13 +1,13 @@
 id: prefer-isinstance-tuple
 valid:
-  - code: |
+  - |
       isinstance(x, (int, float))
-  - code: |
+  - |
       isinstance(x, str)
-  - code: |
+  - |
       isinstance(x, int) and isinstance(y, float)
 invalid:
-  - code: |
+  - |
       isinstance(x, int) or isinstance(x, float)
-  - code: |
+  - |
       isinstance(x, str) or isinstance(x, bytes)

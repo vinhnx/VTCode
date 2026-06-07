@@ -1,13 +1,13 @@
 id: no-array-delete
 valid:
-  - code: |
+  - |
       arr.splice(index, 1);
-  - code: |
+  - |
       const filtered = arr.filter((_, i) => i !== index);
-  - code: |
+  - |
       delete obj.prop;
 invalid:
-  - code: |
+  - |
       delete arr[0];
-  - code: |
+  - |
       delete items[i];

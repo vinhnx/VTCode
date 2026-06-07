@@ -1,0 +1,28 @@
+id: prefer-retain-over-filter-collect
+snapshots:
+  v = v.drain(..).filter(|x| *x > 0).collect();:
+    labels:
+    - source: v = v.drain(..).filter(|x| *x > 0).collect()
+      style: primary
+      start: 0
+      end: 44
+  ? |
+    v = v.drain(..).filter(|x| *x > 0).collect();
+  : labels:
+    - source: v = v.drain(..).filter(|x| *x > 0).collect()
+      style: primary
+      start: 0
+      end: 44
+  v = v.into_iter().filter(|x| *x > 0).collect();:
+    labels:
+    - source: v = v.into_iter().filter(|x| *x > 0).collect()
+      style: primary
+      start: 0
+      end: 46
+  ? |
+    v = v.into_iter().filter(|x| *x > 0).collect();
+  : labels:
+    - source: v = v.into_iter().filter(|x| *x > 0).collect()
+      style: primary
+      start: 0
+      end: 46

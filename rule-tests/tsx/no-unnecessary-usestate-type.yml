@@ -1,23 +1,23 @@
 id: no-unnecessary-usestate-type
 valid:
-  - code: |
+  - |
       const [name, setName] = useState("hello");
-  - code: |
+  - |
       const [count, setCount] = useState(0);
-  - code: |
+  - |
       const [flag, setFlag] = useState(false);
-  - code: |
+  - |
       // Type param needed when initial value is null
       const [user, setUser] = useState<User | null>(null);
-  - code: |
+  - |
       // Type param needed for empty array
       const [items, setItems] = useState<string[]>([]);
 invalid:
-  - code: |
+  - |
       const [name, setName] = useState<string>("hello");
-  - code: |
+  - |
       const [count, setCount] = useState<number>(0);
-  - code: |
+  - |
       const [flag, setFlag] = useState<boolean>(true);
-  - code: |
+  - |
       const [flag, setFlag] = useState<boolean>(false);

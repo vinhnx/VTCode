@@ -1,0 +1,16 @@
+id: no-os-system-injection
+snapshots:
+  ? |
+    os.system("echo " + user_input)
+  : labels:
+    - source: os.system("echo " + user_input)
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    os.system(prefix + cmd + suffix)
+  : labels:
+    - source: os.system(prefix + cmd + suffix)
+      style: primary
+      start: 0
+      end: 32

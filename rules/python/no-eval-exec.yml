@@ -1,0 +1,19 @@
+id: no-eval-exec
+language: python
+severity: warning
+message: Avoid `eval()` and `exec()` with dynamic input; they execute arbitrary code.
+note: |
+  `eval()` and `exec()` run arbitrary Python code. When passed user-controlled
+  or dynamically constructed strings, this is a code injection vulnerability.
+  For expression evaluation, consider `ast.literal_eval()`. For dynamic
+  attribute access, use `getattr()`. This rule flags all uses; suppress
+  intentional uses with `# ast-grep-ignore`.
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: exec($$$ARGS)
+files:
+  - "**/*.py"
+  - "!tests/**"
+  - "!**/test_*.py"
+  - "!**/*_test.py"

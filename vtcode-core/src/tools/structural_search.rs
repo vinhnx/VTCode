@@ -58,6 +58,11 @@ const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
 static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
 });
+/// Valid ast-grep metavariable: `$` or `$$` followed by uppercase/startunderscore,
+/// then uppercase/digits/underscores. Multi-metavariable `$$$` is also valid.
+static AST_GREP_VALID_METAVAR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\$\$?(\$?[A-Z_][A-Z0-9_]*)$").expect("ast-grep valid metavar regex must compile")
+});
 static ANSI_ESCAPE_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile"));
 static AST_GREP_TEST_RESULT_RE: Lazy<Regex> = Lazy::new(|| {
@@ -77,6 +82,8 @@ enum StructuralWorkflow {
     Test,
     Inspect,
     Rewrite,
+    Count,
+    Rules,
 }
 
 impl StructuralWorkflow {
@@ -87,6 +94,8 @@ impl StructuralWorkflow {
             Self::Test => "test",
             Self::Inspect => "inspect",
             Self::Rewrite => "rewrite",
+            Self::Count => "count",
+            Self::Rules => "rules",
         }
     }
 }
@@ -133,6 +142,40 @@ impl DebugQueryFormat {
             Self::Sexp => "sexp",
         }
     }
+}
+
+/// Accepted forms for the `nth_child` field: a plain number, an An+B
+/// formula string, or a full object with `position`, optional `reverse`,
+/// and optional `ofRule`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum NthChildInput {
+    Number(usize),
+    Formula(String),
+    Object(NthChildObject),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct NthChildObject {
+    position: Value,
+    #[serde(default)]
+    reverse: Option<bool>,
+    #[serde(default, rename = "ofRule")]
+    of_rule: Option<Value>,
+}
+
+/// A source-range constraint with 0-based line/column positions.
+/// `start` is inclusive, `end` is exclusive.
+#[derive(Debug, Clone, Deserialize)]
+struct RangeInput {
+    start: RangePoint,
+    end: RangePoint,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RangePoint {
+    line: usize,
+    column: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -279,6 +322,25 @@ struct StructuralSearchRequest {
     /// of `sg run --rewrite`.
     #[serde(default, rename = "fix_config")]
     fix_config: Option<FixConfig>,
+
+    /// Match node text by Rust regex. Passed as `--regex` to the ast-grep
+    /// CLI. Requires `lang` to be set. Only valid for `query` and `rewrite`
+    /// workflows.
+    #[serde(default)]
+    regex: Option<String>,
+
+    /// Match by 1-based position among named siblings. Accepts a number,
+    /// an An+B formula string, or an object with `position`, optional
+    /// `reverse`, and optional `ofRule`. Only valid for `query` workflow;
+    /// triggers YAML rule generation.
+    #[serde(default, rename = "nth_child")]
+    nth_child: Option<NthChildInput>,
+
+    /// Match by source position (0-based line/column, start inclusive, end
+    /// exclusive). Only valid for `query` workflow; triggers YAML rule
+    /// generation.
+    #[serde(default)]
+    range: Option<RangeInput>,
 }
 
 impl StructuralSearchRequest {
@@ -295,6 +357,7 @@ impl StructuralSearchRequest {
     fn normalize(&mut self) {
         if self.workflow == StructuralWorkflow::Query
             || self.workflow == StructuralWorkflow::Rewrite
+            || self.workflow == StructuralWorkflow::Count
         {
             self.lang = self.normalized_or_inferred_lang();
         }
@@ -334,8 +397,16 @@ impl StructuralSearchRequest {
     }
 
     fn validate_query(&self) -> Result<()> {
-        if self.pattern().is_none() && self.kind().is_none() {
-            bail!("action='structural' workflow='query' requires a non-empty `pattern` or `kind`");
+        if self.pattern().is_none()
+            && self.kind().is_none()
+            && self.regex_pattern().is_none()
+            && self.nth_child.is_none()
+            && self.range.is_none()
+        {
+            bail!(
+                "action='structural' workflow='query' requires a non-empty `pattern`, `kind`, \
+                 `regex`, `nth_child`, or `range`"
+            );
         }
 
         self.reject_present("config_path", self.config_path.as_deref())?;
@@ -346,6 +417,35 @@ impl StructuralSearchRequest {
             bail!(DEBUG_QUERY_LANG_HINT);
         }
 
+        if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!("action='structural' with `regex` requires `lang` to be set");
+        }
+
+        self.validate_nth_child_position()?;
+
+        Ok(())
+    }
+
+    fn validate_nth_child_position(&self) -> Result<()> {
+        if let Some(ref nth) = self.nth_child {
+            match nth {
+                NthChildInput::Number(n) => {
+                    if *n == 0 {
+                        bail!("`nth_child` position is 1-based; 0 is not valid");
+                    }
+                }
+                NthChildInput::Object(obj) => {
+                    if let Some(pos) = obj.position.as_u64() {
+                        if pos == 0 {
+                            bail!("`nth_child` position is 1-based; 0 is not valid");
+                        }
+                    }
+                }
+                NthChildInput::Formula(_) => {
+                    // An+B formulas are validated by ast-grep itself.
+                }
+            }
+        }
         Ok(())
     }
 
@@ -362,7 +462,10 @@ impl StructuralSearchRequest {
             "debug_query",
             self.debug_query.as_ref().map(DebugQueryFormat::as_str),
         )?;
+        self.reject_present("regex", self.regex.as_deref())?;
         self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
         Ok(())
     }
 
@@ -380,6 +483,9 @@ impl StructuralSearchRequest {
             "debug_query",
             self.debug_query.as_ref().map(DebugQueryFormat::as_str),
         )?;
+        self.reject_present("regex", self.regex.as_deref())?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
         if self.globs.is_some() {
             bail!(
                 "action='structural' workflow='test' does not accept `globs`; use `config_path`, `filter`, and `skip_snapshot_tests`."
@@ -412,7 +518,10 @@ impl StructuralSearchRequest {
             self.debug_query.as_ref().map(DebugQueryFormat::as_str),
         )?;
         self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_present("regex", self.regex.as_deref())?;
         self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
         if self.globs.is_some() {
             bail!(
                 "action='structural' workflow='inspect' does not accept `globs`; use `config_path` and `path`."
@@ -432,8 +541,10 @@ impl StructuralSearchRequest {
     }
 
     fn validate_rewrite(&self) -> Result<()> {
-        if self.pattern().is_none() {
-            bail!("action='structural' workflow='rewrite' requires a non-empty `pattern`");
+        if self.pattern().is_none() && self.regex_pattern().is_none() {
+            bail!(
+                "action='structural' workflow='rewrite' requires a non-empty `pattern` or `regex`"
+            );
         }
 
         let has_string_rewrite = self.rewrite_text().is_some();
@@ -456,11 +567,81 @@ impl StructuralSearchRequest {
         self.reject_present("config_path", self.config_path.as_deref())?;
         self.reject_present("filter", self.filter.as_deref())?;
         self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
 
         if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!(DEBUG_QUERY_LANG_HINT);
         }
 
+        if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!("action='structural' with `regex` requires `lang` to be set");
+        }
+
+        Ok(())
+    }
+
+    fn validate_count(&self) -> Result<()> {
+        if self.pattern().is_none() && self.kind().is_none() && self.regex_pattern().is_none() {
+            bail!(
+                "action='structural' workflow='count' requires a non-empty `pattern`, `kind`, or `regex`"
+            );
+        }
+
+        self.reject_present("config_path", self.config_path.as_deref())?;
+        self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        self.reject_severities()?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
+        self.reject_relational_rules()?;
+
+        if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!(DEBUG_QUERY_LANG_HINT);
+        }
+
+        if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!("action='structural' with `regex` requires `lang` to be set");
+        }
+
+        Ok(())
+    }
+
+    fn validate_rules(&self) -> Result<()> {
+        self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("kind", self.kind.as_deref())?;
+        self.reject_present("lang", self.lang.as_deref())?;
+        self.reject_present("selector", self.selector.as_deref())?;
+        self.reject_present(
+            "strictness",
+            self.strictness.as_ref().map(StructuralStrictness::as_str),
+        )?;
+        self.reject_present(
+            "debug_query",
+            self.debug_query.as_ref().map(DebugQueryFormat::as_str),
+        )?;
+        self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_present("regex", self.regex.as_deref())?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        self.reject_severities()?;
+        self.reject_nth_child()?;
+        self.reject_range()?;
+        self.reject_relational_rules()?;
+        if self.globs.is_some() {
+            bail!(
+                "action='structural' workflow='rules' does not accept `globs`; use `config_path` and `path`."
+            );
+        }
+        if self.context_lines.is_some() {
+            bail!(
+                "action='structural' workflow='rules' does not accept `context_lines`; use `config_path` and `path`."
+            );
+        }
+        if self.max_results.is_some() {
+            bail!(
+                "action='structural' workflow='rules' does not accept `max_results`; use `config_path` and `path`."
+            );
+        }
         Ok(())
     }
 
@@ -481,6 +662,41 @@ impl StructuralSearchRequest {
                 self.workflow.as_str()
             );
         }
+        Ok(())
+    }
+
+    fn reject_nth_child(&self) -> Result<()> {
+        if self.nth_child.is_some() {
+            bail!(
+                "action='structural' workflow='{}' does not accept `nth_child`.",
+                self.workflow.as_str()
+            );
+        }
+        Ok(())
+    }
+
+    fn reject_range(&self) -> Result<()> {
+        if self.range.is_some() {
+            bail!(
+                "action='structural' workflow='{}' does not accept `range`.",
+                self.workflow.as_str()
+            );
+        }
+        Ok(())
+    }
+
+    fn reject_relational_rules(&self) -> Result<()> {
+        // Relational rule fields (has, inside, constraints) are not yet
+        // supported as top-level request fields. This method exists as a
+        // placeholder for future expansion and to keep validation call
+        // sites consistent.
+        Ok(())
+    }
+
+    fn reject_severities(&self) -> Result<()> {
+        // Severity fields are not yet supported as top-level request fields.
+        // This method exists as a placeholder for future expansion and to
+        // keep validation call sites consistent.
         Ok(())
     }
 
@@ -510,6 +726,13 @@ impl StructuralSearchRequest {
             .as_deref()
             .map(str::trim)
             .filter(|kind| !kind.is_empty())
+    }
+
+    fn regex_pattern(&self) -> Option<&str> {
+        self.regex
+            .as_deref()
+            .map(str::trim)
+            .filter(|r| !r.is_empty())
     }
 
     fn filter(&self) -> Option<&str> {
@@ -743,8 +966,12 @@ struct AstGrepPoint {
 
 pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Result<Value> {
     let request = StructuralSearchRequest::from_args(&args)?;
+    // Pure-Rust workflows that don't need the ast-grep binary.
     if request.workflow == StructuralWorkflow::Inspect {
         return execute_structural_inspect(workspace_root, &request).await;
+    }
+    if request.workflow == StructuralWorkflow::Rules {
+        return execute_structural_rules(workspace_root, &request).await;
     }
     let ast_grep = resolve_ast_grep_binary_path().map_err(|reason| {
         anyhow!(
@@ -765,6 +992,10 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
         StructuralWorkflow::Rewrite => {
             execute_structural_rewrite(workspace_root, &request, &ast_grep).await
         }
+        StructuralWorkflow::Count => {
+            execute_structural_count(workspace_root, &request, &ast_grep).await
+        }
+        StructuralWorkflow::Rules => unreachable!("handled above"),
     }
 }
 
@@ -1046,6 +1277,192 @@ async fn execute_structural_rewrite(
         &search_path.display_path,
         rewrites,
     ))
+}
+
+async fn execute_structural_count(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+) -> Result<Value> {
+    let search_path = resolve_search_path(workspace_root, request.requested_path())?;
+    let globs = request.normalized_globs();
+
+    // When nthChild, range, has, inside, or constraints is present, use YAML
+    // rule generation and count scan findings.
+    if request.nth_child.is_some()
+        || request.range.is_some()
+        || request.has.is_some()
+        || request.inside.is_some()
+        || request.constraints.is_some()
+    {
+        return execute_atomic_rule_count(workspace_root, request, ast_grep, &search_path).await;
+    }
+
+    let command_path = search_path.command_arg.clone();
+    let mut command = ast_grep_command(ast_grep, workspace_root, "run");
+    if let Some(pattern) = request.pattern() {
+        command.arg(format!("--pattern={pattern}"));
+    }
+    command.arg("--json=compact").arg("--color=never");
+
+    if let Some(lang) = request
+        .lang
+        .as_deref()
+        .filter(|lang| !lang.trim().is_empty())
+    {
+        command.arg("--lang").arg(lang);
+    }
+    if let Some(kind) = request.kind() {
+        command.arg("--kind").arg(kind);
+    }
+    if let Some(regex) = request.regex_pattern() {
+        command.arg("--regex").arg(regex);
+    }
+    if let Some(selector) = request
+        .selector
+        .as_deref()
+        .filter(|selector| !selector.trim().is_empty())
+    {
+        command.arg("--selector").arg(selector);
+    }
+    if let Some(strictness) = &request.strictness {
+        command.arg("--strictness").arg(strictness.as_str());
+    }
+    apply_context_and_globs(&mut command, request.context_lines, &globs);
+    command.arg(&command_path);
+
+    let output =
+        run_ast_grep_command(&mut command, "failed to run ast-grep structural count").await?;
+
+    let no_matches = output.status.code() == Some(1);
+    if !output.status.success() && !no_matches {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep structural count failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let count = if no_matches && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        0
+    } else {
+        parse_compact_matches(&output.stdout)?.len()
+    };
+
+    let max_results = request.effective_max_results();
+    let truncated = count > max_results;
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "workflow": "count",
+        "path": search_path.display_path,
+        "count": count,
+        "truncated": truncated,
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    Ok(result)
+}
+
+/// Execute count via YAML rule generation (for nthChild/range/has/inside/constraints).
+async fn execute_atomic_rule_count(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+    search_path: &ResolvedSearchPath,
+) -> Result<Value> {
+    let lang = request
+        .lang
+        .as_deref()
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or("javascript");
+
+    let rule_yaml = build_atomic_rule_yaml(request, lang);
+
+    let temp_dir = tempfile::tempdir().with_context(|| {
+        "failed to create temporary directory for atomic rule count".to_string()
+    })?;
+    let rules_dir = temp_dir.path().join("rules");
+    afs::create_dir_all(&rules_dir).await.with_context(|| {
+        format!(
+            "failed to create rules directory at {}",
+            rules_dir.display()
+        )
+    })?;
+
+    let rule_path = rules_dir.join("atomic-count.yml");
+    afs::write(&rule_path, &rule_yaml)
+        .await
+        .with_context(|| format!("failed to write atomic rule to {}", rule_path.display()))?;
+
+    let sgconfig_path = temp_dir.path().join("sgconfig.yml");
+    let sgconfig_content = format!("ruleDirs:\n  - {}\n", rules_dir.display());
+    afs::write(&sgconfig_path, &sgconfig_content)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to write sgconfig.yml to {}",
+                sgconfig_path.display()
+            )
+        })?;
+
+    let mut command = ast_grep_command(ast_grep, workspace_root, "scan");
+    command
+        .arg("--config")
+        .arg(&sgconfig_path)
+        .arg("--json=stream")
+        .arg("--include-metadata")
+        .arg("--color=never");
+
+    let globs = request.normalized_globs();
+    apply_context_and_globs(&mut command, request.context_lines, &globs);
+    command.arg(&search_path.command_arg);
+
+    let output =
+        run_ast_grep_command(&mut command, "failed to run ast-grep atomic rule count").await?;
+
+    let findings_with_error_exit = output.status.code() == Some(1);
+    if !output.status.success() && !findings_with_error_exit {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep atomic rule count failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let findings =
+        if findings_with_error_exit && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            Vec::new()
+        } else {
+            parse_stream_findings(&output.stdout)?
+        };
+
+    let count = findings.len();
+    let max_results = request.effective_max_results();
+    let truncated = count > max_results;
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "workflow": "count",
+        "path": search_path.display_path,
+        "count": count,
+        "truncated": truncated,
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    Ok(result)
 }
 
 /// Execute a FixConfig rewrite by generating a temporary YAML rule with
@@ -1531,6 +1948,134 @@ async fn execute_structural_inspect(
         "language_globs": language_globs,
         "discovered_configs": discovered,
     }))
+}
+
+async fn execute_structural_rules(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+) -> Result<Value> {
+    let requested_config = request.requested_config_path();
+    let config_path = resolve_config_path(workspace_root, requested_config, false).await?;
+
+    let resolved_full = if Path::new(&config_path.command_arg).is_absolute() {
+        PathBuf::from(&config_path.command_arg)
+    } else {
+        workspace_root.join(&config_path.command_arg)
+    };
+    let config_exists = resolved_full.is_file();
+
+    if !config_exists {
+        return Ok(json!({
+            "backend": "ast-grep",
+            "workflow": "rules",
+            "config_path": config_path.display_path,
+            "config_exists": false,
+            "rules": [],
+        }));
+    }
+
+    let rule_dirs = extract_rule_dirs(&resolved_full).await;
+    let config_parent = resolved_full.parent().unwrap_or(workspace_root);
+
+    let mut rules = Vec::new();
+    for dir in &rule_dirs {
+        let dir_path = config_parent.join(dir);
+        if !dir_path.is_dir() {
+            continue;
+        }
+        collect_rules_from_dir(&dir_path, &mut rules).await;
+    }
+
+    Ok(json!({
+        "backend": "ast-grep",
+        "workflow": "rules",
+        "config_path": config_path.display_path,
+        "config_exists": true,
+        "rule_dirs": rule_dirs,
+        "rules": rules,
+    }))
+}
+
+/// Recursively collect rule summaries from YAML files in a directory.
+async fn collect_rules_from_dir(dir: &Path, rules: &mut Vec<Value>) {
+    let mut entries = match afs::read_dir(dir).await {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.is_dir() {
+            Box::pin(collect_rules_from_dir(&path, rules)).await;
+            continue;
+        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        if !matches!(ext, "yml" | "yaml") {
+            continue;
+        }
+        let Ok(content) = afs::read_to_string(&path).await else {
+            continue;
+        };
+        if let Some(summary) = extract_rule_summary(&content, &path) {
+            rules.push(summary);
+        }
+    }
+}
+
+/// Extract a rule summary from a YAML file's content.
+fn extract_rule_summary(content: &str, path: &Path) -> Option<Value> {
+    let mut id = None;
+    let mut language = None;
+    let mut severity = None;
+    let mut message = None;
+    let mut has_fix = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("id:") && id.is_none() {
+            id = Some(trimmed.strip_prefix("id:")?.trim().to_string());
+        } else if trimmed.starts_with("language:") && language.is_none() {
+            language = Some(trimmed.strip_prefix("language:")?.trim().to_string());
+        } else if trimmed.starts_with("severity:") && severity.is_none() {
+            severity = Some(trimmed.strip_prefix("severity:")?.trim().to_string());
+        } else if trimmed.starts_with("message:") && message.is_none() {
+            message = Some(
+                trimmed
+                    .strip_prefix("message:")?
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string(),
+            );
+        } else if trimmed.starts_with("fix:") && !has_fix {
+            has_fix = true;
+        }
+    }
+
+    let id = id?;
+    let file_name = path
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let mut summary = json!({
+        "id": id,
+        "file": file_name,
+    });
+    if let Some(lang) = language {
+        summary["language"] = json!(lang);
+    }
+    if let Some(sev) = severity {
+        summary["severity"] = json!(sev);
+    }
+    if let Some(msg) = message {
+        summary["message"] = json!(msg);
+    }
+    summary["has_fix"] = json!(has_fix);
+
+    Some(summary)
 }
 
 fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Option<String>> {

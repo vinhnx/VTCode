@@ -1,0 +1,13 @@
+id: no-system-out-println
+valid:
+  - |
+      logger.info("request processed");
+  - |
+      log.debug("value: {}", value);
+invalid:
+  - |
+      System.out.println("request received");
+  - |
+      System.err.println("error occurred");
+  - |
+      System.out.print("processing");

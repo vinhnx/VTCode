@@ -1,15 +1,15 @@
 id: no-debugger
 valid:
-  - code: |
+  - |
       const x = 1;
-  - code: |
+  - |
       function debug() {
         return "debugger";
       }
 invalid:
-  - code: |
+  - |
       debugger;
-  - code: |
+  - |
       function test() {
         debugger;
         return true;

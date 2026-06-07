@@ -1,11 +1,11 @@
 id: prefer-data-class
 valid:
-  - code: |
+  - |
       abstract class Base
-  - code: |
+  - |
       object Singleton
 invalid:
-  - code: |
+  - |
       class User(val name: String, val age: Int)
-  - code: |
+  - |
       class Point(val x: Int, val y: Int)

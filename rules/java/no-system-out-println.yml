@@ -1,0 +1,18 @@
+id: no-system-out-println
+language: Java
+severity: warning
+message: Avoid `System.out.println`; use a logging framework instead.
+note: |
+  Direct console output via `System.out.println` is not configurable and
+  cannot be routed to log aggregators. Use SLF4J, Log4j2, or
+  `java.util.logging` for structured logging in production code.
+rule:
+  any:
+    - pattern: System.out.println($$$)
+    - pattern: System.out.print($$$)
+    - pattern: System.err.println($$$)
+    - pattern: System.err.print($$$)
+files:
+  - "**/*.java"
+  - "!**/test/**"
+  - "!**/*Test.java"

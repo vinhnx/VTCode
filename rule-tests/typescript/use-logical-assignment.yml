@@ -1,13 +1,13 @@
 id: use-logical-assignment
 valid:
-  - code: |
+  - |
       a = b || c;
-  - code: |
+  - |
       a ||= b;
-  - code: |
+  - |
       a = a && b;
 invalid:
-  - code: |
+  - |
       config = config || defaults;
-  - code: |
+  - |
       options.timeout = options.timeout || 5000;

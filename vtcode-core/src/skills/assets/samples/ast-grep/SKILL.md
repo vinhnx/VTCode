@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep: ast-grep run, sg scan, sg test, sg new, new rule, sgconfig.yml, inline-rules, stdin, json, optional chaining, rule catalog, meta variables, pattern objects, nthChild stopBy, range field, metadata url, caseInsensitive glob, severity off, include metadata, rule order, kind pattern, positive rule, kind esquery, debug-query, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, string fix, fix config, expandEnd, replace substring, toCase separatedBy, rewriter, rewrite joinBy, find patch, barrel import, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, languageGlobs, expandoChar, napi parse, python api, programmatic API, walrus operator, list comprehension, isinstance tuple."
+description: "Use for ast-grep: ast-grep run, sg scan, sg test, sg new, new rule, sgconfig.yml, inline-rules, stdin, json, optional chaining, rule catalog, meta variables, pattern objects, nthChild stopBy, range field, metadata url, caseInsensitive glob, severity off, severities filter, has_error_findings, include metadata, rule order, kind pattern, positive rule, kind esquery, debug-query, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, string fix, fix config, expandEnd, replace substring, toCase separatedBy, rewriter, rewrite joinBy, find patch, barrel import, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, languageGlobs, expandoChar, napi parse, python api, programmatic API, walrus operator, list comprehension, isinstance tuple."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -11,7 +11,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Routing
 
-- Prefer `unified_search` with `action="structural"` and `workflow="scan"` for read-only project scans.
+- Prefer `unified_search` with `action="structural"` and `workflow="scan"` for read-only project scans. Use `severities: ["error", "warning"]` to filter findings by severity level and focus on actionable issues.
 - Prefer `unified_search` with `action="structural"` and `workflow="test"` for read-only ast-grep rule tests.
 - Prefer `unified_search` with `action="structural"` and `workflow="rewrite"` for dry-run rewrite previews. This runs `ast-grep run --pattern=... --rewrite=... --json=compact --color=never` and returns proposed replacements without applying them. Required fields: `pattern`, `rewrite`. Optional: `lang`, `selector`, `strictness`, `globs`, `context_lines`, `max_results`.
 - Prefer structural `debug_query` on the public tool surface before falling back to raw `ast-grep run --debug-query`.
@@ -828,15 +828,25 @@ kind: decorated_definition > function_definition
 - Patching keys define reusable fixes. Use `transform` to derive new meta-variables before replacement, `fix` for either a string replacement or a `template` object with `expandStart` / `expandEnd`, and `rewriters` when the transformation is too complex for one inline `fix`.
 - Linting keys define what scan results report. Use `severity`, `message`, `note`, and `labels` for diagnostics, then `files` and `ignores` to scope where the rule applies.
 - Severity levels are `error`, `warning`, `info`, `hint`, and `off`. `hint` is the default severity in ast-grep project scans.
-- `error` findings make raw `ast-grep scan` exit non-zero; VT Code normalizes that CLI behavior into structured findings on the public scan path instead of surfacing a tool error.
+- `error` findings make raw `ast-grep scan` exit non-zero; VT Code normalizes that CLI behavior into structured findings on the public scan path instead of surfacing a tool error. The scan summary includes a `has_error_findings` flag that is `true` when any error-severity rule matched.
 - `severity: off` disables the rule during scanning. `note` supports Markdown but cannot interpolate meta variables.
+- VT Code's public scan surface accepts an optional `severities` filter (a list of severity levels like `["error", "warning"]`). When present, only findings matching one of the listed severities are returned. This filters the output after ast-grep runs; it does not override rule severities at the CLI level. Use this to focus on actionable findings in CI or to reduce noise from hint-level rules.
+- Choosing severity for custom rules:
+  - `error`: correctness bugs, security vulnerabilities, or patterns that should always fail CI. Examples: `no-debugger`, `no-array-delete`, `no-return-in-foreach`, `no-await-in-promise-all`.
+  - `warning`: code smells, style violations, or patterns that are usually wrong but may have valid exceptions. Examples: `no-iterator-for-each`, `no-console-except-error`, `avoid-duplicate-export`, `no-chars-enumerate`.
+  - `info`: informational findings that are useful for code review but not necessarily wrong. Examples: `no-alloc-digit-count`, `optional-to-union`, `no-walrus-source`.
+  - `hint`: suggestions and style preferences. This is the default. Examples: `prefer-optional-chaining`, `prefer-nullish-coalescing`, `use-logical-assignment`, `let-chain-candidate`.
+  - `off`: disabled rules. Useful for rules that are temporarily turned off or only enabled in specific contexts.
 - Source suppression uses `ast-grep-ignore` comments.
   - `ast-grep-ignore` suppresses all rules for the same line or following line
   - `ast-grep-ignore: rule-id` suppresses one rule
   - comma-separated rule ids suppress multiple specific rules
   - next-line suppression only works when there is no preceding AST node on that same comment line
+  - Example: `let x = dangerous_call(); // ast-grep-ignore: no-dangerous-calls`
+  - Example: `// ast-grep-ignore: no-console-log, no-debugger` on the line above
 - File-level suppression requires the suppression comment on the first line plus an empty second line.
-- `unused-suppression` is a built-in hint-style rule with autofix for stale ignore directives, but it only appears in full `scan` runs when ast-grep is not filtering or disabling rules through CLI narrowing flags.
+  - Example: `// ast-grep-ignore: no-console-log` as the very first line of the file, followed by an empty line.
+- `unused-suppression` is a built-in hint-style rule with autofix for stale ignore directives, but it only appears in full `scan` runs when ast-grep is not filtering or disabling rules through CLI narrowing flags. Override its severity on the CLI with `--error unused-suppression` to make stale suppressions fail CI.
 - `labels` keys must come from meta variables already defined by the rule or `constraints`.
 - `files` supports either plain globs or object entries. Use object syntax when you need options like `caseInsensitive` glob matching.
 - `ignores` runs before `files`. Both are relative to the `sgconfig.yml` directory, and the glob should not start with `./`.
@@ -1295,14 +1305,14 @@ In the public structural tool:
 - `--color=auto|always|ansi|never` only controls terminal coloring. VT Code’s public structural query forces plain output with `--color=never`.
 - `--format=github|sarif` is for CI/reporting pipelines, not VT Code’s normalized public scan result shape.
 - `--report-style=rich|medium|short` only changes ast-grep’s human-readable diagnostics.
-- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run. These flags belong on the CLI skill path, not VT Code’s public structural surface.
+- `--error`, `--warning`, `--info`, `--hint`, and `--off` override rule severities for one scan run. These flags belong on the CLI skill path, not VT Code’s public structural surface. Use the `severities` filter on the public scan surface to filter findings by severity without overriding rule severities.
 - `--inspect entity` is the direct CLI way to inspect each rule’s final enabled severity, including overrides and project-config effects.
 - `unused-suppression` can also have its severity overridden on the CLI, but that is still CLI-only behavior outside VT Code’s public structural surface.
 - `--inspect=summary|entity` emits file and rule discovery diagnostics to stderr without changing the actual match results.
 - `--threads <NUM>` controls approximate parallelism. `0` keeps ast-grep’s default heuristics.
 - `-C/--context` shows symmetric surrounding lines. `-A/--after` and `-B/--before` are asymmetric alternatives and conflict with `--context`.
 - `ast-grep run` exits `0` when at least one match is found and `1` when no matches are found. VT Code normalizes that no-match case to an empty `matches` array on the public structural query path.
-- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match. VT Code normalizes that error-finding case to structured `findings` instead of surfacing a tool error.
+- `ast-grep scan` exits `1` when at least one error-severity rule matches and `0` when no rules match. VT Code normalizes that error-finding case to structured `findings` instead of surfacing a tool error. The scan summary includes `has_error_findings: true` when error-severity findings are present.
 
 ## API Escalation
 

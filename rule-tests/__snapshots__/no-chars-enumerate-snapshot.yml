@@ -1,0 +1,52 @@
+id: no-chars-enumerate
+snapshots:
+  ? |-
+    for (i, ch) in s.chars().enumerate() {
+        if ch == ' ' {
+            return i;
+        }
+    }
+  : fixed: |-
+      for (i, ch) in s.char_indices() {
+          if ch == ' ' {
+              return i;
+          }
+      }
+    labels:
+    - source: s.chars().enumerate()
+      style: primary
+      start: 15
+      end: 36
+  ? |
+    for (i, ch) in s.chars().enumerate() {
+        if ch == ' ' {
+            return i;
+        }
+    }
+  : fixed: |
+      for (i, ch) in s.char_indices() {
+          if ch == ' ' {
+              return i;
+          }
+      }
+    labels:
+    - source: s.chars().enumerate()
+      style: primary
+      start: 15
+      end: 36
+  let pos = text.chars().enumerate().find(|(_, c)| *c == '\n').map(|(i, _)| i);:
+    fixed: let pos = text.char_indices().find(|(_, c)| *c == '\n').map(|(i, _)| i);
+    labels:
+    - source: text.chars().enumerate()
+      style: primary
+      start: 10
+      end: 34
+  ? |
+    let pos = text.chars().enumerate().find(|(_, c)| *c == '\n').map(|(i, _)| i);
+  : fixed: |
+      let pos = text.char_indices().find(|(_, c)| *c == '\n').map(|(i, _)| i);
+    labels:
+    - source: text.chars().enumerate()
+      style: primary
+      start: 10
+      end: 34

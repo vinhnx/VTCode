@@ -1,0 +1,23 @@
+id: no-string-concat-in-loop
+language: Java
+severity: warning
+message: Use `StringBuilder` instead of string concatenation in loops.
+note: |
+  String concatenation (`+=` or `+`) inside a loop creates a new String object
+  on each iteration, resulting in O(n^2) time complexity. Use `StringBuilder`
+  for efficient string building in loops.
+rule:
+  pattern: $VAR = $VAR + $EXPR
+  any:
+    - inside:
+        kind: for_statement
+        stopBy: end
+    - inside:
+        kind: enhanced_for_statement
+        stopBy: end
+    - inside:
+        kind: while_statement
+        stopBy: end
+files:
+  - "**/*.java"
+  - "!**/test/**"

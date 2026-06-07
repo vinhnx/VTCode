@@ -1,0 +1,54 @@
+id: rename-svg-attribute
+snapshots:
+  ? |-
+    function Icon() {
+      return <svg><circle fill-opacity="0.5" stroke-width="2" /></svg>;
+    }
+  : labels:
+    - source: fill-opacity
+      style: primary
+      start: 40
+      end: 52
+    - source: fill-opacity="0.5"
+      style: secondary
+      start: 40
+      end: 58
+  ? |
+    function Icon() {
+      return <svg><circle fill-opacity="0.5" stroke-width="2" /></svg>;
+    }
+  : labels:
+    - source: fill-opacity
+      style: primary
+      start: 40
+      end: 52
+    - source: fill-opacity="0.5"
+      style: secondary
+      start: 40
+      end: 58
+  ? |-
+    function Icon() {
+      return <svg><path stroke-linecap="round" /></svg>;
+    }
+  : labels:
+    - source: stroke-linecap
+      style: primary
+      start: 38
+      end: 52
+    - source: stroke-linecap="round"
+      style: secondary
+      start: 38
+      end: 60
+  ? |
+    function Icon() {
+      return <svg><path stroke-linecap="round" /></svg>;
+    }
+  : labels:
+    - source: stroke-linecap
+      style: primary
+      start: 38
+      end: 52
+    - source: stroke-linecap="round"
+      style: secondary
+      start: 38
+      end: 60

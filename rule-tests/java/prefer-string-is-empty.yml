@@ -1,0 +1,23 @@
+id: prefer-string-is-empty
+valid:
+  - |
+      if (str.isEmpty()) {
+          return;
+      }
+  - |
+      if (str == null || str.isEmpty()) {
+          return;
+      }
+  - |
+      if (str.length() > 0) {
+          process(str);
+      }
+invalid:
+  - |
+      if (str.length() == 0) {
+          return;
+      }
+  - |
+      if (str.equals("")) {
+          return;
+      }

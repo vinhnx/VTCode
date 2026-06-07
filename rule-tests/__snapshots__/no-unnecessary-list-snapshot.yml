@@ -1,0 +1,34 @@
+id: no-unnecessary-list
+snapshots:
+  result = list([x * 2 for x in items if x > 0]):
+    fixed: result = [x * 2 for x in items if x > 0]
+    labels:
+    - source: list([x * 2 for x in items if x > 0])
+      style: primary
+      start: 9
+      end: 46
+  ? |
+    result = list([x * 2 for x in items if x > 0])
+  : fixed: |
+      result = [x * 2 for x in items if x > 0]
+    labels:
+    - source: list([x * 2 for x in items if x > 0])
+      style: primary
+      start: 9
+      end: 46
+  result = list([x for x in items]):
+    fixed: result = [x for x in items]
+    labels:
+    - source: list([x for x in items])
+      style: primary
+      start: 9
+      end: 33
+  ? |
+    result = list([x for x in items])
+  : fixed: |
+      result = [x for x in items]
+    labels:
+    - source: list([x for x in items])
+      style: primary
+      start: 9
+      end: 33

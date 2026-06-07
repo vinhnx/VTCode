@@ -1,0 +1,50 @@
+id: prefer-generator-expression
+snapshots:
+  all([is_valid(x) for x in items]):
+    fixed: all(is_valid(x) for x in items)
+    labels:
+    - source: all([is_valid(x) for x in items])
+      style: primary
+      start: 0
+      end: 33
+  ? |
+    all([is_valid(x) for x in items])
+  : fixed: |
+      all(is_valid(x) for x in items)
+    labels:
+    - source: all([is_valid(x) for x in items])
+      style: primary
+      start: 0
+      end: 33
+  any([x > 0 for x in items]):
+    fixed: any(x > 0 for x in items)
+    labels:
+    - source: any([x > 0 for x in items])
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    any([x > 0 for x in items])
+  : fixed: |
+      any(x > 0 for x in items)
+    labels:
+    - source: any([x > 0 for x in items])
+      style: primary
+      start: 0
+      end: 27
+  sum([x * 2 for x in items]):
+    fixed: sum(x * 2 for x in items)
+    labels:
+    - source: sum([x * 2 for x in items])
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    sum([x * 2 for x in items])
+  : fixed: |
+      sum(x * 2 for x in items)
+    labels:
+    - source: sum([x * 2 for x in items])
+      style: primary
+      start: 0
+      end: 27

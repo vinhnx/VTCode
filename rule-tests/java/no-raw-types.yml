@@ -1,0 +1,15 @@
+id: no-raw-types
+valid:
+  - |
+      List<String> names = new ArrayList<>();
+  - |
+      Map<String, Integer> counts = new HashMap<>();
+  - |
+      Optional<Result> result = Optional.of(value);
+invalid:
+  - |
+      List names = new ArrayList();
+  - |
+      Map counts = new HashMap();
+  - |
+      Optional result = Optional.of(value);

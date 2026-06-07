@@ -1,0 +1,22 @@
+id: no-string-concat-in-loop
+valid:
+  - |
+      StringBuilder sb = new StringBuilder();
+      for (String item : items) {
+          sb.append(item);
+      }
+      return sb.toString();
+  - |
+      String result = "";
+      result = result + value;
+invalid:
+  - |
+      String result = "";
+      for (String item : items) {
+          result = result + item;
+      }
+  - |
+      String output = "";
+      for (int i = 0; i < count; i++) {
+          output = output + chars[i];
+      }

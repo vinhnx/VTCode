@@ -1,25 +1,25 @@
 id: no-unsafe-fn-without-unsafe
 valid:
-  - code: |
+  - |
       unsafe fn deref_ptr(ptr: *const i32) -> i32 {
           unsafe { *ptr }
       }
-  - code: |
+  - |
       fn safe_function(x: i32) -> i32 {
           x + 1
       }
-  - code: |
+  - |
       unsafe fn call_ffi() {
           unsafe {
               libc::exit(0);
           }
       }
 invalid:
-  - code: |
+  - |
       unsafe fn do_nothing(x: i32) -> i32 {
           x + 1
       }
-  - code: |
+  - |
       unsafe fn wrapper(s: &str) -> usize {
           s.len()
       }

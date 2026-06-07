@@ -1,0 +1,50 @@
+id: prefer-action-over-filter
+snapshots:
+  after_filter :log_activity:
+    fixed: after_action :log_activity
+    labels:
+    - source: after_filter :log_activity
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    after_filter :log_activity
+  : fixed: |
+      after_action :log_activity
+    labels:
+    - source: after_filter :log_activity
+      style: primary
+      start: 0
+      end: 26
+  around_filter :wrap_in_transaction:
+    fixed: around_action :wrap_in_transaction
+    labels:
+    - source: around_filter :wrap_in_transaction
+      style: primary
+      start: 0
+      end: 34
+  ? |
+    around_filter :wrap_in_transaction
+  : fixed: |
+      around_action :wrap_in_transaction
+    labels:
+    - source: around_filter :wrap_in_transaction
+      style: primary
+      start: 0
+      end: 34
+  before_filter :require_login:
+    fixed: before_action :require_login
+    labels:
+    - source: before_filter :require_login
+      style: primary
+      start: 0
+      end: 28
+  ? |
+    before_filter :require_login
+  : fixed: |
+      before_action :require_login
+    labels:
+    - source: before_filter :require_login
+      style: primary
+      start: 0
+      end: 28

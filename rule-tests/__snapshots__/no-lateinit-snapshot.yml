@@ -1,0 +1,28 @@
+id: no-lateinit
+snapshots:
+  'lateinit var name: String':
+    labels:
+    - source: 'lateinit var name: String'
+      style: primary
+      start: 0
+      end: 25
+  ? |
+    lateinit var name: String
+  : labels:
+    - source: 'lateinit var name: String'
+      style: primary
+      start: 0
+      end: 25
+  'lateinit var service: MyService':
+    labels:
+    - source: 'lateinit var service: MyService'
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    lateinit var service: MyService
+  : labels:
+    - source: 'lateinit var service: MyService'
+      style: primary
+      start: 0
+      end: 31

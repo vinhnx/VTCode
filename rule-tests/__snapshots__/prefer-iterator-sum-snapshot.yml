@@ -1,0 +1,50 @@
+id: prefer-iterator-sum
+snapshots:
+  let total = items.iter().fold(0, |acc, x| acc + x);:
+    fixed: let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 50
+  ? |
+    let total = items.iter().fold(0, |acc, x| acc + x);
+  : fixed: |
+      let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 50
+  let total = items.iter().fold(0.0, |acc, x| acc + x);:
+    fixed: let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0.0, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 52
+  ? |
+    let total = items.iter().fold(0.0, |acc, x| acc + x);
+  : fixed: |
+      let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0.0, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 52
+  let total = items.iter().fold(0u64, |acc, x| acc + x);:
+    fixed: let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0u64, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 53
+  ? |
+    let total = items.iter().fold(0u64, |acc, x| acc + x);
+  : fixed: |
+      let total = items.iter().sum();
+    labels:
+    - source: items.iter().fold(0u64, |acc, x| acc + x)
+      style: primary
+      start: 12
+      end: 53

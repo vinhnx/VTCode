@@ -1,15 +1,15 @@
 id: prefer-is-empty
 valid:
-  - code: |
+  - |
       if (list.isEmpty()) return
-  - code: |
+  - |
       if (str.isEmpty()) return
 invalid:
-  - code: |
+  - |
       if (list.size == 0) return
-  - code: |
+  - |
       if (str.length == 0) return
-  - code: |
+  - |
       if (items.count() == 0) return
-  - code: |
+  - |
       if (list.size <= 0) return

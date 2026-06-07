@@ -1,0 +1,28 @@
+id: clean-architecture-imports
+snapshots:
+  import com.example.data.database.UserDao:
+    labels:
+    - source: import com.example.data.database.UserDao
+      style: primary
+      start: 0
+      end: 40
+  ? |
+    import com.example.data.database.UserDao
+  : labels:
+    - source: import com.example.data.database.UserDao
+      style: primary
+      start: 0
+      end: 40
+  import com.example.presentation.ui.UserScreen:
+    labels:
+    - source: import com.example.presentation.ui.UserScreen
+      style: primary
+      start: 0
+      end: 45
+  ? |
+    import com.example.presentation.ui.UserScreen
+  : labels:
+    - source: import com.example.presentation.ui.UserScreen
+      style: primary
+      start: 0
+      end: 45

@@ -1,6 +1,6 @@
 id: no-nested-links
 valid:
-  - code: |
+  - |
       function Nav() {
         return (
           <nav>
@@ -9,12 +9,12 @@ valid:
           </nav>
         );
       }
-  - code: |
+  - |
       function Card() {
         return <a href="/detail"><span>Click here</span></a>;
       }
 invalid:
-  - code: |
+  - |
       function Broken() {
         return (
           <a href="/outer">
@@ -22,7 +22,7 @@ invalid:
           </a>
         );
       }
-  - code: |
+  - |
       function AlsoBroken() {
         return (
           <a href="/parent">

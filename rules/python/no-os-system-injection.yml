@@ -1,0 +1,18 @@
+id: no-os-system-injection
+language: python
+severity: error
+message: Avoid `os.system()` with string interpolation; use `subprocess.run` with a list.
+note: |
+  `os.system(cmd)` passes the string to a shell, enabling command injection
+  when the string contains user-controlled input. Use `subprocess.run([cmd, arg1, ...])`
+  which bypasses the shell entirely. This rule flags `os.system` calls that
+  contain string concatenation, which is a common injection vector.
+rule:
+  any:
+    - pattern: os.system($A + $B)
+    - pattern: os.system($A + $B + $C)
+files:
+  - "**/*.py"
+  - "!tests/**"
+  - "!**/test_*.py"
+  - "!**/*_test.py"

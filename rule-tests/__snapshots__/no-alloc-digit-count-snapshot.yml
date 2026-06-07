@@ -1,0 +1,34 @@
+id: no-alloc-digit-count
+snapshots:
+  let digits = n.to_string().chars().count();:
+    fixed: let digits = n.checked_ilog10().unwrap_or(0) + 1;
+    labels:
+    - source: n.to_string().chars().count()
+      style: primary
+      start: 13
+      end: 42
+  ? |
+    let digits = n.to_string().chars().count();
+  : fixed: |
+      let digits = n.checked_ilog10().unwrap_or(0) + 1;
+    labels:
+    - source: n.to_string().chars().count()
+      style: primary
+      start: 13
+      end: 42
+  let width = num.to_string().chars().count();:
+    fixed: let width = num.checked_ilog10().unwrap_or(0) + 1;
+    labels:
+    - source: num.to_string().chars().count()
+      style: primary
+      start: 12
+      end: 43
+  ? |
+    let width = num.to_string().chars().count();
+  : fixed: |
+      let width = num.checked_ilog10().unwrap_or(0) + 1;
+    labels:
+    - source: num.to_string().chars().count()
+      style: primary
+      start: 12
+      end: 43

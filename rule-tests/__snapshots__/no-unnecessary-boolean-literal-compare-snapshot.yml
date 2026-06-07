@@ -1,0 +1,50 @@
+id: no-unnecessary-boolean-literal-compare
+snapshots:
+  if (isValid !== false) { proceed(); }:
+    fixed: if (isValid) { proceed(); }
+    labels:
+    - source: isValid !== false
+      style: primary
+      start: 4
+      end: 21
+  ? |
+    if (isValid !== false) { proceed(); }
+  : fixed: |
+      if (isValid) { proceed(); }
+    labels:
+    - source: isValid !== false
+      style: primary
+      start: 4
+      end: 21
+  if (isValid == true) { proceed(); }:
+    fixed: if (isValid) { proceed(); }
+    labels:
+    - source: isValid == true
+      style: primary
+      start: 4
+      end: 19
+  ? |
+    if (isValid == true) { proceed(); }
+  : fixed: |
+      if (isValid) { proceed(); }
+    labels:
+    - source: isValid == true
+      style: primary
+      start: 4
+      end: 19
+  if (isValid === true) { proceed(); }:
+    fixed: if (isValid) { proceed(); }
+    labels:
+    - source: isValid === true
+      style: primary
+      start: 4
+      end: 20
+  ? |
+    if (isValid === true) { proceed(); }
+  : fixed: |
+      if (isValid) { proceed(); }
+    labels:
+    - source: isValid === true
+      style: primary
+      start: 4
+      end: 20

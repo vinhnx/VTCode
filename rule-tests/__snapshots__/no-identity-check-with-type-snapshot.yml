@@ -1,0 +1,34 @@
+id: no-identity-check-with-type
+snapshots:
+  type(x) == str:
+    fixed: isinstance(x, str)
+    labels:
+    - source: type(x) == str
+      style: primary
+      start: 0
+      end: 14
+  ? |
+    type(x) == str
+  : fixed: |
+      isinstance(x, str)
+    labels:
+    - source: type(x) == str
+      style: primary
+      start: 0
+      end: 14
+  type(x) is int:
+    fixed: isinstance(x, int)
+    labels:
+    - source: type(x) is int
+      style: primary
+      start: 0
+      end: 14
+  ? |
+    type(x) is int
+  : fixed: |
+      isinstance(x, int)
+    labels:
+    - source: type(x) is int
+      style: primary
+      start: 0
+      end: 14
