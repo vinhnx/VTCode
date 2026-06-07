@@ -39,11 +39,24 @@ fn generate_placeholder_artifacts() {
         }
     };
 
-    // Write empty files to prevent "file not found" errors during docs.rs build
-    if let Err(error) = fs::write(
-        out_dir.join("openrouter_constants.rs"),
-        "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n",
-    ) {
+    // Generate placeholder openrouter_constants.rs with all per-model constants
+    // so that #[cfg(not(docsrs))] source code referencing these constants compiles.
+    // The docsrs cfg is only set during the rustdoc pass, not during compilation,
+    // so source code behind #[cfg(not(docsrs))] is active and needs these symbols.
+    let constants_content = match generate_placeholder_openrouter_constants() {
+        Ok(content) => content,
+        Err(error) => {
+            eprintln!("warning: failed to generate placeholder openrouter constants: {error:#}");
+            // Fall back to minimal placeholder
+            "    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    \
+             pub const SUPPORTED_MODELS: &[&str] = &[];\n    \
+             pub const REASONING_MODELS: &[&str] = &[];\n    \
+             pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    \
+             pub mod vendor {}\n"
+                .to_string()
+        }
+    };
+    if let Err(error) = fs::write(out_dir.join("openrouter_constants.rs"), constants_content) {
         eprintln!("warning: failed to write placeholder constants: {error}");
     }
     if let Err(error) = fs::write(
@@ -58,6 +71,131 @@ fn generate_placeholder_artifacts() {
     ) {
         eprintln!("warning: failed to write capability metadata: {error}");
     }
+}
+
+/// Generate placeholder openrouter_constants.rs for docs.rs builds.
+///
+/// The `docsrs` cfg flag is only set during the final rustdoc invocation, not
+/// during the cargo compilation step. Source code behind `#[cfg(not(docsrs))]`
+/// is therefore active and references per-model constants (e.g.
+/// `openrouter::QWEN3_CODER`). This function reads the embedded model metadata
+/// and generates all per-model constants so compilation succeeds.
+fn generate_placeholder_openrouter_constants() -> Result<String> {
+    let root: Value = serde_json::from_str(EMBEDDED_OPENROUTER_MODELS)
+        .context("Failed to parse embedded openrouter_models.json for placeholder generation")?;
+
+    let models = root
+        .get("models")
+        .and_then(|v| v.as_object())
+        .context("openrouter_models.json is missing 'models' object")?;
+
+    let default_model_id = root
+        .get("default_model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("xiaomi/mimo-v2.5-pro");
+
+    // Collect per-model entries: (constant_name, model_id, is_reasoning, tool_call, vendor)
+    let mut entries: Vec<(String, String, bool, bool, String)> = Vec::new();
+    let mut default_const_name: Option<String> = None;
+
+    for (_key, model) in models {
+        let Some(vtcode) = model.get("vtcode") else {
+            continue;
+        };
+        let const_name = match vtcode.get("constant").and_then(|v| v.as_str()) {
+            Some(c) => c.to_string(),
+            None => continue,
+        };
+        let model_id = match model.get("id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+        let is_reasoning = model
+            .get("reasoning")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let tool_call = model
+            .get("tool_call")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let vendor = vtcode
+            .get("vendor")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        if model_id == default_model_id {
+            default_const_name = Some(const_name.clone());
+        }
+
+        entries.push((const_name, model_id, is_reasoning, tool_call, vendor));
+    }
+
+    let default_const = default_const_name
+        .as_deref()
+        .unwrap_or("XIAOMI_MIMO_V2_5_PRO");
+
+    let mut output = String::new();
+    output.push_str("// Auto-generated placeholder for docs.rs build\n");
+
+    // Per-model constants
+    for (const_name, model_id, _, _, _) in &entries {
+        output.push_str(&format!("pub const {const_name}: &str = \"{model_id}\";\n"));
+    }
+
+    // DEFAULT_MODEL
+    output.push_str(&format!(
+        "pub const DEFAULT_MODEL: &str = {default_const};\n"
+    ));
+
+    // SUPPORTED_MODELS
+    output.push_str("pub const SUPPORTED_MODELS: &[&str] = &[");
+    for (const_name, _, _, _, _) in &entries {
+        output.push_str(&format!("{const_name}, "));
+    }
+    output.push_str("];\n");
+
+    // REASONING_MODELS
+    output.push_str("pub const REASONING_MODELS: &[&str] = &[");
+    for (const_name, _, is_reasoning, _, _) in &entries {
+        if *is_reasoning {
+            output.push_str(&format!("{const_name}, "));
+        }
+    }
+    output.push_str("];\n");
+
+    // TOOL_UNAVAILABLE_MODELS
+    output.push_str("pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[");
+    for (const_name, _, _, tool_call, _) in &entries {
+        if !tool_call {
+            output.push_str(&format!("{const_name}, "));
+        }
+    }
+    output.push_str("];\n");
+
+    // Vendor modules
+    let mut vendor_map: IndexMap<String, Vec<&str>> = IndexMap::new();
+    for (const_name, _, _, _, vendor) in &entries {
+        vendor_map
+            .entry(vendor.clone())
+            .or_default()
+            .push(const_name);
+    }
+
+    output.push_str("pub mod vendor {\n");
+    for (vendor, constants) in &vendor_map {
+        let mod_name = to_module_name(vendor);
+        output.push_str(&format!("    pub mod {mod_name} {{\n"));
+        output.push_str("        pub const MODELS: &[&str] = &[");
+        for c in constants {
+            output.push_str(&format!("super::super::{c}, "));
+        }
+        output.push_str("];\n");
+        output.push_str("    }\n");
+    }
+    output.push_str("}\n");
+
+    Ok(output)
 }
 
 fn generate_artifacts() -> Result<()> {

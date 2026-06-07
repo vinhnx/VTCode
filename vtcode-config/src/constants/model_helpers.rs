@@ -10,10 +10,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         "mimo" => Some(models::mimo::SUPPORTED_MODELS),
         "minimax" => Some(models::minimax::SUPPORTED_MODELS),
         "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
-        #[cfg(not(docsrs))]
         "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
-        #[cfg(docsrs)]
-        "openrouter" => Some(&[]),
         "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
         "zai" => Some(models::zai::SUPPORTED_MODELS),
         "opencode-zen" => Some(models::opencode_zen::CONFIGURED_MODELS),
@@ -38,10 +35,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "mimo" => Some(models::mimo::DEFAULT_MODEL),
         "minimax" => Some(models::minimax::DEFAULT_MODEL),
         "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
-        #[cfg(not(docsrs))]
         "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
-        #[cfg(docsrs)]
-        "openrouter" => Some("openrouter/auto"), // Fallback for docs.rs build
         "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
         "zai" => Some(models::zai::DEFAULT_MODEL),
         "opencode-zen" => Some(models::opencode_zen::DEFAULT_MODEL),

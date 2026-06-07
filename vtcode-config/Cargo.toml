@@ -58,20 +58,12 @@ serde_json = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 default-target = "x86_64-unknown-linux-gnu"
+rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.cargo-machete]
 ignored = ["nix"]
 
-[lints.clippy]
-unwrap_used = "allow"
-panic = "allow"
-panic_in_result_fn = "allow"
-unused_result_ok = "allow"
-float_cmp = "allow"
-unreachable = "allow"
-assertions_on_result_states = "allow"
-
-[lints.rust]
-unfulfilled_lint_expectations = "allow"
+[lints]
+workspace = true
 

@@ -2,50 +2,9 @@ use crate::models::Provider;
 
 use super::ModelId;
 
-#[cfg(not(docsrs))]
 #[allow(dead_code)]
 mod capability_generated {
     include!(concat!(env!("OUT_DIR"), "/model_capabilities.rs"));
-}
-
-#[cfg(docsrs)]
-#[allow(dead_code)]
-mod capability_generated {
-    #[derive(Clone, Copy)]
-    pub struct Pricing {
-        pub input: Option<f64>,
-        pub output: Option<f64>,
-        pub cache_read: Option<f64>,
-        pub cache_write: Option<f64>,
-    }
-
-    #[derive(Clone, Copy)]
-    pub struct Entry {
-        pub provider: &'static str,
-        pub id: &'static str,
-        pub display_name: &'static str,
-        pub description: &'static str,
-        pub context_window: usize,
-        pub max_output_tokens: Option<usize>,
-        pub reasoning: bool,
-        pub tool_call: bool,
-        pub vision: bool,
-        pub input_modalities: &'static [&'static str],
-        pub caching: bool,
-        pub structured_output: bool,
-        pub pricing: Pricing,
-    }
-
-    pub const ENTRIES: &[Entry] = &[];
-    pub const PROVIDERS: &[&str] = &[];
-
-    pub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> {
-        None
-    }
-
-    pub fn models_for_provider(_provider: &str) -> Option<&'static [&'static str]> {
-        None
-    }
 }
 
 /// Catalog metadata generated from `docs/models.json`.

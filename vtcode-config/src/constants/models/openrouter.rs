@@ -1,20 +1,4 @@
-#[cfg(not(docsrs))]
+// Include build-script-generated constants. On docs.rs, the build script
+// detects the DOCS_RS env var and generates a placeholder file with all
+// per-model constants so that #[cfg(not(docsrs))] source code compiles.
 include!(concat!(env!("OUT_DIR"), "/openrouter_constants.rs"));
-
-// For docs.rs builds, define placeholder constants to avoid compilation errors
-#[cfg(docsrs)]
-mod generated_constants {
-    pub const DEFAULT_MODEL: &str = "openrouter/auto";
-    pub const SUPPORTED_MODELS: &[&str] = &[];
-    pub const REASONING_MODELS: &[&str] = &[];
-    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
-
-    pub mod vendor {
-        pub mod openrouter {
-            pub const MODELS: &[&str] = &[];
-        }
-    }
-}
-
-#[cfg(docsrs)]
-pub use generated_constants::*;
