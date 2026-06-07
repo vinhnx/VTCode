@@ -818,13 +818,7 @@ pub(super) async fn resolve_inline_loop_action(
 }
 
 async fn handle_cycle_session_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
-    let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer
-            .line(MessageStyle::Error, "No session agents are available.")?;
-        return Ok(());
-    };
-
-    let specs = controller.effective_specs().await;
+    let specs = load_session_agent_specs(ctx).await?;
     match next_session_agent_name(ctx.active_session_agent.active(), &specs) {
         Some(name) => handle_select_session_agent(ctx, name).await,
         None => {
@@ -847,13 +841,7 @@ async fn handle_select_session_agent(
         return Ok(());
     };
 
-    let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer
-            .line(MessageStyle::Error, "No session agents are available.")?;
-        return Ok(());
-    };
-
-    let specs = controller.effective_specs().await;
+    let specs = load_session_agent_specs(ctx).await?;
     match ctx.active_session_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
@@ -874,6 +862,28 @@ async fn handle_select_session_agent(
     }
 
     Ok(())
+}
+
+async fn load_session_agent_specs(
+    ctx: &InteractionLoopContext<'_>,
+) -> Result<Vec<vtcode_config::SubagentSpec>> {
+    if let Some(controller) = ctx.tool_registry.subagent_controller() {
+        let specs = controller.effective_specs().await;
+        if !specs.is_empty() {
+            return Ok(specs);
+        }
+    }
+
+    let discovered = vtcode_config::discover_subagents(
+        &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
+    )
+    .with_context(|| {
+        format!(
+            "Failed to discover session agents in {}",
+            ctx.config.workspace.display()
+        )
+    })?;
+    Ok(discovered.effective)
 }
 
 fn set_session_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
