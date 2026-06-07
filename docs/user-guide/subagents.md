@@ -21,11 +21,11 @@ For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude
 
 | Agent | Default model | Mutates files? | Purpose |
 | --- | --- | --- | --- |
-| `build` | `inherit` | yes | Default implementation controller for the main session |
-| `duck` | `inherit` | no | Discussion-first controller for scope, constraints, and trade-offs |
+| `build` | `inherit` | yes | Default implementation agent for the main session |
+| `duck` | `inherit` | no | Discussion-first agent for scope, constraints, and trade-offs |
 | `plan` | `inherit` | no | Read-only planning agent available as both primary and delegated child |
 
-Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use `mode: primary` for main-session controllers, `mode: subagent` for delegated-only definitions, and `mode: all` for definitions that should support both.
+Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use `mode: primary` for main-session agents, `mode: subagent` for delegated-only definitions, and `mode: all` for definitions that should support both.
 
 ## Built-in subagents
 
@@ -40,7 +40,7 @@ Notes:
 
 - `explorer` also matches `explore`
 - `worker` also matches `general` and `general-purpose`
-- child threads cannot spawn more subagents in the current VT Code build
+- child threads do not spawn more subagents
 
 Completed child threads are expected to return a fixed Markdown handoff that VT Code can merge back into the parent session memory:
 
@@ -218,6 +218,31 @@ Only `name` and `description` are required.
 | `memory` | persistent memory scope | `user`, `project`, or `local` |
 | `isolation` | compatibility field for future isolation modes | `worktree` is parsed but currently rejected at runtime in VT Code |
 
+### Field Availability
+
+| Field | Primary agents | Subagents |
+| --- | --- | --- |
+| `name` | yes | yes |
+| `description` | yes | yes |
+| Markdown body / instructions | yes | yes |
+| `mode` | yes | yes |
+| `tools` | yes | yes |
+| `disallowedTools` | yes | yes |
+| `permissionMode` | yes | yes |
+| `model` | yes | yes |
+| `reasoning_effort` | yes | yes |
+| `color` | no | yes |
+| `skills` | no | yes |
+| `mcpServers` | no | yes |
+| `hooks` | no | yes |
+| `background` | no | yes |
+| `maxTurns` | no | yes |
+| `nickname_candidates` | no | yes |
+| `initialPrompt` | no | yes |
+| `memory` | no | yes |
+| `isolation` | no | yes |
+| `aliases` | lookup only | lookup and delegation matching |
+
 ## Model Resolution
 
 VT Code resolves a subagent model in this order:
@@ -379,26 +404,29 @@ VT Code treats a single explicit mention as the selected agent for the turn. If 
 
 Press `Tab` on an empty idle composer to cycle the active primary agent. The cycle includes discovered agent specs marked with `mode: primary` or `mode: all`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
 
-When you select a primary agent, VT Code keeps you in the main session rather than spawning a child thread. The selected spec controls these request-time fields:
+When you select a primary agent, VT Code keeps you in the main session rather than spawning a child thread. The active primary agent is shown in the header next to the current mode.
 
-- the Markdown body or instructions become the active primary agent instructions
-- `tools` is intersected with the current session's available tools
-- `disallowedTools` removes tools after allowlist filtering, so deny wins
-- `permissionMode` can only narrow the current session mode
-- `model` and `reasoning_effort` are applied before request validation and provider capability checks
-- aliases are metadata only for primary agents
+Primary agents use the same agent definition format:
 
-Some fields are not supported by primary agents in this implementation. Child-run fields such as `background`, `maxTurns`, `initialPrompt`, and `isolation` apply only when spawning child agents. Other fields, including `skills`, `mcpServers`, `hooks`, `nickname_candidates`, and `memory`, remain delegated-child-only until they are wired into main-session switching.
+```markdown
+---
+name: duck
+description: Discussion-first agent for scope, constraints, and trade-offs.
+mode: primary
+tools: [read_file, list_files, unified_search]
+permissionMode: plan
+model: inherit
+---
+
+Help the user clarify goals and trade-offs before implementation.
+Do not edit files.
+```
+
+Use `mode: primary` for agents that should control the main session, `mode: subagent` for delegated child agents, and `mode: all` for agents that should be available in both places.
 
 Cycling past the last available primary agent wraps back to `build`.
 
-The active primary agent is shown in the header next to the current mode.
-
-`Tab` cycles through available primary agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
-
-VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for primary agents. In VT Code, `--agent` is already used for model override. Primary-agent switching is the interactive `Tab` flow described here.
-
-This feature does not add a workflow engine, hardcoded controller workflows, a new permission DSL, new sandbox rules, or new LSP behaviour. It reuses existing agent specs and existing runtime permission/tool concepts.
+`@agent-name` remains delegated-child syntax. It does not select a primary agent.
 
 ### Inspect Active Agents In Place
 
