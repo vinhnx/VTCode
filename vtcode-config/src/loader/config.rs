@@ -813,10 +813,6 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
-# Terminal emulation backend for PTY snapshots
-# Options: "ghostty_core" (pure Rust, default), "legacy_vt100" (vt100 crate, lowest fidelity)
-emulation_backend = "ghostty_core"
-
 # Optional preferred shell for PTY sessions (falls back to $SHELL when unset)
 # preferred_shell = "/bin/zsh"
 

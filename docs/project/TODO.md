@@ -269,4 +269,4 @@ double check pty and shell command handling again, it seems broken
 
 ==
 
-can we remove vt100?
+[x] remove vt100 legacy backend (done)

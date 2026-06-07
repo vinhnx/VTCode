@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode_config::{PtyConfig, PtyEmulationBackend, VTCodeConfig};
+use vtcode_config::{PtyConfig, VTCodeConfig};
 
 #[test]
 fn shell_zsh_fork_disabled_allows_missing_zsh_path() {
@@ -8,40 +8,15 @@ fn shell_zsh_fork_disabled_allows_missing_zsh_path() {
 }
 
 #[test]
-fn pty_defaults_to_ghostty_core_backend() {
-    let config = PtyConfig::default();
-    assert_eq!(config.emulation_backend, PtyEmulationBackend::GhosttyCore);
-}
-
-#[test]
-fn pty_deserializes_ghostty_core_backend() -> Result<()> {
+fn pty_config_deserializes_with_defaults() -> Result<()> {
     let config: VTCodeConfig = toml::from_str(
         r#"
 [pty]
-emulation_backend = "ghostty_core"
+scrollback_lines = 500
 "#,
     )?;
 
-    assert_eq!(
-        config.pty.emulation_backend,
-        PtyEmulationBackend::GhosttyCore
-    );
-    Ok(())
-}
-
-#[test]
-fn pty_deserializes_ghostty_alias_as_ghostty_core() -> Result<()> {
-    let config: VTCodeConfig = toml::from_str(
-        r#"
-[pty]
-emulation_backend = "ghostty"
-"#,
-    )?;
-
-    assert_eq!(
-        config.pty.emulation_backend,
-        PtyEmulationBackend::GhosttyCore
-    );
+    assert_eq!(config.pty.scrollback_lines, 500);
     Ok(())
 }
 

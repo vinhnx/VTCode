@@ -22,12 +22,7 @@ impl PtyPreviewRenderer {
         };
 
         Self {
-            screen_state: PtyScreenState::new(
-                size,
-                config.scrollback_lines,
-                config.emulation_backend,
-                config.max_scrollback_bytes,
-            ),
+            screen_state: PtyScreenState::new(size, config.scrollback_lines),
             scrollback: PtyScrollback::new(config.scrollback_lines, config.max_scrollback_bytes),
         }
     }
@@ -90,7 +85,7 @@ fn normalize_preview_chunk(chunk: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::PtyPreviewRenderer;
-    use crate::config::{PtyConfig, PtyEmulationBackend};
+    use crate::config::PtyConfig;
 
     #[test]
     fn carriage_return_snapshot_keeps_latest_screen_contents() {
@@ -110,10 +105,7 @@ mod tests {
 
     #[test]
     fn ghostty_core_backend_renders_snapshot() {
-        let mut preview = PtyPreviewRenderer::from_config(&PtyConfig {
-            emulation_backend: PtyEmulationBackend::GhosttyCore,
-            ..PtyConfig::default()
-        });
+        let mut preview = PtyPreviewRenderer::from_config(&PtyConfig::default());
         preview.push_str("ghostty core\n");
 
         assert_eq!(preview.snapshot_text(), "ghostty core");

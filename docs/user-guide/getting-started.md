@@ -221,7 +221,6 @@ enabled = true
 default_rows = 24
 default_cols = 80
 command_timeout_seconds = 300
-emulation_backend = "ghostty" # default; falls back to "legacy_vt100" when unavailable
 
 # Lifecycle hooks - Execute shell commands in response to agent events
 # For comprehensive examples and setup, see: ../../guides/lifecycle-hooks.md

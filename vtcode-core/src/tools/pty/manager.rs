@@ -594,8 +594,6 @@ if output.len() > max_tokens * 4 {
         let screen_state = Arc::new(Mutex::new(PtyScreenState::new(
             size,
             self.config.scrollback_lines,
-            self.config.emulation_backend,
-            self.config.max_scrollback_bytes,
         )));
         let scrollback = Arc::new(Mutex::new(PtyScrollback::new(
             self.config.scrollback_lines,
@@ -603,7 +601,6 @@ if output.len() > max_tokens * 4 {
         )));
         debug!(
             session_id = %session_id,
-            configured_backend = self.config.emulation_backend.as_str(),
             rows = size.rows,
             cols = size.cols,
             "Created PTY session"

@@ -191,7 +191,7 @@ Narrow commands: `cargo check`, `cargo nextest run`, `cargo fmt`, `cargo clippy`
 ./scripts/run.sh         # release build + launch
 ```
 
-Both auto-bootstrap Ghostty VT runtime. Without it, PTY snapshots fall back to `legacy_vt100`.
+Both auto-bootstrap Ghostty VT runtime.
 
 ## Testing
 
