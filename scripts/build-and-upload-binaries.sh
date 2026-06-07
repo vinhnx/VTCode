@@ -14,22 +14,18 @@ TARGET_ENV_ASSIGNMENTS=()
 DRY_RUN=false
 NO_WINDOWS_CROSS=false
 
-package_release_archive_with_ghostty() {
+package_release_archive() {
     local target=$1
     local dist_dir=$2
     local archive_name=$3
     local binary_name="${4:-vtcode}"
     local release_dir="target/$target/release"
 
-    bash "$SCRIPT_DIR/prepare-ghostty-vt-release-assets.sh" "$target" "$release_dir"
-
-    rm -rf "$dist_dir/ghostty-vt"
     cp "$release_dir/$binary_name" "$dist_dir/$binary_name"
-    cp -R "$release_dir/ghostty-vt" "$dist_dir/ghostty-vt"
     (
         cd "$dist_dir"
-        tar -czf "$archive_name" "$binary_name" ghostty-vt
-        rm -rf "$binary_name" ghostty-vt
+        tar -czf "$archive_name" "$binary_name"
+        rm -rf "$binary_name"
     )
 }
 
@@ -243,20 +239,20 @@ build_binaries() {
     print_info "Packaging binaries..."
 
     # macOS x86_64
-    package_release_archive_with_ghostty \
+    package_release_archive \
         "x86_64-apple-darwin" \
         "$dist_dir" \
         "vtcode-$version-x86_64-apple-darwin.tar.gz"
 
     # macOS aarch64
-    package_release_archive_with_ghostty \
+    package_release_archive \
         "aarch64-apple-darwin" \
         "$dist_dir" \
         "vtcode-$version-aarch64-apple-darwin.tar.gz"
 
     # Linux x86_64
     if [ "$build_linux" = true ] && [ -f "target/x86_64-unknown-linux-gnu/release/vtcode" ]; then
-        package_release_archive_with_ghostty \
+        package_release_archive \
             "x86_64-unknown-linux-gnu" \
             "$dist_dir" \
             "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz"
@@ -264,7 +260,7 @@ build_binaries() {
 
     # Linux aarch64
     if [ "$build_linux" = true ] && [ -f "target/aarch64-unknown-linux-gnu/release/vtcode" ]; then
-        package_release_archive_with_ghostty \
+        package_release_archive \
             "aarch64-unknown-linux-gnu" \
             "$dist_dir" \
             "vtcode-$version-aarch64-unknown-linux-gnu.tar.gz"
@@ -324,7 +320,7 @@ build_binaries_local() {
         
         # Package x86_64
         if [ -f "target/x86_64-apple-darwin/release/vtcode" ]; then
-            package_release_archive_with_ghostty \
+            package_release_archive \
                 "x86_64-apple-darwin" \
                 "$dist_dir" \
                 "vtcode-$version-x86_64-apple-darwin.tar.gz"
@@ -335,7 +331,7 @@ build_binaries_local() {
         
         # Package aarch64
         if [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
-            package_release_archive_with_ghostty \
+            package_release_archive \
                 "aarch64-apple-darwin" \
                 "$dist_dir" \
                 "vtcode-$version-aarch64-apple-darwin.tar.gz"
@@ -357,7 +353,7 @@ build_binaries_local() {
         
         # Package Linux binary
         print_info "Packaging Linux binary..."
-        package_release_archive_with_ghostty \
+        package_release_archive \
             "x86_64-unknown-linux-gnu" \
             "$dist_dir" \
             "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz"

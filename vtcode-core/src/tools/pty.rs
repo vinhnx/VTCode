@@ -17,8 +17,6 @@ mod manager_utils;
 #[cfg(feature = "tui")]
 mod preview;
 #[cfg(feature = "tui")]
-mod raw_vt_buffer;
-#[cfg(feature = "tui")]
 mod screen_backend;
 #[cfg(feature = "tui")]
 mod scrollback;

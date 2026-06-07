@@ -33,10 +33,6 @@ struct PackageReleaseArgs {
     #[arg(long)]
     binary: PathBuf,
 
-    /// Path to the Ghostty VT runtime directory to bundle (optional).
-    #[arg(long)]
-    ghostty_vt: Option<PathBuf>,
-
     /// Output directory for generated artifacts and final archives.
     #[arg(long, default_value = "dist")]
     out_dir: PathBuf,
@@ -70,13 +66,6 @@ fn package_release(args: PackageReleaseArgs) -> Result<(), Box<dyn std::error::E
     fs::create_dir_all(stage_dir.join("completions/bash"))?;
     fs::create_dir_all(stage_dir.join("completions/fish"))?;
     fs::create_dir_all(stage_dir.join("completions/zsh"))?;
-
-    if let Some(ghostty_vt_dir) = &args.ghostty_vt {
-        let src = workspace_root.join(ghostty_vt_dir);
-        if src.is_dir() {
-            copy_dir_recursive(&src, &stage_dir.join("ghostty-vt"))?;
-        }
-    }
 
     let man_page = vtcode_core::cli::ManPageGenerator::generate_main_man_page()?;
     fs::write(stage_dir.join("man/man1/vtcode.1"), man_page)?;
@@ -163,19 +152,4 @@ fn create_archive(
     } else {
         Err("tar command failed".into())
     }
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let target = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_recursive(&entry.path(), &target)?;
-        } else {
-            fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
 }

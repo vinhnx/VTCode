@@ -714,7 +714,7 @@ impl Default for PtyConfig {
 #[serde(rename_all = "snake_case")]
 pub enum PtyEmulationBackend {
     #[default]
-    Ghostty,
+    #[serde(alias = "ghostty")]
     GhosttyCore,
     LegacyVt100,
 }
@@ -723,7 +723,6 @@ impl PtyEmulationBackend {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Ghostty => "ghostty",
             Self::GhosttyCore => "ghostty_core",
             Self::LegacyVt100 => "legacy_vt100",
         }

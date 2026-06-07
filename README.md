@@ -243,7 +243,7 @@ Inside the TUI, `/loop` repeats a prompt on an interval within the current sessi
 | Model providers  | GitHub Copilot, OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Xiaomi MiMo, HuggingFace, Ollama, LM Studio, llama.cpp, custom OpenAI-compatible APIs |
 | Extensibility    | Agent Skills, MCP clients and server mode, lifecycle hooks, subagents, background subprocess agents, custom providers, editor integrations                                         |
 | Interoperability | Open Responses, Agent2Agent, Anthropic Messages API compatibility, ATIF trajectory export                                                                                          |
-| Terminal UX      | Rich TUI, mouse support, text selection, live command output, Ghostty VT snapshots with `legacy_vt100` fallback                                                                    |
+| Terminal UX      | Rich TUI, mouse support, text selection, live command output                                                                                                                      |
 
 ## Installation
 
@@ -279,10 +279,7 @@ brew tap vinhnx/tap
 brew install vinhnx/tap/vtcode
 ```
 
-> [!TIP]
-> Official macOS/Linux release archives include `ghostty-vt/` runtime libraries for richer PTY snapshots. Custom installs continue to work with the built-in `legacy_vt100` backend.
-
-More details: [Installation Guide](./docs/installation/README.md), [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md), [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
+More details: [Installation Guide](./docs/installation/README.md), [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md).
 
 ## Providers
 
@@ -444,8 +441,6 @@ cargo nextest run test_name         # single test by name
 ./scripts/run-debug.sh   # debug build + launch
 ./scripts/run.sh         # release build + launch
 ```
-
-Both auto-bootstrap the Ghostty VT runtime. Without it, PTY snapshots fall back to `legacy_vt100`.
 
 Read: [Development Setup](./docs/development/DEVELOPMENT_SETUP.md), [Testing](./docs/development/testing.md), [CI/CD](./docs/development/ci-cd.md).
 

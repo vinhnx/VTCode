@@ -25,14 +25,13 @@ print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
-package_release_archive_with_ghostty() {
+package_release_archive() {
     local target=$1
     local binary_name=$2
     local archive_path=$3
     local release_dir="target/$target/release"
 
-    bash "$SCRIPT_DIR/prepare-ghostty-vt-release-assets.sh" "$target" "$release_dir"
-    tar -C "$release_dir" -czf "$archive_path" "$binary_name" ghostty-vt
+    tar -C "$release_dir" -czf "$archive_path" "$binary_name"
 }
 
 # Get GitHub username from commit author email
@@ -640,8 +639,17 @@ trigger_docs_rs_rebuild() {
     fi
 
     print_distribution "Triggering docs.rs rebuild for version $version..."
-    curl -s -o /dev/null "https://docs.rs/vtcode/$version" || true
-    curl -s -o /dev/null "https://docs.rs/vtcode-core/$version" || true
+    local crates=(
+        vtcode vtcode-core vtcode-tui vtcode-design vtcode-config
+        vtcode-commons vtcode-markdown-store vtcode-indexer vtcode-bash-runner
+        vtcode-exec-events vtcode-file-search vtcode-acp vtcode-auth
+        vtcode-process-hardening vtcode-ghostty-core
+        vtcode-macros vtcode-terminal-detection vtcode-theme
+        vtcode-utility-tool-specs vtcode-collaboration-tool-specs vtcode-vim
+    )
+    for crate in "${crates[@]}"; do
+        curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true
+    done
 }
 
 update_homebrew_formula_file() {
@@ -1147,7 +1155,7 @@ main() {
          
          # x86_64-apple-darwin
          if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
-            package_release_archive_with_ghostty \
+            package_release_archive \
                 "x86_64-apple-darwin" \
                 "vtcode" \
                 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz"
@@ -1159,7 +1167,7 @@ main() {
 
         # aarch64-apple-darwin
         if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
-            package_release_archive_with_ghostty \
+            package_release_archive \
                 "aarch64-apple-darwin" \
                 "vtcode" \
                 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz"

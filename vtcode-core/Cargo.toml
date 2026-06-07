@@ -134,7 +134,6 @@ vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.123.4"
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.123.4" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.123.4" }
 vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.4" }
-vtcode-ghostty-vt-sys = { path = "../vtcode-ghostty-vt-sys", version = "0.123.4" }
 vtcode-ghostty-core = { path = "../vtcode-ghostty-core", version = "0.123.4" }
 
 # Schema generation

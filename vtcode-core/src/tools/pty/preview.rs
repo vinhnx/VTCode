@@ -109,13 +109,13 @@ mod tests {
     }
 
     #[test]
-    fn ghostty_backend_falls_back_to_legacy_snapshot_when_runtime_library_is_missing() {
+    fn ghostty_core_backend_renders_snapshot() {
         let mut preview = PtyPreviewRenderer::from_config(&PtyConfig {
-            emulation_backend: PtyEmulationBackend::Ghostty,
+            emulation_backend: PtyEmulationBackend::GhosttyCore,
             ..PtyConfig::default()
         });
-        preview.push_str("ghostty fallback\n");
+        preview.push_str("ghostty core\n");
 
-        assert_eq!(preview.snapshot_text(), "ghostty fallback");
+        assert_eq!(preview.snapshot_text(), "ghostty core");
     }
 }

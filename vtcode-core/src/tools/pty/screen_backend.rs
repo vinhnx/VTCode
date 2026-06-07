@@ -1,9 +1,6 @@
 use portable_pty::PtySize;
-use std::sync::OnceLock;
-use tracing::warn;
 use vt100::Parser;
 use vtcode_ghostty_core::Terminal;
-use vtcode_ghostty_vt_sys::{GhosttyRenderRequest, render_terminal_snapshot};
 
 use crate::config::PtyEmulationBackend;
 
@@ -73,72 +70,6 @@ impl PtyBackend for GhosttyCoreBackend {
 }
 
 // ---------------------------------------------------------------------------
-// GhosttyFfiBackend (native Zig library, batch replay)
-// ---------------------------------------------------------------------------
-
-struct GhosttyFfiBackend {
-    vt100_parser: Parser,
-    raw_vt_buffer: super::raw_vt_buffer::RawVtBuffer,
-    scrollback_lines: usize,
-    size: PtySize,
-}
-
-impl GhosttyFfiBackend {
-    fn new(size: PtySize, scrollback_lines: usize, max_scrollback_bytes: usize) -> Self {
-        Self {
-            vt100_parser: Parser::new(size.rows, size.cols, scrollback_lines),
-            raw_vt_buffer: super::raw_vt_buffer::RawVtBuffer::new(max_scrollback_bytes),
-            scrollback_lines,
-            size,
-        }
-    }
-}
-
-impl PtyBackend for GhosttyFfiBackend {
-    fn process(&mut self, chunk: &[u8]) {
-        self.vt100_parser.process(chunk);
-        self.raw_vt_buffer.push(chunk);
-    }
-
-    fn resize(&mut self, rows: u16, cols: u16) {
-        self.vt100_parser.screen_mut().set_size(rows, cols);
-        self.size = PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
-    }
-
-    fn screen_text(&self) -> String {
-        let snapshot = self.raw_vt_buffer.snapshot();
-        if snapshot.was_truncated {
-            return self.vt100_parser.screen().contents();
-        }
-
-        match render_terminal_snapshot(
-            GhosttyRenderRequest {
-                cols: self.size.cols,
-                rows: self.size.rows,
-                scrollback_lines: self.scrollback_lines,
-            },
-            &snapshot.bytes,
-        ) {
-            Ok(output) => output.screen_contents,
-            Err(error) => {
-                warn_ghostty_fallback_once(PtyEmulationBackend::Ghostty, &error);
-                self.vt100_parser.screen().contents()
-            }
-        }
-    }
-
-    fn scrollback_text(&self) -> String {
-        // The FFI path doesn't provide scrollback separately; use vt100 fallback
-        self.vt100_parser.screen().contents()
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Vt100Backend (legacy vt100 crate)
 // ---------------------------------------------------------------------------
 
@@ -185,14 +116,9 @@ impl PtyScreenState {
         size: PtySize,
         scrollback_lines: usize,
         backend: PtyEmulationBackend,
-        max_scrollback_bytes: usize,
+        _max_scrollback_bytes: usize,
     ) -> Self {
         let backend: Box<dyn PtyBackend> = match backend {
-            PtyEmulationBackend::Ghostty => Box::new(GhosttyFfiBackend::new(
-                size,
-                scrollback_lines,
-                max_scrollback_bytes,
-            )),
             PtyEmulationBackend::GhosttyCore => {
                 Box::new(GhosttyCoreBackend::new(size, scrollback_lines))
             }
@@ -226,23 +152,6 @@ pub(super) struct ScreenSnapshot {
     pub(super) scrollback: String,
 }
 
-// ---------------------------------------------------------------------------
-// Fallback warning
-// ---------------------------------------------------------------------------
-
-fn warn_ghostty_fallback_once(configured_backend: PtyEmulationBackend, error: &anyhow::Error) {
-    static WARNED: OnceLock<()> = OnceLock::new();
-
-    if WARNED.set(()).is_ok() {
-        warn!(
-            configured_backend = configured_backend.as_str(),
-            active_backend = PtyEmulationBackend::LegacyVt100.as_str(),
-            error = %error,
-            "PTY snapshot backend resolved via fallback"
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use portable_pty::PtySize;
@@ -259,17 +168,10 @@ mod tests {
         }
     }
 
-    const MAX_SCROLLBACK_BYTES: usize = 25_000_000;
-
     #[test]
     fn ghostty_core_backend_processes_plain_text() {
         let size = test_size();
-        let mut state = PtyScreenState::new(
-            size,
-            100,
-            PtyEmulationBackend::GhosttyCore,
-            MAX_SCROLLBACK_BYTES,
-        );
+        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::GhosttyCore, 0);
         state.process(b"hello");
         let snapshot = state.prepare_snapshot();
         assert!(
@@ -282,12 +184,7 @@ mod tests {
     #[test]
     fn legacy_backend_uses_legacy_snapshot() {
         let size = test_size();
-        let mut state = PtyScreenState::new(
-            size,
-            100,
-            PtyEmulationBackend::LegacyVt100,
-            MAX_SCROLLBACK_BYTES,
-        );
+        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::LegacyVt100, 0);
         state.process(b"legacy");
         let snapshot = state.prepare_snapshot();
         assert!(
@@ -300,12 +197,7 @@ mod tests {
     #[test]
     fn ghostty_core_backend_handles_newlines() {
         let size = test_size();
-        let mut state = PtyScreenState::new(
-            size,
-            100,
-            PtyEmulationBackend::GhosttyCore,
-            MAX_SCROLLBACK_BYTES,
-        );
+        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::GhosttyCore, 0);
         state.process(b"line1\nline2");
         let snapshot = state.prepare_snapshot();
         assert!(
@@ -323,12 +215,7 @@ mod tests {
     #[test]
     fn ghostty_core_backend_handles_ansi_colors() {
         let size = test_size();
-        let mut state = PtyScreenState::new(
-            size,
-            100,
-            PtyEmulationBackend::GhosttyCore,
-            MAX_SCROLLBACK_BYTES,
-        );
+        let mut state = PtyScreenState::new(size, 100, PtyEmulationBackend::GhosttyCore, 0);
         state.process(b"\x1B[1;31mcolored\x1B[0m");
         let snapshot = state.prepare_snapshot();
         assert!(

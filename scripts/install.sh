@@ -402,32 +402,6 @@ install_binary() {
     log_success "Binary installed to $target"
 }
 
-install_ghostty_runtime_libraries() {
-    local binary_source="$1"
-    local install_dir="$2"
-    local runtime_source
-    runtime_source="$(dirname "$binary_source")/ghostty-vt"
-
-    if [[ ! -d "$runtime_source" ]]; then
-        log_warning "Release archive did not include bundled Ghostty VT runtime libraries"
-        log_warning "VT Code will continue and fall back to legacy_vt100 until they are present"
-        return 0
-    fi
-
-    local runtime_target="$install_dir/ghostty-vt"
-    rm -rf "$runtime_target"
-    mkdir -p "$runtime_target"
-
-    if ! cp -R "$runtime_source/." "$runtime_target/"; then
-        log_warning "Failed to install Ghostty VT runtime libraries to $runtime_target"
-        log_warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
-        rm -rf "$runtime_target"
-        return 0
-    fi
-
-    log_success "Ghostty VT runtime libraries installed to $runtime_target"
-}
-
 install_man_and_completions() {
     local archive_source="$1"
     local install_dir="$2"
@@ -607,7 +581,6 @@ main() {
     # Install binary
     local target_path="$INSTALL_DIR/$BIN_NAME"
     install_binary "$binary_path" "$target_path"
-    install_ghostty_runtime_libraries "$binary_path" "$INSTALL_DIR"
 
     if [[ "$WITH_COMPLETIONS" -eq 1 ]]; then
         install_man_and_completions "$extract_dir" "$INSTALL_DIR"

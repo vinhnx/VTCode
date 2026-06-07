@@ -7242,7 +7242,6 @@ dependencies = [
  "vtcode-exec-events",
  "vtcode-file-search",
  "vtcode-ghostty-core",
- "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
  "vtcode-macros",
  "vtcode-markdown-store",
@@ -7306,15 +7305,6 @@ name = "vtcode-ghostty-core"
 version = "0.123.4"
 dependencies = [
  "unicode-width",
-]
-
-[[package]]
-name = "vtcode-ghostty-vt-sys"
-version = "0.123.4"
-dependencies = [
- "anyhow",
- "libloading",
- "tempfile",
 ]
 
 [[package]]

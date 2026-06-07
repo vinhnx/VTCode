@@ -120,7 +120,6 @@ members = [
     "vtcode-design",
     "vtcode-utility-tool-specs",
     "vtcode-terminal-detection",
-    "vtcode-ghostty-vt-sys",
     "vtcode-ghostty-core",
     "vtcode-theme",
     "vtcode-tui",
@@ -156,7 +155,6 @@ vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-file-search = { path = "vtcode-file-search" }
-vtcode-ghostty-vt-sys = { path = "vtcode-ghostty-vt-sys" }
 vtcode-ghostty-core = { path = "vtcode-ghostty-core" }
 vtcode-design = { path = "vtcode-design" }
 

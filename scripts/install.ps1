@@ -255,37 +255,6 @@ function Install-Binary {
     }
 }
 
-function Install-GhosttyRuntimeLibraries {
-    param(
-        [string]$BinaryPath,
-        [string]$InstallDir
-    )
-
-    $RuntimeSource = Join-Path (Split-Path $BinaryPath -Parent) "ghostty-vt"
-    if (-not (Test-Path $RuntimeSource)) {
-        return
-    }
-
-    $RuntimeTarget = Join-Path $InstallDir "ghostty-vt"
-    Write-Info "Installing Ghostty VT runtime libraries to $RuntimeTarget..."
-
-    try {
-        if (Test-Path $RuntimeTarget) {
-            Remove-Item -Path $RuntimeTarget -Recurse -Force -ErrorAction Stop
-        }
-        New-Item -ItemType Directory -Path $RuntimeTarget -Force > $null
-        Copy-Item -Path (Join-Path $RuntimeSource '*') -Destination $RuntimeTarget -Recurse -Force -ErrorAction Stop
-        Write-Success "Ghostty VT runtime libraries installed to $RuntimeTarget"
-    }
-    catch {
-        Write-Warning "Failed to install Ghostty VT runtime libraries"
-        Write-Warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
-        if (Test-Path $RuntimeTarget) {
-            Remove-Item -Path $RuntimeTarget -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
-
 # Check if installation directory is in PATH
 function Check-Path {
     param([string]$InstallPath)
@@ -347,8 +316,7 @@ function Main {
         # Install binary
         $TargetPath = Join-Path $InstallDir $BinName
         Install-Binary -Source $BinaryPath -Target $TargetPath
-        Install-GhosttyRuntimeLibraries -BinaryPath $BinaryPath -InstallDir $InstallDir
-        
+
         # Check if in PATH
         if (-not (Check-Path $InstallDir)) {
             Add-ToPath $InstallDir

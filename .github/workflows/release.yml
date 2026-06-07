@@ -129,11 +129,6 @@ jobs:
             echo "✗ Binary not found!" && exit 1
           fi
 
-      - name: Prepare bundled Ghostty VT runtime
-        shell: bash
-        run: |
-          bash scripts/prepare-ghostty-vt-release-assets.sh "${{ matrix.target }}" "target/${{ matrix.target }}/release"
-
       - name: Package
         shell: bash
         run: |
@@ -143,7 +138,6 @@ jobs:
             --target "${{ matrix.target }}" \
             --version "$VERSION" \
             --binary "target/${{ matrix.target }}/release/vtcode" \
-            --ghostty-vt "target/${{ matrix.target }}/release/ghostty-vt" \
             --out-dir dist
           ARCHIVE="dist/vtcode-${{ matrix.target }}-v${VERSION}.tar.gz"
           if command -v sha256sum &> /dev/null; then
@@ -258,11 +252,6 @@ jobs:
             echo "✗ Binary not found!" && exit 1
           fi
 
-      - name: Prepare bundled Ghostty VT runtime
-        shell: bash
-        run: |
-          bash scripts/prepare-ghostty-vt-release-assets.sh "${{ matrix.target }}" "target/${{ matrix.target }}/release"
-
       - name: Package
         shell: bash
         run: |
@@ -272,7 +261,6 @@ jobs:
             --target "${{ matrix.target }}" \
             --version "$VERSION" \
             --binary "target/${{ matrix.target }}/release/vtcode" \
-            --ghostty-vt "target/${{ matrix.target }}/release/ghostty-vt" \
             --out-dir dist
           ARCHIVE="dist/vtcode-${{ matrix.target }}-v${VERSION}.tar.gz"
           if command -v sha256sum &> /dev/null; then

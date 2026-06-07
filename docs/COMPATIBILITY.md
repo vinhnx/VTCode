@@ -15,7 +15,6 @@ Inspired by [caniuse.rs](https://caniuse.rs), this document tracks feature avail
 | Desktop Notifications | Yes | Yes | Yes | No | Optional feature |
 | Bash Runner | Yes | Yes | Partial | No | Windows uses PowerShell |
 | PTY Sessions | Yes | Yes | Partial | No | Limited on Windows |
-| Ghostty VT Runtime Library | Yes | Yes | No | No | Default PTY backend on supported platforms; official macOS/Linux releases bundle it and other installs fall back to `legacy_vt100` when missing |
 
 **Legend:** Yes = Fully Supported | Partial = Partial Support | No = Not Supported
 
@@ -31,20 +30,31 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 
 | Crate | Version | MSRV | Edition | Stable Since |
 |-------|---------|------|---------|--------------|
-| vtcode | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-core | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-tui | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-config | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-commons | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-llm | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-lmstudio | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-markdown-store | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-indexer | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-tools | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-bash-runner | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-exec-events | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-file-search | 0.85.1 | 1.88 | 2024 | Initial release |
-| vtcode-acp | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-core | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-tui | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-design | 0.123.4 | 1.88 | 2024 | 0.123.4 |
+| vtcode-config | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-commons | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-llm | 0.123.4 | 1.88 | 2024 | Initial release (publish=false) |
+| vtcode-lmstudio | 0.123.4 | 1.88 | 2024 | Initial release (publish=false) |
+| vtcode-tools | 0.123.4 | 1.88 | 2024 | Initial release (publish=false) |
+| vtcode-markdown-store | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-indexer | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-bash-runner | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-exec-events | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-file-search | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-acp | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-auth | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-process-hardening | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-ghostty-core | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-macros | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-terminal-detection | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-theme | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-utility-tool-specs | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-collaboration-tool-specs | 0.123.4 | 1.88 | 2024 | Initial release |
+| vtcode-vim | 0.123.4 | 1.88 | 2024 | Initial release |
+| xtask | 0.8.4 | 1.88 | 2024 | Internal |
 
 ---
 
@@ -57,7 +67,6 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Secret Service (Keyring) | Yes | `libsecret` | Requires `secret-service` DBus interface |
 | Desktop Notifications | Yes | `libnotify` | Via `notify-rust` crate |
 | PTY Sessions | Yes | `libc` | Full Unix PTY support |
-| Ghostty VT Runtime Library | Yes | Packaged runtime library | Default PTY backend; official releases bundle `ghostty-vt/` by default |
 | File Permissions | Yes | `libc` | Unix permission model |
 | Signal Handling | Yes | `signal-hook` | POSIX signals |
 
@@ -68,7 +77,6 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Keychain (Keyring) | Yes | Security Framework | Native macOS keychain |
 | Desktop Notifications | Yes | `mac-notification-sys` | Native NSUserNotification |
 | PTY Sessions | Yes | `libc` | Full Unix PTY support |
-| Ghostty VT Runtime Library | Yes | Packaged runtime library | Default PTY backend; official releases bundle `ghostty-vt/` by default |
 | File Permissions | Yes | `libc` | Unix permission model |
 | Signal Handling | Yes | `signal-hook` | POSIX signals |
 | Touch ID Auth | No | - | Not yet implemented |
@@ -80,7 +88,6 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | Credential Manager (Keyring) | Yes | Windows API | Via `keyring` crate |
 | Desktop Notifications | Yes | Windows Runtime | Via `windows` crate |
 | PTY Sessions | Partial | `conpty` | Limited via ConPTY |
-| Ghostty VT Runtime Library | No | - | Windows remains on `legacy_vt100` |
 | File Permissions | Partial | `windows-sys` | ACL-based, not Unix perms |
 | Signal Handling | Partial | `windows-sys` | Limited Ctrl+C/Ctrl+Break |
 | PowerShell Integration | Yes | - | Default shell backend |
@@ -243,5 +250,5 @@ When adding new features, please:
 
 ---
 
-*Last updated: 2026-03-01*
-*VT Code Version: 0.85.1*
+*Last updated: 2026-06-07*
+*VT Code Version: 0.123.4*
