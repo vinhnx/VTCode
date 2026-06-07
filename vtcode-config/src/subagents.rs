@@ -27,15 +27,6 @@ Use structural search and grep over shell exploration when possible.
 When reading multiple files, read them all in parallel for efficiency.
 Return findings with file paths and line numbers for easy navigation."#;
 
-const BUILTIN_PLAN_AGENT: &str = r#"You are a read-only planning research subagent.
-
-Gather the minimum repository context needed to support a plan or design decision.
-Return findings, risks, and constraints clearly; do not modify files.
-Read relevant files before making claims about the codebase. Never speculate.
-Use structural search to find patterns across the repository.
-When reading multiple files, read them all in parallel for efficiency.
-Ground your recommendations in specific code references and file paths."#;
-
 const BUILTIN_WORKER_AGENT: &str = r#"You are a write-capable worker subagent.
 
 Handle bounded implementation work, verify results, and return a concise outcome summary with
@@ -46,7 +37,7 @@ Do not add features, refactor surrounding code, or make improvements beyond the 
 Verify your changes by running relevant tests or checks before reporting completion.
 If calls repeat without progress, re-plan instead of retrying identically."#;
 
-const BUILTIN_BUILD_TOP_LEVEL_AGENT: &str = r#"You are VT Code's build agent.
+const BUILTIN_BUILD_PRIMARY_AGENT: &str = r#"You are VT Code's build agent.
 
 Own the main coding session. Understand the user's request, inspect relevant project context,
 make directly requested changes, and verify them with the narrowest useful checks.
@@ -55,13 +46,14 @@ When planning is needed, state the plan briefly before implementation. When the 
 discussion or review, do not edit files.
 Report changed files, validation, and remaining risks clearly."#;
 
-const BUILTIN_PLAN_TOP_LEVEL_AGENT: &str = r#"You are VT Code's plan agent.
+const BUILTIN_PLAN_PRIMARY_AGENT: &str = r#"You are VT Code's plan agent.
 
-Own the main coding session in read-only planning mode. Clarify the user's goal, inspect relevant
-project context, identify trade-offs and risks, and produce a concrete implementation plan.
+In the main session, work in read-only planning mode. As a delegated subagent, gather the minimum
+repository context needed to support a plan or design decision. Clarify the user's goal, inspect
+relevant project context, identify trade-offs and risks, and produce concrete findings.
 Do not edit files. Do not present the plan as complete until assumptions and validation steps are clear."#;
 
-const BUILTIN_DUCK_TOP_LEVEL_AGENT: &str = r#"You are VT Code's duck agent.
+const BUILTIN_DUCK_PRIMARY_AGENT: &str = r#"You are VT Code's duck agent.
 
 Own the main coding session as a discussion-first controller. Help the user think through scope,
 constraints, contradictions, and options before implementation.
@@ -129,6 +121,16 @@ pub enum SubagentMemoryScope {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMode {
+    Primary,
+    #[default]
+    Subagent,
+    All,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 pub enum SubagentMcpServer {
@@ -164,7 +166,7 @@ pub struct SubagentSpec {
     #[serde(default)]
     pub background: bool,
     #[serde(default)]
-    pub top_level: bool,
+    pub mode: AgentMode,
     #[serde(default)]
     pub max_turns: Option<usize>,
     #[serde(default)]
@@ -185,6 +187,16 @@ pub struct SubagentSpec {
 }
 
 impl SubagentSpec {
+    #[must_use]
+    pub const fn is_primary(&self) -> bool {
+        matches!(self.mode, AgentMode::Primary | AgentMode::All)
+    }
+
+    #[must_use]
+    pub const fn is_subagent(&self) -> bool {
+        matches!(self.mode, AgentMode::Subagent | AgentMode::All)
+    }
+
     #[must_use]
     pub fn is_read_only(&self) -> bool {
         if matches!(self.permission_mode, Some(PermissionMode::Plan)) {
@@ -355,10 +367,10 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 
     discovered.sort_by_key(|spec| spec.source.priority());
 
-    let mut effective_by_name: BTreeMap<(String, bool), SubagentSpec> = BTreeMap::new();
+    let mut effective_by_name: BTreeMap<String, SubagentSpec> = BTreeMap::new();
     let mut shadowed = Vec::new();
     for spec in discovered {
-        let key = (spec.name.clone(), spec.top_level);
+        let key = spec.name.clone();
         if let Some(existing) = effective_by_name.get(&key) {
             if should_replace(existing, &spec) {
                 shadowed.push(existing.clone());
@@ -379,9 +391,9 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 
 pub fn builtin_subagents() -> Vec<SubagentSpec> {
     vec![
-        builtin_top_level_build_agent(),
-        builtin_top_level_duck_agent(),
-        builtin_top_level_plan_agent(),
+        builtin_primary_build_agent(),
+        builtin_primary_duck_agent(),
+        builtin_plan_agent(),
         SubagentSpec {
             name: "default".to_string(),
             description: "Default inheriting subagent for general delegated work.".to_string(),
@@ -396,7 +408,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: vec!["default".to_string()],
             initial_prompt: None,
@@ -421,38 +433,13 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: vec!["explore".to_string(), "search".to_string()],
             initial_prompt: None,
             memory: None,
             isolation: None,
             aliases: vec!["explore".to_string()],
-            source: SubagentSource::Builtin,
-            file_path: None,
-            warnings: Vec::new(),
-        },
-        SubagentSpec {
-            name: "plan".to_string(),
-            description: "Read-only planning researcher. Use proactively while gathering context for implementation plans.".to_string(),
-            prompt: BUILTIN_PLAN_AGENT.to_string(),
-            tools: Some(builtin_readonly_tool_ids()),
-            disallowed_tools: builtin_readonly_disallowed_tool_ids(),
-            model: Some("inherit".to_string()),
-            color: Some("yellow".to_string()),
-            reasoning_effort: Some("medium".to_string()),
-            permission_mode: Some(PermissionMode::Plan),
-            skills: Vec::new(),
-            mcp_servers: Vec::new(),
-            hooks: None,
-            background: false,
-            top_level: false,
-            max_turns: None,
-            nickname_candidates: vec!["planner".to_string()],
-            initial_prompt: None,
-            memory: None,
-            isolation: None,
-            aliases: Vec::new(),
             source: SubagentSource::Builtin,
             file_path: None,
             warnings: Vec::new(),
@@ -471,7 +458,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: vec!["general".to_string(), "worker".to_string()],
             initial_prompt: None,
@@ -485,12 +472,11 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
     ]
 }
 
-pub fn builtin_top_level_build_agent() -> SubagentSpec {
+pub fn builtin_primary_build_agent() -> SubagentSpec {
     SubagentSpec {
         name: "build".to_string(),
-        description: "Default top-level implementation controller for the main session."
-            .to_string(),
-        prompt: BUILTIN_BUILD_TOP_LEVEL_AGENT.to_string(),
+        description: "Default primary implementation controller for the main session.".to_string(),
+        prompt: BUILTIN_BUILD_PRIMARY_AGENT.to_string(),
         tools: None,
         disallowed_tools: Vec::new(),
         model: Some("inherit".to_string()),
@@ -501,7 +487,7 @@ pub fn builtin_top_level_build_agent() -> SubagentSpec {
         mcp_servers: Vec::new(),
         hooks: None,
         background: false,
-        top_level: true,
+        mode: AgentMode::Primary,
         max_turns: None,
         nickname_candidates: vec!["build".to_string(), "builder".to_string()],
         initial_prompt: None,
@@ -514,11 +500,11 @@ pub fn builtin_top_level_build_agent() -> SubagentSpec {
     }
 }
 
-pub fn builtin_top_level_plan_agent() -> SubagentSpec {
+pub fn builtin_plan_agent() -> SubagentSpec {
     SubagentSpec {
         name: "plan".to_string(),
-        description: "Built-in read-only planning controller for the main session.".to_string(),
-        prompt: BUILTIN_PLAN_TOP_LEVEL_AGENT.to_string(),
+        description: "Built-in read-only planning agent definition.".to_string(),
+        prompt: BUILTIN_PLAN_PRIMARY_AGENT.to_string(),
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
@@ -529,7 +515,7 @@ pub fn builtin_top_level_plan_agent() -> SubagentSpec {
         mcp_servers: Vec::new(),
         hooks: None,
         background: false,
-        top_level: true,
+        mode: AgentMode::All,
         max_turns: None,
         nickname_candidates: vec!["plan".to_string(), "planner".to_string()],
         initial_prompt: None,
@@ -542,11 +528,11 @@ pub fn builtin_top_level_plan_agent() -> SubagentSpec {
     }
 }
 
-pub fn builtin_top_level_duck_agent() -> SubagentSpec {
+pub fn builtin_primary_duck_agent() -> SubagentSpec {
     SubagentSpec {
         name: "duck".to_string(),
         description: "Built-in discussion-first controller for the main session.".to_string(),
-        prompt: BUILTIN_DUCK_TOP_LEVEL_AGENT.to_string(),
+        prompt: BUILTIN_DUCK_PRIMARY_AGENT.to_string(),
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
@@ -557,7 +543,7 @@ pub fn builtin_top_level_duck_agent() -> SubagentSpec {
         mcp_servers: Vec::new(),
         hooks: None,
         background: false,
-        top_level: true,
+        mode: AgentMode::Primary,
         max_turns: None,
         nickname_candidates: vec!["duck".to_string()],
         initial_prompt: None,
@@ -690,7 +676,12 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("background")
             .and_then(JsonValue::as_bool)
             .unwrap_or(false);
-        let top_level = optional_bool_alias(config, &["topLevel", "top_level"]).unwrap_or(false);
+        let mode = config
+            .get("mode")
+            .and_then(JsonValue::as_str)
+            .map(parse_agent_mode)
+            .transpose()?
+            .unwrap_or_default();
         let nickname_candidates =
             optional_string_list(config.get("nickname_candidates"))?.unwrap_or_default();
         let initial_prompt = config
@@ -722,7 +713,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             mcp_servers,
             hooks,
             background,
-            top_level,
+            mode,
             max_turns,
             nickname_candidates,
             initial_prompt,
@@ -839,7 +830,12 @@ fn subagent_spec_from_json_map(
         .get("background")
         .and_then(JsonValue::as_bool)
         .unwrap_or(false);
-    let top_level = optional_bool_alias(object, &["topLevel", "top_level"]).unwrap_or(false);
+    let mode = object
+        .get("mode")
+        .and_then(JsonValue::as_str)
+        .map(parse_agent_mode)
+        .transpose()?
+        .unwrap_or_default();
     let max_turns = object
         .get("maxTurns")
         .or_else(|| object.get("max_turns"))
@@ -876,7 +872,7 @@ fn subagent_spec_from_json_map(
         mcp_servers,
         hooks,
         background,
-        top_level,
+        mode,
         max_turns,
         nickname_candidates,
         initial_prompt,
@@ -974,11 +970,6 @@ fn required_string(object: &JsonMap<String, JsonValue>, key: &str) -> Result<Str
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
         .ok_or_else(|| anyhow!("missing required subagent field '{key}'"))
-}
-
-fn optional_bool_alias(object: &JsonMap<String, JsonValue>, keys: &[&str]) -> Option<bool> {
-    keys.iter()
-        .find_map(|key| object.get(*key).and_then(JsonValue::as_bool))
 }
 
 fn optional_string_list(value: Option<&JsonValue>) -> Result<Option<Vec<String>>> {
@@ -1151,6 +1142,15 @@ fn parse_memory_scope(value: &str) -> Result<SubagentMemoryScope> {
     }
 }
 
+fn parse_agent_mode(value: &str) -> Result<AgentMode> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "primary" => Ok(AgentMode::Primary),
+        "subagent" => Ok(AgentMode::Subagent),
+        "all" => Ok(AgentMode::All),
+        other => bail!("unsupported agent mode '{other}'"),
+    }
+}
+
 fn toml_table_to_json_object(
     table: &toml::map::Map<String, toml::Value>,
 ) -> Result<JsonMap<String, JsonValue>> {
@@ -1200,8 +1200,8 @@ fn default_background_toggle_shortcut() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundSubagentConfig, SubagentDiscoveryInput, SubagentRuntimeLimits, SubagentSource,
-        builtin_subagents, discover_subagents, load_subagent_from_file,
+        AgentMode, BackgroundSubagentConfig, SubagentDiscoveryInput, SubagentRuntimeLimits,
+        SubagentSource, builtin_subagents, discover_subagents, load_subagent_from_file,
     };
     use crate::constants::tools;
     use anyhow::Result;
@@ -1225,7 +1225,7 @@ permissionMode: plan
 skills: [rust]
 memory: project
 background: true
-topLevel: true
+mode: primary
 maxTurns: 7
 nickname_candidates: [rev]
 ---
@@ -1248,7 +1248,7 @@ Review the target changes."#,
         );
         assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
         assert!(spec.background);
-        assert!(spec.top_level);
+        assert_eq!(spec.mode, AgentMode::Primary);
         assert_eq!(spec.max_turns, Some(7));
         assert_eq!(spec.prompt, "Review the target changes.");
         Ok(())
@@ -1377,12 +1377,14 @@ vtcode"#,
     }
 
     #[test]
-    fn top_level_and_delegated_agents_with_same_name_do_not_shadow_each_other() -> Result<()> {
+    fn agent_definitions_with_same_name_shadow_by_precedence() -> Result<()> {
         let temp = TempDir::new()?;
-        let project_agents = temp.path().join(".vtcode/agents");
-        fs::create_dir_all(&project_agents)?;
+        let project_vtcode_agents = temp.path().join(".vtcode/agents");
+        let project_claude_agents = temp.path().join(".claude/agents");
+        fs::create_dir_all(&project_vtcode_agents)?;
+        fs::create_dir_all(&project_claude_agents)?;
         fs::write(
-            project_agents.join("plan.md"),
+            project_claude_agents.join("plan.md"),
             r#"---
 name: plan
 description: Project delegated plan child
@@ -1390,13 +1392,13 @@ description: Project delegated plan child
 Project child plan."#,
         )?;
         fs::write(
-            project_agents.join("plan-top-level.md"),
+            project_vtcode_agents.join("plan.md"),
             r#"---
 name: plan
-description: Project top-level plan
-topLevel: true
+description: Project primary plan
+mode: primary
 ---
-Project top-level plan."#,
+Project primary plan."#,
         )?;
 
         let discovered =
@@ -1404,12 +1406,13 @@ Project top-level plan."#,
         let project_plan_specs = discovered
             .effective
             .iter()
-            .filter(|spec| spec.name == "plan" && spec.source == SubagentSource::ProjectVtcode)
+            .filter(|spec| spec.name == "plan")
             .collect::<Vec<_>>();
 
-        assert_eq!(project_plan_specs.len(), 2);
-        assert!(project_plan_specs.iter().any(|spec| !spec.top_level));
-        assert!(project_plan_specs.iter().any(|spec| spec.top_level));
+        assert_eq!(project_plan_specs.len(), 1);
+        assert_eq!(project_plan_specs[0].description, "Project primary plan");
+        assert_eq!(project_plan_specs[0].mode, AgentMode::Primary);
+        assert_eq!(project_plan_specs[0].source, SubagentSource::ProjectVtcode);
         Ok(())
     }
 
@@ -1499,15 +1502,20 @@ Hook prompt"#,
     }
 
     #[test]
-    fn builtin_top_level_agents_are_available() {
+    fn builtin_primary_agents_are_available() {
         let builtins = builtin_subagents();
-        for name in ["build", "duck", "plan"] {
+        for name in ["build", "duck"] {
             let spec = builtins
                 .iter()
-                .find(|spec| spec.name == name && spec.top_level)
-                .unwrap_or_else(|| panic!("missing built-in top-level agent {name}"));
+                .find(|spec| spec.name == name && spec.mode == AgentMode::Primary)
+                .unwrap_or_else(|| panic!("missing built-in primary agent {name}"));
             assert_eq!(spec.source, SubagentSource::Builtin);
         }
+        let plan = builtins
+            .iter()
+            .find(|spec| spec.name == "plan" && spec.mode == AgentMode::All)
+            .expect("missing built-in all-mode plan agent");
+        assert_eq!(plan.source, SubagentSource::Builtin);
     }
 
     #[test]

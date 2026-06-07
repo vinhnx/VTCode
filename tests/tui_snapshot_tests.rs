@@ -48,7 +48,7 @@ fn test_header_context_snapshot() {
         tools: "enabled".to_string(),
         git: "clean".to_string(),
         mcp: "disabled".to_string(),
-        top_level_agent: None,
+        primary_agent: None,
         highlights: vec![],
         subagent_badges: vec![],
         version: "0.37.1".to_string(),

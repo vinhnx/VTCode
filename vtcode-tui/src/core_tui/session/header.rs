@@ -41,7 +41,7 @@ fn format_model_summary_label(model: &str) -> String {
         .join("-")
 }
 
-fn top_level_agent_header_label(name: Option<&str>) -> String {
+fn primary_agent_header_label(name: Option<&str>) -> String {
     let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
         return "Build".to_string();
     };
@@ -564,7 +564,7 @@ impl Session {
             .add_modifier(Modifier::BOLD);
         push_badge(
             &mut spans,
-            top_level_agent_header_label(self.header_context.top_level_agent.as_deref()),
+            primary_agent_header_label(self.header_context.primary_agent.as_deref()),
             agent_style,
             &mut first_section,
         );

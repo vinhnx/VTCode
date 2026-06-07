@@ -285,7 +285,7 @@ pub(crate) async fn initialize_session(
             .effective_specs()
             .await
             .into_iter()
-            .filter(|spec| !spec.top_level)
+            .filter(|spec| spec.is_subagent())
             .map(|spec| {
                 let read_only = spec.is_read_only();
                 (spec.name, spec.description, read_only)
@@ -300,8 +300,8 @@ pub(crate) async fn initialize_session(
         &available_subagents,
     )
     .await;
-    let active_top_level_agent = if let Some(controller) = subagent_controller.as_ref() {
-        vtcode_core::top_level_agent::ActiveTopLevelAgentState::from_specs(
+    let active_primary_agent = if let Some(controller) = subagent_controller.as_ref() {
+        vtcode_core::primary_agent::ActivePrimaryAgentState::from_specs(
             &controller.effective_specs().await,
         )
     } else {
@@ -310,11 +310,11 @@ pub(crate) async fn initialize_session(
         )
         .with_context(|| {
             format!(
-                "Failed to discover top-level agents in {}",
+                "Failed to discover primary agents in {}",
                 config.workspace.display()
             )
         })?;
-        vtcode_core::top_level_agent::ActiveTopLevelAgentState::from_discovery(&discovered)
+        vtcode_core::primary_agent::ActivePrimaryAgentState::from_discovery(&discovered)
     };
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
@@ -400,7 +400,7 @@ pub(crate) async fn initialize_session(
         async_mcp_manager,
         mcp_panel_state,
         loaded_skills: skill_setup.active_skills_map,
-        active_top_level_agent,
+        active_primary_agent,
     })
 }
 

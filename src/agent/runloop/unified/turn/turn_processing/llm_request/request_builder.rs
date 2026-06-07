@@ -17,14 +17,14 @@ use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_responses_continuation_request,
     supports_responses_chaining,
 };
+use vtcode_core::primary_agent::{
+    ActivePrimaryAgent, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+};
 use vtcode_core::prompts::{
     append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
-use vtcode_core::top_level_agent::{
-    ActiveTopLevelAgent, apply_top_level_agent_tool_overlay, clamp_top_level_permission_mode,
-};
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
@@ -76,7 +76,7 @@ pub(super) struct TurnRequestSnapshot {
     pub context_window_size: usize,
     pub turn_timeout_secs: u64,
     pub active_model: String,
-    pub active_top_level_agent: ActiveTopLevelAgent,
+    pub active_primary_agent: ActivePrimaryAgent,
     pub openai_prompt_cache_enabled: bool,
     pub openai_prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
     pub prompt_cache_shaping_mode: PromptCacheShapingMode,
@@ -129,8 +129,8 @@ pub(super) fn capture_turn_request_snapshot(
         resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
     let request_user_input_enabled =
         FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(plan_mode, true);
-    let active_top_level_agent = ctx.active_top_level_agent.active().clone();
-    let active_model = resolve_effective_request_model(active_model, &active_top_level_agent);
+    let active_primary_agent = ctx.active_primary_agent.active().clone();
+    let active_model = resolve_effective_request_model(active_model, &active_primary_agent);
     let context_window_size = ctx.provider_client.effective_context_size(&active_model);
     let turn_timeout_secs = ctx
         .vt_cfg
@@ -155,7 +155,7 @@ pub(super) fn capture_turn_request_snapshot(
         context_window_size,
         turn_timeout_secs,
         active_model,
-        active_top_level_agent,
+        active_primary_agent,
         openai_prompt_cache_enabled,
         openai_prompt_cache_key_mode,
         prompt_cache_shaping_mode,
@@ -166,9 +166,9 @@ pub(super) fn capture_turn_request_snapshot(
 
 pub(super) fn resolve_effective_request_model(
     base_model: &str,
-    active_top_level_agent: &ActiveTopLevelAgent,
+    active_primary_agent: &ActivePrimaryAgent,
 ) -> String {
-    active_top_level_agent
+    active_primary_agent
         .model
         .as_deref()
         .map(str::trim)
@@ -243,10 +243,7 @@ async fn build_prompt_output(
                 input.turn.request_user_input_enabled,
             )
             .await;
-        apply_top_level_agent_overlay_to_tool_snapshot(
-            base_snapshot,
-            &input.turn.active_top_level_agent,
-        )
+        apply_primary_agent_policy_to_tool_snapshot(base_snapshot, &input.turn.active_primary_agent)
     };
 
     append_runtime_tool_prompt_sections(
@@ -265,11 +262,11 @@ async fn build_prompt_output(
     })
 }
 
-fn apply_top_level_agent_overlay_to_tool_snapshot(
+fn apply_primary_agent_policy_to_tool_snapshot(
     snapshot: SessionToolCatalogSnapshot,
-    active_top_level_agent: &ActiveTopLevelAgent,
+    active_primary_agent: &ActivePrimaryAgent,
 ) -> SessionToolCatalogSnapshot {
-    let filtered = apply_top_level_agent_tool_overlay(snapshot.snapshot, active_top_level_agent);
+    let filtered = apply_primary_agent_tool_policy(snapshot.snapshot, active_primary_agent);
     SessionToolCatalogSnapshot::new(
         snapshot.version,
         snapshot.epoch,
@@ -513,10 +510,10 @@ fn prepend_request_context_message(
 fn inject_request_context_messages(
     messages: Vec<uni::Message>,
     editor_context_message: Option<uni::Message>,
-    top_level_agent_context_message: Option<uni::Message>,
+    primary_agent_context_message: Option<uni::Message>,
 ) -> Vec<uni::Message> {
     let messages = prepend_request_context_message(messages, editor_context_message);
-    insert_after_latest_user_message(messages, top_level_agent_context_message)
+    insert_after_latest_user_message(messages, primary_agent_context_message)
 }
 
 fn insert_after_latest_user_message(
@@ -544,21 +541,21 @@ fn resolve_effective_reasoning_effort(
     }
 
     turn_snapshot
-        .active_top_level_agent
+        .active_primary_agent
         .reasoning_effort
         .as_deref()
         .and_then(vtcode_core::config::types::ReasoningEffortLevel::parse)
         .or_else(|| cfg.map(|cfg| cfg.agent.reasoning_effort))
 }
 
-async fn request_top_level_agent_context_message(
+async fn request_primary_agent_context_message(
     ctx: &TurnProcessingContext<'_>,
     turn_snapshot: &TurnRequestSnapshot,
     tool_snapshot: &SessionToolCatalogSnapshot,
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
 ) -> uni::Message {
-    let agent = &turn_snapshot.active_top_level_agent;
-    let block = render_top_level_agent_runtime_context(
+    let agent = &turn_snapshot.active_primary_agent;
+    let block = render_primary_agent_runtime_context(
         ctx,
         turn_snapshot,
         tool_snapshot,
@@ -569,16 +566,16 @@ async fn request_top_level_agent_context_message(
     uni::Message::user(block)
 }
 
-async fn render_top_level_agent_runtime_context(
+async fn render_primary_agent_runtime_context(
     ctx: &TurnProcessingContext<'_>,
     turn_snapshot: &TurnRequestSnapshot,
     tool_snapshot: &SessionToolCatalogSnapshot,
-    agent: &ActiveTopLevelAgent,
+    agent: &ActivePrimaryAgent,
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
 ) -> String {
     let permissions = ctx.permissions_state.read().await;
     let effective_permission_mode =
-        clamp_top_level_permission_mode(permissions.default_mode, agent.permission_mode);
+        clamp_primary_permission_mode(permissions.default_mode, agent.permission_mode);
     let mut lines = Vec::new();
     lines.push("## Active Session Agent Runtime State".to_string());
     lines.push(format!("- Active agent: {}", agent.display_name));
@@ -626,13 +623,13 @@ async fn render_top_level_agent_runtime_context(
     ));
     if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
         lines.push(format!(
-            "- Top-level-agent tool allow-list: {}",
+            "- Primary-agent tool allow-list: {}",
             tools.join(", ")
         ));
     }
     if !agent.disallowed_tools.is_empty() {
         lines.push(format!(
-            "- Top-level-agent disallowed tools: {}",
+            "- Primary-agent disallowed tools: {}",
             agent.disallowed_tools.join(", ")
         ));
     }
@@ -775,8 +772,8 @@ pub(super) async fn build_turn_request(
         &continuation_messages,
     );
     let request_messages = request_messages.into_owned();
-    let top_level_agent_context_message = Some(
-        request_top_level_agent_context_message(
+    let primary_agent_context_message = Some(
+        request_primary_agent_context_message(
             ctx,
             turn_snapshot,
             &prompt_output.tool_snapshot,
@@ -787,7 +784,7 @@ pub(super) async fn build_turn_request(
     let request_messages = inject_request_context_messages(
         request_messages,
         ctx.context_manager.request_editor_context_message(),
-        top_level_agent_context_message,
+        primary_agent_context_message,
     );
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: request_messages,
@@ -843,7 +840,7 @@ mod tests {
     use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
-    fn test_top_level_agent_spec(name: &str, prompt: &str) -> SubagentSpec {
+    fn test_primary_agent_spec(name: &str, prompt: &str) -> SubagentSpec {
         SubagentSpec {
             name: name.to_string(),
             description: format!("{name} description"),
@@ -858,7 +855,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: true,
+            mode: vtcode_config::AgentMode::Primary,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -1218,7 +1215,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_top_level_agent_runtime_state_is_request_only_after_latest_user() {
+    async fn active_primary_agent_runtime_state_is_request_only_after_latest_user() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(ToolDefinition::function(
@@ -1232,8 +1229,8 @@ mod tests {
                 }),
             ))
             .await;
-        let spec = test_top_level_agent_spec("planner", "Plan carefully before editing.");
-        backing.select_top_level_agent_from_specs(&[spec], "planner");
+        let spec = test_primary_agent_spec("planner", "Plan carefully before editing.");
+        backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let built = {
             let mut ctx = backing.turn_processing_context();
@@ -1264,7 +1261,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_top_level_agent_tool_allow_list_intersects_baseline_tools() {
+    async fn active_primary_agent_tool_allow_list_intersects_baseline_tools() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(named_tool("unified_search"))
@@ -1275,13 +1272,13 @@ mod tests {
         backing
             .add_tool_definition(named_tool("unified_exec"))
             .await;
-        let mut spec = test_top_level_agent_spec("planner", "Use limited tools.");
+        let mut spec = test_primary_agent_spec("planner", "Use limited tools.");
         spec.tools = Some(vec![
             "unified_search".to_string(),
             "missing_tool".to_string(),
         ]);
         spec.disallowed_tools = Vec::new();
-        backing.select_top_level_agent_from_specs(&[spec], "planner");
+        backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let built = {
             let mut ctx = backing.turn_processing_context();
@@ -1298,7 +1295,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_top_level_agent_deny_list_applies_after_allow_list() {
+    async fn active_primary_agent_deny_list_applies_after_allow_list() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(named_tool("unified_search"))
@@ -1306,13 +1303,13 @@ mod tests {
         backing
             .add_tool_definition(named_tool("unified_file"))
             .await;
-        let mut spec = test_top_level_agent_spec("planner", "Use deterministic tools.");
+        let mut spec = test_primary_agent_spec("planner", "Use deterministic tools.");
         spec.tools = Some(vec![
             "unified_search".to_string(),
             "unified_file".to_string(),
         ]);
         spec.disallowed_tools = vec!["unified_search".to_string()];
-        backing.select_top_level_agent_from_specs(&[spec], "planner");
+        backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let built = {
             let mut ctx = backing.turn_processing_context();
@@ -1334,7 +1331,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unconstrained_top_level_agent_falls_back_to_baseline_tools() {
+    async fn unconstrained_primary_agent_falls_back_to_baseline_tools() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(named_tool("unified_search"))
@@ -1364,10 +1361,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_top_level_agent_runtime_state_does_not_stale_response_chains() {
+    async fn active_primary_agent_runtime_state_does_not_stale_response_chains() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let spec = test_top_level_agent_spec("planner", "Use the active top-level agent.");
-        backing.select_top_level_agent_from_specs(&[spec], "planner");
+        let spec = test_primary_agent_spec("planner", "Use the active primary agent.");
+        backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let prior_messages = vec![uni::Message::user("hello".to_string())];
         let built = {
@@ -1412,16 +1409,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn active_top_level_agent_runtime_state_keeps_stable_prompt_cache_friendly() {
+    async fn active_primary_agent_runtime_state_keeps_stable_prompt_cache_friendly() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut cfg = VTCodeConfig::default();
         cfg.agent.include_temporal_context = true;
         cfg.prompt_cache.cache_friendly_prompt_shaping = true;
         let cfg = Box::leak(Box::new(cfg));
-        let first = test_top_level_agent_spec("planner", "Planner instructions.");
-        let second = test_top_level_agent_spec("reviewer", "Reviewer instructions.");
+        let first = test_primary_agent_spec("planner", "Planner instructions.");
+        let second = test_primary_agent_spec("reviewer", "Reviewer instructions.");
 
-        backing.select_top_level_agent_from_specs(std::slice::from_ref(&first), "planner");
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&first), "planner");
         let first_built = {
             let mut ctx = backing.turn_processing_context();
             ctx.vt_cfg = Some(cfg);
@@ -1433,7 +1430,7 @@ mod tests {
                 .expect("first request should build")
         };
 
-        backing.select_top_level_agent_from_specs(std::slice::from_ref(&second), "reviewer");
+        backing.select_primary_agent_from_specs(std::slice::from_ref(&second), "reviewer");
         let second_built = {
             let mut ctx = backing.turn_processing_context();
             ctx.vt_cfg = Some(cfg);
@@ -1466,12 +1463,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn top_level_agent_model_and_reasoning_feed_request_metadata() {
+    async fn primary_agent_model_and_reasoning_feed_request_metadata() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let mut spec = test_top_level_agent_spec("planner", "Use agent metadata.");
+        let mut spec = test_primary_agent_spec("planner", "Use agent metadata.");
         spec.model = Some("overlay-model".to_string());
         spec.reasoning_effort = Some("high".to_string());
-        backing.select_top_level_agent_from_specs(&[spec], "planner");
+        backing.select_primary_agent_from_specs(&[spec], "planner");
 
         let mut cfg = VTCodeConfig::default();
         cfg.agent.reasoning_effort = ReasoningEffortLevel::Medium;

@@ -316,17 +316,17 @@ async fn agent_command_opens_active_agents_inspector() {
 }
 
 #[tokio::test]
-async fn top_level_agent_command_is_not_registered() {
+async fn primary_agent_command_is_not_registered() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command("top-level-agent list", &mut renderer, &workspace)
+    let outcome = handle_slash_command("primary-agent list", &mut renderer, &workspace)
         .await
-        .expect("top-level-agent should fall through");
+        .expect("primary-agent should fall through");
 
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/top-level-agent list"
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/primary-agent list"
     ));
 }
 

@@ -381,7 +381,7 @@ async fn skip_confirmations_does_not_bypass_cached_tool_denial() {
             decision_ledger: None,
             tool_permission_cache: Some(&permission_cache),
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: true,
@@ -434,7 +434,7 @@ async fn tool_policy_deny_overrides_cached_session_approval() {
             decision_ledger: None,
             tool_permission_cache: Some(&permission_cache),
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -481,7 +481,7 @@ async fn dont_ask_mode_denies_non_allowed_requests() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -529,7 +529,7 @@ async fn dont_ask_mode_allows_explicitly_allowed_tools() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -548,7 +548,7 @@ async fn dont_ask_mode_allows_explicitly_allowed_tools() {
 }
 
 #[tokio::test]
-async fn permission_mode_overlay_narrows_but_does_not_broaden() {
+async fn permission_mode_override_narrows_but_does_not_broaden() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -576,7 +576,7 @@ async fn permission_mode_overlay_narrows_but_does_not_broaden() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: Some(PermissionMode::DontAsk),
+            permission_mode_override: Some(PermissionMode::DontAsk),
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -612,7 +612,7 @@ async fn permission_mode_overlay_narrows_but_does_not_broaden() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: Some(PermissionMode::BypassPermissions),
+            permission_mode_override: Some(PermissionMode::BypassPermissions),
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -631,7 +631,7 @@ async fn permission_mode_overlay_narrows_but_does_not_broaden() {
 }
 
 #[tokio::test]
-async fn narrowing_permission_overlay_disables_skip_confirmations_auto_approval() {
+async fn narrowing_permission_override_disables_skip_confirmations_auto_approval() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -660,7 +660,7 @@ async fn narrowing_permission_overlay_disables_skip_confirmations_auto_approval(
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: Some(PermissionMode::Default),
+            permission_mode_override: Some(PermissionMode::Default),
             hitl_notification_bell: false,
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
@@ -679,7 +679,7 @@ async fn narrowing_permission_overlay_disables_skip_confirmations_auto_approval(
 }
 
 #[tokio::test]
-async fn skip_confirmations_auto_approves_without_permission_overlay() {
+async fn skip_confirmations_auto_approves_without_permission_override() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -708,7 +708,7 @@ async fn skip_confirmations_auto_approves_without_permission_overlay() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
@@ -727,7 +727,7 @@ async fn skip_confirmations_auto_approves_without_permission_overlay() {
 }
 
 #[tokio::test]
-async fn skip_confirmations_auto_approves_with_non_narrowing_permission_overlay() {
+async fn skip_confirmations_auto_approves_with_non_narrowing_permission_override() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut session = create_headless_session();
@@ -756,7 +756,7 @@ async fn skip_confirmations_auto_approves_with_non_narrowing_permission_overlay(
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: Some(PermissionMode::BypassPermissions),
+            permission_mode_override: Some(PermissionMode::BypassPermissions),
             hitl_notification_bell: false,
             approval_policy: reject_all_approvals(),
             skip_confirmations: true,
@@ -803,7 +803,7 @@ async fn accept_edits_mode_auto_allows_builtin_file_mutations() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -855,7 +855,7 @@ async fn accept_edits_mode_keeps_protected_write_prompts() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -907,7 +907,7 @@ async fn bypass_permissions_keeps_protected_write_prompts() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -960,7 +960,7 @@ async fn ask_rules_override_bypass_permissions_mode() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -1013,7 +1013,7 @@ async fn disallowed_tools_override_bypass_permissions_mode() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -1103,7 +1103,7 @@ async fn auto_mode_headless_fallback_returns_blocked_summary() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::OnRequest,
             skip_confirmations: false,
@@ -1177,7 +1177,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
@@ -1224,7 +1224,7 @@ async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
             decision_ledger: None,
             tool_permission_cache: None,
             permissions_state: None,
-            permission_mode_overlay: None,
+            permission_mode_override: None,
             hitl_notification_bell: false,
             approval_policy: AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,

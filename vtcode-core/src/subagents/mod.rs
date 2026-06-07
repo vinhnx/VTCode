@@ -1264,7 +1264,7 @@ impl SubagentController {
             .discovered
             .effective
             .iter()
-            .find(|spec| !spec.top_level && spec.matches_name(candidate))
+            .find(|spec| spec.is_subagent() && spec.matches_name(candidate))
             .cloned()
     }
 
@@ -1967,7 +1967,7 @@ Run the managed background demo.
         .expect("write background agent");
     }
 
-    fn write_test_top_level_agent(workspace_root: &std::path::Path) {
+    fn write_test_primary_agent(workspace_root: &std::path::Path) {
         let agent_dir = workspace_root.join(".vtcode/agents");
         std::fs::create_dir_all(&agent_dir).expect("agent dir");
         std::fs::write(
@@ -1975,14 +1975,14 @@ Run the managed background demo.
             r#"---
 name: duck
 description: Discussion controller.
-topLevel: true
+mode: primary
 permissionMode: plan
 ---
 
 Discuss before implementation.
 "#,
         )
-        .expect("write top-level agent");
+        .expect("write primary agent");
     }
 
     fn write_test_read_only_subagent(workspace_root: &std::path::Path) {
@@ -2243,7 +2243,7 @@ Inspect the repository.
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: vtcode_config::AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -2320,7 +2320,7 @@ Inspect the repository.
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: vtcode_config::AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -2548,9 +2548,9 @@ Inspect the repository.
     }
 
     #[test]
-    fn explicit_agent_mentions_ignore_top_level_agents() {
+    fn explicit_agent_mentions_ignore_primary_only_agents() {
         let mut duck = read_only_test_spec("duck");
-        duck.top_level = true;
+        duck.mode = vtcode_config::AgentMode::Primary;
 
         assert_eq!(
             extract_explicit_agent_mentions("@agent-duck discuss the task", &[duck.clone()]),
@@ -2775,9 +2775,9 @@ Inspect the repository.
     }
 
     #[tokio::test]
-    async fn spawn_rejects_top_level_agent_as_child() {
+    async fn spawn_rejects_primary_only_agent_as_child() {
         let temp = TempDir::new().expect("tempdir");
-        write_test_top_level_agent(temp.path());
+        write_test_primary_agent(temp.path());
         let controller = SubagentController::new(test_controller_config(
             temp.path().to_path_buf(),
             VTCodeConfig::default(),
@@ -2797,7 +2797,7 @@ Inspect the repository.
                 ..SpawnAgentRequest::default()
             })
             .await
-            .expect_err("top-level agent should not spawn as child");
+            .expect_err("primary-only agent should not spawn as child");
 
         assert!(err.to_string().contains("Unknown subagent type duck"));
     }

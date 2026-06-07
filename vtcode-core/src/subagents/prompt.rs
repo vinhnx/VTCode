@@ -30,7 +30,7 @@ pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> V
     for direct in extract_direct_agent_mentions(input) {
         if let Some(matching_child) = specs
             .iter()
-            .find(|spec| !spec.top_level && spec.matches_name(direct.as_str()))
+            .find(|spec| spec.is_subagent() && spec.matches_name(direct.as_str()))
         {
             push_unique_agent_mention(&mut mentions, &matching_child.name);
             continue;
@@ -38,7 +38,7 @@ pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> V
 
         if specs
             .iter()
-            .any(|spec| spec.top_level && spec.matches_name(direct.as_str()))
+            .any(|spec| spec.is_primary() && spec.matches_name(direct.as_str()))
         {
             continue;
         }
@@ -47,7 +47,7 @@ pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> V
     }
 
     let lower = input.to_ascii_lowercase();
-    for spec in specs.iter().filter(|spec| !spec.top_level) {
+    for spec in specs.iter().filter(|spec| spec.is_subagent()) {
         if !matches_explicit_named_agent_selection(lower.as_str(), spec) {
             continue;
         }
@@ -283,11 +283,11 @@ fn item_prompt_segment(item: &SubagentInputItem) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use vtcode_config::{SubagentSource, SubagentSpec};
+    use vtcode_config::{AgentMode, SubagentSource, SubagentSpec};
 
     use super::extract_explicit_agent_mentions;
 
-    fn test_spec(name: &str, top_level: bool) -> SubagentSpec {
+    fn test_spec(name: &str, mode: AgentMode) -> SubagentSpec {
         SubagentSpec {
             name: name.to_string(),
             description: "test".to_string(),
@@ -302,7 +302,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level,
+            mode,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -317,24 +317,32 @@ mod tests {
 
     #[test]
     fn explicit_mentions_use_delegated_agent_namespace() {
-        let top_level_plan = test_spec("plan", true);
-        let child_plan = test_spec("plan", false);
+        let primary_plan = test_spec("plan", AgentMode::Primary);
+        let child_plan = test_spec("plan", AgentMode::Subagent);
 
         let mentions = extract_explicit_agent_mentions(
             "@agent-plan inspect this",
-            &[top_level_plan, child_plan],
+            &[primary_plan, child_plan],
         );
 
         assert_eq!(mentions, vec!["plan".to_string()]);
     }
 
     #[test]
-    fn explicit_mentions_ignore_top_level_only_agents() {
-        let top_level_plan = test_spec("plan", true);
+    fn explicit_mentions_ignore_primary_only_agents() {
+        let primary_plan = test_spec("plan", AgentMode::Primary);
 
-        let mentions =
-            extract_explicit_agent_mentions("@agent-plan inspect this", &[top_level_plan]);
+        let mentions = extract_explicit_agent_mentions("@agent-plan inspect this", &[primary_plan]);
 
         assert!(mentions.is_empty());
+    }
+
+    #[test]
+    fn explicit_mentions_allow_all_mode_agents() {
+        let plan = test_spec("plan", AgentMode::All);
+
+        let mentions = extract_explicit_agent_mentions("@agent-plan inspect this", &[plan]);
+
+        assert_eq!(mentions, vec!["plan".to_string()]);
     }
 }

@@ -119,12 +119,12 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
 }
 
 #[tokio::test]
-async fn active_top_level_agent_policy_blocks_hallucinated_denied_tool_call() {
+async fn active_primary_agent_policy_blocks_hallucinated_denied_tool_call() {
     let mut backing = TestContextBacking::new(2).await;
-    let mut spec = test_top_level_agent_spec("reader");
+    let mut spec = test_primary_agent_spec("reader");
     spec.tools = Some(vec![tool_names::READ_FILE.to_string()]);
     spec.disallowed_tools = vec![tool_names::READ_FILE.to_string()];
-    backing.select_top_level_agent_from_specs(&[spec], "reader");
+    backing.select_primary_agent_from_specs(&[spec], "reader");
 
     let valid_file = backing.sample_file.clone();
     let args = json!({"path": valid_file.to_string_lossy()});
@@ -139,7 +139,7 @@ async fn active_top_level_agent_policy_blocks_hallucinated_denied_tool_call() {
         message
             .content
             .as_text()
-            .contains("active top-level agent policy")
+            .contains("active primary agent policy")
     }));
     assert_eq!(ctx.harness_state.tool_calls, 0);
 }

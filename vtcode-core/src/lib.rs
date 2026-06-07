@@ -179,6 +179,7 @@ pub mod permissions;
 pub mod persistent_memory;
 pub mod plugins;
 pub mod pods;
+pub mod primary_agent;
 pub mod project_doc;
 pub mod prompts;
 pub mod retry;
@@ -196,7 +197,6 @@ pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
-pub mod top_level_agent;
 pub mod trace; // Agent Trace specification for AI code attribution
 pub mod turn_metadata; // Turn metadata for LLM requests (git context)
 pub mod types;
@@ -240,15 +240,15 @@ pub use ide_context::{
     EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
     EditorSelectionRange,
 };
+pub use primary_agent::{
+    ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState,
+    PrimaryAgentResolutionError, resolve_discovered_primary_agent, resolve_primary_agent,
+};
 pub use subagents::{
     SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,
     SpawnBackgroundSubprocessRequest as SubagentSpawnBackgroundSubprocessRequest,
     SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
     SubagentStatusEntry,
-};
-pub use top_level_agent::{
-    ActiveTopLevelAgent, ActiveTopLevelAgentSpecIdentity, ActiveTopLevelAgentState,
-    TopLevelAgentResolutionError, resolve_discovered_top_level_agent, resolve_top_level_agent,
 };
 pub use vtcode_bash_runner::BashRunner;
 

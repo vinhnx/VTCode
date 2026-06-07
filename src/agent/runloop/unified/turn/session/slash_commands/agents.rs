@@ -194,7 +194,7 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
         vec![
             action_item(
                 "Browse agents",
-                "List top-level and child-agent definitions with source badges",
+                "List primary and child-agent definitions with source badges",
                 Some("Recommended"),
                 "browse effective shadowed agents",
                 "browse",
@@ -701,18 +701,20 @@ fn action_item(
 }
 
 fn agent_badge(spec: &vtcode_config::SubagentSpec) -> String {
-    if spec.top_level {
-        return "Top-level".to_string();
-    }
-    match spec.file_path {
-        Some(_) => spec.source.label().to_string(),
-        None => "Built-in".to_string(),
+    match spec.mode {
+        vtcode_config::AgentMode::Primary => "Primary".to_string(),
+        vtcode_config::AgentMode::Subagent => "Subagent".to_string(),
+        vtcode_config::AgentMode::All => "All".to_string(),
     }
 }
 
 fn agent_subtitle(spec: &vtcode_config::SubagentSpec, shadowed: bool) -> String {
     let mut parts = vec![spec.source.label().to_string(), spec.description.clone()];
-    let kind = if spec.top_level { "top-level" } else { "child" };
+    let kind = match spec.mode {
+        vtcode_config::AgentMode::Primary => "primary",
+        vtcode_config::AgentMode::Subagent => "subagent",
+        vtcode_config::AgentMode::All => "all",
+    };
     parts.push(kind.to_string());
     if spec.is_read_only() {
         parts.push("read-only".to_string());
@@ -742,7 +744,7 @@ async fn refresh_agent_palette(
     handle.configure_agent_palette(
         specs
             .into_iter()
-            .filter(|spec| !spec.top_level)
+            .filter(|spec| spec.is_subagent())
             .map(|spec| AgentPaletteItem {
                 name: spec.name,
                 description: Some(spec.description),

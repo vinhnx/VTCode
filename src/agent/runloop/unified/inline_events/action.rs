@@ -3,8 +3,8 @@ use vtcode_core::hooks::SessionEndReason;
 pub(crate) enum InlineLoopAction {
     Continue,
     Submit(String),
-    CycleTopLevelAgent,
-    SelectTopLevelAgent {
+    CyclePrimaryAgent,
+    SelectPrimaryAgent {
         name: Option<String>,
     },
     RequestInlinePromptSuggestion(String),

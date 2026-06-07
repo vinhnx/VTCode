@@ -28,10 +28,10 @@ use vtcode_core::hooks::{
 use vtcode_core::permissions::{
     PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
 };
+use vtcode_core::primary_agent::clamp_primary_permission_mode;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
-use vtcode_core::top_level_agent::clamp_top_level_permission_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::InlineHandle;
 
@@ -173,7 +173,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub permissions_state: Option<&'a Arc<RwLock<PermissionsConfig>>>,
-    pub permission_mode_overlay: Option<PermissionMode>,
+    pub permission_mode_override: Option<PermissionMode>,
     pub hitl_notification_bell: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
@@ -971,7 +971,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         permissions_state,
-        permission_mode_overlay,
+        permission_mode_override,
         hitl_notification_bell,
         approval_policy,
         skip_confirmations,
@@ -1036,8 +1036,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     };
     let base_permission_mode = permissions_snapshot.default_mode;
     permissions_snapshot.default_mode =
-        clamp_top_level_permission_mode(base_permission_mode, permission_mode_overlay);
-    let session_overlay_narrows_permissions = permission_mode_overlay.is_some()
+        clamp_primary_permission_mode(base_permission_mode, permission_mode_override);
+    let session_override_narrows_permissions = permission_mode_override.is_some()
         && permissions_snapshot.default_mode != base_permission_mode;
     let permission_mode = current_permission_mode(&permissions_snapshot);
     let effective_permissions =
@@ -1150,7 +1150,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
-    if skip_confirmations && !session_overlay_narrows_permissions {
+    if skip_confirmations && !session_override_narrows_permissions {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 

@@ -197,30 +197,30 @@ fn permission_overlay_surfaces_action_required_status() {
 }
 
 #[test]
-fn header_meta_line_renders_active_top_level_agent() {
+fn header_meta_line_renders_active_primary_agent() {
     let mut session = fresh_session();
-    session.header_context.top_level_agent = Some("planner".to_string());
+    session.header_context.primary_agent = Some("planner".to_string());
 
     assert_header_contains_badge(&mut session, "Planner");
 }
 
 #[test]
-fn set_top_level_agent_command_updates_header_badge() {
+fn set_primary_agent_command_updates_header_badge() {
     let mut session = fresh_session();
 
-    session.handle_command(InlineCommand::SetTopLevelAgent {
+    session.handle_command(InlineCommand::SetPrimaryAgent {
         name: Some("reviewer".to_string()),
     });
     assert_header_contains_badge(&mut session, "Reviewer");
 
-    session.handle_command(InlineCommand::SetTopLevelAgent { name: None });
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: None });
     let text = header_line_text(&mut session);
     assert!(text.contains("Build"));
     assert!(!text.contains("Reviewer"));
 }
 
 #[test]
-fn bottom_status_excludes_top_level_agent() {
+fn bottom_status_excludes_primary_agent() {
     let mut session = fresh_session();
 
     assert_eq!(session.status_right_text(), None);
@@ -229,7 +229,7 @@ fn bottom_status_excludes_top_level_agent() {
         left: None,
         right: Some("gpt-5.5 | 98% context left".to_string()),
     });
-    session.handle_command(InlineCommand::SetTopLevelAgent {
+    session.handle_command(InlineCommand::SetPrimaryAgent {
         name: Some("reviewer".to_string()),
     });
 
@@ -240,14 +240,14 @@ fn bottom_status_excludes_top_level_agent() {
 }
 
 #[test]
-fn header_context_updates_preserve_active_top_level_agent() {
+fn header_context_updates_preserve_active_primary_agent() {
     let mut session = fresh_session();
-    session.handle_command(InlineCommand::SetTopLevelAgent {
+    session.handle_command(InlineCommand::SetPrimaryAgent {
         name: Some("planner".to_string()),
     });
 
     let mut replacement = session.header_context.clone();
-    replacement.top_level_agent = None;
+    replacement.primary_agent = None;
     replacement.model = "Model: replacement".to_string();
     session.handle_command(InlineCommand::SetHeaderContext {
         context: Box::new(replacement),

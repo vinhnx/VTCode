@@ -418,7 +418,7 @@ pub(crate) async fn build_inline_header_context(
         workspace_trust: trust_value,
         tools: chain_entries.first().cloned().unwrap_or_default(),
         mcp: mcp_value,
-        top_level_agent: Some("build".to_string()),
+        primary_agent: Some("build".to_string()),
         highlights, // Use the modified highlights that may include the home directory warning
         subagent_badges: Vec::new(),
         editing_mode: vtcode_tui::app::EditingMode::default(),

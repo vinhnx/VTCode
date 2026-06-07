@@ -80,7 +80,7 @@ pub(crate) async fn handle_input_commands(
                         conversation_history: ctx.conversation_history,
                         decision_ledger: ctx.decision_ledger,
                         context_manager: ctx.context_manager,
-                        active_top_level_agent: ctx.active_top_level_agent,
+                        active_primary_agent: ctx.active_primary_agent,
                         session_stats: ctx.session_stats,
                         input_status_state: state.input_status_state,
                         tools: ctx.tools,

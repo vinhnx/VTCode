@@ -178,7 +178,7 @@ During chat you can lead with `/` to trigger built-in actions without leaving th
 
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 
-For delegated child-agent workflows and top-level agents, see the dedicated [Subagents guide](./subagents.md). New `.vtcode/agents/*.md` files should use VT Code tool ids such as `read_file`, `list_files`, `unified_search`, and `unified_exec`, not Claude-style names like `Read` or `Bash`.
+For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). New `.vtcode/agents/*.md` files should use VT Code tool ids such as `read_file`, `list_files`, `unified_search`, and `unified_exec`, not Claude-style names like `Read` or `Bash`.
 
 VT Code uses a comprehensive TOML configuration system. The `init` command creates a `vtcode.toml` file with sensible defaults.
 

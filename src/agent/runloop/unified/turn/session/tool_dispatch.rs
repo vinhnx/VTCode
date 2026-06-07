@@ -318,7 +318,7 @@ fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
 
 fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<serde_json::Value> {
     let trimmed = input.trim();
-    for spec in specs.iter().filter(|spec| !spec.top_level) {
+    for spec in specs.iter().filter(|spec| spec.is_subagent()) {
         for candidate in
             std::iter::once(spec.name.as_str()).chain(spec.aliases.iter().map(String::as_str))
         {
@@ -670,7 +670,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: false,
+            mode: vtcode_config::AgentMode::Subagent,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,
@@ -866,14 +866,14 @@ mod tests {
     }
 
     #[test]
-    fn direct_subagent_spawn_args_ignores_top_level_specs() {
-        let mut top_level_plan = test_subagent_spec("plan");
-        top_level_plan.top_level = true;
+    fn direct_subagent_spawn_args_ignores_primary_specs() {
+        let mut primary_plan = test_subagent_spec("plan");
+        primary_plan.mode = vtcode_config::AgentMode::Primary;
         let child_plan = test_subagent_spec("plan");
 
         let args = direct_subagent_spawn_args(
             "use plan subagent and review code",
-            &[top_level_plan, child_plan],
+            &[primary_plan, child_plan],
         )
         .expect("direct subagent spawn");
 

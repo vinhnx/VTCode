@@ -729,12 +729,12 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
-        InlineLoopAction::CycleTopLevelAgent => {
-            handle_cycle_top_level_agent(ctx).await?;
+        InlineLoopAction::CyclePrimaryAgent => {
+            handle_cycle_primary_agent(ctx).await?;
             InlineLoopActionResolution::ContinueLoop
         }
-        InlineLoopAction::SelectTopLevelAgent { name } => {
-            handle_select_top_level_agent(ctx, name).await?;
+        InlineLoopAction::SelectPrimaryAgent { name } => {
+            handle_select_primary_agent(ctx, name).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
@@ -817,51 +817,51 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
-async fn handle_cycle_top_level_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
-    let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
+async fn handle_cycle_primary_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
-    match next_top_level_agent_name(ctx.active_top_level_agent.active(), &specs) {
-        Some(name) => handle_select_top_level_agent(ctx, Some(name)).await,
+    match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
+        Some(name) => handle_select_primary_agent(ctx, Some(name)).await,
         None => {
             ctx.renderer
-                .line(MessageStyle::Error, "No top-level agents are available.")?;
+                .line(MessageStyle::Error, "No primary agents are available.")?;
             Ok(())
         }
     }
 }
 
-async fn handle_select_top_level_agent(
+async fn handle_select_primary_agent(
     ctx: &mut InteractionLoopContext<'_>,
     name: Option<String>,
 ) -> Result<()> {
     let Some(name) = name else {
-        let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
+        let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
             return Ok(());
         };
         let display_name = ctx
-            .active_top_level_agent
+            .active_primary_agent
             .reset_to_default_from_specs(&specs)
             .display_name
             .clone();
-        set_top_level_agent_display(ctx, display_name);
+        set_primary_agent_display(ctx, display_name);
         return Ok(());
     };
 
-    let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
+    let Some(specs) = load_primary_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
-    match ctx.active_top_level_agent.select_from_specs(&specs, &name) {
+    match ctx.active_primary_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
-            set_top_level_agent_display(ctx, display_name);
+            set_primary_agent_display(ctx, display_name);
         }
-        Err(vtcode_core::top_level_agent::TopLevelAgentResolutionError::UnknownAgent {
+        Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
             requested,
         }) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Unknown top-level agent '{requested}'."),
+                &format!("Unknown primary agent '{requested}'."),
             )?;
         }
     }
@@ -869,22 +869,22 @@ async fn handle_select_top_level_agent(
     Ok(())
 }
 
-async fn load_top_level_agent_specs_or_report(
+async fn load_primary_agent_specs_or_report(
     ctx: &mut InteractionLoopContext<'_>,
 ) -> Result<Option<Vec<vtcode_config::SubagentSpec>>> {
-    match load_top_level_agent_specs(ctx).await {
+    match load_primary_agent_specs(ctx).await {
         Ok(specs) => Ok(Some(specs)),
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to discover top-level agents: {err}"),
+                &format!("Failed to discover primary agents: {err}"),
             )?;
             Ok(None)
         }
     }
 }
 
-async fn load_top_level_agent_specs(
+async fn load_primary_agent_specs(
     ctx: &InteractionLoopContext<'_>,
 ) -> Result<Vec<vtcode_config::SubagentSpec>> {
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
@@ -892,7 +892,7 @@ async fn load_top_level_agent_specs(
             .effective_specs()
             .await
             .into_iter()
-            .filter(|spec| spec.top_level)
+            .filter(|spec| spec.is_primary())
             .collect::<Vec<_>>();
         if !specs.is_empty() {
             return Ok(specs);
@@ -904,29 +904,29 @@ async fn load_top_level_agent_specs(
     )
     .with_context(|| {
         format!(
-            "Failed to discover top-level agents in {}",
+            "Failed to discover primary agents in {}",
             ctx.config.workspace.display()
         )
     })?;
     Ok(discovered
         .effective
         .into_iter()
-        .filter(|spec| spec.top_level)
+        .filter(|spec| spec.is_primary())
         .collect())
 }
 
-fn set_top_level_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
-    ctx.header_context.top_level_agent = Some(name.clone());
-    ctx.handle.set_top_level_agent(Some(name));
+fn set_primary_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
+    ctx.header_context.primary_agent = Some(name.clone());
+    ctx.handle.set_primary_agent(Some(name));
 }
 
-fn next_top_level_agent_name(
-    active: &vtcode_core::top_level_agent::ActiveTopLevelAgent,
+fn next_primary_agent_name(
+    active: &vtcode_core::primary_agent::ActivePrimaryAgent,
     specs: &[vtcode_config::SubagentSpec],
 ) -> Option<String> {
     let mut names = specs
         .iter()
-        .filter(|spec| spec.top_level)
+        .filter(|spec| spec.is_primary())
         .map(|spec| spec.name.trim())
         .filter(|name| !name.is_empty())
         .map(str::to_string)
@@ -960,51 +960,51 @@ mod tests {
     use vtcode_config::{SubagentSource, SubagentSpec};
 
     #[test]
-    fn next_top_level_agent_name_starts_with_first_sorted_agent() {
+    fn next_primary_agent_name_starts_with_first_sorted_agent() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
 
         assert_eq!(
-            next_top_level_agent_name(&default_active_top_level_agent(), &specs),
+            next_primary_agent_name(&default_active_primary_agent(), &specs),
             Some("alpha".to_string())
         );
     }
 
     #[test]
-    fn next_top_level_agent_name_cycles_to_next_sorted_agent() {
+    fn next_primary_agent_name_cycles_to_next_sorted_agent() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
-        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[1]);
+        let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
 
         assert_eq!(
-            next_top_level_agent_name(&active, &specs),
+            next_primary_agent_name(&active, &specs),
             Some("beta".to_string())
         );
     }
 
     #[test]
-    fn next_top_level_agent_name_cycles_last_agent_to_first() {
+    fn next_primary_agent_name_cycles_last_agent_to_first() {
         let specs = vec![test_subagent_spec("build"), test_subagent_spec("duck")];
-        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[1]);
+        let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
 
         assert_eq!(
-            next_top_level_agent_name(&active, &specs),
+            next_primary_agent_name(&active, &specs),
             Some("build".to_string())
         );
     }
 
     #[test]
-    fn next_top_level_agent_name_skips_non_top_level_subagents() {
+    fn next_primary_agent_name_skips_non_primary_subagents() {
         let mut worker = test_subagent_spec("worker");
-        worker.top_level = false;
+        worker.mode = vtcode_config::AgentMode::Subagent;
         let specs = vec![worker, test_subagent_spec("duck")];
 
         assert_eq!(
-            next_top_level_agent_name(&default_active_top_level_agent(), &specs),
+            next_primary_agent_name(&default_active_primary_agent(), &specs),
             Some("duck".to_string())
         );
     }
 
-    fn default_active_top_level_agent() -> vtcode_core::top_level_agent::ActiveTopLevelAgent {
-        vtcode_core::top_level_agent::ActiveTopLevelAgentState::default()
+    fn default_active_primary_agent() -> vtcode_core::primary_agent::ActivePrimaryAgent {
+        vtcode_core::primary_agent::ActivePrimaryAgentState::default()
             .active()
             .clone()
     }
@@ -1024,7 +1024,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: true,
+            mode: vtcode_config::AgentMode::Primary,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,

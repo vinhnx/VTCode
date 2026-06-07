@@ -9,23 +9,23 @@ Subagents help you:
 - reuse project or user agent definitions across repositories
 - preload skills, MCP servers, memory, and hooks for specialized work
 - inspect delegated child threads with `/agent`
-- switch the main session's active top-level agent with `Tab`
+- switch the main session's active primary agent with `Tab`
 
-VT Code ships with built-in top-level agents and subagents, and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
+VT Code ships with built-in primary agents and subagents, and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
 
-The same agent specification format can describe delegated child agents and top-level agents. A subagent is delegated child work with its own thread. A top-level agent controls the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
+The same agent specification format can describe delegated child agents and primary agents. A subagent is delegated child work with its own thread. A primary agent controls the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
 
-## Built-in top-level agents
+## Built-in primary agents
 
 | Agent | Default model | Mutates files? | Purpose |
 | --- | --- | --- | --- |
 | `build` | `inherit` | yes | Default implementation controller for the main session |
 | `duck` | `inherit` | no | Discussion-first controller for scope, constraints, and trade-offs |
-| `plan` | `inherit` | no | Read-only planning controller for the main session |
+| `plan` | `inherit` | no | Read-only planning agent available as both primary and delegated child |
 
-Custom project or user specs with the same name and `topLevel: true` override these built-ins using the normal discovery precedence. Delegated child agents use a separate namespace, so a top-level `plan` and a delegated `plan` subagent can coexist.
+Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use `mode: primary` for main-session controllers, `mode: subagent` for delegated-only definitions, and `mode: all` for definitions that should support both.
 
 ## Built-in subagents
 
@@ -95,7 +95,7 @@ Use the code-reviewer agent on the auth changes
 Spawn a code-reviewer subagent and summarize only the important findings
 ```
 
-6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `Tab` on an empty idle composer when you want to switch the main session to another top-level agent.
+6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `Tab` on an empty idle composer when you want to switch the main session to another primary agent.
 
 ## Discovery And Precedence
 
@@ -201,12 +201,13 @@ Only `name` and `description` are required.
 | --- | --- | --- |
 | `name` | unique agent identifier | use lowercase letters, digits, and hyphens |
 | `description` | delegation hint for VT Code and the model | include phrases like "use proactively" when you want read-only delegation to be attractive |
+| `mode` | agent availability | `primary`, `subagent`, or `all`; omitted mode defaults to `subagent` |
 | `tools` | allowlist of tool names | use VT Code tool ids from `vtcode schema tools`, such as `read_file`, `list_files`, `unified_search`, `unified_exec`, `edit_file`, `write_file`, `apply_patch`, or `unified_file` |
 | `disallowedTools` | denylist removed from inherited or allowed tools | use the same VT Code tool ids as `tools`; applied before the runtime child-tool filter |
 | `model` | model override | defaults to `inherit`; also accepts `small`, `haiku`, `sonnet`, `opus`, or a full model id |
 | `color` | TUI badge color for active subagent indicators | optional; accepts simple color names such as `blue`, hex like `#4f8fd8`, or Git-style fg/bg strings such as `white #4f8fd8` |
 | `reasoning_effort` | per-agent reasoning override | `effort` and `model_reasoning_effort` are also accepted |
-| `permissionMode` | child permission mode | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto` |
+| `permissionMode` | permission mode override | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`, `auto`; can only narrow the current session mode for primary agents or the parent mode for child agents |
 | `skills` | skills to preload into the child context | uses the same skill loader as the main session |
 | `mcpServers` | named or inline MCP servers | inline servers are scoped to the child config overlay |
 | `hooks` | child-local lifecycle hooks | use this for `PreToolUse`, `PostToolUse`, and `Stop` behavior inside the child thread |
@@ -261,7 +262,7 @@ Subagents inherit the parent approval context and can only stay at or below the 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
 
-Top-level agents use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
+Primary agents use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
 
 ### MCP Servers
 
@@ -372,30 +373,30 @@ An explicit mention guarantees the selection for that turn:
 
 VT Code treats a single explicit mention as the selected agent for the turn. If the model later tries to spawn a different agent, the call is rejected instead of silently switching.
 
-`/agent` and `/agents` can inspect agent definitions and delegated child runs. `@agent-name` is only for delegated child agents; top-level agents cannot be invoked with `@`.
+`/agent` and `/agents` can inspect agent definitions and delegated child runs. `@agent-name` is only for subagent-capable definitions; primary-only agents cannot be invoked with `@`.
 
-### Use A Top-Level Agent
+### Use A Primary Agent
 
-Press `Tab` on an empty idle composer to cycle the active top-level agent. The cycle includes only discovered agent specs marked with `topLevel: true`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
+Press `Tab` on an empty idle composer to cycle the active primary agent. The cycle includes discovered agent specs marked with `mode: primary` or `mode: all`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
 
-When you select a top-level agent, VT Code keeps you in the main session rather than spawning a child thread. The selected spec controls these request-time fields:
+When you select a primary agent, VT Code keeps you in the main session rather than spawning a child thread. The selected spec controls these request-time fields:
 
-- the Markdown body or instructions become the active top-level agent instructions
+- the Markdown body or instructions become the active primary agent instructions
 - `tools` is intersected with the current session's available tools
 - `disallowedTools` removes tools after allowlist filtering, so deny wins
 - `permissionMode` can only narrow the current session mode
 - `model` and `reasoning_effort` are applied before request validation and provider capability checks
-- aliases are metadata only for top-level agents
+- aliases are metadata only for primary agents
 
-Some fields are not supported by top-level agents in this implementation. Child-run fields such as `background`, `maxTurns`, `initialPrompt`, and `isolation` apply only when spawning child agents. Other fields, including `skills`, `mcpServers`, `hooks`, `nickname_candidates`, and `memory`, remain delegated-child-only until they are wired into main-session switching.
+Some fields are not supported by primary agents in this implementation. Child-run fields such as `background`, `maxTurns`, `initialPrompt`, and `isolation` apply only when spawning child agents. Other fields, including `skills`, `mcpServers`, `hooks`, `nickname_candidates`, and `memory`, remain delegated-child-only until they are wired into main-session switching.
 
-Cycling past the last available top-level agent wraps back to `build`.
+Cycling past the last available primary agent wraps back to `build`.
 
-The active top-level agent is shown in the header next to the current mode.
+The active primary agent is shown in the header next to the current mode.
 
-`Tab` cycles through available top-level agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
+`Tab` cycles through available primary agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
 
-VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for top-level agents. In VT Code, `--agent` is already used for model override. Top-level switching is the interactive `Tab` flow described here.
+VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for primary agents. In VT Code, `--agent` is already used for model override. Primary-agent switching is the interactive `Tab` flow described here.
 
 This feature does not add a workflow engine, hardcoded controller workflows, a new permission DSL, new sandbox rules, or new LSP behaviour. It reuses existing agent specs and existing runtime permission/tool concepts.
 

@@ -4,22 +4,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use vtcode_config::{
-    DiscoveredSubagents, PermissionMode, SubagentSource, SubagentSpec,
-    builtin_top_level_build_agent,
+    DiscoveredSubagents, PermissionMode, SubagentSource, SubagentSpec, builtin_primary_build_agent,
 };
 
 use crate::llm::provider::ToolDefinition;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveTopLevelAgentSpecIdentity {
+pub struct ActivePrimaryAgentSpecIdentity {
     pub name: String,
     pub source: SubagentSource,
     pub file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveTopLevelAgent {
-    pub identity: ActiveTopLevelAgentSpecIdentity,
+pub struct ActivePrimaryAgent {
+    pub identity: ActivePrimaryAgentSpecIdentity,
     pub display_name: String,
     pub instructions: String,
     pub tools: Option<Vec<String>>,
@@ -29,11 +28,11 @@ pub struct ActiveTopLevelAgent {
     pub reasoning_effort: Option<String>,
 }
 
-impl ActiveTopLevelAgent {
+impl ActivePrimaryAgent {
     #[must_use]
     pub fn from_spec(spec: &SubagentSpec) -> Self {
         Self {
-            identity: ActiveTopLevelAgentSpecIdentity {
+            identity: ActivePrimaryAgentSpecIdentity {
                 name: spec.name.clone(),
                 source: spec.source.clone(),
                 file_path: spec.file_path.clone(),
@@ -49,24 +48,24 @@ impl ActiveTopLevelAgent {
     }
 }
 
-pub const DEFAULT_TOP_LEVEL_AGENT_NAME: &str = "build";
+pub const DEFAULT_PRIMARY_AGENT_NAME: &str = "build";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveTopLevelAgentState {
-    active: ActiveTopLevelAgent,
+pub struct ActivePrimaryAgentState {
+    active: ActivePrimaryAgent,
 }
 
-impl Default for ActiveTopLevelAgentState {
+impl Default for ActivePrimaryAgentState {
     fn default() -> Self {
         Self {
-            active: ActiveTopLevelAgent::from_spec(&builtin_top_level_build_agent()),
+            active: ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()),
         }
     }
 }
 
-impl ActiveTopLevelAgentState {
+impl ActivePrimaryAgentState {
     #[must_use]
-    pub const fn active(&self) -> &ActiveTopLevelAgent {
+    pub const fn active(&self) -> &ActivePrimaryAgent {
         &self.active
     }
 
@@ -77,12 +76,12 @@ impl ActiveTopLevelAgentState {
 
     #[must_use]
     pub fn from_specs(specs: &[SubagentSpec]) -> Self {
-        let active = resolve_top_level_agent(specs, DEFAULT_TOP_LEVEL_AGENT_NAME)
-            .unwrap_or_else(|_| ActiveTopLevelAgent::from_spec(&builtin_top_level_build_agent()));
+        let active = resolve_primary_agent(specs, DEFAULT_PRIMARY_AGENT_NAME)
+            .unwrap_or_else(|_| ActivePrimaryAgent::from_spec(&builtin_primary_build_agent()));
         Self { active }
     }
 
-    pub fn reset_to_default_from_specs(&mut self, specs: &[SubagentSpec]) -> &ActiveTopLevelAgent {
+    pub fn reset_to_default_from_specs(&mut self, specs: &[SubagentSpec]) -> &ActivePrimaryAgent {
         self.active = Self::from_specs(specs).active;
         &self.active
     }
@@ -91,7 +90,7 @@ impl ActiveTopLevelAgentState {
         &mut self,
         discovered: &DiscoveredSubagents,
         requested: &str,
-    ) -> TopLevelAgentResolutionResult<&ActiveTopLevelAgent> {
+    ) -> PrimaryAgentResolutionResult<&ActivePrimaryAgent> {
         self.select_from_specs(&discovered.effective, requested)
     }
 
@@ -99,73 +98,73 @@ impl ActiveTopLevelAgentState {
         &mut self,
         specs: &[SubagentSpec],
         requested: &str,
-    ) -> TopLevelAgentResolutionResult<&ActiveTopLevelAgent> {
-        let active = resolve_top_level_agent(specs, requested)?;
+    ) -> PrimaryAgentResolutionResult<&ActivePrimaryAgent> {
+        let active = resolve_primary_agent(specs, requested)?;
         self.active = active;
         Ok(&self.active)
     }
 }
 
-pub type TopLevelAgentResolutionResult<T> = Result<T, TopLevelAgentResolutionError>;
+pub type PrimaryAgentResolutionResult<T> = Result<T, PrimaryAgentResolutionError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TopLevelAgentResolutionError {
+pub enum PrimaryAgentResolutionError {
     UnknownAgent { requested: String },
 }
 
-impl fmt::Display for TopLevelAgentResolutionError {
+impl fmt::Display for PrimaryAgentResolutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownAgent { requested } => write!(f, "Unknown top-level agent {requested}"),
+            Self::UnknownAgent { requested } => write!(f, "Unknown primary agent {requested}"),
         }
     }
 }
 
-impl Error for TopLevelAgentResolutionError {}
+impl Error for PrimaryAgentResolutionError {}
 
-pub fn resolve_discovered_top_level_agent(
+pub fn resolve_discovered_primary_agent(
     discovered: &DiscoveredSubagents,
     requested: &str,
-) -> TopLevelAgentResolutionResult<ActiveTopLevelAgent> {
-    resolve_top_level_agent(&discovered.effective, requested)
+) -> PrimaryAgentResolutionResult<ActivePrimaryAgent> {
+    resolve_primary_agent(&discovered.effective, requested)
 }
 
-pub fn resolve_top_level_agent(
+pub fn resolve_primary_agent(
     specs: &[SubagentSpec],
     requested: &str,
-) -> TopLevelAgentResolutionResult<ActiveTopLevelAgent> {
+) -> PrimaryAgentResolutionResult<ActivePrimaryAgent> {
     specs
         .iter()
-        .find(|spec| spec.top_level && spec.name.eq_ignore_ascii_case(requested))
+        .find(|spec| spec.is_primary() && spec.name.eq_ignore_ascii_case(requested))
         .or_else(|| {
             specs
                 .iter()
-                .find(|spec| spec.top_level && spec.matches_name(requested))
+                .find(|spec| spec.is_primary() && spec.matches_name(requested))
         })
-        .map(ActiveTopLevelAgent::from_spec)
-        .ok_or_else(|| TopLevelAgentResolutionError::UnknownAgent {
+        .map(ActivePrimaryAgent::from_spec)
+        .ok_or_else(|| PrimaryAgentResolutionError::UnknownAgent {
             requested: requested.to_string(),
         })
 }
 
 #[must_use]
-pub fn clamp_top_level_permission_mode(
+pub fn clamp_primary_permission_mode(
     base: PermissionMode,
-    overlay: Option<PermissionMode>,
+    requested: Option<PermissionMode>,
 ) -> PermissionMode {
-    let Some(overlay) = overlay else {
+    let Some(requested) = requested else {
         return base;
     };
 
-    if permission_rank(overlay) <= permission_rank(base) {
-        overlay
+    if permission_rank(requested) <= permission_rank(base) {
+        requested
     } else {
         base
     }
 }
 
 #[must_use]
-pub fn top_level_agent_allows_tool(agent: &ActiveTopLevelAgent, tool_name: &str) -> bool {
+pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) -> bool {
     let tool_name = normalise_tool_name(tool_name);
     let allow_list_allows = agent.tools.as_ref().is_none_or(|tools| {
         tools
@@ -183,14 +182,14 @@ pub fn top_level_agent_allows_tool(agent: &ActiveTopLevelAgent, tool_name: &str)
 }
 
 #[must_use]
-pub fn apply_top_level_agent_tool_overlay(
+pub fn apply_primary_agent_tool_policy(
     tools: Option<Arc<Vec<ToolDefinition>>>,
-    agent: &ActiveTopLevelAgent,
+    agent: &ActivePrimaryAgent,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
     let filtered = tools
         .iter()
-        .filter(|tool| top_level_agent_allows_tool(agent, tool.function_name()))
+        .filter(|tool| primary_agent_allows_tool(agent, tool.function_name()))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -226,7 +225,7 @@ mod tests {
     #[test]
     fn resolves_existing_spec_by_name() {
         let spec = test_spec("planner");
-        let active = resolve_top_level_agent(&[spec], "planner").expect("resolved");
+        let active = resolve_primary_agent(&[spec], "planner").expect("resolved");
 
         assert_eq!(active.identity.name, "planner");
         assert_eq!(active.display_name, "planner");
@@ -242,7 +241,7 @@ mod tests {
     fn unknown_agent_error_preserves_current_active_agent() {
         let current = test_spec("current");
         let specs = vec![current.clone()];
-        let mut state = ActiveTopLevelAgentState::default();
+        let mut state = ActivePrimaryAgentState::default();
         let original = state
             .select_from_specs(&specs, "current")
             .expect("initial selection")
@@ -254,7 +253,7 @@ mod tests {
 
         assert_eq!(
             error,
-            TopLevelAgentResolutionError::UnknownAgent {
+            PrimaryAgentResolutionError::UnknownAgent {
                 requested: "missing".to_string()
             }
         );
@@ -266,7 +265,7 @@ mod tests {
         let mut spec = test_spec("reviewer");
         spec.aliases = vec!["critic".to_string()];
 
-        let active = resolve_top_level_agent(&[spec], "CRITIC").expect("resolved by alias");
+        let active = resolve_primary_agent(&[spec], "CRITIC").expect("resolved by alias");
 
         assert_eq!(active.identity.name, "reviewer");
         assert_eq!(active.display_name, "reviewer");
@@ -278,13 +277,13 @@ mod tests {
         build.aliases = vec!["builder".to_string()];
         let builder = test_spec("builder");
 
-        let active = resolve_top_level_agent(&[build, builder], "builder").expect("resolved");
+        let active = resolve_primary_agent(&[build, builder], "builder").expect("resolved");
 
         assert_eq!(active.identity.name, "builder");
     }
 
     #[test]
-    fn ignored_subagent_fields_do_not_enter_runtime_overlay() {
+    fn ignored_subagent_fields_do_not_enter_primary_agent_runtime() {
         let mut spec = test_spec("worker");
         spec.aliases = vec!["builder".to_string()];
         spec.skills = vec!["rust".to_string()];
@@ -296,7 +295,7 @@ mod tests {
         spec.memory = Some(SubagentMemoryScope::Project);
         spec.isolation = Some("full".to_string());
 
-        let active = ActiveTopLevelAgent::from_spec(&spec);
+        let active = ActivePrimaryAgent::from_spec(&spec);
 
         assert_eq!(active.identity.name, "worker");
         assert_eq!(active.display_name, "worker");
@@ -310,9 +309,9 @@ mod tests {
 
     #[test]
     fn default_state_uses_builtin_build_agent() {
-        let mut state = ActiveTopLevelAgentState::default();
+        let mut state = ActivePrimaryAgentState::default();
 
-        assert_eq!(state.active().identity.name, DEFAULT_TOP_LEVEL_AGENT_NAME);
+        assert_eq!(state.active().identity.name, DEFAULT_PRIMARY_AGENT_NAME);
         assert_eq!(state.active().identity.source, SubagentSource::Builtin);
 
         state
@@ -322,7 +321,7 @@ mod tests {
 
         state.reset_to_default_from_specs(&[]);
 
-        assert_eq!(state.active().identity.name, DEFAULT_TOP_LEVEL_AGENT_NAME);
+        assert_eq!(state.active().identity.name, DEFAULT_PRIMARY_AGENT_NAME);
         assert_eq!(state.active().identity.source, SubagentSource::Builtin);
     }
 
@@ -336,14 +335,14 @@ mod tests {
                     "description": "CLI build",
                     "prompt": "cli build instructions",
                     "model": "gpt-cli",
-                    "topLevel": true
+                    "mode": "primary"
                 }
             })),
             plugin_agent_files: Vec::new(),
         })
         .expect("discovered subagents");
 
-        let active = ActiveTopLevelAgentState::from_discovery(&discovered);
+        let active = ActivePrimaryAgentState::from_discovery(&discovered);
 
         assert_eq!(active.active().identity.name, "build");
         assert_eq!(active.active().identity.source, SubagentSource::Cli);
@@ -353,27 +352,24 @@ mod tests {
 
     #[test]
     fn default_build_agent_allows_baseline_tools() {
-        let active = ActiveTopLevelAgentState::default();
+        let active = ActivePrimaryAgentState::default();
 
-        assert!(top_level_agent_allows_tool(
-            active.active(),
-            "unified_search"
-        ));
+        assert!(primary_agent_allows_tool(active.active(), "unified_search"));
     }
 
     #[test]
-    fn tool_overlay_intersects_allow_list_then_applies_deny_list() {
+    fn tool_policy_intersects_allow_list_then_applies_deny_list() {
         let mut spec = test_spec("worker");
         spec.tools = Some(vec![
             "unified_search".to_string(),
             "unified_file".to_string(),
         ]);
         spec.disallowed_tools = vec!["UNIFIED_SEARCH".to_string()];
-        let active = ActiveTopLevelAgent::from_spec(&spec);
+        let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!top_level_agent_allows_tool(&active, "unified_exec"));
-        assert!(!top_level_agent_allows_tool(&active, "unified_search"));
-        assert!(top_level_agent_allows_tool(&active, "unified_file"));
+        assert!(!primary_agent_allows_tool(&active, "unified_exec"));
+        assert!(!primary_agent_allows_tool(&active, "unified_search"));
+        assert!(primary_agent_allows_tool(&active, "unified_file"));
     }
 
     #[test]
@@ -381,27 +377,27 @@ mod tests {
         let mut spec = test_spec("worker");
         spec.tools = Some(Vec::new());
         spec.disallowed_tools = Vec::new();
-        let active = ActiveTopLevelAgent::from_spec(&spec);
+        let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(!top_level_agent_allows_tool(&active, "unified_search"));
+        assert!(!primary_agent_allows_tool(&active, "unified_search"));
     }
 
     #[test]
-    fn permission_overlay_clamps_without_broadening() {
+    fn permission_policy_clamps_without_broadening() {
         assert_eq!(
-            clamp_top_level_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
+            clamp_primary_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
             PermissionMode::Plan
         );
         assert_eq!(
-            clamp_top_level_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
+            clamp_primary_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
             PermissionMode::Default
         );
         assert_eq!(
-            clamp_top_level_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
+            clamp_primary_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
             PermissionMode::Plan
         );
         assert_eq!(
-            clamp_top_level_permission_mode(PermissionMode::Plan, None),
+            clamp_primary_permission_mode(PermissionMode::Plan, None),
             PermissionMode::Plan
         );
     }
@@ -421,7 +417,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
-            top_level: true,
+            mode: vtcode_config::AgentMode::Primary,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,

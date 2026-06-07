@@ -636,9 +636,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if can_cycle_top_level_agent(session, &key) {
+            if can_cycle_primary_agent(session, &key) {
                 session.mark_dirty();
-                return Some(InlineEvent::CycleTopLevelAgent);
+                return Some(InlineEvent::CyclePrimaryAgent);
             }
 
             let Some(submitted) = take_submitted_input(session) else {
@@ -794,9 +794,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.update_input_triggers();
                     return None;
                 }
-                if can_cycle_top_level_agent(session, &key) {
+                if can_cycle_primary_agent(session, &key) {
                     session.mark_dirty();
-                    return Some(InlineEvent::CycleTopLevelAgent);
+                    return Some(InlineEvent::CyclePrimaryAgent);
                 }
                 let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
@@ -1160,7 +1160,7 @@ fn handle_transcript_review_key(
     }
 }
 
-fn can_cycle_top_level_agent(session: &Session, key: &KeyEvent) -> bool {
+fn can_cycle_primary_agent(session: &Session, key: &KeyEvent) -> bool {
     key.modifiers == KeyModifiers::NONE
         && !session.is_running_activity()
         && session.core.input_manager.content().is_empty()
