@@ -8,9 +8,12 @@ Subagents help you:
 - constrain tools for focused reviewers, planners, or debuggers
 - reuse project or user agent definitions across repositories
 - preload skills, MCP servers, memory, and hooks for specialized work
-- switch between the main thread and delegated child threads with `/agent`
+- inspect delegated child threads with `/agent`
+- switch the main session's top-level runtime overlay with `/session-agent`
 
 VT Code ships with built-in subagents and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
+
+The same agent specifications can also be used as top-level session-agent overlays. A subagent is delegated child work with its own thread. A session-agent overlay keeps you in the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
 
@@ -82,7 +85,7 @@ Use the code-reviewer agent on the auth changes
 Spawn a code-reviewer subagent and summarize only the important findings
 ```
 
-6. Use `/agent` to switch between the main thread and delegated child threads. Use `/agents threads` to inspect child runs and open completed transcripts.
+6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `/session-agent` when you want the main session itself to use one of the agent definitions as a top-level overlay.
 
 ## Discovery And Precedence
 
@@ -248,6 +251,8 @@ Subagents inherit the parent approval context and can only stay at or below the 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
 
+Top-level session-agent overlays use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
+
 ### MCP Servers
 
 Use `mcpServers` to attach named or inline MCP providers to a subagent:
@@ -357,7 +362,42 @@ An explicit mention guarantees the selection for that turn:
 
 VT Code treats a single explicit mention as the selected agent for the turn. If the model later tries to spawn a different agent, the call is rejected instead of silently switching.
 
-VT Code does not currently expose Claude-style session-wide `--agent <name>` or `--agents <json>` flows. In VT Code, `--agent` is already used for model override. Use agent files, natural-language delegation, explicit mentions, or `/agents` instead.
+`/agent`, `/agents`, and `@agent-name` remain delegated child-agent controls. They do not switch the main session's top-level controller.
+
+### Use An Agent As The Main Session Overlay
+
+Use `/session-agent` to list, switch, or clear the active top-level session agent:
+
+```text
+/session-agent
+/session-agent list
+/session-agent reviewer
+/session-agent critic
+/session-agent reset
+```
+
+`/session-agent <name-or-alias>` resolves the same discovered agent specs used by subagents, including aliases from the agent definition. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
+
+When a session agent is active, VT Code keeps you in the main session. It applies the selected spec as a request-time overlay rather than spawning a child thread:
+
+- the Markdown body or instructions become the active session-agent instructions
+- `tools` is intersected with the current session's available tools
+- `disallowedTools` removes tools after allowlist filtering, so deny wins
+- `permissionMode` can only narrow the current session mode
+- `model` and `reasoning_effort` are applied before request validation and provider capability checks
+- aliases are used only for `/session-agent` lookup
+
+Fields that are child-only or not supported for top-level overlays are ignored for this feature: `skills`, `mcpServers`, `hooks`, `background`, `maxTurns`, `initialPrompt`, `nickname_candidates`, `memory`, and `isolation`.
+
+Use `/session-agent clear`, `/session-agent reset`, `/session-agent default`, `/session-agent base`, or `/session-agent none` to return to the base session with no active overlay. An unknown name reports an error and leaves the existing active session agent unchanged.
+
+The active session agent is shown in the TUI status/header area when one is selected. With no active overlay, VT Code is in the base session.
+
+`Tab` can cycle through available session agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority. `/session-agent` is the reliable switching path when `Tab` is reserved for input behaviour.
+
+VT Code still does not expose Claude-style CLI `--agent <name>` or `--agents <json>` session flows. In VT Code, `--agent` is already used for model override. Top-level switching is the interactive `/session-agent` overlay described here.
+
+This feature does not add a workflow engine, hardcoded controller workflows, a new permission DSL, new sandbox rules, or new LSP behaviour. It reuses existing agent specs and existing runtime permission/tool concepts.
 
 ### Inspect Active Agents In Place
 
