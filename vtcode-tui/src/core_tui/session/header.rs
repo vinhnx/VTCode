@@ -212,17 +212,33 @@ impl Session {
 
     fn header_compact_right_spans(&self) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
+        let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
+        if !agent_label.trim().is_empty() {
+            spans.push(Span::styled(
+                agent_label,
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
         if let Some((mode_text, mode_style)) = self.header_active_mode_summary() {
-            spans.push(Span::styled(mode_text, mode_style));
-            if !model_summary_spans.is_empty() {
+            if !spans.is_empty() {
                 spans.push(Span::styled(
                     " · ".to_owned(),
                     self.header_secondary_style(),
                 ));
             }
+            spans.push(Span::styled(mode_text, mode_style));
         }
 
+        if !spans.is_empty() && !model_summary_spans.is_empty() {
+            spans.push(Span::styled(
+                " · ".to_owned(),
+                self.header_secondary_style(),
+            ));
+        }
         spans.extend(model_summary_spans);
 
         spans

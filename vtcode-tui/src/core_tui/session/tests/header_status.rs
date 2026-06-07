@@ -548,6 +548,19 @@ fn hidden_header_summary_live_reloads_model_changes() {
 }
 
 #[test]
+fn hidden_header_summary_renders_active_primary_agent() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.primary_agent = Some("duck".to_string());
+
+    let line = header_line_text(&mut session);
+
+    assert!(line.contains("Duck"));
+    assert!(line.contains("Edit"));
+}
+
+#[test]
 fn header_context_updates_preserve_live_mode_state() {
     let mut session = fresh_session();
     session.appearance.hide_header = true;
