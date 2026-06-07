@@ -219,6 +219,26 @@ fn set_session_agent_command_updates_header_badge() {
 }
 
 #[test]
+fn bottom_status_always_includes_session_agent() {
+    let mut session = fresh_session();
+
+    assert_eq!(session.status_right_text_with_session_agent(), "agent:base");
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: None,
+        right: Some("gpt-5.5 | 98% context left".to_string()),
+    });
+    session.handle_command(InlineCommand::SetSessionAgent {
+        name: Some("reviewer".to_string()),
+    });
+
+    assert_eq!(
+        session.status_right_text_with_session_agent(),
+        "agent:reviewer | gpt-5.5 | 98% context left"
+    );
+}
+
+#[test]
 fn header_context_updates_preserve_active_session_agent() {
     let mut session = fresh_session();
     session.handle_command(InlineCommand::SetSessionAgent {

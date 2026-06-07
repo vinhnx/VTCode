@@ -287,12 +287,6 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "tools"
     ),
     built_in_command_spec!(
-        "session-agent",
-        "List or switch the top-level session agent (usage: /session-agent [list|clear|<name-or-alias>])",
-        "/session-agent [list|clear|reset|default|base|<name-or-alias>]",
-        "session"
-    ),
-    built_in_command_spec!(
         "subprocess",
         "Open local agents or manage background subprocesses (usage: /subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>])",
         "/subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]",

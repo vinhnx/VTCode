@@ -3,6 +3,9 @@ use vtcode_core::hooks::SessionEndReason;
 pub(crate) enum InlineLoopAction {
     Continue,
     Submit(String),
+    SelectSessionAgent {
+        name: Option<String>,
+    },
     RequestInlinePromptSuggestion(String),
     OpenTranscriptReviewInEditor(String),
     OpenTranscriptReviewScrollback(String),

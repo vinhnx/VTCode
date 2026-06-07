@@ -166,6 +166,10 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::RequestInlinePromptSuggestion(draft)
             }
+            InlineEvent::SelectSessionAgent { name } => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::SelectSessionAgent { name }
+            }
             InlineEvent::OpenTranscriptReviewInEditor(text) => {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::OpenTranscriptReviewInEditor(text)

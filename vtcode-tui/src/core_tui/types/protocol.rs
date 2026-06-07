@@ -138,6 +138,9 @@ pub enum InlineEvent {
     },
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
+    SelectSessionAgent {
+        name: Option<String>,
+    },
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,

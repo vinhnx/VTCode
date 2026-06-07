@@ -1,11 +1,7 @@
-use super::builtins::{
-    DoctorCommand, parse_doctor_args, parse_effort_args, parse_session_agent_command,
-    parse_update_args,
-};
+use super::builtins::{DoctorCommand, parse_doctor_args, parse_effort_args, parse_update_args};
 use super::{
-    AgentManagerAction, CompactConversationCommand, ScheduleCommandAction,
-    SessionAgentCommandAction, SessionLogExportFormat, SessionModeCommand, SlashCommandOutcome,
-    SubprocessManagerAction, handle_slash_command,
+    AgentManagerAction, CompactConversationCommand, ScheduleCommandAction, SessionLogExportFormat,
+    SessionModeCommand, SlashCommandOutcome, SubprocessManagerAction, handle_slash_command,
 };
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::provider::ResponsesCompactionOptions;
@@ -73,50 +69,6 @@ fn parse_effort_supports_persist_flag_and_level() {
 fn parse_effort_rejects_multiple_levels() {
     let err = parse_effort_args("low high").expect_err("must reject");
     assert!(err.contains("at most one effort level"));
-}
-
-#[test]
-fn parse_session_agent_defaults_to_list() {
-    assert_eq!(
-        parse_session_agent_command("").expect("should parse"),
-        SessionAgentCommandAction::List
-    );
-    assert_eq!(
-        parse_session_agent_command("list").expect("should parse"),
-        SessionAgentCommandAction::List
-    );
-}
-
-#[test]
-fn parse_session_agent_supports_switch_by_name_or_alias_token() {
-    assert_eq!(
-        parse_session_agent_command("planner").expect("should parse"),
-        SessionAgentCommandAction::Select {
-            name: "planner".to_string()
-        }
-    );
-    assert_eq!(
-        parse_session_agent_command("critic").expect("should parse"),
-        SessionAgentCommandAction::Select {
-            name: "critic".to_string()
-        }
-    );
-}
-
-#[test]
-fn parse_session_agent_supports_clear_aliases() {
-    for input in ["clear", "reset", "default", "base", "none"] {
-        assert_eq!(
-            parse_session_agent_command(input).expect("should parse"),
-            SessionAgentCommandAction::Clear
-        );
-    }
-}
-
-#[test]
-fn parse_session_agent_rejects_extra_arguments() {
-    let err = parse_session_agent_command("planner extra").expect_err("must reject");
-    assert!(err.contains("Usage: /session-agent"));
 }
 
 #[tokio::test]
@@ -364,38 +316,17 @@ async fn agent_command_opens_active_agents_inspector() {
 }
 
 #[tokio::test]
-async fn session_agent_command_routes_to_top_level_switching() {
+async fn session_agent_command_is_not_registered() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let list = handle_slash_command("session-agent", &mut renderer, &workspace)
+    let outcome = handle_slash_command("session-agent list", &mut renderer, &workspace)
         .await
-        .expect("session-agent list should parse");
-    assert!(matches!(
-        list,
-        SlashCommandOutcome::ManageSessionAgent {
-            action: SessionAgentCommandAction::List
-        }
-    ));
+        .expect("session-agent should fall through");
 
-    let select = handle_slash_command("session-agent critic", &mut renderer, &workspace)
-        .await
-        .expect("session-agent select should parse");
     assert!(matches!(
-        select,
-        SlashCommandOutcome::ManageSessionAgent {
-            action: SessionAgentCommandAction::Select { ref name }
-        } if name == "critic"
-    ));
-
-    let clear = handle_slash_command("session-agent reset", &mut renderer, &workspace)
-        .await
-        .expect("session-agent reset should parse");
-    assert!(matches!(
-        clear,
-        SlashCommandOutcome::ManageSessionAgent {
-            action: SessionAgentCommandAction::Clear
-        }
+        outcome,
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/session-agent list"
     ));
 }
 

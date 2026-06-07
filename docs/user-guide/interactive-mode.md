@@ -111,7 +111,7 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 - If a session stopped because it hit the local `max_budget_usd` limit, resuming it offers three choices: continue from the saved summary, continue with the full transcript after an explicit higher-cost warning, or start fresh.
 - `/agents` opens the subagent manager for creating, inspecting, editing, deleting, and browsing active delegated agents. New scaffolds use VT Code tool ids in frontmatter.
 - `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
-- `/session-agent` lists or switches the top-level session-agent overlay. Use `/session-agent <name-or-alias>` to select a discovered agent spec, or `/session-agent reset` to return to the base session.
+- On an empty idle composer, `Tab` cycles the top-level session-agent overlay through discovered agent specs and then back to `agent:base`.
 - `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
 ## Scheduled Prompts And Reminders

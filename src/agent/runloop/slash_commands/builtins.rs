@@ -14,8 +14,8 @@ use super::management::{
     handle_local_command, handle_loop_command, handle_mcp_command, handle_schedule_command,
 };
 use super::models::{
-    AgentDefinitionScope, AgentManagerAction, SessionAgentCommandAction, SlashCommandOutcome,
-    SubprocessManagerAction, ThemePaletteMode,
+    AgentDefinitionScope, AgentManagerAction, SlashCommandOutcome, SubprocessManagerAction,
+    ThemePaletteMode,
 };
 use super::parsing::{self, parse_compact_command, parse_session_log_export_format};
 use super::rendering::{render_help, render_theme_list};
@@ -331,13 +331,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 }
             },
         },
-        "session-agent" => match parse_session_agent_command(args) {
-            Ok(action) => Ok(SlashCommandOutcome::ManageSessionAgent { action }),
-            Err(message) => {
-                renderer.line(MessageStyle::Error, &message)?;
-                Ok(SlashCommandOutcome::Handled)
-            }
-        },
         "subprocesses" | "subprocess" => match parse_subprocesses_command(args) {
             Ok(action) => Ok(SlashCommandOutcome::ManageSubprocesses { action }),
             Err(message) => {
@@ -371,24 +364,6 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             Ok(SlashCommandOutcome::StartTerminalSetup)
         }
         _ => unreachable!("unknown built-in command skill: {}", spec.slash_name),
-    }
-}
-
-pub(in crate::agent::runloop::slash_commands) fn parse_session_agent_command(
-    args: &str,
-) -> std::result::Result<SessionAgentCommandAction, String> {
-    let parts = args.split_whitespace().collect::<Vec<_>>();
-    match parts.as_slice() {
-        [] | ["list"] | ["ls"] | ["show"] => Ok(SessionAgentCommandAction::List),
-        ["clear"] | ["reset"] | ["default"] | ["base"] | ["none"] => {
-            Ok(SessionAgentCommandAction::Clear)
-        }
-        [name] => Ok(SessionAgentCommandAction::Select {
-            name: (*name).to_string(),
-        }),
-        _ => {
-            Err("Usage: /session-agent [list|clear|reset|default|base|<name-or-alias>]".to_string())
-        }
     }
 }
 

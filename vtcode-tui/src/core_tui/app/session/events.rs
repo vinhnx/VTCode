@@ -636,16 +636,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if handle_running_slash_command_block(session) {
-                return None;
-            }
-
-            if let Some(command) = maybe_cycle_session_agent(session, &key) {
-                if handle_running_slash_command_block_for_input(session, &command) {
-                    return None;
-                }
+            if !session.is_running_activity()
+                && let Some(name) = maybe_cycle_session_agent(session, &key)
+            {
                 session.mark_dirty();
-                return Some(InlineEvent::Submit(command));
+                return Some(InlineEvent::SelectSessionAgent { name });
             }
 
             let Some(submitted) = take_submitted_input(session) else {
@@ -1163,7 +1158,7 @@ fn handle_transcript_review_key(
     }
 }
 
-fn maybe_cycle_session_agent(session: &Session, key: &KeyEvent) -> Option<String> {
+fn maybe_cycle_session_agent(session: &Session, key: &KeyEvent) -> Option<Option<String>> {
     if key.modifiers != KeyModifiers::NONE
         || !session.core.input_manager.content().is_empty()
         || !session.core.queued_inputs.is_empty()
@@ -1191,12 +1186,12 @@ fn maybe_cycle_session_agent(session: &Session, key: &KeyEvent) -> Option<String
         .map(str::trim)
         .filter(|name| !name.is_empty());
     let next = match active.and_then(|active| agent_names.iter().position(|name| *name == active)) {
-        Some(index) if index + 1 < agent_names.len() => agent_names[index + 1].to_owned(),
-        Some(_) => "default".to_owned(),
-        None => agent_names[0].to_owned(),
+        Some(index) if index + 1 < agent_names.len() => Some(agent_names[index + 1].to_owned()),
+        Some(_) => None,
+        None => Some(agent_names[0].to_owned()),
     };
 
-    Some(format!("/session-agent {next}"))
+    Some(next)
 }
 
 fn take_submitted_input(session: &mut Session) -> Option<String> {

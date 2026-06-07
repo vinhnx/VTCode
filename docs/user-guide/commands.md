@@ -138,7 +138,7 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 - `/resume` opens archived sessions when the current run is idle.
 - `/fork` opens the session picker and then lets you choose between a full-copy fork and a summarized fork.
 - `/compact` manually compacts the current conversation context immediately. Use `/compact edit-prompt` or `/compact reset-prompt` to manage the saved default prompt for manual compaction requests. On the local fallback path, VT Code keeps a structured summary plus retained user prompts instead of a mixed recent tail.
-- `/session-agent [list|clear|reset|default|base|<name-or-alias>]` lists or switches the top-level session-agent overlay. `/agent`, `/agents`, and `@agent-name` remain delegated child-agent controls.
+- `/agent`, `/agents`, and `@agent-name` remain delegated child-agent controls. Top-level session-agent overlays are switched from the TUI with `Tab` on an empty idle composer.
 - `/loop` schedules a session-scoped prompt that re-enters the chat only when the current turn is idle.
 - `/schedule` manages durable scheduled tasks. They are polled while VT Code is open, and the local scheduler daemon keeps them running in the background.
 

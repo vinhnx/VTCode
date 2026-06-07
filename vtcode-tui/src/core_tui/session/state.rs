@@ -315,6 +315,25 @@ impl Session {
             .filter(|value| !value.is_empty())
     }
 
+    pub(crate) fn session_agent_status_label(&self) -> String {
+        let agent = self
+            .header_context
+            .session_agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("base");
+        format!("agent:{agent}")
+    }
+
+    pub(crate) fn status_right_text_with_session_agent(&self) -> String {
+        let agent = self.session_agent_status_label();
+        match self.status_right_text() {
+            Some(status) => format!("{agent} | {status}"),
+            None => agent,
+        }
+    }
+
     pub(crate) fn is_running_activity(&self) -> bool {
         let left = self.status_left_text().unwrap_or("");
         let running_status = self.appearance.should_animate_progress_status()

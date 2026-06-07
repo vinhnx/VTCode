@@ -729,6 +729,10 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
+        InlineLoopAction::SelectSessionAgent { name } => {
+            handle_select_session_agent(ctx, name).await?;
+            InlineLoopActionResolution::ContinueLoop
+        }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
             handle_inline_prompt_suggestion_request(ctx, state, &draft).await?;
             InlineLoopActionResolution::ContinueLoop
@@ -807,6 +811,52 @@ pub(super) async fn resolve_inline_loop_action(
         }
     };
     Ok(resolution)
+}
+
+async fn handle_select_session_agent(
+    ctx: &mut InteractionLoopContext<'_>,
+    name: Option<String>,
+) -> Result<()> {
+    let Some(name) = name else {
+        ctx.active_session_agent.clear();
+        set_session_agent_display(ctx, None);
+        ctx.renderer
+            .line(MessageStyle::Info, "Session agent: base")?;
+        return Ok(());
+    };
+
+    let Some(controller) = ctx.tool_registry.subagent_controller() else {
+        ctx.renderer
+            .line(MessageStyle::Error, "No session agents are available.")?;
+        return Ok(());
+    };
+
+    let specs = controller.effective_specs().await;
+    match ctx.active_session_agent.select_from_specs(&specs, &name) {
+        Ok(active) => {
+            let display_name = active.display_name.clone();
+            set_session_agent_display(ctx, Some(display_name.clone()));
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Session agent: {display_name}"),
+            )?;
+        }
+        Err(vtcode_core::session_agent::SessionAgentResolutionError::UnknownAgent {
+            requested,
+        }) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Unknown session agent '{requested}'."),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn set_session_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
+    ctx.header_context.session_agent = name.clone();
+    ctx.handle.set_session_agent(name);
 }
 
 #[cfg(test)]

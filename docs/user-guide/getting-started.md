@@ -175,7 +175,6 @@ During chat you can lead with `/` to trigger built-in actions without leaving th
 -   `/command <program> [args...]` — run a shell command via `unified_exec`
 -   `/agents` — create, inspect, edit, or delete subagent definitions with VT Code-native frontmatter
 -   `/agent` — inspect delegated child threads in the current session
--   `/session-agent [name-or-alias]` — switch the main session to a top-level agent overlay, or use `/session-agent reset` to return to the base session
 
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 

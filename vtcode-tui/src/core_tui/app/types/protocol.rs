@@ -144,6 +144,9 @@ pub enum InlineEvent {
     OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
+    SelectSessionAgent {
+        name: Option<String>,
+    },
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,
@@ -183,6 +186,9 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             }
             crate::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 Self::RequestInlinePromptSuggestion(draft)
+            }
+            crate::core_tui::types::InlineEvent::SelectSessionAgent { name } => {
+                Self::SelectSessionAgent { name }
             }
             crate::core_tui::types::InlineEvent::ToggleMode => Self::ToggleMode,
             crate::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,

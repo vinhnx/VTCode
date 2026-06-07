@@ -60,7 +60,6 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::LaunchGit
         | SlashCommandOutcome::ManageSkills { .. }
         | SlashCommandOutcome::ManageAgents { .. }
-        | SlashCommandOutcome::ManageSessionAgent { .. }
         | SlashCommandOutcome::ManageSubprocesses { .. }
         | SlashCommandOutcome::OpenRewindPicker
         | SlashCommandOutcome::RewindToTurn { .. }
@@ -191,9 +190,6 @@ async fn route_navigation_outcome(
         }
         SlashCommandOutcome::ManageAgents { action } => {
             handlers::handle_manage_agents(ctx, action).await
-        }
-        SlashCommandOutcome::ManageSessionAgent { action } => {
-            handlers::handle_manage_session_agent(ctx, action).await
         }
         SlashCommandOutcome::ManageSubprocesses { action } => {
             handlers::handle_manage_subprocesses(ctx, action).await

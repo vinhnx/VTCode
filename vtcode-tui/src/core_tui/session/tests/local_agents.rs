@@ -195,7 +195,9 @@ fn tab_cycles_session_agent_when_composer_is_empty() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::Submit(value)) if value == "/session-agent alpha"
+        Some(app_types::InlineEvent::SelectSessionAgent {
+            name: Some(value)
+        }) if value == "alpha"
     ));
 }
 
@@ -209,14 +211,20 @@ fn tab_does_not_cycle_session_agent_while_running() {
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "");
+}
 
-    let lines = rendered_app_session_lines(&mut session, 20);
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("'/session-agent' is disabled while a task is in progress")),
-        "Tab should use the running slash-command guard for its synthetic command"
-    );
+#[test]
+fn tab_queues_draft_while_running_instead_of_switching_session_agent() {
+    let mut session = app_session_with_input("Review this", "Review this".len());
+    load_session_agent_palette(&mut session);
+    set_app_session_busy_status(&mut session);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::QueueSubmit(value)) if value == "Review this"
+    ));
 }
 
 #[test]
@@ -231,7 +239,7 @@ fn tab_cycles_session_agent_back_to_default_after_last_agent() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::Submit(value)) if value == "/session-agent default"
+        Some(app_types::InlineEvent::SelectSessionAgent { name: None })
     ));
 }
 
