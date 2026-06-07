@@ -518,27 +518,145 @@ Use the public structural tool first for read-only project checks:
 - `transform` derives strings from captured meta variables before `fix` applies.
 - Each transform key creates a new variable name without `$`; `source` still references captured or previously transformed values with `$VAR` syntax.
 - Transform order matters. Later transforms can consume earlier transform outputs, which is how multi-step rewrites like case-convert -> regex replace -> case-convert work.
+- Transforms are evaluated in declaration order. A transform that references a variable created by an earlier transform in the same `transform` block will see the already-transformed value.
+- Transforms only run after the rule matches. If the rule does not match, no transforms execute and no `fix` is applied.
+
+### replace
+
 - `replace` is regex-based text replacement over one captured meta variable.
   - `source` must be `$VAR` style
   - `replace` is the Rust regex
   - `by` is the replacement string
-  - capture groups from the regex can be reused in `by`
+  - capture groups from the regex can be reused in `by` as `$1`, `$2`, etc.
   - those capture groups are only available inside that same `replace` transform; regular `regex` rules do not expose them
+  - Rust regex syntax: no look-around, no PCRE backreferences, but capture groups work
+
+```yaml
+# Strip leading underscore from identifier
+transform:
+  CLEAN:
+    replace:
+      replace: "^_"
+      by: ""
+      source: $VAR
+
+# Extract file extension using capture group
+transform:
+  EXT:
+    replace:
+      replace: ".*\\.(.+)$"
+      by: "$1"
+      source: $FILENAME
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  CLEAN: replace($VAR, replace="^_", by="")
+```
+
+### substring
+
 - `substring` is Python-style slicing over Unicode characters.
   - `startChar` is inclusive
   - `endChar` is exclusive
   - negative indexes count backward from the end of the string
+  - omit either bound for open-ended slicing
+
+```yaml
+# Strip first and last character (e.g., remove quotes)
+transform:
+  UNQUOTED:
+    substring:
+      startChar: 1
+      endChar: -1
+      source: $STR
+
+# Get first 3 characters
+transform:
+  PREFIX:
+    substring:
+      endChar: 3
+      source: $ID
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  UNQUOTED: substring($STR, startChar=1, endChar=-1)
+```
+
+### convert
+
 - `convert` changes identifier casing through `toCase`.
   - common targets: `camelCase`, `snakeCase`, `kebabCase`, `pascalCase`, `lowerCase`, `upperCase`, `capitalize`
   - `separatedBy` controls how the source string is split into words before conversion
+  - when `separatedBy` is omitted, all known separators are used
 - `CaseChange` is the separator for transitions like `astGrep`, `ASTGrep`, or `XMLHttpRequest`
+
+```yaml
+# Convert camelCase to snake_case
+transform:
+  SNAKE:
+    convert:
+      toCase: snakeCase
+      source: $CAMEL
+
+# Convert only by underscore, preserving internal casing
+transform:
+  KEBAB:
+    convert:
+      toCase: kebabCase
+      separatedBy: [underscore]
+      source: $NAME
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  SNAKE: convert($CAMEL, toCase=snakeCase)
+```
+
+### Chaining Transforms
+
+- Later transforms can consume variables created by earlier transforms. This is the standard way to build multi-step string pipelines.
+
+```yaml
+# Pipeline: strip prefix, then convert case
+transform:
+  RAW:
+    replace:
+      replace: "^get"
+      by: ""
+      source: $METHOD
+  SNAKE:
+    convert:
+      toCase: snakeCase
+      source: $RAW
+# Input: "getUserName" -> RAW="UserName" -> SNAKE="user_name"
+```
+
+### Conditional Separators from Multi-Capture
+
+- For conditional commas, whitespace, or similar glue text, derive a helper transform such as `MAYBE_COMMA` from a possibly empty multi-capture instead of hard-coding punctuation directly into `fix`.
+
+```yaml
+# Add comma only when there are existing arguments
+rule:
+  pattern: "foo($$$ARGS)"
+transform:
+  MAYBE_COMMA:
+    replace:
+      replace: ".+"
+      by: ", "
+      source: $ARGS
+fix: "bar($MAYBE_COMMA$newArg)"
+```
+
+### String-Form Transforms
+
 - Ast-grep also accepts string-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)`.
 - String-form transforms require ast-grep 0.38.3+. Use object form when version compatibility or debugging clarity matters.
-- For conditional commas, whitespace, or similar glue text, derive a helper transform such as `MAYBE_COMMA` from a possibly empty multi-capture instead of hard-coding punctuation directly into `fix`.
+- String-form syntax: `operator($SOURCE, key1=value1, key2=value2)`.
 
 ## Rewriters
 
 - `rewriters` is an experimental feature and should be treated as advanced YAML, not the default way to structure rewrites.
+- Rewriters allow replacing multiple sub-nodes with different fixes in one rule. The normal `fix` replaces one matched node at a time; `rewriters` plus `transform.rewrite` handle the one-to-many case.
 - A rewriter only accepts:
   - `id`
   - `rule`
@@ -547,12 +665,22 @@ Use the public structural tool first for read-only project checks:
   - `utils`
   - `fix`
 - `id`, `rule`, and `fix` are required.
+- The three-step workflow is:
+  1. Define `rewriters` at the YAML rule root. Each rewriter has an `id`, a `rule` to match sub-nodes, and a `fix` to transform each matched sub-node.
+  2. Apply the rewriter to a metavariable via `transform` using the `rewrite` operator. `rewriters` lists which rewriter ids to try; `source` points at the metavariable whose sub-nodes are rewritten.
+  3. Use the resulting transformed metavariable in the outer `fix`.
+- Concrete example converting Python `dict(a=1, b=2)` to `{‘a’: 1, ‘b’: 2}`:
+  - Define a rewriter that matches `keyword_argument` nodes: extract `$KEY` and `$VAL` from the name and value fields, fix as `’$KEY’: $VAL`.
+  - Apply it to `$$$ARGS` captured from `dict($$$ARGS)` via `transform: { LITERAL: { rewrite: { rewriters: [dict-rewrite], source: $$$ARGS } } }`.
+  - Use `fix: ‘{ $LITERAL }’` on the outer rule to wrap the rewritten arguments in braces.
+- Multiple rewriters can be listed in one `transform.rewrite` call. Each sub-node is transformed by the first matching rewriter in declaration order. If two rewriters could match the same node, only the one that appears earlier in the `rewriters` list is applied. Order matters.
+- `joinBy` controls how transformed sub-nodes are stitched together. By default, sub-nodes are replaced in-place preserving original separators. Set `joinBy` to a string like `’ + ‘` or `’\n’` to override the joiner. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
 - Rewriters are only reachable through `transform.rewrite`.
 - Captured meta variables do not cross rewriter boundaries.
   - one rewriter cannot read another rewriter’s captures
   - the outer rule cannot read captures local to a rewriter
 - Rewriter-local `transform` variables and `utils` stay local the same way.
-- A rewriter can still call other rewriters from the same list inside its own `transform` section.
+- A rewriter can still call other rewriters from the same list inside its own `transform` section, enabling multi-pass rewrite pipelines.
 
 ## Pattern Syntax
 
@@ -649,8 +777,12 @@ Use the public structural tool first for read-only project checks:
 - The injection `rule` should capture the subregion with a meta variable such as `$CONTENT`.
   - styled-components example: `styled.$TAG\`$CONTENT\``
   - GraphQL tagged template example: `graphql\`$CONTENT\``
+  - SQL tagged template example: `sql\`$CONTENT\``
+- The `$CONTENT` meta variable is required in the injection rule. It designates which part of the host match should be re-parsed as the injected language.
+- Use dynamic `injected` candidates when the rule captures `$LANG` and the embedded language varies (e.g., `css` vs `scss` vs `less`).
 - Use `languageGlobs` when a whole file should be parsed through a different or superset language.
 - Use `languageInjections` when only a nested fragment switches language inside the same file.
+- Use `workflow='inspect'` on VT Code's public structural surface to see configured injections, custom languages, and language globs from the project's `sgconfig.yml`.
 - VT Code boundary:
   - public structural query / scan / test can consume existing injection config
   - authoring or debugging `languageInjections` remains skill-driven work
@@ -675,7 +807,9 @@ Use the public structural tool first for read-only project checks:
   - apply sub-rules under a meta-variable
   - generate one fix per sub-node
   - join the results with `joinBy`
-- This is the declarative way to do one-to-many rewrites such as splitting a barrel import into separate import lines.
+- This is the declarative way to do one-to-many rewrites such as splitting a barrel import into separate import lines, converting `dict(a=1, b=2)` to `{'a': 1, 'b': 2}`, or transforming heterogeneous lists where each element type needs a different rewrite rule.
+- `transform.rewrite` has three important behavioral properties: (1) it rewrites descendants of the captured source metavariable, not the source itself; (2) overlapping rewriter matches are prevented so each sub-node is rewritten at most once; (3) higher-level AST matches are preferred before nested ones, and for one node only the first matching rewriter in declaration order is applied.
+- Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
 - In VT Code, keep this on the bundled ast-grep skill path.
   - public structural tool stays read-only
   - rewrite/apply flows still belong to CLI-driven skill work

@@ -23,6 +23,7 @@ pub mod editor;
 pub mod env_lock;
 pub mod error_category;
 pub mod errors;
+pub mod exclusions;
 pub mod formatting;
 pub mod fs;
 pub mod http;
@@ -47,6 +48,7 @@ pub mod unicode;
 pub mod utils;
 pub mod validation;
 pub mod vtcodegitignore;
+pub mod walk;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use editor::{
     EditorPoint, EditorTarget, normalize_editor_hash_fragment, parse_editor_target,

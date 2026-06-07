@@ -10,20 +10,7 @@ use super::{FileEntry, FilePalette};
 impl FilePalette {
     pub(super) fn should_exclude_file(path: &Path) -> bool {
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            let sensitive_patterns = [
-                ".env",
-                ".env.local",
-                ".env.production",
-                ".env.development",
-                ".env.test",
-                ".git",
-                ".DS_Store",
-            ];
-
-            if sensitive_patterns
-                .iter()
-                .any(|s| file_name == *s || file_name.starts_with(".env."))
-            {
+            if vtcode_commons::exclusions::is_sensitive_file(file_name) || file_name == ".git" {
                 return true;
             }
 

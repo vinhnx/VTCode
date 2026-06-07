@@ -90,10 +90,21 @@ impl FileTracker {
 
         task::spawn_blocking(move || {
             let mut files = Vec::new();
+            let glob_pattern = match glob::Pattern::new(&pattern) {
+                Ok(p) => p,
+                Err(_) => return Ok(files),
+            };
 
-            if let Ok(glob_pattern) = glob::glob(&format!("{}/{}", workspace.display(), pattern)) {
-                for path in glob_pattern.flatten() {
-                    files.push(path);
+            let walker = vtcode_commons::walk::build_walker_single_threaded(&workspace).build();
+            for entry in walker.flatten() {
+                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    continue;
+                }
+                let path = entry.path();
+                let relative = path.strip_prefix(&workspace).unwrap_or(path);
+                let relative_str = relative.to_string_lossy();
+                if glob_pattern.matches(&relative_str) {
+                    files.push(path.to_path_buf());
                 }
             }
 

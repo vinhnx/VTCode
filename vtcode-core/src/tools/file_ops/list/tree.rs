@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use serde_json::{Value, json};
 use std::path::Path;
 use tokio::fs;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_default_walker;
 
 pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> Result<Value> {
     let search_path = tool.workspace_root.join(&input.path);
@@ -30,7 +30,10 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
     let mut dir_contents: HashMap<String, Vec<(String, String)>> = HashMap::new(); // path -> [(name, type)]
 
     // Walk the directory structure up to max_depth
-    for entry in WalkDir::new(&search_path).max_depth(10).follow_links(false) {
+    for entry in build_default_walker(&search_path)
+        .max_depth(Some(10))
+        .build()
+    {
         let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
         let path = entry.path();
 
@@ -61,6 +64,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
                         .await
                         .map(|ft| ft.is_dir())
                         .unwrap_or(false);
+
                     entries_list.push((
                         entry_name,
                         if is_dir { "directory" } else { "file" }.to_string(),

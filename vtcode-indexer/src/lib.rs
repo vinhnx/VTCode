@@ -177,18 +177,10 @@ impl TraversalFilter for ConfigTraversalFilter {
 
         // Always skip known sensitive files regardless of config.
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            let is_sensitive = matches!(
-                file_name,
-                ".env"
-                    | ".env.local"
-                    | ".env.production"
-                    | ".env.development"
-                    | ".env.test"
-                    | ".git"
-                    | ".gitignore"
-                    | ".DS_Store"
-            ) || file_name.starts_with(".env.");
-            if is_sensitive {
+            if vtcode_commons::exclusions::is_sensitive_file(file_name)
+                || file_name == ".gitignore"
+                || file_name == ".git"
+            {
                 return false;
             }
         }
@@ -214,12 +206,12 @@ impl SimpleIndexerConfig {
         let vtcode_dir = workspace_root.join(".vtcode");
         let external_dir = vtcode_dir.join("external");
 
-        let mut excluded_dirs = vec![
-            index_dir.clone(),
-            vtcode_dir,
-            workspace_root.join("target"),
-            workspace_root.join("node_modules"),
-        ];
+        let mut excluded_dirs: Vec<PathBuf> = vtcode_commons::exclusions::DEFAULT_EXCLUDED_DIRS
+            .iter()
+            .map(|name| workspace_root.join(name))
+            .collect();
+        excluded_dirs.push(index_dir.clone());
+        excluded_dirs.push(vtcode_dir);
 
         excluded_dirs.dedup();
 

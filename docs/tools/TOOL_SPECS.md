@@ -63,9 +63,9 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Required: `action="structural"`
 - Optional common fields: `workflow` (`"query" | "scan" | "test"`, default `"query"`), `path` (default `"."` for query/scan; public structural takes one root per call even though raw `ast-grep run` accepts multiple paths), `config_path` (default workspace `sgconfig.yml` for scan/test), `filter`, `globs`, `context_lines`, `max_results`
 - `workflow="query"`:
-  - Required: `pattern`
+  - Required: at least one of `pattern` or `kind`
   - Optional: `lang`, `selector`, `strictness`, `debug_query`
-  - Internal mapping: read-only `ast-grep run --pattern ... --json=compact --color=never`, plus optional `--lang`, `--selector`, `--strictness`, repeated `--globs`, and `--context`
+  - Internal mapping: read-only `ast-grep run --pattern ... --json=compact --color=never`, plus optional `--lang`, `--kind`, `--selector`, `--strictness`, repeated `--globs`, and `--context`
   - `lang` accepts ast-grep built-in aliases. VT Code normalizes and infers a local subset it can pre-parse itself, such as Rust, Python, JavaScript, TypeScript, TSX, Go, and Java, while explicit unsupported aliases are still passed through to ast-grep unchanged.
   - `strictness` tunes ast-grep matching for read-only queries. `smart` is the default; common alternatives are `cst`, `ast`, `relaxed`, and `signature`. `template` is passed through for ast-grep compatibility.
   - `context_lines` maps to ast-grep `--context`; raw `--before` and `--after` are intentionally not exposed
@@ -86,7 +86,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - Result shape: `passed`, `stdout`, `stderr`, `summary`, and `backend: "ast-grep"`
 - Constraints:
   - Read-only only; rewrite/apply flags are rejected
-  - `lang`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"`
+  - `lang`, `kind`, `selector`, `strictness`, and `debug_query` are only valid for `workflow="query"`
   - `lang` is required when `debug_query` is set
   - `skip_snapshot_tests` is only valid for `workflow="test"`
   - Default `config_path` is workspace `sgconfig.yml`; raw ast-grep also supports upward discovery of `sgconfig.yml`, but VT Code’s public structural surface pins scan/test to an explicit config path for determinism

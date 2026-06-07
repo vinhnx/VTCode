@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use flate2::read::GzDecoder;
 use tar::Archive;
 use tempfile::TempDir;
+use vtcode_commons::walk::build_walker_single_threaded;
 use zip::ZipArchive;
 
 use super::state::InstallPaths;
@@ -123,10 +124,10 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
 
 fn find_extracted_binary(root: &Path) -> Result<PathBuf> {
     let alias_name = alias_ast_grep_binary_name();
-    walkdir::WalkDir::new(root)
-        .into_iter()
+    build_walker_single_threaded(root)
+        .build()
         .filter_map(std::result::Result::ok)
-        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .find_map(|entry| {
             let name = entry.file_name().to_string_lossy();
             if name == canonical_ast_grep_binary_name()

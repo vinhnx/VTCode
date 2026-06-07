@@ -50,13 +50,7 @@ const DEFAULT_MAX_RESULT_BYTES: usize = 32 * 1024;
 /// Default timeout for blocking grep invocations.
 const DEFAULT_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Default ignore globs to avoid noisy vendor/build directories.
-const DEFAULT_IGNORE_GLOBS: &[&str] = &[
-    "**/.git/**",
-    "**/node_modules/**",
-    "**/target/**",
-    "**/.cursor/**",
-];
+use vtcode_commons::exclusions::DEFAULT_IGNORE_GLOBS;
 
 /// How long to wait after a keystroke before firing the first search when none
 /// is currently running. Keeps early queries more meaningful.

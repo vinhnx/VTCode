@@ -37,7 +37,7 @@ anstyle = { workspace = true }
 anstyle-query = "1.0"
 futures = { workspace = true }
 base64 = { workspace = true }
-glob = "0.3"
+ignore = { workspace = true }
 dirs = { workspace = true }
 once_cell = { workspace = true }
 sha2 = { workspace = true }

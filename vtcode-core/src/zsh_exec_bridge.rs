@@ -88,13 +88,14 @@ mod unix_impl {
             // Restrict socket to owner-only — prevents other users on the same
             // machine from communicating with the bridge (defence in depth;
             // the random UUID path already provides unpredictability).
-            fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o700))
-                .with_context(|| {
+            fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o700)).with_context(
+                || {
                     format!(
                         "set permissions on zsh exec bridge socket at {}",
                         socket_path.display()
                     )
-                })?;
+                },
+            )?;
             listener
                 .set_nonblocking(true)
                 .context("set zsh exec bridge listener to nonblocking")?;

@@ -1,10 +1,11 @@
 use super::FileOpsTool;
 use crate::tools::jaro_winkler_similarity;
 use anyhow::{Result, anyhow};
+use ignore::DirEntry;
 use std::cmp::Ordering;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, WalkDir};
+use vtcode_commons::walk::{build_default_walker, is_excluded_dir};
 
 const MAX_PATH_SUGGESTIONS: usize = 3;
 const MAX_PATH_SUGGESTION_SCAN: usize = 20_000;
@@ -20,7 +21,7 @@ impl PathSuggestionKind {
     fn matches(self, entry: &DirEntry) -> bool {
         match self {
             Self::Any => true,
-            Self::File => entry.file_type().is_file(),
+            Self::File => entry.file_type().is_some_and(|ft| ft.is_file()),
         }
     }
 }
@@ -61,23 +62,6 @@ fn suggestion_score(requested_path: &str, candidate_path: &str) -> f32 {
     }
 
     score.min(1.0)
-}
-
-fn should_index_suggestion_entry(workspace_root: &Path, entry: &DirEntry) -> bool {
-    if entry.depth() == 0 {
-        return true;
-    }
-
-    let Ok(relative) = entry.path().strip_prefix(workspace_root) else {
-        return true;
-    };
-
-    !relative.components().any(|component| {
-        matches!(
-            component.as_os_str().to_str(),
-            Some(".git" | "target" | "node_modules")
-        )
-    })
 }
 
 impl FileOpsTool {
@@ -215,10 +199,9 @@ impl FileOpsTool {
         let mut scored_paths = Vec::with_capacity(MAX_PATH_SUGGESTIONS * 2);
         let mut scanned = 0usize;
 
-        let walker = WalkDir::new(&self.workspace_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|entry| should_index_suggestion_entry(&self.workspace_root, entry));
+        let walker = build_default_walker(&self.workspace_root)
+            .filter_entry(|entry| !is_excluded_dir(entry))
+            .build();
 
         for entry in walker {
             let Ok(entry) = entry else {

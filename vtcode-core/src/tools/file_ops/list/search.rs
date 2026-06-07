@@ -6,7 +6,7 @@ use crate::tools::types::ListInput;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_default_walker;
 
 impl FileOpsTool {
     /// Execute recursive file search
@@ -34,7 +34,10 @@ impl FileOpsTool {
         let mut count = 0;
         let mut matched_total = 0;
 
-        for entry in WalkDir::new(&search_path).max_depth(10) {
+        for entry in build_default_walker(&search_path)
+            .max_depth(Some(10))
+            .build()
+        {
             let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
             let path = entry.path();
 
@@ -68,7 +71,7 @@ impl FileOpsTool {
                 continue;
             }
 
-            let is_dir = entry.file_type().is_dir();
+            let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
             items.push(json!({
                 "name": name,
                 "path": relative_path,
@@ -99,7 +102,10 @@ impl FileOpsTool {
             .ok_or_else(|| anyhow!("Error: Invalid 'list_files' arguments. When mode='find_name', must provide name_pattern (string). Example: {{\"path\": \".\", \"mode\": \"find_name\", \"name_pattern\": \"Cargo.toml\"}}"))?;
         let search_path = self.workspace_root.join(&input.path);
 
-        for entry in WalkDir::new(&search_path).max_depth(10) {
+        for entry in build_default_walker(&search_path)
+            .max_depth(Some(10))
+            .build()
+        {
             let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
             let path = entry.path();
 
@@ -115,7 +121,7 @@ impl FileOpsTool {
             };
 
             if matches {
-                let is_dir = entry.file_type().is_dir();
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
                 return Ok(json!({
                     "success": true,
                     "found": true,

@@ -1,45 +1,37 @@
 use portable_pty::PtySize;
-use vtcode_ghostty_core::Terminal;
+use vt100::Parser;
+use vtcode_config::constants::defaults::DEFAULT_PTY_SCROLLBACK_LINES;
 
 // ---------------------------------------------------------------------------
-// PtyScreenState -- wraps GhosttyCore terminal
+// PtyScreenState -- wraps vt100 terminal parser
 // ---------------------------------------------------------------------------
 
 pub(super) struct PtyScreenState {
-    terminal: Terminal,
+    parser: Parser,
 }
 
 impl PtyScreenState {
     pub(super) fn new(size: PtySize, scrollback_lines: usize) -> Self {
-        let mut terminal = Terminal::new(size.cols as usize, size.rows as usize);
-        terminal.set_max_scrollback(scrollback_lines);
-        Self { terminal }
+        let scrollback = if scrollback_lines == 0 {
+            DEFAULT_PTY_SCROLLBACK_LINES
+        } else {
+            scrollback_lines
+        };
+        let parser = Parser::new(size.rows, size.cols, scrollback);
+        Self { parser }
     }
 
     pub(super) fn process(&mut self, chunk: &[u8]) {
-        self.terminal.write(chunk);
+        self.parser.process(chunk);
     }
 
     pub(super) fn resize(&mut self, size: PtySize) {
-        self.terminal.resize(size.cols as usize, size.rows as usize);
+        self.parser.screen_mut().set_size(size.rows, size.cols);
     }
 
     pub(super) fn prepare_snapshot(&self) -> ScreenSnapshot {
-        let scrollback = {
-            let mut out = String::new();
-            for i in 0..self.terminal.scrollback_len() {
-                if let Some(row) = self.terminal.scrollback_row(i) {
-                    if !out.is_empty() {
-                        out.push('\n');
-                    }
-                    out.push_str(&row);
-                }
-            }
-            out
-        };
         ScreenSnapshot {
-            screen_contents: self.terminal.plain_text(),
-            scrollback,
+            screen_contents: self.parser.screen().contents(),
         }
     }
 }
@@ -50,7 +42,6 @@ impl PtyScreenState {
 
 pub(super) struct ScreenSnapshot {
     pub(super) screen_contents: String,
-    pub(super) scrollback: String,
 }
 
 #[cfg(test)]

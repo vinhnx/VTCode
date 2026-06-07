@@ -85,7 +85,31 @@ fn grammar_for(language: AstGrepLanguage) -> Option<tree_sitter::Language> {
         AstGrepLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
         AstGrepLanguage::Go => tree_sitter_go::LANGUAGE.into(),
         AstGrepLanguage::Java => tree_sitter_java::LANGUAGE.into(),
-        AstGrepLanguage::Markdown => return None,
+        // Languages without bundled local parsers delegate to the ast-grep binary,
+        // which has its own built-in tree-sitter parsers for all supported languages.
+        AstGrepLanguage::Markdown
+        | AstGrepLanguage::C
+        | AstGrepLanguage::Cpp
+        | AstGrepLanguage::Csharp
+        | AstGrepLanguage::Css
+        | AstGrepLanguage::Html
+        | AstGrepLanguage::Json
+        | AstGrepLanguage::Yaml
+        | AstGrepLanguage::Ruby
+        | AstGrepLanguage::Php
+        | AstGrepLanguage::Kotlin
+        | AstGrepLanguage::Swift
+        | AstGrepLanguage::Lua
+        | AstGrepLanguage::Bash
+        | AstGrepLanguage::Sql
+        | AstGrepLanguage::Scala
+        | AstGrepLanguage::Elixir
+        | AstGrepLanguage::Dockerfile
+        | AstGrepLanguage::Toml
+        | AstGrepLanguage::Hcl
+        | AstGrepLanguage::Dart
+        | AstGrepLanguage::Zig
+        | AstGrepLanguage::Protobuf => return None,
     })
 }
 

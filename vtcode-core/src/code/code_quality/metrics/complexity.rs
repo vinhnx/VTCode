@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_walker_single_threaded;
 
 /// Complexity analysis results
 #[derive(Debug, Clone)]
@@ -47,12 +47,12 @@ impl ComplexityAnalyzer {
         let mut results = Vec::new();
 
         // Walk the directory to analyze all source files
-        for entry in WalkDir::new(dir_path)
+        for entry in build_walker_single_threaded(dir_path)
             .follow_links(true)
-            .into_iter()
+            .build()
             .filter_map(|e| e.ok())
         {
-            if entry.file_type().is_file()
+            if entry.file_type().is_some_and(|ft| ft.is_file())
                 && let Some(ext) = entry.path().extension()
             {
                 // Check if this is a source code file

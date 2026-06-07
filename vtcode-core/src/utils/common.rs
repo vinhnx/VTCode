@@ -129,9 +129,9 @@ fn collect_workspace_language_counts(root: &Path) -> BTreeMap<String, usize> {
     let mut counts = BTreeMap::new();
     let mut total = 0usize;
 
-    for entry in walkdir::WalkDir::new(root)
-        .max_depth(4)
-        .into_iter()
+    for entry in vtcode_commons::walk::build_walker_single_threaded(root)
+        .max_depth(Some(4))
+        .build()
         .filter_map(|entry| entry.ok())
     {
         let path = entry.path();

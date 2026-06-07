@@ -14,6 +14,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Prefer `unified_search` with `action="structural"` and `workflow="scan"` for read-only project scans.
 - Prefer `unified_search` with `action="structural"` and `workflow="test"` for read-only ast-grep rule tests.
 - Prefer structural `debug_query` on the public tool surface before falling back to raw `ast-grep run --debug-query`.
+- Use `kind` on the public structural surface to match nodes by tree-sitter node kind (e.g. `function_item`, `call_expression`). `kind` supports ESQuery-style compound selectors like `A > B`, `A + B`, `A ~ B`, `A, B`, and pseudo-selectors like `:has()`, `:not()`, `:is()`, `:nth-child()`. `kind` can be used alone or combined with `pattern`.
 - Stay on the public structural surface first when the task is only running project checks and reporting findings.
 - Use `unified_exec` only when the public structural surface cannot express the requested ast-grep flow.
 
@@ -233,6 +234,7 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - A rule object still needs a positive anchor. In practice, start with `pattern` or `kind`; `regex` is a filter, not a sufficient root rule by itself.
 - Atomic rules are `pattern`, `kind`, `regex`, `nthChild`, and `range`.
 - Use atomic fields such as `pattern`, `kind`, `regex`, `nthChild`, and `range` for direct node checks.
+- In VT Code's public structural surface, `kind` is available as a first-class field alongside `pattern`. Use `kind` alone to match by node type without a pattern, or combine both to filter pattern matches by node kind.
 - Use relational fields such as `inside`, `has`, `follows`, and `precedes` when the match depends on surrounding nodes.
 - Use composite fields such as `all`, `any`, `not`, and `matches` to combine sub-rules or reuse utility rules.
 - `kind` values support ESQuery-style pseudo-selectors (`:has()`, `:not()`, `:is()`, `:nth-child()`) for matching nodes by descendant structure, exclusion, alternatives, or sibling position without writing separate relational rules.
@@ -305,25 +307,170 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - `transform` builds new strings from captured meta variables before `fix` runs.
 - Each `transform` entry introduces a new variable name without a leading `$`. Inside the transform object, `source` still points at an existing capture or prior transform result using the normal `$VAR` form.
 - Later transforms can consume variables created by earlier transforms, so transform order matters when you are stacking multiple string operations.
+- Transforms are evaluated in declaration order. A transform that references a variable created by an earlier transform in the same `transform` block will see the already-transformed value.
+- Transforms only run after the rule matches. If the rule does not match, no transforms execute and no `fix` is applied.
+
+### replace
+
 - `replace` uses a Rust regex over one meta variable. `source` must be `$VAR` style, `replace` is the regex, `by` is the replacement text, and regex capture groups can be reused in `by`.
 - Regex capture groups are only available inside the `replace` field of the `replace` transform and can only be referenced from the `by` field of that same transform. Regular `regex` rules do not expose those capture groups.
+- Rust regex syntax applies: no look-around, no backreferences in the traditional PCRE sense, but capture groups `()` work and are referenced as `$1`, `$2`, etc. in `by`.
+
+```yaml
+# Strip leading underscore from a variable name
+transform:
+  CLEAN_NAME:
+    replace:
+      replace: "^_"
+      by: ""
+      source: $VAR
+
+# Extract domain from email using capture group
+transform:
+  DOMAIN:
+    replace:
+      replace: "^[^@]+@(.+)$"
+      by: "$1"
+      source: $EMAIL
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  CLEAN_NAME: replace($VAR, replace="^_", by="")
+```
+
+### substring
+
 - `substring` slices a meta variable by character index with inclusive `startChar` and exclusive `endChar`. Negative indexes count from the end, and slicing is based on Unicode characters rather than raw bytes.
 - `substring` behaves like Python string slicing, so omit either bound when the slice should stay open-ended.
+
+```yaml
+# Remove first and last character (e.g., strip quotes)
+transform:
+  UNQUOTED:
+    substring:
+      startChar: 1
+      endChar: -1
+      source: $STR
+
+# Get first 3 characters
+transform:
+  PREFIX:
+    substring:
+      endChar: 3
+      source: $ID
+
+# Remove first character only
+transform:
+  NO_PREFIX:
+    substring:
+      startChar: 1
+      source: $NAME
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  UNQUOTED: substring($STR, startChar=1, endChar=-1)
+```
+
+### convert
+
 - `convert` changes identifier-style casing through `toCase`. Common outputs are `lowerCase`, `upperCase`, `capitalize`, `camelCase`, `snakeCase`, `kebabCase`, and `pascalCase`.
 - Use `separatedBy` to control how `convert` splits words before rebuilding the target case. Supported separators include dash, dot, space, slash, underscore, and `CaseChange`.
 - `CaseChange` splits at transitions such as `astGrep`, `ASTGrep`, or `XMLHttpRequest`, which matters when converting mixed acronym identifiers.
+- When `separatedBy` is omitted, all known separators are used. This is usually the right default.
+
+```yaml
+# Convert camelCase to snake_case
+transform:
+  SNAKE_NAME:
+    convert:
+      toCase: snakeCase
+      source: $CAMEL
+
+# Convert only by underscore, preserving camelCase within segments
+transform:
+  KEBAB_FROM_UNDERSCORE:
+    convert:
+      toCase: kebabCase
+      separatedBy: [underscore]
+      source: $UNDERSCORE_NAME
+
+# Convert PascalCase to camelCase (using CaseChange separator)
+transform:
+  CAMEL:
+    convert:
+      toCase: camelCase
+      separatedBy: [CaseChange]
+      source: $PASCAL
+
+# String-form (ast-grep 0.38.3+)
+transform:
+  SNAKE_NAME: convert($CAMEL, toCase=snakeCase)
+```
+
+### Chaining Transforms
+
+- Later transforms can consume variables created by earlier transforms. This is the standard way to build multi-step string pipelines.
+- Transform order is the declaration order in the YAML `transform` map.
+
+```yaml
+# Pipeline: strip prefix, then convert case
+transform:
+  RAW_NAME:
+    replace:
+      replace: "^get"
+      by: ""
+      source: $METHOD_NAME
+  SNAKE:
+    convert:
+      toCase: snakeCase
+      source: $RAW_NAME
+# Input: "getUserName" -> RAW_NAME="UserName" -> SNAKE="user_name"
+```
+
+### Conditional Separators from Multi-Capture
+
 - Use `replace` transforms for conditional punctuation or whitespace when a multi-capture may be empty. The common pattern is deriving `MAYBE_COMMA` or similar from `$$$ARGS` so the extra separator only appears when matches exist.
-- String-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)` are valid shorthand in newer ast-grep versions, but keep examples explicit when debugging.
-- String-form transforms require ast-grep 0.38.3 or newer. Prefer object form when compatibility or debugging clarity matters.
+
+```yaml
+# Add comma only when there are arguments
+rule:
+  pattern: "foo($$$ARGS)"
+transform:
+  MAYBE_COMMA:
+    replace:
+      replace: ".+"
+      by: ", "
+      source: $ARGS
+fix: "bar($MAYBE_COMMA$newArg)"
+# If $$$ARGS matched "a, b" -> MAYBE_COMMA=", " -> "bar(, newArg)"
+# If $$$ARGS matched nothing -> MAYBE_COMMA="" -> "bar(newArg)"
+```
+
+### String-Form Transforms
+
+- String-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)` are valid shorthand in ast-grep 0.38.3+.
+- Prefer object form when compatibility or debugging clarity matters.
+- String-form syntax: `operator($SOURCE, key1=value1, key2=value2)`.
+- Array values use `[item1, item2]` syntax inside the string form.
 
 ## Rewriters
 
 - `rewriters` is an experimental feature for advanced multi-node rewrites. Prefer ast-grep’s API instead when the YAML starts carrying too much control flow or state.
-- A rewriter is a smaller rule object with only `id`, `rule`, `constraints`, `transform`, `utils`, and `fix`. `id`, `rule`, and `fix` are required.
-- Rewriters are only usable through the `rewrite` transformation. They are not standalone scan/report rules.
-- Meta variables captured inside one rewriter do not leak to sibling rewriters or the outer rule.
-- Rewriter-local `transform` variables and `utils` are also scoped to that one rewriter.
-- A rewriter transform can call other rewriters from the same `rewriters` list when the rewrite pipeline needs multiple internal passes.
+- Rewriters allow replacing multiple sub-nodes with different fixes in one rule. The normal `fix` replaces one matched node at a time; `rewriters` plus `transform.rewrite` handle the one-to-many case.
+- The three-step workflow is:
+  1. Define `rewriters` at the YAML rule root. Each rewriter needs `id`, `rule`, and `fix`. Optional fields are `constraints`, `transform`, and `utils`.
+  2. Apply the rewriter to a metavariable via `transform` using the `rewrite` operator. `rewriters` lists which rewriter ids to try; `source` points at the metavariable whose sub-nodes are rewritten.
+  3. Use the resulting transformed metavariable in the outer `fix`.
+- Concrete example converting Python `dict(a=1, b=2)` to `{‘a’: 1, ‘b’: 2}`:
+  - Define a rewriter that matches `keyword_argument` nodes and rewrites `$KEY=$VAL` to `’$KEY’: $VAL`.
+  - Apply it to `$$$ARGS` captured from `dict($$$ARGS)` via `transform: { LITERAL: { rewrite: { rewriters: [dict-rewrite], source: $$$ARGS } } }`.
+  - Use `fix: ‘{ $LITERAL }’` on the outer rule to wrap the rewritten arguments in braces.
+- Multiple rewriters can be listed in one `transform.rewrite` call. Each sub-node is transformed by the first matching rewriter in declaration order. If two rewriters could match the same node, only the one that appears earlier in the `rewriters` list is applied. Order matters.
+- `joinBy` controls how transformed sub-nodes are stitched together. By default, sub-nodes are replaced in-place preserving original separators. Set `joinBy` to a string like `’ + ‘` or `’\n’` to override the joiner.
+- A rewriter can call other rewriters from the same `rewriters` list inside its own `transform` section, enabling multi-pass rewrite pipelines.
+- Meta variables captured inside one rewriter do not leak to sibling rewriters or the outer rule. Rewriter-local `transform` variables and `utils` are also scoped to that one rewriter.
+- String-form shorthand `rewrite(rewriters, source, joinBy?)` is valid in newer ast-grep versions, but prefer object form when compatibility or debugging clarity matters.
+- Keep rewriter authoring on the CLI skill path. VT Code’s public structural surface stays read-only and does not expose rewrite/apply behavior.
 
 ## Pattern Syntax
 
@@ -386,10 +533,47 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - ast-grep can search embedded languages inside a host document. Built-in injection already covers HTML with CSS in `<style>` and JavaScript in `<script>`.
 - Use `languageInjections` in `sgconfig.yml` when the embedded language is project-specific, such as CSS inside styled-components or GraphQL inside tagged template literals.
 - A `languageInjections` entry needs `hostLanguage`, a `rule`, and `injected`. The `rule` should capture the embedded subregion with a meta variable such as `$CONTENT`.
+- The `$CONTENT` meta variable in the injection rule designates which portion of the host match should be parsed as the injected language. Without it, ast-grep cannot identify the embedded region.
 - Typical patterns are `styled.$TAG\`$CONTENT\`` for CSS-in-JS and `graphql\`$CONTENT\`` for GraphQL template literals.
 - ast-grep parses the extracted subregion with the injected language, not the parent document language. That is why CSS patterns can match inside JavaScript once injection is configured.
 - Use `languageGlobs` when the whole file should be parsed as a different or superset language. Use `languageInjections` when only a nested region inside the file changes language.
+- In VT Code, use `workflow='inspect'` on the public structural surface to see configured `languageInjections`, `customLanguages`, and `languageGlobs` from the project's `sgconfig.yml`.
 - In VT Code, read-only structural query / scan / test can consume existing injection config. Designing or debugging `languageInjections` itself stays on the bundled ast-grep skill path.
+
+### Injection Config Examples
+
+```yaml
+# CSS-in-JS (styled-components)
+languageInjections:
+- hostLanguage: js
+  rule:
+    pattern: styled.$TAG`$CONTENT`
+  injected: css
+
+# GraphQL tagged template literals
+- hostLanguage: js
+  rule:
+    pattern: graphql`$CONTENT`
+  injected: graphql
+
+# SQL tagged template literals
+- hostLanguage: js
+  rule:
+    pattern: sql`$CONTENT`
+  injected: sql
+```
+
+### Dynamic Injected Language
+
+- Use dynamic `injected` candidates when the rule captures `$LANG` and the embedded language must be chosen from a list such as `css`, `scss`, or `less`.
+- This is useful for framework-specific template directives where the language tag is part of the matched syntax.
+
+### Injection vs. languageGlobs vs. customLanguages
+
+- `languageGlobs` remaps entire files to a different parser. Use it when the file extension does not match ast-grep's built-in mapping (e.g., parsing `.ts` files as TSX).
+- `languageInjections` extracts a sub-region of a file and parses it as a different language. Use it for embedded languages like CSS in JS or SQL in template literals.
+- `customLanguages` registers a new tree-sitter parser for a language ast-grep does not ship. Use it when the target language has a tree-sitter grammar but is not built in.
+- All three are configured in `sgconfig.yml` and consumed automatically by `ast-grep scan` and VT Code's structural workflows.
 
 ## FAQ Highlights
 
@@ -407,7 +591,9 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - The simple workflow rewrites one matched node at a time. When one node must expand into multiple outputs, use `rewriters` plus `transform.rewrite` instead of forcing everything into one inline `fix`.
 - `transform.rewrite` lets you run sub-rules over a matched meta-variable, generate one fix per sub-node, and join the results with `joinBy`.
 - `transform.rewrite` is still experimental. It rewrites descendants of the captured source, prevents overlapping rewriter matches, prefers higher-level AST matches first, and for one node only applies the first matching rewriter in the declared order.
-- This is the right model for list-style rewrites such as exploding a barrel import into multiple single imports, and it is the canonical example for rewriter usage.
+- This is the right model for list-style rewrites such as exploding a barrel import into multiple single imports, converting `dict(a=1, b=2)` to `{‘a’: 1, ‘b’: 2}`, or transforming heterogeneous lists where each element type needs a different rewrite rule.
+- `transform.rewrite` has three important behavioral properties: (1) it rewrites descendants of the captured source metavariable, not the source itself; (2) overlapping rewriter matches are prevented so each sub-node is rewritten at most once; (3) higher-level AST matches are preferred before nested ones, and for one node only the first matching rewriter in declaration order is applied.
+- Use `joinBy` when the rewritten sub-nodes must be stitched with a different separator than the original source text. For example, `joinBy: "\n"` converts comma-separated imports into newline-separated direct imports.
 - Keep this declarative workflow on the ast-grep skill path. VT Code’s public structural surface stays read-only and does not expose rewrite/apply behavior.
 
 ## Rewrite Essentials

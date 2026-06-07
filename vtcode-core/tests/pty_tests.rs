@@ -177,7 +177,7 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
     assert_eq!(updated.cols, 120);
 
     let snapshot = manager.snapshot_session(&session_id)?;
-    // With GhosttyCoreBackend, scrollback only contains lines that scrolled off
+    // With vt100 backend, scrollback only contains lines that scrolled off
     // the visible screen. In a 3-row terminal with 2-3 lines of output, nothing
     // scrolls, so we verify via screen_contents instead.
     let screen = snapshot.screen_contents.as_deref().unwrap_or("");

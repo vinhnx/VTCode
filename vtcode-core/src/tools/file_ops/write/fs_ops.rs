@@ -243,14 +243,17 @@ impl FileOpsTool {
                     path
                 ));
             }
-            // Simple recursive copy using walkdir
-            use walkdir::WalkDir;
-            for entry in WalkDir::new(&from_path).into_iter().filter_map(|e| e.ok()) {
+            // Simple recursive copy
+            use vtcode_commons::walk::build_walker_single_threaded;
+            for entry in build_walker_single_threaded(&from_path)
+                .build()
+                .filter_map(|e| e.ok())
+            {
                 let entry_path = entry.path();
                 let relative = entry_path.strip_prefix(&from_path).unwrap_or(entry_path);
                 let target = to_path.join(relative);
 
-                if entry.file_type().is_dir() {
+                if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                     ensure_dir_exists(&target).await?;
                 } else {
                     with_file_context(

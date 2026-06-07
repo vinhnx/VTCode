@@ -2,10 +2,10 @@
 
 use anyhow::{Context, Result};
 use std::path::Path;
+use vtcode_commons::walk::build_walker_single_threaded;
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::file_utils::ensure_dir_exists;
 use vtcode_core::{ProjectData, SimpleProjectManager};
-use walkdir::WalkDir;
 
 /// Handle the init-project command
 pub async fn handle_init_project_command(
@@ -173,11 +173,14 @@ async fn migrate_existing_files(
         }
 
         if path.is_dir() {
-            for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
+            for entry in build_walker_single_threaded(&path)
+                .build()
+                .filter_map(|e| e.ok())
+            {
                 let file_path = entry.path();
                 let relative = file_path.strip_prefix(&path).unwrap_or(file_path);
                 let dest_path = destination.join(relative);
-                if entry.file_type().is_dir() {
+                if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                     ensure_dir_exists(&dest_path).await?;
                 } else {
                     if let Some(parent) = dest_path.parent() {

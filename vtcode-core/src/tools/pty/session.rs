@@ -298,11 +298,7 @@ impl PtySessionHandle {
         };
 
         metadata.screen_contents = Some(snapshot.screen_contents);
-        if !snapshot.scrollback.is_empty() {
-            metadata.scrollback = Some(snapshot.scrollback);
-        } else {
-            metadata.scrollback = None;
-        }
+        metadata.scrollback = None;
 
         metadata
     }

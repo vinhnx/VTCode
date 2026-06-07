@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_walker_single_threaded;
 
 /// Coverage analysis results
 #[derive(Debug, Clone)]
@@ -63,12 +63,12 @@ impl CoverageAnalyzer {
         let mut _total_files = 0;
         let mut _test_files = 0;
 
-        for entry in WalkDir::new(project_path)
+        for entry in build_walker_single_threaded(project_path)
             .follow_links(true)
-            .into_iter()
+            .build()
             .filter_map(|e| e.ok())
         {
-            if entry.file_type().is_file() {
+            if entry.file_type().is_some_and(|ft| ft.is_file()) {
                 if let Some(ext) = entry.path().extension() {
                     let source_extensions = ["rs", "js", "ts", "py", "java", "cpp", "c", "go"];
                     if source_extensions.contains(&ext.to_str().unwrap_or("")) {
@@ -113,12 +113,12 @@ impl CoverageAnalyzer {
             && let Some(parent) = source_path.parent()
         {
             // Look for test files in the same directory
-            for entry in WalkDir::new(parent)
-                .max_depth(1)
-                .into_iter()
+            for entry in build_walker_single_threaded(parent)
+                .max_depth(Some(1))
+                .build()
                 .filter_map(|e| e.ok())
             {
-                if entry.file_type().is_file()
+                if entry.file_type().is_some_and(|ft| ft.is_file())
                     && let Some(test_file_name) = entry.path().file_name().and_then(|n| n.to_str())
                     && (test_file_name.contains("test") || test_file_name.contains("spec"))
                     && test_file_name.contains(file_name.split('.').next().unwrap_or(""))

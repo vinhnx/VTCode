@@ -1,7 +1,10 @@
 //! .vtcodegitignore file pattern matching utilities
+//!
+//! Uses the `ignore` crate's gitignore parser for correct, battle-tested
+//! pattern matching instead of hand-rolled glob conversion.
 
 use anyhow::{Result, anyhow};
-use glob::Pattern;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
@@ -11,21 +14,10 @@ use tokio::fs;
 pub struct VTCodeGitignore {
     /// Root directory where .vtcodegitignore was found
     root_dir: PathBuf,
-    /// Compiled glob patterns for matching
-    patterns: Vec<CompiledPattern>,
+    /// Compiled gitignore matcher
+    matcher: Gitignore,
     /// Whether the .vtcodegitignore file exists and was loaded
     loaded: bool,
-}
-
-/// A compiled pattern with its original string and compiled glob
-#[derive(Debug, Clone)]
-struct CompiledPattern {
-    /// Original pattern string from the file
-    original: String,
-    /// Compiled glob pattern
-    pattern: Pattern,
-    /// Whether this is a negation pattern (starts with !)
-    negated: bool,
 }
 
 impl VTCodeGitignore {
@@ -41,13 +33,12 @@ impl VTCodeGitignore {
     pub async fn from_directory(root_dir: &Path) -> Result<Self> {
         let gitignore_path = root_dir.join(".vtcodegitignore");
 
-        let mut patterns = Vec::new();
         let mut loaded = false;
+        let mut builder = GitignoreBuilder::new(root_dir);
 
         if gitignore_path.exists() {
-            match Self::load_patterns(&gitignore_path).await {
-                Ok(loaded_patterns) => {
-                    patterns = loaded_patterns;
+            match Self::load_patterns(&gitignore_path, &mut builder).await {
+                Ok(()) => {
                     loaded = true;
                 }
                 Err(e) => {
@@ -57,20 +48,25 @@ impl VTCodeGitignore {
             }
         }
 
+        let matcher = builder.build().unwrap_or_else(|_| {
+            // Fallback to empty matcher on build error
+            GitignoreBuilder::new(root_dir)
+                .build()
+                .expect("empty gitignore builder should always succeed")
+        });
+
         Ok(Self {
             root_dir: root_dir.to_path_buf(),
-            patterns,
+            matcher,
             loaded,
         })
     }
 
-    /// Load patterns from the .vtcodegitignore file
-    async fn load_patterns(file_path: &Path) -> Result<Vec<CompiledPattern>> {
+    /// Load patterns from the .vtcodegitignore file into the builder
+    async fn load_patterns(file_path: &Path, builder: &mut GitignoreBuilder) -> Result<()> {
         let content = fs::read_to_string(file_path)
             .await
             .map_err(|e| anyhow!("Failed to read .vtcodegitignore: {}", e))?;
-
-        let mut patterns = Vec::new();
 
         for (line_num, line) in content.lines().enumerate() {
             let line = line.trim();
@@ -80,93 +76,34 @@ impl VTCodeGitignore {
                 continue;
             }
 
-            // Parse the pattern
-            let (pattern_str, negated) = if let Some(stripped) = line.strip_prefix('!') {
-                (stripped.to_string(), true)
-            } else {
-                (line.to_string(), false)
-            };
-
-            // Convert gitignore patterns to glob patterns
-            let glob_pattern = Self::convert_gitignore_to_glob(&pattern_str);
-
-            match Pattern::new(&glob_pattern) {
-                Ok(pattern) => {
-                    patterns.push(CompiledPattern {
-                        original: pattern_str,
-                        pattern,
-                        negated,
-                    });
-                }
-                Err(e) => {
-                    return Err(anyhow!(
-                        "Invalid pattern on line {}: '{}': {}",
-                        line_num + 1,
-                        pattern_str,
-                        e
-                    ));
-                }
-            }
+            builder.add_line(None, line).map_err(|e| {
+                anyhow!(
+                    "Invalid pattern on line {}: '{}': {}",
+                    line_num + 1,
+                    line,
+                    e
+                )
+            })?;
         }
 
-        Ok(patterns)
-    }
-
-    /// Convert gitignore pattern syntax to glob pattern syntax
-    fn convert_gitignore_to_glob(pattern: &str) -> String {
-        let mut result = pattern.to_string();
-
-        // Handle directory-only patterns (ending with /)
-        if result.ends_with('/') {
-            result = format!("{}/**", result.trim_end_matches('/'));
-        }
-
-        // Handle patterns that don't start with / or **/
-        if !result.starts_with('/') && !result.starts_with("**/") && !result.contains('/') {
-            // Simple filename pattern - make it match anywhere
-            result = format!("**/{}", result);
-        }
-
-        result
+        Ok(())
     }
 
     /// Check if a file path should be excluded based on the .vtcodegitignore patterns
     pub fn should_exclude(&self, file_path: &Path) -> bool {
-        if !self.loaded || self.patterns.is_empty() {
+        if !self.loaded {
             return false;
         }
 
         // Convert to relative path from the root directory
         let relative_path = match file_path.strip_prefix(&self.root_dir) {
             Ok(rel) => rel,
-            Err(_) => {
-                // If we can't make it relative, use the full path
-                file_path
-            }
+            Err(_) => file_path,
         };
 
-        let path_str = relative_path.to_string_lossy();
-
-        // Default to not excluded
-        let mut excluded = false;
-
-        for pattern in &self.patterns {
-            if pattern.pattern.matches(&path_str) {
-                if pattern.original.ends_with('/') && file_path.is_file() {
-                    // Directory-only rules should not exclude individual files.
-                    continue;
-                }
-                if pattern.negated {
-                    // Negation pattern - include this file
-                    excluded = false;
-                } else {
-                    // Normal pattern - exclude this file
-                    excluded = true;
-                }
-            }
-        }
-
-        excluded
+        self.matcher
+            .matched_path_or_any_parents(relative_path, file_path.is_dir())
+            .is_ignore()
     }
 
     /// Filter a list of file paths based on .vtcodegitignore patterns
@@ -188,7 +125,7 @@ impl VTCodeGitignore {
 
     /// Get the number of patterns loaded
     pub fn pattern_count(&self) -> usize {
-        self.patterns.len()
+        self.matcher.num_ignores() as usize
     }
 
     /// Get the root directory
@@ -199,9 +136,13 @@ impl VTCodeGitignore {
 
 impl Default for VTCodeGitignore {
     fn default() -> Self {
+        let root_dir = PathBuf::new();
+        let matcher = GitignoreBuilder::new(&root_dir)
+            .build()
+            .expect("empty gitignore builder should always succeed");
         Self {
-            root_dir: PathBuf::new(),
-            patterns: Vec::new(),
+            root_dir,
+            matcher,
             loaded: false,
         }
     }

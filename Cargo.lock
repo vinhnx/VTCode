@@ -1095,7 +1095,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6904,6 +6904,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
+name = "vt100"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "054ff75fb8fa83e609e685106df4faeffdf3a735d3c74ebce97ec557d5d36fd9"
+dependencies = [
+ "itoa",
+ "unicode-width",
+ "vte",
+]
+
+[[package]]
 name = "vtcode"
 version = "0.123.5"
 dependencies = [
@@ -6963,7 +6974,6 @@ dependencies = [
  "vtcode-process-hardening",
  "vtcode-terminal-detection",
  "vtcode-tui",
- "walkdir",
  "webbrowser",
 ]
 
@@ -7060,8 +7070,8 @@ dependencies = [
  "compact_str",
  "dirs",
  "futures",
- "glob",
  "hashbrown 0.17.1",
+ "ignore",
  "left-right",
  "memchr",
  "once_cell",
@@ -7210,6 +7220,7 @@ dependencies = [
  "unicode-width",
  "url",
  "uuid",
+ "vt100",
  "vtcode-auth",
  "vtcode-bash-runner",
  "vtcode-collaboration-tool-specs",
@@ -7218,7 +7229,6 @@ dependencies = [
  "vtcode-design",
  "vtcode-exec-events",
  "vtcode-file-search",
- "vtcode-ghostty-core",
  "vtcode-indexer",
  "vtcode-macros",
  "vtcode-markdown-store",
@@ -7226,7 +7236,6 @@ dependencies = [
  "vtcode-theme",
  "vtcode-tui",
  "vtcode-utility-tool-specs",
- "walkdir",
  "webbrowser",
  "which",
  "wiremock",
@@ -7458,6 +7467,16 @@ version = "0.123.5"
 dependencies = [
  "criterion",
  "crossterm",
+]
+
+[[package]]
+name = "vte"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5924018406ce0063cd67f8e008104968b74b563ee1b85dde3ed1f7cb87d3dbd"
+dependencies = [
+ "arrayvec",
+ "memchr",
 ]
 
 [[package]]
@@ -7808,7 +7827,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ use crate::utils::file_utils::canonicalize_with_context;
 use anyhow::{Context, Result, anyhow};
 use glob::{Pattern, glob};
 use tracing::warn;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_walker_single_threaded;
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
 const AGENTS_OVERRIDE_FILENAME: &str = "AGENTS.override.md";
@@ -727,7 +727,7 @@ async fn discover_rule_sources(
     match_context: &MatchContext,
     excludes: &ExclusionMatcher,
 ) -> Result<(Vec<InstructionSource>, Vec<InstructionSource>)> {
-    // WalkDir performs blocking filesystem I/O (readdir, stat, canonicalize).
+    // Directory walking performs blocking filesystem I/O (readdir, stat, canonicalize).
     // Offload the traversal to the blocking thread pool so the async runtime
     // stays responsive while we discover rule files on disk.
     let discovered = {
@@ -741,13 +741,13 @@ async fn discover_rule_sources(
                     continue;
                 }
 
-                for entry in WalkDir::new(root)
+                for entry in build_walker_single_threaded(root)
                     .follow_links(true)
-                    .sort_by_file_name()
-                    .into_iter()
+                    .sort_by_file_name(|a, b| a.cmp(b))
+                    .build()
                     .filter_map(std::result::Result::ok)
                 {
-                    if !entry.file_type().is_file() {
+                    if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                         continue;
                     }
 

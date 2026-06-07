@@ -136,7 +136,7 @@ pub async fn fetch_llamacpp_models(base_url: Option<String>) -> Result<Vec<Strin
         Some(env_vars::LLAMACPP_BASE_URL),
     );
     let models_url = format!("{}/models", resolved_base_url.trim_end_matches('/'));
-    let client = http_client::create_client_with_timeout(std::time::Duration::from_secs(5));
+    let client = http_client::create_client_with_timeout(Duration::from_secs(5));
     let response = client
         .get(&models_url)
         .header("Content-Type", "application/json")

@@ -27,7 +27,7 @@ impl OpenAIProvider {
     pub(crate) async fn stream_normalized_request(
         &self,
         mut request: provider::LLMRequest,
-    ) -> Result<provider::LLMNormalizedStream, provider::LLMError> {
+    ) -> Result<LLMNormalizedStream, provider::LLMError> {
         crate::llm::providers::common::ensure_model(&mut request, &self.model);
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;

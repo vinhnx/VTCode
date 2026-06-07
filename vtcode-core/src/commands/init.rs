@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use walkdir::{DirEntry, WalkDir};
+use vtcode_commons::walk::{build_default_walker, is_excluded_dir};
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
 const MAX_SCAN_DEPTH: usize = 4;
@@ -500,12 +500,12 @@ fn analyze_project(workspace: &Path) -> Result<ProjectAnalysis> {
 
 fn collect_workspace_files(workspace: &Path) -> Result<Vec<String>> {
     let mut files = BTreeSet::new();
-    for entry in WalkDir::new(workspace)
-        .max_depth(MAX_SCAN_DEPTH)
-        .into_iter()
-        .filter_entry(|entry| !should_skip_entry(entry, workspace))
+    for entry in build_default_walker(workspace)
+        .max_depth(Some(MAX_SCAN_DEPTH))
+        .filter_entry(|entry| !is_excluded_dir(entry))
+        .build()
         .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
     {
         let relative = entry
             .path()
@@ -514,27 +514,6 @@ fn collect_workspace_files(workspace: &Path) -> Result<Vec<String>> {
         files.insert(relative.to_string_lossy().replace('\\', "/"));
     }
     Ok(files.into_iter().collect())
-}
-
-fn should_skip_entry(entry: &DirEntry, workspace: &Path) -> bool {
-    if entry.path() == workspace {
-        return false;
-    }
-
-    if !entry.file_type().is_dir() {
-        return false;
-    }
-
-    entry
-        .file_name()
-        .to_str()
-        .map(|name| {
-            matches!(
-                name,
-                ".git" | "node_modules" | "target" | "dist" | ".next" | "vendor"
-            )
-        })
-        .unwrap_or(false)
 }
 
 fn analyze_file(analysis: &mut ProjectAnalysis, path: &str) {

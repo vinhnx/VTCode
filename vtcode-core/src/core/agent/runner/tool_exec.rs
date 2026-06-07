@@ -350,7 +350,7 @@ impl AgentRunner {
 
     async fn try_execute_fallback(
         &self,
-        fallback: &crate::core::agent::harness_kernel::FallbackRecommendation,
+        fallback: &FallbackRecommendation,
         runtime: &mut AgentRuntime,
         agent_prefix: &str,
         name: &str,

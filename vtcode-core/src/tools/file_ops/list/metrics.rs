@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 use std::path::Path;
-use walkdir::WalkDir;
+use vtcode_commons::walk::build_walker_single_threaded;
 
 impl FileOpsTool {
     pub(crate) async fn execute_largest_files(&self, input: &ListInput) -> Result<Value> {
@@ -50,7 +50,7 @@ impl FileOpsTool {
 
         let raw_entries = tokio::task::spawn_blocking(move || {
             let mut entries = Vec::new();
-            for entry in WalkDir::new(&search_root_clone).into_iter() {
+            for entry in build_walker_single_threaded(&search_root_clone).build() {
                 let entry = match entry {
                     Ok(e) => e,
                     Err(e) => {

@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
+use tokio::fs as afs;
 use tokio::process::Command;
 
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
@@ -20,11 +21,10 @@ const MAX_ALLOWED_GLOBS: usize = 64;
 const MAX_ALLOWED_CONTEXT_LINES: usize = 20;
 const MAX_AUXILIARY_OUTPUT_CHARS: usize = 64_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; pseudo-selectors `:has()`, `:not()`, `:is()`, and `:nth-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position.";
-const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; pseudo-selectors `:has()`, `:not()`, `:is()`, and `:nth-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, or `FixConfig` with `expandStart`/`expandEnd`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
+const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `workflow='inspect'` to see the project's current `languageInjections`, `customLanguages`, and `languageGlobs` configuration.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
-    "rewrite",
     "interactive",
     "update_all",
     "stdin",
@@ -74,6 +74,8 @@ enum StructuralWorkflow {
     Query,
     Scan,
     Test,
+    Inspect,
+    Rewrite,
 }
 
 impl StructuralWorkflow {
@@ -82,6 +84,8 @@ impl StructuralWorkflow {
             Self::Query => "query",
             Self::Scan => "scan",
             Self::Test => "test",
+            Self::Inspect => "inspect",
+            Self::Rewrite => "rewrite",
         }
     }
 }
@@ -153,6 +157,8 @@ struct StructuralSearchRequest {
     #[serde(default)]
     pattern: Option<String>,
     #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
     path: Option<String>,
     #[serde(default)]
     config_path: Option<String>,
@@ -174,6 +180,8 @@ struct StructuralSearchRequest {
     max_results: Option<usize>,
     #[serde(default)]
     skip_snapshot_tests: Option<bool>,
+    #[serde(default)]
+    rewrite: Option<String>,
 }
 
 impl StructuralSearchRequest {
@@ -188,7 +196,9 @@ impl StructuralSearchRequest {
     }
 
     fn normalize(&mut self) {
-        if self.workflow == StructuralWorkflow::Query {
+        if self.workflow == StructuralWorkflow::Query
+            || self.workflow == StructuralWorkflow::Rewrite
+        {
             self.lang = self.normalized_or_inferred_lang();
         }
     }
@@ -200,6 +210,8 @@ impl StructuralSearchRequest {
             StructuralWorkflow::Query => self.validate_query(),
             StructuralWorkflow::Scan => self.validate_scan(),
             StructuralWorkflow::Test => self.validate_test(),
+            StructuralWorkflow::Inspect => self.validate_inspect(),
+            StructuralWorkflow::Rewrite => self.validate_rewrite(),
         }
     }
 
@@ -225,8 +237,8 @@ impl StructuralSearchRequest {
     }
 
     fn validate_query(&self) -> Result<()> {
-        if self.pattern().is_none() {
-            bail!("action='structural' workflow='query' requires a non-empty `pattern`");
+        if self.pattern().is_none() && self.kind().is_none() {
+            bail!("action='structural' workflow='query' requires a non-empty `pattern` or `kind`");
         }
 
         self.reject_present("config_path", self.config_path.as_deref())?;
@@ -242,6 +254,7 @@ impl StructuralSearchRequest {
 
     fn validate_scan(&self) -> Result<()> {
         self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("kind", self.kind.as_deref())?;
         self.reject_present("lang", self.lang.as_deref())?;
         self.reject_present("selector", self.selector.as_deref())?;
         self.reject_present(
@@ -258,6 +271,7 @@ impl StructuralSearchRequest {
 
     fn validate_test(&self) -> Result<()> {
         self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("kind", self.kind.as_deref())?;
         self.reject_present("path", self.path.as_deref())?;
         self.reject_present("lang", self.lang.as_deref())?;
         self.reject_present("selector", self.selector.as_deref())?;
@@ -284,6 +298,58 @@ impl StructuralSearchRequest {
                 "action='structural' workflow='test' does not accept `max_results`; use `config_path`, `filter`, and `skip_snapshot_tests`."
             );
         }
+        Ok(())
+    }
+
+    fn validate_inspect(&self) -> Result<()> {
+        self.reject_present("pattern", self.pattern.as_deref())?;
+        self.reject_present("kind", self.kind.as_deref())?;
+        self.reject_present("lang", self.lang.as_deref())?;
+        self.reject_present("selector", self.selector.as_deref())?;
+        self.reject_present(
+            "strictness",
+            self.strictness.as_ref().map(StructuralStrictness::as_str),
+        )?;
+        self.reject_present(
+            "debug_query",
+            self.debug_query.as_ref().map(DebugQueryFormat::as_str),
+        )?;
+        self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+        if self.globs.is_some() {
+            bail!(
+                "action='structural' workflow='inspect' does not accept `globs`; use `config_path` and `path`."
+            );
+        }
+        if self.context_lines.is_some() {
+            bail!(
+                "action='structural' workflow='inspect' does not accept `context_lines`; use `config_path` and `path`."
+            );
+        }
+        if self.max_results.is_some() {
+            bail!(
+                "action='structural' workflow='inspect' does not accept `max_results`; use `config_path` and `path`."
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_rewrite(&self) -> Result<()> {
+        if self.pattern().is_none() {
+            bail!("action='structural' workflow='rewrite' requires a non-empty `pattern`");
+        }
+        if self.rewrite_text().is_none() {
+            bail!("action='structural' workflow='rewrite' requires a non-empty `rewrite`");
+        }
+
+        self.reject_present("config_path", self.config_path.as_deref())?;
+        self.reject_present("filter", self.filter.as_deref())?;
+        self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
+
+        if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!(DEBUG_QUERY_LANG_HINT);
+        }
+
         Ok(())
     }
 
@@ -328,8 +394,22 @@ impl StructuralSearchRequest {
             .filter(|pattern| !pattern.is_empty())
     }
 
+    fn kind(&self) -> Option<&str> {
+        self.kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|kind| !kind.is_empty())
+    }
+
     fn filter(&self) -> Option<&str> {
         self.filter
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    fn rewrite_text(&self) -> Option<&str> {
+        self.rewrite
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -414,6 +494,31 @@ struct AstGrepMatch {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct AstGrepRewriteMatch {
+    file: String,
+    text: String,
+    #[serde(default)]
+    lines: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    range: AstGrepRange,
+    #[serde(default, rename = "metaVariables")]
+    meta_variables: Option<AstGrepMetaVariables>,
+    #[serde(default)]
+    replacement: Option<String>,
+    #[serde(default, rename = "replacementOffsets")]
+    replacement_offsets: Option<AstGrepByteOffset>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AstGrepLabel {
+    text: String,
+    range: AstGrepRange,
+    #[serde(default)]
+    source: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct AstGrepScanFinding {
     file: String,
     text: String,
@@ -432,6 +537,8 @@ struct AstGrepScanFinding {
     note: Option<String>,
     #[serde(default)]
     metadata: Option<Value>,
+    #[serde(default)]
+    labels: Vec<AstGrepLabel>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -456,6 +563,9 @@ struct AstGrepPoint {
 
 pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Result<Value> {
     let request = StructuralSearchRequest::from_args(&args)?;
+    if request.workflow == StructuralWorkflow::Inspect {
+        return execute_structural_inspect(workspace_root, &request).await;
+    }
     let ast_grep = resolve_ast_grep_binary_path().map_err(|reason| {
         anyhow!(
             "Structural search requires ast-grep (`sg`). {reason}. Install it with `{AST_GREP_INSTALL_COMMAND}`."
@@ -471,6 +581,10 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
         StructuralWorkflow::Test => {
             execute_structural_test(workspace_root, &request, &ast_grep).await
         }
+        StructuralWorkflow::Inspect => unreachable!("handled above"),
+        StructuralWorkflow::Rewrite => {
+            execute_structural_rewrite(workspace_root, &request, &ast_grep).await
+        }
     }
 }
 
@@ -481,12 +595,14 @@ async fn execute_structural_query(
 ) -> Result<Value> {
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
     let globs = request.normalized_globs();
-    if let Some(hint) = preflight_parseable_pattern(request)? {
-        return Ok(build_fragment_result(
-            request,
-            &search_path.display_path,
-            hint,
-        ));
+    if request.pattern().is_some() {
+        if let Some(hint) = preflight_parseable_pattern(request)? {
+            return Ok(build_fragment_result(
+                request,
+                &search_path.display_path,
+                hint,
+            ));
+        }
     }
     let command_path = search_path.command_arg.clone();
 
@@ -529,13 +645,10 @@ async fn execute_structural_query(
     }
 
     let mut command = ast_grep_command(ast_grep, workspace_root, "run");
-    command
-        .arg(format!(
-            "--pattern={}",
-            request.pattern().expect("query pattern validated")
-        ))
-        .arg("--json=compact")
-        .arg("--color=never");
+    if let Some(pattern) = request.pattern() {
+        command.arg(format!("--pattern={pattern}"));
+    }
+    command.arg("--json=compact").arg("--color=never");
 
     if let Some(lang) = request
         .lang
@@ -543,6 +656,9 @@ async fn execute_structural_query(
         .filter(|lang| !lang.trim().is_empty())
     {
         command.arg("--lang").arg(lang);
+    }
+    if let Some(kind) = request.kind() {
+        command.arg("--kind").arg(kind);
     }
     if let Some(selector) = request
         .selector
@@ -589,7 +705,8 @@ async fn execute_structural_scan(
     ast_grep: &Path,
 ) -> Result<Value> {
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
-    let config_path = resolve_config_path(workspace_root, request.requested_config_path()).await?;
+    let config_path =
+        resolve_config_path(workspace_root, request.requested_config_path(), true).await?;
     let globs = request.normalized_globs();
 
     let mut command = ast_grep_command(ast_grep, workspace_root, "scan");
@@ -639,7 +756,8 @@ async fn execute_structural_test(
     request: &StructuralSearchRequest,
     ast_grep: &Path,
 ) -> Result<Value> {
-    let config_path = resolve_config_path(workspace_root, request.requested_config_path()).await?;
+    let config_path =
+        resolve_config_path(workspace_root, request.requested_config_path(), true).await?;
 
     let mut command = ast_grep_command(ast_grep, workspace_root, "test");
     command.arg("--config").arg(&config_path.command_arg);
@@ -660,6 +778,246 @@ async fn execute_structural_test(
         &output.stdout,
         &output.stderr,
     ))
+}
+
+async fn execute_structural_rewrite(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+) -> Result<Value> {
+    let search_path = resolve_search_path(workspace_root, request.requested_path())?;
+    let globs = request.normalized_globs();
+
+    if let Some(hint) = preflight_parseable_pattern(request)? {
+        return Ok(build_rewrite_fragment_result(
+            request,
+            &search_path.display_path,
+            hint,
+        ));
+    }
+
+    let command_path = search_path.command_arg.clone();
+    let mut command = ast_grep_command(ast_grep, workspace_root, "run");
+    command
+        .arg(format!(
+            "--pattern={}",
+            request.pattern().expect("rewrite pattern validated")
+        ))
+        .arg(format!(
+            "--rewrite={}",
+            request.rewrite_text().expect("rewrite text validated")
+        ))
+        .arg("--json=compact")
+        .arg("--color=never");
+
+    if let Some(lang) = request
+        .lang
+        .as_deref()
+        .filter(|lang| !lang.trim().is_empty())
+    {
+        command.arg("--lang").arg(lang);
+    }
+    if let Some(selector) = request
+        .selector
+        .as_deref()
+        .filter(|selector| !selector.trim().is_empty())
+    {
+        command.arg("--selector").arg(selector);
+    }
+    if let Some(strictness) = &request.strictness {
+        command.arg("--strictness").arg(strictness.as_str());
+    }
+    apply_context_and_globs(&mut command, request.context_lines, &globs);
+    command.arg(&command_path);
+
+    let output =
+        run_ast_grep_command(&mut command, "failed to run ast-grep structural rewrite").await?;
+
+    let no_matches = output.status.code() == Some(1);
+    if !output.status.success() && !no_matches {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep structural rewrite failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let rewrites = if no_matches && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        Vec::new()
+    } else {
+        parse_rewrite_matches(&output.stdout)?
+    };
+    Ok(build_rewrite_result(
+        request,
+        &search_path.display_path,
+        rewrites,
+    ))
+}
+
+fn build_rewrite_fragment_result(
+    request: &StructuralSearchRequest,
+    display_path: &str,
+    hint: String,
+) -> Value {
+    let next_action = "Retry `unified_search` with `action='structural'` using a larger parseable pattern and `selector` when the real target is a subnode inside that pattern. Do not rerun the same fragment unchanged.";
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "workflow": "rewrite",
+        "path": display_path,
+        "rewrites": [],
+        "truncated": false,
+        "is_recoverable": true,
+        "next_action": next_action,
+        "hint": hint,
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(rewrite_text) = request.rewrite_text() {
+        result["rewrite"] = json!(rewrite_text);
+    }
+    result
+}
+
+fn parse_rewrite_matches(stdout: &[u8]) -> Result<Vec<AstGrepRewriteMatch>> {
+    serde_json::from_slice(stdout).context("failed to parse ast-grep rewrite JSON output")
+}
+
+fn build_rewrite_result(
+    request: &StructuralSearchRequest,
+    display_path: &str,
+    rewrites: Vec<AstGrepRewriteMatch>,
+) -> Value {
+    let max_results = request.effective_max_results();
+    let truncated = rewrites.len() > max_results;
+    let normalized_rewrites = rewrites
+        .into_iter()
+        .take(max_results)
+        .map(normalize_rewrite_match)
+        .collect::<Vec<_>>();
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "workflow": "rewrite",
+        "path": display_path,
+        "rewrites": normalized_rewrites,
+        "truncated": truncated,
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(rewrite_text) = request.rewrite_text() {
+        result["rewrite"] = json!(rewrite_text);
+    }
+    result
+}
+
+fn normalize_rewrite_match(entry: AstGrepRewriteMatch) -> Value {
+    let mut rewrite_object = Map::new();
+    rewrite_object.insert("file".to_string(), Value::String(entry.file));
+    rewrite_object.insert("line_number".to_string(), json!(entry.range.start.line));
+    rewrite_object.insert("text".to_string(), Value::String(entry.text.clone()));
+    rewrite_object.insert(
+        "lines".to_string(),
+        Value::String(entry.lines.unwrap_or(entry.text)),
+    );
+    if let Some(language) = entry.language {
+        rewrite_object.insert("language".to_string(), Value::String(language));
+    }
+    rewrite_object.insert("range".to_string(), build_range_value(&entry.range));
+    if let Some(replacement) = entry.replacement {
+        rewrite_object.insert("replacement".to_string(), Value::String(replacement));
+    }
+    if let Some(offsets) = entry.replacement_offsets {
+        rewrite_object.insert(
+            "replacementOffsets".to_string(),
+            json!({ "start": offsets.start, "end": offsets.end }),
+        );
+    }
+    if let Some(meta_vars) = entry.meta_variables {
+        rewrite_object.insert(
+            "metaVariables".to_string(),
+            build_meta_variables_value(&meta_vars),
+        );
+    }
+    Value::Object(rewrite_object)
+}
+
+async fn execute_structural_inspect(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+) -> Result<Value> {
+    let requested_config = request.requested_config_path();
+    let config_path = resolve_config_path(workspace_root, requested_config, false).await?;
+
+    let resolved_full = if Path::new(&config_path.command_arg).is_absolute() {
+        PathBuf::from(&config_path.command_arg)
+    } else {
+        workspace_root.join(&config_path.command_arg)
+    };
+    let config_exists = resolved_full.is_file();
+
+    let rule_dir_hints = if config_exists {
+        extract_rule_dirs(&resolved_full).await
+    } else {
+        Vec::new()
+    };
+
+    let language_injections = if config_exists {
+        extract_language_injections(&resolved_full).await
+    } else {
+        Vec::new()
+    };
+
+    let custom_languages = if config_exists {
+        extract_custom_languages(&resolved_full).await
+    } else {
+        Value::Object(Map::new())
+    };
+
+    let language_globs = if config_exists {
+        extract_language_globs(&resolved_full).await
+    } else {
+        Value::Object(Map::new())
+    };
+
+    let discovered = if !config_exists {
+        let is_default = requested_config == DEFAULT_AST_GREP_CONFIG_PATH;
+        if is_default {
+            match discover_project_config(workspace_root).await {
+                Some(found) => {
+                    let display = found
+                        .strip_prefix(workspace_root)
+                        .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+                        .unwrap_or_else(|_| found.to_string_lossy().replace('\\', "/"));
+                    vec![display]
+                }
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    let search_path = resolve_search_path(workspace_root, request.requested_path())?;
+
+    Ok(json!({
+        "backend": "ast-grep",
+        "workflow": "inspect",
+        "project_dir": search_path.display_path,
+        "config_path": config_path.display_path,
+        "config_exists": config_exists,
+        "rule_dir_hints": rule_dir_hints,
+        "language_injections": language_injections,
+        "custom_languages": custom_languages,
+        "language_globs": language_globs,
+        "discovered_configs": discovered,
+    }))
 }
 
 fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Option<String>> {
@@ -760,6 +1118,144 @@ fn has_argument_key(object: &Map<String, Value>, key: &str) -> bool {
             .is_some_and(|hyphenated| object.get(hyphenated).is_some())
 }
 
+/// Known ast-grep transform operators.
+const TRANSFORM_OPERATORS: &[&str] = &["replace", "substring", "convert", "rewrite"];
+
+/// Validate that a transform source references a valid meta-variable form (`$VAR` or `$$$$VAR`).
+fn validate_transform_source(source: &str) -> Result<()> {
+    let trimmed = source.trim();
+    if trimmed.is_empty() {
+        bail!("transform `source` must not be empty");
+    }
+    if !trimmed.starts_with('$') {
+        bail!("transform `source` must start with `$` (got `{}`)", trimmed);
+    }
+    let name = &trimmed[1..];
+    if name.is_empty() {
+        bail!("transform `source` must have a name after `$`");
+    }
+    // Multi-metavariable form: $$$$VAR
+    let bare = if name.starts_with("$$$") {
+        &name[3..]
+    } else {
+        name
+    };
+    if bare.is_empty() {
+        bail!("transform `source` must have a metavariable name");
+    }
+    if !bare.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        bail!(
+            "transform `source` metavariable name must be alphanumeric or underscore (got `{}`)",
+            bare
+        );
+    }
+    Ok(())
+}
+
+/// Validate that a transform operator is recognized.
+fn validate_transform_operator(operator: &str) -> Result<()> {
+    if !TRANSFORM_OPERATORS.contains(&operator) {
+        bail!(
+            "unknown transform operator `{}`; expected one of: {}",
+            operator,
+            TRANSFORM_OPERATORS.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Validate a `replace` transform object has required fields.
+fn validate_replace_transform(value: &Value) -> Result<()> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| anyhow!("`replace` transform must be an object"))?;
+
+    if !obj.contains_key("source") {
+        bail!("`replace` transform requires a `source` field");
+    }
+    if !obj.contains_key("replace") {
+        bail!("`replace` transform requires a `replace` field (the regex pattern)");
+    }
+    if !obj.contains_key("by") {
+        bail!("`replace` transform requires a `by` field (the replacement string)");
+    }
+
+    if let Some(source) = obj.get("source").and_then(|v| v.as_str()) {
+        validate_transform_source(source)?;
+    }
+
+    Ok(())
+}
+
+/// Validate a `substring` transform object has required fields.
+fn validate_substring_transform(value: &Value) -> Result<()> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| anyhow!("`substring` transform must be an object"))?;
+
+    if !obj.contains_key("source") {
+        bail!("`substring` transform requires a `source` field");
+    }
+
+    if let Some(source) = obj.get("source").and_then(|v| v.as_str()) {
+        validate_transform_source(source)?;
+    }
+
+    Ok(())
+}
+
+/// Validate a `convert` transform object has required fields.
+fn validate_convert_transform(value: &Value) -> Result<()> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| anyhow!("`convert` transform must be an object"))?;
+
+    if !obj.contains_key("source") {
+        bail!("`convert` transform requires a `source` field");
+    }
+    if !obj.contains_key("toCase") {
+        bail!("`convert` transform requires a `toCase` field");
+    }
+
+    if let Some(source) = obj.get("source").and_then(|v| v.as_str()) {
+        validate_transform_source(source)?;
+    }
+
+    Ok(())
+}
+
+/// Validate a `rewrite` transform object has required fields.
+fn validate_rewrite_transform(value: &Value) -> Result<()> {
+    let obj = value
+        .as_object()
+        .ok_or_else(|| anyhow!("`rewrite` transform must be an object"))?;
+
+    if !obj.contains_key("source") {
+        bail!("`rewrite` transform requires a `source` field");
+    }
+    if !obj.contains_key("rewriters") {
+        bail!("`rewrite` transform requires a `rewriters` field");
+    }
+
+    if let Some(source) = obj.get("source").and_then(|v| v.as_str()) {
+        validate_transform_source(source)?;
+    }
+
+    Ok(())
+}
+
+/// Validate a single transform entry (operator + value).
+fn validate_transform_entry(operator: &str, value: &Value) -> Result<()> {
+    validate_transform_operator(operator)?;
+    match operator {
+        "replace" => validate_replace_transform(value),
+        "substring" => validate_substring_transform(value),
+        "convert" => validate_convert_transform(value),
+        "rewrite" => validate_rewrite_transform(value),
+        _ => unreachable!("validated by validate_transform_operator"),
+    }
+}
+
 fn parse_compact_matches(stdout: &[u8]) -> Result<Vec<AstGrepMatch>> {
     serde_json::from_slice(stdout).context("failed to parse ast-grep JSON output")
 }
@@ -805,16 +1301,22 @@ fn build_debug_query_result(
     debug_query: &DebugQueryFormat,
     stdout: &[u8],
 ) -> Value {
-    json!({
+    let mut result = json!({
         "backend": "ast-grep",
-        "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "lang": request.lang,
         "debug_query": debug_query.as_str(),
         "debug_query_output": truncate_auxiliary_output(String::from_utf8_lossy(stdout).trim()),
         "matches": [],
         "truncated": false,
-    })
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    result
 }
 
 fn build_query_result(
@@ -830,13 +1332,19 @@ fn build_query_result(
         .map(normalize_match)
         .collect::<Vec<_>>();
 
-    json!({
+    let mut result = json!({
         "backend": "ast-grep",
-        "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "matches": normalized_matches,
         "truncated": truncated,
-    })
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    result
 }
 
 fn build_scan_result(
@@ -871,16 +1379,22 @@ fn build_fragment_result(
 ) -> Value {
     let next_action = "Retry `unified_search` with `action='structural'` using a larger parseable pattern and `selector` when the real target is a subnode inside that pattern. Do not rerun the same fragment unchanged.";
 
-    json!({
+    let mut result = json!({
         "backend": "ast-grep",
-        "pattern": request.pattern().expect("query pattern validated"),
         "path": display_path,
         "matches": [],
         "truncated": false,
         "is_recoverable": true,
         "next_action": next_action,
         "hint": hint,
-    })
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    result
 }
 
 fn build_range_value(range: &AstGrepRange) -> Value {
@@ -980,6 +1494,22 @@ fn normalize_scan_finding(entry: &AstGrepScanFinding) -> Value {
         }
         finding_object.insert("metadata".to_string(), metadata.clone());
     }
+    if !entry.labels.is_empty() {
+        let labels_json: Vec<Value> = entry
+            .labels
+            .iter()
+            .map(|label| {
+                let mut label_obj = Map::new();
+                label_obj.insert("text".to_string(), Value::String(label.text.clone()));
+                label_obj.insert("range".to_string(), build_range_value(&label.range));
+                if let Some(source) = &label.source {
+                    label_obj.insert("source".to_string(), Value::String(source.clone()));
+                }
+                Value::Object(label_obj)
+            })
+            .collect();
+        finding_object.insert("labels".to_string(), Value::Array(labels_json));
+    }
     Value::Object(finding_object)
 }
 
@@ -1063,7 +1593,7 @@ fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
         message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
     }
     message.push_str(
-        " Retry `unified_search` with a refined structural pattern before switching tools. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or rewrite-oriented ast-grep tasks, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
+        " Retry `unified_search` with a refined structural pattern before switching tools. For simple rewrites, use `workflow='rewrite'` on the public structural surface. For `sg scan`, `sg test`, `sg new`, `sgconfig.yml`, or advanced rewrite-oriented ast-grep tasks with `transform`, `rewriters`, or `FixConfig`, load the bundled `ast-grep` skill first and use `unified_exec` only when the public structural surface and skill guidance still cannot express the needed CLI flow.",
     );
     if !detail.contains(AST_GREP_INSTALL_COMMAND) {
         message.push(' ');
@@ -1195,6 +1725,7 @@ fn remap_legacy_crates_search_path(
 async fn resolve_config_path(
     workspace_root: &Path,
     requested_path: &str,
+    require_exists: bool,
 ) -> Result<ResolvedSearchPath> {
     let candidate = if Path::new(requested_path).is_absolute() {
         PathBuf::from(requested_path)
@@ -1221,7 +1752,368 @@ async fn resolve_config_path(
         );
     }
 
+    if require_exists && !resolved.is_file() {
+        let is_default = requested_path == DEFAULT_AST_GREP_CONFIG_PATH;
+        let discovered = if is_default {
+            discover_project_config(&workspace_root).await
+        } else {
+            None
+        };
+        bail!(
+            "{}",
+            format_missing_config_error(
+                requested_path,
+                is_default,
+                &resolved,
+                discovered.as_deref()
+            )
+        );
+    }
+
     build_resolved_workspace_path(&workspace_root, resolved)
+}
+
+/// Walk up from `start` looking for `sgconfig.yml` in ancestor directories.
+async fn discover_project_config(start: &Path) -> Option<PathBuf> {
+    let mut current = Some(start.to_path_buf());
+    while let Some(dir) = current {
+        let candidate = dir.join(DEFAULT_AST_GREP_CONFIG_PATH);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        current = dir.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
+fn format_missing_config_error(
+    requested: &str,
+    is_default: bool,
+    resolved: &Path,
+    discovered: Option<&Path>,
+) -> String {
+    let mut message = if is_default {
+        format!(
+            "ast-grep project config `{}` not found at {}. \
+             `workflow=\"scan\"` and `workflow=\"test\"` require a project config file. \
+             Create `{}` with at least:\n\n  ruleDirs:\n    - rules\n\n\
+             Then place rule YAML files in the `rules/` directory. \
+             Or scaffold a full project with `ast-grep new project`. \
+             For config authoring, load the bundled `ast-grep` skill.",
+            requested,
+            resolved.display(),
+            requested,
+        )
+    } else {
+        format!(
+            "ast-grep project config not found at `{}` (resolved to {}). \
+             Verify the `config_path` is correct and the file exists. \
+             For config authoring, load the bundled `ast-grep` skill.",
+            requested,
+            resolved.display(),
+        )
+    };
+
+    if let Some(found) = discovered {
+        message.push_str(&format!(
+            "\n\nNote: found `{}` at {}. \
+             Set `config_path` to that path to use it, or create a local `{}` in the workspace root.",
+            DEFAULT_AST_GREP_CONFIG_PATH,
+            found.display(),
+            DEFAULT_AST_GREP_CONFIG_PATH,
+        ));
+    }
+
+    message
+}
+
+/// Best-effort extraction of `ruleDirs` entries from a sgconfig.yml file.
+/// Returns relative directory paths found under the `ruleDirs:` key.
+async fn extract_rule_dirs(config_path: &Path) -> Vec<String> {
+    let Ok(content) = afs::read_to_string(config_path).await else {
+        return Vec::new();
+    };
+
+    let mut dirs = Vec::new();
+    let mut in_rule_dirs = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("ruleDirs:") {
+            in_rule_dirs = true;
+            // Handle inline array: ruleDirs: [rules, custom-rules]
+            if let Some(bracket_content) = trimmed.strip_prefix("ruleDirs:").map(str::trim) {
+                if bracket_content.starts_with('[') {
+                    let inner = bracket_content.trim_matches(|c| c == '[' || c == ']');
+                    for item in inner.split(',') {
+                        let item = item.trim().trim_matches('"').trim_matches('\'');
+                        if !item.is_empty() {
+                            dirs.push(item.to_string());
+                        }
+                    }
+                    in_rule_dirs = false;
+                }
+            }
+            continue;
+        }
+
+        if in_rule_dirs {
+            if trimmed.starts_with('-') {
+                let item = trimmed
+                    .strip_prefix('-')
+                    .unwrap_or(trimmed)
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'');
+                if !item.is_empty() {
+                    dirs.push(item.to_string());
+                }
+            } else if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                // Hit a new key, stop collecting
+                in_rule_dirs = false;
+            }
+        }
+    }
+
+    dirs
+}
+
+/// Best-effort extraction of `languageInjections` entries from a sgconfig.yml file.
+/// Returns a list of objects with `host_language`, `rule_pattern` (or `rule_kind`),
+/// and `injected` language name.
+async fn extract_language_injections(config_path: &Path) -> Vec<Value> {
+    let Ok(content) = std::fs::read_to_string(config_path) else {
+        return Vec::new();
+    };
+
+    let mut injections = Vec::new();
+    let mut in_injections = false;
+    let mut current_item: Option<Map<String, Value>> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Detect start of languageInjections section
+        if trimmed.starts_with("languageInjections:") {
+            in_injections = true;
+            // Handle inline array (uncommon but possible)
+            if trimmed.contains('[') {
+                break; // Inline array of objects is too complex for line-by-line parsing
+            }
+            continue;
+        }
+
+        if !in_injections {
+            continue;
+        }
+
+        // List item start: "- " (may be at 0-indent in YAML)
+        if trimmed.starts_with("- ") {
+            // Flush previous item
+            if let Some(item) = current_item.take() {
+                injections.push(Value::Object(item));
+            }
+            current_item = Some(Map::new());
+            // Check for inline key-value: "- hostLanguage: js"
+            let after_dash = trimmed.strip_prefix("- ").unwrap_or(trimmed).trim();
+            if let Some((key, value)) = parse_yaml_simple_kv(after_dash) {
+                if let Some(ref mut item) = current_item {
+                    item.insert(key, value);
+                }
+            }
+            continue;
+        }
+
+        // A new top-level key (not a list item) ends the section
+        if !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
+            if let Some(item) = current_item.take() {
+                injections.push(Value::Object(item));
+            }
+            in_injections = false;
+            continue;
+        }
+
+        // Key-value inside a list item (indented deeper than "- ")
+        if let Some(ref mut item) = current_item {
+            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+                item.insert(key, value);
+            }
+        }
+    }
+
+    // Flush last item
+    if let Some(item) = current_item {
+        injections.push(Value::Object(item));
+    }
+
+    injections
+}
+
+/// Best-effort extraction of `customLanguages` entries from a sgconfig.yml file.
+/// Returns a JSON object mapping language names to their config (library_path, extensions).
+async fn extract_custom_languages(config_path: &Path) -> Value {
+    let Ok(content) = afs::read_to_string(config_path).await else {
+        return Value::Object(Map::new());
+    };
+
+    let mut languages = Map::new();
+    let mut in_custom_languages = false;
+    let mut current_lang: Option<String> = None;
+    let mut current_lang_config: Option<Map<String, Value>> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("customLanguages:") {
+            in_custom_languages = true;
+            continue;
+        }
+
+        if !in_custom_languages {
+            continue;
+        }
+
+        // A new top-level key ends the section
+        if !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+        {
+            if let (Some(lang), Some(config)) = (current_lang.take(), current_lang_config.take()) {
+                languages.insert(lang, Value::Object(config));
+            }
+            in_custom_languages = false;
+            continue;
+        }
+
+        // Language entry at 2-space indent: "graphql:"
+        let indent = line.len() - line.trim_start().len();
+        if indent == 2 && trimmed.ends_with(':') && !trimmed.contains(' ') {
+            // Flush previous language
+            if let (Some(lang), Some(config)) = (current_lang.take(), current_lang_config.take()) {
+                languages.insert(lang, Value::Object(config));
+            }
+            current_lang = Some(trimmed.trim_end_matches(':').to_string());
+            current_lang_config = Some(Map::new());
+            continue;
+        }
+
+        // Key-value inside a language entry
+        if let Some(ref mut config) = current_lang_config {
+            if let Some((key, value)) = parse_yaml_simple_kv(trimmed) {
+                config.insert(key, value);
+            }
+        }
+    }
+
+    // Flush last language
+    if let (Some(lang), Some(config)) = (current_lang, current_lang_config) {
+        languages.insert(lang, Value::Object(config));
+    }
+
+    Value::Object(languages)
+}
+
+/// Best-effort extraction of `languageGlobs` entries from a sgconfig.yml file.
+/// Returns a JSON object mapping language names to their glob pattern arrays.
+async fn extract_language_globs(config_path: &Path) -> Value {
+    let Ok(content) = afs::read_to_string(config_path).await else {
+        return Value::Object(Map::new());
+    };
+
+    let mut globs = Map::new();
+    let mut in_language_globs = false;
+    let mut current_lang: Option<String> = None;
+    let mut current_patterns: Vec<Value> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("languageGlobs:") {
+            in_language_globs = true;
+            continue;
+        }
+
+        if !in_language_globs {
+            continue;
+        }
+
+        // A new top-level key ends the section
+        if !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+        {
+            if let Some(lang) = current_lang.take() {
+                globs.insert(lang, Value::Array(std::mem::take(&mut current_patterns)));
+            }
+            in_language_globs = false;
+            continue;
+        }
+
+        let indent = line.len() - line.trim_start().len();
+
+        // Language entry at 2-space indent: "tsx:"
+        if indent == 2 && trimmed.ends_with(':') && !trimmed.starts_with('-') {
+            // Flush previous language
+            if let Some(lang) = current_lang.take() {
+                globs.insert(lang, Value::Array(std::mem::take(&mut current_patterns)));
+            }
+            current_lang = Some(trimmed.trim_end_matches(':').to_string());
+            continue;
+        }
+
+        // Glob pattern entry: "- \"*.tsx\"" at 4-space indent
+        if indent >= 4 && trimmed.starts_with("- ") {
+            let pattern = trimmed
+                .strip_prefix("- ")
+                .unwrap_or(trimmed)
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
+            if !pattern.is_empty() {
+                current_patterns.push(Value::String(pattern.to_string()));
+            }
+        }
+    }
+
+    // Flush last language
+    if let Some(lang) = current_lang {
+        globs.insert(lang, Value::Array(current_patterns));
+    }
+
+    Value::Object(globs)
+}
+
+/// Parse a simple YAML key-value pair like `hostLanguage: js` or `libraryPath: graphql.so`.
+/// Returns (key, Value) where key is the trimmed left side and Value is the trimmed right side.
+fn parse_yaml_simple_kv(input: &str) -> Option<(String, Value)> {
+    let colon_pos = input.find(':')?;
+    let key = input[..colon_pos].trim().to_string();
+    if key.is_empty() || key.contains(' ') {
+        return None;
+    }
+    let raw_value = input[colon_pos + 1..].trim();
+
+    // Skip keys with empty values -- these are typically parent keys
+    // with nested content (e.g. `rule:` followed by indented sub-keys).
+    if raw_value.is_empty() {
+        return None;
+    }
+
+    // Handle inline array: extensions: [graphql]
+    if raw_value.starts_with('[') && raw_value.ends_with(']') {
+        let inner = &raw_value[1..raw_value.len() - 1];
+        let items: Vec<Value> = inner
+            .split(',')
+            .map(|s| Value::String(s.trim().trim_matches('"').trim_matches('\'').to_string()))
+            .filter(|v| !v.as_str().is_some_and(str::is_empty))
+            .collect();
+        return Some((key, Value::Array(items)));
+    }
+
+    let value = raw_value.trim_matches('"').trim_matches('\'');
+    Some((key, Value::String(value.to_string())))
 }
 
 fn summarize_test_output(stdout: &str, passed: bool) -> Value {

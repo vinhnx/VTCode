@@ -600,8 +600,7 @@ pub(crate) async fn execute_llm_request(
                             // a synthesis retry. Use Some(None) instead of None
                             // to explicitly disable thinking mode via the
                             // `thinking: {"type": "disabled"}` payload field.
-                            request.reasoning_effort =
-                                Some(vtcode_core::config::types::ReasoningEffortLevel::None);
+                            request.reasoning_effort = Some(ReasoningEffortLevel::None);
                             compacted_tool_retry_used = true;
                             tracing::debug!(provider = %turn_snapshot.provider_name, "{status_msg}",);
                             _spinner.finish();

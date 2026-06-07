@@ -688,7 +688,7 @@ impl StreamAggregator {
     }
 
     /// Process a content delta, applying sanitization for reasoning tags.
-    pub fn handle_content(&mut self, delta: &str) -> Vec<crate::llm::provider::LLMStreamEvent> {
+    pub fn handle_content(&mut self, delta: &str) -> Vec<LLMStreamEvent> {
         self.content.push_str(delta);
         self.sanitizer.process_chunk(delta)
     }
@@ -739,10 +739,10 @@ impl StreamAggregator {
         // Collect any leftover bits from sanitizer
         for event in self.sanitizer.finalize() {
             match event {
-                crate::llm::provider::LLMStreamEvent::Token { delta } => {
+                LLMStreamEvent::Token { delta } => {
                     self.content.push_str(&delta);
                 }
-                crate::llm::provider::LLMStreamEvent::Reasoning { delta } => {
+                LLMStreamEvent::Reasoning { delta } => {
                     self.reasoning.push_str(&delta);
                 }
                 _ => {}

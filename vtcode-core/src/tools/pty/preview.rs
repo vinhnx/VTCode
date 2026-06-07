@@ -43,14 +43,7 @@ impl PtyPreviewRenderer {
     #[must_use]
     pub fn snapshot_text(&self) -> String {
         let snapshot = self.screen_state.prepare_snapshot();
-
-        let visible = if snapshot.screen_contents.trim().is_empty() {
-            snapshot.scrollback
-        } else {
-            snapshot.screen_contents
-        };
-
-        normalize_snapshot_text(&visible)
+        normalize_snapshot_text(&snapshot.screen_contents)
     }
 }
 
@@ -104,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn ghostty_core_backend_renders_snapshot() {
+    fn vt100_backend_renders_snapshot() {
         let mut preview = PtyPreviewRenderer::from_config(&PtyConfig::default());
         preview.push_str("ghostty core\n");
 

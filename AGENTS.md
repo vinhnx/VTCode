@@ -32,7 +32,6 @@ Cargo workspace, ~26 crates. `default-members` = root, `vtcode-core`, `vtcode-tu
 | `vtcode-process-hardening` | OS sandboxing (Seatbelt, Landlock) |
 | `vtcode-exec-events` | `ThreadEvent` contract and ATIF export |
 | `vtcode-commons` | Shared utilities |
-| `vtcode-ghostty-core` | Ghostty VT terminal emulator core and runtime bindings |
 | `vtcode-macros` | Procedural macros |
 | `vtcode-markdown-store` | Markdown storage and rendering |
 | `vtcode-terminal-detection` | Terminal detection primitives |
@@ -66,7 +65,6 @@ Every crate has its own AGENTS.md with crate-specific conventions:
 | `vtcode-exec-events` | [vtcode-exec-events/AGENTS.md](vtcode-exec-events/AGENTS.md) |
 | `vtcode-commons` | [vtcode-commons/AGENTS.md](vtcode-commons/AGENTS.md) |
 | `vtcode-process-hardening` | [vtcode-process-hardening/AGENTS.md](vtcode-process-hardening/AGENTS.md) |
-| `vtcode-ghostty-core` | [vtcode-ghostty-core/AGENTS.md](vtcode-ghostty-core/AGENTS.md) |
 | `vtcode-macros` | [vtcode-macros/AGENTS.md](vtcode-macros/AGENTS.md) |
 | `vtcode-markdown-store` | [vtcode-markdown-store/AGENTS.md](vtcode-markdown-store/AGENTS.md) |
 | `vtcode-terminal-detection` | [vtcode-terminal-detection/AGENTS.md](vtcode-terminal-detection/AGENTS.md) |
@@ -114,11 +112,7 @@ Read these files at session start when context is needed. Write to them when you
 | Skill | Use when |
 |---|---|
 | `rust-skills` | Writing, reviewing, or refactoring Rust code (179 rules across 14 categories) |
-| `code-review` | Reviewing diffs for correctness bugs and reuse/simplification cleanups |
-| `simplify` | Reviewing changed code for reuse, simplification, efficiency |
-| `verify` | Confirming a change works by running the app and observing behavior |
-| `pr-code-review` | PR review with bug triage and automated fix loops |
-| `security-review` | Security-focused code review |
+| `pr-code-review` | PR review with bug triage, correctness review, and automated fix loops |
 
 ### Project Management Skills
 

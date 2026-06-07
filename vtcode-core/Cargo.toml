@@ -53,9 +53,9 @@ futures = { workspace = true }
 futures-lite = "2.3"
 async-stream = "0.3"
 base64 = { workspace = true }
-walkdir = { workspace = true }
 glob = "0.3"
 ignore = { workspace = true }
+vt100 = { workspace = true }
 thiserror = { workspace = true }
 dialoguer = { workspace = true }
 regex = { workspace = true }
@@ -133,7 +133,6 @@ vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.123.5"
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.123.5" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.123.5" }
 vtcode-terminal-detection = { path = "../vtcode-terminal-detection", version = "0.123.5" }
-vtcode-ghostty-core = { path = "../vtcode-ghostty-core", version = "0.123.5" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }
