@@ -976,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    fn next_top_level_agent_name_cycles_last_agent_to_base() {
+    fn next_top_level_agent_name_cycles_last_agent_to_default() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
         let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[0]);
 

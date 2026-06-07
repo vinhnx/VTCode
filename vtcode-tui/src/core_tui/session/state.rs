@@ -322,7 +322,7 @@ impl Session {
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .unwrap_or("base");
+            .unwrap_or("default");
         format!("agent:{agent}")
     }
 

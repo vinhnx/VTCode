@@ -224,7 +224,7 @@ fn bottom_status_always_includes_top_level_agent() {
 
     assert_eq!(
         session.status_right_text_with_top_level_agent(),
-        "agent:base"
+        "agent:default"
     );
 
     session.handle_command(InlineCommand::SetInputStatus {

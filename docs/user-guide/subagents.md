@@ -9,11 +9,11 @@ Subagents help you:
 - reuse project or user agent definitions across repositories
 - preload skills, MCP servers, memory, and hooks for specialized work
 - inspect delegated child threads with `/agent`
-- switch the main session's top-level runtime overlay with `Tab`
+- switch the main session's active top-level agent with `Tab`
 
 VT Code ships with built-in subagents and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
 
-The same agent specifications can also be used as top-level agent overlays. A subagent is delegated child work with its own thread. A top-level agent overlay keeps you in the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
+The same agent specification format can describe delegated child agents and top-level agents. A subagent is delegated child work with its own thread. A top-level agent controls the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
 
@@ -85,7 +85,7 @@ Use the code-reviewer agent on the auth changes
 Spawn a code-reviewer subagent and summarize only the important findings
 ```
 
-6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `Tab` on an empty idle composer when you want the main session itself to use one of the agent definitions as a top-level overlay.
+6. Use `/agent` or `/agents threads` to inspect delegated child runs and open completed transcripts. Use `Tab` on an empty idle composer when you want to switch the main session to another top-level agent.
 
 ## Discovery And Precedence
 
@@ -251,7 +251,7 @@ Subagents inherit the parent approval context and can only stay at or below the 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
 
-Top-level agent overlays use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
+Top-level agents use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
 
 ### MCP Servers
 
@@ -362,30 +362,30 @@ An explicit mention guarantees the selection for that turn:
 
 VT Code treats a single explicit mention as the selected agent for the turn. If the model later tries to spawn a different agent, the call is rejected instead of silently switching.
 
-`/agent`, `/agents`, and `@agent-name` remain delegated child-agent controls. They do not switch the main session's top-level controller.
+`/agent` and `/agents` can inspect agent definitions and delegated child runs. `@agent-name` is only for delegated child agents; top-level agents cannot be invoked with `@`.
 
-### Use An Agent As The Main Session Overlay
+### Use A Top-Level Agent
 
 Press `Tab` on an empty idle composer to cycle the active top-level agent. The cycle includes only discovered agent specs marked with `topLevel: true`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
 
-When a top-level agent is active, VT Code keeps you in the main session. It applies the selected spec as a request-time overlay rather than spawning a child thread:
+When you select a top-level agent, VT Code keeps you in the main session rather than spawning a child thread. The selected spec controls these request-time fields:
 
 - the Markdown body or instructions become the active top-level agent instructions
 - `tools` is intersected with the current session's available tools
 - `disallowedTools` removes tools after allowlist filtering, so deny wins
 - `permissionMode` can only narrow the current session mode
 - `model` and `reasoning_effort` are applied before request validation and provider capability checks
-- aliases are metadata only for top-level overlays
+- aliases are metadata only for top-level agents
 
-Fields that are child-only or not supported for top-level overlays are ignored for this feature: `skills`, `mcpServers`, `hooks`, `background`, `maxTurns`, `initialPrompt`, `nickname_candidates`, `memory`, and `isolation`.
+Some fields are not supported by top-level agents in this implementation. Child-run fields such as `background`, `maxTurns`, `initialPrompt`, and `isolation` apply only when spawning child agents. Other fields, including `skills`, `mcpServers`, `hooks`, `nickname_candidates`, and `memory`, remain delegated-child-only until they are wired into main-session switching.
 
-Cycling past the last available top-level agent returns to the base session with no active overlay.
+Cycling past the last available top-level agent returns to VT Code's default top-level agent.
 
-The active top-level agent is shown in the bottom status line as `agent:<name>`. With no active overlay, VT Code shows `agent:base`.
+The active top-level agent is shown in the bottom status line as `agent:<name>`. The built-in default controller is shown as `agent:default`.
 
 `Tab` cycles through available top-level agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
 
-VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for top-level overlays. In VT Code, `--agent` is already used for model override. Top-level switching is the interactive `Tab` overlay described here.
+VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for top-level agents. In VT Code, `--agent` is already used for model override. Top-level switching is the interactive `Tab` flow described here.
 
 This feature does not add a workflow engine, hardcoded controller workflows, a new permission DSL, new sandbox rules, or new LSP behaviour. It reuses existing agent specs and existing runtime permission/tool concepts.
 

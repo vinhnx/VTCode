@@ -28,16 +28,18 @@ pub fn delegated_task_requires_clarification(prompt: &str) -> bool {
 pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> Vec<String> {
     let mut mentions = Vec::new();
     for direct in extract_direct_agent_mentions(input) {
-        let canonical = specs
-            .iter()
-            .find(|spec| spec.matches_name(direct.as_str()))
+        let matching_spec = specs.iter().find(|spec| spec.matches_name(direct.as_str()));
+        if matching_spec.is_some_and(|spec| spec.top_level) {
+            continue;
+        }
+        let canonical = matching_spec
             .map(|spec| spec.name.clone())
             .unwrap_or(direct);
         push_unique_agent_mention(&mut mentions, &canonical);
     }
 
     let lower = input.to_ascii_lowercase();
-    for spec in specs {
+    for spec in specs.iter().filter(|spec| !spec.top_level) {
         if !matches_explicit_named_agent_selection(lower.as_str(), spec) {
             continue;
         }
