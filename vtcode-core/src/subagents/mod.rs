@@ -1330,7 +1330,10 @@ impl SubagentController {
                 explicit
             );
         }
-        if !spec.is_read_only() && !delegation.explicit_request {
+        if !spec.is_read_only()
+            && !delegation.explicit_request
+            && delegation.requested_agent.is_none()
+        {
             bail!(
                 "{} cannot launch write-capable agent '{}' without an explicit delegation signal from the current user turn. Ask the user to mention the agent, say 'delegate'/'spawn', or request parallel work.",
                 tool_name,
@@ -2672,7 +2675,7 @@ Run the managed background demo.
     }
 
     #[tokio::test]
-    async fn spawn_rejects_write_capable_agent_without_explicit_request() {
+    async fn spawn_rejects_write_capable_agent_without_explicit_request_or_agent_type() {
         let temp = TempDir::new().expect("tempdir");
         let controller = SubagentController::new(test_controller_config(
             temp.path().to_path_buf(),
@@ -2683,17 +2686,38 @@ Run the managed background demo.
 
         let err = controller
             .spawn(SpawnAgentRequest {
+                message: Some("Implement a change.".to_string()),
+                ..SpawnAgentRequest::default()
+            })
+            .await
+            .expect_err("write-capable agent should require explicit request or agent_type");
+
+        assert!(
+            err.to_string()
+                .contains("cannot launch write-capable agent")
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_allows_write_capable_agent_with_explicit_agent_type() {
+        let temp = TempDir::new().expect("tempdir");
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let spawned = controller
+            .spawn(SpawnAgentRequest {
                 agent_type: Some("worker".to_string()),
                 message: Some("Implement a change.".to_string()),
                 ..SpawnAgentRequest::default()
             })
             .await
-            .expect_err("write-capable agent should require explicit request");
+            .expect("explicit agent_type should allow write-capable agent");
 
-        assert!(
-            err.to_string()
-                .contains("cannot launch write-capable agent 'worker'")
-        );
+        controller.close(&spawned.id).await.expect("close");
     }
 
     #[tokio::test]

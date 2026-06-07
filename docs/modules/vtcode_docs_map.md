@@ -746,8 +746,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: VT Code Agent Harness Robustness Plan
-  - **Topics**: Structural Code: ast-grep, Ranked Findings, Fix Plan, Validation
-  - **User Questions**: "What can you tell me about VT Code Agent Harness Robustness Plan?", "How does Structural Code: ast-grep work?", "How does Ranked Findings work?"
+  - **Topics**: Structural Code: ast-grep, Counting method, Corrected ranked findings, Turn-delta summary, Deep-dive root cause notes
+  - **User Questions**: "What can you tell me about VT Code Agent Harness Robustness Plan?", "How does Structural Code: ast-grep work?", "How does Counting method work?"
 
 - **File**: `docs/environment/ALLOWED_COMMANDS_REFERENCE.md`
   - **Content**: VT Code Allowed Commands Reference

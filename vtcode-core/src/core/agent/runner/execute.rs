@@ -707,11 +707,10 @@ impl AgentRunner {
                 // properties) before paying for an API round-trip.
                 self.validate_llm_request(&request)?;
                 let previous_response_chain_present = request.previous_response_id.is_some();
-                // Extract messages before the request is moved into run_turn_once,
-                // so we can pass them to set_previous_response_chain afterward
-                // without cloning.
-                let mut request = request;
-                let sent_messages = std::mem::take(&mut request.messages);
+                // Clone messages for set_previous_response_chain while keeping
+                // the original in the request so providers that validate messages
+                // (e.g. MiMo) see a non-empty list during stream().
+                let sent_messages = request.messages.clone();
                 // Compute timeout before the call to avoid simultaneous mutable/immutable
                 // borrows of `self` (provider_client vs config).
                 let streaming_timeout = self
