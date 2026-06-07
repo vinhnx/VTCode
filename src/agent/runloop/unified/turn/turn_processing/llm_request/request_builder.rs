@@ -577,7 +577,7 @@ async fn render_primary_agent_runtime_context(
     let effective_permission_mode =
         clamp_primary_permission_mode(permissions.default_mode, agent.permission_mode);
     let mut lines = Vec::new();
-    lines.push("## Active Session Agent Runtime State".to_string());
+    lines.push("## Active Primary Agent Runtime State".to_string());
     lines.push(format!("- Active agent: {}", agent.display_name));
     lines.push(format!("- Spec name: {}", agent.identity.name));
     lines.push(format!("- Request model: {}", turn_snapshot.active_model));
@@ -892,6 +892,23 @@ mod tests {
             .collect()
     }
 
+    fn non_runtime_request_messages(request: &uni::LLMRequest) -> Vec<uni::Message> {
+        request
+            .messages
+            .iter()
+            .filter(|message| !is_primary_agent_runtime_context_message(message))
+            .cloned()
+            .collect()
+    }
+
+    fn is_primary_agent_runtime_context_message(message: &uni::Message) -> bool {
+        message.role == uni::MessageRole::User
+            && message
+                .content
+                .as_text()
+                .starts_with("## Active Primary Agent Runtime State")
+    }
+
     #[tokio::test]
     async fn recovery_request_omits_tools_and_disables_tool_choice() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
@@ -1074,7 +1091,7 @@ mod tests {
             Some("resp_123")
         );
         assert_eq!(
-            built.request.messages,
+            non_runtime_request_messages(&built.request),
             vec![uni::Message::user("continue".to_string())]
         );
     }
@@ -1107,7 +1124,7 @@ mod tests {
             Some("resp_123")
         );
         assert_eq!(
-            built.request.messages,
+            non_runtime_request_messages(&built.request),
             vec![uni::Message::user("continue".to_string())]
         );
     }
@@ -1139,7 +1156,7 @@ mod tests {
             Some("resp_123")
         );
         assert_eq!(
-            built.request.messages,
+            non_runtime_request_messages(&built.request),
             vec![
                 uni::Message::user("hello".to_string()),
                 uni::Message::user("continue".to_string())
@@ -1184,28 +1201,29 @@ mod tests {
             .expect("system prompt")
             .as_str();
         assert!(!system_prompt.contains("## Active Editor Context"));
-        assert_eq!(built.request.messages.len(), 2);
-        assert_eq!(built.request.messages[0].role, uni::MessageRole::User);
+        let non_runtime_messages = non_runtime_request_messages(&built.request);
+        assert_eq!(non_runtime_messages.len(), 2);
+        assert_eq!(non_runtime_messages[0].role, uni::MessageRole::User);
         assert!(
-            built.request.messages[0]
+            non_runtime_messages[0]
                 .content
                 .as_text()
                 .contains("## Active Editor Context")
         );
         assert!(
-            built.request.messages[0]
+            non_runtime_messages[0]
                 .content
                 .as_text()
                 .contains("- Active file: src/main.rs")
         );
         assert!(
-            built.request.messages[0]
+            non_runtime_messages[0]
                 .content
                 .as_text()
                 .contains("- Language: Rust")
         );
         assert_eq!(
-            built.request.messages[1],
+            non_runtime_messages[1],
             uni::Message::user("hello".to_string())
         );
         assert_eq!(
@@ -1249,7 +1267,7 @@ mod tests {
         );
         assert_eq!(built.request.messages[1].role, uni::MessageRole::User);
         let runtime_context = built.request.messages[1].content.as_text();
-        assert!(runtime_context.contains("## Active Session Agent Runtime State"));
+        assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
         assert!(runtime_context.contains("- Agent permission mode: plan"));
@@ -1397,7 +1415,7 @@ mod tests {
             built.request.messages[1]
                 .content
                 .as_text()
-                .contains("## Active Session Agent Runtime State")
+                .contains("## Active Primary Agent Runtime State")
         );
         assert_eq!(
             built.continuation_messages,
@@ -1561,22 +1579,23 @@ mod tests {
             second.request.previous_response_id.as_deref(),
             Some("resp_123")
         );
-        assert_eq!(second.request.messages.len(), 2);
-        assert_eq!(second.request.messages[0].role, uni::MessageRole::User);
+        let non_runtime_messages = non_runtime_request_messages(&second.request);
+        assert_eq!(non_runtime_messages.len(), 2);
+        assert_eq!(non_runtime_messages[0].role, uni::MessageRole::User);
         assert!(
-            second.request.messages[0]
+            non_runtime_messages[0]
                 .content
                 .as_text()
                 .contains("## Active Editor Context")
         );
         assert!(
-            second.request.messages[0]
+            non_runtime_messages[0]
                 .content
                 .as_text()
                 .contains("- Active file: src/lib.rs")
         );
         assert_eq!(
-            second.request.messages[1],
+            non_runtime_messages[1],
             uni::Message::user("continue".to_string())
         );
         assert_eq!(
