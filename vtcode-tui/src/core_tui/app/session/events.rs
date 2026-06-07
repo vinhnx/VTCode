@@ -640,6 +640,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if let Some(command) = maybe_cycle_session_agent(session, &key) {
+                if handle_running_slash_command_block_for_input(session, &command) {
+                    return None;
+                }
+                session.mark_dirty();
+                return Some(InlineEvent::Submit(command));
+            }
+
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
@@ -1155,6 +1163,42 @@ fn handle_transcript_review_key(
     }
 }
 
+fn maybe_cycle_session_agent(session: &Session, key: &KeyEvent) -> Option<String> {
+    if key.modifiers != KeyModifiers::NONE
+        || !session.core.input_manager.content().is_empty()
+        || !session.core.queued_inputs.is_empty()
+        || session.visible_transient_surface().is_some()
+        || session.has_active_overlay()
+    {
+        return None;
+    }
+
+    let agent_names = session
+        .agent_palette
+        .as_ref()?
+        .agent_names()
+        .filter(|name| !name.trim().is_empty())
+        .collect::<Vec<_>>();
+    if agent_names.is_empty() {
+        return None;
+    }
+
+    let active = session
+        .core
+        .header_context
+        .session_agent
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty());
+    let next = match active.and_then(|active| agent_names.iter().position(|name| *name == active)) {
+        Some(index) if index + 1 < agent_names.len() => agent_names[index + 1].to_owned(),
+        Some(_) => "default".to_owned(),
+        None => agent_names[0].to_owned(),
+    };
+
+    Some(format!("/session-agent {next}"))
+}
+
 fn take_submitted_input(session: &mut Session) -> Option<String> {
     let submitted = session.core.input_manager.content().to_owned();
     let submitted_entry = session.core.input_manager.current_history_entry();
@@ -1178,12 +1222,16 @@ fn clear_submitted_input(session: &mut Session) {
 }
 
 fn handle_running_slash_command_block(session: &mut Session) -> bool {
+    let input = session.core.input_manager.content().to_owned();
+    handle_running_slash_command_block_for_input(session, &input)
+}
+
+fn handle_running_slash_command_block_for_input(session: &mut Session, input: &str) -> bool {
     if !session.is_running_activity() {
         return false;
     }
 
-    let Some(command_name) = extract_slash_command_name(session.core.input_manager.content())
-    else {
+    let Some(command_name) = extract_slash_command_name(input) else {
         return false;
     };
 
