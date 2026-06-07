@@ -17,7 +17,7 @@ categories = ["development-tools", "command-line-interface"]
 anstyle = { workspace = true }
 ratatui = { workspace = true }
 unicode-width = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.123.3" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.123.4" }
 
 [dev-dependencies]
 

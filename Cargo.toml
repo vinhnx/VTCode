@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.123.3"
+version = "0.123.4"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -103,7 +103,7 @@ quote = "1"
 syn = "2"
 
 [workspace.package]
-version = "0.123.3"
+version = "0.123.4"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -236,15 +236,15 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 
 
 [dependencies]
-vtcode-acp = { path = "vtcode-acp", version = "0.123.3" }
-vtcode-commons = { path = "vtcode-commons", version = "0.123.3" }
-vtcode-design = { path = "vtcode-design", version = "0.123.3" }
-vtcode-config = { path = "vtcode-config", version = "0.123.3" }
-vtcode-auth = { path = "vtcode-auth", version = "0.123.3" }
-vtcode-core = { path = "vtcode-core", version = "0.123.3", default-features = false }
-vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.123.3" }
-vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.123.3" }
-vtcode-tui = { path = "vtcode-tui", version = "0.123.3" }
+vtcode-acp = { path = "vtcode-acp", version = "0.123.4" }
+vtcode-commons = { path = "vtcode-commons", version = "0.123.4" }
+vtcode-design = { path = "vtcode-design", version = "0.123.4" }
+vtcode-config = { path = "vtcode-config", version = "0.123.4" }
+vtcode-auth = { path = "vtcode-auth", version = "0.123.4" }
+vtcode-core = { path = "vtcode-core", version = "0.123.4", default-features = false }
+vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.123.4" }
+vtcode-terminal-detection = { path = "vtcode-terminal-detection", version = "0.123.4" }
+vtcode-tui = { path = "vtcode-tui", version = "0.123.4" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
