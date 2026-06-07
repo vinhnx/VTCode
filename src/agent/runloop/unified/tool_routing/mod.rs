@@ -1034,8 +1034,11 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     } else {
         permissions_config.cloned().unwrap_or_default()
     };
+    let base_permission_mode = permissions_snapshot.default_mode;
     permissions_snapshot.default_mode =
-        clamp_session_permission_mode(permissions_snapshot.default_mode, permission_mode_overlay);
+        clamp_session_permission_mode(base_permission_mode, permission_mode_overlay);
+    let session_overlay_narrows_permissions = permission_mode_overlay.is_some()
+        && permissions_snapshot.default_mode != base_permission_mode;
     let permission_mode = current_permission_mode(&permissions_snapshot);
     let effective_permissions =
         effective_permissions_config(&permissions_snapshot, permission_mode);
@@ -1147,7 +1150,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
-    if skip_confirmations {
+    if skip_confirmations && !session_overlay_narrows_permissions {
         return Ok(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
 
