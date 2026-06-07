@@ -1,5 +1,16 @@
 id: prefer-nullish-coalescing
 snapshots:
+  ? |
+    const result = isActive || hasPermission;
+  : labels:
+    - source: isActive || hasPermission
+      style: primary
+      start: 15
+      end: 40
+    - source: result = isActive || hasPermission
+      style: secondary
+      start: 6
+      end: 40
   const timeout = options.timeout || 5000;:
     labels:
     - source: options.timeout || 5000
@@ -21,6 +32,17 @@ snapshots:
       style: secondary
       start: 6
       end: 39
+  ? |
+    const x = a || b;
+  : labels:
+    - source: a || b
+      style: primary
+      start: 10
+      end: 16
+    - source: x = a || b
+      style: secondary
+      start: 6
+      end: 16
   const x = value || "default";:
     labels:
     - source: value || "default"

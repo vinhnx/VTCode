@@ -1,11 +1,11 @@
 use super::{
     AstGrepByteOffset, AstGrepLabel, AstGrepMatch, AstGrepMetaVar, AstGrepMetaVariables,
     AstGrepPoint, AstGrepRange, AstGrepRewriteMatch, AstGrepScanFinding, FixConfig, FixExpandRule,
-    StructuralSearchRequest, StructuralWorkflow, build_fixconfig_rule_yaml, build_query_result,
-    execute_structural_search, extract_custom_languages, extract_language_globs,
-    extract_language_injections, format_ast_grep_failure, normalize_match, normalize_rewrite_match,
-    normalize_scan_finding, parse_compact_matches, preflight_parseable_pattern,
-    sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
+    StructuralSearchRequest, StructuralWorkflow, build_atomic_rule_yaml, build_fixconfig_rule_yaml,
+    build_query_result, execute_structural_search, extract_custom_languages,
+    extract_language_globs, extract_language_injections, format_ast_grep_failure, normalize_match,
+    normalize_rewrite_match, normalize_scan_finding, parse_compact_matches,
+    preflight_parseable_pattern, sanitize_pattern_for_tree_sitter, yaml_escape_scalar,
 };
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -4280,4 +4280,372 @@ fn query_regex_only_without_pattern_or_kind_passes_validation() {
         request.validate_query().is_ok(),
         "regex alone (no pattern/kind) should pass validate_query"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Relational rule YAML generation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn build_atomic_rule_yaml_emits_has_pattern_string() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "await $PROMISE",
+        "lang": "typescript",
+        "has": "return"
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("pattern: await $PROMISE"), "{yaml}");
+    assert!(yaml.contains("has:\n"), "{yaml}");
+    assert!(yaml.contains("  pattern: return\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_has_rule_object() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "await $PROMISE",
+        "lang": "typescript",
+        "has": {
+            "kind": "for_in_statement",
+            "stopBy": "end"
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("has:\n"), "{yaml}");
+    assert!(yaml.contains("kind: for_in_statement\n"), "{yaml}");
+    assert!(yaml.contains("stopBy: end\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_inside_pattern_string() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "return $VAL",
+        "lang": "typescript",
+        "inside": "function $NAME($$$) { $$$ }"
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("inside:\n"), "{yaml}");
+    assert!(
+        yaml.contains("pattern: function $NAME($$$) { $$$ }\n"),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_follows() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "console.log('hello')",
+        "lang": "javascript",
+        "follows": {
+            "pattern": "console.log('world')"
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(yaml.contains("follows:\n"), "{yaml}");
+    assert!(yaml.contains("pattern: console.log('world')\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_precedes() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "console.log('world')",
+        "lang": "javascript",
+        "precedes": {
+            "pattern": "console.log('hello')"
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "javascript");
+    assert!(yaml.contains("precedes:\n"), "{yaml}");
+    assert!(yaml.contains("pattern: console.log('hello')\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_nested_relational_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "pass",
+        "lang": "python",
+        "inside": {
+            "kind": "block",
+            "has": {
+                "kind": "expression_statement",
+                "stopBy": "end"
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "python");
+    assert!(yaml.contains("inside:\n"), "{yaml}");
+    assert!(yaml.contains("kind: block\n"), "{yaml}");
+    assert!(yaml.contains("has:\n"), "{yaml}");
+    assert!(yaml.contains("kind: expression_statement\n"), "{yaml}");
+    assert!(yaml.contains("stopBy: end\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_constraints() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "$FN($$$ARGS)",
+        "lang": "typescript",
+        "constraints": {
+            "$FN": {
+                "kind": "identifier",
+                "regex": "^use"
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("constraints:\n"), "{yaml}");
+    assert!(yaml.contains("$FN:\n"), "{yaml}");
+    assert!(yaml.contains("kind: identifier\n"), "{yaml}");
+    assert!(yaml.contains("regex: ^use\n"), "{yaml}");
+}
+
+#[test]
+fn build_atomic_rule_yaml_emits_stopby_object() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "$CALL",
+        "lang": "typescript",
+        "inside": {
+            "kind": "function",
+            "stopBy": {
+                "kind": "function"
+            }
+        }
+    }))
+    .expect("valid request");
+
+    let yaml = build_atomic_rule_yaml(&request, "typescript");
+    assert!(yaml.contains("inside:\n"), "{yaml}");
+    assert!(yaml.contains("stopBy:\n"), "{yaml}");
+    assert!(yaml.contains("kind: function\n"), "{yaml}");
+}
+
+// ---------------------------------------------------------------------------
+// Relational rule validation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn validate_query_accepts_has_as_sufficient() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "typescript",
+        "has": { "kind": "for_in_statement" }
+    }));
+    assert!(
+        request.is_ok(),
+        "has alone should satisfy query validation: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_accepts_inside_as_sufficient() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "typescript",
+        "inside": { "kind": "function" }
+    }));
+    assert!(
+        request.is_ok(),
+        "inside alone should satisfy query validation: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_accepts_follows_as_sufficient() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "follows": { "pattern": "console.log('a')" }
+    }));
+    assert!(
+        request.is_ok(),
+        "follows alone should satisfy query validation: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_accepts_precedes_as_sufficient() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "javascript",
+        "precedes": { "pattern": "console.log('b')" }
+    }));
+    assert!(
+        request.is_ok(),
+        "precedes alone should satisfy query validation: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_query_requires_lang_with_relational_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "has": { "kind": "for_in_statement" }
+    }));
+    let err = request.expect_err("relational rules without lang should fail");
+    assert!(err.to_string().contains("requires `lang`"), "{err}");
+}
+
+#[test]
+fn validate_query_rejects_no_pattern_no_relational() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "lang": "typescript"
+    }));
+    let err = request.expect_err("no pattern and no relational rules should fail");
+    assert!(err.to_string().contains("requires a non-empty"), "{err}");
+}
+
+#[test]
+fn validate_count_accepts_relational_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "count",
+        "lang": "typescript",
+        "has": { "kind": "for_in_statement" }
+    }));
+    assert!(
+        request.is_ok(),
+        "count should accept relational rules: {:?}",
+        request.err()
+    );
+}
+
+#[test]
+fn validate_rewrite_rejects_relational_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "typescript",
+        "has": { "kind": "function" }
+    }));
+    let err = request.expect_err("rewrite should reject relational rules");
+    assert!(
+        err.to_string().contains("does not accept relational"),
+        "{err}"
+    );
+}
+
+#[test]
+fn validate_rewrite_rejects_follows() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "foo()",
+        "rewrite": "bar()",
+        "lang": "typescript",
+        "follows": { "pattern": "baz()" }
+    }));
+    let err = request.expect_err("rewrite should reject follows");
+    assert!(
+        err.to_string().contains("does not accept relational"),
+        "{err}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Relational rule deserialization tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn relational_rule_input_deserializes_pattern_string() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "foo()",
+        "lang": "typescript",
+        "has": "return"
+    }))
+    .expect("should deserialize");
+    assert!(request.has.is_some());
+}
+
+#[test]
+fn relational_rule_input_deserializes_rule_object() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "foo()",
+        "lang": "typescript",
+        "inside": {
+            "kind": "function",
+            "stopBy": "end"
+        }
+    }))
+    .expect("should deserialize");
+    assert!(request.inside.is_some());
+}
+
+#[test]
+fn relational_rule_input_deserializes_nested_rules() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "pass",
+        "lang": "python",
+        "inside": {
+            "kind": "block",
+            "has": {
+                "kind": "expression_statement",
+                "stopBy": "end"
+            }
+        }
+    }))
+    .expect("should deserialize nested rules");
+    assert!(request.inside.is_some());
+}
+
+#[test]
+fn relational_rule_input_deserializes_follows_and_precedes() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "query",
+        "pattern": "bar()",
+        "lang": "javascript",
+        "follows": { "pattern": "foo()" },
+        "precedes": { "pattern": "baz()" }
+    }))
+    .expect("should deserialize");
+    assert!(request.follows.is_some());
+    assert!(request.precedes.is_some());
 }

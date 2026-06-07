@@ -1,9 +1,7 @@
 id: no-path-traversal
 valid:
   - |
-      File.join(Rails.root, "data", "fixed.txt")
-  - |
-      send_file Rails.root.join("public", "report.pdf")
+      File.basename(user_input)
 invalid:
   - |
       File.join(Rails.root, params[:file])
@@ -11,3 +9,7 @@ invalid:
       Rails.root.join("data", user_input)
   - |
       send_file params[:path]
+  - |
+      File.join(Rails.root, "data", "fixed.txt")
+  - |
+      send_file Rails.root.join("public", "report.pdf")

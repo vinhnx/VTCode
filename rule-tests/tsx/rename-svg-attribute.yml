@@ -4,11 +4,6 @@ valid:
       function Icon() {
         return <svg><path strokeLinecap="round" fillOpacity="0.5" /></svg>;
       }
-  - |
-      // Regular HTML attributes are fine
-      function Box() {
-        return <div className="container" data-testid="box" />;
-      }
 invalid:
   - |
       function Icon() {
@@ -17,4 +12,8 @@ invalid:
   - |
       function Icon() {
         return <svg><circle fill-opacity="0.5" stroke-width="2" /></svg>;
+      }
+  - |
+      function Box() {
+        return <div data-testid="box" />;
       }

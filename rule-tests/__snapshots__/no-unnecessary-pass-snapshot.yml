@@ -1,2 +1,42 @@
 id: no-unnecessary-pass
-snapshots: {}
+snapshots:
+  ? |
+    def do_something():
+        print("hello")
+        pass
+  : labels:
+    - source: pass
+      style: primary
+      start: 43
+      end: 47
+    - source: print("hello")
+      style: secondary
+      start: 24
+      end: 38
+    - source: |-
+        print("hello")
+            pass
+      style: secondary
+      start: 24
+      end: 47
+  ? |
+    def process(x):
+        result = x * 2
+        pass
+        return result
+  : labels:
+    - source: pass
+      style: primary
+      start: 39
+      end: 43
+    - source: result = x * 2
+      style: secondary
+      start: 20
+      end: 34
+    - source: |-
+        result = x * 2
+            pass
+            return result
+      style: secondary
+      start: 20
+      end: 61

@@ -4,8 +4,8 @@ valid:
       x: int | None = None
   - |
       x: str = "hello"
-  - |
-      x: Optional[int] = None
 invalid:
   - |
       x: Optional[int]
+  - |
+      x: Optional[int] = None

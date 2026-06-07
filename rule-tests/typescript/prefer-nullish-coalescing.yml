@@ -3,11 +3,13 @@ valid:
   - |
       const x = value ?? fallback;
   - |
-      const x = a || b;
-  - |
       if (a || b) { doSomething(); }
 invalid:
   - |
       const x = value || "default";
   - |
       const timeout = options.timeout || 5000;
+  - |
+      const x = a || b;
+  - |
+      const result = isActive || hasPermission;
