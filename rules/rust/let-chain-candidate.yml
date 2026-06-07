@@ -49,5 +49,7 @@ rule:
         kind: block
         has:
           matches: sole-inner-if-let-stmt
+metadata:
+  url: https://doc.rust-lang.org/nightly/edition-guide/rust-2024/let-chains.html
 files:
   - "**/*.rs"

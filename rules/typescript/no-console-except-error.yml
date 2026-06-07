@@ -15,9 +15,9 @@ rule:
           kind: catch_clause
           stopBy: end
     - pattern: console.$METHOD($$$)
-      constraints:
-        METHOD:
-          regex: ^(log|debug|warn|info|trace)$
+constraints:
+  METHOD:
+    regex: ^(log|debug|warn|info|trace)$
 files:
   - "**/*.ts"
   - "**/*.tsx"

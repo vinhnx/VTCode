@@ -95,7 +95,9 @@ VT Code ships a set of curated ast-grep rules under `rules/` with matching tests
 - `no-print`: flags `print()` calls in production code
 - `no-walrus-source`: flags walrus operators that harm readability
 - `no-unnecessary-list`: flags `list(...)` wrapping an already-list expression
+- `no-identity-check-with-type`: flags `type(x) is T` in favor of `isinstance(x, T)`
 - `optional-to-union`: flags `Optional[X]` in favor of `X | None`
+- `prefer-dict-get`: flags `if k in d: d[k]` in favor of `d.get(k)`
 - `prefer-generator-expression`: flags list comprehensions passed to `sum`/`any`/`all`/`min`/`max`
 - `prefer-isinstance-tuple`: flags `isinstance(x, A) or isinstance(x, B)` in favor of `isinstance(x, (A, B))`
 
@@ -103,9 +105,13 @@ VT Code ships a set of curated ast-grep rules under `rules/` with matching tests
 - `no-unsafe-fn-without-unsafe`: flags `unsafe fn` bodies that contain no `unsafe` block
 - `avoid-duplicate-export`: flags `pub use` when `pub mod` already exposes the module
 - `no-iterator-for-each`: flags `.iter().for_each()` in favor of `for` loops
+- `no-redundant-closure`: flags `|x| foo(x)` in favor of `foo` directly
 - `let-chain-candidate`: flags nested `if` that could be collapsed with `let`-chains
 - `no-chars-enumerate`: flags `.chars().enumerate()` when `.char_indices()` is more idiomatic
 - `no-alloc-digit-count`: flags digit-count loops that allocate instead of using repeated division
+- `prefer-iterator-sum`: flags manual accumulator loops in favor of `.sum()`
+- `prefer-retain-over-filter-collect`: flags `.filter().collect()` on a `Vec` in favor of `.retain()`
+- `prefer-unwrap-or-default`: flags `.unwrap_or(Default::default())` in favor of `.unwrap_or_default()`
 
 ### Kotlin (`rules/kotlin/`)
 - `no-var`: flags mutable `var` declarations

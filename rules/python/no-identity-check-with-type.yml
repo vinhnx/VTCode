@@ -1,0 +1,20 @@
+id: no-identity-check-with-type
+language: python
+severity: warning
+message: Use `isinstance($X, $T)` instead of `type($X) is $T` or `type($X) == $T`.
+note: |
+  `type(x) is T` fails for subclasses, while `isinstance(x, T)` respects
+  inheritance. Use `isinstance` unless you intentionally need an exact type
+  match (rare). For negated checks (`type(x) is not T`), use
+  `not isinstance(x, T)` manually -- this rule only autofixes the
+  affirmative forms.
+rule:
+  any:
+    - pattern: "type($X) is $T"
+    - pattern: "type($X) == $T"
+fix: isinstance($X, $T)
+files:
+  - "**/*.py"
+  - "!tests/**"
+  - "!**/test_*.py"
+  - "!**/*_test.py"

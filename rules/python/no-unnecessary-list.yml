@@ -8,7 +8,7 @@ note: |
   extra allocation. This is a safe autofix.
 rule:
   pattern: list($LC)
-  constraints:
-    LC:
-      kind: list_comprehension
+constraints:
+  LC:
+    kind: list_comprehension
 fix: $LC

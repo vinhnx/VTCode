@@ -10,11 +10,11 @@ note: |
   list for indexing or reuse.
 rule:
   pattern: $FUNC($LIST)
-  constraints:
-    FUNC:
-      regex: ^(any|all|sum)$
-    LIST:
-      kind: list_comprehension
+constraints:
+  FUNC:
+    regex: ^(any|all|sum)$
+  LIST:
+    kind: list_comprehension
 transform:
   INNER:
     substring:
@@ -22,3 +22,5 @@ transform:
       startChar: 1
       endChar: -1
 fix: $FUNC($INNER)
+metadata:
+  url: https://peps.python.org/pep-0289/

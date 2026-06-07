@@ -1,0 +1,16 @@
+id: no-identity-check-with-type
+valid:
+  - code: |
+      isinstance(x, int)
+  - code: |
+      isinstance(x, (int, float))
+  - code: |
+      if x is None:
+          pass
+  - code: |
+      type(x)
+invalid:
+  - code: |
+      type(x) is int
+  - code: |
+      type(x) == str

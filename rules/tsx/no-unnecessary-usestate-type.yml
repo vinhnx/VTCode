@@ -19,8 +19,8 @@ constraints:
     any:
       - kind: number
       - kind: string
-      - kind: true
-      - kind: false
+      - kind: "true"
+      - kind: "false"
 fix: useState($INIT)
 files:
   - "**/*.tsx"

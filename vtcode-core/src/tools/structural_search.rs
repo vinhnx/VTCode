@@ -1,9 +1,10 @@
 use anyhow::{Context, Result, anyhow, bail};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use tokio::fs as afs;
 use tokio::process::Command;
@@ -640,6 +641,63 @@ struct AstGrepLabel {
     source: Option<String>,
 }
 
+/// Severity level for ast-grep scan findings.
+///
+/// ast-grep defines five severity levels:
+/// - `error`: reports an error; causes `ast-grep scan` to exit non-zero
+/// - `warning`: reports a warning
+/// - `info`: reports an informational message
+/// - `hint`: reports a hint (the default severity for ast-grep rules)
+/// - `off`: disables the rule entirely
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AstGrepSeverity {
+    Error,
+    Warning,
+    Info,
+    Hint,
+    Off,
+}
+
+impl AstGrepSeverity {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Info => "info",
+            Self::Hint => "hint",
+            Self::Off => "off",
+        }
+    }
+
+    fn from_str_normalized(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "error" => Some(Self::Error),
+            "warning" | "warn" => Some(Self::Warning),
+            "info" => Some(Self::Info),
+            "hint" => Some(Self::Hint),
+            "off" | "none" => Some(Self::Off),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AstGrepSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for AstGrepSeverity {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        AstGrepSeverity::from_str_normalized(&s).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unknown severity `{s}`; expected error, warning, info, hint, or off"
+            ))
+        })
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct AstGrepScanFinding {
     file: String,
@@ -652,7 +710,7 @@ struct AstGrepScanFinding {
     #[serde(default, rename = "ruleId")]
     rule_id: Option<String>,
     #[serde(default)]
-    severity: Option<String>,
+    severity: Option<AstGrepSeverity>,
     #[serde(default)]
     message: Option<String>,
     #[serde(default)]
@@ -1940,7 +1998,10 @@ fn normalize_scan_finding(entry: &AstGrepScanFinding) -> Value {
     }
     finding_object.insert("range".to_string(), build_range_value(&entry.range));
     finding_object.insert("rule_id".to_string(), json!(entry.rule_id));
-    finding_object.insert("severity".to_string(), json!(entry.severity));
+    finding_object.insert(
+        "severity".to_string(),
+        json!(entry.severity.map(|s| s.to_string())),
+    );
     finding_object.insert("message".to_string(), json!(entry.message));
     finding_object.insert("note".to_string(), json!(entry.note));
     if let Some(metadata) = &entry.metadata {

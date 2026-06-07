@@ -24,7 +24,6 @@ constraints:
     any:
       - kind: jsx_element
       - kind: jsx_self_closing_element
-      - kind: jsx_fragment
 fix: "{$COND ? $JSX : null}"
 files:
   - "**/*.tsx"

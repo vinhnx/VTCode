@@ -1,7 +1,7 @@
 id: no-return-in-foreach
 language: typescript
 severity: error
-message: `return` inside `.forEach()` does not return from the enclosing function.
+message: "return inside .forEach() does not return from the enclosing function."
 note: |
   The callback passed to `.forEach()` is a regular function call. A `return`
   statement inside it only exits the callback, not the surrounding function.

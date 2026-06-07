@@ -9,8 +9,8 @@ note: |
   below to your project's actual module layout.
 rule:
   pattern: import $PATH
-  constraints:
-    PATH:
-      regex: ^com\.example\.(data|presentation)\.
+constraints:
+  PATH:
+    regex: ^com\.example\.(data|presentation)\.
 files:
   - src/**/domain/**/*.kt

@@ -9,9 +9,9 @@ note: |
   `detect`, `any?`, `all?`, `none?`, and `count`.
 rule:
   pattern: $LIST.$ITER { |$V| $V.$METHOD }
-  constraints:
-    ITER:
-      regex: ^(map|select|reject|each|find_all|detect|any\?|all\?|none\?|count)$
+constraints:
+  ITER:
+    regex: ^(map|select|reject|each|find_all|detect|any\?|all\?|none\?|count)$
 fix: $LIST.$ITER(&:$METHOD)
 files:
   - '**/*.rb'

@@ -11,8 +11,8 @@ note: |
   partial application, or additional logic are not flagged.
 rule:
   pattern: "|$A| $FUNC($A)"
-  constraints:
-    FUNC:
-      kind: identifier
+constraints:
+  FUNC:
+    kind: identifier
 files:
   - "**/*.rs"

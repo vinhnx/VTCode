@@ -257,6 +257,7 @@ impl AstGrepLanguage {
                 | Self::Tsx
                 | Self::Go
                 | Self::Java
+                | Self::Bash
         )
     }
 

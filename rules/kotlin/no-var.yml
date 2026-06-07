@@ -8,9 +8,7 @@ note: |
   to reason about.
 rule:
   kind: property_declaration
-  has:
-    field: property_delegate
-    pattern: var
+  pattern: "var $NAME: $TYPE"
 files:
   - src/**/*.kt
   - src/**/*.kts

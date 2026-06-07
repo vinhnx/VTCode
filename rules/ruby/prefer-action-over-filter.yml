@@ -7,17 +7,18 @@ note: |
   favor of `before_action`, `after_action`, and `around_action`. The `_action`
   variants have been the recommended API since Rails 4.0.
 rule:
-  any:
-    - pattern: before_filter $$$ARGS
-    - pattern: after_filter $$$ARGS
-    - pattern: around_filter $$$ARGS
-fix:
-  template: $FILTER_ACTION $$$ARGS
-  transform:
-    FILTER_ACTION:
+  pattern: $FILTER $$$ARGS
+constraints:
+  FILTER:
+    regex: ^(before_filter|after_filter|around_filter)$
+transform:
+  ACTION:
+    replace:
       source: $FILTER
-      replace:
-        regex: _filter$
-        by: _action
+      replace: _filter$
+      by: _action
+fix: $ACTION $$$ARGS
+metadata:
+  url: https://guides.rubyonrails.org/upgrading_ruby_on_rails.html
 files:
   - app/controllers/**/*.rb

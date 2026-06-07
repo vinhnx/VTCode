@@ -9,7 +9,9 @@ note: |
   acceptable in certain framework contexts (e.g., Android `@Inject` fields,
   JUnit `@BeforeEach`) where the framework guarantees initialization timing.
 rule:
-  pattern: lateinit var $NAME: $TYPE
+  pattern: "lateinit var $NAME: $TYPE"
+metadata:
+  url: https://kotlinlang.org/docs/properties.html#late-initialized-properties
 files:
   - src/**/*.kt
   - src/**/*.kts

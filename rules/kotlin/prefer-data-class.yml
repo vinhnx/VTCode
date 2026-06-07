@@ -14,6 +14,8 @@ rule:
     kind: primary_constructor
     has:
       kind: class_parameter
+metadata:
+  url: https://kotlinlang.org/docs/data-classes.html
 files:
   - src/**/*.kt
   - src/**/*.kts

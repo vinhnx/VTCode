@@ -13,3 +13,5 @@ rule:
     context: 'a: Optional[$T]'
     selector: generic_type
 fix: $T | None
+metadata:
+  url: https://peps.python.org/pep-0604/

@@ -30,6 +30,8 @@ constraints:
       - kind: member_expression
       - kind: call_expression
       - kind: subscript_expression
+metadata:
+  url: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Nullish_coalescing
 files:
   - "**/*.ts"
   - "**/*.tsx"

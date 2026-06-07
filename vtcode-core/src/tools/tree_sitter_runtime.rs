@@ -85,10 +85,10 @@ fn grammar_for(language: AstGrepLanguage) -> Option<tree_sitter::Language> {
         AstGrepLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
         AstGrepLanguage::Go => tree_sitter_go::LANGUAGE.into(),
         AstGrepLanguage::Java => tree_sitter_java::LANGUAGE.into(),
+        AstGrepLanguage::Bash => tree_sitter_bash::LANGUAGE.into(),
         // Languages without bundled local parsers delegate to the ast-grep binary,
         // which has its own built-in tree-sitter parsers for all supported languages.
-        AstGrepLanguage::Markdown
-        | AstGrepLanguage::C
+        AstGrepLanguage::C
         | AstGrepLanguage::Cpp
         | AstGrepLanguage::Csharp
         | AstGrepLanguage::Css
