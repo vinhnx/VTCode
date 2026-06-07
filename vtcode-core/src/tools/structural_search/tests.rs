@@ -1294,9 +1294,11 @@ fn structural_failure_message_skips_project_config_hint_for_parse_errors() {
         "parse error near pattern".to_string(),
     );
 
-    assert!(!text.contains("customLanguages"));
-    assert!(!text.contains("languageGlobs"));
-    assert!(!text.contains("languageInjections"));
+    // "tree-sitter dynamic library" is unique to AST_GREP_PROJECT_CONFIG_HINT
+    // and should NOT appear for generic parse errors (only for language support
+    // issues). Strings like "customLanguages" or "languageInjections" may
+    // appear in AST_GREP_FAQ_HINT and are not reliable discriminators.
+    assert!(!text.contains("tree-sitter dynamic library"));
 }
 
 #[test]
@@ -3440,5 +3442,334 @@ async fn fixconfig_rewrite_without_expansion_uses_sg_run_rewrite() {
         args.lines()
             .any(|line| line == "--rewrite=logger.log($$$ARGS)"),
         "should pass --rewrite with template"
+    );
+}
+
+// --------------- Go-specific tests ---------------
+
+#[test]
+fn structural_request_accepts_go_contextual_selector() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fmt.Println($A)",
+        "lang": "go",
+        "selector": "call_expression"
+    }))
+    .expect("Go pattern with call_expression selector should be valid");
+
+    assert_eq!(request.pattern(), Some("fmt.Println($A)"));
+    assert_eq!(request.selector.as_deref(), Some("call_expression"));
+}
+
+#[test]
+fn structural_request_accepts_go_defer_kind() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "defer_statement",
+        "lang": "go"
+    }))
+    .expect("Go defer_statement kind should be valid");
+
+    assert_eq!(request.kind(), Some("defer_statement"));
+}
+
+#[test]
+fn structural_request_accepts_go_import_spec_kind_with_regex() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "kind": "import_spec",
+        "lang": "go"
+    }))
+    .expect("Go import_spec kind should be valid");
+
+    assert_eq!(request.kind(), Some("import_spec"));
+}
+
+#[test]
+fn go_call_pattern_preflight_parses_as_type_conversion() {
+    // In Go, `fmt.Println($A)` sanitizes to `fmt.Println(placeholder)` which
+    // tree-sitter-go parses as a type conversion (valid Go syntax). The
+    // preflight should accept it without a fragment hint. The Go-specific
+    // guidance in `fragment_pattern_hint` is a defensive measure for edge
+    // cases where tree-sitter-go fails to parse a call-like pattern.
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "fmt.Println($A)",
+        "lang": "go"
+    }))
+    .expect("valid request");
+
+    assert!(
+        preflight_parseable_pattern(&request)
+            .expect("preflight should succeed")
+            .is_none(),
+        "Go call-like pattern should parse as type conversion without fragment hint"
+    );
+}
+
+#[test]
+fn looks_like_html_attribute_pattern_detects_attribute_fragments() {
+    assert!(super::looks_like_html_attribute_pattern("class=$VAL"));
+    assert!(super::looks_like_html_attribute_pattern("id=$ID"));
+    assert!(super::looks_like_html_attribute_pattern("href=$URL"));
+    assert!(super::looks_like_html_attribute_pattern("data-testid=$VAL"));
+    assert!(super::looks_like_html_attribute_pattern("xml:lang=$VAL"));
+    assert!(!super::looks_like_html_attribute_pattern(
+        "<div class=$VAL>"
+    ));
+    assert!(!super::looks_like_html_attribute_pattern("class"));
+    assert!(!super::looks_like_html_attribute_pattern("=value"));
+}
+
+#[test]
+fn looks_like_html_tag_pattern_detects_opening_tag_fragments() {
+    assert!(super::looks_like_html_tag_pattern("<$TAG>"));
+    assert!(super::looks_like_html_tag_pattern("<div>"));
+    assert!(super::looks_like_html_tag_pattern("<$TAG $$$ATTRS>"));
+    assert!(!super::looks_like_html_tag_pattern("<div></div>"));
+    assert!(!super::looks_like_html_tag_pattern("<br/>"));
+    assert!(!super::looks_like_html_tag_pattern("class=$VAL"));
+}
+
+#[test]
+fn html_fragment_hint_for_attribute_pattern_mentions_kinds() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "class=$VAL",
+        "lang": "html"
+    }))
+    .expect("valid request");
+
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Html);
+    assert!(
+        hint.contains("attribute_name"),
+        "should mention attribute_name kind: {hint}"
+    );
+    assert!(
+        hint.contains("attribute_value"),
+        "should mention attribute_value kind: {hint}"
+    );
+}
+
+#[test]
+fn html_fragment_hint_for_tag_pattern_mentions_element() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "<$TAG>",
+        "lang": "html"
+    }))
+    .expect("valid request");
+
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Html);
+    assert!(hint.contains("tag_name"), "should mention tag_name: {hint}");
+    assert!(
+        hint.contains("element"),
+        "should mention element kind: {hint}"
+    );
+}
+
+#[test]
+fn looks_like_java_declaration_fragment_detects_bare_annotations() {
+    assert!(super::looks_like_java_declaration_fragment("@Override"));
+    assert!(super::looks_like_java_declaration_fragment("@Nullable"));
+    assert!(super::looks_like_java_declaration_fragment("@Bean($$$)"));
+    assert!(!super::looks_like_java_declaration_fragment("class Foo {}"));
+    assert!(!super::looks_like_java_declaration_fragment("foo()"));
+}
+
+#[test]
+fn looks_like_java_declaration_fragment_detects_type_declaration_fragments() {
+    assert!(super::looks_like_java_declaration_fragment("String $F;"));
+    assert!(super::looks_like_java_declaration_fragment(
+        "private String $NAME;"
+    ));
+    assert!(super::looks_like_java_declaration_fragment("int $X;"));
+    assert!(!super::looks_like_java_declaration_fragment("String"));
+    assert!(!super::looks_like_java_declaration_fragment("$F"));
+}
+
+#[test]
+fn java_fragment_hint_for_annotation_mentions_kinds() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "@Override",
+        "lang": "java"
+    }))
+    .expect("valid request");
+
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Java);
+    assert!(
+        hint.contains("marker_annotation") || hint.contains("annotation"),
+        "should mention annotation kind: {hint}"
+    );
+    assert!(
+        hint.contains("field_declaration"),
+        "should mention field_declaration: {hint}"
+    );
+}
+
+#[test]
+fn java_fragment_hint_for_type_declaration_mentions_field_type_pattern() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "String $F;",
+        "lang": "java"
+    }))
+    .expect("valid request");
+
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Java);
+    assert!(
+        hint.contains("field: type"),
+        "should mention field: type pattern: {hint}"
+    );
+    assert!(
+        hint.contains("field_declaration"),
+        "should mention field_declaration: {hint}"
+    );
+}
+
+// --------------- FixConfig stopBy object tests ---------------
+
+#[test]
+fn fixconfig_accepts_expand_rule_with_stop_by_object() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "workflow": "rewrite",
+        "pattern": "$ITEM",
+        "lang": "javascript",
+        "fix_config": {
+            "template": "",
+            "expand_start": {
+                "regex": ",",
+                "stop_by": { "kind": "," }
+            },
+            "expand_end": {
+                "regex": ",",
+                "stop_by": { "regex": "," }
+            }
+        }
+    }))
+    .expect("fix_config with object stop_by should be accepted");
+
+    let fc = request.fix_config.as_ref().expect("fix_config present");
+    let es = fc.expand_start.as_ref().expect("expand_start present");
+    assert_eq!(es.regex.as_deref(), Some(","));
+    let stop_by = es.stop_by.as_ref().expect("stop_by present");
+    assert_eq!(stop_by["kind"], ",");
+
+    let ee = fc.expand_end.as_ref().expect("expand_end present");
+    let stop_by_end = ee.stop_by.as_ref().expect("stop_by present");
+    assert_eq!(stop_by_end["regex"], ",");
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_renders_stop_by_object() {
+    let fix_config = FixConfig {
+        template: "".to_string(),
+        expand_start: None,
+        expand_end: Some(FixExpandRule {
+            regex: Some(",".to_string()),
+            kind: None,
+            pattern: None,
+            stop_by: Some(json!({ "kind": "," })),
+        }),
+    };
+    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None);
+
+    assert!(yaml.contains("expandEnd:"), "yaml: {yaml}");
+    assert!(yaml.contains("regex: ','"), "yaml: {yaml}");
+    assert!(yaml.contains("stopBy:"), "yaml: {yaml}");
+    assert!(yaml.contains("kind: ','"), "yaml: {yaml}");
+}
+
+#[test]
+fn build_fixconfig_rule_yaml_renders_stop_by_string() {
+    let fix_config = FixConfig {
+        template: "".to_string(),
+        expand_start: Some(FixExpandRule {
+            regex: Some(",".to_string()),
+            kind: None,
+            pattern: None,
+            stop_by: Some(json!("line")),
+        }),
+        expand_end: None,
+    };
+    let yaml = build_fixconfig_rule_yaml("$ITEM", "javascript", &fix_config, None);
+
+    assert!(yaml.contains("expandStart:"), "yaml: {yaml}");
+    assert!(yaml.contains("stopBy: line"), "yaml: {yaml}");
+}
+
+// --------------- Ruby fragment detection tests ---------------
+
+#[test]
+fn looks_like_ruby_block_fragment_detects_pipe_blocks() {
+    assert!(super::looks_like_ruby_block_fragment("{ |$V| $V.$METHOD }"));
+    assert!(super::looks_like_ruby_block_fragment(
+        "do |$V| $V.$METHOD end"
+    ));
+    assert!(super::looks_like_ruby_block_fragment("| $V | $V.$METHOD"));
+    assert!(!super::looks_like_ruby_block_fragment("def foo; end"));
+    assert!(!super::looks_like_ruby_block_fragment("$OBJ.method"));
+}
+
+#[test]
+fn looks_like_ruby_block_fragment_detects_symbol_to_proc() {
+    assert!(super::looks_like_ruby_block_fragment("&:$METHOD"));
+    assert!(super::looks_like_ruby_block_fragment("&:to_s"));
+    assert!(!super::looks_like_ruby_block_fragment("symbol"));
+    assert!(!super::looks_like_ruby_block_fragment("&block"));
+}
+
+#[test]
+fn ruby_fragment_hint_for_block_mentions_selector() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "{ |$V| $V.$METHOD }",
+        "lang": "ruby"
+    }))
+    .expect("valid request");
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Ruby);
+    assert!(
+        hint.contains("selector: call"),
+        "should mention selector: call: {hint}"
+    );
+    assert!(
+        hint.contains("block"),
+        "should mention block node kind: {hint}"
+    );
+}
+
+#[test]
+fn ruby_fragment_hint_for_do_block_mentions_do_block() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "do |$V| $V.$METHOD end",
+        "lang": "ruby"
+    }))
+    .expect("valid request");
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Ruby);
+    assert!(
+        hint.contains("do_block"),
+        "should mention do_block node kind: {hint}"
+    );
+}
+
+#[test]
+fn ruby_fragment_hint_for_symbol_to_proc_mentions_call() {
+    let request = StructuralSearchRequest::from_args(&json!({
+        "action": "structural",
+        "pattern": "&:$METHOD",
+        "lang": "ruby"
+    }))
+    .expect("valid request");
+    let hint = super::fragment_pattern_hint(&request, super::AstGrepLanguage::Ruby);
+    assert!(
+        hint.contains("$LIST.$ITER(&:$METHOD)"),
+        "should mention symbol-to-proc pattern: {hint}"
+    );
+    assert!(
+        hint.contains("symbol"),
+        "should mention symbol node kind: {hint}"
     );
 }

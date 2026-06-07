@@ -1,0 +1,18 @@
+id: no-path-traversal
+language: Ruby
+severity: hint
+message: Potential path traversal vulnerability; validate and sanitize file paths
+note: |
+  User-controlled input flowing into `Rails.root.join`, `File.join`, or
+  `send_file` without validation can allow directory traversal attacks.
+  Use `File.basename()` to strip path components, or validate against
+  an allowlist of permitted paths. This rule is a detection hint, not
+  proof of exploitability -- the surrounding validation logic matters.
+rule:
+  any:
+    - pattern: Rails.root.join($$$, $VAR, $$$)
+    - pattern: File.join($$$, $VAR, $$$)
+    - pattern: send_file $VAR
+files:
+  - app/**/*.rb
+  - lib/**/*.rb

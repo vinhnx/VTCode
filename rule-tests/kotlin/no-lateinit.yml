@@ -1,0 +1,11 @@
+id: no-lateinit
+valid:
+  - code: |
+      val name: String = "hello"
+  - code: |
+      val items: List<String>? = null
+invalid:
+  - code: |
+      lateinit var name: String
+  - code: |
+      lateinit var service: MyService

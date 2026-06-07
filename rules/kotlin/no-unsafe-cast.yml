@@ -1,0 +1,14 @@
+id: no-unsafe-cast
+language: Kotlin
+severity: warning
+message: Prefer safe cast `as?` over unsafe cast `as`
+note: |
+  Unsafe casts throw ClassCastException at runtime when the value is not of the
+  expected type. Use `as?` with null-check or a `when` block for safer
+  type handling.
+rule:
+  pattern: $EXPR as $TYPE
+files:
+  - src/**/*.kt
+  - src/**/*.kts
+  - tests/**/*.kt

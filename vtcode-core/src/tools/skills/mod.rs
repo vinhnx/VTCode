@@ -1400,6 +1400,9 @@ Use `/rust-skills`.
         list_skills_discovers_bundled_ast_grep_by_meta_variable_query => "meta variables",
         list_skills_discovers_bundled_ast_grep_by_optional_chaining_query => "optional chaining",
         list_skills_discovers_bundled_ast_grep_by_rule_catalog_query => "rule catalog",
+        list_skills_discovers_bundled_ast_grep_by_walrus_operator_query => "walrus operator",
+        list_skills_discovers_bundled_ast_grep_by_list_comprehension_query => "list comprehension",
+        list_skills_discovers_bundled_ast_grep_by_isinstance_tuple_query => "isinstance tuple",
     }
 
     #[tokio::test]

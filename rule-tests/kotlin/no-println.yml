@@ -1,0 +1,13 @@
+id: no-println
+valid:
+  - code: |
+      logger.info("hello")
+  - code: |
+      Log.d("TAG", "message")
+invalid:
+  - code: |
+      println("debug output")
+  - code: |
+      System.out.println("hello")
+  - code: |
+      System.err.println("error")

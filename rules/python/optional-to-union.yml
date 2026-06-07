@@ -1,0 +1,15 @@
+id: optional-to-union
+language: python
+severity: info
+message: Prefer `T | None` over `Optional[T]` for Python 3.10+ codebases.
+note: |
+  PEP 604 union syntax (`T | None`) is more concise and readable than
+  `Optional[T]`. Only apply this when the repository targets Python 3.10+
+  and the typing policy prefers union syntax. This rule matches
+  `Optional[T]` in type annotation context using `context` and `selector`
+  to disambiguate from other subscript expressions.
+rule:
+  pattern:
+    context: 'a: Optional[$T]'
+    selector: generic_type
+fix: $T | None

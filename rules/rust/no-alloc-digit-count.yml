@@ -1,0 +1,14 @@
+id: no-alloc-digit-count
+language: Rust
+severity: info
+message: Count integer digits without heap allocation.
+note: |
+  `num.to_string().chars().count()` allocates a String just to count digits.
+  Use `num.checked_ilog10().unwrap_or(0) + 1` for a zero-allocation alternative.
+  This rule targets integer digit counting only; do not apply it to general
+  formatting pipelines where the String is used for other purposes.
+rule:
+  pattern: "$NUM.to_string().chars().count()"
+fix: "$NUM.checked_ilog10().unwrap_or(0) + 1"
+files:
+  - "**/*.rs"

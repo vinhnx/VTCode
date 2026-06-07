@@ -1,0 +1,17 @@
+id: no-var
+language: Kotlin
+severity: warning
+message: Prefer `val` over `var` for immutability
+note: |
+  Kotlin encourages immutability. Use `val` unless the variable genuinely needs
+  reassignment. This reduces bugs from unintended mutation and makes code easier
+  to reason about.
+rule:
+  kind: property_declaration
+  has:
+    field: property_delegate
+    pattern: var
+files:
+  - src/**/*.kt
+  - src/**/*.kts
+  - tests/**/*.kt

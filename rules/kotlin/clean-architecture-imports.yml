@@ -1,0 +1,16 @@
+id: clean-architecture-imports
+language: Kotlin
+severity: error
+message: Domain layer must not import from data or presentation layers
+note: |
+  In clean architecture, the domain layer defines business logic and must not
+  depend on infrastructure concerns. Imports from data or presentation packages
+  inside domain code violate the dependency rule. Adapt the package patterns
+  below to your project's actual module layout.
+rule:
+  pattern: import $PATH
+  constraints:
+    PATH:
+      regex: ^com\.example\.(data|presentation)\.
+files:
+  - src/**/domain/**/*.kt

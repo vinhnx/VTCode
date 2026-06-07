@@ -1,0 +1,53 @@
+id: let-chain-candidate
+language: Rust
+severity: hint
+message: Nested `if`/`if let` can be collapsed into a Rust 2024 let-chain.
+note: |
+  Rust 2024 supports let-chains, allowing `if let Some(x) = a && let Some(y) = b`
+  instead of nested `if let` blocks. This rule detects candidates for
+  simplification. Only refactor when the project's MSRV is Rust 2024 edition
+  or later.
+utils:
+  sole-child:
+    all:
+      - nthChild: 1
+      - nthChild:
+          position: 1
+          reverse: true
+  if-no-else:
+    kind: if_expression
+    not:
+      has:
+        field: alternative
+        kind: else_clause
+  if-let-no-else:
+    matches: if-no-else
+    has:
+      field: condition
+      kind: let_condition
+  sole-inner-if-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has:
+      matches: if-no-else
+  sole-inner-if-let-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has:
+      matches: if-let-no-else
+rule:
+  matches: if-no-else
+  has:
+    field: consequence
+    kind: block
+    has:
+      matches: sole-inner-if-stmt
+  any:
+    - matches: if-let-no-else
+    - has:
+        field: consequence
+        kind: block
+        has:
+          matches: sole-inner-if-let-stmt
+files:
+  - "**/*.rs"

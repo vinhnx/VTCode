@@ -1,0 +1,22 @@
+id: no-unsafe-fn-without-unsafe
+language: Rust
+severity: warning
+message: Unsafe function contains no `unsafe` block.
+note: |
+  A function marked `unsafe` that does not contain an `unsafe` block in its
+  body may be unnecessarily marked unsafe. Either add the unsafe operations
+  that justify the marker, or remove the `unsafe` qualifier. Treat matches as
+  review candidates; some unsafe markers exist for API contract reasons even
+  when the current body is safe.
+rule:
+  all:
+    - kind: function_item
+    - has:
+        kind: function_modifiers
+        regex: "^unsafe"
+    - not:
+        has:
+          kind: unsafe_block
+          stopBy: end
+files:
+  - "**/*.rs"

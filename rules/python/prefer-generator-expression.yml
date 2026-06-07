@@ -1,0 +1,24 @@
+id: prefer-generator-expression
+language: python
+severity: hint
+message: Prefer a generator expression over a list comprehension when passing to `any`, `all`, or `sum`.
+note: |
+  Generator expressions avoid allocating an intermediate list when the
+  consuming function only needs to iterate once. This is a safe rewrite
+  for `any()`, `all()`, and `sum()` because they accept any iterable.
+  Do not generalize to every list comprehension; some sites require a
+  list for indexing or reuse.
+rule:
+  pattern: $FUNC($LIST)
+  constraints:
+    FUNC:
+      regex: ^(any|all|sum)$
+    LIST:
+      kind: list_comprehension
+transform:
+  INNER:
+    substring:
+      source: $LIST
+      startChar: 1
+      endChar: -1
+fix: $FUNC($INNER)

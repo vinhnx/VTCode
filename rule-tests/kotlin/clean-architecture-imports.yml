@@ -1,0 +1,11 @@
+id: clean-architecture-imports
+valid:
+  - code: |
+      import com.example.domain.model.User
+  - code: |
+      import com.example.domain.repository.UserRepository
+invalid:
+  - code: |
+      import com.example.data.database.UserDao
+  - code: |
+      import com.example.presentation.ui.UserScreen

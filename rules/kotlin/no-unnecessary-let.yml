@@ -1,0 +1,15 @@
+id: no-unnecessary-let
+language: Kotlin
+severity: warning
+message: Unnecessary `let` block; access the receiver directly
+note: |
+  Using `let { it.method() }` when the receiver is non-null and the block body
+  is a single expression adds ceremony without benefit. Prefer direct method
+  access: `receiver.method()`. Keep `let` for null-safe chaining (`?.let { }`)
+  or when renaming `it` improves readability.
+rule:
+  pattern: $RECEIVER.let { $PARAM -> $BODY }
+files:
+  - src/**/*.kt
+  - src/**/*.kts
+  - tests/**/*.kt

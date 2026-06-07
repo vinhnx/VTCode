@@ -1,0 +1,15 @@
+id: prefer-symbol-over-proc
+valid:
+  - code: |
+      list.map(&:to_s)
+  - code: |
+      list.select(&:even?)
+  - code: |
+      items.each { |v| puts v.name; v.save }
+invalid:
+  - code: |
+      list.map { |v| v.to_s }
+  - code: |
+      list.select { |v| v.even? }
+  - code: |
+      list.each { |v| v.upcase }

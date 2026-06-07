@@ -21,7 +21,7 @@ const MAX_ALLOWED_GLOBS: usize = 64;
 const MAX_ALLOWED_CONTEXT_LINES: usize = 20;
 const MAX_AUXILIARY_OUTPUT_CHARS: usize = 64_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for HTML, key node kinds are `element`, `tag_name`, `attribute_name`, `attribute_value`, and `text`; use `kind: element` with `has` to match elements by tag or attribute, `kind: tag_name` to match tag names, `kind: attribute_name` to match attribute names, and `kind: text` to match text content; HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element; HTML `<script>` and `<style>` content is parsed as embedded JavaScript/CSS respectively, so search those regions with `lang: javascript` or `lang: css` rules; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
 const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `testConfigs` with `testDir` (required) and optional `snapshotDir` to configure ast-grep test discovery. Use `utilDirs` to declare directories for global utility rules shared across multiple rule files. Use `workflow='inspect'` to see the project's current `testConfigs`, `utilDirs`, `languageInjections`, `customLanguages`, and `languageGlobs` configuration.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
@@ -2077,7 +2077,9 @@ fn looks_like_language_support_issue(detail: &str) -> bool {
 fn looks_like_go_call_pattern(pattern: &str) -> bool {
     // Match patterns like `pkg.Func($$$)`, `Func($$$)`, or
     // `expr.Method($$$)` where the pattern starts with an identifier
-    // chain followed by parenthesized arguments.
+    // chain followed by parenthesized arguments. Metavariable prefixes
+    // (`$`, `$$`, `$$$`) are stripped before checking identifier validity
+    // so patterns like `$A.$B($$$)` are recognized as call patterns.
     let trimmed = pattern.trim();
     let Some(paren) = trimmed.find('(') else {
         return false;
@@ -2087,10 +2089,108 @@ fn looks_like_go_call_pattern(pattern: &str) -> bool {
     }
     let callee = &trimmed[..paren];
     // Callee must look like an identifier chain: `Func`, `pkg.Func`,
-    // `pkg.Sub.Method`, etc.
+    // `pkg.Sub.Method`, etc. Strip metavariable prefixes so `$A.$B`
+    // is treated like `A.B`.
     callee.split('.').all(|part| {
-        !part.is_empty() && (part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        let stripped = part.trim_start_matches('$');
+        !stripped.is_empty()
+            && stripped
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
+}
+
+fn looks_like_html_attribute_pattern(pattern: &str) -> bool {
+    // Match patterns like `class=$VAL`, `id=$ID`, `href=$URL` where the
+    // pattern looks like an HTML attribute assignment without surrounding
+    // element context.
+    let trimmed = pattern.trim();
+    if trimmed.contains('<') || trimmed.contains('>') {
+        return false;
+    }
+    let Some(eq) = trimmed.find('=') else {
+        return false;
+    };
+    let attr_name = &trimmed[..eq];
+    // Attribute name must be a valid HTML attribute name (letters, digits,
+    // hyphens, underscores, colons for namespaced attrs).
+    !attr_name.is_empty()
+        && attr_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+}
+
+fn looks_like_html_tag_pattern(pattern: &str) -> bool {
+    // Match patterns like `<$TAG>`, `<div>`, `<$TAG $$$ATTRS>` that look
+    // like HTML opening tags without a closing tag or body.
+    let trimmed = pattern.trim();
+    trimmed.starts_with('<')
+        && trimmed.contains('>')
+        && !trimmed.contains("</")
+        && !trimmed.ends_with("/>")
+}
+
+/// Returns true when a Java pattern looks like a bare type-qualified
+/// identifier or field declaration fragment that tree-sitter-java would
+/// fail to parse as standalone code. Common examples:
+/// - `$MOD String $F` (modifier + type + name without surrounding class)
+/// - `@Annotation` (bare annotation without surrounding declaration)
+/// - `$TYPE $VAR;` fragments that need class-body context
+fn looks_like_java_declaration_fragment(pattern: &str) -> bool {
+    let trimmed = pattern.trim();
+    // Bare annotation: `@Foo` or `@Foo($$$)`
+    if trimmed.starts_with('@') {
+        return true;
+    }
+    // Patterns with semicolons that look like field/variable declarations
+    // without class context: `String $F;`, `private $TYPE $NAME;`
+    if trimmed.ends_with(';') {
+        // Contains a type-like identifier followed by a metavariable
+        let inner = trimmed.trim_end_matches(';').trim();
+        let parts: Vec<&str> = inner.split_whitespace().collect();
+        if parts.len() >= 2 {
+            // Last part should look like a metavariable or identifier
+            let last = parts.last().unwrap();
+            if last.starts_with('$') || last.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Returns true when a Ruby pattern looks like a bare block or pipe fragment
+/// that tree-sitter-ruby would fail to parse as standalone code. Common
+/// examples:
+/// - `{ |$V| $V.$METHOD }` (block with pipe parameters)
+/// - `do |$V| $V.$METHOD end` (do-block with pipe parameters)
+/// - `&:$METHOD` (bare symbol-to-proc)
+fn looks_like_ruby_block_fragment(pattern: &str) -> bool {
+    let trimmed = pattern.trim();
+
+    // Bare symbol-to-proc: `&:method_name`
+    if trimmed.starts_with('&') && trimmed.len() > 1 {
+        let after = &trimmed[1..];
+        if after.starts_with(':') && after.len() > 1 {
+            return true;
+        }
+    }
+
+    // Bare pipe block: `{ |$V| ... }` or `do |$V| ... end`
+    if trimmed.starts_with('{') && trimmed.contains('|') {
+        return true;
+    }
+    if trimmed.starts_with("do") && trimmed.contains('|') {
+        return true;
+    }
+
+    // Bare block body starting with pipe: `| $V | $V.$METHOD`
+    if trimmed.starts_with('|') {
+        return true;
+    }
+
+    false
 }
 
 fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLanguage) -> String {
@@ -2113,6 +2213,39 @@ fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLan
             " In Go, tree-sitter parses bare call-like fragments (e.g. `fmt.Println($A)`) as type conversions, not call expressions. \
              Wrap the call in surrounding parseable code like `func t() { fmt.Println($A) }` and use `selector: call_expression` to match only function calls. \
              Note: contextual patterns with `context` + `selector` require the CLI skill path via `unified_exec`.",
+        );
+    } else if language == AstGrepLanguage::Html && looks_like_html_attribute_pattern(trimmed) {
+        message.push_str(
+            " In HTML, bare attribute expressions like `class=$VAL` are not standalone parseable code. \
+             Use `kind: attribute_name` to match attribute names, `kind: attribute_value` for values, \
+             or `kind: element` with `has` to match elements containing specific attributes. \
+             For example, to match elements with a specific attribute, use `kind: element` with \
+             `has: { kind: attribute_name, regex: \"^class$\" }`.",
+        );
+    } else if language == AstGrepLanguage::Html && looks_like_html_tag_pattern(trimmed) {
+        message.push_str(
+            " In HTML, tree-sitter parses tag structures as `element` nodes with `tag_name` and `attribute` children. \
+             Bare tag fragments like `<$TAG>` are not standalone code. Use `kind: element` with \
+             `has: { field: tag_name, pattern: $TAG }` to match elements by tag name, \
+             or `kind: tag_name` to match tag name nodes directly.",
+        );
+    } else if language == AstGrepLanguage::Java && looks_like_java_declaration_fragment(trimmed) {
+        message.push_str(
+            " In Java, bare type declarations, annotations, and field fragments are not standalone parseable code. \
+             For field or variable declarations with modifiers/annotations, use `kind: field_declaration` with \
+             `has: { field: type, regex: \"^TypeName$\" }` to match by type regardless of modifiers. \
+             For annotations, use `kind: marker_annotation` or `kind: annotation` with `inside` to scope \
+             to the declaration you care about. Wrap bare fragments in a full class body like \
+             `class _ { $TYPE $VAR; }` and use `selector` to target the inner node.",
+        );
+    } else if language == AstGrepLanguage::Ruby && looks_like_ruby_block_fragment(trimmed) {
+        message.push_str(
+            " In Ruby, bare block fragments like `{ |$V| $V.$METHOD }` or `do |$V| $V.$METHOD end` are not \
+             standalone parseable code. Wrap the block in a method call like `$LIST.select { |$V| $V.$METHOD }` \
+             and use `selector: call` to match the outer call. For symbol-to-proc patterns, match the enclosing \
+             method call directly with `$LIST.$ITER(&:$METHOD)`. Key Ruby tree-sitter node kinds: `call` for \
+             method calls, `method_call` for keyword-style calls, `block` for `{{ }}` blocks, `do_block` for \
+             `do...end` blocks, `symbol` for `:name` literals, `assignment` for variable assignments.",
         );
     } else {
         message.push_str(

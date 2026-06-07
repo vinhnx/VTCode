@@ -1,0 +1,15 @@
+id: no-lateinit
+language: Kotlin
+severity: info
+message: Avoid `lateinit`; prefer nullable types or `lazy` delegation
+note: |
+  `lateinit` defers initialization and throws UninitializedPropertyAccessException
+  if accessed before assignment. Prefer nullable types (`Type?`) with explicit
+  null checks, or `by lazy { }` for computed-once values. `lateinit` is
+  acceptable in certain framework contexts (e.g., Android `@Inject` fields,
+  JUnit `@BeforeEach`) where the framework guarantees initialization timing.
+rule:
+  pattern: lateinit var $NAME: $TYPE
+files:
+  - src/**/*.kt
+  - src/**/*.kts

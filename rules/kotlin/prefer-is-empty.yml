@@ -1,0 +1,20 @@
+id: prefer-is-empty
+language: Kotlin
+severity: warning
+message: Use `isEmpty()` instead of comparing size or length to zero
+note: |
+  Kotlin collections and strings provide `isEmpty()` which is more readable and
+  idiomatic than `.size == 0` or `.length == 0`. It also avoids potential issues
+  with custom `size` property implementations.
+rule:
+  any:
+    - pattern: $X.size == 0
+    - pattern: $X.length == 0
+    - pattern: $X.count() == 0
+    - pattern: $X.size <= 0
+    - pattern: $X.length <= 0
+fix: $X.isEmpty()
+files:
+  - src/**/*.kt
+  - src/**/*.kts
+  - tests/**/*.kt
