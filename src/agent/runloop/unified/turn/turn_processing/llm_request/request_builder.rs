@@ -17,14 +17,14 @@ use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_responses_continuation_request,
     supports_responses_chaining,
 };
-use vtcode_core::primary_agent::{
-    ActivePrimaryAgent, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
-};
 use vtcode_core::prompts::{
     append_runtime_tool_prompt_sections, temporal::generate_temporal_context,
     upsert_harness_limits_section,
 };
 use vtcode_core::tools::handlers::anthropic_native_memory_enabled_for_runtime;
+use vtcode_core::{
+    ActivePrimaryAgent, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+};
 
 use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
@@ -585,7 +585,7 @@ async fn render_primary_agent_runtime_context(
         .model
         .as_deref()
         .map(str::trim)
-        .filter(|model| !model.is_empty())
+        .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
     {
         lines.push(format!("- Agent model: {model}"));
     }

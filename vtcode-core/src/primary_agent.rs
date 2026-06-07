@@ -3,6 +3,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use vtcode_config::constants::defaults::DEFAULT_PRIMARY_AGENT_NAME;
 use vtcode_config::{
     DiscoveredSubagents, PermissionMode, SubagentSource, SubagentSpec, builtin_primary_build_agent,
 };
@@ -47,8 +48,6 @@ impl ActivePrimaryAgent {
         }
     }
 }
-
-pub const DEFAULT_PRIMARY_AGENT_NAME: &str = "build";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivePrimaryAgentState {

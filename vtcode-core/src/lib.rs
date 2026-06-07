@@ -242,7 +242,8 @@ pub use ide_context::{
 };
 pub use primary_agent::{
     ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState,
-    PrimaryAgentResolutionError, resolve_discovered_primary_agent, resolve_primary_agent,
+    PrimaryAgentResolutionError, apply_primary_agent_tool_policy, clamp_primary_permission_mode,
+    resolve_discovered_primary_agent, resolve_primary_agent,
 };
 pub use subagents::{
     SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,

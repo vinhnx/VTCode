@@ -789,6 +789,13 @@ impl SubagentController {
         spec: SubagentSpec,
         request: SpawnAgentRequest,
     ) -> Result<SubagentStatusEntry> {
+        if !spec.is_subagent() {
+            bail!(
+                "custom subagent spawn only supports subagent-capable specs; '{}' is primary-only",
+                spec.name
+            );
+        }
+
         if !spec.is_read_only() {
             bail!(
                 "custom subagent spawn only supports read-only specs; '{}' exposes write-capable behavior",
@@ -3348,6 +3355,41 @@ Inspect the repository.
         assert!(
             err.to_string()
                 .contains("custom subagent spawn only supports read-only specs")
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_custom_rejects_primary_only_spec() {
+        let temp = TempDir::new().expect("tempdir");
+        write_test_primary_agent(temp.path());
+        let controller = SubagentController::new(test_controller_config(
+            temp.path().to_path_buf(),
+            VTCodeConfig::default(),
+        ))
+        .await
+        .expect("controller");
+
+        let spec = controller
+            .effective_specs()
+            .await
+            .into_iter()
+            .find(|spec| spec.name == "duck")
+            .expect("duck primary agent");
+
+        let err = controller
+            .spawn_custom(
+                spec,
+                SpawnAgentRequest {
+                    message: Some("Discuss the task.".to_string()),
+                    ..SpawnAgentRequest::default()
+                },
+            )
+            .await
+            .expect_err("primary-only custom spec should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("custom subagent spawn only supports subagent-capable specs")
         );
     }
 
