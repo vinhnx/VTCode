@@ -2,6 +2,24 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.123.5 - 2026-06-07
+
+### Highlights
+#### Bug Fixes
+
+- Resolve 3 critical harness robustness bugs from session turn_364 (ebdbafb1) 
+#### Documentation
+
+- Add AGENTS.md files for various VT Code components (d56ab044) 
+#### Features
+
+- Add DRY CLI messages helper and detailed clap help for agents (f37e27c8) 
+- Enhance tool permission handling and improve ANSI escape sequence detection (b6e069ce) 
+### Other Changes
+#### Other
+
+- Remove Ghostty VT runtime integration and related tests; adjust terminal size in tests. (2218ca09) 
+- Update TODO (8f62b657) 
 ## 0.123.4 - 2026-06-07
 
 ### Highlights
