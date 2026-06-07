@@ -87,9 +87,6 @@ memories = true
 # Type: `string`
 version = "0.96.12"
 
-[permissions]
-default_mode = "auto"
-
 
 # Provider Endpoints
 # Network and provider-specific API settings.
@@ -224,7 +221,7 @@ spawn_background_subprocess = "allow"
 
 task_tracker = "allow"
 
-unified_exec = "deny"
+unified_exec = "allow"
 
 unified_file = "allow"
 

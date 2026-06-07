@@ -7,7 +7,7 @@ use vtcode_commons::preview::{
 };
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
-use vtcode_core::utils::ansi_parser::strip_ansi;
+
 use vtcode_tui::app::InlineLinkRange;
 use vtcode_tui::app::InlineSegment;
 
@@ -150,6 +150,12 @@ pub(super) struct PtyStreamState {
     legacy: LegacyPtyStreamState,
     preview: PtyPreviewRenderer,
     displayed_count: usize,
+    /// Tracks whether any applied chunk contained ANSI escape sequences.
+    /// When true, the preview path (VT100 terminal emulator) is preferred
+    /// because it correctly processes control sequences like screen rewrites
+    /// and OSC8 hyperlinks.  When false, the legacy path is preferred because
+    /// it preserves raw text formatting (leading indentation).
+    input_has_ansi: bool,
 }
 
 impl PtyStreamState {
@@ -163,6 +169,7 @@ impl PtyStreamState {
             legacy: LegacyPtyStreamState::new(),
             preview,
             displayed_count: 0,
+            input_has_ansi: false,
         }
     }
 
@@ -175,6 +182,13 @@ impl PtyStreamState {
             return;
         }
 
+        // Detect CSI sequences (ESC[) which indicate screen-altering operations
+        // like clear screen, cursor positioning.  OSC sequences (ESC]) like
+        // OSC8 hyperlinks should NOT trigger the preview path because the
+        // terminal emulator strips link metadata from screen contents.
+        if chunk.contains("\x1b[") {
+            self.input_has_ansi = true;
+        }
         self.legacy.apply_chunk(chunk);
         self.preview.push_str(chunk);
     }
@@ -212,12 +226,13 @@ impl PtyStreamState {
         self.legacy = LegacyPtyStreamState::new();
         self.preview = PtyPreviewRenderer::from_config(&self.pty_config);
         self.displayed_count = 0;
+        self.input_has_ansi = false;
     }
 
     fn select_render_output(&self, limit: usize) -> RenderedPtyOutput {
         let preview = self.render_preview_output(limit);
         let legacy = self.legacy.render_output(limit);
-        if should_use_legacy_output(&legacy, &preview) {
+        if should_use_legacy_output(&legacy, &preview, self.input_has_ansi) {
             legacy
         } else {
             preview
@@ -250,19 +265,23 @@ impl PtyStreamState {
     }
 }
 
-fn should_use_legacy_output(legacy: &RenderedPtyOutput, preview: &RenderedPtyOutput) -> bool {
+fn should_use_legacy_output(
+    legacy: &RenderedPtyOutput,
+    preview: &RenderedPtyOutput,
+    input_has_ansi: bool,
+) -> bool {
     if preview.lines.is_empty() {
         return true;
     }
     if legacy.lines.is_empty() {
         return false;
     }
-
-    normalize_rendered_lines(&legacy.lines) == normalize_rendered_lines(&preview.lines)
-}
-
-fn normalize_rendered_lines(lines: &[String]) -> Vec<String> {
-    lines.iter().map(|line| strip_ansi(line)).collect()
+    // When input contained ANSI escape sequences (screen rewrites, OSC8
+    // hyperlinks, cursor moves), the preview path — which processes through
+    // a VT100 terminal emulator — produces the correct rendered output.
+    // For plain text the legacy path preserves raw formatting (leading
+    // indentation) that the terminal emulator strips, so prefer legacy.
+    !input_has_ansi
 }
 
 fn render_visible_output_lines(lines: &[String], limit: usize) -> Vec<String> {
