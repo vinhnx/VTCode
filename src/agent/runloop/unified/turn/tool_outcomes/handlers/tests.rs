@@ -44,6 +44,7 @@ use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::session_agent::ActiveSessionAgentState;
 use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
 use vtcode_core::tools::health::ToolHealthTracker;
@@ -129,6 +130,7 @@ struct TestContextBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
+    active_session_agent: ActiveSessionAgentState,
     runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
@@ -247,6 +249,7 @@ impl TestContextBacking {
             working_history,
             tool_catalog,
             default_placeholder,
+            active_session_agent: ActiveSessionAgentState::default(),
             runtime_steering: RuntimeSteering::default(),
             config,
             provider_client,
@@ -277,6 +280,7 @@ impl TestContextBacking {
             config: &mut self.config,
             vt_cfg: None,
             context_manager: &mut self.context_manager,
+            active_session_agent: &self.active_session_agent,
             decision_ledger: &self.decision_ledger,
             traj: &self.traj,
         };

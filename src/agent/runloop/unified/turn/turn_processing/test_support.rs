@@ -15,6 +15,7 @@ use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::{self as uni, ToolDefinition};
+use vtcode_core::session_agent::ActiveSessionAgentState;
 use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
 use vtcode_core::tools::health::ToolHealthTracker;
@@ -111,6 +112,7 @@ pub(crate) struct TestTurnProcessingBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
+    active_session_agent: ActiveSessionAgentState,
     runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
@@ -221,6 +223,7 @@ impl TestTurnProcessingBacking {
             working_history: Vec::new(),
             tool_catalog,
             default_placeholder: None,
+            active_session_agent: ActiveSessionAgentState::default(),
             runtime_steering: RuntimeSteering::default(),
             config,
             provider_client: Box::new(NoopProvider),
@@ -231,6 +234,16 @@ impl TestTurnProcessingBacking {
 
     pub(crate) async fn add_tool_definition(&self, tool: ToolDefinition) {
         self.tools.write().await.push(tool);
+    }
+
+    pub(crate) fn select_session_agent_from_specs(
+        &mut self,
+        specs: &[vtcode_config::SubagentSpec],
+        requested: &str,
+    ) {
+        self.active_session_agent
+            .select_from_specs(specs, requested)
+            .expect("test session agent should resolve");
     }
 
     pub(crate) fn set_steering_receiver(
@@ -311,6 +324,7 @@ impl TestTurnProcessingBacking {
             &mut self.turn_metadata_cache,
             &mut self.provider_client,
             &self.traj,
+            &self.active_session_agent,
             true,
             false,
             &mut self.runtime_steering,
@@ -339,6 +353,7 @@ impl TestTurnProcessingBacking {
             config: &mut self.config,
             vt_cfg: None,
             context_manager: &mut self.context_manager,
+            active_session_agent: &self.active_session_agent,
             decision_ledger: &self.decision_ledger,
             traj: &self.traj,
         };

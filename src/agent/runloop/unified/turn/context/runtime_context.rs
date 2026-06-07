@@ -68,6 +68,7 @@ pub(crate) struct LLMContext<'a> {
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub vt_cfg: Option<&'a VTCodeConfig>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
+    pub active_session_agent: &'a vtcode_core::session_agent::ActiveSessionAgentState,
     pub decision_ledger: &'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 }
@@ -138,6 +139,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    pub active_session_agent: &'a vtcode_core::session_agent::ActiveSessionAgentState,
     pub skip_confirmations: bool,
     pub full_auto: bool,
     // Phase 4 Integration
@@ -182,6 +184,7 @@ impl<'a> TurnProcessingContext<'a> {
             active_thread_label: ui.active_thread_label,
             vt_cfg: llm.vt_cfg,
             context_manager: llm.context_manager,
+            active_session_agent: llm.active_session_agent,
             last_forced_redraw: ui.last_forced_redraw,
             input_status_state: ui.input_status_state,
             session: ui.session,
@@ -229,6 +232,7 @@ impl<'a> TurnProcessingContext<'a> {
             config: self.config,
             vt_cfg: self.vt_cfg,
             context_manager: self.context_manager,
+            active_session_agent: self.active_session_agent,
             decision_ledger: self.decision_ledger,
             traj: self.traj,
         };
@@ -313,6 +317,7 @@ impl<'a> TurnProcessingContext<'a> {
             state.turn_metadata_cache,
             llm_ctx.provider_client,
             llm_ctx.traj,
+            llm_ctx.active_session_agent,
             state.skip_confirmations,
             state.full_auto,
             state.runtime_steering,
