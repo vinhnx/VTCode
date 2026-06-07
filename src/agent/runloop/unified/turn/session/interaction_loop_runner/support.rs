@@ -818,7 +818,9 @@ pub(super) async fn resolve_inline_loop_action(
 }
 
 async fn handle_cycle_session_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
-    let specs = load_session_agent_specs(ctx).await?;
+    let Some(specs) = load_session_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
     match next_session_agent_name(ctx.active_session_agent.active(), &specs) {
         Some(name) => handle_select_session_agent(ctx, name).await,
         None => {
@@ -841,7 +843,9 @@ async fn handle_select_session_agent(
         return Ok(());
     };
 
-    let specs = load_session_agent_specs(ctx).await?;
+    let Some(specs) = load_session_agent_specs_or_report(ctx).await? else {
+        return Ok(());
+    };
     match ctx.active_session_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
@@ -862,6 +866,21 @@ async fn handle_select_session_agent(
     }
 
     Ok(())
+}
+
+async fn load_session_agent_specs_or_report(
+    ctx: &mut InteractionLoopContext<'_>,
+) -> Result<Option<Vec<vtcode_config::SubagentSpec>>> {
+    match load_session_agent_specs(ctx).await {
+        Ok(specs) => Ok(Some(specs)),
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to discover session agents: {err}"),
+            )?;
+            Ok(None)
+        }
+    }
 }
 
 async fn load_session_agent_specs(
