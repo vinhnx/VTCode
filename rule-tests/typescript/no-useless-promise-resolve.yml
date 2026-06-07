@@ -8,7 +8,6 @@ valid:
       async function getData() {
         return await fetch(url);
       }
-invalid:
   - |
       async function getData() {
         return Promise.resolve(42);

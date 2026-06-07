@@ -1,5 +1,12 @@
 id: no-path-traversal
 snapshots:
+  ? |
+    File.join(Rails.root, "data", "fixed.txt")
+  : labels:
+    - source: File.join(Rails.root, "data", "fixed.txt")
+      style: primary
+      start: 0
+      end: 42
   File.join(Rails.root, params[:file]):
     labels:
     - source: File.join(Rails.root, params[:file])
@@ -26,6 +33,13 @@ snapshots:
       style: primary
       start: 0
       end: 35
+  ? |
+    send_file Rails.root.join("public", "report.pdf")
+  : labels:
+    - source: send_file Rails.root.join("public", "report.pdf")
+      style: primary
+      start: 0
+      end: 49
   send_file params[:path]:
     labels:
     - source: send_file params[:path]

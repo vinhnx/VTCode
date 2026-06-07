@@ -16,6 +16,24 @@ snapshots:
       style: primary
       start: 13
       end: 36
+  ? |
+    const name = obj && obj.name;
+  : fixed: |
+      const name = obj?.name;
+    labels:
+    - source: obj && obj.name
+      style: primary
+      start: 13
+      end: 28
+  ? |
+    const val = obj != null && obj.name;
+  : fixed: |
+      const val = obj?.name;
+    labels:
+    - source: obj != null && obj.name
+      style: primary
+      start: 12
+      end: 35
   const val = x !== null && x !== undefined && x.prop;:
     fixed: const val = x?.prop;
     labels:

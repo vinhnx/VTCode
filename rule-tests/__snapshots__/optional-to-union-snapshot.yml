@@ -16,3 +16,12 @@ snapshots:
       style: primary
       start: 3
       end: 16
+  ? |
+    x: Optional[int] = None
+  : fixed: |
+      x: int | None = None
+    labels:
+    - source: Optional[int]
+      style: primary
+      start: 3
+      end: 16

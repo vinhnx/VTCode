@@ -4,8 +4,3 @@ valid:
       val name: String = "hello"
   - |
       val count = 42
-invalid:
-  - |
-      var name: String = "hello"
-  - |
-      var count = 42

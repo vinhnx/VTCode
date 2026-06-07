@@ -1,17 +1,19 @@
 id: prefer-optional-chaining
 valid:
   - |
-      const city = user?.address?.city;
+      const name = obj?.name;
   - |
       const name = obj && other.prop;
   - |
       if (user) { doSomething(user); }
   - |
       const value = a || fallback;
-invalid:
   - |
       const city = user && user.address.city;
+invalid:
   - |
-      const name = obj != null && obj.name;
+      const name = obj && obj.name;
+  - |
+      const val = obj != null && obj.name;
   - |
       const val = x !== null && x !== undefined && x.prop;

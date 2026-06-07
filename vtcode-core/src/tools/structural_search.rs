@@ -22,7 +22,7 @@ const MAX_ALLOWED_GLOBS: usize = 64;
 const MAX_ALLOWED_CONTEXT_LINES: usize = 20;
 const MAX_AUXILIARY_OUTPUT_CHARS: usize = 64_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for HTML, key node kinds are `element`, `tag_name`, `attribute_name`, `attribute_value`, and `text`; use `kind: element` with `has` to match elements by tag or attribute, `kind: tag_name` to match tag names, `kind: attribute_name` to match attribute names, and `kind: text` to match text content; HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element; HTML `<script>` and `<style>` content is parsed as embedded JavaScript/CSS respectively, so search those regions with `lang: javascript` or `lang: css` rules; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; for C, tree-sitter-c parses fragments differently by context: `test($A)` alone becomes `macro_type_specifier`, while `test($A);` becomes `expression_statement -> call_expression`; use `context` plus `selector: call_expression` for C function-call matching; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; `$_NAME` prefix means non-capturing (no backreference); same-name metavariables enforce identity (`$A == $A` matches `a == a` but not `a == b`); meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text, lowercase names, or bare `$` followed by digits will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis; `kind` supports ESQuery-style compound selectors: `A > B` (direct child), `A B` (descendant), `A + B` (immediate sibling), `A ~ B` (general sibling), and `A, B` (either); pseudo-selectors `:has()`, `:not()`, `:is()`, `:nth-child()`, and `:nth-last-child()` narrow `kind` and `selector` matches by descendant structure, exclusion, alternatives, or sibling position; for HTML, key node kinds are `element`, `tag_name`, `attribute_name`, `attribute_value`, and `text`; use `kind: element` with `has` to match elements by tag or attribute, `kind: tag_name` to match tag names, `kind: attribute_name` to match attribute names, and `kind: text` to match text content; HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element; HTML `<script>` and `<style>` content is parsed as embedded JavaScript/CSS respectively, so search those regions with `lang: javascript` or `lang: css` rules; for simple pattern-to-pattern rewrites, use `workflow='rewrite'` which previews replacements without applying them; for FixConfig rewrites with range expansion via `expandStart`/`expandEnd`, use `workflow='rewrite'` with `fix_config` which generates a temporary YAML rule and previews the expanded replacements; for advanced rewrite operations using `transform` (replace for regex substitution with capture groups, substring for Python-style Unicode slicing, convert for identifier case changes like camelCase/snakeCase/kebabCase/pascalCase), `fix`, `rewriters`, load the bundled `ast-grep` skill which covers the full transform pipeline including regex capture groups, chained sequential transformations, conditional separators from multi-captures, and string-form shorthand syntax.";
 const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. Some embedded-language cases are built in, such as HTML `<script>` / `<style>` extraction. If the target syntax is embedded inside another host language, configure `languageInjections` with `hostLanguage`, `rule`, and `injected`; the rule should capture the embedded subregion with a meta variable like `$CONTENT`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules. Use `testConfigs` with `testDir` (required) and optional `snapshotDir` to configure ast-grep test discovery. Use `utilDirs` to declare directories for global utility rules shared across multiple rule files. Use `workflow='inspect'` to see the project's current `testConfigs`, `utilDirs`, `languageInjections`, `customLanguages`, and `languageGlobs` configuration.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
@@ -341,6 +341,23 @@ struct StructuralSearchRequest {
     /// generation.
     #[serde(default)]
     range: Option<RangeInput>,
+
+    // -- Relational rule fields ------------------------------------------------
+    /// Relational: match if a descendant matches this rule.
+    #[serde(default)]
+    has: Option<Box<serde_json::Value>>,
+    /// Relational: match if an ancestor matches this rule.
+    #[serde(default)]
+    inside: Option<Box<serde_json::Value>>,
+    /// Relational: match if a preceding sibling matches this rule.
+    #[serde(default)]
+    follows: Option<Box<serde_json::Value>>,
+    /// Relational: match if a following sibling matches this rule.
+    #[serde(default)]
+    precedes: Option<Box<serde_json::Value>>,
+    /// Narrow meta-variable matches by additional constraints.
+    #[serde(default)]
+    constraints: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl StructuralSearchRequest {
@@ -372,6 +389,8 @@ impl StructuralSearchRequest {
             StructuralWorkflow::Test => self.validate_test(),
             StructuralWorkflow::Inspect => self.validate_inspect(),
             StructuralWorkflow::Rewrite => self.validate_rewrite(),
+            StructuralWorkflow::Count => self.validate_query(),
+            StructuralWorkflow::Rules => self.validate_scan(),
         }
     }
 
@@ -397,15 +416,22 @@ impl StructuralSearchRequest {
     }
 
     fn validate_query(&self) -> Result<()> {
+        let has_relational = self.has.is_some()
+            || self.inside.is_some()
+            || self.follows.is_some()
+            || self.precedes.is_some();
+
         if self.pattern().is_none()
             && self.kind().is_none()
             && self.regex_pattern().is_none()
             && self.nth_child.is_none()
             && self.range.is_none()
+            && !has_relational
+            && self.constraints.is_none()
         {
             bail!(
                 "action='structural' workflow='query' requires a non-empty `pattern`, `kind`, \
-                 `regex`, `nth_child`, or `range`"
+                 `regex`, `nth_child`, `range`, `has`, `inside`, `follows`, or `precedes`"
             );
         }
 
@@ -419,6 +445,12 @@ impl StructuralSearchRequest {
 
         if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!("action='structural' with `regex` requires `lang` to be set");
+        }
+
+        if has_relational && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!(
+                "action='structural' with relational rules (`has`/`inside`/`follows`/`precedes`) requires `lang` to be set"
+            );
         }
 
         self.validate_nth_child_position()?;
@@ -569,6 +601,7 @@ impl StructuralSearchRequest {
         self.reject_flag("skip_snapshot_tests", self.skip_snapshot_tests)?;
         self.reject_nth_child()?;
         self.reject_range()?;
+        self.reject_relational_rules()?;
 
         if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!(DEBUG_QUERY_LANG_HINT);
@@ -582,9 +615,20 @@ impl StructuralSearchRequest {
     }
 
     fn validate_count(&self) -> Result<()> {
-        if self.pattern().is_none() && self.kind().is_none() && self.regex_pattern().is_none() {
+        let has_relational = self.has.is_some()
+            || self.inside.is_some()
+            || self.follows.is_some()
+            || self.precedes.is_some();
+
+        if self.pattern().is_none()
+            && self.kind().is_none()
+            && self.regex_pattern().is_none()
+            && !has_relational
+            && self.constraints.is_none()
+        {
             bail!(
-                "action='structural' workflow='count' requires a non-empty `pattern`, `kind`, or `regex`"
+                "action='structural' workflow='count' requires a non-empty `pattern`, `kind`, \
+                 `regex`, `has`, `inside`, `follows`, or `precedes`"
             );
         }
 
@@ -594,7 +638,6 @@ impl StructuralSearchRequest {
         self.reject_severities()?;
         self.reject_nth_child()?;
         self.reject_range()?;
-        self.reject_relational_rules()?;
 
         if self.debug_query.is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!(DEBUG_QUERY_LANG_HINT);
@@ -602,6 +645,12 @@ impl StructuralSearchRequest {
 
         if self.regex_pattern().is_some() && self.lang.as_deref().is_none_or(str::is_empty) {
             bail!("action='structural' with `regex` requires `lang` to be set");
+        }
+
+        if has_relational && self.lang.as_deref().is_none_or(str::is_empty) {
+            bail!(
+                "action='structural' with relational rules (`has`/`inside`/`follows`/`precedes`) requires `lang` to be set"
+            );
         }
 
         Ok(())
@@ -686,10 +735,17 @@ impl StructuralSearchRequest {
     }
 
     fn reject_relational_rules(&self) -> Result<()> {
-        // Relational rule fields (has, inside, constraints) are not yet
-        // supported as top-level request fields. This method exists as a
-        // placeholder for future expansion and to keep validation call
-        // sites consistent.
+        if self.has.is_some()
+            || self.inside.is_some()
+            || self.follows.is_some()
+            || self.precedes.is_some()
+            || self.constraints.is_some()
+        {
+            bail!(
+                "action='structural' workflow='{}' does not accept relational rules                  (`has`, `inside`, `follows`, `precedes`) or `constraints`.",
+                self.workflow.as_str()
+            );
+        }
         Ok(())
     }
 
@@ -1055,6 +1111,17 @@ async fn execute_structural_query(
         ));
     }
 
+    // When relational rules or constraints are present, use YAML rule
+    // generation because these operators cannot be expressed via CLI flags.
+    if request.has.is_some()
+        || request.inside.is_some()
+        || request.follows.is_some()
+        || request.precedes.is_some()
+        || request.constraints.is_some()
+    {
+        return execute_atomic_rule_query(workspace_root, request, ast_grep, &search_path).await;
+    }
+
     let mut command = ast_grep_command(ast_grep, workspace_root, "run");
     if let Some(pattern) = request.pattern() {
         command.arg(format!("--pattern={pattern}"));
@@ -1287,12 +1354,14 @@ async fn execute_structural_count(
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
     let globs = request.normalized_globs();
 
-    // When nthChild, range, has, inside, or constraints is present, use YAML
-    // rule generation and count scan findings.
+    // When nthChild, range, relational rules, or constraints is present,
+    // use YAML rule generation and count scan findings.
     if request.nth_child.is_some()
         || request.range.is_some()
         || request.has.is_some()
         || request.inside.is_some()
+        || request.follows.is_some()
+        || request.precedes.is_some()
         || request.constraints.is_some()
     {
         return execute_atomic_rule_count(workspace_root, request, ast_grep, &search_path).await;
@@ -1368,6 +1437,173 @@ async fn execute_structural_count(
         result["kind"] = json!(kind);
     }
     Ok(result)
+}
+
+/// Build a YAML rule string for an atomic count query.
+fn build_atomic_rule_yaml(request: &StructuralSearchRequest, lang: &str) -> String {
+    use std::fmt::Write as _;
+    let mut yaml = String::new();
+    let _ = writeln!(yaml, "id: atomic-count");
+    let _ = writeln!(yaml, "language: {lang}");
+    let _ = writeln!(yaml, "severity: info");
+    let _ = writeln!(yaml, "rule:");
+
+    if let Some(pattern) = request.pattern() {
+        let _ = writeln!(yaml, "  pattern: {}", yaml_escape_scalar(pattern));
+    }
+    if let Some(kind) = request.kind() {
+        let _ = writeln!(yaml, "  kind: {}", yaml_escape_scalar(kind));
+    }
+    if let Some(regex) = request.regex_pattern() {
+        let _ = writeln!(yaml, "  regex: {}", yaml_escape_scalar(regex));
+    }
+    if let Some(selector) = request.selector.as_deref().filter(|s| !s.trim().is_empty()) {
+        let _ = writeln!(yaml, "  selector: {}", yaml_escape_scalar(selector));
+    }
+    if let Some(strictness) = &request.strictness {
+        let _ = writeln!(yaml, "  strictness: {}", strictness.as_str());
+    }
+
+    if let Some(nth) = &request.nth_child {
+        match nth {
+            NthChildInput::Number(n) => {
+                let _ = writeln!(yaml, "  nthChild: {n}");
+            }
+            NthChildInput::Formula(f) => {
+                let _ = writeln!(yaml, "  nthChild: {}", yaml_escape_scalar(f));
+            }
+            NthChildInput::Object(obj) => {
+                let _ = writeln!(yaml, "  nthChild:");
+                match &obj.position {
+                    Value::Number(n) => {
+                        let _ = writeln!(yaml, "    position: {n}");
+                    }
+                    Value::String(s) => {
+                        let _ = writeln!(yaml, "    position: {}", yaml_escape_scalar(s));
+                    }
+                    _ => {
+                        let _ = writeln!(yaml, "    position: {}", obj.position);
+                    }
+                }
+                if let Some(reverse) = obj.reverse {
+                    let _ = writeln!(yaml, "    reverse: {reverse}");
+                }
+                if let Some(of_rule) = &obj.of_rule {
+                    let _ = writeln!(yaml, "    ofRule:");
+                    if let Some(of_obj) = of_rule.as_object() {
+                        for (k, v) in of_obj {
+                            match v {
+                                Value::String(s) => {
+                                    let _ = writeln!(yaml, "      {k}: {}", yaml_escape_scalar(s));
+                                }
+                                Value::Number(n) => {
+                                    let _ = writeln!(yaml, "      {k}: {n}");
+                                }
+                                Value::Bool(b) => {
+                                    let _ = writeln!(yaml, "      {k}: {b}");
+                                }
+                                _ => {
+                                    let _ = writeln!(yaml, "      {k}: {v}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(r) = &request.range {
+        let _ = writeln!(yaml, "  range:");
+        let _ = writeln!(yaml, "    start:");
+        let _ = writeln!(yaml, "      line: {}", r.start.line);
+        let _ = writeln!(yaml, "      column: {}", r.start.column);
+        let _ = writeln!(yaml, "    end:");
+        let _ = writeln!(yaml, "      line: {}", r.end.line);
+        let _ = writeln!(yaml, "      column: {}", r.end.column);
+    }
+
+    // Relational rules.
+    emit_value_yaml_field(&mut yaml, "  ", "has", request.has.as_deref());
+    emit_value_yaml_field(&mut yaml, "  ", "inside", request.inside.as_deref());
+    emit_value_yaml_field(&mut yaml, "  ", "follows", request.follows.as_deref());
+    emit_value_yaml_field(&mut yaml, "  ", "precedes", request.precedes.as_deref());
+
+    // Constraints.
+    if let Some(constraints) = &request.constraints {
+        if !constraints.is_empty() {
+            yaml.push_str("  constraints:\n");
+            for (var_name, constraint_value) in constraints {
+                yaml.push_str(&format!("    {}:\n", var_name));
+                value_to_yaml(&mut yaml, constraint_value, 6);
+            }
+        }
+    }
+
+    yaml
+}
+
+/// Emit a relational rule field from a JSON value into YAML.
+fn emit_value_yaml_field(yaml: &mut String, pad: &str, name: &str, value: Option<&Value>) {
+    if let Some(val) = value {
+        yaml.push_str(&format!("{pad}{name}:\n"));
+        value_to_yaml(yaml, val, pad.len() + 2);
+    }
+}
+
+/// Recursively serialize a JSON value to YAML at the given indentation.
+fn value_to_yaml(yaml: &mut String, value: &Value, indent: usize) {
+    let pad = " ".repeat(indent);
+    match value {
+        Value::String(s) => {
+            yaml.push_str(&format!("{pad}{}\n", yaml_escape_scalar(s)));
+        }
+        Value::Number(n) => {
+            yaml.push_str(&format!("{pad}{n}\n"));
+        }
+        Value::Bool(b) => {
+            yaml.push_str(&format!("{pad}{b}\n"));
+        }
+        Value::Null => {
+            yaml.push_str(&format!("{pad}null\n"));
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                yaml.push_str(&format!("{pad}- "));
+                match item {
+                    Value::String(s) => yaml.push_str(&format!("{}\n", yaml_escape_scalar(s))),
+                    Value::Number(n) => yaml.push_str(&format!("{n}\n")),
+                    Value::Bool(b) => yaml.push_str(&format!("{b}\n")),
+                    _ => {
+                        yaml.push('\n');
+                        value_to_yaml(yaml, item, indent + 2);
+                    }
+                }
+            }
+        }
+        Value::Object(obj) => {
+            for (key, val) in obj {
+                match val {
+                    Value::Object(_) | Value::Array(_) => {
+                        yaml.push_str(&format!("{pad}{key}:\n"));
+                        value_to_yaml(yaml, val, indent + 2);
+                    }
+                    Value::String(s) => {
+                        yaml.push_str(&format!("{pad}{key}: {}\n", yaml_escape_scalar(s)));
+                    }
+                    Value::Number(n) => {
+                        yaml.push_str(&format!("{pad}{key}: {n}\n"));
+                    }
+                    Value::Bool(b) => {
+                        yaml.push_str(&format!("{pad}{key}: {b}\n"));
+                    }
+                    Value::Null => {
+                        yaml.push_str(&format!("{pad}{key}: null\n"));
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Execute count via YAML rule generation (for nthChild/range/has/inside/constraints).
@@ -1454,6 +1690,125 @@ async fn execute_atomic_rule_count(
         "workflow": "count",
         "path": search_path.display_path,
         "count": count,
+        "truncated": truncated,
+    });
+    if let Some(pattern) = request.pattern() {
+        result["pattern"] = json!(pattern);
+    }
+    if let Some(kind) = request.kind() {
+        result["kind"] = json!(kind);
+    }
+    Ok(result)
+}
+
+/// Execute a query via YAML rule generation when relational rules
+/// or constraints are present.
+async fn execute_atomic_rule_query(
+    workspace_root: &Path,
+    request: &StructuralSearchRequest,
+    ast_grep: &Path,
+    search_path: &ResolvedSearchPath,
+) -> Result<Value> {
+    let lang = request
+        .lang
+        .as_deref()
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or("javascript");
+
+    let rule_yaml = build_atomic_rule_yaml(request, lang);
+
+    let temp_dir = tempfile::tempdir().with_context(|| {
+        "failed to create temporary directory for atomic rule query".to_string()
+    })?;
+    let rules_dir = temp_dir.path().join("rules");
+    afs::create_dir_all(&rules_dir).await.with_context(|| {
+        format!(
+            "failed to create rules directory at {}",
+            rules_dir.display()
+        )
+    })?;
+
+    let rule_path = rules_dir.join("atomic-query.yml");
+    afs::write(&rule_path, &rule_yaml)
+        .await
+        .with_context(|| format!("failed to write atomic rule to {}", rule_path.display()))?;
+
+    let sgconfig_path = temp_dir.path().join("sgconfig.yml");
+    let sgconfig_content = format!("ruleDirs:\n  - {}\n", rules_dir.display());
+    afs::write(&sgconfig_path, &sgconfig_content)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to write sgconfig.yml to {}",
+                sgconfig_path.display()
+            )
+        })?;
+
+    let mut command = ast_grep_command(ast_grep, workspace_root, "scan");
+    command
+        .arg("--config")
+        .arg(&sgconfig_path)
+        .arg("--json=stream")
+        .arg("--include-metadata")
+        .arg("--color=never");
+
+    let globs = request.normalized_globs();
+    apply_context_and_globs(&mut command, request.context_lines, &globs);
+    command.arg(&search_path.command_arg);
+
+    let output =
+        run_ast_grep_command(&mut command, "failed to run ast-grep atomic rule query").await?;
+
+    let findings_with_error_exit = output.status.code() == Some(1);
+    if !output.status.success() && !findings_with_error_exit {
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "ast-grep atomic rule query failed",
+                stderr_or_stdout(&output.stderr, &output.stdout)
+            )
+        );
+    }
+
+    let findings =
+        if findings_with_error_exit && String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+            Vec::new()
+        } else {
+            parse_stream_findings(&output.stdout)?
+        };
+
+    let max_results = request.effective_max_results();
+    let truncated = findings.len() > max_results;
+    let normalized_matches = findings
+        .into_iter()
+        .take(max_results)
+        .map(|finding| {
+            let mut match_object = serde_json::Map::new();
+            match_object.insert("file".to_string(), Value::String(finding.file));
+            match_object.insert("line_number".to_string(), json!(finding.range.start.line));
+            match_object.insert("text".to_string(), Value::String(finding.text.clone()));
+            match_object.insert(
+                "lines".to_string(),
+                Value::String(finding.lines.unwrap_or(finding.text)),
+            );
+            if let Some(language) = finding.language {
+                match_object.insert("language".to_string(), Value::String(language));
+            }
+            match_object.insert("range".to_string(), build_range_value(&finding.range));
+            if let Some(message) = finding.message {
+                match_object.insert("message".to_string(), Value::String(message));
+            }
+            if let Some(metadata) = &finding.metadata {
+                match_object.insert("metadata".to_string(), metadata.clone());
+            }
+            Value::Object(match_object)
+        })
+        .collect::<Vec<_>>();
+
+    let mut result = json!({
+        "backend": "ast-grep",
+        "path": search_path.display_path,
+        "matches": normalized_matches,
         "truncated": truncated,
     });
     if let Some(pattern) = request.pattern() {
@@ -1661,6 +2016,64 @@ fn append_expand_rule_yaml(yaml: &mut String, rule: &FixExpandRule) {
                 yaml.push_str(&format!("    stopBy: {}\n", stop_by));
             }
         }
+    }
+}
+
+/// Append a JSON value as YAML at the given indentation level. Handles
+/// strings (via `yaml_escape_scalar`), numbers, bools, objects (recursive),
+/// arrays (YAML list items), and null (skipped).
+fn append_value_yaml(yaml: &mut String, value: &Value, indent: usize) {
+    let pad = " ".repeat(indent);
+    match value {
+        Value::String(s) => {
+            yaml.push_str(&yaml_escape_scalar(s));
+            yaml.push('\n');
+        }
+        Value::Number(n) => {
+            yaml.push_str(&n.to_string());
+            yaml.push('\n');
+        }
+        Value::Bool(b) => {
+            yaml.push_str(if *b { "true" } else { "false" });
+            yaml.push('\n');
+        }
+        Value::Null => {
+            yaml.push_str("null\n");
+        }
+        Value::Object(obj) => {
+            yaml.push('\n');
+            for (key, val) in obj {
+                yaml.push_str(&format!("{pad}{key}: "));
+                append_value_yaml(yaml, val, indent + 2);
+            }
+        }
+        Value::Array(arr) => {
+            yaml.push('\n');
+            for item in arr {
+                yaml.push_str(&format!("{pad}- "));
+                append_value_yaml(yaml, item, indent + 2);
+            }
+        }
+    }
+}
+
+/// Append a relational rule (`has`, `inside`, `follows`, `precedes`) to the
+/// YAML string. The `key` is the relational operator name and `value` is
+/// the sub-rule object.
+fn append_relational_yaml(yaml: &mut String, key: &str, value: &Value, indent: usize) {
+    let pad = " ".repeat(indent);
+    yaml.push_str(&format!("{pad}{key}: "));
+    append_value_yaml(yaml, value, indent + 2);
+}
+
+/// Append a `constraints` block to the YAML string. Each key is a
+/// metavariable name (e.g. `$TARGET`) and each value is a rule object.
+fn append_constraints_yaml(yaml: &mut String, constraints: &Map<String, Value>, indent: usize) {
+    let pad = " ".repeat(indent);
+    yaml.push_str(&format!("{pad}constraints:\n"));
+    for (var_name, rule) in constraints {
+        yaml.push_str(&format!("{pad}  {var_name}: "));
+        append_value_yaml(yaml, rule, indent + 4);
     }
 }
 
@@ -2091,8 +2504,10 @@ fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Opti
         return Ok(None);
     }
 
-    let (sanitized_pattern, contains_metavariables) =
-        sanitize_pattern_for_tree_sitter(request.pattern().expect("query pattern validated"));
+    let pattern = request.pattern().expect("query pattern validated");
+    validate_metavariable_syntax(pattern)?;
+
+    let (sanitized_pattern, contains_metavariables) = sanitize_pattern_for_tree_sitter(pattern);
     let tree = match parse_source(language, &sanitized_pattern) {
         Ok(tree) => tree,
         Err(_) if contains_metavariables => {
@@ -2148,6 +2563,49 @@ fn sanitize_pattern_for_tree_sitter(pattern: &str) -> (String, bool) {
         });
 
     (sanitized.into_owned(), contains_metavariables)
+}
+
+/// Validate metavariable syntax in an ast-grep pattern.
+fn validate_metavariable_syntax(pattern: &str) -> Result<()> {
+    static AST_GREP_DOLLAR_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"\$\$?[A-Za-z0-9_]+").expect("ast-grep dollar token regex must compile")
+    });
+
+    for mat in AST_GREP_DOLLAR_TOKEN_RE.find_iter(pattern) {
+        let token = mat.as_str();
+        if !AST_GREP_VALID_METAVAR_RE.is_match(token) {
+            if token.starts_with("$$$") {
+                let rest = &token[3..];
+                if rest.is_empty()
+                    || !rest
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase() || c == '_')
+                {
+                    bail!(
+                        "invalid metavariable `{token}`: multi-metavariable `$$$` must be followed by                          an uppercase name (e.g. `$$$ARGS`); got `{rest}`"
+                    );
+                }
+            } else if token == "$" || token == "$$" {
+                bail!(
+                    "bare `{token}` is not a valid metavariable; use `$NAME` (named node),                      `$$NAME` (unnamed node), or `$$$NAME` (zero or more nodes)"
+                );
+            } else {
+                let prefix = if token.starts_with("$$") { "$$" } else { "$" };
+                let name = &token[prefix.len()..];
+                if name.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+                    bail!(
+                        "invalid metavariable `{token}`: names must start with an uppercase letter                          or underscore; use `{prefix}{upper}` instead",
+                        upper = name.to_ascii_uppercase()
+                    );
+                }
+                bail!(
+                    "invalid metavariable `{token}`: names must match `[A-Z_][A-Z0-9_]*`                      after the `$` or `$$` prefix"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 fn reject_forbidden_args(args: &Value) -> Result<()> {
@@ -2579,7 +3037,12 @@ fn build_scan_summary(findings: &[AstGrepScanFinding], returned: usize, truncate
     let mut by_rule = BTreeMap::new();
 
     for finding in findings {
-        let severity = finding.severity.as_deref().unwrap_or("unknown").to_string();
+        let severity = finding
+            .severity
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("unknown")
+            .to_string();
         *by_severity.entry(severity).or_insert(0usize) += 1;
 
         let rule = finding.rule_id.as_deref().unwrap_or("unknown").to_string();
@@ -2772,6 +3235,29 @@ fn looks_like_java_declaration_fragment(pattern: &str) -> bool {
 /// - `{ |$V| $V.$METHOD }` (block with pipe parameters)
 /// - `do |$V| $V.$METHOD end` (do-block with pipe parameters)
 /// - `&:$METHOD` (bare symbol-to-proc)
+fn looks_like_css_selector_fragment(pattern: &str) -> bool {
+    let trimmed = pattern.trim();
+    if trimmed.starts_with('.') && trimmed.len() > 1 && !trimmed.contains('{') {
+        return true;
+    }
+    if trimmed.starts_with('#') && trimmed.len() > 1 && !trimmed.contains('{') {
+        return true;
+    }
+    false
+}
+
+fn looks_like_python_decorator_fragment(pattern: &str) -> bool {
+    let trimmed = pattern.trim();
+    if trimmed.starts_with('@') && trimmed.len() > 1 && !trimmed.contains('\n') {
+        let rest = &trimmed[1..];
+        return rest
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    }
+    false
+}
+
 fn looks_like_ruby_block_fragment(pattern: &str) -> bool {
     let trimmed = pattern.trim();
 
@@ -2852,6 +3338,21 @@ fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLan
              method call directly with `$LIST.$ITER(&:$METHOD)`. Key Ruby tree-sitter node kinds: `call` for \
              method calls, `method_call` for keyword-style calls, `block` for `{{ }}` blocks, `do_block` for \
              `do...end` blocks, `symbol` for `:name` literals, `assignment` for variable assignments.",
+        );
+    } else if language == AstGrepLanguage::Css && looks_like_css_selector_fragment(trimmed) {
+        message.push_str(
+            " In CSS, bare selectors like `.class` or `#id` are not standalone parseable code. \
+             Use `kind: rule_set` with `has` to match rule sets containing specific selectors, or \
+             `kind: selector` to match selector nodes.",
+        );
+    } else if language == AstGrepLanguage::Python && looks_like_python_decorator_fragment(trimmed) {
+        message.push_str(
+            " In Python, bare decorators like `@property` are not standalone parseable code. \
+             Wrap with the decorated definition and use `selector: decorated_definition` to match.",
+        );
+    } else if language == AstGrepLanguage::Bash && !trimmed.contains(';') {
+        message.push_str(
+            " In Bash, bare command fragments need script context. Use `kind: command` with `has` to match specific commands.",
         );
     } else {
         message.push_str(
