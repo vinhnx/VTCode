@@ -66,7 +66,7 @@ pub(crate) async fn handle_manage_agents(
         AgentManagerAction::Threads => {
             if ctx.renderer.supports_inline_ui() {
                 let mut ctx = ctx;
-                if !ensure_selection_ui_available(&mut ctx, "browsing delegated child threads")? {
+                if !ensure_selection_ui_available(&mut ctx, "browsing subagent threads")? {
                     return Ok(SlashCommandControl::Continue);
                 }
                 show_threads_modal(ctx).await
@@ -188,13 +188,13 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
     ctx.handle.show_list_modal(
         "Agents".to_string(),
         vec![
-            "Manage agent definitions, delegated child runs, and custom definitions.".to_string(),
+            "Manage agent definitions, subagent runs, and custom definitions.".to_string(),
             "Use Enter to inspect, create, edit, or delete definitions.".to_string(),
         ],
         vec![
             action_item(
                 "Browse agents",
-                "List primary and child-agent definitions with source badges",
+                "List primary and subagent definitions with source badges",
                 Some("Recommended"),
                 "browse effective shadowed agents",
                 "browse",
@@ -398,11 +398,11 @@ async fn handle_list_agents_text(ctx: &mut SlashCommandContext<'_>) -> Result<Sl
 
     if threads.is_empty() {
         ctx.renderer
-            .line(MessageStyle::Info, "No delegated child threads yet.")?;
+            .line(MessageStyle::Info, "No subagent threads yet.")?;
     } else {
         ctx.renderer.line(
             MessageStyle::Info,
-            &format!("{} delegated child thread(s):", threads.len()),
+            &format!("{} subagent thread(s):", threads.len()),
         )?;
         for entry in threads {
             ctx.renderer.line(
