@@ -424,7 +424,7 @@ Do not edit files.
 
 Use `mode: primary` for agents that should control the main session, `mode: subagent` for delegated child agents, and `mode: all` for agents that should be available in both places.
 
-Cycling past the last available primary agent wraps back to `build`.
+Cycling past the last available primary agent wraps back to the first agent.
 
 `@agent-name` remains delegated-child syntax. It does not select a primary agent.
 
