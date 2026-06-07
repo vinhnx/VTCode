@@ -77,6 +77,9 @@ pub enum InlineCommand {
     SetSubagentPreview {
         text: Option<String>,
     },
+    SetSessionAgent {
+        name: Option<String>,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -286,6 +289,10 @@ impl InlineHandle {
 
     pub fn set_subagent_preview(&self, text: Option<String>) {
         self.send_command(InlineCommand::SetSubagentPreview { text });
+    }
+
+    pub fn set_session_agent(&self, name: Option<String>) {
+        self.send_command(InlineCommand::SetSessionAgent { name });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

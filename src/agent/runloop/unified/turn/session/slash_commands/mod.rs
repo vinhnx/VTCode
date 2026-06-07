@@ -9,6 +9,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::session_agent::ActiveSessionAgentState;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
@@ -56,6 +57,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) conversation_history: &'a mut Vec<uni::Message>,
     pub(crate) decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub(crate) context_manager: &'a mut ContextManager,
+    pub(crate) active_session_agent: &'a mut ActiveSessionAgentState,
     pub(crate) session_stats: &'a mut SessionStats,
     pub(crate) input_status_state: &'a mut InputStatusState,
     pub(crate) tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
@@ -94,6 +96,7 @@ impl<'a> SlashCommandContext<'a> {
             conversation_history: self.conversation_history,
             decision_ledger: self.decision_ledger,
             context_manager: self.context_manager,
+            active_session_agent: &mut *self.active_session_agent,
             session_stats: self.session_stats,
             input_status_state: self.input_status_state,
             tools: self.tools,

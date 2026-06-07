@@ -578,6 +578,24 @@ impl Session {
             );
         }
 
+        if let Some(name) = self
+            .header_context
+            .session_agent
+            .as_ref()
+            .map(|name| name.trim())
+            .filter(|name| !name.is_empty())
+        {
+            let badge_style = Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                format!("Agent: {name}"),
+                badge_style,
+                &mut first_section,
+            );
+        }
+
         // Show trust level badge
         let trust_value = self.header_context.workspace_trust.to_lowercase();
         if trust_value.contains("full auto") || trust_value.contains("full_auto") {

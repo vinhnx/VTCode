@@ -179,6 +179,7 @@ pub struct InlineHeaderContext {
     pub workspace_trust: String,
     pub tools: String,
     pub mcp: String,
+    pub session_agent: Option<String>,
     pub highlights: Vec<InlineHeaderHighlight>,
     pub subagent_badges: Vec<InlineHeaderBadge>,
     /// Current editing mode for display in header.
@@ -207,6 +208,7 @@ impl Default for InlineHeaderContext {
             workspace_trust: "Trust: unavailable".to_string(),
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),
+            session_agent: None,
             highlights: Vec::new(),
             subagent_badges: Vec::new(),
             editing_mode: EditingMode::default(),

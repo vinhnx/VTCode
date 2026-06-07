@@ -70,6 +70,13 @@ pub(crate) enum AgentManagerAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SessionAgentCommandAction {
+    List,
+    Select { name: String },
+    Clear,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SubprocessManagerAction {
     List,
     ToggleDefault,
@@ -191,6 +198,9 @@ pub(crate) enum SlashCommandOutcome {
     },
     ManageAgents {
         action: AgentManagerAction,
+    },
+    ManageSessionAgent {
+        action: SessionAgentCommandAction,
     },
     ManageSubprocesses {
         action: SubprocessManagerAction,

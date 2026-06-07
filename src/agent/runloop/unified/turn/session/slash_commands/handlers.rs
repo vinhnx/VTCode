@@ -30,6 +30,8 @@ mod oauth;
 mod rewind;
 #[path = "schedule.rs"]
 mod schedule;
+#[path = "session_agent.rs"]
+mod session_agent;
 #[path = "share_log.rs"]
 mod share_log;
 #[path = "skills.rs"]
@@ -75,6 +77,7 @@ pub(super) use oauth::{
 };
 pub(super) use rewind::{handle_open_rewind_picker, handle_rewind_latest, handle_rewind_to_turn};
 pub(super) use schedule::handle_manage_schedule;
+pub(super) use session_agent::handle_manage_session_agent;
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{

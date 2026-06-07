@@ -54,7 +54,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
-    pub active_session_agent: &'a ActiveSessionAgentState,
+    pub active_session_agent: &'a mut ActiveSessionAgentState,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
     pub linked_directories:
@@ -118,7 +118,7 @@ impl<'a> InteractionLoopContext<'a> {
             config: self.config,
             vt_cfg: self.vt_cfg.as_ref(),
             context_manager: self.context_manager,
-            active_session_agent: self.active_session_agent,
+            active_session_agent: &*self.active_session_agent,
             decision_ledger: self.decision_ledger,
             traj: self.traj,
         };
