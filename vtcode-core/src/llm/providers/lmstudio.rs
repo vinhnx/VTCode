@@ -1,4 +1,3 @@
-#![allow(clippy::result_large_err)]
 //! LM Studio provider implementation
 //!
 //! LM Studio provides multiple API surfaces:

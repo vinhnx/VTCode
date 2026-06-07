@@ -4,7 +4,6 @@ use crate::config::constants::tools;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::TaskOutcome;
 use crate::llm::providers::gemini::wire::{Content, Part};
-use crate::utils::colors::style;
 use serde_json::Value;
 use std::path::Path;
 
@@ -27,7 +26,7 @@ impl AgentRunner {
             return false;
         };
         if !self.quiet {
-            println!("{}", style(&warning).red().bold());
+            tracing::warn!(?warning, "Loop detector warning");
         }
         if hard_limit {
             session_state.warnings.push(warning.clone());

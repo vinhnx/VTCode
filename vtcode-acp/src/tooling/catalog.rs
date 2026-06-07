@@ -79,7 +79,6 @@ pub struct AcpToolRegistry {
 }
 
 impl AcpToolRegistry {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workspace_root: &Path,
         read_file_enabled: bool,

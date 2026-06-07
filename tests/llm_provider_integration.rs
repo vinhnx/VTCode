@@ -88,7 +88,7 @@ fn test_message_creation() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires live provider"]
 fn test_provider_supported_models() {
     // Test that providers report correct supported models
     let gemini = GeminiProvider::new("test_key".to_string());

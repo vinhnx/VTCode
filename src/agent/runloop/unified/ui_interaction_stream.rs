@@ -284,6 +284,7 @@ fn normalized_to_legacy_stream(
     (Box::pin(stream), progress_rx)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -339,6 +340,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn render_stream_with_options_and_progress_impl(
     provider_name: &str,
     stream: &mut uni::BorrowedLLMStream<'_>,

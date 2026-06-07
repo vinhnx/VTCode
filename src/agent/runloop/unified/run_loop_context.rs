@@ -182,6 +182,7 @@ pub(crate) struct HarnessTurnState {
 }
 
 impl HarnessTurnState {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         run_id: TurnRunId,
         turn_id: TurnId,

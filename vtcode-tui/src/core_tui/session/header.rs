@@ -18,11 +18,7 @@ use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
 
 fn clean_reasoning_text(text: &str) -> String {
-    text.lines()
-        .map(str::trim_end)
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+    vtcode_commons::formatting::clean_reasoning_text(text)
 }
 
 fn capitalize_first_letter(s: &str) -> String {

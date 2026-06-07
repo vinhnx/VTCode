@@ -12,6 +12,7 @@ pub(crate) struct McpToolManager;
 
 impl McpToolManager {
     /// Enumerate MCP tools after refresh, identify newly added ones, and update the tool registry
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn enumerate_mcp_tools_after_refresh(
         tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &std::sync::Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
@@ -55,6 +56,7 @@ impl McpToolManager {
     }
 
     /// Enumerate MCP tools after initial setup, identify newly added ones, and update the tool registry
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn enumerate_mcp_tools_after_initial_setup(
         tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &std::sync::Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,

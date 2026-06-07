@@ -10,8 +10,6 @@
 pub mod ansi;
 pub mod ansi_capabilities;
 pub mod ansi_codes;
-#[cfg(feature = "tui")]
-pub mod anstyle_utils;
 pub mod async_utils;
 pub mod at_pattern;
 pub mod color256_theme;

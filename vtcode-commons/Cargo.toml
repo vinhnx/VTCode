@@ -35,7 +35,6 @@ tokio = { workspace = true, features = ["fs", "io-util"] }
 tracing = { workspace = true }
 anstyle = { workspace = true }
 anstyle-query = "1.0"
-anstyle-crossterm = { workspace = true }
 futures = { workspace = true }
 base64 = { workspace = true }
 glob = "0.3"

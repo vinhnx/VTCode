@@ -183,6 +183,16 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
     }
 }
 
+/// Strip ANSI escape codes from text, returning a borrowed `Cow` when the
+/// input contains no ESC byte.  This is the preferred API for call-sites that
+/// want to avoid allocation on the common "no ANSI codes" path.
+pub fn strip_ansi_codes(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains('\x1b') {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    std::borrow::Cow::Owned(strip_ansi(text))
+}
+
 /// Strip ANSI escape codes from text, keeping only plain text
 pub fn strip_ansi(text: &str) -> String {
     let mut output = Vec::with_capacity(text.len());

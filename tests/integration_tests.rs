@@ -19,7 +19,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires tool execution environment"]
     async fn test_list_files_tool() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
@@ -133,7 +133,7 @@ unified_file = "allow"
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires tool execution environment"]
     async fn test_grep_file_tool() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();

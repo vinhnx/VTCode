@@ -156,6 +156,6 @@ mod tests {
     #[test]
     fn test_ripgrep_status_check() {
         let status = RipgrepStatus::check();
-        println!("Ripgrep status: {:?}", status);
+        tracing::debug!(?status, "Ripgrep status");
     }
 }

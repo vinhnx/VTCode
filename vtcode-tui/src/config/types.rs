@@ -11,6 +11,7 @@ pub enum ReasoningEffortLevel {
     Medium,
     High,
     XHigh,
+    Max,
 }
 
 impl ReasoningEffortLevel {
@@ -22,6 +23,7 @@ impl ReasoningEffortLevel {
             Self::Medium => "medium",
             Self::High => "high",
             Self::XHigh => "xhigh",
+            Self::Max => "max",
         }
     }
 }
@@ -63,8 +65,8 @@ impl fmt::Display for SystemPromptMode {
 #[serde(rename_all = "lowercase")]
 pub enum ToolDocumentationMode {
     Minimal,
-    Progressive,
     #[default]
+    Progressive,
     Full,
 }
 

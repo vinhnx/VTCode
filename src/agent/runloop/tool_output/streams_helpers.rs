@@ -10,7 +10,6 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::ansi_codes::ESC_CHAR;
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
@@ -276,10 +275,7 @@ mod markdown_block_tests {
 
 #[inline]
 pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
-    if !input.contains(ESC_CHAR) {
-        return Cow::Borrowed(input);
-    }
-    Cow::Owned(vtcode_core::utils::ansi_parser::strip_ansi(input))
+    vtcode_commons::ansi::strip_ansi_codes(input)
 }
 
 #[cfg(test)]

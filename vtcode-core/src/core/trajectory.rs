@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::SECONDS_PER_DAY;
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::async_line_writer::AsyncLineWriter;
 
 const TRAJECTORY_PREFIX: &str = "trajectory-";
 const TRAJECTORY_EXTENSION: &str = "jsonl";
-const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 const BYTES_PER_MB: u64 = 1024 * 1024;
 
 #[derive(Clone)]

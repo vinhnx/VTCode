@@ -596,67 +596,11 @@ impl SimpleIndexer {
         Ok(self.search_files_internal(&regex, file_pattern, false))
     }
 
-    #[allow(dead_code)]
-    fn walk_directory<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
-    where
-        F: FnMut(&Path) -> Result<()>,
-    {
-        if !dir_path.exists() {
-            return Ok(());
-        }
-
-        self.walk_directory_internal(dir_path, callback)
-    }
-
-    #[allow(dead_code)]
-    fn walk_directory_internal<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
-    where
-        F: FnMut(&Path) -> Result<()>,
-    {
-        for entry in fs::read_dir(dir_path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                if self.is_allowed_path(&path) {
-                    self.walk_directory_internal(&path, callback)?;
-                    continue;
-                }
-
-                if !self.filter.should_descend(&path, &self.config) {
-                    self.walk_allowed_descendants(&path, callback)?;
-                    continue;
-                }
-
-                self.walk_directory_internal(&path, callback)?;
-            } else if path.is_file() {
-                callback(&path)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
     fn is_allowed_path(&self, path: &Path) -> bool {
         self.config
             .allowed_dirs
             .iter()
             .any(|allowed| path.starts_with(allowed))
-    }
-
-    #[allow(dead_code)]
-    fn walk_allowed_descendants<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
-    where
-        F: FnMut(&Path) -> Result<()>,
-    {
-        let allowed_dirs = self.config.allowed_dirs.clone();
-        for allowed in allowed_dirs {
-            if allowed.starts_with(dir_path) && allowed.exists() {
-                self.walk_directory_internal(&allowed, callback)?;
-            }
-        }
-        Ok(())
     }
 
     #[inline]

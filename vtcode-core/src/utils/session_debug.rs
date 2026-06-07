@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
+use crate::core::SECONDS_PER_DAY;
 use crate::utils::dot_config::DotManager;
 use crate::utils::session_archive::SESSION_DIR_ENV;
 
@@ -23,7 +24,6 @@ pub const DEFAULT_MAX_DEBUG_LOG_AGE_DAYS: u32 = 7;
 
 const DEBUG_LOG_FILE_PREFIX: &str = "debug-";
 const DEBUG_BYTES_PER_MB: u64 = 1024 * 1024;
-const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 fn with_runtime_debug_context<R>(f: impl FnOnce(&mut RuntimeDebugContext) -> R) -> R {
     match RUNTIME_DEBUG_CONTEXT.lock() {

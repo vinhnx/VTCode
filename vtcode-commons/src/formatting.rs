@@ -232,6 +232,22 @@ pub fn collapse_whitespace(text: &str) -> String {
     result
 }
 
+/// Clean reasoning text by trimming trailing whitespace on each line and
+/// removing blank lines.
+///
+/// ```
+/// # use vtcode_commons::formatting::clean_reasoning_text;
+/// assert_eq!(clean_reasoning_text("line1\n\n\nline2\n"), "line1\nline2");
+/// assert_eq!(clean_reasoning_text(""), "");
+/// ```
+pub fn clean_reasoning_text(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

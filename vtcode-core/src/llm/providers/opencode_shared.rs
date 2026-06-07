@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use crate::config::models::model_catalog_entry;
 use crate::llm::error_display;
 use crate::llm::provider::{

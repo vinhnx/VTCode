@@ -16,6 +16,7 @@ pub(crate) enum WizardModalOutcome {
     Cancelled { signal: Option<&'static str> },
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn show_wizard_modal_and_wait(
     handle: &InlineHandle,
     session: &mut InlineSession,

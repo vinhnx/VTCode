@@ -1,4 +1,3 @@
-#![allow(clippy::result_large_err)]
 //! Base trait and common implementations for LLM providers
 //!
 //! This module provides a unified foundation for all LLM providers to eliminate
@@ -43,7 +42,6 @@ impl ProviderConfig {
     }
 
     /// Build HTTP client with provider-specific configuration
-    #[expect(clippy::result_large_err)]
     pub fn build_http_client(&self) -> Result<HttpClient, LLMError> {
         use crate::llm::http_client::HttpClientFactory;
         Ok(HttpClientFactory::with_timeouts(
@@ -175,11 +173,9 @@ pub trait BaseProvider: Send + Sync {
     fn config(&self) -> &ProviderConfig;
 
     /// Build HTTP request for the provider
-    #[expect(clippy::result_large_err)]
     fn build_request(&self, request: &LLMRequest) -> Result<reqwest::Request, LLMError>;
 
     /// Parse response from the provider
-    #[expect(clippy::result_large_err)]
     fn parse_response(&self, response: Value) -> Result<LLMResponse, LLMError>;
 
     /// Execute LLM request with common error handling and retry logic

@@ -3,10 +3,8 @@
 // Conventions:
 //   error()   — red bold "Error: ..." for fatal problems
 //   warn()    — yellow "Warning: ..." for non-fatal issues
-//   info()    — cyan "Info: ..." for neutral guidance
 //   ok()      — green "Done: ..." for success
 //   hint()    — dim "  -> ..." for follow-up actions beneath an error/warn
-//   config_hint() — renders a vtcode.toml snippet the user should add
 
 use vtcode_core::utils::colors::style;
 
@@ -20,12 +18,6 @@ pub fn warn(msg: &str) -> String {
     format!("{}", style(format!("Warning: {msg}")).yellow())
 }
 
-/// Cyan info prefix.
-#[allow(dead_code)]
-pub fn info(msg: &str) -> String {
-    format!("{}", style(format!("Info: {msg}")).cyan())
-}
-
 /// Green success prefix.
 pub fn ok(msg: &str) -> String {
     format!("{}", style(format!("Done: {msg}")).green())
@@ -34,15 +26,4 @@ pub fn ok(msg: &str) -> String {
 /// Dim follow-up hint, indented with arrow.
 pub fn hint(msg: &str) -> String {
     format!("{}", style(format!("  -> {msg}")).dim())
-}
-
-/// Render a vtcode.toml configuration snippet the user should add.
-#[allow(dead_code)]
-pub fn config_hint(section: &str, snippet: &str) -> String {
-    format!(
-        "Add the following to {}:\n\n  [{}]\n  {}",
-        style("vtcode.toml").bold(),
-        section,
-        snippet
-    )
 }

@@ -7,20 +7,6 @@ use hashbrown::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Single metric data point
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct MetricPoint {
-    /// Metric name (e.g., "command.execute", "cache.hit")
-    pub name: String,
-    /// Measured value (duration in ms, count, bytes, etc.)
-    pub value: f64,
-    /// Unit of measurement
-    pub unit: String,
-    /// When this metric was recorded
-    pub timestamp: Instant,
-}
-
 /// Aggregated statistics for a metric
 #[derive(Debug, Clone)]
 pub struct MetricStats {
