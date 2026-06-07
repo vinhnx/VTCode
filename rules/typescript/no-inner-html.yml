@@ -1,0 +1,27 @@
+id: no-inner-html
+language: typescript
+severity: error
+message: Avoid `innerHTML` assignment; use textContent or a safe DOM API to prevent XSS.
+note: |
+  Setting `element.innerHTML = userInput` renders raw HTML, enabling cross-site
+  scripting (XSS) when the value contains user-controlled content. Use
+  `textContent` for plain text, or a sanitization library (DOMPurify) when
+  HTML is required. This rule flags direct `innerHTML` assignments.
+labels:
+  EL:
+    style: primary
+    message: this element's innerHTML is being set directly
+  VAL:
+    style: secondary
+    message: this value is rendered as raw HTML
+rule:
+  pattern: $EL.innerHTML = $VAL
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!**/*.test.*"
+  - "!**/*.spec.*"

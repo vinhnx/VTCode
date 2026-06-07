@@ -1,11 +1,11 @@
 id: no-var
 valid:
-  - code: |
+  - |
       val name: String = "hello"
-  - code: |
+  - |
       val count = 42
 invalid:
-  - code: |
+  - |
       var name: String = "hello"
-  - code: |
+  - |
       var count = 42

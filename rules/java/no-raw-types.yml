@@ -1,0 +1,19 @@
+id: no-raw-types
+language: Java
+severity: warning
+message: Use parameterized types instead of raw types.
+note: |
+  Raw types like `List` instead of `List<String>` bypass generic type safety
+  and produce unchecked assignment warnings. Always specify type parameters
+  for generic types. Use `var` with diamond inference when the type is obvious:
+  `var list = new ArrayList<String>()`.
+rule:
+  kind: type_identifier
+  regex: "^(List|Map|Set|Collection|Iterator|Iterable|Queue|Deque|Optional)$"
+  not:
+    inside:
+      kind: generic_type
+      stopBy: end
+files:
+  - "**/*.java"
+  - "!**/test/**"

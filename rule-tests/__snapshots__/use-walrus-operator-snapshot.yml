@@ -1,0 +1,40 @@
+id: use-walrus-operator
+snapshots:
+  ? |-
+    x = get_value()
+    if x:
+        use(x)
+  : fixed: |-
+      x = get_value()
+      if x := get_value():
+          use(x)
+    labels:
+    - source: |-
+        if x:
+            use(x)
+      style: primary
+      start: 16
+      end: 32
+    - source: x = get_value()
+      style: secondary
+      start: 0
+      end: 15
+  ? |
+    x = get_value()
+    if x:
+        use(x)
+  : fixed: |
+      x = get_value()
+      if x := get_value():
+          use(x)
+    labels:
+    - source: |-
+        if x:
+            use(x)
+      style: primary
+      start: 16
+      end: 32
+    - source: x = get_value()
+      style: secondary
+      start: 0
+      end: 15

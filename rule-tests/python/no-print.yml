@@ -1,13 +1,13 @@
 id: no-print
 valid:
-  - code: |
+  - |
       logger.info("hello")
-  - code: |
+  - |
       logging.debug("message")
-  - code: |
+  - |
       sys.stdout.write("output")
 invalid:
-  - code: |
+  - |
       print("debug output")
-  - code: |
+  - |
       print("hello", "world")

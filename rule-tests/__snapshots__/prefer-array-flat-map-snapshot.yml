@@ -1,0 +1,18 @@
+id: prefer-array-flat-map
+snapshots:
+  arr.map(x => x.items).flat();:
+    fixed: arr.flatMap(x => x.items);
+    labels:
+    - source: arr.map(x => x.items).flat()
+      style: primary
+      start: 0
+      end: 28
+  ? |
+    arr.map(x => x.items).flat();
+  : fixed: |
+      arr.flatMap(x => x.items);
+    labels:
+    - source: arr.map(x => x.items).flat()
+      style: primary
+      start: 0
+      end: 28

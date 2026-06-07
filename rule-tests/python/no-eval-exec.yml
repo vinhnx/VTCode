@@ -1,0 +1,15 @@
+id: no-eval-exec
+valid:
+  - |
+      result = ast.literal_eval(user_input)
+  - |
+      value = getattr(obj, attr_name)
+  - |
+      import ast
+invalid:
+  - |
+      result = eval(user_input)
+  - |
+      exec(code_string)
+  - |
+      eval(f"obj.{method_name}")

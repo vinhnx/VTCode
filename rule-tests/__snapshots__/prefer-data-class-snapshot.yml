@@ -1,0 +1,60 @@
+id: prefer-data-class
+snapshots:
+  'class Point(val x: Int, val y: Int)':
+    labels:
+    - source: 'class Point(val x: Int, val y: Int)'
+      style: primary
+      start: 0
+      end: 35
+    - source: 'val x: Int'
+      style: secondary
+      start: 12
+      end: 22
+    - source: '(val x: Int, val y: Int)'
+      style: secondary
+      start: 11
+      end: 35
+  ? |
+    class Point(val x: Int, val y: Int)
+  : labels:
+    - source: 'class Point(val x: Int, val y: Int)'
+      style: primary
+      start: 0
+      end: 35
+    - source: 'val x: Int'
+      style: secondary
+      start: 12
+      end: 22
+    - source: '(val x: Int, val y: Int)'
+      style: secondary
+      start: 11
+      end: 35
+  'class User(val name: String, val age: Int)':
+    labels:
+    - source: 'class User(val name: String, val age: Int)'
+      style: primary
+      start: 0
+      end: 42
+    - source: 'val name: String'
+      style: secondary
+      start: 11
+      end: 27
+    - source: '(val name: String, val age: Int)'
+      style: secondary
+      start: 10
+      end: 42
+  ? |
+    class User(val name: String, val age: Int)
+  : labels:
+    - source: 'class User(val name: String, val age: Int)'
+      style: primary
+      start: 0
+      end: 42
+    - source: 'val name: String'
+      style: secondary
+      start: 11
+      end: 27
+    - source: '(val name: String, val age: Int)'
+      style: secondary
+      start: 10
+      end: 42

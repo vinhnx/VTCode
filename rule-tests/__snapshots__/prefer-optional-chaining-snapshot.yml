@@ -1,0 +1,34 @@
+id: prefer-optional-chaining
+snapshots:
+  const name = obj != null && obj.name;:
+    fixed: const name = obj?.name;
+    labels:
+    - source: obj != null && obj.name
+      style: primary
+      start: 13
+      end: 36
+  ? |
+    const name = obj != null && obj.name;
+  : fixed: |
+      const name = obj?.name;
+    labels:
+    - source: obj != null && obj.name
+      style: primary
+      start: 13
+      end: 36
+  const val = x !== null && x !== undefined && x.prop;:
+    fixed: const val = x?.prop;
+    labels:
+    - source: x !== null && x !== undefined && x.prop
+      style: primary
+      start: 12
+      end: 51
+  ? |
+    const val = x !== null && x !== undefined && x.prop;
+  : fixed: |
+      const val = x?.prop;
+    labels:
+    - source: x !== null && x !== undefined && x.prop
+      style: primary
+      start: 12
+      end: 51

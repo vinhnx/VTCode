@@ -1,22 +1,17 @@
 id: no-chars-enumerate
 valid:
-  - code: |
+  - |
       for (i, ch) in s.char_indices() {
           println!("{}: {}", i, ch);
       }
-  - code: |
+  - |
       let chars: Vec<(usize, char)> = s.char_indices().collect();
-  - code: |
-      for (i, ch) in s.chars().enumerate() {
-          println!("character {}: {}", i, ch);
-      }
-    # Character indices are intentional here
 invalid:
-  - code: |
+  - |
       for (i, ch) in s.chars().enumerate() {
           if ch == ' ' {
               return i;
           }
       }
-  - code: |
+  - |
       let pos = text.chars().enumerate().find(|(_, c)| *c == '\n').map(|(i, _)| i);

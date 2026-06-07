@@ -1,0 +1,23 @@
+id: no-unnecessary-pass
+valid:
+  - |
+      def placeholder():
+          pass
+  - |
+      class Empty:
+          pass
+  - |
+      try:
+          risky_operation()
+      except Exception:
+          pass
+invalid:
+  - |
+      def do_something():
+          print("hello")
+          pass
+  - |
+      def process(x):
+          result = x * 2
+          pass
+          return result

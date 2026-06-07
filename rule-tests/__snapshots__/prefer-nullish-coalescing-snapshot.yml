@@ -1,0 +1,44 @@
+id: prefer-nullish-coalescing
+snapshots:
+  const timeout = options.timeout || 5000;:
+    labels:
+    - source: options.timeout || 5000
+      style: primary
+      start: 16
+      end: 39
+    - source: timeout = options.timeout || 5000
+      style: secondary
+      start: 6
+      end: 39
+  ? |
+    const timeout = options.timeout || 5000;
+  : labels:
+    - source: options.timeout || 5000
+      style: primary
+      start: 16
+      end: 39
+    - source: timeout = options.timeout || 5000
+      style: secondary
+      start: 6
+      end: 39
+  const x = value || "default";:
+    labels:
+    - source: value || "default"
+      style: primary
+      start: 10
+      end: 28
+    - source: x = value || "default"
+      style: secondary
+      start: 6
+      end: 28
+  ? |
+    const x = value || "default";
+  : labels:
+    - source: value || "default"
+      style: primary
+      start: 10
+      end: 28
+    - source: x = value || "default"
+      style: secondary
+      start: 6
+      end: 28

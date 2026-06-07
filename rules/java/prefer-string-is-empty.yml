@@ -1,0 +1,14 @@
+id: prefer-string-is-empty
+language: Java
+severity: hint
+message: Use `.isEmpty()` instead of `.length() == 0` or `.equals("")`.
+note: |
+  `str.isEmpty()` is more readable and idiomatic than `str.length() == 0` or
+  `str.equals("")`. For null safety, consider `str == null || str.isEmpty()`.
+rule:
+  any:
+    - pattern: $S.length() == 0
+    - pattern: $S.equals("")
+fix: $S.isEmpty()
+files:
+  - "**/*.java"

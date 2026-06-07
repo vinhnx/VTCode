@@ -1,0 +1,13 @@
+id: prefer-generator-in-any-all
+valid:
+  - |
+      any(x > 0 for x in items)
+  - |
+      all(isinstance(x, int) for x in values)
+  - |
+      result = sum([x * 2 for x in items])
+invalid:
+  - |
+      any([x > 0 for x in items])
+  - |
+      all([isinstance(x, int) for x in values])

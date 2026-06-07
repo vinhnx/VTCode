@@ -1,15 +1,15 @@
 id: prefer-iterator-sum
 valid:
-  - code: |
+  - |
       let total = items.iter().sum::<i32>();
-  - code: |
+  - |
       let total = items.iter().fold(1, |acc, x| acc * x);
-  - code: |
+  - |
       let total = items.iter().fold(0, |acc, x| acc + x + 1);
 invalid:
-  - code: |
+  - |
       let total = items.iter().fold(0, |acc, x| acc + x);
-  - code: |
+  - |
       let total = items.iter().fold(0.0, |acc, x| acc + x);
-  - code: |
+  - |
       let total = items.iter().fold(0u64, |acc, x| acc + x);

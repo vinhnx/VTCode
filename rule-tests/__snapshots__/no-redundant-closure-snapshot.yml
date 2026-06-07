@@ -1,0 +1,28 @@
+id: no-redundant-closure
+snapshots:
+  items.iter().for_each(|x| bar(x)):
+    labels:
+    - source: '|x| bar(x)'
+      style: primary
+      start: 22
+      end: 32
+  ? |
+    items.iter().for_each(|x| bar(x))
+  : labels:
+    - source: '|x| bar(x)'
+      style: primary
+      start: 22
+      end: 32
+  items.iter().map(|x| foo(x)).collect():
+    labels:
+    - source: '|x| foo(x)'
+      style: primary
+      start: 17
+      end: 27
+  ? |
+    items.iter().map(|x| foo(x)).collect()
+  : labels:
+    - source: '|x| foo(x)'
+      style: primary
+      start: 17
+      end: 27

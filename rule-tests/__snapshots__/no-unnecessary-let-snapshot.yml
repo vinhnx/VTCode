@@ -1,0 +1,16 @@
+id: no-unnecessary-let
+snapshots:
+  ? |
+    name.let { n -> n.length }
+  : labels:
+    - source: name.let { n -> n.length }
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    result.let { value -> process(value) }
+  : labels:
+    - source: result.let { value -> process(value) }
+      style: primary
+      start: 0
+      end: 38

@@ -1,14 +1,14 @@
 id: no-console-except-error
 valid:
-  - code: |
+  - |
       logger.info("started");
-  - code: |
+  - |
       try {
         doWork();
       } catch (e) {
         console.error("failed", e);
       }
-  - code: |
+  - |
       // console.error in catch is allowed
       try {
         riskyOp();
@@ -16,11 +16,11 @@ valid:
         console.error(err);
       }
 invalid:
-  - code: |
+  - |
       console.log("debug output");
-  - code: |
+  - |
       console.warn("deprecated");
-  - code: |
+  - |
       console.debug("trace", value);
-  - code: |
+  - |
       console.error("outside catch block");

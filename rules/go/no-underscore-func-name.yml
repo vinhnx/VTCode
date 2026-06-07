@@ -1,0 +1,17 @@
+id: no-underscore-func-name
+language: Go
+severity: hint
+message: Use camelCase for Go function names, not snake_case.
+note: |
+  Go convention uses camelCase for function names (e.g., `getUserName` not
+  `get_user_name`). This rule detects snake_case function names and
+  flags them as style violations. This is a detection rule with no autofix
+  because renaming a function requires updating all call sites.
+rule:
+  kind: function_declaration
+  has:
+    field: name
+    regex: "^[a-z]+_[a-z]"
+files:
+  - "**/*.go"
+  - "!**/*_test.go"

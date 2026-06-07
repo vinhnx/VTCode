@@ -1,0 +1,34 @@
+id: prefer-dict-get
+snapshots:
+  result = data[name] if name in data else None:
+    fixed: result = data.get(name, None)
+    labels:
+    - source: data[name] if name in data else None
+      style: primary
+      start: 9
+      end: 45
+  ? |
+    result = data[name] if name in data else None
+  : fixed: |
+      result = data.get(name, None)
+    labels:
+    - source: data[name] if name in data else None
+      style: primary
+      start: 9
+      end: 45
+  value = d[key] if key in d else "default":
+    fixed: value = d.get(key, "default")
+    labels:
+    - source: d[key] if key in d else "default"
+      style: primary
+      start: 8
+      end: 41
+  ? |
+    value = d[key] if key in d else "default"
+  : fixed: |
+      value = d.get(key, "default")
+    labels:
+    - source: d[key] if key in d else "default"
+      style: primary
+      start: 8
+      end: 41

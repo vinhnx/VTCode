@@ -1,0 +1,15 @@
+id: no-eval
+valid:
+  - |
+      const data = JSON.parse(input);
+  - |
+      const num = parseInt(str, 10);
+  - |
+      const fn = (x: number) => x + 1;
+invalid:
+  - |
+      const result = eval(userInput);
+  - |
+      const fn = new Function("return " + code);
+  - |
+      eval("console.log('hello')");

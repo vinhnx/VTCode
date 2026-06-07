@@ -1,0 +1,67 @@
+id: no-iterator-for-each
+snapshots:
+  ? |-
+    items.iter().for_each(|x| {
+        println!("{}", x);
+    });
+  : labels:
+    - source: |-
+        items.iter().for_each(|x| {
+            println!("{}", x);
+        })
+      style: primary
+      start: 0
+      end: 53
+  ? |
+    items.iter().for_each(|x| {
+        println!("{}", x);
+    });
+  : labels:
+    - source: |-
+        items.iter().for_each(|x| {
+            println!("{}", x);
+        })
+      style: primary
+      start: 0
+      end: 53
+  ? |-
+    items.iter().try_for_each(|x| {
+        process(x)?;
+        Ok(())
+    });
+  : labels:
+    - source: |-
+        items.iter().try_for_each(|x| {
+            process(x)?;
+            Ok(())
+        })
+      style: primary
+      start: 0
+      end: 62
+  ? |
+    items.iter().try_for_each(|x| {
+        process(x)?;
+        Ok(())
+    });
+  : labels:
+    - source: |-
+        items.iter().try_for_each(|x| {
+            process(x)?;
+            Ok(())
+        })
+      style: primary
+      start: 0
+      end: 62
+  vec![1, 2, 3].into_iter().for_each(|x| println!("{}", x));:
+    labels:
+    - source: vec![1, 2, 3].into_iter().for_each(|x| println!("{}", x))
+      style: primary
+      start: 0
+      end: 57
+  ? |
+    vec![1, 2, 3].into_iter().for_each(|x| println!("{}", x));
+  : labels:
+    - source: vec![1, 2, 3].into_iter().for_each(|x| println!("{}", x))
+      style: primary
+      start: 0
+      end: 57

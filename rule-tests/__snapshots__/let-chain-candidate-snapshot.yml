@@ -1,0 +1,220 @@
+id: let-chain-candidate
+snapshots:
+  ? |-
+    if a > 0 {
+        if let Some(x) = b {
+            println!("{}", x);
+        }
+    }
+  : labels:
+    - source: |-
+        if a > 0 {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: primary
+      start: 0
+      end: 70
+    - source: let Some(x) = b
+      style: secondary
+      start: 18
+      end: 33
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: secondary
+      start: 9
+      end: 70
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: secondary
+      start: 9
+      end: 70
+  ? |
+    if a > 0 {
+        if let Some(x) = b {
+            println!("{}", x);
+        }
+    }
+  : labels:
+    - source: |-
+        if a > 0 {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: primary
+      start: 0
+      end: 70
+    - source: let Some(x) = b
+      style: secondary
+      start: 18
+      end: 33
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: secondary
+      start: 9
+      end: 70
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        if let Some(x) = b {
+                println!("{}", x);
+            }
+      style: secondary
+      start: 15
+      end: 68
+    - source: |-
+        {
+            if let Some(x) = b {
+                println!("{}", x);
+            }
+        }
+      style: secondary
+      start: 9
+      end: 70
+  ? |-
+    if let Some(x) = a {
+        if let Some(y) = b {
+            println!("{} {}", x, y);
+        }
+    }
+  : labels:
+    - source: |-
+        if let Some(x) = a {
+            if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+        }
+      style: primary
+      start: 0
+      end: 86
+    - source: let Some(x) = a
+      style: secondary
+      start: 3
+      end: 18
+    - source: |-
+        if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+      style: secondary
+      start: 25
+      end: 84
+    - source: |-
+        if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+      style: secondary
+      start: 25
+      end: 84
+    - source: |-
+        {
+            if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+        }
+      style: secondary
+      start: 19
+      end: 86
+  ? |
+    if let Some(x) = a {
+        if let Some(y) = b {
+            println!("{} {}", x, y);
+        }
+    }
+  : labels:
+    - source: |-
+        if let Some(x) = a {
+            if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+        }
+      style: primary
+      start: 0
+      end: 86
+    - source: let Some(x) = a
+      style: secondary
+      start: 3
+      end: 18
+    - source: |-
+        if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+      style: secondary
+      start: 25
+      end: 84
+    - source: |-
+        if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+      style: secondary
+      start: 25
+      end: 84
+    - source: |-
+        {
+            if let Some(y) = b {
+                println!("{} {}", x, y);
+            }
+        }
+      style: secondary
+      start: 19
+      end: 86

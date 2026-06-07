@@ -1,0 +1,23 @@
+id: no-system-out-println
+snapshots:
+  ? |
+    System.err.println("error occurred");
+  : labels:
+    - source: System.err.println("error occurred")
+      style: primary
+      start: 0
+      end: 36
+  ? |
+    System.out.print("processing");
+  : labels:
+    - source: System.out.print("processing")
+      style: primary
+      start: 0
+      end: 30
+  ? |
+    System.out.println("request received");
+  : labels:
+    - source: System.out.println("request received")
+      style: primary
+      start: 0
+      end: 38

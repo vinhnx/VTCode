@@ -1,0 +1,34 @@
+id: prefer-isinstance-tuple
+snapshots:
+  isinstance(x, int) or isinstance(x, float):
+    fixed: isinstance(x, (int, float))
+    labels:
+    - source: isinstance(x, int) or isinstance(x, float)
+      style: primary
+      start: 0
+      end: 42
+  ? |
+    isinstance(x, int) or isinstance(x, float)
+  : fixed: |
+      isinstance(x, (int, float))
+    labels:
+    - source: isinstance(x, int) or isinstance(x, float)
+      style: primary
+      start: 0
+      end: 42
+  isinstance(x, str) or isinstance(x, bytes):
+    fixed: isinstance(x, (str, bytes))
+    labels:
+    - source: isinstance(x, str) or isinstance(x, bytes)
+      style: primary
+      start: 0
+      end: 42
+  ? |
+    isinstance(x, str) or isinstance(x, bytes)
+  : fixed: |
+      isinstance(x, (str, bytes))
+    labels:
+    - source: isinstance(x, str) or isinstance(x, bytes)
+      style: primary
+      start: 0
+      end: 42

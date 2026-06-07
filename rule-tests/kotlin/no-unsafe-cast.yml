@@ -1,15 +1,15 @@
 id: no-unsafe-cast
 valid:
-  - code: |
+  - |
       val x = obj as? String
-  - code: |
+  - |
       val x: String? = obj as? String
-  - code: |
+  - |
       when (obj) {
           is String -> println(obj)
       }
 invalid:
-  - code: |
+  - |
       val x = obj as String
-  - code: |
+  - |
       val len = (obj as String).length

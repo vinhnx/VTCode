@@ -1,0 +1,86 @@
+id: no-return-in-foreach
+snapshots:
+  ? |-
+    arr.forEach(x => {
+      if (x > 10) return x;
+    });
+  : labels:
+    - source: return x;
+      style: primary
+      start: 33
+      end: 42
+    - source: arr.forEach
+      style: secondary
+      start: 0
+      end: 11
+    - source: |-
+        arr.forEach(x => {
+          if (x > 10) return x;
+        })
+      style: secondary
+      start: 0
+      end: 45
+  ? |
+    arr.forEach(x => {
+      if (x > 10) return x;
+    });
+  : labels:
+    - source: return x;
+      style: primary
+      start: 33
+      end: 42
+    - source: arr.forEach
+      style: secondary
+      start: 0
+      end: 11
+    - source: |-
+        arr.forEach(x => {
+          if (x > 10) return x;
+        })
+      style: secondary
+      start: 0
+      end: 45
+  ? |-
+    function findById(items: Item[], id: string) {
+      items.forEach(item => {
+        if (item.id === id) return item;
+      });
+    }
+  : labels:
+    - source: return item;
+      style: primary
+      start: 97
+      end: 109
+    - source: items.forEach
+      style: secondary
+      start: 49
+      end: 62
+    - source: |-
+        items.forEach(item => {
+            if (item.id === id) return item;
+          })
+      style: secondary
+      start: 49
+      end: 114
+  ? |
+    function findById(items: Item[], id: string) {
+      items.forEach(item => {
+        if (item.id === id) return item;
+      });
+    }
+  : labels:
+    - source: return item;
+      style: primary
+      start: 97
+      end: 109
+    - source: items.forEach
+      style: secondary
+      start: 49
+      end: 62
+    - source: |-
+        items.forEach(item => {
+            if (item.id === id) return item;
+          })
+      style: secondary
+      start: 49
+      end: 114

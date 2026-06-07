@@ -1,0 +1,70 @@
+id: avoid-jsx-short-circuit
+snapshots:
+  ? |-
+    function App({ count }: { count: number }) {
+      return <span>{count && <Badge />}</span>;
+    }
+  : fixed: |-
+      function App({ count }: { count: number }) {
+        return <span>{{count ? <Badge /> : null}}</span>;
+      }
+    labels:
+    - source: count && <Badge />
+      style: primary
+      start: 61
+      end: 79
+    - source: '{count && <Badge />}'
+      style: secondary
+      start: 60
+      end: 80
+  ? |
+    function App({ count }: { count: number }) {
+      return <span>{count && <Badge />}</span>;
+    }
+  : fixed: |
+      function App({ count }: { count: number }) {
+        return <span>{{count ? <Badge /> : null}}</span>;
+      }
+    labels:
+    - source: count && <Badge />
+      style: primary
+      start: 61
+      end: 79
+    - source: '{count && <Badge />}'
+      style: secondary
+      start: 60
+      end: 80
+  ? |-
+    function App({ items }: { items: string[] }) {
+      return <div>{items.length && <List items={items} />}</div>;
+    }
+  : fixed: |-
+      function App({ items }: { items: string[] }) {
+        return <div>{{items.length ? <List items={items} /> : null}}</div>;
+      }
+    labels:
+    - source: items.length && <List items={items} />
+      style: primary
+      start: 62
+      end: 100
+    - source: '{items.length && <List items={items} />}'
+      style: secondary
+      start: 61
+      end: 101
+  ? |
+    function App({ items }: { items: string[] }) {
+      return <div>{items.length && <List items={items} />}</div>;
+    }
+  : fixed: |
+      function App({ items }: { items: string[] }) {
+        return <div>{{items.length ? <List items={items} /> : null}}</div>;
+      }
+    labels:
+    - source: items.length && <List items={items} />
+      style: primary
+      start: 62
+      end: 100
+    - source: '{items.length && <List items={items} />}'
+      style: secondary
+      start: 61
+      end: 101

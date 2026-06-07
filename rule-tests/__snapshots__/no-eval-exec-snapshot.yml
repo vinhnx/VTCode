@@ -1,0 +1,23 @@
+id: no-eval-exec
+snapshots:
+  ? |
+    eval(f"obj.{method_name}")
+  : labels:
+    - source: eval(f"obj.{method_name}")
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    exec(code_string)
+  : labels:
+    - source: exec(code_string)
+      style: primary
+      start: 0
+      end: 17
+  ? |
+    result = eval(user_input)
+  : labels:
+    - source: eval(user_input)
+      style: primary
+      start: 9
+      end: 25

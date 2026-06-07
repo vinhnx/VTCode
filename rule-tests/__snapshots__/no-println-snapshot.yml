@@ -1,0 +1,41 @@
+id: no-println
+snapshots:
+  System.err.println("error"):
+    labels:
+    - source: System.err.println("error")
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    System.err.println("error")
+  : labels:
+    - source: System.err.println("error")
+      style: primary
+      start: 0
+      end: 27
+  System.out.println("hello"):
+    labels:
+    - source: System.out.println("hello")
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    System.out.println("hello")
+  : labels:
+    - source: System.out.println("hello")
+      style: primary
+      start: 0
+      end: 27
+  println("debug output"):
+    labels:
+    - source: println("debug output")
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    println("debug output")
+  : labels:
+    - source: println("debug output")
+      style: primary
+      start: 0
+      end: 23

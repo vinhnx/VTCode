@@ -1,0 +1,20 @@
+id: prefer-generator-in-any-all
+snapshots:
+  ? |
+    all([isinstance(x, int) for x in values])
+  : fixed: |
+      all(isinstance(x, int) for x in values)
+    labels:
+    - source: all([isinstance(x, int) for x in values])
+      style: primary
+      start: 0
+      end: 41
+  ? |
+    any([x > 0 for x in items])
+  : fixed: |
+      any(x > 0 for x in items)
+    labels:
+    - source: any([x > 0 for x in items])
+      style: primary
+      start: 0
+      end: 27

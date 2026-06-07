@@ -1,0 +1,19 @@
+id: no-panic-in-lib
+language: Go
+severity: warning
+message: Avoid `panic()` in library code; return errors instead.
+note: |
+  `panic()` unwinds the entire goroutine stack and is not recoverable by
+  callers unless they use `defer/recover`. Library code should return
+  `error` values so callers can handle failures gracefully. This rule
+  is scoped to non-test, non-main Go files.
+labels:
+  MSG:
+    style: primary
+    message: this panic will crash the caller
+rule:
+  pattern: panic($MSG)
+files:
+  - "**/*.go"
+  - "!**/*_test.go"
+  - "!**/cmd/**"

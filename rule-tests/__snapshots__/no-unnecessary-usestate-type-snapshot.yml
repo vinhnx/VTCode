@@ -1,0 +1,66 @@
+id: no-unnecessary-usestate-type
+snapshots:
+  const [count, setCount] = useState<number>(0);:
+    fixed: const [count, setCount] = useState(0);
+    labels:
+    - source: useState<number>(0)
+      style: primary
+      start: 26
+      end: 45
+  ? |
+    const [count, setCount] = useState<number>(0);
+  : fixed: |
+      const [count, setCount] = useState(0);
+    labels:
+    - source: useState<number>(0)
+      style: primary
+      start: 26
+      end: 45
+  const [flag, setFlag] = useState<boolean>(false);:
+    fixed: const [flag, setFlag] = useState(false);
+    labels:
+    - source: useState<boolean>(false)
+      style: primary
+      start: 24
+      end: 48
+  ? |
+    const [flag, setFlag] = useState<boolean>(false);
+  : fixed: |
+      const [flag, setFlag] = useState(false);
+    labels:
+    - source: useState<boolean>(false)
+      style: primary
+      start: 24
+      end: 48
+  const [flag, setFlag] = useState<boolean>(true);:
+    fixed: const [flag, setFlag] = useState(true);
+    labels:
+    - source: useState<boolean>(true)
+      style: primary
+      start: 24
+      end: 47
+  ? |
+    const [flag, setFlag] = useState<boolean>(true);
+  : fixed: |
+      const [flag, setFlag] = useState(true);
+    labels:
+    - source: useState<boolean>(true)
+      style: primary
+      start: 24
+      end: 47
+  const [name, setName] = useState<string>("hello");:
+    fixed: const [name, setName] = useState("hello");
+    labels:
+    - source: useState<string>("hello")
+      style: primary
+      start: 24
+      end: 49
+  ? |
+    const [name, setName] = useState<string>("hello");
+  : fixed: |
+      const [name, setName] = useState("hello");
+    labels:
+    - source: useState<string>("hello")
+      style: primary
+      start: 24
+      end: 49

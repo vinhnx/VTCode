@@ -1,15 +1,15 @@
 id: prefer-action-over-filter
 valid:
-  - code: |
+  - |
       before_action :require_login
-  - code: |
+  - |
       after_action :log_activity
-  - code: |
+  - |
       around_action :wrap_in_transaction
 invalid:
-  - code: |
+  - |
       before_filter :require_login
-  - code: |
+  - |
       after_filter :log_activity
-  - code: |
+  - |
       around_filter :wrap_in_transaction

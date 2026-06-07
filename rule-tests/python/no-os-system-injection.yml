@@ -1,0 +1,13 @@
+id: no-os-system-injection
+valid:
+  - |
+      subprocess.run(["ls", "-la"], check=True)
+  - |
+      os.system("ls")
+  - |
+      subprocess.run(["echo", user_input], shell=False)
+invalid:
+  - |
+      os.system("echo " + user_input)
+  - |
+      os.system(prefix + cmd + suffix)

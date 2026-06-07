@@ -1,12 +1,11 @@
 id: optional-to-union
 valid:
-  - code: |
+  - |
       x: int | None = None
-  - code: |
+  - |
       x: str = "hello"
-  - code: |
+  - |
       x: Optional[int] = None
-      # This rule only matches in type annotation context
 invalid:
-  - code: |
+  - |
       x: Optional[int]

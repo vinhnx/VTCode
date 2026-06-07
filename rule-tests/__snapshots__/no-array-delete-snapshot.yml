@@ -1,0 +1,28 @@
+id: no-array-delete
+snapshots:
+  delete arr[0];:
+    labels:
+    - source: delete arr[0]
+      style: primary
+      start: 0
+      end: 13
+  ? |
+    delete arr[0];
+  : labels:
+    - source: delete arr[0]
+      style: primary
+      start: 0
+      end: 13
+  delete items[i];:
+    labels:
+    - source: delete items[i]
+      style: primary
+      start: 0
+      end: 15
+  ? |
+    delete items[i];
+  : labels:
+    - source: delete items[i]
+      style: primary
+      start: 0
+      end: 15

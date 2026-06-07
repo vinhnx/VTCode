@@ -1,14 +1,14 @@
 id: no-alloc-digit-count
 valid:
-  - code: |
+  - |
       let digits = n.checked_ilog10().unwrap_or(0) + 1;
-  - code: |
+  - |
       let s = n.to_string();
       println!("{}", s);
-  - code: |
+  - |
       let len = items.to_string().len();
 invalid:
-  - code: |
+  - |
       let digits = n.to_string().chars().count();
-  - code: |
+  - |
       let width = num.to_string().chars().count();

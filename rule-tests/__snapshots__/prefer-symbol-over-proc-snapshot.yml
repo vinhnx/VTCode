@@ -1,0 +1,50 @@
+id: prefer-symbol-over-proc
+snapshots:
+  list.each { |v| v.upcase }:
+    fixed: list.each(&:upcase)
+    labels:
+    - source: list.each { |v| v.upcase }
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    list.each { |v| v.upcase }
+  : fixed: |
+      list.each(&:upcase)
+    labels:
+    - source: list.each { |v| v.upcase }
+      style: primary
+      start: 0
+      end: 26
+  list.map { |v| v.to_s }:
+    fixed: list.map(&:to_s)
+    labels:
+    - source: list.map { |v| v.to_s }
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    list.map { |v| v.to_s }
+  : fixed: |
+      list.map(&:to_s)
+    labels:
+    - source: list.map { |v| v.to_s }
+      style: primary
+      start: 0
+      end: 23
+  list.select { |v| v.even? }:
+    fixed: list.select(&:even?)
+    labels:
+    - source: list.select { |v| v.even? }
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    list.select { |v| v.even? }
+  : fixed: |
+      list.select(&:even?)
+    labels:
+    - source: list.select { |v| v.even? }
+      style: primary
+      start: 0
+      end: 27

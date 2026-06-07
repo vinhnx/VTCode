@@ -1,0 +1,35 @@
+id: no-debugger
+snapshots:
+  debugger;:
+    labels:
+    - source: debugger;
+      style: primary
+      start: 0
+      end: 9
+  ? |
+    debugger;
+  : labels:
+    - source: debugger;
+      style: primary
+      start: 0
+      end: 9
+  ? |-
+    function test() {
+      debugger;
+      return true;
+    }
+  : labels:
+    - source: debugger;
+      style: primary
+      start: 20
+      end: 29
+  ? |
+    function test() {
+      debugger;
+      return true;
+    }
+  : labels:
+    - source: debugger;
+      style: primary
+      start: 20
+      end: 29

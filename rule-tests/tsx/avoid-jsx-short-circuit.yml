@@ -1,27 +1,27 @@
 id: avoid-jsx-short-circuit
 valid:
-  - code: |
+  - |
       function App({ items }: { items: string[] }) {
         return <div>{items.length > 0 ? <List items={items} /> : null}</div>;
       }
-  - code: |
+  - |
       function App({ items }: { items: string[] }) {
         return <div>{items.length ? <List items={items} /> : null}</div>;
       }
-  - code: |
+  - |
       // Boolean && outside JSX is fine
       const x = a && b;
-  - code: |
+  - |
       // && inside an attribute is fine
       function App() {
         return <div hidden={false && true} />;
       }
 invalid:
-  - code: |
+  - |
       function App({ items }: { items: string[] }) {
         return <div>{items.length && <List items={items} />}</div>;
       }
-  - code: |
+  - |
       function App({ count }: { count: number }) {
         return <span>{count && <Badge />}</span>;
       }

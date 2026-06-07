@@ -1,11 +1,11 @@
 id: prefer-array-flat-map
 valid:
-  - code: |
+  - |
       arr.flatMap(x => x.items);
-  - code: |
+  - |
       arr.map(x => x.name);
-  - code: |
+  - |
       arr.filter(x => x.active).map(x => x.name);
 invalid:
-  - code: |
+  - |
       arr.map(x => x.items).flat();

@@ -1,0 +1,28 @@
+id: prefer-string-is-empty
+snapshots:
+  ? |
+    if (str.equals("")) {
+        return;
+    }
+  : fixed: |
+      if (str.isEmpty()) {
+          return;
+      }
+    labels:
+    - source: str.equals("")
+      style: primary
+      start: 4
+      end: 18
+  ? |
+    if (str.length() == 0) {
+        return;
+    }
+  : fixed: |
+      if (str.isEmpty()) {
+          return;
+      }
+    labels:
+    - source: str.length() == 0
+      style: primary
+      start: 4
+      end: 21

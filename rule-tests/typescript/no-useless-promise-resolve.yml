@@ -1,15 +1,15 @@
 id: no-useless-promise-resolve
 valid:
-  - code: |
+  - |
       function getValue() {
         return Promise.resolve(42);
       }
-  - code: |
+  - |
       async function getData() {
         return await fetch(url);
       }
 invalid:
-  - code: |
+  - |
       async function getData() {
         return Promise.resolve(42);
       }

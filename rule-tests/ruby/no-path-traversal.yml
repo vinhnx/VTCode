@@ -1,13 +1,13 @@
 id: no-path-traversal
 valid:
-  - code: |
+  - |
       File.join(Rails.root, "data", "fixed.txt")
-  - code: |
+  - |
       send_file Rails.root.join("public", "report.pdf")
 invalid:
-  - code: |
+  - |
       File.join(Rails.root, params[:file])
-  - code: |
+  - |
       Rails.root.join("data", user_input)
-  - code: |
+  - |
       send_file params[:path]

@@ -1,0 +1,34 @@
+id: use-logical-assignment
+snapshots:
+  config = config || defaults;:
+    fixed: config ||= defaults;
+    labels:
+    - source: config = config || defaults
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    config = config || defaults;
+  : fixed: |
+      config ||= defaults;
+    labels:
+    - source: config = config || defaults
+      style: primary
+      start: 0
+      end: 27
+  options.timeout = options.timeout || 5000;:
+    fixed: options.timeout ||= 5000;
+    labels:
+    - source: options.timeout = options.timeout || 5000
+      style: primary
+      start: 0
+      end: 41
+  ? |
+    options.timeout = options.timeout || 5000;
+  : fixed: |
+      options.timeout ||= 5000;
+    labels:
+    - source: options.timeout = options.timeout || 5000
+      style: primary
+      start: 0
+      end: 41

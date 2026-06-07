@@ -1,20 +1,17 @@
 id: avoid-duplicate-export
 valid:
-  - code: |
-      pub mod foo;
-      // No pub use of foo's items
-  - code: |
-      mod foo;
-      pub use foo::Bar;
-      // Private module, so pub use is the only public path
-  - code: |
-      pub mod foo;
-      pub use bar::Baz;
-      // Different module, no conflict
-invalid:
-  - code: |
+  - |
       pub mod foo;
       pub use foo::Bar;
-  - code: |
+  - |
       pub mod utils;
       pub use utils::Helper;
+  - |
+      pub mod foo;
+      // No pub use of foo's items
+  - |
+      mod foo;
+      pub use foo::Bar;
+  - |
+      pub mod foo;
+      pub use bar::Baz;

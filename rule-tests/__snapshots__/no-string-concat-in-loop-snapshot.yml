@@ -1,0 +1,36 @@
+id: no-string-concat-in-loop
+snapshots:
+  ? |
+    String output = "";
+    for (int i = 0; i < count; i++) {
+        output = output + chars[i];
+    }
+  : labels:
+    - source: output = output + chars[i]
+      style: primary
+      start: 58
+      end: 84
+    - source: |-
+        for (int i = 0; i < count; i++) {
+            output = output + chars[i];
+        }
+      style: secondary
+      start: 20
+      end: 87
+  ? |
+    String result = "";
+    for (String item : items) {
+        result = result + item;
+    }
+  : labels:
+    - source: result = result + item
+      style: primary
+      start: 52
+      end: 74
+    - source: |-
+        for (String item : items) {
+            result = result + item;
+        }
+      style: secondary
+      start: 20
+      end: 77

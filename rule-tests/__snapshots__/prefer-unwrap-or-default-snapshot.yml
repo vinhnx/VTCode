@@ -1,0 +1,28 @@
+id: prefer-unwrap-or-default
+snapshots:
+  let x = maybe_val.unwrap_or(String::default());:
+    labels:
+    - source: maybe_val.unwrap_or(String::default())
+      style: primary
+      start: 8
+      end: 46
+  ? |
+    let x = maybe_val.unwrap_or(String::default());
+  : labels:
+    - source: maybe_val.unwrap_or(String::default())
+      style: primary
+      start: 8
+      end: 46
+  let x = maybe_val.unwrap_or(Vec::default());:
+    labels:
+    - source: maybe_val.unwrap_or(Vec::default())
+      style: primary
+      start: 8
+      end: 43
+  ? |
+    let x = maybe_val.unwrap_or(Vec::default());
+  : labels:
+    - source: maybe_val.unwrap_or(Vec::default())
+      style: primary
+      start: 8
+      end: 43

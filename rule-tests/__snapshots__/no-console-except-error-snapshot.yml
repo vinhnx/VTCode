@@ -1,0 +1,54 @@
+id: no-console-except-error
+snapshots:
+  console.debug("trace", value);:
+    labels:
+    - source: console.debug("trace", value)
+      style: primary
+      start: 0
+      end: 29
+  ? |
+    console.debug("trace", value);
+  : labels:
+    - source: console.debug("trace", value)
+      style: primary
+      start: 0
+      end: 29
+  console.error("outside catch block");:
+    labels:
+    - source: console.error("outside catch block")
+      style: primary
+      start: 0
+      end: 36
+  ? |
+    console.error("outside catch block");
+  : labels:
+    - source: console.error("outside catch block")
+      style: primary
+      start: 0
+      end: 36
+  console.log("debug output");:
+    labels:
+    - source: console.log("debug output")
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    console.log("debug output");
+  : labels:
+    - source: console.log("debug output")
+      style: primary
+      start: 0
+      end: 27
+  console.warn("deprecated");:
+    labels:
+    - source: console.warn("deprecated")
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    console.warn("deprecated");
+  : labels:
+    - source: console.warn("deprecated")
+      style: primary
+      start: 0
+      end: 26

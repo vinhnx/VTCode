@@ -1,0 +1,18 @@
+id: no-fmt-println
+language: Go
+severity: warning
+message: Avoid `fmt.Println` in production code; use a structured logger.
+note: |
+  Direct console output via `fmt.Println` is not configurable and cannot be
+  routed to log aggregators. Use `log/slog` (Go 1.21+) or a structured
+  logging library for production code. `fmt.Println` is acceptable in
+  tests, examples, and CLI tools.
+rule:
+  any:
+    - pattern: fmt.Println($$$)
+    - pattern: fmt.Printf($$$)
+    - pattern: fmt.Fprintln(os.Stdout, $$$)
+files:
+  - "**/*.go"
+  - "!**/*_test.go"
+  - "!**/examples/**"

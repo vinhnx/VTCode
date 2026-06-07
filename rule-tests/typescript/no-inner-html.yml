@@ -1,0 +1,13 @@
+id: no-inner-html
+valid:
+  - |
+      element.textContent = userInput;
+  - |
+      element.setAttribute("class", className);
+  - |
+      const html = element.innerHTML;
+invalid:
+  - |
+      element.innerHTML = userInput;
+  - |
+      document.getElementById("app").innerHTML = dynamicContent;
