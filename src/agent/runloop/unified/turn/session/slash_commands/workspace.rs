@@ -688,6 +688,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: true,
+            top_level: false,
             max_turns: Some(9),
             nickname_candidates: vec!["repo".to_string()],
             initial_prompt: Some("ignored".to_string()),

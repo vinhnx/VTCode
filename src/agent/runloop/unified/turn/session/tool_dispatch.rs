@@ -670,6 +670,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: false,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,

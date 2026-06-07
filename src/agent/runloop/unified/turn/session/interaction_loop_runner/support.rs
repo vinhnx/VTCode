@@ -887,7 +887,12 @@ async fn load_session_agent_specs(
     ctx: &InteractionLoopContext<'_>,
 ) -> Result<Vec<vtcode_config::SubagentSpec>> {
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
-        let specs = controller.effective_specs().await;
+        let specs = controller
+            .effective_specs()
+            .await
+            .into_iter()
+            .filter(|spec| spec.top_level)
+            .collect::<Vec<_>>();
         if !specs.is_empty() {
             return Ok(specs);
         }
@@ -902,7 +907,11 @@ async fn load_session_agent_specs(
             ctx.config.workspace.display()
         )
     })?;
-    Ok(discovered.effective)
+    Ok(discovered
+        .effective
+        .into_iter()
+        .filter(|spec| spec.top_level)
+        .collect())
 }
 
 fn set_session_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
@@ -916,6 +925,7 @@ fn next_session_agent_name(
 ) -> Option<Option<String>> {
     let mut names = specs
         .iter()
+        .filter(|spec| spec.top_level)
         .map(|spec| spec.name.trim())
         .filter(|name| !name.is_empty())
         .map(str::to_string)
@@ -979,6 +989,18 @@ mod tests {
         assert_eq!(next_session_agent_name(Some(&active), &specs), Some(None));
     }
 
+    #[test]
+    fn next_session_agent_name_skips_non_top_level_subagents() {
+        let mut worker = test_subagent_spec("worker");
+        worker.top_level = false;
+        let specs = vec![worker, test_subagent_spec("duck")];
+
+        assert_eq!(
+            next_session_agent_name(None, &specs),
+            Some(Some("duck".to_string()))
+        );
+    }
+
     fn test_subagent_spec(name: &str) -> SubagentSpec {
         SubagentSpec {
             name: name.to_string(),
@@ -994,6 +1016,7 @@ mod tests {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: true,
             max_turns: None,
             nickname_candidates: Vec::new(),
             initial_prompt: None,

@@ -143,6 +143,8 @@ pub struct SubagentSpec {
     #[serde(default)]
     pub background: bool,
     #[serde(default)]
+    pub top_level: bool,
+    #[serde(default)]
     pub max_turns: Option<usize>,
     #[serde(default)]
     pub nickname_candidates: Vec<String>,
@@ -369,6 +371,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: false,
             max_turns: None,
             nickname_candidates: vec!["default".to_string()],
             initial_prompt: None,
@@ -393,6 +396,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: false,
             max_turns: None,
             nickname_candidates: vec!["explore".to_string(), "search".to_string()],
             initial_prompt: None,
@@ -417,6 +421,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: false,
             max_turns: None,
             nickname_candidates: vec!["planner".to_string()],
             initial_prompt: None,
@@ -441,6 +446,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             mcp_servers: Vec::new(),
             hooks: None,
             background: false,
+            top_level: false,
             max_turns: None,
             nickname_candidates: vec!["general".to_string(), "worker".to_string()],
             initial_prompt: None,
@@ -574,6 +580,8 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("background")
             .and_then(JsonValue::as_bool)
             .unwrap_or(false);
+        let top_level =
+            optional_bool_alias(config, &["topLevel", "top_level", "session"]).unwrap_or(false);
         let nickname_candidates =
             optional_string_list(config.get("nickname_candidates"))?.unwrap_or_default();
         let initial_prompt = config
@@ -605,6 +613,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             mcp_servers,
             hooks,
             background,
+            top_level,
             max_turns,
             nickname_candidates,
             initial_prompt,
@@ -721,6 +730,8 @@ fn subagent_spec_from_json_map(
         .get("background")
         .and_then(JsonValue::as_bool)
         .unwrap_or(false);
+    let top_level =
+        optional_bool_alias(object, &["topLevel", "top_level", "session"]).unwrap_or(false);
     let max_turns = object
         .get("maxTurns")
         .or_else(|| object.get("max_turns"))
@@ -757,6 +768,7 @@ fn subagent_spec_from_json_map(
         mcp_servers,
         hooks,
         background,
+        top_level,
         max_turns,
         nickname_candidates,
         initial_prompt,
@@ -854,6 +866,11 @@ fn required_string(object: &JsonMap<String, JsonValue>, key: &str) -> Result<Str
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
         .ok_or_else(|| anyhow!("missing required subagent field '{key}'"))
+}
+
+fn optional_bool_alias(object: &JsonMap<String, JsonValue>, keys: &[&str]) -> Option<bool> {
+    keys.iter()
+        .find_map(|key| object.get(*key).and_then(JsonValue::as_bool))
 }
 
 fn optional_string_list(value: Option<&JsonValue>) -> Result<Option<Vec<String>>> {
@@ -1100,6 +1117,7 @@ permissionMode: plan
 skills: [rust]
 memory: project
 background: true
+topLevel: true
 maxTurns: 7
 nickname_candidates: [rev]
 ---
@@ -1122,6 +1140,7 @@ Review the target changes."#,
         );
         assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
         assert!(spec.background);
+        assert!(spec.top_level);
         assert_eq!(spec.max_turns, Some(7));
         assert_eq!(spec.prompt, "Review the target changes.");
         Ok(())

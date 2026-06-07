@@ -340,6 +340,7 @@ fn test_session_agent_spec(name: &str) -> SubagentSpec {
         mcp_servers: Vec::new(),
         hooks: None,
         background: false,
+        top_level: true,
         max_turns: None,
         nickname_candidates: Vec::new(),
         initial_prompt: None,
