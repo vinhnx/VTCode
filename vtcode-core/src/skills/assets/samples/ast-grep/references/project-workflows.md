@@ -131,19 +131,124 @@ Use the public structural tool first for read-only project checks:
 - Avoid duplicated exports:
   - useful when a Rust crate exposes both `pub mod foo;` and `pub use foo::Foo;`
   - model it as a scan rule for API-surface review, not an automatic rewrite
+  - uses `all` to combine a `pub use $A::$B;` pattern with `inside: { kind: source_file }` and a `has` check for `pub mod $A;` with `stopBy: end`:
+
+```yaml
+id: avoid-duplicate-export
+language: Rust
+severity: warning
+message: Item re-exported via `pub use` when `pub mod` already exposes the module.
+rule:
+  all:
+    - pattern: "pub use $A::$B;"
+    - inside:
+        kind: source_file
+    - has:
+        pattern: "pub mod $A;"
+        stopBy: end
+```
+
 - `chars().enumerate()` vs `char_indices()`:
   - good rewrite example when the code really needs byte offsets
   - do not apply blindly if the caller intentionally wants character positions
+  - simple pattern-based rewrite rule:
+
+```yaml
+id: no-chars-enumerate
+language: Rust
+severity: warning
+message: Use `.char_indices()` instead of `.chars().enumerate()` when byte offsets are needed.
+rule:
+  pattern: "$A.chars().enumerate()"
+fix: "$A.char_indices()"
+```
+
 - `to_string().chars().count()` vs `checked_ilog10()`:
   - good Rust-specific performance rewrite when the expression is truly counting digits of an integer
   - do not over-apply if the expression is part of a more general formatting pipeline
+  - simple pattern-based rewrite rule:
+
+```yaml
+id: no-alloc-digit-count
+language: Rust
+severity: info
+message: Count integer digits without heap allocation.
+rule:
+  pattern: "$NUM.to_string().chars().count()"
+fix: "$NUM.checked_ilog10().unwrap_or(0) + 1"
+```
+
 - Unsafe function without unsafe block:
   - good scan rule for Rust review workflows
   - the catalog form uses `kind: function_item`, checks `function_modifiers` with `regex: "^unsafe"`, and rejects bodies containing `unsafe_block`
   - keep this as a diagnostic rule unless the repository already has a codemod-safe policy for removing `unsafe`
+  - uses `all` with `kind`, `has`, and `not` to detect the pattern:
+
+```yaml
+id: no-unsafe-fn-without-unsafe
+language: Rust
+severity: warning
+message: Unsafe function contains no `unsafe` block.
+rule:
+  all:
+    - kind: function_item
+    - has:
+        kind: function_modifiers
+        regex: "^unsafe"
+    - not:
+        has:
+          kind: unsafe_block
+          stopBy: end
+```
+
+- Rust 2024 let-chain candidate:
+  - good `hint`-severity suggestion rule for nested `if`/`if let` structures
+  - uses `utils` to define reusable matchers for sole-child statements, no-else `if` expressions, and no-else `if let` expressions
+  - the root rule matches an `if` whose block contains only another `if` statement
+  - only refactor when the project's MSRV is Rust 2024 edition or later:
+
+```yaml
+id: let-chain-candidate
+language: Rust
+severity: hint
+message: Nested `if`/`if let` can be collapsed into a Rust 2024 let-chain.
+utils:
+  sole-child:
+    all:
+      - nthChild: 1
+      - nthChild: { position: 1, reverse: true }
+  if-no-else:
+    kind: if_expression
+    not: { has: { field: alternative, kind: else_clause } }
+  if-let-no-else:
+    matches: if-no-else
+    has: { field: condition, kind: let_condition }
+  sole-inner-if-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has: { matches: if-no-else }
+  sole-inner-if-let-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has: { matches: if-let-no-else }
+rule:
+  matches: if-no-else
+  has:
+    field: consequence
+    kind: block
+    has: { matches: sole-inner-if-stmt }
+  any:
+    - matches: if-let-no-else
+    - has:
+        field: consequence
+        kind: block
+        has: { matches: sole-inner-if-let-stmt }
+```
+
 - `indoc!` rewrite:
   - useful as a formatting-sensitive rewrite example
   - keep this on the CLI skill path because the replacement should be reviewed for whitespace and raw-string fidelity
+  - CLI pattern: `ast-grep --pattern 'indoc! { r#"$$$A"# }' --rewrite '`$$$A`'`
 - When adapting Rust catalog rules in VT Code, preserve repository-specific API conventions, lint policy, and safe-by-default coding rules instead of importing the example verbatim.
 
 ### TypeScript Catalog Examples
@@ -236,24 +341,115 @@ Use the public structural tool first for read-only project checks:
 - OpenAI SDK migration:
   - good multi-rule migration example for updating legacy `openai` imports, client initialization, and completion calls
   - keep it on the CLI skill path because API migrations often require response-shape, auth, and application-flow review beyond a blind rewrite
+  - uses three rules separated by `---`: import rewrite, client initialization, and completion method update
 - Generator-expression rewrites:
   - good example of restricting a rewrite to iterator-accepting contexts such as `any`, `all`, or `sum`
   - do not expand it to every list comprehension unless the surrounding use site is proven generator-safe
+  - the constraint-based variant restricts `$FUNC` with `regex: ^(any|all|sum)$` and `$LIST` with `kind: list_comprehension`, then strips brackets with a `substring` transform:
+
+```yaml
+id: prefer-generator-in-builtins
+language: python
+rule:
+  pattern: $FUNC($LIST)
+  constraints:
+    FUNC:
+      regex: ^(any|all|sum)$
+    LIST:
+      kind: list_comprehension
+transform:
+  INNER:
+    substring:
+      source: $LIST
+      startChar: 1
+      endChar: -1
+fix: $FUNC($INNER)
+```
+
 - Walrus-operator rewrite:
   - useful paired-rule example that rewrites the `if` and removes the preceding temporary assignment
   - only apply it where the repository requires Python 3.8+ and accepts assignment-expression style
+  - uses `follows` to detect the assignment before the `if`, and a second rule with `precedes` to delete the redundant assignment:
+
+```yaml
+id: use-walrus-operator
+language: python
+rule:
+  follows:
+    pattern:
+      context: $VAR = $$$EXPR
+      selector: expression_statement
+  pattern: "if $VAR: $$$B"
+fix: |-
+  if $VAR := $$$EXPR:
+      $$$B
+---
+id: remove-walrus-source
+language: python
+rule:
+  pattern: $VAR = $$$EXPR
+  kind: expression_statement
+  precedes:
+    pattern: "if $VAR: $$$B"
+fix: ‘’
+```
+
 - Remove async function:
   - strong `rewriters` example for transforming nested `await` sites inside a matched async function body
   - treat it as a semantics-changing migration and review all callers before using it broadly
+  - uses a `rewriter` named `remove-await-call` to strip `await` from each call inside the body, then the outer rule removes `async`:
+
+```yaml
+id: remove-async
+language: python
+rule:
+  pattern:
+    context: ‘async def $FUNC($$$ARGS): $$$BODY’
+    selector: function_definition
+rewriters:
+  remove-await-call:
+    pattern: ‘await $$$CALL’
+    fix: $$$CALL
+transform:
+  REMOVED_BODY:
+    rewrite:
+      rewriters: [remove-await-call]
+      source: $$$BODY
+fix: |-
+  def $FUNC($$$ARGS):
+      $REMOVED_BODY
+```
+
 - Pytest fixture refactors:
   - useful `utils`-driven example for renaming fixtures or adding fixture type hints without touching similarly named non-test code
   - keep it scoped to real pytest contexts so ordinary production functions are not swept in
+  - uses `utils` to define `is-fixture-function` (function following a `@pytest.fixture` decorator) and `is-test-function` (function whose name starts with `test_`)
 - PEP 604 typing rewrites:
   - useful modernization examples for `Optional[T]` and nested `Union[...]` rewrites
   - only use them when the repository’s Python version floor and typing policy explicitly support `T | None` and `|`
+  - the simple variant uses `context` and `selector` to disambiguate `Optional[$T]` as a generic type:
+
+```yaml
+id: optional-to-union
+language: python
+rule:
+  pattern:
+    context: ‘a: Optional[$T]’
+    selector: generic_type
+fix: $T | None
+```
+
+  - the recursive variant handles nested `Union` and `Optional` types using multiple `rewriters` that call each other
 - SQLAlchemy annotated mapping rewrite:
   - useful ORM migration example for moving `mapped_column(String, nullable=True)` toward `Mapped[str | None]`
   - keep it reviewable because SQLAlchemy version, declarative style, and column semantics vary across repositories
+  - uses `rewriters` to filter out `String` positional args and `nullable=True` keyword args from the argument list
+- `print` detection:
+  - use `kind: call` with `has: { field: function, pattern: print }` to match `print()` calls
+  - scope with `files` to exclude test directories and scripts where console output is acceptable
+- `isinstance` tuple consolidation:
+  - pattern `isinstance($X, $A) or isinstance($X, $B)` can be rewritten to `isinstance($X, ($A, $B))`
+  - safe autofix when both `isinstance` calls check the same variable
 - When adapting Python catalog rules in VT Code, preserve repository-specific Python version support, framework conventions, typing standards, async behavior, and migration boundaries instead of importing the example verbatim.
 
 ### Kotlin Catalog Examples
@@ -271,9 +467,49 @@ Use the public structural tool first for read-only project checks:
 - Unused local variable rule:
   - useful educational example of ordered `all` constraints with `has` and `precedes`
   - do not treat it as a replacement for compiler or IDE diagnostics because it intentionally simplifies Java variable-declaration coverage
+  - the rule uses `all` to guarantee that `$IDENT` is captured by the first `has` before the `not`/`precedes` check runs:
+
+```yaml
+id: no-unused-vars
+language: java
+rule:
+  kind: local_variable_declaration
+  all:
+    - has:
+        has:
+          kind: identifier
+          pattern: $IDENT
+    - not:
+        precedes:
+          stopBy: end
+          has:
+            stopBy: end
+            any:
+              - { kind: identifier, pattern: $IDENT }
+              - { has: { kind: identifier, pattern: $IDENT, stopBy: end } }
+fix: ''
+```
+
+  - treat matches as review candidates because Java variable scopes are broader than this sample covers
+
 - Find `String` field declarations:
   - good structural scan example for matching `field_declaration` nodes by their typed child instead of relying on fragile surface syntax
   - especially useful when modifiers or annotations make naive patterns fail to parse
+  - a naive `String $F;` pattern fails because it ignores modifiers; `$MOD String $F;` also fails because tree-sitter rejects `$MOD` as an invalid modifier and produces an `ERROR` node
+  - the structural approach with `kind` plus `has` plus `field` plus `regex` works regardless of how many modifiers or annotations precede the type:
+
+```yaml
+id: find-field-with-type
+language: java
+rule:
+  kind: field_declaration
+  has:
+    field: type
+    regex: ^String$
+```
+
+  - use this pattern whenever a naive code pattern fails because Java modifiers, annotations, or access qualifiers change the surface syntax
+
 - Java catalog usage in VT Code:
   - keep these rules review-oriented unless the repository explicitly wants ast-grep-based cleanup
   - preserve repository-specific annotation style, package structure, and static-analysis tooling
@@ -283,12 +519,106 @@ Use the public structural tool first for read-only project checks:
 - HTML parser for framework templates:
   - useful for Vue, Svelte, Astro, and similar template files when the syntax is mostly HTML
   - do not assume it covers framework-specific frontmatter or control-flow syntax; switch to a custom language when parser gaps matter
+  - use `languageGlobs` in `sgconfig.yml` to map framework extensions (`.vue`, `.svelte`, `.astro`) to the HTML parser when the content is mostly HTML
+- Key HTML node kinds: `element`, `tag_name`, `attribute_name`, `attribute_value`, `text`, `comment`. Use these with `kind` to match specific HTML structures without writing full pattern syntax.
+- Matching elements by tag name:
+  - use `kind: element` with `has: { field: tag_name, pattern: $TAG }` to match elements by tag
+  - for regex-based tag matching, use `kind: tag_name` with `regex` and `inside: { kind: element }`
+  - example: find all heading elements:
+
+```yaml
+id: find-headings
+language: html
+rule:
+  kind: element
+  has:
+    field: tag_name
+    regex: "^h[1-6]$"
+```
+
+- Matching elements by attribute:
+  - use `kind: element` with `has: { kind: attribute_name, regex: "^class$" }` to find elements with a specific attribute
+  - to also match the value, add a nested `has` on the attribute node to capture `attribute_value`
+  - example: find elements with `data-testid` attributes:
+
+```yaml
+id: find-test-elements
+language: html
+rule:
+  kind: element
+  has:
+    kind: attribute_name
+    regex: "^data-testid$"
+```
+
+- Scoping with `inside` and `stopBy`:
+  - HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element
+  - the catalog's `inside-tag` utility demonstrates wrapping `inside` with `kind: element` and `has` to capture the enclosing tag name, then using `constraints` to restrict which tags match
+  - example utility rule:
+
+```yaml
+utils:
+  inside-tag:
+    inside:
+      kind: element
+      stopBy: { kind: element }
+      has:
+        field: tag_name
+        pattern: $TAG_NAME
+```
+
 - Ant Design Vue attribute migration:
   - good enclosing-tag rewrite example for renaming `:visible` to `:open` only on the intended popup components
+  - uses `kind: attribute_name` with `regex: :visible`, `inside` to find the enclosing `element`, `has` to capture the `tag_name`, and `constraints` to restrict to `a-modal|a-tooltip`
   - keep it on the CLI skill path because framework version and component-library conventions need confirmation first
+  - example YAML:
+
+```yaml
+id: antd-visible-to-open
+language: html
+rule:
+  kind: attribute_name
+  regex: ":visible"
+  matches: inside-tag
+constraints:
+  TAG_NAME:
+    regex: "a-modal|a-tooltip"
+fix: ":open"
+utils:
+  inside-tag:
+    inside:
+      kind: element
+      has:
+        field: tag_name
+        pattern: $TAG_NAME
+```
+
 - i18n extraction:
   - good template rewrite example for static text while skipping mustache expressions
+  - uses `kind: text` with `pattern: $T` to capture text content, `not: { regex: '{{.*}}' }` to skip mustache interpolation
   - keep it reviewable because real i18n flows usually need key naming, dictionary generation, and whitespace cleanup around the rewrite
+  - example YAML:
+
+```yaml
+id: extract-i18n-keys
+language: html
+rule:
+  kind: text
+  pattern: $T
+  not:
+    regex: "\\{\\{.*\\}\\}"
+fix: "{{ $('$T') }}"
+```
+
+- HTML comment scanning:
+  - use `kind: comment` with `regex` to find comments containing specific markers like TODO, FIXME, or deprecated notices
+  - useful for documentation audits and cleanup tasks
+
+- Embedded language regions:
+  - HTML `<script>` content is parsed as JavaScript; `<style>` content is parsed as CSS
+  - search inside these regions with `lang: javascript` or `lang: css` rules
+  - for custom embedded languages (e.g. TypeScript in `<script lang="ts">`), configure `languageInjections` in `sgconfig.yml`
+
 - When adapting HTML catalog rules in VT Code, preserve repository-specific template framework conventions, parser limitations, i18n workflow, and component-library versions instead of importing the example verbatim.
 
 ### Go Catalog Examples

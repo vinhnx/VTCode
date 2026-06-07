@@ -1,0 +1,23 @@
+id: prefer-action-over-filter
+language: Ruby
+severity: warning
+message: Use `*_action` instead of deprecated `*_filter`
+note: |
+  Rails 5.0 deprecated `before_filter`, `after_filter`, and `around_filter` in
+  favor of `before_action`, `after_action`, and `around_action`. The `_action`
+  variants have been the recommended API since Rails 4.0.
+rule:
+  any:
+    - pattern: before_filter $$$ARGS
+    - pattern: after_filter $$$ARGS
+    - pattern: around_filter $$$ARGS
+fix:
+  template: $FILTER_ACTION $$$ARGS
+  transform:
+    FILTER_ACTION:
+      source: $FILTER
+      replace:
+        regex: _filter$
+        by: _action
+files:
+  - app/controllers/**/*.rb

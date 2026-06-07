@@ -1,0 +1,22 @@
+id: no-iterator-for-each
+valid:
+  - code: |
+      for item in items {
+          process(item);
+      }
+  - code: |
+      items.iter().map(|x| x * 2).collect::<Vec<_>>();
+  - code: |
+      let result: Vec<_> = items.iter().filter(|x| **x > 0).collect();
+invalid:
+  - code: |
+      items.iter().for_each(|x| {
+          println!("{}", x);
+      });
+  - code: |
+      items.iter().try_for_each(|x| {
+          process(x)?;
+          Ok(())
+      });
+  - code: |
+      vec![1, 2, 3].into_iter().for_each(|x| println!("{}", x));

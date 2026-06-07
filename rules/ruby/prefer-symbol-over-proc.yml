@@ -1,0 +1,17 @@
+id: prefer-symbol-over-proc
+language: Ruby
+severity: info
+message: Prefer `&:method` shorthand over verbose block
+note: |
+  Ruby's symbol-to-proc shorthand `&:method` is more concise than
+  `{ |v| v.method }` for single-method calls on the block parameter.
+  This rule targets `map`, `select`, `reject`, `each`, `find_all`,
+  `detect`, `any?`, `all?`, `none?`, and `count`.
+rule:
+  pattern: $LIST.$ITER { |$V| $V.$METHOD }
+  constraints:
+    ITER:
+      regex: ^(map|select|reject|each|find_all|detect|any\?|all\?|none\?|count)$
+fix: $LIST.$ITER(&:$METHOD)
+files:
+  - '**/*.rb'

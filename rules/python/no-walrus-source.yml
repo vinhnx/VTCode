@@ -1,0 +1,31 @@
+id: use-walrus-operator
+language: python
+severity: info
+message: Use the walrus operator (`:=`) when an assignment immediately precedes an `if` that tests the same variable.
+note: |
+  Python 3.8+ supports assignment expressions via `:=`. When a variable
+  is assigned and immediately tested in an `if`, the walrus operator
+  combines both into one statement. Only apply where the style guide
+  accepts assignment expressions. This rule handles the `if` rewrite;
+  the companion rule `remove-walrus-source` deletes the redundant
+  assignment.
+rule:
+  follows:
+    pattern:
+      context: $VAR = $$$EXPR
+      selector: expression_statement
+  pattern: "if $VAR: $$$B"
+fix: |-
+  if $VAR := $$$EXPR:
+      $$$B
+---
+id: remove-walrus-source
+language: python
+severity: info
+message: Remove redundant assignment consumed by walrus operator in the following `if`.
+rule:
+  pattern: $VAR = $$$EXPR
+  kind: expression_statement
+  precedes:
+    pattern: "if $VAR: $$$B"
+fix: ''

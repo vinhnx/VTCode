@@ -1,0 +1,14 @@
+id: no-unnecessary-list
+language: python
+severity: hint
+message: Remove unnecessary `list()` wrapper around a list comprehension.
+note: |
+  `list([...])` allocates an intermediate list that the outer `list()`
+  then copies. A bare list comprehension is equivalent and avoids the
+  extra allocation. This is a safe autofix.
+rule:
+  pattern: list($LC)
+  constraints:
+    LC:
+      kind: list_comprehension
+fix: $LC

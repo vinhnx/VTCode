@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep: ast-grep run, sg scan, sg test, sg new, new rule, sgconfig.yml, inline-rules, stdin, json, optional chaining, rule catalog, meta variables, pattern objects, nthChild stopBy, range field, metadata url, caseInsensitive glob, severity off, include metadata, rule order, kind pattern, positive rule, kind esquery, debug-query, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, string fix, fix config, expandEnd, replace substring, toCase separatedBy, rewriter, rewrite joinBy, find patch, barrel import, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, languageGlobs, expandoChar, napi parse, python api, programmatic API."
+description: "Use for ast-grep: ast-grep run, sg scan, sg test, sg new, new rule, sgconfig.yml, inline-rules, stdin, json, optional chaining, rule catalog, meta variables, pattern objects, nthChild stopBy, range field, metadata url, caseInsensitive glob, severity off, include metadata, rule order, kind pattern, positive rule, kind esquery, debug-query, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, string fix, fix config, expandEnd, replace substring, toCase separatedBy, rewriter, rewrite joinBy, find patch, barrel import, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, languageGlobs, expandoChar, napi parse, python api, programmatic API, walrus operator, list comprehension, isinstance tuple."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -89,11 +89,107 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Rust Catalog Highlights
 
-- Avoid duplicated exports: a Rust lint-style rule can detect `pub use foo::Bar;` in the same source file that already exposes `pub mod foo;`. Treat this as API-surface cleanup, not a mechanical rewrite.
-- Beware `chars().enumerate()`: the Rust catalog rewrite from `$A.chars().enumerate()` to `$A.char_indices()` is valid when the code needs byte offsets instead of character indexes.
-- Count `usize` digits without allocation: the catalog rewrite from `$NUM.to_string().chars().count()` to `$NUM.checked_ilog10().unwrap_or(0) + 1` is a good Rust-specific performance cleanup when the target is known to be an integer digit count.
-- Unsafe function without unsafe block: the Rust catalog’s `function_item` rule that requires `unsafe` modifiers but rejects bodies containing `unsafe_block` is a good review rule for redundant `unsafe` markers. It is diagnostic-oriented and should usually stay a scan rule, not an automatic rewrite.
-- Rewrite `indoc!` macro: the catalog example that removes `indoc! { r#"..."# }` wrappers is a rewrite-oriented example. Keep it on the CLI skill path because the replacement is formatting-sensitive and should be reviewed interactively before broad apply.
+- Avoid duplicated exports: a Rust lint-style rule can detect `pub use foo::Bar;` in the same source file that already exposes `pub mod foo;`. Treat this as API-surface cleanup, not a mechanical rewrite. The rule uses `all` to combine a `pub use $A::$B;` pattern with `inside: { kind: source_file }` and a `has` check for `pub mod $A;` with `stopBy: end`:
+
+```yaml
+id: avoid-duplicate-export
+language: Rust
+severity: warning
+message: Item re-exported via `pub use` when `pub mod` already exposes the module.
+rule:
+  all:
+    - pattern: "pub use $A::$B;"
+    - inside:
+        kind: source_file
+    - has:
+        pattern: "pub mod $A;"
+        stopBy: end
+```
+
+- Beware `chars().enumerate()`: the Rust catalog rewrite from `$A.chars().enumerate()` to `$A.char_indices()` is valid when the code needs byte offsets instead of character indexes. Do not apply blindly if the caller intentionally wants character positions:
+
+```yaml
+id: no-chars-enumerate
+language: Rust
+severity: warning
+message: Use `.char_indices()` instead of `.chars().enumerate()` when byte offsets are needed.
+rule:
+  pattern: "$A.chars().enumerate()"
+fix: "$A.char_indices()"
+```
+
+- Count `usize` digits without allocation: the catalog rewrite from `$NUM.to_string().chars().count()` to `$NUM.checked_ilog10().unwrap_or(0) + 1` is a good Rust-specific performance cleanup when the target is known to be an integer digit count. Do not over-apply if the expression is part of a more general formatting pipeline:
+
+```yaml
+id: no-alloc-digit-count
+language: Rust
+severity: info
+message: Count integer digits without heap allocation.
+rule:
+  pattern: "$NUM.to_string().chars().count()"
+fix: "$NUM.checked_ilog10().unwrap_or(0) + 1"
+```
+
+- Unsafe function without unsafe block: the Rust catalog’s `function_item` rule that requires `unsafe` modifiers but rejects bodies containing `unsafe_block` is a good review rule for redundant `unsafe` markers. It is diagnostic-oriented and should usually stay a scan rule, not an automatic rewrite. The rule uses `kind: function_item` with `has` checking `function_modifiers` via `regex: "^unsafe"` and `not` rejecting bodies containing `unsafe_block`:
+
+```yaml
+id: no-unsafe-fn-without-unsafe
+language: Rust
+severity: warning
+message: Unsafe function contains no `unsafe` block.
+rule:
+  all:
+    - kind: function_item
+    - has:
+        kind: function_modifiers
+        regex: "^unsafe"
+    - not:
+        has:
+          kind: unsafe_block
+          stopBy: end
+```
+
+- Rust 2024 let-chain candidate: the catalog’s nested `if`/`if let` detection rule uses `utils` to define reusable matchers for sole-child statements, no-else `if` expressions, and no-else `if let` expressions. The root rule matches an `if` whose block contains only another `if` statement, suggesting the two can be collapsed into a single let-chain. Keep this as a `hint`-severity suggestion because let-chains require Rust 2024 edition:
+
+```yaml
+id: let-chain-candidate
+language: Rust
+severity: hint
+message: Nested `if`/`if let` can be collapsed into a Rust 2024 let-chain.
+utils:
+  sole-child:
+    all:
+      - nthChild: 1
+      - nthChild: { position: 1, reverse: true }
+  if-no-else:
+    kind: if_expression
+    not: { has: { field: alternative, kind: else_clause } }
+  if-let-no-else:
+    matches: if-no-else
+    has: { field: condition, kind: let_condition }
+  sole-inner-if-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has: { matches: if-no-else }
+  sole-inner-if-let-stmt:
+    kind: expression_statement
+    matches: sole-child
+    has: { matches: if-let-no-else }
+rule:
+  matches: if-no-else
+  has:
+    field: consequence
+    kind: block
+    has: { matches: sole-inner-if-stmt }
+  any:
+    - matches: if-let-no-else
+    - has:
+        field: consequence
+        kind: block
+        has: { matches: sole-inner-if-let-stmt }
+```
+
+- Rewrite `indoc!` macro: the catalog example that removes `indoc! { r#"..."# }` wrappers is a rewrite-oriented example. Keep it on the CLI skill path because the replacement is formatting-sensitive and should be reviewed interactively before broad apply. The CLI pattern is `ast-grep --pattern ‘indoc! { r#"$$$A"# }’ --rewrite ‘`$$$A`’`.
 - Adapt these rules to the repository’s Rust style before using them directly. In VT Code, preserve existing lint policy, public API conventions, and the project’s bias against unnecessary rewrites.
 
 ## TypeScript Catalog Highlights
@@ -131,20 +227,134 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 
 ## Ruby Catalog Highlights
 
-- Rails `*_filter` to `*_action`: useful migration rewrite for older Rails controllers. Keep it on the CLI skill path because framework version, controller style, and review expectations vary by repository.
-- Prefer symbol over proc: good Ruby cleanup rewrite for cases like `.select { |v| v.even? }` to `.select(&:even?)`, but only where the shorthand remains readable and matches local Ruby style.
-- Path traversal detection in Rails: good security-oriented scan rule for `Rails.root.join`, `File.join`, or `send_file` fed by variables. Treat it as a review hint, not a proof of exploitability, because the surrounding validation path still matters.
+- Key Ruby tree-sitter node kinds for pattern authoring: `call` for method calls (e.g. `$OBJ.method`), `method_call` for keyword-style calls (e.g. `puts "hello"`), `block` for `{{ }}` blocks, `do_block` for `do...end` blocks, `symbol` for `:name` literals, `assignment` for variable assignments, `method` for method definitions, `class` for class definitions, `if` for conditionals, `unless` for negative conditionals, `case` for case/when, `while` and `until` for loops, `return` for return statements, `yield` for yield calls, `super` for super calls, `self` for self references.
+- Ruby has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing. Use `debug_query` to inspect parse output when matching is surprising.
+- Ruby’s `$VAR` meta-variable syntax works directly because `$` is a valid Ruby global variable prefix. No `expandoChar` override is needed.
+- Rails `*_filter` to `*_action`: useful migration rewrite for older Rails controllers. The catalog rule uses a `transform` with `replace` to swap `_filter` for `_action` on the captured `$FILTER` meta-variable. The pattern uses `$$$ACTION` to capture all arguments after the filter name. Keep it on the CLI skill path because framework version, controller style, and review expectations vary by repository:
+
+```yaml
+id: migration-action-filter
+language: Ruby
+rule:
+  any:
+    - pattern: before_filter $$$ACTION
+    - pattern: after_filter $$$ACTION
+    - pattern: around_filter $$$ACTION
+  has:
+    pattern: $FILTER
+    kind: identifier
+fix:
+  template: $FILTER_ACTION $$$ACTION
+  transform:
+    FILTER_ACTION:
+      source: $FILTER
+      replace:
+        regex: _filter$
+        by: _action
+```
+
+- Prefer symbol over proc: good Ruby cleanup rewrite for cases like `.select { |v| v.even? }` to `.select(&:even?)`. The catalog rule constrains `ITER` to `map|select|each` via `regex`, and matches the block pattern `$LIST.$ITER { |$V| $V.$METHOD }`. The fix uses `$LIST.$ITER(&:$METHOD)` syntax. Only apply where the shorthand remains readable and matches local Ruby style. Extend the `ITER` regex to cover `reject`, `find_all`, `detect`, `any?`, `all?`, `none?`, `count` when appropriate.
+- Path traversal detection in Rails: good security-oriented scan rule for `Rails.root.join`, `File.join`, or `send_file` fed by variables. Uses `any` with three patterns and `severity: hint` because this is a detection rule, not proof of exploitability. The surrounding validation path still matters. Advise `File.basename()` or allowlist validation as remediation.
+- For bare block fragments like `{ |$V| $V.$METHOD }` or `do |$V| $V.$METHOD end`, wrap in the enclosing method call and use `selector: call` to match the outer call. For symbol-to-proc, match the enclosing method call directly with `$LIST.$ITER(&:$METHOD)`.
 - Adapt Ruby catalog rules to the repository’s Rails version, Ruby style guide, and security posture before using them directly.
 
 ## Python Catalog Highlights
 
-- OpenAI SDK migration: useful multi-rule migration example for legacy `openai` Python client code, but keep it on the CLI skill path because imports, client lifetime, response shapes, and surrounding application logic often need repository-specific review.
-- Prefer generator expressions: good example of narrowing a rewrite to contexts like `any(...)`, `all(...)`, or `sum(...)` where generator expressions are clearly valid. Do not generalize it to every list comprehension.
-- Walrus operator in `if` statements: useful paired-rule rewrite example, but only apply it where the repository targets Python 3.8+ and the style guide accepts assignment expressions.
-- Remove async function: strong `rewriters` example for stripping `async` and inner `await`, but treat it as high-risk migration work because it changes call semantics and often requires broader control-flow review.
-- Pytest fixture refactors: good example of `utils`-driven context matching for fixture rename or type-hint updates. Keep it tied to real pytest usage so similarly named non-test code is not swept in.
-- `Optional[T]` to `T | None` and recursive union rewrites: useful typing-modernization examples, but only where the repository targets Python 3.10+ and static typing policy actually prefers PEP 604 unions.
-- SQLAlchemy `mapped_column` to annotated `Mapped[...]`: useful ORM migration example, but keep it on the CLI skill path because ORM version, model style, and nullable semantics need review.
+- Key Python tree-sitter node kinds for pattern authoring: `function_definition` for functions, `call` for function calls, `import_statement` and `import_from_statement` for imports, `assignment` for assignments, `decorated_definition` for decorated functions/classes, `with_statement` for context managers, `try_statement` for try/except, `if_statement` for conditionals, `for_statement` for loops, `return_statement` for returns, `async_function_definition` for async functions, `await` for await expressions, `type` for type annotations, `subscript` for generic types like `Optional[T]`, `list_comprehension` for list comprehensions, `argument_list` for function arguments, `keyword_argument` for keyword arguments, `conditional_expression` for ternary expressions, `assert_statement` for assertions.
+- Python has a local tree-sitter parser in VT Code, so preflight pattern validation works for Python patterns. Meta-variable patterns are sanitized and parsed locally before being sent to `sg`.
+- Python’s `$VAR` meta-variable syntax works directly because `$` is not a valid Python identifier prefix in expression context. No `expandoChar` override is needed.
+- OpenAI SDK migration: useful multi-rule migration example for legacy `openai` Python client code, but keep it on the CLI skill path because imports, client lifetime, response shapes, and surrounding application logic often need repository-specific review. The migration uses three rules separated by `---`: import rewrite (`import openai` to `from openai import Client`), client initialization (`openai.api_key = $KEY` to `client = Client($KEY)`), and completion method (`openai.Completion.create($$$ARGS)` to `client.completions.create($$$ARGS)`).
+- Prefer generator expressions: good example of narrowing a rewrite to contexts like `any(...)`, `all(...)`, or `sum(...)` where generator expressions are clearly valid. Do not generalize it to every list comprehension. The constraint-based variant uses `constraints` to restrict `$FUNC` to `any|all|sum` and `$LIST` to `list_comprehension` kind, then strips brackets with a `substring` transform:
+
+```yaml
+id: prefer-generator-in-builtins
+language: python
+rule:
+  pattern: $FUNC($LIST)
+  constraints:
+    FUNC:
+      regex: ^(any|all|sum)$
+    LIST:
+      kind: list_comprehension
+transform:
+  INNER:
+    substring:
+      source: $LIST
+      startChar: 1
+      endChar: -1
+fix: $FUNC($INNER)
+```
+
+- Walrus operator in `if` statements: useful paired-rule rewrite example, but only apply it where the repository targets Python 3.8+ and the style guide accepts assignment expressions. This is a multi-rule YAML using `follows` and `precedes` relational operators. The first rule rewrites the `if` to use `:=`, the second deletes the preceding assignment:
+
+```yaml
+id: use-walrus-operator
+language: python
+rule:
+  follows:
+    pattern:
+      context: $VAR = $$$EXPR
+      selector: expression_statement
+  pattern: "if $VAR: $$$B"
+fix: |-
+  if $VAR := $$$EXPR:
+      $$$B
+---
+id: remove-walrus-source
+language: python
+rule:
+  pattern: $VAR = $$$EXPR
+  kind: expression_statement
+  precedes:
+    pattern: "if $VAR: $$$B"
+fix: ‘’
+```
+
+- Remove async function: strong `rewriters` example for stripping `async` and inner `await`, but treat it as high-risk migration work because it changes call semantics and often requires broader control-flow review. Uses `rewriters` to strip `await` from inside the body before removing the `async` keyword:
+
+```yaml
+id: remove-async
+language: python
+rule:
+  pattern:
+    context: ‘async def $FUNC($$$ARGS): $$$BODY’
+    selector: function_definition
+rewriters:
+  remove-await-call:
+    pattern: ‘await $$$CALL’
+    fix: $$$CALL
+transform:
+  REMOVED_BODY:
+    rewrite:
+      rewriters: [remove-await-call]
+      source: $$$BODY
+fix: |-
+  def $FUNC($$$ARGS):
+      $REMOVED_BODY
+```
+
+- Pytest fixture refactors: good example of `utils`-driven context matching for fixture rename or type-hint updates. Uses `utils` to define reusable context matchers like `is-fixture-function` (function following a `@pytest.fixture` decorator) and `is-test-function` (function whose name starts with `test_`). Keep it tied to real pytest usage so similarly named non-test code is not swept in.
+- `Optional[T]` to `T | None` and recursive union rewrites: useful typing-modernization examples, but only where the repository targets Python 3.10+ and static typing policy actually prefers PEP 604 unions. The simple variant uses `context` and `selector` to disambiguate `Optional[$T]` as a generic type:
+
+```yaml
+id: optional-to-union
+language: python
+rule:
+  pattern:
+    context: ‘a: Optional[$T]’
+    selector: generic_type
+fix: $T | None
+```
+
+The recursive variant handles nested `Union` and `Optional` types using multiple `rewriters` that call each other, transforming deeply nested expressions like `Optional[Union[List[Union[str, dict]], str]]` into `List[str | dict] | str | None`.
+
+- SQLAlchemy `mapped_column` to annotated `Mapped[...]`: useful ORM migration example, but keep it on the CLI skill path because ORM version, model style, and nullable semantics need review. Uses `rewriters` to filter out `String` positional args and `nullable=True` keyword args from the argument list, then wraps the result in `Mapped[str | None]`.
+- `print` detection: use `kind: call` with `has: { field: function, pattern: print }` to match `print()` calls. Scope with `files` to exclude test directories and scripts where console output is acceptable. For `logging.debug()` or similar, use `regex: ^(debug|info|warning)$` on the function field inside a `logging.` attribute access.
+- f-string preference: use `kind: call` with `has: { field: function, pattern: $FN }` and `constraints` restricting `$FN` to `^(str|int|float|repr)$` to find type-conversion calls that could be f-string expressions. This is a suggestion rule, not an enforcement rule, because some conversions are intentional type coercion.
+- List comprehension vs `map`/`filter`: pattern `$LIST = list(map($FUNC, $ITER))` can be rewritten to `$LIST = [$FUNC($X) for $X in $ITER]` when `$FUNC` is a simple lambda or single-argument call. Keep it on the CLI skill path because readability depends on the complexity of `$FUNC`.
+- `dict.get` with default: pattern `$D[$KEY]` inside a `try_statement` with `except KeyError` can often be rewritten to `$D.get($KEY)` or `$D.get($KEY, $DEFAULT)`. Use `kind: subscript` with `inside` to scope within the try body. Treat as review material because some dict access patterns intentionally propagate `KeyError`.
+- Assert vs unittest assertions: pattern `assert $EXPR == $VAL` can be rewritten to `self.assertEqual($EXPR, $VAL)` in unittest contexts, or left as-is in pytest contexts. Use `files` to scope by test framework convention.
+- `isinstance` tuple consolidation: pattern `isinstance($X, $A) or isinstance($X, $B)` can be rewritten to `isinstance($X, ($A, $B))`. This is a safe autofix when both `isinstance` calls check the same variable.
 - Adapt Python catalog rules to the repository’s Python version floor, framework stack, typing policy, async model, and migration scope before using them directly.
 
 ## Kotlin Catalog Highlights
@@ -152,20 +362,76 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Clean-architecture import checks: good scan-rule example for enforcing architectural boundaries with `files` plus import-path constraints. Treat it as repository-policy enforcement rather than a universal Kotlin rule.
 - The Kotlin catalog example is diagnostic-oriented, not rewrite-oriented. Keep it on the scan path because import-boundary violations usually need design review instead of blind mutation.
 - File-scoped package constraints are the point of the example: adapt the `files` glob and package regexes to the repository’s actual module layout before relying on the result.
-- Adapt Kotlin catalog rules to the repository’s package naming, architecture boundaries, Android-vs-server structure, and lint ownership before using them directly.
+- Kotlin has no local tree-sitter parser in VT Code, so preflight pattern validation is skipped; patterns go directly to `sg` for parsing. Use `debug_query` to inspect parse output when matching is surprising. This is the same situation as C, C++, Ruby, and other extended languages.
+- Unsafe cast detection (`$EXPR as $TYPE`): good warning-level scan rule for catching runtime ClassCastException risks. The safe cast `as?` is a different AST node, so this pattern does not false-positive on safe casts. Treat as review material; some casts are intentionally unsafe after exhaustive `when` or `is` checks.
+- `var` vs `val` preference: use `kind: property_declaration` with `has: { field: property_delegate, pattern: var }` to match mutable property declarations. A naive `var $NAME: $TYPE` pattern may over-match in contexts where the parser attaches different node structure. The `kind` plus `has` plus `field` approach is more robust.
+- `println` detection: use an `any` composite to cover Kotlin’s top-level `println($$$ARGS)`, Java’s `System.out.println($$$ARGS)`, and `System.err.println($$$ARGS)`. Scope with `files` to exclude test directories where console output is acceptable.
+- `isEmpty()` preference: straightforward rewrite rule from `$X.size == 0` or `$X.length == 0` to `$X.isEmpty()`. Also cover `$X.count() == 0` and `$X.size <= 0`. This is a safe autofix because Kotlin’s `isEmpty()` is semantically equivalent for standard collections and strings.
+- `lateinit` detection: pattern `lateinit var $NAME: $TYPE` is a direct structural match. Use `severity: info` because `lateinit` is sometimes justified in dependency injection and test setup contexts. Teams should adjust severity to match their policy.
+- Unnecessary `let` blocks: pattern `$RECEIVER.let { $PARAM -> $BODY }` catches explicit named-parameter `let` calls. This does not match the implicit `it` form (`$RECEIVER.let { $BODY }`) because the parser structures those differently. Focus on the named-parameter variant as the more egregious anti-pattern.
+- Data class candidates: use `kind: class_declaration` with `has: { kind: primary_constructor, has: { kind: class_parameter } }` to find classes with constructor parameters. This is a suggestion rule, not an enforcement rule, because classes with inheritance or behavior should remain regular classes.
+- Key Kotlin tree-sitter node kinds for pattern authoring: `class_declaration` for classes, `property_declaration` for val/var properties, `function_declaration` for functions, `primary_constructor` for primary constructors, `class_parameter` for constructor parameters, `import_declaration` for imports, `call_expression` for function calls, `as_expression` for cast expressions, `lambda_expression` for lambdas, `when_expression` for when blocks.
+- Kotlin tree-sitter parses `$EXPR as $TYPE` as `as_expression` and `$EXPR as? $TYPE` as a variant with the `?` token attached, so a pattern targeting `as` will not match `as?`. This makes cast-direction rules safe from false positives on safe casts.
+- Kotlin’s `?.let { }` safe-call form is parsed differently from `.let { }` dot-call form. Rules targeting one will not match the other. Use `any` with both patterns when both forms should be flagged.
+- Adapt Kotlin catalog rules and the rules above to the repository’s package naming, architecture boundaries, Android-vs-server structure, coroutine usage, and lint ownership before using them directly.
 
 ## Java Catalog Highlights
 
-- Unused local variable detection: useful educational example for `has` plus ordered `all` plus `precedes`, but prefer the project’s established linter or IDE for real unused-variable enforcement because Java variable scopes are broader than the sample rule covers.
-- Field declarations of type `String`: good structural scan example showing why `field_declaration` plus `has: { field: type }` is more robust than a naive pattern when modifiers and annotations are present.
+- Unused local variable detection: useful educational example for `has` plus ordered `all` plus `precedes`, but prefer the project’s established linter or IDE for real unused-variable enforcement because Java variable scopes are broader than the sample rule covers. The rule uses `all` to guarantee that the meta-variable `$IDENT` is captured by the first `has` clause before the `not`/`precedes` check runs. Without that ordering, the meta-variable would not be available for the later comparison:
+
+```yaml
+id: no-unused-vars
+language: java
+rule:
+  kind: local_variable_declaration
+  all:
+    - has:
+        has:
+          kind: identifier
+          pattern: $IDENT
+    - not:
+        precedes:
+          stopBy: end
+          has:
+            stopBy: end
+            any:
+              - { kind: identifier, pattern: $IDENT }
+              - { has: { kind: identifier, pattern: $IDENT, stopBy: end } }
+fix: ‘’
+```
+
+Treat matches as review candidates, not conclusive unused-variable proofs. Java variable scopes are broader than this sample covers, and the project’s established linter or IDE is usually a better fit for real unused-variable enforcement.
+
+- Field declarations of type `String`: good structural scan example showing why `field_declaration` plus `has: { field: type }` is more robust than a naive pattern when modifiers and annotations are present. A naive `String $F;` pattern fails because it ignores modifiers and annotations. A `$MOD String $F;` pattern also fails because tree-sitter does not consider `$MOD` a valid modifier and produces an `ERROR` node. The structural rule approach works regardless of how many modifiers or annotations precede the type:
+
+```yaml
+id: find-field-with-type
+language: java
+rule:
+  kind: field_declaration
+  has:
+    field: type
+    regex: ^String$
+```
+
+Use this `kind` plus `has` plus `field` plus `regex` pattern whenever a naive code pattern fails because Java modifiers, annotations, or access qualifiers change the surface syntax. The `field: type` constraint targets the semantic type child of the declaration, not the raw text, so it is robust against `private static final String`, `@Nullable String`, or other decorated forms.
+
 - The Java catalog examples are primarily search/diagnostic material, not high-confidence autofix rules. Keep them review-oriented unless the repository explicitly wants ast-grep-based cleanup instead of compiler or linter diagnostics.
 - Adapt Java catalog rules to the repository’s package conventions, annotation usage, style tooling, and existing static-analysis stack before using them directly.
 
 ## HTML Catalog Highlights
 
-- HTML parser reuse for framework templates: useful when Vue, Svelte, Astro, or similar files are mostly HTML, but keep parser caveats in mind because framework-specific control flow or frontmatter may require a custom language instead.
-- Ant Design Vue `visible` to `open`: good framework-specific attribute rewrite using enclosing-tag checks plus constraints. Keep it on the CLI skill path because framework version and component set must be confirmed first.
-- i18n key extraction: useful template rewrite example for wrapping static text while skipping mustache expressions, but keep it reviewable because real projects usually need key naming, dictionary updates, and whitespace policy beyond the raw rewrite.
+- HTML parser reuse for framework templates: useful when Vue, Svelte, Astro, or similar files are mostly HTML, but keep parser caveats in mind because framework-specific control flow or frontmatter may require a custom language instead. Use `languageGlobs` in `sgconfig.yml` to parse `.vue`, `.svelte`, or `.astro` files as HTML when the framework syntax is minimal enough for the HTML parser.
+- Key HTML node kinds for pattern authoring: `element` for full HTML elements, `tag_name` for tag names, `attribute_name` for attribute names, `attribute_value` for attribute values, `text` for text content, and `comment` for HTML comments. Use these with `kind` to match specific HTML structures without writing full pattern syntax.
+- Matching elements by tag name: use `kind: element` with `has: { field: tag_name, pattern: $TAG }` to match elements by their tag name. For regex-based tag matching (e.g. all heading tags), use `kind: tag_name` with `regex: "^h[1-6]$"` and `inside: { kind: element }`.
+- Matching elements by attribute: use `kind: element` with `has: { kind: attribute_name, regex: "^class$" }` to find elements with a specific attribute. To also match the attribute value, add a nested `has` on the attribute node to capture `attribute_value`.
+- Scoping with `inside` and `stopBy`: HTML `inside` with `stopBy: { kind: element }` scopes matches to the nearest enclosing element. This is essential for avoiding cross-element matches in deeply nested HTML. The `inside-tag` utility pattern from the catalog demonstrates wrapping `inside` with `kind: element` and `has` to capture the enclosing tag name, then using `constraints` to restrict which tags match.
+- Ant Design Vue `visible` to `open`: good framework-specific attribute rewrite using enclosing-tag checks plus constraints. The pattern uses `kind: attribute_name` with `regex: :visible` to match the attribute, `inside` to find the enclosing `element`, `has` to capture the `tag_name`, and `constraints` to restrict to specific components (`a-modal|a-tooltip`). Keep it on the CLI skill path because framework version and component set must be confirmed first.
+- i18n key extraction: useful template rewrite example for wrapping static text while skipping mustache expressions. Uses `kind: text` with `pattern: $T` to capture text content, `not: { regex: ‘{{.*}}’ }` to skip mustache interpolation, and `fix: "{{ $(‘$T’) }}"` to wrap the text. Keep it reviewable because real projects usually need key naming, dictionary updates, and whitespace policy beyond the raw rewrite.
+- Attribute rewrite patterns: HTML attribute rewrites commonly use `kind: attribute_name` to match the target attribute, `inside` to find the parent element, and `constraints` to narrow by attribute name regex. For renaming attributes (e.g. `visible` to `open`), match the attribute name node and use `fix` to replace it.
+- Text content patterns: use `kind: text` to match raw text nodes inside elements. Combine with `inside: { kind: element, has: { field: tag_name, pattern: $TAG } }` to scope text matching to specific elements. Use `not` to exclude text containing interpolation syntax.
+- HTML comment patterns: use `kind: comment` to match HTML comments. Combine with `regex` to find comments containing specific text patterns like TODO, FIXME, or deprecated notices.
+- HTML `<script>` and `<style>` content is parsed as embedded JavaScript and CSS respectively. Search inside these regions with `lang: javascript` or `lang: css` rules. For custom embedded languages (e.g. TypeScript in `<script lang="ts">`), configure `languageInjections` in `sgconfig.yml`.
 - Adapt HTML catalog rules to the repository’s template framework, parser limitations, i18n workflow, and component-library version before using them directly.
 
 ## Go Catalog Highlights

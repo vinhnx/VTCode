@@ -1,0 +1,18 @@
+id: avoid-duplicate-export
+language: Rust
+severity: warning
+message: Item re-exported via `pub use` when `pub mod` already exposes the module.
+note: |
+  When a source file already has `pub mod foo;`, adding `pub use foo::Bar;`
+  creates a duplicate export path. Consider removing the `pub use` or making
+  the module private (`mod foo;`) to keep the API surface unambiguous.
+rule:
+  all:
+    - pattern: "pub use $A::$B;"
+    - inside:
+        kind: source_file
+    - has:
+        pattern: "pub mod $A;"
+        stopBy: end
+files:
+  - "**/*.rs"

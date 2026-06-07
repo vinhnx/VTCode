@@ -1,0 +1,15 @@
+id: use-walrus-operator
+valid:
+  - code: |
+      if x > 0:
+          print(x)
+  - code: |
+      y = get_value()
+      if y:
+          use(y)
+      other_use(y)
+invalid:
+  - code: |
+      x = get_value()
+      if x:
+          use(x)

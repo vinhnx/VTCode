@@ -1,0 +1,19 @@
+id: no-print
+language: python
+severity: warning
+message: Avoid `print()` in production code. Use `logging` instead.
+note: |
+  `print()` calls in production code should use the `logging` module for
+  proper log level control, formatting, and output routing. Scope this rule
+  with `files` to exclude test directories and scripts where console output
+  is acceptable.
+rule:
+  kind: call
+  has:
+    field: function
+    pattern: print
+files:
+  - "**/*.py"
+  - "!tests/**"
+  - "!**/test_*.py"
+  - "!**/*_test.py"

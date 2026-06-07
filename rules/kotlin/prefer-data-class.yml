@@ -1,0 +1,19 @@
+id: prefer-data-class
+language: Kotlin
+severity: info
+message: Consider using `data class` for classes that primarily hold data
+note: |
+  Kotlin `data class` auto-generates `equals()`, `hashCode()`, `toString()`,
+  `copy()`, and destructuring. A regular class with only `val` properties in
+  the primary constructor and no meaningful behavior is a candidate for
+  conversion. Review manually: classes with inheritance, abstract members, or
+  custom `equals`/`hashCode` are not suitable.
+rule:
+  kind: class_declaration
+  has:
+    kind: primary_constructor
+    has:
+      kind: class_parameter
+files:
+  - src/**/*.kt
+  - src/**/*.kts

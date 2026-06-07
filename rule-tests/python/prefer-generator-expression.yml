@@ -1,0 +1,17 @@
+id: prefer-generator-expression
+valid:
+  - code: |
+      any(x > 0 for x in items)
+  - code: |
+      all(is_valid(x) for x in items)
+  - code: |
+      sum(x * 2 for x in items)
+  - code: |
+      result = [x for x in items if x > 0]
+invalid:
+  - code: |
+      any([x > 0 for x in items])
+  - code: |
+      all([is_valid(x) for x in items])
+  - code: |
+      sum([x * 2 for x in items])

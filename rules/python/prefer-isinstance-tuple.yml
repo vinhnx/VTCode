@@ -1,0 +1,11 @@
+id: prefer-isinstance-tuple
+language: python
+severity: hint
+message: Consolidate multiple `isinstance` checks on the same variable into a single call with a tuple.
+note: |
+  `isinstance(x, A) or isinstance(x, B)` is equivalent to
+  `isinstance(x, (A, B))` and is more readable. This is a safe autofix
+  when both `isinstance` calls check the same variable.
+rule:
+  pattern: isinstance($X, $A) or isinstance($X, $B)
+fix: isinstance($X, ($A, $B))

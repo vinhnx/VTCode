@@ -1,0 +1,14 @@
+id: no-chars-enumerate
+language: Rust
+severity: warning
+message: Use `.char_indices()` instead of `.chars().enumerate()` when byte offsets are needed.
+note: |
+  `.chars().enumerate()` yields character indices (0, 1, 2, ...), not byte
+  offsets. For UTF-8 byte positions, use `.char_indices()` instead. This rule
+  only applies when the code needs byte offsets; if character positions are
+  intentional, suppress with `ast-grep-ignore`.
+rule:
+  pattern: "$A.chars().enumerate()"
+fix: "$A.char_indices()"
+files:
+  - "**/*.rs"

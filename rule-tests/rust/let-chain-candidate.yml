@@ -1,0 +1,39 @@
+id: let-chain-candidate
+valid:
+  - code: |
+      if let Some(x) = a {
+          println!("{}", x);
+      } else {
+          println!("none");
+      }
+  - code: |
+      if a > 0 {
+          if b > 0 {
+              if c > 0 {
+                  println!("all positive");
+              }
+          }
+      }
+    # Three levels deep, not a simple two-level candidate
+  - code: |
+      if let Some(x) = a {
+          println!("{}", x);
+          extra_call();
+          if let Some(y) = b {
+              println!("{}", y);
+          }
+      }
+    # Inner if let is not the sole child
+invalid:
+  - code: |
+      if let Some(x) = a {
+          if let Some(y) = b {
+              println!("{} {}", x, y);
+          }
+      }
+  - code: |
+      if a > 0 {
+          if let Some(x) = b {
+              println!("{}", x);
+          }
+      }

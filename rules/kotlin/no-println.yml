@@ -1,0 +1,16 @@
+id: no-println
+language: Kotlin
+severity: warning
+message: Avoid `println` in production code; use a logging framework instead
+note: |
+  Direct console output via `println` is not configurable, cannot be routed to
+  log aggregators, and clutters production output. Use a structured logging
+  framework such as SLF4J, Logback, or Android's Timber.
+rule:
+  any:
+    - pattern: println($$$ARGS)
+    - pattern: System.out.println($$$ARGS)
+    - pattern: System.err.println($$$ARGS)
+files:
+  - src/**/*.kt
+  - src/**/*.kts

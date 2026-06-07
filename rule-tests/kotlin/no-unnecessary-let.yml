@@ -1,0 +1,11 @@
+id: no-unnecessary-let
+valid:
+  - code: |
+      obj?.let { println(it) }
+  - code: |
+      result.let { value -> process(value) }
+invalid:
+  - code: |
+      obj.let { it.toString() }
+  - code: |
+      name.let { it.length }
