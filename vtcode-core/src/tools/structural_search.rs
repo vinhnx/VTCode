@@ -385,6 +385,22 @@ impl StructuralSearchRequest {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct AstGrepMetaVar {
+    text: String,
+    range: AstGrepRange,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct AstGrepMetaVariables {
+    #[serde(default)]
+    single: BTreeMap<String, AstGrepMetaVar>,
+    #[serde(default)]
+    multi: BTreeMap<String, Vec<AstGrepMetaVar>>,
+    #[serde(default)]
+    transformed: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct AstGrepMatch {
     file: String,
     text: String,
@@ -393,6 +409,8 @@ struct AstGrepMatch {
     #[serde(default)]
     language: Option<String>,
     range: AstGrepRange,
+    #[serde(default, rename = "metaVariables")]
+    meta_variables: Option<AstGrepMetaVariables>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -417,9 +435,17 @@ struct AstGrepScanFinding {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct AstGrepByteOffset {
+    start: usize,
+    end: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct AstGrepRange {
     start: AstGrepPoint,
     end: AstGrepPoint,
+    #[serde(default, rename = "byteOffset")]
+    byte_offset: Option<AstGrepByteOffset>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -853,6 +879,58 @@ fn build_fragment_result(
     })
 }
 
+fn build_range_value(range: &AstGrepRange) -> Value {
+    let mut range_object = json!({
+        "start": {
+            "line": range.start.line,
+            "column": range.start.column,
+        },
+        "end": {
+            "line": range.end.line,
+            "column": range.end.column,
+        },
+    });
+    if let Some(byte_offset) = &range.byte_offset {
+        range_object["byteOffset"] = json!({
+            "start": byte_offset.start,
+            "end": byte_offset.end,
+        });
+    }
+    range_object
+}
+
+fn build_meta_var_value(var: &AstGrepMetaVar) -> Value {
+    json!({
+        "text": var.text,
+        "range": build_range_value(&var.range),
+    })
+}
+
+fn build_meta_variables_value(meta_vars: &AstGrepMetaVariables) -> Value {
+    let mut single = Map::new();
+    for (key, var) in &meta_vars.single {
+        single.insert(key.clone(), build_meta_var_value(var));
+    }
+
+    let mut multi = Map::new();
+    for (key, vars) in &meta_vars.multi {
+        let vars_json: Vec<Value> = vars.iter().map(build_meta_var_value).collect();
+        multi.insert(key.clone(), Value::Array(vars_json));
+    }
+
+    let transformed = if meta_vars.transformed.is_empty() {
+        Value::Object(Map::new())
+    } else {
+        json!(meta_vars.transformed)
+    };
+
+    json!({
+        "single": Value::Object(single),
+        "multi": Value::Object(multi),
+        "transformed": transformed,
+    })
+}
+
 fn normalize_match(entry: AstGrepMatch) -> Value {
     let mut match_object = Map::new();
     match_object.insert("file".to_string(), Value::String(entry.file));
@@ -865,19 +943,13 @@ fn normalize_match(entry: AstGrepMatch) -> Value {
     if let Some(language) = entry.language {
         match_object.insert("language".to_string(), Value::String(language));
     }
-    match_object.insert(
-        "range".to_string(),
-        json!({
-            "start": {
-                "line": entry.range.start.line,
-                "column": entry.range.start.column,
-            },
-            "end": {
-                "line": entry.range.end.line,
-                "column": entry.range.end.column,
-            },
-        }),
-    );
+    match_object.insert("range".to_string(), build_range_value(&entry.range));
+    if let Some(meta_vars) = entry.meta_variables {
+        match_object.insert(
+            "metaVariables".to_string(),
+            build_meta_variables_value(&meta_vars),
+        );
+    }
     Value::Object(match_object)
 }
 
@@ -893,24 +965,15 @@ fn normalize_scan_finding(entry: &AstGrepScanFinding) -> Value {
     if let Some(language) = &entry.language {
         finding_object.insert("language".to_string(), Value::String(language.clone()));
     }
-    finding_object.insert(
-        "range".to_string(),
-        json!({
-            "start": {
-                "line": entry.range.start.line,
-                "column": entry.range.start.column,
-            },
-            "end": {
-                "line": entry.range.end.line,
-                "column": entry.range.end.column,
-            },
-        }),
-    );
+    finding_object.insert("range".to_string(), build_range_value(&entry.range));
     finding_object.insert("rule_id".to_string(), json!(entry.rule_id));
     finding_object.insert("severity".to_string(), json!(entry.severity));
     finding_object.insert("message".to_string(), json!(entry.message));
     finding_object.insert("note".to_string(), json!(entry.note));
     if let Some(metadata) = &entry.metadata {
+        if let Some(url) = metadata.get("url").or_else(|| metadata.get("docs")) {
+            finding_object.insert("url".to_string(), url.clone());
+        }
         finding_object.insert("metadata".to_string(), metadata.clone());
     }
     Value::Object(finding_object)
