@@ -820,6 +820,7 @@ fn meta_click_emits_open_file_event_for_transcript_path() {
     ));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn ctrl_click_does_not_emit_open_file_event_on_macos() {
     let mut fixture = SessionWithFileLink::new();
@@ -843,6 +844,7 @@ fn ctrl_click_does_not_emit_open_file_event_on_macos() {
     assert!(!fixture.session.mouse_selection.has_selection);
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
     let mut fixture = SessionWithFileLink::new();
@@ -883,6 +885,7 @@ fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
     rx.try_recv().unwrap_err();
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn meta_key_press_then_plain_click_emits_open_file_event_on_macos() {
     let mut fixture = SessionWithFileLink::new();
@@ -995,6 +998,7 @@ fn app_session_double_click_emits_open_url_event_for_modal_auth_link() {
     rx.try_recv().unwrap_err();
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn app_session_command_key_press_then_plain_click_emits_open_file_event_on_macos() {
     let mut fixture = AppSessionWithFileLink::new();
@@ -1020,6 +1024,7 @@ fn app_session_command_key_press_then_plain_click_emits_open_file_event_on_macos
     ));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn app_session_ctrl_click_on_link_is_consumed_without_selection() {
     let mut fixture = AppSessionWithFileLink::new();

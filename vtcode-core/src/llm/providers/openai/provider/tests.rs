@@ -835,6 +835,34 @@ fn chat_completions_applies_temperature_independent_of_max_tokens() {
 }
 
 #[test]
+fn chat_completions_omits_temperature_for_gpt_5_5_with_reasoning() {
+    let provider = native_openai_provider(models::openai::GPT_5_5);
+    let mut request = sample_request(models::openai::GPT_5_5);
+    request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::Medium);
+    request.temperature = Some(0.4);
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    assert!(payload.get("temperature").is_none());
+}
+
+#[test]
+fn chat_completions_keeps_temperature_for_gpt_5_5_without_reasoning() {
+    let provider = native_openai_provider(models::openai::GPT_5_5);
+    let mut request = sample_request(models::openai::GPT_5_5);
+    request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::None);
+    request.temperature = Some(0.4);
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    let temp = payload
+        .get("temperature")
+        .and_then(Value::as_f64)
+        .expect("temperature should be present");
+    assert!((temp - 0.4).abs() < 1e-6);
+}
+
+#[test]
 fn chat_payload_omits_assistant_phase_metadata() {
     let provider = native_openai_provider(models::openai::DEFAULT_MODEL);
     let request = provider::LLMRequest {

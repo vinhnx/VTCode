@@ -47,6 +47,8 @@ const GATED_SAMPLING_MODELS: &[&str] = &[
     openai_models::GPT,
     openai_models::GPT_5_2,
     openai_models::GPT_5_4,
+    openai_models::GPT_5_5,
+    openai_models::GPT_5_5_DATED,
 ];
 const SAMPLING_DISABLED_MODELS: &[&str] = &[
     openai_models::GPT_5,
