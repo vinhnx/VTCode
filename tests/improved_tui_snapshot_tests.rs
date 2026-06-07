@@ -97,7 +97,7 @@ fn test_header_context_rendering() {
         workspace_trust: "trusted".to_string(),
         tools: "enabled".to_string(),
         mcp: "available".to_string(),
-        session_agent: None,
+        top_level_agent: None,
         highlights: vec![],
         subagent_badges: vec![],
         editor_context: None,

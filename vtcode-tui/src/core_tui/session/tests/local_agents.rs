@@ -187,42 +187,42 @@ fn alt_s_remains_subprocesses_entrypoint() {
 }
 
 #[test]
-fn tab_cycles_session_agent_when_composer_is_empty() {
+fn tab_cycles_top_level_agent_when_composer_is_empty() {
     let mut session = app_session_with_input("", 0);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::CycleSessionAgent)
+        Some(app_types::InlineEvent::CycleTopLevelAgent)
     ));
 }
 
 #[test]
-fn tab_character_cycles_session_agent_when_composer_is_empty() {
+fn tab_character_cycles_top_level_agent_when_composer_is_empty() {
     let mut session = app_session_with_input("", 0);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Char('\t'), KeyModifiers::NONE));
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::CycleSessionAgent)
+        Some(app_types::InlineEvent::CycleTopLevelAgent)
     ));
 }
 
 #[test]
-fn core_tab_cycles_session_agent_when_composer_is_empty() {
+fn core_tab_cycles_top_level_agent_when_composer_is_empty() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(event, Some(InlineEvent::CycleSessionAgent)));
+    assert!(matches!(event, Some(InlineEvent::CycleTopLevelAgent)));
 }
 
 #[test]
-fn tab_does_not_cycle_session_agent_while_running() {
+fn tab_does_not_cycle_top_level_agent_while_running() {
     let mut session = app_session_with_input("", 0);
-    load_session_agent_palette(&mut session);
+    load_top_level_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -232,9 +232,9 @@ fn tab_does_not_cycle_session_agent_while_running() {
 }
 
 #[test]
-fn tab_queues_draft_while_running_instead_of_switching_session_agent() {
+fn tab_queues_draft_while_running_instead_of_switching_top_level_agent() {
     let mut session = app_session_with_input("Review this", "Review this".len());
-    load_session_agent_palette(&mut session);
+    load_top_level_agent_palette(&mut session);
     set_app_session_busy_status(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -246,9 +246,9 @@ fn tab_queues_draft_while_running_instead_of_switching_session_agent() {
 }
 
 #[test]
-fn tab_cycles_session_agent_back_to_default_after_last_agent() {
+fn tab_cycles_top_level_agent_back_to_default_after_last_agent() {
     let mut session = app_session_with_input("", 0);
-    session.handle_command(app_types::InlineCommand::SetSessionAgent {
+    session.handle_command(app_types::InlineCommand::SetTopLevelAgent {
         name: Some("beta".to_string()),
     });
 
@@ -256,14 +256,14 @@ fn tab_cycles_session_agent_back_to_default_after_last_agent() {
 
     assert!(matches!(
         event,
-        Some(app_types::InlineEvent::CycleSessionAgent)
+        Some(app_types::InlineEvent::CycleTopLevelAgent)
     ));
 }
 
 #[test]
-fn tab_accepts_inline_prompt_suggestion_before_session_agent_cycle() {
+fn tab_accepts_inline_prompt_suggestion_before_top_level_agent_cycle() {
     let mut session = app_session_with_input("Review the current", "Review the current".len());
-    load_session_agent_palette(&mut session);
+    load_top_level_agent_palette(&mut session);
     session
         .core
         .set_inline_prompt_suggestion("Review the current diff".to_string(), true);
@@ -279,9 +279,9 @@ fn tab_accepts_inline_prompt_suggestion_before_session_agent_cycle() {
 }
 
 #[test]
-fn tab_queues_draft_instead_of_switching_session_agent() {
+fn tab_queues_draft_instead_of_switching_top_level_agent() {
     let mut session = app_session_with_input("Review this", "Review this".len());
-    load_session_agent_palette(&mut session);
+    load_top_level_agent_palette(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
@@ -292,9 +292,9 @@ fn tab_queues_draft_instead_of_switching_session_agent() {
 }
 
 #[test]
-fn tab_does_not_switch_session_agent_when_queued_input_exists() {
+fn tab_does_not_switch_top_level_agent_when_queued_input_exists() {
     let mut session = app_session_with_input("", 0);
-    load_session_agent_palette(&mut session);
+    load_top_level_agent_palette(&mut session);
     set_app_session_queued_inputs(&mut session, vec!["queued follow-up".to_string()]);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -502,7 +502,7 @@ fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
     assert!(!summary.contains("/memory"));
 }
 
-fn load_session_agent_palette(session: &mut AppSession) {
+fn load_top_level_agent_palette(session: &mut AppSession) {
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::AgentPalette(
             app_types::AgentPaletteTransientRequest {

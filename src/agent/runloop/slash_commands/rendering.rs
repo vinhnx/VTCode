@@ -253,7 +253,7 @@ pub(super) async fn render_help(
         )?;
         renderer.line(
             MessageStyle::Info,
-            "  Tab – Accept suggestion, cycle session agent when empty, or queue input",
+            "  Tab – Accept suggestion, cycle top-level agent when empty, or queue input",
         )?;
         renderer.line(
             MessageStyle::Info,

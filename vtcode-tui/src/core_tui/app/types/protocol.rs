@@ -81,7 +81,7 @@ pub enum InlineCommand {
     SetLocalAgents {
         entries: Vec<LocalAgentEntry>,
     },
-    SetSessionAgent {
+    SetTopLevelAgent {
         name: Option<String>,
     },
     SetCursorVisible(bool),
@@ -144,8 +144,8 @@ pub enum InlineEvent {
     OpenTranscriptReviewScrollback(String),
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
-    CycleSessionAgent,
-    SelectSessionAgent {
+    CycleTopLevelAgent,
+    SelectTopLevelAgent {
         name: Option<String>,
     },
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
@@ -188,9 +188,9 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             crate::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 Self::RequestInlinePromptSuggestion(draft)
             }
-            crate::core_tui::types::InlineEvent::CycleSessionAgent => Self::CycleSessionAgent,
-            crate::core_tui::types::InlineEvent::SelectSessionAgent { name } => {
-                Self::SelectSessionAgent { name }
+            crate::core_tui::types::InlineEvent::CycleTopLevelAgent => Self::CycleTopLevelAgent,
+            crate::core_tui::types::InlineEvent::SelectTopLevelAgent { name } => {
+                Self::SelectTopLevelAgent { name }
             }
             crate::core_tui::types::InlineEvent::ToggleMode => Self::ToggleMode,
             crate::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,
@@ -347,8 +347,8 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetLocalAgents { entries });
     }
 
-    pub fn set_session_agent(&self, name: Option<String>) {
-        self.send_command(InlineCommand::SetSessionAgent { name });
+    pub fn set_top_level_agent(&self, name: Option<String>) {
+        self.send_command(InlineCommand::SetTopLevelAgent { name });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

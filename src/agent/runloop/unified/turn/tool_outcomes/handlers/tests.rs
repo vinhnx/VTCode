@@ -45,11 +45,11 @@ use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::session_agent::ActiveSessionAgentState;
 use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
 use vtcode_core::tools::health::ToolHealthTracker;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
+use vtcode_core::top_level_agent::ActiveTopLevelAgentState;
 use vtcode_tui::app::{InlineHandle, InlineSession};
 
 #[derive(Clone)]
@@ -131,7 +131,7 @@ struct TestContextBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
-    active_session_agent: ActiveSessionAgentState,
+    active_top_level_agent: ActiveTopLevelAgentState,
     runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
@@ -250,7 +250,7 @@ impl TestContextBacking {
             working_history,
             tool_catalog,
             default_placeholder,
-            active_session_agent: ActiveSessionAgentState::default(),
+            active_top_level_agent: ActiveTopLevelAgentState::default(),
             runtime_steering: RuntimeSteering::default(),
             config,
             provider_client,
@@ -281,7 +281,7 @@ impl TestContextBacking {
             config: &mut self.config,
             vt_cfg: None,
             context_manager: &mut self.context_manager,
-            active_session_agent: &self.active_session_agent,
+            active_top_level_agent: &self.active_top_level_agent,
             decision_ledger: &self.decision_ledger,
             traj: &self.traj,
         };
@@ -318,14 +318,14 @@ impl TestContextBacking {
         })
     }
 
-    fn select_session_agent_from_specs(&mut self, specs: &[SubagentSpec], requested: &str) {
-        self.active_session_agent
+    fn select_top_level_agent_from_specs(&mut self, specs: &[SubagentSpec], requested: &str) {
+        self.active_top_level_agent
             .select_from_specs(specs, requested)
-            .expect("test session agent should resolve");
+            .expect("test top-level agent should resolve");
     }
 }
 
-fn test_session_agent_spec(name: &str) -> SubagentSpec {
+fn test_top_level_agent_spec(name: &str) -> SubagentSpec {
     SubagentSpec {
         name: name.to_string(),
         description: format!("{name} description"),

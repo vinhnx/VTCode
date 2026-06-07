@@ -8,15 +8,15 @@ use vtcode_config::{DiscoveredSubagents, PermissionMode, SubagentSource, Subagen
 use crate::llm::provider::ToolDefinition;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveSessionAgentSpecIdentity {
+pub struct ActiveTopLevelAgentSpecIdentity {
     pub name: String,
     pub source: SubagentSource,
     pub file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveSessionAgent {
-    pub identity: ActiveSessionAgentSpecIdentity,
+pub struct ActiveTopLevelAgent {
+    pub identity: ActiveTopLevelAgentSpecIdentity,
     pub display_name: String,
     pub instructions: String,
     pub tools: Option<Vec<String>>,
@@ -26,11 +26,11 @@ pub struct ActiveSessionAgent {
     pub reasoning_effort: Option<String>,
 }
 
-impl ActiveSessionAgent {
+impl ActiveTopLevelAgent {
     #[must_use]
     pub fn from_spec(spec: &SubagentSpec) -> Self {
         Self {
-            identity: ActiveSessionAgentSpecIdentity {
+            identity: ActiveTopLevelAgentSpecIdentity {
                 name: spec.name.clone(),
                 source: spec.source.clone(),
                 file_path: spec.file_path.clone(),
@@ -47,13 +47,13 @@ impl ActiveSessionAgent {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ActiveSessionAgentState {
-    active: Option<ActiveSessionAgent>,
+pub struct ActiveTopLevelAgentState {
+    active: Option<ActiveTopLevelAgent>,
 }
 
-impl ActiveSessionAgentState {
+impl ActiveTopLevelAgentState {
     #[must_use]
-    pub const fn active(&self) -> Option<&ActiveSessionAgent> {
+    pub const fn active(&self) -> Option<&ActiveTopLevelAgent> {
         self.active.as_ref()
     }
 
@@ -65,7 +65,7 @@ impl ActiveSessionAgentState {
         &mut self,
         discovered: &DiscoveredSubagents,
         requested: &str,
-    ) -> SessionAgentResolutionResult<&ActiveSessionAgent> {
+    ) -> TopLevelAgentResolutionResult<&ActiveTopLevelAgent> {
         self.select_from_specs(&discovered.effective, requested)
     }
 
@@ -73,51 +73,51 @@ impl ActiveSessionAgentState {
         &mut self,
         specs: &[SubagentSpec],
         requested: &str,
-    ) -> SessionAgentResolutionResult<&ActiveSessionAgent> {
-        let active = resolve_session_agent(specs, requested)?;
+    ) -> TopLevelAgentResolutionResult<&ActiveTopLevelAgent> {
+        let active = resolve_top_level_agent(specs, requested)?;
         Ok(self.active.insert(active))
     }
 }
 
-pub type SessionAgentResolutionResult<T> = Result<T, SessionAgentResolutionError>;
+pub type TopLevelAgentResolutionResult<T> = Result<T, TopLevelAgentResolutionError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionAgentResolutionError {
+pub enum TopLevelAgentResolutionError {
     UnknownAgent { requested: String },
 }
 
-impl fmt::Display for SessionAgentResolutionError {
+impl fmt::Display for TopLevelAgentResolutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownAgent { requested } => write!(f, "Unknown session agent {requested}"),
+            Self::UnknownAgent { requested } => write!(f, "Unknown top-level agent {requested}"),
         }
     }
 }
 
-impl Error for SessionAgentResolutionError {}
+impl Error for TopLevelAgentResolutionError {}
 
-pub fn resolve_discovered_session_agent(
+pub fn resolve_discovered_top_level_agent(
     discovered: &DiscoveredSubagents,
     requested: &str,
-) -> SessionAgentResolutionResult<ActiveSessionAgent> {
-    resolve_session_agent(&discovered.effective, requested)
+) -> TopLevelAgentResolutionResult<ActiveTopLevelAgent> {
+    resolve_top_level_agent(&discovered.effective, requested)
 }
 
-pub fn resolve_session_agent(
+pub fn resolve_top_level_agent(
     specs: &[SubagentSpec],
     requested: &str,
-) -> SessionAgentResolutionResult<ActiveSessionAgent> {
+) -> TopLevelAgentResolutionResult<ActiveTopLevelAgent> {
     specs
         .iter()
         .find(|spec| spec.matches_name(requested))
-        .map(ActiveSessionAgent::from_spec)
-        .ok_or_else(|| SessionAgentResolutionError::UnknownAgent {
+        .map(ActiveTopLevelAgent::from_spec)
+        .ok_or_else(|| TopLevelAgentResolutionError::UnknownAgent {
             requested: requested.to_string(),
         })
 }
 
 #[must_use]
-pub fn clamp_session_permission_mode(
+pub fn clamp_top_level_permission_mode(
     base: PermissionMode,
     overlay: Option<PermissionMode>,
 ) -> PermissionMode {
@@ -133,7 +133,7 @@ pub fn clamp_session_permission_mode(
 }
 
 #[must_use]
-pub fn session_agent_allows_tool(agent: Option<&ActiveSessionAgent>, tool_name: &str) -> bool {
+pub fn top_level_agent_allows_tool(agent: Option<&ActiveTopLevelAgent>, tool_name: &str) -> bool {
     let Some(agent) = agent else {
         return true;
     };
@@ -155,9 +155,9 @@ pub fn session_agent_allows_tool(agent: Option<&ActiveSessionAgent>, tool_name: 
 }
 
 #[must_use]
-pub fn apply_session_agent_tool_overlay(
+pub fn apply_top_level_agent_tool_overlay(
     tools: Option<Arc<Vec<ToolDefinition>>>,
-    agent: Option<&ActiveSessionAgent>,
+    agent: Option<&ActiveTopLevelAgent>,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
     let Some(agent) = agent else {
@@ -166,7 +166,7 @@ pub fn apply_session_agent_tool_overlay(
 
     let filtered = tools
         .iter()
-        .filter(|tool| session_agent_allows_tool(Some(agent), tool.function_name()))
+        .filter(|tool| top_level_agent_allows_tool(Some(agent), tool.function_name()))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn resolves_existing_spec_by_name() {
         let spec = test_spec("planner");
-        let active = resolve_session_agent(&[spec], "planner").expect("resolved");
+        let active = resolve_top_level_agent(&[spec], "planner").expect("resolved");
 
         assert_eq!(active.identity.name, "planner");
         assert_eq!(active.display_name, "planner");
@@ -218,7 +218,7 @@ mod tests {
     fn unknown_agent_error_preserves_current_active_agent() {
         let current = test_spec("current");
         let specs = vec![current.clone()];
-        let mut state = ActiveSessionAgentState::default();
+        let mut state = ActiveTopLevelAgentState::default();
         let original = state
             .select_from_specs(&specs, "current")
             .expect("initial selection")
@@ -230,7 +230,7 @@ mod tests {
 
         assert_eq!(
             error,
-            SessionAgentResolutionError::UnknownAgent {
+            TopLevelAgentResolutionError::UnknownAgent {
                 requested: "missing".to_string()
             }
         );
@@ -242,7 +242,7 @@ mod tests {
         let mut spec = test_spec("reviewer");
         spec.aliases = vec!["critic".to_string()];
 
-        let active = resolve_session_agent(&[spec], "CRITIC").expect("resolved by alias");
+        let active = resolve_top_level_agent(&[spec], "CRITIC").expect("resolved by alias");
 
         assert_eq!(active.identity.name, "reviewer");
         assert_eq!(active.display_name, "reviewer");
@@ -261,7 +261,7 @@ mod tests {
         spec.memory = Some(SubagentMemoryScope::Project);
         spec.isolation = Some("full".to_string());
 
-        let active = ActiveSessionAgent::from_spec(&spec);
+        let active = ActiveTopLevelAgent::from_spec(&spec);
 
         assert_eq!(active.identity.name, "worker");
         assert_eq!(active.display_name, "worker");
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn default_state_has_no_overlay_and_clear_restores_no_overlay() {
-        let mut state = ActiveSessionAgentState::default();
+        let mut state = ActiveTopLevelAgentState::default();
 
         assert!(state.active().is_none());
 
@@ -303,7 +303,7 @@ mod tests {
         })
         .expect("discovered subagents");
 
-        let active = resolve_discovered_session_agent(&discovered, "default").expect("resolved");
+        let active = resolve_discovered_top_level_agent(&discovered, "default").expect("resolved");
 
         assert_eq!(active.identity.name, "default");
         assert_eq!(active.identity.source, SubagentSource::Cli);
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn tool_overlay_allows_baseline_without_active_agent() {
-        assert!(session_agent_allows_tool(None, "unified_search"));
+        assert!(top_level_agent_allows_tool(None, "unified_search"));
     }
 
     #[test]
@@ -324,11 +324,14 @@ mod tests {
             "unified_file".to_string(),
         ]);
         spec.disallowed_tools = vec!["UNIFIED_SEARCH".to_string()];
-        let active = ActiveSessionAgent::from_spec(&spec);
+        let active = ActiveTopLevelAgent::from_spec(&spec);
 
-        assert!(!session_agent_allows_tool(Some(&active), "unified_exec"));
-        assert!(!session_agent_allows_tool(Some(&active), "unified_search"));
-        assert!(session_agent_allows_tool(Some(&active), "unified_file"));
+        assert!(!top_level_agent_allows_tool(Some(&active), "unified_exec"));
+        assert!(!top_level_agent_allows_tool(
+            Some(&active),
+            "unified_search"
+        ));
+        assert!(top_level_agent_allows_tool(Some(&active), "unified_file"));
     }
 
     #[test]
@@ -336,27 +339,30 @@ mod tests {
         let mut spec = test_spec("worker");
         spec.tools = Some(Vec::new());
         spec.disallowed_tools = Vec::new();
-        let active = ActiveSessionAgent::from_spec(&spec);
+        let active = ActiveTopLevelAgent::from_spec(&spec);
 
-        assert!(!session_agent_allows_tool(Some(&active), "unified_search"));
+        assert!(!top_level_agent_allows_tool(
+            Some(&active),
+            "unified_search"
+        ));
     }
 
     #[test]
     fn permission_overlay_clamps_without_broadening() {
         assert_eq!(
-            clamp_session_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
+            clamp_top_level_permission_mode(PermissionMode::Default, Some(PermissionMode::Plan)),
             PermissionMode::Plan
         );
         assert_eq!(
-            clamp_session_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
+            clamp_top_level_permission_mode(PermissionMode::Default, Some(PermissionMode::Auto)),
             PermissionMode::Default
         );
         assert_eq!(
-            clamp_session_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
+            clamp_top_level_permission_mode(PermissionMode::Auto, Some(PermissionMode::Plan)),
             PermissionMode::Plan
         );
         assert_eq!(
-            clamp_session_permission_mode(PermissionMode::Plan, None),
+            clamp_top_level_permission_mode(PermissionMode::Plan, None),
             PermissionMode::Plan
         );
     }

@@ -197,56 +197,59 @@ fn permission_overlay_surfaces_action_required_status() {
 }
 
 #[test]
-fn header_meta_line_renders_active_session_agent() {
+fn header_meta_line_renders_active_top_level_agent() {
     let mut session = fresh_session();
-    session.header_context.session_agent = Some("planner".to_string());
+    session.header_context.top_level_agent = Some("planner".to_string());
 
     assert_header_contains_badge(&mut session, "Agent: planner");
 }
 
 #[test]
-fn set_session_agent_command_updates_header_badge() {
+fn set_top_level_agent_command_updates_header_badge() {
     let mut session = fresh_session();
 
-    session.handle_command(InlineCommand::SetSessionAgent {
+    session.handle_command(InlineCommand::SetTopLevelAgent {
         name: Some("reviewer".to_string()),
     });
     assert_header_contains_badge(&mut session, "Agent: reviewer");
 
-    session.handle_command(InlineCommand::SetSessionAgent { name: None });
+    session.handle_command(InlineCommand::SetTopLevelAgent { name: None });
     let text = header_line_text(&mut session);
     assert!(!text.contains("Agent: reviewer"));
 }
 
 #[test]
-fn bottom_status_always_includes_session_agent() {
+fn bottom_status_always_includes_top_level_agent() {
     let mut session = fresh_session();
 
-    assert_eq!(session.status_right_text_with_session_agent(), "agent:base");
+    assert_eq!(
+        session.status_right_text_with_top_level_agent(),
+        "agent:base"
+    );
 
     session.handle_command(InlineCommand::SetInputStatus {
         left: None,
         right: Some("gpt-5.5 | 98% context left".to_string()),
     });
-    session.handle_command(InlineCommand::SetSessionAgent {
+    session.handle_command(InlineCommand::SetTopLevelAgent {
         name: Some("reviewer".to_string()),
     });
 
     assert_eq!(
-        session.status_right_text_with_session_agent(),
+        session.status_right_text_with_top_level_agent(),
         "agent:reviewer | gpt-5.5 | 98% context left"
     );
 }
 
 #[test]
-fn header_context_updates_preserve_active_session_agent() {
+fn header_context_updates_preserve_active_top_level_agent() {
     let mut session = fresh_session();
-    session.handle_command(InlineCommand::SetSessionAgent {
+    session.handle_command(InlineCommand::SetTopLevelAgent {
         name: Some("planner".to_string()),
     });
 
     let mut replacement = session.header_context.clone();
-    replacement.session_agent = None;
+    replacement.top_level_agent = None;
     replacement.model = "Model: replacement".to_string();
     session.handle_command(InlineCommand::SetHeaderContext {
         context: Box::new(replacement),

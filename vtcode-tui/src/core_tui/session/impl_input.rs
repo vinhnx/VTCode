@@ -97,7 +97,7 @@ impl Session {
                 next_context.editing_mode = self.header_context.editing_mode;
                 next_context.autonomous_mode = self.header_context.autonomous_mode;
                 next_context.reasoning_stage = self.header_context.reasoning_stage.clone();
-                next_context.session_agent = self.header_context.session_agent.clone();
+                next_context.top_level_agent = self.header_context.top_level_agent.clone();
                 self.header_context = next_context;
                 self.invalidate_header_cache();
             }
@@ -151,8 +151,8 @@ impl Session {
                 self.subagent_preview = text.filter(|value| !value.trim().is_empty());
                 self.invalidate_sidebar_cache();
             }
-            InlineCommand::SetSessionAgent { name } => {
-                self.header_context.session_agent = name.filter(|value| !value.trim().is_empty());
+            InlineCommand::SetTopLevelAgent { name } => {
+                self.header_context.top_level_agent = name.filter(|value| !value.trim().is_empty());
                 self.invalidate_header_cache();
             }
             InlineCommand::SetCursorVisible(value) => {

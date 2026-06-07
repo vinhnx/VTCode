@@ -189,7 +189,6 @@ pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod scheduler;
 pub mod security;
 pub mod session;
-pub mod session_agent;
 pub mod shutdown;
 pub mod skills;
 pub mod subagents;
@@ -197,6 +196,7 @@ pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
+pub mod top_level_agent;
 pub mod trace; // Agent Trace specification for AI code attribution
 pub mod turn_metadata; // Turn metadata for LLM requests (git context)
 pub mod types;
@@ -246,9 +246,9 @@ pub use subagents::{
     SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
     SubagentStatusEntry,
 };
-pub use session_agent::{
-    ActiveSessionAgent, ActiveSessionAgentSpecIdentity, ActiveSessionAgentState,
-    SessionAgentResolutionError, resolve_discovered_session_agent, resolve_session_agent,
+pub use top_level_agent::{
+    ActiveTopLevelAgent, ActiveTopLevelAgentSpecIdentity, ActiveTopLevelAgentState,
+    TopLevelAgentResolutionError, resolve_discovered_top_level_agent, resolve_top_level_agent,
 };
 pub use vtcode_bash_runner::BashRunner;
 

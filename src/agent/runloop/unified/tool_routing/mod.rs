@@ -28,10 +28,10 @@ use vtcode_core::hooks::{
 use vtcode_core::permissions::{
     PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
 };
-use vtcode_core::session_agent::clamp_session_permission_mode;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
+use vtcode_core::top_level_agent::clamp_top_level_permission_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::InlineHandle;
 
@@ -1036,7 +1036,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     };
     let base_permission_mode = permissions_snapshot.default_mode;
     permissions_snapshot.default_mode =
-        clamp_session_permission_mode(base_permission_mode, permission_mode_overlay);
+        clamp_top_level_permission_mode(base_permission_mode, permission_mode_overlay);
     let session_overlay_narrows_permissions = permission_mode_overlay.is_some()
         && permissions_snapshot.default_mode != base_permission_mode;
     let permission_mode = current_permission_mode(&permissions_snapshot);

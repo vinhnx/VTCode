@@ -10,7 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::session_agent::ActiveSessionAgentState;
+use vtcode_core::top_level_agent::ActiveTopLevelAgentState;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::InlineHandle;
 
@@ -54,7 +54,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
-    pub active_session_agent: &'a mut ActiveSessionAgentState,
+    pub active_top_level_agent: &'a mut ActiveTopLevelAgentState,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
     pub linked_directories:
@@ -118,7 +118,7 @@ impl<'a> InteractionLoopContext<'a> {
             config: self.config,
             vt_cfg: self.vt_cfg.as_ref(),
             context_manager: self.context_manager,
-            active_session_agent: &*self.active_session_agent,
+            active_top_level_agent: &*self.active_top_level_agent,
             decision_ledger: self.decision_ledger,
             traj: self.traj,
         };

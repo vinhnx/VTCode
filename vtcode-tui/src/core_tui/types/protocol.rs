@@ -77,7 +77,7 @@ pub enum InlineCommand {
     SetSubagentPreview {
         text: Option<String>,
     },
-    SetSessionAgent {
+    SetTopLevelAgent {
         name: Option<String>,
     },
     SetCursorVisible(bool),
@@ -138,8 +138,8 @@ pub enum InlineEvent {
     },
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
-    CycleSessionAgent,
-    SelectSessionAgent {
+    CycleTopLevelAgent,
+    SelectTopLevelAgent {
         name: Option<String>,
     },
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
@@ -295,8 +295,8 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetSubagentPreview { text });
     }
 
-    pub fn set_session_agent(&self, name: Option<String>) {
-        self.send_command(InlineCommand::SetSessionAgent { name });
+    pub fn set_top_level_agent(&self, name: Option<String>) {
+        self.send_command(InlineCommand::SetTopLevelAgent { name });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

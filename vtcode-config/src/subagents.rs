@@ -580,8 +580,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("background")
             .and_then(JsonValue::as_bool)
             .unwrap_or(false);
-        let top_level =
-            optional_bool_alias(config, &["topLevel", "top_level", "session"]).unwrap_or(false);
+        let top_level = optional_bool_alias(config, &["topLevel", "top_level"]).unwrap_or(false);
         let nickname_candidates =
             optional_string_list(config.get("nickname_candidates"))?.unwrap_or_default();
         let initial_prompt = config
@@ -730,8 +729,7 @@ fn subagent_spec_from_json_map(
         .get("background")
         .and_then(JsonValue::as_bool)
         .unwrap_or(false);
-    let top_level =
-        optional_bool_alias(object, &["topLevel", "top_level", "session"]).unwrap_or(false);
+    let top_level = optional_bool_alias(object, &["topLevel", "top_level"]).unwrap_or(false);
     let max_turns = object
         .get("maxTurns")
         .or_else(|| object.get("max_turns"))

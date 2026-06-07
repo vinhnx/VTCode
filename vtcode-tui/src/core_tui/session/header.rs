@@ -580,7 +580,7 @@ impl Session {
 
         if let Some(name) = self
             .header_context
-            .session_agent
+            .top_level_agent
             .as_ref()
             .map(|name| name.trim())
             .filter(|name| !name.is_empty())

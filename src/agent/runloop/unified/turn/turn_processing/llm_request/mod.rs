@@ -297,7 +297,7 @@ pub(crate) async fn execute_llm_request(
                         ctx.tool_permission_cache,
                         ctx.permissions_state,
                         turn_snapshot
-                            .active_session_agent
+                            .active_top_level_agent
                             .as_ref()
                             .and_then(|agent| agent.permission_mode),
                         ctx.safety_validator,

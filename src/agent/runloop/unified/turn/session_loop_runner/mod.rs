@@ -330,7 +330,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             async_mcp_manager,
             mut mcp_panel_state,
             loaded_skills,
-            mut active_session_agent,
+            mut active_top_level_agent,
             ..
         } = session_state;
         let decision_ledger = metadata.decision_ledger;
@@ -535,7 +535,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     agent_touched_paths: &mut agent_touched_paths,
                     decision_ledger: &decision_ledger,
                     context_manager: &mut context_manager,
-                    active_session_agent: &mut active_session_agent,
+                    active_top_level_agent: &mut active_top_level_agent,
                     session_stats: &mut session_stats,
                     mcp_panel_state: &mut mcp_panel_state,
                     linked_directories: &mut linked_directories,
@@ -737,7 +737,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &mut turn_metadata_cache,
                         &mut provider_client,
                         &traj,
-                        &active_session_agent,
+                        &active_top_level_agent,
                         skip_confirmations,
                         full_auto,
                         runtime_steering,

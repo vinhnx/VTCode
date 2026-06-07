@@ -787,7 +787,7 @@ impl Session {
             .copy_notification_text()
             .map(str::to_owned)
             .or_else(|| self.status_left_text().map(str::to_owned));
-        let right = Some(self.status_right_text_with_session_agent());
+        let right = Some(self.status_right_text_with_top_level_agent());
 
         if let Some(shell_hint) = self.shell_mode_status_hint() {
             left = Some(match left {

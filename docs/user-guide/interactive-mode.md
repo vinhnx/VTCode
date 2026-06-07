@@ -30,7 +30,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Up/Down arrows`                            | Navigate through command history.                                               | Recall previous prompts or commands.                                                                                                      |
 | `Esc` + `Esc`                               | Open the rewind picker for checkpoint restore or summarize actions.             | Idle context only (while no task/PTY is running).                                                                                         |
 | `Enter`                                     | Queue the current input.                                                        | Plain input box only.                                                                                                                     |
-| `Tab`                                       | Accept the visible inline suggestion; on an empty idle composer, cycle session-agent overlays; otherwise queue the current input. | Plain input box only. Slash lists, pickers, queued input, active overlays, and visible suggestions keep priority over session-agent cycling. |
+| `Tab`                                       | Accept the visible inline suggestion; on an empty idle composer, cycle top-level agent overlays; otherwise queue the current input. | Plain input box only. Slash lists, pickers, queued input, active overlays, and visible suggestions keep priority over top-level agent cycling. |
 | `Ctrl+Enter`                                | Process now or steer now.                                                       | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |
 | `Shift+Tab` or `Alt+M`                      | Cycle permission modes.                                                         | Switches Edit, Auto, and Plan modes.                                                                                                      |
 
@@ -111,7 +111,7 @@ Press `Alt+O` to open the fullscreen transcript review surface. It builds a plai
 - If a session stopped because it hit the local `max_budget_usd` limit, resuming it offers three choices: continue from the saved summary, continue with the full transcript after an explicit higher-cost warning, or start fresh.
 - `/agents` opens the subagent manager for creating, inspecting, editing, deleting, and browsing active delegated agents. New scaffolds use VT Code tool ids in frontmatter.
 - `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
-- On an empty idle composer, `Tab` cycles the top-level session-agent overlay through discovered agent specs and then back to `agent:base`.
+- On an empty idle composer, `Tab` cycles the top-level top-level agent overlay through discovered agent specs and then back to `agent:base`.
 - `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
 ## Scheduled Prompts And Reminders

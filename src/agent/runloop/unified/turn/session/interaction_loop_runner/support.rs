@@ -729,12 +729,12 @@ pub(super) async fn resolve_inline_loop_action(
     let resolution = match inline_action {
         InlineLoopAction::Continue => InlineLoopActionResolution::ContinueLoop,
         InlineLoopAction::Submit(text) => InlineLoopActionResolution::Submit(text),
-        InlineLoopAction::CycleSessionAgent => {
-            handle_cycle_session_agent(ctx).await?;
+        InlineLoopAction::CycleTopLevelAgent => {
+            handle_cycle_top_level_agent(ctx).await?;
             InlineLoopActionResolution::ContinueLoop
         }
-        InlineLoopAction::SelectSessionAgent { name } => {
-            handle_select_session_agent(ctx, name).await?;
+        InlineLoopAction::SelectTopLevelAgent { name } => {
+            handle_select_top_level_agent(ctx, name).await?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
@@ -817,50 +817,50 @@ pub(super) async fn resolve_inline_loop_action(
     Ok(resolution)
 }
 
-async fn handle_cycle_session_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
-    let Some(specs) = load_session_agent_specs_or_report(ctx).await? else {
+async fn handle_cycle_top_level_agent(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
-    match next_session_agent_name(ctx.active_session_agent.active(), &specs) {
-        Some(name) => handle_select_session_agent(ctx, name).await,
+    match next_top_level_agent_name(ctx.active_top_level_agent.active(), &specs) {
+        Some(name) => handle_select_top_level_agent(ctx, name).await,
         None => {
             ctx.renderer
-                .line(MessageStyle::Error, "No session agents are available.")?;
+                .line(MessageStyle::Error, "No top-level agents are available.")?;
             Ok(())
         }
     }
 }
 
-async fn handle_select_session_agent(
+async fn handle_select_top_level_agent(
     ctx: &mut InteractionLoopContext<'_>,
     name: Option<String>,
 ) -> Result<()> {
     let Some(name) = name else {
-        ctx.active_session_agent.clear();
-        set_session_agent_display(ctx, None);
+        ctx.active_top_level_agent.clear();
+        set_top_level_agent_display(ctx, None);
         ctx.renderer
-            .line(MessageStyle::Info, "Session agent: base")?;
+            .line(MessageStyle::Info, "Top-level agent: base")?;
         return Ok(());
     };
 
-    let Some(specs) = load_session_agent_specs_or_report(ctx).await? else {
+    let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
         return Ok(());
     };
-    match ctx.active_session_agent.select_from_specs(&specs, &name) {
+    match ctx.active_top_level_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
-            set_session_agent_display(ctx, Some(display_name.clone()));
+            set_top_level_agent_display(ctx, Some(display_name.clone()));
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!("Session agent: {display_name}"),
+                &format!("Top-level agent: {display_name}"),
             )?;
         }
-        Err(vtcode_core::session_agent::SessionAgentResolutionError::UnknownAgent {
+        Err(vtcode_core::top_level_agent::TopLevelAgentResolutionError::UnknownAgent {
             requested,
         }) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Unknown session agent '{requested}'."),
+                &format!("Unknown top-level agent '{requested}'."),
             )?;
         }
     }
@@ -868,22 +868,22 @@ async fn handle_select_session_agent(
     Ok(())
 }
 
-async fn load_session_agent_specs_or_report(
+async fn load_top_level_agent_specs_or_report(
     ctx: &mut InteractionLoopContext<'_>,
 ) -> Result<Option<Vec<vtcode_config::SubagentSpec>>> {
-    match load_session_agent_specs(ctx).await {
+    match load_top_level_agent_specs(ctx).await {
         Ok(specs) => Ok(Some(specs)),
         Err(err) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("Failed to discover session agents: {err}"),
+                &format!("Failed to discover top-level agents: {err}"),
             )?;
             Ok(None)
         }
     }
 }
 
-async fn load_session_agent_specs(
+async fn load_top_level_agent_specs(
     ctx: &InteractionLoopContext<'_>,
 ) -> Result<Vec<vtcode_config::SubagentSpec>> {
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
@@ -903,7 +903,7 @@ async fn load_session_agent_specs(
     )
     .with_context(|| {
         format!(
-            "Failed to discover session agents in {}",
+            "Failed to discover top-level agents in {}",
             ctx.config.workspace.display()
         )
     })?;
@@ -914,13 +914,13 @@ async fn load_session_agent_specs(
         .collect())
 }
 
-fn set_session_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
-    ctx.header_context.session_agent = name.clone();
-    ctx.handle.set_session_agent(name);
+fn set_top_level_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
+    ctx.header_context.top_level_agent = name.clone();
+    ctx.handle.set_top_level_agent(name);
 }
 
-fn next_session_agent_name(
-    active: Option<&vtcode_core::session_agent::ActiveSessionAgent>,
+fn next_top_level_agent_name(
+    active: Option<&vtcode_core::top_level_agent::ActiveTopLevelAgent>,
     specs: &[vtcode_config::SubagentSpec],
 ) -> Option<Option<String>> {
     let mut names = specs
@@ -961,42 +961,42 @@ mod tests {
     use vtcode_config::{SubagentSource, SubagentSpec};
 
     #[test]
-    fn next_session_agent_name_starts_with_first_sorted_agent() {
+    fn next_top_level_agent_name_starts_with_first_sorted_agent() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
 
         assert_eq!(
-            next_session_agent_name(None, &specs),
+            next_top_level_agent_name(None, &specs),
             Some(Some("alpha".to_string()))
         );
     }
 
     #[test]
-    fn next_session_agent_name_cycles_to_next_sorted_agent() {
+    fn next_top_level_agent_name_cycles_to_next_sorted_agent() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
-        let active = vtcode_core::session_agent::ActiveSessionAgent::from_spec(&specs[1]);
+        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[1]);
 
         assert_eq!(
-            next_session_agent_name(Some(&active), &specs),
+            next_top_level_agent_name(Some(&active), &specs),
             Some(Some("beta".to_string()))
         );
     }
 
     #[test]
-    fn next_session_agent_name_cycles_last_agent_to_base() {
+    fn next_top_level_agent_name_cycles_last_agent_to_base() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
-        let active = vtcode_core::session_agent::ActiveSessionAgent::from_spec(&specs[0]);
+        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[0]);
 
-        assert_eq!(next_session_agent_name(Some(&active), &specs), Some(None));
+        assert_eq!(next_top_level_agent_name(Some(&active), &specs), Some(None));
     }
 
     #[test]
-    fn next_session_agent_name_skips_non_top_level_subagents() {
+    fn next_top_level_agent_name_skips_non_top_level_subagents() {
         let mut worker = test_subagent_spec("worker");
         worker.top_level = false;
         let specs = vec![worker, test_subagent_spec("duck")];
 
         assert_eq!(
-            next_session_agent_name(None, &specs),
+            next_top_level_agent_name(None, &specs),
             Some(Some("duck".to_string()))
         );
     }

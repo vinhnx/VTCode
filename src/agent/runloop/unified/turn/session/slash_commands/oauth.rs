@@ -734,8 +734,8 @@ mod tests {
         let checkpoint_manager = None;
         let lifecycle_hooks = None;
         let harness_emitter = None;
-        let active_session_agent = Box::leak(Box::new(
-            vtcode_core::session_agent::ActiveSessionAgentState::default(),
+        let active_top_level_agent = Box::leak(Box::new(
+            vtcode_core::top_level_agent::ActiveTopLevelAgentState::default(),
         ));
         let thread_handle = Box::leak(Box::new(
             vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(
@@ -763,7 +763,7 @@ mod tests {
             conversation_history,
             decision_ledger: turn.decision_ledger,
             context_manager: turn.context_manager,
-            active_session_agent,
+            active_top_level_agent,
             session_stats: turn.session_stats,
             input_status_state: turn.input_status_state,
             tools: turn.tools,

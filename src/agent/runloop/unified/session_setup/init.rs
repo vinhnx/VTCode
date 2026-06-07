@@ -383,7 +383,7 @@ pub(crate) async fn initialize_session(
         async_mcp_manager,
         mcp_panel_state,
         loaded_skills: skill_setup.active_skills_map,
-        active_session_agent: vtcode_core::session_agent::ActiveSessionAgentState::default(),
+        active_top_level_agent: vtcode_core::top_level_agent::ActiveTopLevelAgentState::default(),
     })
 }
 

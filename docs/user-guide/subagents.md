@@ -13,7 +13,7 @@ Subagents help you:
 
 VT Code ships with built-in subagents and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
 
-The same agent specifications can also be used as top-level session-agent overlays. A subagent is delegated child work with its own thread. A session-agent overlay keeps you in the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
+The same agent specifications can also be used as top-level agent overlays. A subagent is delegated child work with its own thread. A top-level agent overlay keeps you in the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
 
@@ -251,7 +251,7 @@ Subagents inherit the parent approval context and can only stay at or below the 
 - If the parent is in `auto` or `bypassPermissions`, the parent mode wins.
 - Otherwise the child can request a stricter mode such as `plan` or `dontAsk`.
 
-Top-level session-agent overlays use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
+Top-level agent overlays use the same conservative rule: `permissionMode` can narrow the current session mode but cannot broaden it.
 
 ### MCP Servers
 
@@ -366,11 +366,11 @@ VT Code treats a single explicit mention as the selected agent for the turn. If 
 
 ### Use An Agent As The Main Session Overlay
 
-Press `Tab` on an empty idle composer to cycle the active top-level session agent. The cycle uses the same discovered agent specs used by subagents. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
+Press `Tab` on an empty idle composer to cycle the active top-level agent. The cycle includes only discovered agent specs marked with `topLevel: true`. Project definitions still take precedence over user definitions, imported definitions, plugin definitions, and built-ins according to the discovery order above.
 
-When a session agent is active, VT Code keeps you in the main session. It applies the selected spec as a request-time overlay rather than spawning a child thread:
+When a top-level agent is active, VT Code keeps you in the main session. It applies the selected spec as a request-time overlay rather than spawning a child thread:
 
-- the Markdown body or instructions become the active session-agent instructions
+- the Markdown body or instructions become the active top-level agent instructions
 - `tools` is intersected with the current session's available tools
 - `disallowedTools` removes tools after allowlist filtering, so deny wins
 - `permissionMode` can only narrow the current session mode
@@ -379,11 +379,11 @@ When a session agent is active, VT Code keeps you in the main session. It applie
 
 Fields that are child-only or not supported for top-level overlays are ignored for this feature: `skills`, `mcpServers`, `hooks`, `background`, `maxTurns`, `initialPrompt`, `nickname_candidates`, `memory`, and `isolation`.
 
-Cycling past the last available session agent returns to the base session with no active overlay.
+Cycling past the last available top-level agent returns to the base session with no active overlay.
 
-The active session agent is shown in the bottom status line as `agent:<name>`. With no active overlay, VT Code shows `agent:base`.
+The active top-level agent is shown in the bottom status line as `agent:<name>`. With no active overlay, VT Code shows `agent:base`.
 
-`Tab` cycles through available session agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
+`Tab` cycles through available top-level agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
 
 VT Code does not expose a slash command or Claude-style CLI `--agent <name>` / `--agents <json>` session flow for top-level overlays. In VT Code, `--agent` is already used for model override. Top-level switching is the interactive `Tab` overlay described here.
 
