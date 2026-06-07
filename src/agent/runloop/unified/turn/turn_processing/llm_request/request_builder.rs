@@ -76,7 +76,7 @@ pub(super) struct TurnRequestSnapshot {
     pub context_window_size: usize,
     pub turn_timeout_secs: u64,
     pub active_model: String,
-    pub active_top_level_agent: Option<ActiveTopLevelAgent>,
+    pub active_top_level_agent: ActiveTopLevelAgent,
     pub openai_prompt_cache_enabled: bool,
     pub openai_prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
     pub prompt_cache_shaping_mode: PromptCacheShapingMode,
@@ -129,9 +129,8 @@ pub(super) fn capture_turn_request_snapshot(
         resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
     let request_user_input_enabled =
         FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(plan_mode, true);
-    let active_top_level_agent = ctx.active_top_level_agent.active().cloned();
-    let active_model =
-        resolve_effective_request_model(active_model, active_top_level_agent.as_ref());
+    let active_top_level_agent = ctx.active_top_level_agent.active().clone();
+    let active_model = resolve_effective_request_model(active_model, &active_top_level_agent);
     let context_window_size = ctx.provider_client.effective_context_size(&active_model);
     let turn_timeout_secs = ctx
         .vt_cfg
@@ -167,10 +166,11 @@ pub(super) fn capture_turn_request_snapshot(
 
 pub(super) fn resolve_effective_request_model(
     base_model: &str,
-    active_top_level_agent: Option<&ActiveTopLevelAgent>,
+    active_top_level_agent: &ActiveTopLevelAgent,
 ) -> String {
     active_top_level_agent
-        .and_then(|agent| agent.model.as_deref())
+        .model
+        .as_deref()
         .map(str::trim)
         .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
         .unwrap_or(base_model)
@@ -245,7 +245,7 @@ async fn build_prompt_output(
             .await;
         apply_top_level_agent_overlay_to_tool_snapshot(
             base_snapshot,
-            input.turn.active_top_level_agent.as_ref(),
+            &input.turn.active_top_level_agent,
         )
     };
 
@@ -267,7 +267,7 @@ async fn build_prompt_output(
 
 fn apply_top_level_agent_overlay_to_tool_snapshot(
     snapshot: SessionToolCatalogSnapshot,
-    active_top_level_agent: Option<&ActiveTopLevelAgent>,
+    active_top_level_agent: &ActiveTopLevelAgent,
 ) -> SessionToolCatalogSnapshot {
     let filtered = apply_top_level_agent_tool_overlay(snapshot.snapshot, active_top_level_agent);
     SessionToolCatalogSnapshot::new(
@@ -545,8 +545,8 @@ fn resolve_effective_reasoning_effort(
 
     turn_snapshot
         .active_top_level_agent
-        .as_ref()
-        .and_then(|agent| agent.reasoning_effort.as_deref())
+        .reasoning_effort
+        .as_deref()
         .and_then(vtcode_core::config::types::ReasoningEffortLevel::parse)
         .or_else(|| cfg.map(|cfg| cfg.agent.reasoning_effort))
 }
@@ -556,8 +556,8 @@ async fn request_top_level_agent_context_message(
     turn_snapshot: &TurnRequestSnapshot,
     tool_snapshot: &SessionToolCatalogSnapshot,
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
-) -> Option<uni::Message> {
-    let agent = turn_snapshot.active_top_level_agent.as_ref()?;
+) -> uni::Message {
+    let agent = &turn_snapshot.active_top_level_agent;
     let block = render_top_level_agent_runtime_context(
         ctx,
         turn_snapshot,
@@ -566,7 +566,7 @@ async fn request_top_level_agent_context_message(
         reasoning_effort,
     )
     .await;
-    Some(uni::Message::user(block))
+    uni::Message::user(block)
 }
 
 async fn render_top_level_agent_runtime_context(
@@ -590,7 +590,7 @@ async fn render_top_level_agent_runtime_context(
         .map(str::trim)
         .filter(|model| !model.is_empty())
     {
-        lines.push(format!("- Model overlay: {model}"));
+        lines.push(format!("- Agent model: {model}"));
     }
     if let Some(effort) = reasoning_effort {
         lines.push(format!("- Request reasoning effort: {}", effort.as_str()));
@@ -601,7 +601,7 @@ async fn render_top_level_agent_runtime_context(
         .map(str::trim)
         .filter(|effort| !effort.is_empty())
     {
-        lines.push(format!("- Reasoning overlay: {raw_effort}"));
+        lines.push(format!("- Agent reasoning effort: {raw_effort}"));
     }
     lines.push(format!(
         "- Session mode: plan_mode={}, auto_mode={}, full_auto={}, permission_mode={}",
@@ -612,7 +612,7 @@ async fn render_top_level_agent_runtime_context(
     ));
     if let Some(mode) = agent.permission_mode {
         lines.push(format!(
-            "- Top-level-agent permission overlay: {}",
+            "- Agent permission mode: {}",
             permission_mode_label(mode)
         ));
         lines.push(format!(
@@ -775,13 +775,15 @@ pub(super) async fn build_turn_request(
         &continuation_messages,
     );
     let request_messages = request_messages.into_owned();
-    let top_level_agent_context_message = request_top_level_agent_context_message(
-        ctx,
-        turn_snapshot,
-        &prompt_output.tool_snapshot,
-        reasoning_effort,
-    )
-    .await;
+    let top_level_agent_context_message = Some(
+        request_top_level_agent_context_message(
+            ctx,
+            turn_snapshot,
+            &prompt_output.tool_snapshot,
+            reasoning_effort,
+        )
+        .await,
+    );
     let request_messages = inject_request_context_messages(
         request_messages,
         ctx.context_manager.request_editor_context_message(),
@@ -1253,7 +1255,7 @@ mod tests {
         assert!(runtime_context.contains("## Active Session Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: unified_search"));
-        assert!(runtime_context.contains("- Top-level-agent permission overlay: plan"));
+        assert!(runtime_context.contains("- Agent permission mode: plan"));
         assert!(runtime_context.contains("Plan carefully before editing."));
         assert_eq!(
             built.continuation_messages,
@@ -1332,7 +1334,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn absent_top_level_agent_tool_fields_fall_back_to_baseline_tools() {
+    async fn unconstrained_top_level_agent_falls_back_to_baseline_tools() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing
             .add_tool_definition(named_tool("unified_search"))
@@ -1464,9 +1466,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn top_level_agent_model_and_reasoning_overlay_feed_request_metadata() {
+    async fn top_level_agent_model_and_reasoning_feed_request_metadata() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let mut spec = test_top_level_agent_spec("planner", "Use overlay metadata.");
+        let mut spec = test_top_level_agent_spec("planner", "Use agent metadata.");
         spec.model = Some("overlay-model".to_string());
         spec.reasoning_effort = Some("high".to_string());
         backing.select_top_level_agent_from_specs(&[spec], "planner");

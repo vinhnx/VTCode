@@ -41,6 +41,13 @@ fn format_model_summary_label(model: &str) -> String {
         .join("-")
 }
 
+fn top_level_agent_header_label(name: Option<&str>) -> String {
+    let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
+        return "Build".to_string();
+    };
+    format_model_summary_label(name)
+}
+
 fn compact_context_window_label(context_window_size: usize) -> String {
     if context_window_size >= 1_000_000 {
         format!("{}M", context_window_size / 1_000_000)
@@ -552,6 +559,16 @@ impl Session {
                 *first = false;
             };
 
+        let agent_style = Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD);
+        push_badge(
+            &mut spans,
+            top_level_agent_header_label(self.header_context.top_level_agent.as_deref()),
+            agent_style,
+            &mut first_section,
+        );
+
         // Show editing mode badge
         if self.header_context.editing_mode == EditingMode::Plan {
             let badge_style = Style::default()
@@ -573,24 +590,6 @@ impl Session {
             push_badge(
                 &mut spans,
                 "Auto".to_string(),
-                badge_style,
-                &mut first_section,
-            );
-        }
-
-        if let Some(name) = self
-            .header_context
-            .top_level_agent
-            .as_ref()
-            .map(|name| name.trim())
-            .filter(|name| !name.is_empty())
-        {
-            let badge_style = Style::default()
-                .fg(Color::Magenta)
-                .add_modifier(Modifier::BOLD);
-            push_badge(
-                &mut spans,
-                format!("Agent: {name}"),
                 badge_style,
                 &mut first_section,
             );

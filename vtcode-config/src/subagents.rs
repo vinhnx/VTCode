@@ -46,6 +46,27 @@ Do not add features, refactor surrounding code, or make improvements beyond the 
 Verify your changes by running relevant tests or checks before reporting completion.
 If calls repeat without progress, re-plan instead of retrying identically."#;
 
+const BUILTIN_BUILD_TOP_LEVEL_AGENT: &str = r#"You are VT Code's build agent.
+
+Own the main coding session. Understand the user's request, inspect relevant project context,
+make directly requested changes, and verify them with the narrowest useful checks.
+Keep changes focused. Do not add unrelated features or refactors.
+When planning is needed, state the plan briefly before implementation. When the user only wants
+discussion or review, do not edit files.
+Report changed files, validation, and remaining risks clearly."#;
+
+const BUILTIN_PLAN_TOP_LEVEL_AGENT: &str = r#"You are VT Code's plan agent.
+
+Own the main coding session in read-only planning mode. Clarify the user's goal, inspect relevant
+project context, identify trade-offs and risks, and produce a concrete implementation plan.
+Do not edit files. Do not present the plan as complete until assumptions and validation steps are clear."#;
+
+const BUILTIN_DUCK_TOP_LEVEL_AGENT: &str = r#"You are VT Code's duck agent.
+
+Own the main coding session as a discussion-first controller. Help the user think through scope,
+constraints, contradictions, and options before implementation.
+Do not edit files unless the user explicitly asks to proceed with a concrete change."#;
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -334,18 +355,19 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 
     discovered.sort_by_key(|spec| spec.source.priority());
 
-    let mut effective_by_name: BTreeMap<String, SubagentSpec> = BTreeMap::new();
+    let mut effective_by_name: BTreeMap<(String, bool), SubagentSpec> = BTreeMap::new();
     let mut shadowed = Vec::new();
     for spec in discovered {
-        if let Some(existing) = effective_by_name.get(spec.name.as_str()) {
+        let key = (spec.name.clone(), spec.top_level);
+        if let Some(existing) = effective_by_name.get(&key) {
             if should_replace(existing, &spec) {
                 shadowed.push(existing.clone());
-                effective_by_name.insert(spec.name.clone(), spec);
+                effective_by_name.insert(key, spec);
             } else {
                 shadowed.push(spec);
             }
         } else {
-            effective_by_name.insert(spec.name.clone(), spec);
+            effective_by_name.insert(key, spec);
         }
     }
 
@@ -357,6 +379,9 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
 
 pub fn builtin_subagents() -> Vec<SubagentSpec> {
     vec![
+        builtin_top_level_build_agent(),
+        builtin_top_level_duck_agent(),
+        builtin_top_level_plan_agent(),
         SubagentSpec {
             name: "default".to_string(),
             description: "Default inheriting subagent for general delegated work.".to_string(),
@@ -458,6 +483,91 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             warnings: Vec::new(),
         },
     ]
+}
+
+pub fn builtin_top_level_build_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "build".to_string(),
+        description: "Default top-level implementation controller for the main session."
+            .to_string(),
+        prompt: BUILTIN_BUILD_TOP_LEVEL_AGENT.to_string(),
+        tools: None,
+        disallowed_tools: Vec::new(),
+        model: Some("inherit".to_string()),
+        color: Some("magenta".to_string()),
+        reasoning_effort: None,
+        permission_mode: None,
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        top_level: true,
+        max_turns: None,
+        nickname_candidates: vec!["build".to_string(), "builder".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: vec!["builder".to_string()],
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
+}
+
+pub fn builtin_top_level_plan_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "plan".to_string(),
+        description: "Built-in read-only planning controller for the main session.".to_string(),
+        prompt: BUILTIN_PLAN_TOP_LEVEL_AGENT.to_string(),
+        tools: Some(builtin_readonly_tool_ids()),
+        disallowed_tools: builtin_readonly_disallowed_tool_ids(),
+        model: Some("inherit".to_string()),
+        color: Some("yellow".to_string()),
+        reasoning_effort: Some("medium".to_string()),
+        permission_mode: Some(PermissionMode::Plan),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        top_level: true,
+        max_turns: None,
+        nickname_candidates: vec!["plan".to_string(), "planner".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: vec!["planner".to_string()],
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
+}
+
+pub fn builtin_top_level_duck_agent() -> SubagentSpec {
+    SubagentSpec {
+        name: "duck".to_string(),
+        description: "Built-in discussion-first controller for the main session.".to_string(),
+        prompt: BUILTIN_DUCK_TOP_LEVEL_AGENT.to_string(),
+        tools: Some(builtin_readonly_tool_ids()),
+        disallowed_tools: builtin_readonly_disallowed_tool_ids(),
+        model: Some("inherit".to_string()),
+        color: Some("cyan".to_string()),
+        reasoning_effort: Some("low".to_string()),
+        permission_mode: Some(PermissionMode::Plan),
+        skills: Vec::new(),
+        mcp_servers: Vec::new(),
+        hooks: None,
+        background: false,
+        top_level: true,
+        max_turns: None,
+        nickname_candidates: vec!["duck".to_string()],
+        initial_prompt: None,
+        memory: None,
+        isolation: None,
+        aliases: Vec::new(),
+        source: SubagentSource::Builtin,
+        file_path: None,
+        warnings: Vec::new(),
+    }
 }
 
 fn builtin_readonly_tool_ids() -> Vec<String> {
@@ -1267,6 +1377,43 @@ vtcode"#,
     }
 
     #[test]
+    fn top_level_and_delegated_agents_with_same_name_do_not_shadow_each_other() -> Result<()> {
+        let temp = TempDir::new()?;
+        let project_agents = temp.path().join(".vtcode/agents");
+        fs::create_dir_all(&project_agents)?;
+        fs::write(
+            project_agents.join("plan.md"),
+            r#"---
+name: plan
+description: Project delegated plan child
+---
+Project child plan."#,
+        )?;
+        fs::write(
+            project_agents.join("plan-top-level.md"),
+            r#"---
+name: plan
+description: Project top-level plan
+topLevel: true
+---
+Project top-level plan."#,
+        )?;
+
+        let discovered =
+            discover_subagents(&SubagentDiscoveryInput::new(temp.path().to_path_buf()))?;
+        let project_plan_specs = discovered
+            .effective
+            .iter()
+            .filter(|spec| spec.name == "plan" && spec.source == SubagentSource::ProjectVtcode)
+            .collect::<Vec<_>>();
+
+        assert_eq!(project_plan_specs.len(), 2);
+        assert!(project_plan_specs.iter().any(|spec| !spec.top_level));
+        assert!(project_plan_specs.iter().any(|spec| spec.top_level));
+        Ok(())
+    }
+
+    #[test]
     fn plugin_restrictions_strip_unsafe_overrides() -> Result<()> {
         let temp = TempDir::new()?;
         let path = temp.path().join("plugin-agent.md");
@@ -1349,6 +1496,18 @@ Hook prompt"#,
         assert!(explorer.matches_name("explore"));
         assert!(worker.matches_name("general"));
         assert!(worker.matches_name("general-purpose"));
+    }
+
+    #[test]
+    fn builtin_top_level_agents_are_available() {
+        let builtins = builtin_subagents();
+        for name in ["build", "duck", "plan"] {
+            let spec = builtins
+                .iter()
+                .find(|spec| spec.name == name && spec.top_level)
+                .unwrap_or_else(|| panic!("missing built-in top-level agent {name}"));
+            assert_eq!(spec.source, SubagentSource::Builtin);
+        }
     }
 
     #[test]

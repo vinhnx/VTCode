@@ -201,7 +201,7 @@ fn header_meta_line_renders_active_top_level_agent() {
     let mut session = fresh_session();
     session.header_context.top_level_agent = Some("planner".to_string());
 
-    assert_header_contains_badge(&mut session, "Agent: planner");
+    assert_header_contains_badge(&mut session, "Planner");
 }
 
 #[test]
@@ -211,21 +211,19 @@ fn set_top_level_agent_command_updates_header_badge() {
     session.handle_command(InlineCommand::SetTopLevelAgent {
         name: Some("reviewer".to_string()),
     });
-    assert_header_contains_badge(&mut session, "Agent: reviewer");
+    assert_header_contains_badge(&mut session, "Reviewer");
 
     session.handle_command(InlineCommand::SetTopLevelAgent { name: None });
     let text = header_line_text(&mut session);
-    assert!(!text.contains("Agent: reviewer"));
+    assert!(text.contains("Build"));
+    assert!(!text.contains("Reviewer"));
 }
 
 #[test]
-fn bottom_status_always_includes_top_level_agent() {
+fn bottom_status_excludes_top_level_agent() {
     let mut session = fresh_session();
 
-    assert_eq!(
-        session.status_right_text_with_top_level_agent(),
-        "agent:default"
-    );
+    assert_eq!(session.status_right_text(), None);
 
     session.handle_command(InlineCommand::SetInputStatus {
         left: None,
@@ -236,8 +234,8 @@ fn bottom_status_always_includes_top_level_agent() {
     });
 
     assert_eq!(
-        session.status_right_text_with_top_level_agent(),
-        "agent:reviewer | gpt-5.5 | 98% context left"
+        session.status_right_text(),
+        Some("gpt-5.5 | 98% context left")
     );
 }
 
@@ -255,7 +253,7 @@ fn header_context_updates_preserve_active_top_level_agent() {
         context: Box::new(replacement),
     });
 
-    assert_header_contains_badge(&mut session, "Agent: planner");
+    assert_header_contains_badge(&mut session, "Planner");
 }
 
 #[test]

@@ -186,10 +186,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
         decision_ledger: Some(ctx.decision_ledger),
         tool_permission_cache: Some(ctx.tool_permission_cache),
         permissions_state: Some(ctx.permissions_state),
-        permission_mode_overlay: ctx
-            .active_top_level_agent
-            .active()
-            .and_then(|agent| agent.permission_mode),
+        permission_mode_overlay: ctx.active_top_level_agent.active().permission_mode,
         hitl_notification_bell: ctx
             .vt_cfg
             .map(|cfg| cfg.security.hitl_notification_bell)

@@ -822,7 +822,7 @@ async fn handle_cycle_top_level_agent(ctx: &mut InteractionLoopContext<'_>) -> R
         return Ok(());
     };
     match next_top_level_agent_name(ctx.active_top_level_agent.active(), &specs) {
-        Some(name) => handle_select_top_level_agent(ctx, name).await,
+        Some(name) => handle_select_top_level_agent(ctx, Some(name)).await,
         None => {
             ctx.renderer
                 .line(MessageStyle::Error, "No top-level agents are available.")?;
@@ -836,8 +836,15 @@ async fn handle_select_top_level_agent(
     name: Option<String>,
 ) -> Result<()> {
     let Some(name) = name else {
-        ctx.active_top_level_agent.clear();
-        set_top_level_agent_display(ctx, None);
+        let Some(specs) = load_top_level_agent_specs_or_report(ctx).await? else {
+            return Ok(());
+        };
+        let display_name = ctx
+            .active_top_level_agent
+            .reset_to_default_from_specs(&specs)
+            .display_name
+            .clone();
+        set_top_level_agent_display(ctx, display_name);
         return Ok(());
     };
 
@@ -847,7 +854,7 @@ async fn handle_select_top_level_agent(
     match ctx.active_top_level_agent.select_from_specs(&specs, &name) {
         Ok(active) => {
             let display_name = active.display_name.clone();
-            set_top_level_agent_display(ctx, Some(display_name.clone()));
+            set_top_level_agent_display(ctx, display_name);
         }
         Err(vtcode_core::top_level_agent::TopLevelAgentResolutionError::UnknownAgent {
             requested,
@@ -908,15 +915,15 @@ async fn load_top_level_agent_specs(
         .collect())
 }
 
-fn set_top_level_agent_display(ctx: &mut InteractionLoopContext<'_>, name: Option<String>) {
-    ctx.header_context.top_level_agent = name.clone();
-    ctx.handle.set_top_level_agent(name);
+fn set_top_level_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
+    ctx.header_context.top_level_agent = Some(name.clone());
+    ctx.handle.set_top_level_agent(Some(name));
 }
 
 fn next_top_level_agent_name(
-    active: Option<&vtcode_core::top_level_agent::ActiveTopLevelAgent>,
+    active: &vtcode_core::top_level_agent::ActiveTopLevelAgent,
     specs: &[vtcode_config::SubagentSpec],
-) -> Option<Option<String>> {
+) -> Option<String> {
     let mut names = specs
         .iter()
         .filter(|spec| spec.top_level)
@@ -931,12 +938,10 @@ fn next_top_level_agent_name(
         return None;
     }
 
-    let active_name = active.map(|agent| agent.identity.name.as_str());
     Some(
-        match active_name.and_then(|active| names.iter().position(|name| name == active)) {
-            Some(index) if index + 1 < names.len() => Some(names[index + 1].clone()),
-            Some(_) => None,
-            None => Some(names[0].clone()),
+        match names.iter().position(|name| name == &active.identity.name) {
+            Some(index) if index + 1 < names.len() => names[index + 1].clone(),
+            Some(_) | None => names[0].clone(),
         },
     )
 }
@@ -959,8 +964,8 @@ mod tests {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
 
         assert_eq!(
-            next_top_level_agent_name(None, &specs),
-            Some(Some("alpha".to_string()))
+            next_top_level_agent_name(&default_active_top_level_agent(), &specs),
+            Some("alpha".to_string())
         );
     }
 
@@ -970,17 +975,20 @@ mod tests {
         let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[1]);
 
         assert_eq!(
-            next_top_level_agent_name(Some(&active), &specs),
-            Some(Some("beta".to_string()))
+            next_top_level_agent_name(&active, &specs),
+            Some("beta".to_string())
         );
     }
 
     #[test]
-    fn next_top_level_agent_name_cycles_last_agent_to_default() {
-        let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
-        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[0]);
+    fn next_top_level_agent_name_cycles_last_agent_to_first() {
+        let specs = vec![test_subagent_spec("build"), test_subagent_spec("duck")];
+        let active = vtcode_core::top_level_agent::ActiveTopLevelAgent::from_spec(&specs[1]);
 
-        assert_eq!(next_top_level_agent_name(Some(&active), &specs), Some(None));
+        assert_eq!(
+            next_top_level_agent_name(&active, &specs),
+            Some("build".to_string())
+        );
     }
 
     #[test]
@@ -990,9 +998,15 @@ mod tests {
         let specs = vec![worker, test_subagent_spec("duck")];
 
         assert_eq!(
-            next_top_level_agent_name(None, &specs),
-            Some(Some("duck".to_string()))
+            next_top_level_agent_name(&default_active_top_level_agent(), &specs),
+            Some("duck".to_string())
         );
+    }
+
+    fn default_active_top_level_agent() -> vtcode_core::top_level_agent::ActiveTopLevelAgent {
+        vtcode_core::top_level_agent::ActiveTopLevelAgentState::default()
+            .active()
+            .clone()
     }
 
     fn test_subagent_spec(name: &str) -> SubagentSpec {

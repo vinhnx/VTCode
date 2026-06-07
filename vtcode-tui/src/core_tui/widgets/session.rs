@@ -350,7 +350,7 @@ impl<'a> SessionWidget<'a> {
 
     fn render_footer(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
         let left_status = self.session.status_left_text().unwrap_or("");
-        let right_status = self.session.status_right_text_with_top_level_agent();
+        let right_status = self.session.status_right_text().unwrap_or("");
 
         let hint = if let Some(hint) = self.footer_hint_override {
             hint

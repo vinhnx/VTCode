@@ -318,7 +318,7 @@ fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
 
 fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<serde_json::Value> {
     let trimmed = input.trim();
-    for spec in specs {
+    for spec in specs.iter().filter(|spec| !spec.top_level) {
         for candidate in
             std::iter::once(spec.name.as_str()).chain(spec.aliases.iter().map(String::as_str))
         {
@@ -862,6 +862,22 @@ mod tests {
         .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "rust-engineer");
         assert_eq!(args["background"], false);
+        assert_eq!(args["message"], "review code");
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_ignores_top_level_specs() {
+        let mut top_level_plan = test_subagent_spec("plan");
+        top_level_plan.top_level = true;
+        let child_plan = test_subagent_spec("plan");
+
+        let args = direct_subagent_spawn_args(
+            "use plan subagent and review code",
+            &[top_level_plan, child_plan],
+        )
+        .expect("direct subagent spawn");
+
+        assert_eq!(args["agent_type"], "plan");
         assert_eq!(args["message"], "review code");
     }
 

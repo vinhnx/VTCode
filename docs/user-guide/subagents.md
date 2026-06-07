@@ -11,11 +11,21 @@ Subagents help you:
 - inspect delegated child threads with `/agent`
 - switch the main session's active top-level agent with `Tab`
 
-VT Code ships with built-in subagents and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
+VT Code ships with built-in top-level agents and subagents, and can also load custom agents from `.vtcode`, `.claude`, `.codex`, and enabled plugins.
 
 The same agent specification format can describe delegated child agents and top-level agents. A subagent is delegated child work with its own thread. A top-level agent controls the main session and changes the request-time instructions, tools, permission notes, model, and reasoning effort that VT Code applies for subsequent turns.
 
 For new `.vtcode/agents/*.md` files, use VT Code tool ids in frontmatter. Claude-style names such as `Read`, `Grep`, `Glob`, `Edit`, `Write`, and `Bash` are compatibility imports for `.claude` files, not the recommended VT Code-native format.
+
+## Built-in top-level agents
+
+| Agent | Default model | Mutates files? | Purpose |
+| --- | --- | --- | --- |
+| `build` | `inherit` | yes | Default implementation controller for the main session |
+| `duck` | `inherit` | no | Discussion-first controller for scope, constraints, and trade-offs |
+| `plan` | `inherit` | no | Read-only planning controller for the main session |
+
+Custom project or user specs with the same name and `topLevel: true` override these built-ins using the normal discovery precedence. Delegated child agents use a separate namespace, so a top-level `plan` and a delegated `plan` subagent can coexist.
 
 ## Built-in subagents
 
@@ -379,9 +389,9 @@ When you select a top-level agent, VT Code keeps you in the main session rather 
 
 Some fields are not supported by top-level agents in this implementation. Child-run fields such as `background`, `maxTurns`, `initialPrompt`, and `isolation` apply only when spawning child agents. Other fields, including `skills`, `mcpServers`, `hooks`, `nickname_candidates`, and `memory`, remain delegated-child-only until they are wired into main-session switching.
 
-Cycling past the last available top-level agent returns to VT Code's default top-level agent.
+Cycling past the last available top-level agent wraps back to `build`.
 
-The active top-level agent is shown in the bottom status line as `agent:<name>`. The built-in default controller is shown as `agent:default`.
+The active top-level agent is shown in the header next to the current mode.
 
 `Tab` cycles through available top-level agents only under conservative idle conditions: no inline suggestion is visible, the composer is empty, no queued input is waiting, no turn is running, and no list or overlay is active. Inline suggestion acceptance, queued input, slash lists, and other composer behaviours keep priority.
 

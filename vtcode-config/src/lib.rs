@@ -120,8 +120,9 @@ pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_
 pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
     DiscoveredSubagents, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
-    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_subagents, discover_subagents,
-    load_subagent_from_file,
+    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_subagents,
+    builtin_top_level_build_agent, builtin_top_level_duck_agent, builtin_top_level_plan_agent,
+    discover_subagents, load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
