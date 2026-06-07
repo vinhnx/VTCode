@@ -189,6 +189,7 @@ pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod scheduler;
 pub mod security;
 pub mod session;
+pub mod session_agent;
 pub mod shutdown;
 pub mod skills;
 pub mod subagents;
@@ -244,6 +245,10 @@ pub use subagents::{
     SpawnBackgroundSubprocessRequest as SubagentSpawnBackgroundSubprocessRequest,
     SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
     SubagentStatusEntry,
+};
+pub use session_agent::{
+    ActiveSessionAgent, ActiveSessionAgentSpecIdentity, ActiveSessionAgentState,
+    SessionAgentResolutionError, resolve_discovered_session_agent, resolve_session_agent,
 };
 pub use vtcode_bash_runner::BashRunner;
 
