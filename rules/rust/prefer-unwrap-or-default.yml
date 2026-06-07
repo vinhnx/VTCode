@@ -1,0 +1,14 @@
+id: prefer-unwrap-or-default
+language: Rust
+severity: hint
+message: Use `.unwrap_or_default()` instead of `.unwrap_or($T::default())`.
+note: |
+  `.unwrap_or_default()` is more concise and idiomatic than passing an
+  explicit `$T::default()` or `$T::new()` when the type implements
+  `Default`. It also avoids repeating the type name, which improves
+  readability when the type is long or generic. This rule does not fire
+  when the fallback is a non-default value.
+rule:
+  pattern: $EXPR.unwrap_or($T::default())
+files:
+  - "**/*.rs"

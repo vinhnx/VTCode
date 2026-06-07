@@ -1,0 +1,18 @@
+id: prefer-array-flat-map
+language: typescript
+severity: hint
+message: Use `.flatMap()` instead of `.map().flat()`.
+note: |
+  `.map(fn).flat()` creates an intermediate array before flattening.
+  `.flatMap(fn)` combines both steps in a single pass and avoids the
+  intermediate allocation. This is equivalent when the mapping function
+  returns arrays that should be flattened one level.
+rule:
+  pattern: $ARR.map($FN).flat()
+fix: $ARR.flatMap($FN)
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"

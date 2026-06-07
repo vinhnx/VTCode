@@ -87,6 +87,63 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - When adapting a catalog example, translate it to the current repository’s language, style, and safety constraints instead of preserving the example verbatim.
 - Prefer the bundled skill workflow when the user asks to explain, adapt, or combine catalog examples.
 
+## VT Code Bundled Rules
+
+VT Code ships a set of curated ast-grep rules under `rules/` with matching tests under `rule-tests/`. Run them with `vtcode check ast-grep`. The bundled rules are organized by language:
+
+### Python (`rules/python/`)
+- `no-print`: flags `print()` calls in production code
+- `no-walrus-source`: flags walrus operators that harm readability
+- `no-unnecessary-list`: flags `list(...)` wrapping an already-list expression
+- `optional-to-union`: flags `Optional[X]` in favor of `X | None`
+- `prefer-generator-expression`: flags list comprehensions passed to `sum`/`any`/`all`/`min`/`max`
+- `prefer-isinstance-tuple`: flags `isinstance(x, A) or isinstance(x, B)` in favor of `isinstance(x, (A, B))`
+
+### Rust (`rules/rust/`)
+- `no-unsafe-fn-without-unsafe`: flags `unsafe fn` bodies that contain no `unsafe` block
+- `avoid-duplicate-export`: flags `pub use` when `pub mod` already exposes the module
+- `no-iterator-for-each`: flags `.iter().for_each()` in favor of `for` loops
+- `let-chain-candidate`: flags nested `if` that could be collapsed with `let`-chains
+- `no-chars-enumerate`: flags `.chars().enumerate()` when `.char_indices()` is more idiomatic
+- `no-alloc-digit-count`: flags digit-count loops that allocate instead of using repeated division
+
+### Kotlin (`rules/kotlin/`)
+- `no-var`: flags mutable `var` declarations
+- `no-println`: flags `println`/`print` calls
+- `no-lateinit`: flags `lateinit var` usage
+- `no-unsafe-cast`: flags `as` casts without null-safe `as?`
+- `no-unnecessary-let`: flags `let` blocks that add no value
+- `prefer-is-empty`: flags `.count() == 0` in favor of `.isEmpty()`
+- `prefer-data-class`: flags classes that should be `data class`
+- `clean-architecture-imports`: flags imports that violate clean architecture layer boundaries
+
+### Ruby (`rules/ruby/`)
+- `no-path-traversal`: flags string concatenation in `File.join` / `Pathname` that may cause traversal
+- `prefer-action-over-filter`: flags `before_filter` / `after_filter` in favor of `before_action` / `after_action`
+- `prefer-symbol-over-proc`: flags `Proc.new` with a symbol when `(&:method)` is cleaner
+
+### TypeScript (`rules/typescript/`)
+- `no-await-in-promise-all`: flags `await` inside `Promise.all()` arrays (defeats parallelism)
+- `no-console-except-error`: flags `console.log/debug/warn/info/trace` (allows `console.error` in catch blocks)
+- `no-debugger`: flags `debugger` statements
+- `no-unnecessary-boolean-literal-compare`: flags `x === true` or `x === false`
+- `no-useless-promise-resolve`: flags `return Promise.resolve(...)` in async functions
+- `prefer-array-flat-map`: flags `.map(fn).flat()` in favor of `.flatMap(fn)`
+- `prefer-nullish-coalescing`: flags `||` in assignments/returns where `??` is more precise
+- `use-logical-assignment`: flags `$A = $A || $B` in favor of `$A ||= $B`
+- `prefer-optional-chaining`: flags `a && a.b` in favor of `a?.b`
+- `no-return-in-forEach`: flags `return` inside `.forEach()` callbacks (does not return from caller)
+- `no-array-delete`: flags `delete arr[i]` in favor of `.splice()`
+
+### TSX (`rules/tsx/`)
+- `avoid-jsx-short-circuit`: flags `{cond && <Elem />}` in favor of `{cond ? <Elem /> : null}` (prevents rendering `0`)
+- `no-nested-links`: flags `<a>` elements nested inside other `<a>` elements (invalid HTML)
+- `no-unnecessary-usestate-type`: flags `useState<string>('hello')` when TypeScript can infer the type
+- `rename-svg-attribute`: flags hyphenated SVG attributes like `stroke-linecap` in favor of camelCase `strokeLinecap`
+
+### Examples (`rules/examples/`)
+- `no-console-log`: starter rule scoped to `__ast_grep_examples__/` for scaffold validation
+
 ## Rust Catalog Highlights
 
 - Avoid duplicated exports: a Rust lint-style rule can detect `pub use foo::Bar;` in the same source file that already exposes `pub mod foo;`. Treat this as API-surface cleanup, not a mechanical rewrite. The rule uses `all` to combine a `pub use $A::$B;` pattern with `inside: { kind: source_file }` and a `has` check for `pub mod $A;` with `stopBy: end`:
@@ -209,13 +266,13 @@ rule:
 ## TSX Catalog Highlights
 
 - TSX vs TypeScript matters for parsing: JSX-bearing patterns should stay on the TSX parser unless the repository intentionally routes `.ts` through TSX with `languageGlobs`.
-- Unnecessary `useState<T>` primitives: good cleanup rewrite for `useState<string|number|boolean>($A)` when the initializer already gives TypeScript enough information to infer the state type.
-- Avoid `&&` short-circuit in JSX: good React-facing rewrite from `{cond && <View />}` to `{cond ? <View /> : null}` when the left side can evaluate to renderable falsy values like `0`.
+- Unnecessary `useState<T>` primitives: good cleanup rewrite for `useState<string|number|boolean>($A)` when the initializer already gives TypeScript enough information to infer the state type. **Bundled** as `rules/tsx/no-unnecessary-usestate-type.yml`.
+- Avoid `&&` short-circuit in JSX: good React-facing rewrite from `{cond && <View />}` to `{cond ? <View /> : null}` when the left side can evaluate to renderable falsy values like `0`. **Bundled** as `rules/tsx/avoid-jsx-short-circuit.yml`.
 - Rewrite MobX component style: useful migration example when `observer(() => ...)` hides React hook linting from tooling. Keep it on the CLI skill path because naming, export shape, and component conventions vary by repository.
 - Avoid unnecessary React hooks: good diagnostic rule for `use*` functions that do not actually call hooks. Treat it as a review rule first, because renaming or de-hooking can be API-affecting.
 - Reverse React Compiler: clearly rewrite-oriented and intentionally opinionated. Keep it on the CLI skill path and only use it when the user explicitly wants that de-memoization behavior.
-- Avoid nested links: good accessibility and correctness scan rule for JSX trees.
-- Rename SVG attributes: strong TSX rewrite example for hyphenated SVG attribute names such as `stroke-linecap` to `strokeLinecap`. Keep it reviewable because generated markup can be formatting-sensitive.
+- Avoid nested links: good accessibility and correctness scan rule for JSX trees. **Bundled** as `rules/tsx/no-nested-links.yml`.
+- Rename SVG attributes: strong TSX rewrite example for hyphenated SVG attribute names such as `stroke-linecap` to `strokeLinecap`. Keep it reviewable because generated markup can be formatting-sensitive. **Bundled** as `rules/tsx/rename-svg-attribute.yml`.
 - Adapt TSX catalog rules to the repository’s React version, JSX runtime, lint rules, framework conventions, and browser-support target before using them directly.
 
 ## YAML Catalog Highlights

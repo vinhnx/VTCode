@@ -1,0 +1,17 @@
+id: prefer-retain-over-filter-collect
+language: Rust
+severity: warning
+message: Use `.retain()` instead of `.into_iter().filter().collect()` for in-place filtering.
+note: |
+  `v = v.into_iter().filter(pred).collect()` allocates a new Vec and discards
+  the original. `v.retain(|x| pred(x))` filters in-place with no allocation.
+  The closure signature differs: `retain` takes `&T`, while `into_iter` yields
+  `T`. If the predicate needs ownership, the `into_iter` form is correct --
+  suppress with `ast-grep-ignore`. This rule only matches when the same
+  variable is reassigned from its own iterator.
+rule:
+  any:
+    - pattern: $V = $V.into_iter().filter($PRED).collect()
+    - pattern: $V = $V.drain(..).filter($PRED).collect()
+files:
+  - "**/*.rs"

@@ -1,0 +1,34 @@
+id: avoid-jsx-short-circuit
+language: tsx
+severity: error
+message: Use a ternary instead of `&&` for conditional JSX rendering.
+note: |
+  `{cond && <Elem />}` renders the falsy value (e.g. `0`) when `cond` is
+  falsy instead of rendering nothing. This is a common React bug because
+  `0` is a valid React child but invisible in the DOM. Use a ternary to
+  guarantee nothing renders on the falsy branch: `{cond ? <Elem /> : null}`.
+  This rule only fires inside JSX expressions to avoid false positives on
+  plain boolean logic.
+rule:
+  all:
+    - pattern: $COND && $JSX
+    - inside:
+        kind: jsx_expression
+        stopBy: end
+    - not:
+        inside:
+          kind: jsx_attribute
+          stopBy: end
+constraints:
+  JSX:
+    any:
+      - kind: jsx_element
+      - kind: jsx_self_closing_element
+      - kind: jsx_fragment
+fix: "{$COND ? $JSX : null}"
+files:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

@@ -1,0 +1,15 @@
+id: prefer-retain-over-filter-collect
+valid:
+  - code: |
+      let v: Vec<i32> = v.into_iter().filter(|x| *x > 0).collect();
+  - code: |
+      let w: Vec<i32> = v.into_iter().filter(|x| *x > 0).collect();
+  - code: |
+      v.retain(|x| *x > 0);
+  - code: |
+      v = v.into_iter().map(|x| x * 2).collect();
+invalid:
+  - code: |
+      v = v.into_iter().filter(|x| *x > 0).collect();
+  - code: |
+      v = v.drain(..).filter(|x| *x > 0).collect();

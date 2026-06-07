@@ -1,0 +1,32 @@
+id: no-return-in-foreach
+language: typescript
+severity: error
+message: `return` inside `.forEach()` does not return from the enclosing function.
+note: |
+  The callback passed to `.forEach()` is a regular function call. A `return`
+  statement inside it only exits the callback, not the surrounding function.
+  This is a common source of bugs when the intent is to short-circuit the
+  caller. Use a `for...of` loop when you need to return early, or use
+  `.find()` / `.some()` / `.every()` for search-style logic.
+rule:
+  all:
+    - inside:
+        kind: call_expression
+        has:
+          field: function
+          pattern: $OBJ.forEach
+        stopBy: end
+    - any:
+        - kind: return_statement
+        - pattern: "return $EXPR"
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"
+  - "!**/*.test.*"
+  - "!**/*.spec.*"
+  - "!**/__tests__/**"

@@ -1,0 +1,23 @@
+id: no-useless-promise-resolve
+language: typescript
+severity: warning
+message: Do not wrap a non-promise value in `Promise.resolve()` unnecessarily.
+note: |
+  `async` functions already wrap their return value in a promise.
+  `return Promise.resolve(value)` inside an `async` function is redundant;
+  just `return value`. Outside an async context, `Promise.resolve()` is
+  sometimes needed for type coercion -- this rule only flags the pattern
+  inside async functions.
+rule:
+  pattern: return Promise.resolve($VAL)
+  inside:
+    kind: function_declaration
+    has:
+      field: name
+      pattern: async
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"

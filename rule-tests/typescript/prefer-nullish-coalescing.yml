@@ -1,0 +1,13 @@
+id: prefer-nullish-coalescing
+valid:
+  - code: |
+      const x = value ?? fallback;
+  - code: |
+      const x = a || b;
+  - code: |
+      if (a || b) { doSomething(); }
+invalid:
+  - code: |
+      const x = value || "default";
+  - code: |
+      const timeout = options.timeout || 5000;

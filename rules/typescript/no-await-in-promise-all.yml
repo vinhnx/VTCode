@@ -1,0 +1,26 @@
+id: no-await-in-promise-all
+language: typescript
+severity: error
+message: Remove `await` inside `Promise.all()` -- it defeats parallel execution.
+note: |
+  `await` inside a `Promise.all()` array forces each promise to resolve
+  sequentially before the array is even constructed. Remove the `await`
+  so the promises fire concurrently as intended.
+rule:
+  pattern: await $A
+  inside:
+    pattern: Promise.all($_)
+    stopBy:
+      not:
+        any:
+          - kind: array
+          - kind: arguments
+fix: $A
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

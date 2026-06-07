@@ -1,0 +1,20 @@
+id: prefer-iterator-sum
+language: Rust
+severity: hint
+message: Use `.sum()` instead of manual folding with addition.
+note: |
+  `.fold(0, |acc, x| acc + x)` is equivalent to `.sum()` for numeric types
+  that implement `Sum`. The `sum()` method is more expressive and lets the
+  compiler optimize the reduction. This rule matches folds that only add;
+  folds with complex logic or non-zero initializers are not candidates.
+rule:
+  any:
+    - pattern: $ITER.fold(0, |$ACC, $X| $ACC + $X)
+    - pattern: $ITER.fold(0.0, |$ACC, $X| $ACC + $X)
+    - pattern: $ITER.fold(0u32, |$ACC, $X| $ACC + $X)
+    - pattern: $ITER.fold(0u64, |$ACC, $X| $ACC + $X)
+    - pattern: $ITER.fold(0i32, |$ACC, $X| $ACC + $X)
+    - pattern: $ITER.fold(0i64, |$ACC, $X| $ACC + $X)
+fix: $ITER.sum()
+files:
+  - "**/*.rs"

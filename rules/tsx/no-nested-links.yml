@@ -1,0 +1,20 @@
+id: no-nested-links
+language: tsx
+severity: error
+message: Do not nest `<a>` elements inside other `<a>` elements.
+note: |
+  Nested anchor tags produce invalid HTML and React hydration warnings.
+  The inner `<a>` is ignored by browsers, which causes broken navigation
+  and accessibility issues. Restructure the markup so links are siblings
+  or use a single anchor with the appropriate destination.
+rule:
+  pattern: <a $$$>$$$INNER</a>
+  has:
+    pattern: <a $$$>$$$</a>
+    stopBy: end
+files:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "!node_modules/**"
+  - "!dist/**"
+  - "!build/**"

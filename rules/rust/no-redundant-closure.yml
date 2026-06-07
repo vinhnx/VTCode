@@ -1,0 +1,18 @@
+id: no-redundant-closure
+language: Rust
+severity: hint
+message: Closure just forwards its argument; use a function pointer or method reference.
+note: |
+  `|x| foo(x)` is equivalent to `foo` when the closure does nothing but call
+  a single function with its argument unchanged. Replacing the closure with
+  a function reference avoids an extra layer of indirection and is more
+  readable. This rule only matches single-argument closures that directly
+  call a function. Closures with multiple arguments, argument reordering,
+  partial application, or additional logic are not flagged.
+rule:
+  pattern: "|$A| $FUNC($A)"
+  constraints:
+    FUNC:
+      kind: identifier
+files:
+  - "**/*.rs"
