@@ -6,9 +6,12 @@ rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Shared terminal detection primitives for VT Code"
 license.workspace = true
+readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-terminal-detection"
+keywords = ["terminal", "detection", "tty", "vtcode"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anyhow = { workspace = true }

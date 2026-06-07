@@ -2,11 +2,16 @@
 name = "vtcode-ghostty-core"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-documentation.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Pure-Rust VT terminal emulator core for VT Code, inspired by Ghostty"
+license.workspace = true
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+keywords = ["terminal", "vt100", "emulator", "ghostty", "vtcode"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 unicode-width = { workspace = true }

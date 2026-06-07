@@ -6,6 +6,7 @@ rust-version = "1.88"
 description = "Structured execution telemetry event schema used across VT Code crates."
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-exec-events"
 categories = ["development-tools", "data-structures", "database"]

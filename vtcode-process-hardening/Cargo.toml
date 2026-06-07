@@ -2,9 +2,16 @@
 name = "vtcode-process-hardening"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Process hardening and security measures for VT Code"
+license.workspace = true
+readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-process-hardening"
+keywords = ["security", "hardening", "sandbox", "process", "vtcode"]
+categories = ["development-tools", "os"]
 
 [lib]
 name = "vtcode_process_hardening"

@@ -6,6 +6,7 @@ rust-version = "1.88"
 description = "Cross-platform shell execution helpers extracted from VT Code"
 license.workspace = true
 readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-bash-runner"
 categories = ["development-tools", "command-line-utilities"]

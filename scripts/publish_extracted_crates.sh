@@ -18,7 +18,8 @@ Options:
                      performing the real publish. This is the default when the
                      VT_RELEASE_DRY_RUN environment variable is set to `1`.
   --start-from CRATE Resume publishing from the provided crate name. Valid
-                     crates: vtcode-commons, vtcode-auth, vtcode-exec-events,
+                     crates: vtcode-commons, vtcode-process-hardening,
+                     vtcode-design, vtcode-auth, vtcode-exec-events,
                      vtcode-markdown-store, vtcode-ghostty-vt-sys,
                      vtcode-ghostty-core, vtcode-macros, vtcode-vim,
                      vtcode-config, vtcode-theme, vtcode-file-search,
@@ -99,6 +100,7 @@ done
 CRATES=(
     vtcode-commons
     vtcode-process-hardening
+    vtcode-design
     vtcode-auth
     vtcode-exec-events
     vtcode-markdown-store

@@ -3,10 +3,15 @@ name = "vtcode-file-search"
 version.workspace = true
 edition.workspace = true
 rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Fast, parallel fuzzy file search library for VT Code"
 license.workspace = true
 readme = "README.md"
-description = "Fast, parallel fuzzy file search library for VT Code"
+homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-file-search"
+keywords = ["search", "fuzzy", "file-search", "parallel", "vtcode"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "vtcode-file-search"
