@@ -838,8 +838,6 @@ async fn handle_select_top_level_agent(
     let Some(name) = name else {
         ctx.active_top_level_agent.clear();
         set_top_level_agent_display(ctx, None);
-        ctx.renderer
-            .line(MessageStyle::Info, "Top-level agent: base")?;
         return Ok(());
     };
 
@@ -850,10 +848,6 @@ async fn handle_select_top_level_agent(
         Ok(active) => {
             let display_name = active.display_name.clone();
             set_top_level_agent_display(ctx, Some(display_name.clone()));
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Top-level agent: {display_name}"),
-            )?;
         }
         Err(vtcode_core::top_level_agent::TopLevelAgentResolutionError::UnknownAgent {
             requested,
