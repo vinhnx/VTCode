@@ -102,11 +102,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Scope, Basic Commands, Corpus and Artifacts, Reproducing a Crash, Coverage (Optional)
   - **User Questions**: "What can you tell me about Fuzzing Guide?", "How does Scope work?", "How does Basic Commands work?"
 
-- **File**: `docs/development/GHOSTTY_VT_PACKAGING.md`
-  - **Content**: Ghostty VT Packaging
-  - **Topics**: Layout, Runtime, Release Packaging, Local Debug Runs
-  - **User Questions**: "What can you tell me about Ghostty VT Packaging?", "How does Layout work?", "How does Runtime work?"
-
 - **File**: `docs/development/MODEL_ADDITION_CHECKLIST.md`
   - **Content**: Model Addition Checklist
   - **Topics**: Pre-Flight, Phase 1: Constants & Metadata (Database Layer), Phase 2: Model ID Resolution (Core Layer), Phase 3: Capabilities & Collections (Runtime Layer), Phase 4: Compilation & Verification
