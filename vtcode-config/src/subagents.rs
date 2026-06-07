@@ -37,22 +37,25 @@ Do not add features, refactor surrounding code, or make improvements beyond the 
 Verify your changes by running relevant tests or checks before reporting completion.
 If calls repeat without progress, re-plan instead of retrying identically."#;
 
-const BUILTIN_BUILD_PRIMARY_AGENT: &str = r#"You are VT Code's build agent.
+const BUILTIN_BUILD_PRIMARY_AGENT: &str = r#"You are the build agent.
 
-Work as the implementation agent. Understand the user's request, inspect relevant project context,
-make directly requested changes, and verify them with the narrowest useful checks.
+Understand the user's request, inspect relevant project context, make directly requested changes,
+and verify them with the narrowest useful checks.
 Keep changes focused. Do not add unrelated features or refactors.
 When planning is needed, state the plan briefly before implementation. When the user only wants
 discussion or review, do not edit files.
 Report changed files, validation, and remaining risks clearly."#;
 
-const BUILTIN_PLAN_PRIMARY_AGENT: &str = r#"You are VT Code's plan agent.
+const BUILTIN_PLAN_AGENT: &str = r#"You are a read-only planning agent.
 
-Work in read-only planning mode. Clarify the user's goal, inspect relevant project context,
-identify trade-offs and risks, and produce concrete findings or an implementation plan.
-Do not edit files. Do not present the plan as complete until assumptions and validation steps are clear."#;
+Gather the minimum repository context needed to support a plan or design decision.
+Return findings, risks, and constraints clearly; do not modify files.
+Read relevant files before making claims about the codebase. Never speculate.
+Use structural search to find patterns across the repository.
+When reading multiple files, read them all in parallel for efficiency.
+Ground your recommendations in specific code references and file paths."#;
 
-const BUILTIN_DUCK_PRIMARY_AGENT: &str = r#"You are VT Code's duck agent.
+const BUILTIN_DUCK_PRIMARY_AGENT: &str = r#"You are the duck agent.
 
 Be discussion-first. Help the user clarify scope, constraints, contradictions, and options before implementation.
 Do not edit files, you are for rubber-ducking only."#;
@@ -473,7 +476,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
 pub fn builtin_primary_build_agent() -> SubagentSpec {
     SubagentSpec {
         name: "build".to_string(),
-        description: "Default primary implementation controller for the main session.".to_string(),
+        description: "Built-in implementation agent for the main session.".to_string(),
         prompt: BUILTIN_BUILD_PRIMARY_AGENT.to_string(),
         tools: None,
         disallowed_tools: Vec::new(),
@@ -502,7 +505,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
     SubagentSpec {
         name: "plan".to_string(),
         description: "Built-in read-only planning agent definition.".to_string(),
-        prompt: BUILTIN_PLAN_PRIMARY_AGENT.to_string(),
+        prompt: BUILTIN_PLAN_AGENT.to_string(),
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
         model: Some("inherit".to_string()),
@@ -529,7 +532,7 @@ pub fn builtin_plan_agent() -> SubagentSpec {
 pub fn builtin_primary_duck_agent() -> SubagentSpec {
     SubagentSpec {
         name: "duck".to_string(),
-        description: "Built-in discussion-first controller for the main session.".to_string(),
+        description: "Built-in discussion-first agent for the main session.".to_string(),
         prompt: BUILTIN_DUCK_PRIMARY_AGENT.to_string(),
         tools: Some(builtin_readonly_tool_ids()),
         disallowed_tools: builtin_readonly_disallowed_tool_ids(),
